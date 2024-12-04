@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "stockmarket:block/stock_market_block"
+    }
+  }
+}
