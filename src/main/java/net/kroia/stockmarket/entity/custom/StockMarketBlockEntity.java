@@ -3,6 +3,7 @@ package net.kroia.stockmarket.entity.custom;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.entity.ModEntities;
 import net.kroia.stockmarket.menu.custom.ChartMenu;
+import net.kroia.stockmarket.util.CandleStickChart;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
@@ -22,19 +23,27 @@ import java.util.List;
 
 // StockMarketBlockEntity.java
 public class StockMarketBlockEntity extends BlockEntity implements MenuProvider {
-    private ArrayList<Integer> chartData;
+    private ArrayList<CandleStickChart.CandleData> chartData;
 
     public StockMarketBlockEntity(BlockPos pos, BlockState state) {
         super(ModEntities.STOCK_MARKET_BLOCK_ENTITY.get(), pos, state);
         StockMarketMod.LOGGER.info("ChartBlockEntity created at position " + pos);
-        chartData = new ArrayList<Integer>();
+        chartData = new ArrayList<CandleStickChart.CandleData>();
+
+        // Add some dummy data
+        chartData.add(new CandleStickChart.CandleData(0,1, 2, 3, 0));
+        chartData.add(new CandleStickChart.CandleData(1,2, 3, 4, 1));
+        chartData.add(new CandleStickChart.CandleData(2,3, 1, 5, 0));
+
+
+
     }
 
-    public void setChartData(ArrayList<Integer> data) {
+    public void setChartData(ArrayList<CandleStickChart.CandleData> data) {
         this.chartData = data;
     }
 
-    public ArrayList<Integer> getChartData() {
+    public ArrayList<CandleStickChart.CandleData> getChartData() {
         return chartData;
     }
 
@@ -55,7 +64,7 @@ public class StockMarketBlockEntity extends BlockEntity implements MenuProvider 
 
         var dataTag = new CompoundTag();
         //var array = new int[chartData.l]
-        dataTag.putIntArray("list", chartData);
+        //dataTag.putIntArray("list", chartData);
         tag.put(StockMarketMod.MODID, dataTag);
     }
 
