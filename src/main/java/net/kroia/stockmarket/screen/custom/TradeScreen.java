@@ -272,8 +272,17 @@ public class TradeScreen extends Screen {
     }
 
     @Override
+    public boolean charTyped(char codePoint, int modifiers) {
+        if (this.priceBox.isFocused()) {
+            return this.priceBox.charTyped(codePoint, modifiers);
+        }
+        return super.charTyped(codePoint, modifiers);
+    }
+
+    @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (this.priceBox.mouseClicked(mouseX, mouseY, button)) {
+            this.setFocused(this.priceBox);
             return true;
         }
         return super.mouseClicked(mouseX, mouseY, button);
