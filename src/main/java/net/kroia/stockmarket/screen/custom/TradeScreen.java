@@ -5,6 +5,7 @@ import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.market.ServerMarket;
 import net.kroia.stockmarket.networking.packet.RequestPricePacket;
+import net.kroia.stockmarket.networking.packet.SubscribeMarketEventsPacket;
 import net.kroia.stockmarket.networking.packet.TransactionRequestPacket;
 import net.kroia.stockmarket.util.CandleStickChart;
 import net.kroia.stockmarket.util.OrderbookVolumeChart;
@@ -76,6 +77,7 @@ public class TradeScreen extends Screen {
         super.onClose();
         // Unregister the event listener when the screen is closed
         MinecraftForge.EVENT_BUS.unregister(this);
+        SubscribeMarketEventsPacket.generateRequest(itemID, false);
     }
 
     @Override
@@ -110,12 +112,13 @@ public class TradeScreen extends Screen {
 
         // Register the event listener when the screen is initialized
         MinecraftForge.EVENT_BUS.register(this);
+        SubscribeMarketEventsPacket.generateRequest(itemID, true);
     }
 
     @SubscribeEvent
     public void onTick(TickEvent.ClientTickEvent event) {
         // Ensure we only handle ticks when this screen is active
-        if(this.minecraft.screen == this && event.phase == TickEvent.Phase.END)
+        /*if(this.minecraft.screen == this && event.phase == TickEvent.Phase.END)
         {
             tickPhaseCount++;
             if(tickPhaseCount - lastTickPahaseCount > 20) {
@@ -124,7 +127,7 @@ public class TradeScreen extends Screen {
                 //candleStickChart.setPriceHistory(Market.getPriceHistory(itemID));
                 RequestPricePacket.generateRequest(itemID);
             }
-        }
+        }*/
     }
 
     public static void updatePlotsData()

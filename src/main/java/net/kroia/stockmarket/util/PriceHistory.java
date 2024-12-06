@@ -15,6 +15,10 @@ public class PriceHistory {
 
     public PriceHistory(String itemID) {
         this.itemID = itemID;
+        for(int i = 0; i < maxHistorySize; i++)
+        {
+            timeStamps[i] = new Timestamp();
+        }
         clear();
     }
     public PriceHistory(String itemID, int initialPrice) {
@@ -24,6 +28,7 @@ public class PriceHistory {
             lowPrice[i] = initialPrice;
             highPrice[i] = initialPrice;
             closePrice[i] = initialPrice;
+            timeStamps[i] = new Timestamp();
         }
     }
 

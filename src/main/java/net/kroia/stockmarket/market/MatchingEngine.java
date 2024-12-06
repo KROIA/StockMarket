@@ -101,7 +101,7 @@ public class MatchingEngine {
             if(amount == 0)
             {
                 marketOrder.fill(marketOrder.getAmount());
-                marketOrder.markAsProcessed();
+                //marketOrder.markAsProcessed();
                 marketOrder.setAveragePrice(marketOrder.getAmount()*marketOrder.getAmount()+deltaVolume*price/(marketOrder.getAmount()));
                 break;
             }
