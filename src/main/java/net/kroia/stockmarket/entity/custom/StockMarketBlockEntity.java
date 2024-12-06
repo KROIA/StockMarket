@@ -23,28 +23,23 @@ import java.util.List;
 
 // StockMarketBlockEntity.java
 public class StockMarketBlockEntity extends BlockEntity implements MenuProvider {
-    private ArrayList<CandleStickChart.CandleData> chartData;
+    //private ArrayList<CandleStickChart.CandleData> chartData;
+
+    // Current Item that the chart is displaying
+    private String itemID;
 
     public StockMarketBlockEntity(BlockPos pos, BlockState state) {
         super(ModEntities.STOCK_MARKET_BLOCK_ENTITY.get(), pos, state);
         StockMarketMod.LOGGER.info("ChartBlockEntity created at position " + pos);
-        chartData = new ArrayList<CandleStickChart.CandleData>();
-
-        // Add some dummy data
-        chartData.add(new CandleStickChart.CandleData(0,1, 2, 3, 0));
-        chartData.add(new CandleStickChart.CandleData(1,2, 3, 4, 1));
-        chartData.add(new CandleStickChart.CandleData(2,3, 1, 5, 0));
-
-
-
+        itemID = "item.minecraft.diamond";
     }
 
-    public void setChartData(ArrayList<CandleStickChart.CandleData> data) {
-        this.chartData = data;
+    public void setItemID(String itemID) {
+        this.itemID = itemID;
     }
 
-    public ArrayList<CandleStickChart.CandleData> getChartData() {
-        return chartData;
+    public String getItemID() {
+        return itemID;
     }
 
     @Override
@@ -62,9 +57,8 @@ public class StockMarketBlockEntity extends BlockEntity implements MenuProvider 
     {
         super.saveAdditional(tag);
 
-        var dataTag = new CompoundTag();
-        //var array = new int[chartData.l]
-        //dataTag.putIntArray("list", chartData);
+        CompoundTag dataTag = new CompoundTag();
+        dataTag.putString("itemID", itemID);
         tag.put(StockMarketMod.MODID, dataTag);
     }
 
@@ -85,5 +79,7 @@ public class StockMarketBlockEntity extends BlockEntity implements MenuProvider 
     public void handleUpdateTag(CompoundTag tag) {
         super.handleUpdateTag(tag);
         // Deserialize your data
+        CompoundTag dataTag = tag.getCompound(StockMarketMod.MODID);
+        itemID = dataTag.getString("itemID");
     }
 }

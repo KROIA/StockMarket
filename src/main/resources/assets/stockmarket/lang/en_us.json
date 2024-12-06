@@ -1,4 +1,9 @@
 {
   "block.stockmarket.stock_market_block": "Stock Market Block",
-  "item.stockmarket.stock_market_block": "Stock Market Block"
+  "item.stockmarket.stock_market_block": "Stock Market Block",
+  "gui.stockmarket.stock_market_block_screen": "Stock Market Block",
+  "gui.stockmarket.stock_market_block_screen.sell_button": "Sell",
+  "gui.stockmarket.stock_market_block_screen.buy_button": "Buy",
+  "gui.stockmarket.stock_market_block_screen.select_item_button": "Select Item"
+
 }

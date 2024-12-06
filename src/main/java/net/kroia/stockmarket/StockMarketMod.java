@@ -5,13 +5,18 @@ import net.kroia.stockmarket.block.ModBlocks;
 import net.kroia.stockmarket.entity.ModEntities;
 import net.kroia.stockmarket.item.ModCreativeModTabs;
 import net.kroia.stockmarket.item.ModItems;
+import net.kroia.stockmarket.market.Market;
+import net.kroia.stockmarket.market.order.LimitOrder;
 import net.kroia.stockmarket.menu.ModMenus;
+import net.kroia.stockmarket.networking.ModMessages;
+import net.kroia.stockmarket.market.MarketData;
 import net.minecraft.client.Minecraft;
-import net.minecraft.world.item.CreativeModeTab;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.BuildCreativeModeTabContentsEvent;
+import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.server.ServerStartingEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -30,6 +35,8 @@ public class StockMarketMod
     // Directly reference a slf4j logger
     public static final Logger LOGGER = LogUtils.getLogger();
     // Create a Deferred Register to hold Blocks which will all be registered under the "examplemod" namespace
+
+    private static long lastTimeMinute = 0;
     public StockMarketMod()
     {
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
@@ -40,6 +47,7 @@ public class StockMarketMod
         ModEntities.register(modEventBus);
         ModMenus.register(modEventBus);
 
+
         // Register the commonSetup method for modloading
         modEventBus.addListener(this::commonSetup);
 
@@ -48,6 +56,9 @@ public class StockMarketMod
 
         // Register the item to a creative tab
         modEventBus.addListener(this::addCreative);
+
+        // Register ourselves for server-side events
+        MinecraftForge.EVENT_BUS.addListener(this::onServerTick);
     }
 
     private void commonSetup(final FMLCommonSetupEvent event)
@@ -55,6 +66,10 @@ public class StockMarketMod
         // Some common setup code
         LOGGER.info("HELLO FROM COMMON SETUP");
 
+
+
+        ModMessages.register();
+        onServerTickSetup();
 
     }
 
@@ -73,6 +88,13 @@ public class StockMarketMod
     {
         // Do something when the server starts
         LOGGER.info("HELLO from server starting");
+        Market.init();
+
+
+
+
+
+
     }
 
     // You can use EventBusSubscriber to automatically register all static methods in the class annotated with @SubscribeEvent
@@ -87,4 +109,37 @@ public class StockMarketMod
             LOGGER.info("MINECRAFT NAME >> {}", Minecraft.getInstance().getUser().getName());
         }
     }
+
+    public void onServerTickSetup() {
+        lastTimeMinute = getCurrentTimeMinute();
+    }
+
+    @SubscribeEvent
+    public void onServerTick(TickEvent.ServerTickEvent event) {
+        if (event.phase == TickEvent.Phase.END) {
+            long currentTimeMinute = getCurrentTimeMinute();
+
+            if(currentTimeMinute - lastTimeMinute > Market.shiftPriceHistoryInterval) {
+                lastTimeMinute = currentTimeMinute;
+
+                Market.shiftPriceHistory();
+            }
+
+            /*
+            if (currentTimeMinute != lastTimeMinute) { // Check if one minute has passed
+                lastTimeMinute = currentTimeMinute; // Update the last execution time
+
+                LOGGER.info("One minute has passed");
+                Market.shiftPriceHistory();
+                // Call the executeServerSideCode method
+                //executeServerSideCode();
+            }*/
+        }
+    }
+
+    public static long getCurrentTimeMinute() {
+        return System.currentTimeMillis()/6000;
+    }
+
+
 }

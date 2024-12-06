@@ -3,8 +3,6 @@ package net.kroia.stockmarket.entity;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.block.ModBlocks;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
-import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.registries.DeferredRegister;

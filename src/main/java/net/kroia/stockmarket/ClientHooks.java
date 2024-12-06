@@ -1,7 +1,7 @@
 package net.kroia.stockmarket;
 
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
-import net.kroia.stockmarket.screen.custom.ChartScreen;
+import net.kroia.stockmarket.screen.custom.TradeScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionResult;
@@ -15,8 +15,8 @@ public class ClientHooks {
         if(entity instanceof StockMarketBlockEntity)
         {
             StockMarketBlockEntity stockMarketBlockEntity = (StockMarketBlockEntity)entity;
-            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> Minecraft.getInstance().setScreen(new ChartScreen(stockMarketBlockEntity.getChartData())));
-            //Minecraft.getInstance().setScreen(new ChartScreen(stockMarketBlockEntity.getChartData()));
+            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> Minecraft.getInstance().setScreen(new TradeScreen(stockMarketBlockEntity.getItemID())));
+            //Minecraft.getInstance().setScreen(new TradeScreen(stockMarketBlockEntity.getChartData()));
         }
         else
         {
