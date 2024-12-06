@@ -1,14 +1,11 @@
 package net.kroia.stockmarket.networking.packet;
 
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.market.Market;
 import net.kroia.stockmarket.networking.ModMessages;
-import net.kroia.stockmarket.market.MarketData;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;
 
-import java.util.ArrayList;
 import java.util.function.Supplier;
 
 public class RequestPricePacket {

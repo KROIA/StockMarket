@@ -41,14 +41,17 @@ public class OrderbookVolumeChart {
         if(orderBookVolume == null)
             return;
         int x = chartPositionX;
-        int y = chartPositionY;
+        int y = chartPositionY + chartViewHeight;
         int barHeight = chartViewHeight / orderBookVolume.size();
         int maxVolume = orderBookVolume.stream().max(Integer::compareTo).orElse(0);
         for(int volume : orderBookVolume)
         {
-            int barWidth = map(volume, 0, maxVolume, 0, chartViewWidth);
-            graphics.fill(x + chartViewWidth - barWidth, y, barWidth, barHeight, 0xFF00FF00);
-            y += barHeight;
+            if(volume > 0) {
+                int barWidth = map(volume, 0, maxVolume, 0, chartViewWidth);
+                int xPos = x + chartViewWidth - barWidth;
+                graphics.fill(xPos, y, xPos + barWidth,y+ barHeight, 0x8800FFFF);
+            }
+            y -= barHeight;
         }
 
     }

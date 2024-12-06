@@ -1,11 +1,10 @@
 package net.kroia.stockmarket.networking.packet;
 
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.market.Market;
+import net.kroia.stockmarket.market.ServerMarket;
 import net.kroia.stockmarket.market.order.LimitOrder;
 import net.kroia.stockmarket.market.order.MarketOrder;
 import net.kroia.stockmarket.networking.ModMessages;
-import net.kroia.stockmarket.market.MarketData;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;
@@ -99,12 +98,12 @@ public class TransactionRequestPacket {
             {
                 case limit:
                     LimitOrder limitOrder = new LimitOrder(player, amount, price);
-                    Market.addOrder(itemID, limitOrder);
+                    ServerMarket.addOrder(itemID, limitOrder);
                     //StockMarketMod.LOGGER.info("[SERVER] Player "+context.getSender().getName().getString()+" is selling "+this.amount+" of "+this.itemID+" with a limit order");
                     break;
                 case market:
                     MarketOrder marketOrder = new MarketOrder(player, amount);
-                    Market.addOrder(itemID, marketOrder);
+                    ServerMarket.addOrder(itemID, marketOrder);
                     //StockMarketMod.LOGGER.info("[SERVER] Player "+context.getSender().getName().getString()+" is selling "+this.amount+" of "+this.itemID+" with a market order");
                     break;
             }

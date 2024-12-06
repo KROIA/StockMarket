@@ -2,8 +2,8 @@ package net.kroia.stockmarket.networking.packet;
 
 
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.market.Market;
-import net.kroia.stockmarket.market.MarketData;
+import net.kroia.stockmarket.market.ClientMarket;
+import net.kroia.stockmarket.market.ServerMarket;
 import net.kroia.stockmarket.networking.ModMessages;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
 import net.kroia.stockmarket.util.PriceHistory;
@@ -53,8 +53,8 @@ public class UpdatePricePacket {
 
     public static void sendPacket(String itemID, ServerPlayer player)
     {
-        ArrayList<Integer> orderBookVolume = Market.getOrderBookVolume(itemID, 20, 0, 100);
-        ModMessages.sendToPlayer(new UpdatePricePacket(Market.getPriceHistory(itemID), orderBookVolume), player);
+        ArrayList<Integer> orderBookVolume = ServerMarket.getOrderBookVolume(itemID, 20, 0, 100);
+        ModMessages.sendToPlayer(new UpdatePricePacket(ServerMarket.getPriceHistory(itemID), orderBookVolume), player);
     }
 
     public void toBytes(FriendlyByteBuf buf) {
@@ -80,8 +80,9 @@ public class UpdatePricePacket {
             // Update client-side data
             // Get the data from the packet
             //MarketData.setPrice(this.itemID, this.price);
-            Market.setPriceHistory(priceHistory);
+            ClientMarket.setPriceHistory(priceHistory);
             TradeScreen.setOrderBookVolume(orderBookVolume);
+            TradeScreen.updatePlotsData();
             context.setPacketHandled(true);
             return;
         }

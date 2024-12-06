@@ -4,12 +4,11 @@ import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.order.Order;
 import net.kroia.stockmarket.util.PriceHistory;
 
-import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
-public class Market
+public class ServerMarket
 {
     private static Map<String, MarketManager> marketManagers = new HashMap<>();
     private static MarketData marketData;

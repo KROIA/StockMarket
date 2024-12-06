@@ -5,13 +5,11 @@ import net.kroia.stockmarket.block.ModBlocks;
 import net.kroia.stockmarket.entity.ModEntities;
 import net.kroia.stockmarket.item.ModCreativeModTabs;
 import net.kroia.stockmarket.item.ModItems;
-import net.kroia.stockmarket.market.Market;
-import net.kroia.stockmarket.market.order.LimitOrder;
+import net.kroia.stockmarket.market.ClientMarket;
+import net.kroia.stockmarket.market.ServerMarket;
 import net.kroia.stockmarket.menu.ModMenus;
 import net.kroia.stockmarket.networking.ModMessages;
-import net.kroia.stockmarket.market.MarketData;
 import net.minecraft.client.Minecraft;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.MinecraftForge;
@@ -88,7 +86,7 @@ public class StockMarketMod
     {
         // Do something when the server starts
         LOGGER.info("HELLO from server starting");
-        Market.init();
+        ServerMarket.init();
 
 
 
@@ -107,6 +105,7 @@ public class StockMarketMod
             // Some client setup code
             LOGGER.info("HELLO FROM CLIENT SETUP");
             LOGGER.info("MINECRAFT NAME >> {}", Minecraft.getInstance().getUser().getName());
+            ClientMarket.init();
         }
     }
 
@@ -119,10 +118,10 @@ public class StockMarketMod
         if (event.phase == TickEvent.Phase.END) {
             long currentTimeMinute = getCurrentTimeMinute();
 
-            if(currentTimeMinute - lastTimeMinute > Market.shiftPriceHistoryInterval) {
+            if(currentTimeMinute - lastTimeMinute > ServerMarket.shiftPriceHistoryInterval) {
                 lastTimeMinute = currentTimeMinute;
 
-                Market.shiftPriceHistory();
+                ServerMarket.shiftPriceHistory();
             }
 
             /*
@@ -138,7 +137,7 @@ public class StockMarketMod
     }
 
     public static long getCurrentTimeMinute() {
-        return System.currentTimeMillis()/6000;
+        return System.currentTimeMillis()/500;
     }
 
 

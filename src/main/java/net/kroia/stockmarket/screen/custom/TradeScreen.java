@@ -2,12 +2,11 @@
 package net.kroia.stockmarket.screen.custom;
 
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.market.Market;
-import net.kroia.stockmarket.market.order.LimitOrder;
+import net.kroia.stockmarket.market.ClientMarket;
+import net.kroia.stockmarket.market.ServerMarket;
 import net.kroia.stockmarket.networking.packet.RequestPricePacket;
 import net.kroia.stockmarket.networking.packet.TransactionRequestPacket;
 import net.kroia.stockmarket.util.CandleStickChart;
-import net.kroia.stockmarket.market.MarketData;
 import net.kroia.stockmarket.util.OrderbookVolumeChart;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -15,6 +14,9 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.flag.FeatureFlagSet;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 import java.util.ArrayList;
 
@@ -35,7 +37,7 @@ public class TradeScreen extends Screen {
     private final int chartX = 200;
     private final int chartY = 200;
 
-    private String itemID;
+    private static String itemID;
 
     private Button sellMarketButton;
     private Button buyMarketButton;
@@ -47,12 +49,15 @@ public class TradeScreen extends Screen {
 
     private int targetPrice = 0;
 
+    static int lastTickPahaseCount = 0;
+    static int tickPhaseCount = 0;
+
     public TradeScreen(String itemID) {
         super(TITLE);
         this.itemID = itemID;
-        RequestPricePacket.generateRequest(itemID);
-        candleStickChart.setChartView(0, 100, chartWidth, chartHeight);
-        orderbookVolumeChart.setChartView(chartWidth, 100, 50, chartHeight);
+        //RequestPricePacket.generateRequest(itemID);
+        candleStickChart.setChartView(0, 100, 100,100, chartWidth, chartHeight);
+        orderbookVolumeChart.setChartView(chartWidth+100, 100, 50, chartHeight);
         //candleStickChart.setPriceHistory(MarketData.getPriceHistory(itemID));
 
 
@@ -64,6 +69,13 @@ public class TradeScreen extends Screen {
         TransactionRequestPacket.generateRequest(itemID, 1, 45 );
         TransactionRequestPacket.generateRequest(itemID, 5, 44 );
         TransactionRequestPacket.generateRequest(itemID, 20, 40 );
+    }
+
+    @Override
+    public void onClose() {
+        super.onClose();
+        // Unregister the event listener when the screen is closed
+        MinecraftForge.EVENT_BUS.unregister(this);
     }
 
     @Override
@@ -94,7 +106,31 @@ public class TradeScreen extends Screen {
                 this::onBuyLimitButtonPressed).bounds(0,currentY,100,buttonHeight).build()); currentY += buttonHeight+buttonVSpacing;
 
 
-        candleStickChart.setPriceHistory(Market.getPriceHistory(itemID));
+        candleStickChart.setPriceHistory(ClientMarket.getPriceHistory(itemID));
+
+        // Register the event listener when the screen is initialized
+        MinecraftForge.EVENT_BUS.register(this);
+    }
+
+    @SubscribeEvent
+    public void onTick(TickEvent.ClientTickEvent event) {
+        // Ensure we only handle ticks when this screen is active
+        if(this.minecraft.screen == this && event.phase == TickEvent.Phase.END)
+        {
+            tickPhaseCount++;
+            if(tickPhaseCount - lastTickPahaseCount > 20) {
+                lastTickPahaseCount = tickPhaseCount;
+                // Update the chart data
+                //candleStickChart.setPriceHistory(Market.getPriceHistory(itemID));
+                RequestPricePacket.generateRequest(itemID);
+            }
+        }
+    }
+
+    public static void updatePlotsData()
+    {
+        candleStickChart.setPriceHistory(ClientMarket.getPriceHistory(itemID));
+        //orderbookVolumeChart.setOrderBookVolume(ClientMarket.getOrderBookVolume());
     }
 
     public static void setOrderBookVolume(ArrayList<Integer> orderBookVolume) {
@@ -106,8 +142,8 @@ public class TradeScreen extends Screen {
     {
         StockMarketMod.LOGGER.info("Item selected: " + itemId);
         this.itemID = itemId;
-        RequestPricePacket.generateRequest(itemId);
-        candleStickChart.setPriceHistory(Market.getPriceHistory(itemID));
+        //RequestPricePacket.generateRequest(itemId);
+        candleStickChart.setPriceHistory(ClientMarket.getPriceHistory(itemID));
     }
 
     @Override
@@ -122,8 +158,8 @@ public class TradeScreen extends Screen {
         // Render the widgets (buttons, labels, etc.)
         super.render(graphics, mouseX, mouseY, partialTick);
 
-        double price = Market.getPrice(itemID);
-        graphics.drawString(this.font, "Price: " + price, this.width / 2, this.height / 2, 0xFFFFFF);
+        double price = ClientMarket.getPrice(itemID);
+        graphics.drawString(this.font, "Price: " + price, this.width / 2, 5, 0xFFFFFF);
         super.render(graphics, mouseX, mouseY, partialTick);
 
         // Draw the label above the EditBox
@@ -162,13 +198,13 @@ public class TradeScreen extends Screen {
     {
         StockMarketMod.LOGGER.info("Sell button pressed");
         TransactionRequestPacket.generateRequest(itemID, -1);
-        RequestPricePacket.generateRequest(itemID);
+        //RequestPricePacket.generateRequest(itemID);
     }
     private void onBuyMarketButtonPressed(Button button)
     {
         StockMarketMod.LOGGER.info("Buy button pressed");
         TransactionRequestPacket.generateRequest(itemID, 1);
-        RequestPricePacket.generateRequest(itemID);
+        //RequestPricePacket.generateRequest(itemID);
     }
 
     private void onSellLimitButtonPressed(Button button)
@@ -176,7 +212,7 @@ public class TradeScreen extends Screen {
         StockMarketMod.LOGGER.info("Sell button pressed");
         saveInputValue();
         TransactionRequestPacket.generateRequest(itemID, -1, targetPrice);
-        RequestPricePacket.generateRequest(itemID);
+        //RequestPricePacket.generateRequest(itemID);
     }
 
     private void onBuyLimitButtonPressed(Button button)
@@ -184,7 +220,7 @@ public class TradeScreen extends Screen {
         StockMarketMod.LOGGER.info("Buy button pressed");
         saveInputValue();
         TransactionRequestPacket.generateRequest(itemID, 1, targetPrice);
-        RequestPricePacket.generateRequest(itemID);
+        //RequestPricePacket.generateRequest(itemID);
     }
     private void onSelectItemButtonPressed(Button button)
     {
