@@ -1,15 +1,17 @@
 package net.kroia.stockmarket.market.client;
 
-import net.kroia.stockmarket.market.server.MarketManager;
+import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.order.Order;
+import net.kroia.stockmarket.networking.packet.ResponseOrderPacket;
 import net.kroia.stockmarket.networking.packet.SubscribeMarketEventsPacket;
-import net.kroia.stockmarket.networking.packet.TransactionRequestPacket;
+import net.kroia.stockmarket.networking.packet.RequestOrderPacket;
 import net.kroia.stockmarket.networking.packet.UpdatePricePacket;
 import net.kroia.stockmarket.util.OrderbookVolume;
 import net.kroia.stockmarket.util.PriceHistory;
-import net.minecraft.server.level.ServerPlayer;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 
 public class ClientTradeItem {
 
@@ -18,6 +20,8 @@ public class ClientTradeItem {
     private PriceHistory priceHistory;
     private OrderbookVolume orderBookVolume;
 
+    private final Map<Long, Order> orders = new HashMap<>();
+
 
     public ClientTradeItem(String itemID)
     {
@@ -25,11 +29,42 @@ public class ClientTradeItem {
         this.priceHistory = new PriceHistory(itemID, 0);
     }
 
-    public void updateFromPacket(UpdatePricePacket packet)
+    public void handlePacket(UpdatePricePacket packet)
     {
         priceHistory = packet.getPriceHistory();
         orderBookVolume = packet.getOrderBookVolume();
     }
+    public void handlePacket(ResponseOrderPacket packet)
+    {
+        Order order = packet.getOrder();
+        Order oldOrder = orders.get(order.getOrderID());
+        orders.put(order.getOrderID(), order);
+        boolean hasChanged = true;
+        if(oldOrder != null)
+        {
+            hasChanged &= !oldOrder.equals(order);
+        }
+        if(hasChanged)
+        {
+            // Print to user console
+            //StockMarketMod.printToClientConsole("Order: " + order.getOrderID() + " has been updated: "+order.toString());
+            switch(order.getStatus())
+            {
+                case PENDING:
+                    StockMarketMod.printToClientConsole("Order: " + order.getOrderID() + " is open\n"+
+                            "  "+order.getFilledAmount() + " of " + order.getAmount() + " filled");
+                    break;
+                case PROCESSED:
+                    StockMarketMod.printToClientConsole("Order: " + order.getOrderID() + " has been filled\n"+
+                            "  Average price: " + order.getAveragePrice());
+                    break;
+                case INVALID:
+                    StockMarketMod.printToClientConsole("Order: " + order.getOrderID() + " is invalid and has been cancelled");
+                    break;
+            }
+        }
+    }
+
 
     public String getItemID()
     {
@@ -48,14 +83,30 @@ public class ClientTradeItem {
 
     public boolean createOrder(int quantity, int price)
     {
-        TransactionRequestPacket.generateRequest(itemID, quantity, price);
+        RequestOrderPacket.generateRequest(itemID, quantity, price);
         return true;
     }
     public boolean createOrder(int quantity)
     {
-        TransactionRequestPacket.generateRequest(itemID, quantity);
+        RequestOrderPacket.generateRequest(itemID, quantity);
         return true;
     }
+
+    public Order getOrder(long orderID)
+    {
+        return orders.get(orderID);
+    }
+
+    public ArrayList<Order> getOrders()
+    {
+        return new ArrayList<>(orders.values());
+    }
+    public void removeOrder(long orderID)
+    {
+        orders.remove(orderID);
+    }
+
+
 
     public OrderbookVolume getOrderBookVolume() {
         return orderBookVolume;

@@ -38,7 +38,7 @@ public class ServerMarket
     {
         if(tradeItems.containsKey(itemID))
         {
-            StockMarketMod.LOGGER.warn("Trade item already exists: " + itemID);
+            StockMarketMod.LOGGER.warn("[SERVER] Trade item already exists: " + itemID);
             return;
         }
         ServerTradeItem tradeItem = new ServerTradeItem(itemID, startPrice);
@@ -68,12 +68,12 @@ public class ServerMarket
         return marketManagers.get(itemID);
     }*/
 
-    public static void addOrder(String itemID, Order order)
+    public static void addOrder(Order order)
     {
-        ServerTradeItem item = tradeItems.get(itemID);
+        ServerTradeItem item = tradeItems.get(order.getItemID());
         if(item == null)
         {
-            StockMarketMod.LOGGER.warn("Trade item not found: " + itemID);
+            msgTradeItemNotFound(order.getItemID());
             return;
         }
         item.addOrder(order);
@@ -84,7 +84,7 @@ public class ServerMarket
         ServerTradeItem item = tradeItems.get(itemID);
         if(item == null)
         {
-            StockMarketMod.LOGGER.warn("Trade item not found: " + itemID);
+            msgTradeItemNotFound(itemID);
             return null;
         }
         return item.getOrderBookVolume(tiles, minPrice, maxPrice);
@@ -96,7 +96,7 @@ public class ServerMarket
         ServerTradeItem item = tradeItems.get(itemID);
         if(item == null)
         {
-            StockMarketMod.LOGGER.warn("Trade item not found: " + itemID);
+            msgTradeItemNotFound(itemID);
             return 0;
         }
         return item.getPrice();
@@ -111,7 +111,7 @@ public class ServerMarket
         ServerTradeItem item = tradeItems.get(itemID);
         if(item == null)
         {
-            StockMarketMod.LOGGER.warn("Trade item not found: " + itemID);
+            msgTradeItemNotFound(itemID);
             return null;
         }
         return item.getPriceHistory();
@@ -122,7 +122,7 @@ public class ServerMarket
         ServerTradeItem item = tradeItems.get(itemID);
         if(item == null)
         {
-            StockMarketMod.LOGGER.warn("Trade item not found: " + itemID);
+            msgTradeItemNotFound(itemID);
             return;
         }
         item.addSubscriber(player);
@@ -130,7 +130,7 @@ public class ServerMarket
     public static void removePlayerUpdateSubscription(String itemID, ServerPlayer player) {
         ServerTradeItem item = tradeItems.get(itemID);
         if (item == null) {
-            StockMarketMod.LOGGER.warn("Trade item not found: " + itemID);
+            msgTradeItemNotFound(itemID);
             return;
         }
         item.removeSubscriber(player);
@@ -140,5 +140,7 @@ public class ServerMarket
     {
         return tradeItems;
     }
-
+    private static void msgTradeItemNotFound(String itemID) {
+        StockMarketMod.LOGGER.warn("[SERVER] Trade item not found: " + itemID);
+    }
 }

@@ -11,7 +11,7 @@ import net.minecraftforge.network.NetworkEvent;
 
 import java.util.function.Supplier;
 
-public class TransactionRequestPacket {
+public class RequestOrderPacket {
 
     private String itemID;
     private int amount;
@@ -22,24 +22,24 @@ public class TransactionRequestPacket {
     }
     private OrderType orderType;
 
-    public TransactionRequestPacket() {
+    public RequestOrderPacket() {
         itemID = "";
         amount = 0;
     }
-    public TransactionRequestPacket(String itemID, int amount) {
+    public RequestOrderPacket(String itemID, int amount) {
         this.itemID = itemID;
         this.amount = amount;
         this.orderType = OrderType.market;
         this.price = 0;
     }
-    public TransactionRequestPacket(String itemID, int amount, OrderType orderType, int price) {
+    public RequestOrderPacket(String itemID, int amount, OrderType orderType, int price) {
         this.itemID = itemID;
         this.amount = amount;
         this.orderType = orderType;
         this.price = price;
     }
 
-    public TransactionRequestPacket(FriendlyByteBuf buf) {
+    public RequestOrderPacket(FriendlyByteBuf buf) {
         this.itemID = buf.readUtf();
         this.amount = buf.readInt();
         this.orderType = OrderType.valueOf(buf.readUtf());
@@ -49,11 +49,11 @@ public class TransactionRequestPacket {
     public static void generateRequest(String itemID, int amount, int price) {
 
         StockMarketMod.LOGGER.info("[CLIENT] Sending TransactionRequestPacket for item: "+itemID + " amount: "+amount);
-        ModMessages.sendToServer(new TransactionRequestPacket(itemID, amount, OrderType.limit, price));
+        ModMessages.sendToServer(new RequestOrderPacket(itemID, amount, OrderType.limit, price));
     }
     public static void generateRequest(String itemID, int amount) {
         StockMarketMod.LOGGER.info("[CLIENT] Sending TransactionRequestPacket for item: "+itemID + " amount: "+amount);
-        ModMessages.sendToServer(new TransactionRequestPacket(itemID, amount));
+        ModMessages.sendToServer(new RequestOrderPacket(itemID, amount));
     }
 
     public void toBytes(FriendlyByteBuf buf)
@@ -97,13 +97,13 @@ public class TransactionRequestPacket {
             switch(this.orderType)
             {
                 case limit:
-                    LimitOrder limitOrder = new LimitOrder(player, amount, price);
-                    ServerMarket.addOrder(itemID, limitOrder);
+                    LimitOrder limitOrder = new LimitOrder(player, itemID, amount, price);
+                    ServerMarket.addOrder(limitOrder);
                     //StockMarketMod.LOGGER.info("[SERVER] Player "+context.getSender().getName().getString()+" is selling "+this.amount+" of "+this.itemID+" with a limit order");
                     break;
                 case market:
-                    MarketOrder marketOrder = new MarketOrder(player, amount);
-                    ServerMarket.addOrder(itemID, marketOrder);
+                    MarketOrder marketOrder = new MarketOrder(player, itemID, amount);
+                    ServerMarket.addOrder(marketOrder);
                     //StockMarketMod.LOGGER.info("[SERVER] Player "+context.getSender().getName().getString()+" is selling "+this.amount+" of "+this.itemID+" with a market order");
                     break;
             }

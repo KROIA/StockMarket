@@ -40,10 +40,10 @@ public class ModMessages {
                 .consumerMainThread(RequestPricePacket::handle)
                 .add();
 
-        net.messageBuilder(TransactionRequestPacket.class, id(), NetworkDirection.PLAY_TO_SERVER)
-                .decoder(TransactionRequestPacket::new)
-                .encoder(TransactionRequestPacket::toBytes)
-                .consumerMainThread(TransactionRequestPacket::handle)
+        net.messageBuilder(RequestOrderPacket.class, id(), NetworkDirection.PLAY_TO_SERVER)
+                .decoder(RequestOrderPacket::new)
+                .encoder(RequestOrderPacket::toBytes)
+                .consumerMainThread(RequestOrderPacket::handle)
                 .add();
 
         net.messageBuilder(SubscribeMarketEventsPacket.class, id(), NetworkDirection.PLAY_TO_SERVER)
@@ -62,6 +62,12 @@ public class ModMessages {
                 .decoder(UpdateTradeItemsPacket::new)
                 .encoder(UpdateTradeItemsPacket::toBytes)
                 .consumerMainThread(UpdateTradeItemsPacket::handle)
+                .add();
+
+        net.messageBuilder(ResponseOrderPacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(ResponseOrderPacket::new)
+                .encoder(ResponseOrderPacket::toBytes)
+                .consumerMainThread(ResponseOrderPacket::handle)
                 .add();
     }
 

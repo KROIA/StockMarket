@@ -13,6 +13,8 @@ public class OrderbookVolumeChart {
     private int chartViewWidth;
     private int chartViewHeight;
 
+    private final int colorSell = 0x7FFF0000;
+    private final int colorBuy = 0x7F00FF00;
 
 
 
@@ -31,6 +33,22 @@ public class OrderbookVolumeChart {
         this.chartViewHeight = height;
     }
 
+    public int getChartPositionX()
+    {
+        return chartPositionX;
+    }
+    public int getChartPositionY()
+    {
+        return chartPositionY;
+    }
+    public int getChartViewWidth()
+    {
+        return chartViewWidth;
+    }
+    public int getChartViewHeight()
+    {
+        return chartViewHeight;
+    }
     public void setOrderBookVolume(OrderbookVolume orderBookVolume)
     {
         this.orderBookVolume = orderBookVolume;
@@ -47,10 +65,12 @@ public class OrderbookVolumeChart {
         // Get max volume of volume
         int maxVolume = orderBookVolume.getMaxVolume();
         for (int vol : volume) {
-            if (vol > 0) {
-                int barWidth = map(vol, 0, maxVolume, 0, chartViewWidth);
+            int absVol = Math.abs(vol);
+            if (absVol > 0) {
+                int color = vol > 0 ? colorBuy : colorSell;
+                int barWidth = map(absVol, 0, maxVolume, 0, chartViewWidth);
                 int xPos = x + chartViewWidth - barWidth;
-                graphics.fill(xPos, y, xPos + barWidth, y + barHeight, 0x8800FFFF);
+                graphics.fill(xPos, y, xPos + barWidth, y - barHeight, color);
             }
             y -= barHeight;
         }

@@ -4,6 +4,7 @@ import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.MarketOrder;
 import net.kroia.stockmarket.market.server.order.Order;
+import net.kroia.stockmarket.networking.packet.ResponseOrderPacket;
 import net.kroia.stockmarket.util.OrderbookVolume;
 
 import java.util.*;
@@ -19,36 +20,15 @@ public class MatchingEngine {
     private int price;
     private int tradeVolume;
 
-    //private final int maxPrice = 1000_000;
-
-
     // Create a sorted queue for buy and sell orders, sorted by price.
     private final PriorityQueue<LimitOrder> spotBuyOrders = new PriorityQueue<>((o1, o2) -> Double.compare(o2.getPrice(), o1.getPrice()));
     private final PriorityQueue<LimitOrder> spotSellOrders = new PriorityQueue<>(Comparator.comparingDouble(LimitOrder::getPrice));
 
-    //private final ArrayList<MarketOrder> marketOrders = new ArrayList<>();
-
-
-
     public MatchingEngine(int initalPrice) {
-        //this.buyPrice = initalPrice;
-        //this.sellPrice = initalPrice;
         this.price = initalPrice;
         tradeVolume = 0;
     }
 
-    /*public void matchOrders()
-    {
-
-        Order firstBuyOrder = buyOrders.peek();
-        if (firstBuyOrder != null) {
-            // Access the first order without removing it
-            System.out.println("First buy order: " + firstBuyOrder);
-        } else {
-            System.out.println("No buy orders available");
-        }
-
-    }*/
 
     public void addOrder(Order order)
     {
@@ -73,10 +53,12 @@ public class MatchingEngine {
                     // Add the spot order to the sellOrders queue
                     spotSellOrders.add(spotOrder);
                 }
+                spotOrder.notifyPlayer();
             }
         } else if (order instanceof MarketOrder) {
             MarketOrder marketOrder = (MarketOrder) order;
             processMarketOrder(marketOrder);
+            //marketOrder.notifyPlayer();
         } else {
             throw new IllegalArgumentException("Invalid order type");
         }
@@ -101,9 +83,8 @@ public class MatchingEngine {
                 toRemove.add(spotOrder);
             if(amount == 0)
             {
+                marketOrder.changeAveragePrice(deltaVolume, price);
                 marketOrder.fill(marketOrder.getAmount());
-                //marketOrder.markAsProcessed();
-                marketOrder.setAveragePrice(marketOrder.getAmount()*marketOrder.getAmount()+deltaVolume*price/(marketOrder.getAmount()));
                 break;
             }
 
@@ -112,6 +93,8 @@ public class MatchingEngine {
         tradeVolume += Math.abs(volume);
         if(amount == 0)
             return true;
+
+        marketOrder.markAsInvalid();
         StockMarketMod.LOGGER.warn("Market order not fully processed: " + marketOrder.toString());
         return false;
     }
@@ -155,8 +138,9 @@ public class MatchingEngine {
             }
         }
         int deltaVolume = Math.abs(spotOrder.getAmount()+amount);
+
+        spotOrder.changeAveragePrice(deltaVolume, price);
         spotOrder.fill(spotOrder.getAmount()+amount);
-        spotOrder.setAveragePrice(spotOrder.getAveragePrice()*spotOrder.getAmount()+deltaVolume*price/(spotOrder.getAmount()));
         tradeVolume += deltaVolume;
         spotOrders.removeAll(toRemove);
         return amount == 0;
@@ -225,7 +209,7 @@ public class MatchingEngine {
         {
             int index = (order.getPrice() - minPrice) / priceStep;
             if(index >= 0 && index < tiles)
-                volume[index] += -order.getAmount();
+                volume[index] += order.getAmount();
         }
         orderbookVolume.setVolume(volume);
         return orderbookVolume;

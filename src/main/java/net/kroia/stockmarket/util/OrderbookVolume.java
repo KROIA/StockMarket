@@ -51,7 +51,7 @@ public class OrderbookVolume {
         int maxVolume = 0;
         for(int i = 0; i < volume.length; i++)
         {
-            maxVolume = Math.max(maxVolume, volume[i]);
+            maxVolume = Math.max(maxVolume, Math.abs(volume[i]));
         }
         return maxVolume;
     }
