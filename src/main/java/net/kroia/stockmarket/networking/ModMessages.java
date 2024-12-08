@@ -2,10 +2,7 @@ package net.kroia.stockmarket.networking;
 
 
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.networking.packet.RequestPricePacket;
-import net.kroia.stockmarket.networking.packet.SubscribeMarketEventsPacket;
-import net.kroia.stockmarket.networking.packet.TransactionRequestPacket;
-import net.kroia.stockmarket.networking.packet.UpdatePricePacket;
+import net.kroia.stockmarket.networking.packet.*;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkDirection;
@@ -53,6 +50,18 @@ public class ModMessages {
                 .decoder(SubscribeMarketEventsPacket::new)
                 .encoder(SubscribeMarketEventsPacket::toBytes)
                 .consumerMainThread(SubscribeMarketEventsPacket::handle)
+                .add();
+
+        net.messageBuilder(RequestTradeItemsPacket.class, id(), NetworkDirection.PLAY_TO_SERVER)
+                .decoder(RequestTradeItemsPacket::new)
+                .encoder(RequestTradeItemsPacket::toBytes)
+                .consumerMainThread(RequestTradeItemsPacket::handle)
+                .add();
+
+        net.messageBuilder(UpdateTradeItemsPacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(UpdateTradeItemsPacket::new)
+                .encoder(UpdateTradeItemsPacket::toBytes)
+                .consumerMainThread(UpdateTradeItemsPacket::handle)
                 .add();
     }
 

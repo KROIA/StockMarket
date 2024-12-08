@@ -2,19 +2,20 @@
 package net.kroia.stockmarket.screen.custom;
 
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.market.ClientMarket;
-import net.kroia.stockmarket.market.ServerMarket;
-import net.kroia.stockmarket.networking.packet.RequestPricePacket;
-import net.kroia.stockmarket.networking.packet.SubscribeMarketEventsPacket;
-import net.kroia.stockmarket.networking.packet.TransactionRequestPacket;
+import net.kroia.stockmarket.market.client.ClientMarket;
+import net.kroia.stockmarket.market.client.ClientTradeItem;
 import net.kroia.stockmarket.util.CandleStickChart;
 import net.kroia.stockmarket.util.OrderbookVolumeChart;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.flag.FeatureFlagSet;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -39,6 +40,7 @@ public class TradeScreen extends Screen {
     private final int chartY = 200;
 
     private static String itemID;
+    private static ItemStack itemStack;
 
     private Button sellMarketButton;
     private Button buyMarketButton;
@@ -53,23 +55,21 @@ public class TradeScreen extends Screen {
     static int lastTickPahaseCount = 0;
     static int tickPhaseCount = 0;
 
+    static TradeScreen instance;
+    static boolean test = false;
+
     public TradeScreen(String itemID) {
         super(TITLE);
+        instance = this;
         this.itemID = itemID;
+        itemStack = getItemStackFromId(itemID);
         //RequestPricePacket.generateRequest(itemID);
         candleStickChart.setChartView(0, 100, 100,100, chartWidth, chartHeight);
         orderbookVolumeChart.setChartView(chartWidth+100, 100, 50, chartHeight);
         //candleStickChart.setPriceHistory(MarketData.getPriceHistory(itemID));
 
 
-        // Create some dummy orders
-        TransactionRequestPacket.generateRequest(itemID, -30, 90 );
-        TransactionRequestPacket.generateRequest(itemID, -10, 80 );
-        TransactionRequestPacket.generateRequest(itemID, -8, 78 );
-        TransactionRequestPacket.generateRequest(itemID, -2, 75 );
-        TransactionRequestPacket.generateRequest(itemID, 1, 45 );
-        TransactionRequestPacket.generateRequest(itemID, 5, 44 );
-        TransactionRequestPacket.generateRequest(itemID, 20, 40 );
+
     }
 
     @Override
@@ -77,12 +77,14 @@ public class TradeScreen extends Screen {
         super.onClose();
         // Unregister the event listener when the screen is closed
         MinecraftForge.EVENT_BUS.unregister(this);
-        SubscribeMarketEventsPacket.generateRequest(itemID, false);
+        ClientMarket.unsubscribeMarketUpdate(itemID);
+        //SubscribeMarketEventsPacket.generateRequest(itemID, false);
     }
 
     @Override
     protected void init() {
         super.init();
+        ClientMarket.init();
 
         int buttonHeight = 20;
         int buttonVSpacing = 5;
@@ -108,11 +110,13 @@ public class TradeScreen extends Screen {
                 this::onBuyLimitButtonPressed).bounds(0,currentY,100,buttonHeight).build()); currentY += buttonHeight+buttonVSpacing;
 
 
-        candleStickChart.setPriceHistory(ClientMarket.getPriceHistory(itemID));
+
 
         // Register the event listener when the screen is initialized
         MinecraftForge.EVENT_BUS.register(this);
-        SubscribeMarketEventsPacket.generateRequest(itemID, true);
+        //SubscribeMarketEventsPacket.generateRequest(itemID, true);
+
+        //updatePlotsData();
     }
 
     @SubscribeEvent
@@ -130,23 +134,50 @@ public class TradeScreen extends Screen {
         }*/
     }
 
-    public static void updatePlotsData()
+    public static void onAvailableTradeItemsChanged()
     {
-        candleStickChart.setPriceHistory(ClientMarket.getPriceHistory(itemID));
-        //orderbookVolumeChart.setOrderBookVolume(ClientMarket.getOrderBookVolume());
+        // check if screen is visible
+        if(instance.minecraft.screen == instance)
+        {
+            ClientMarket.subscribeMarketUpdate(itemID);
+            updatePlotsData();
+
+            if(!test) {
+                test = true;
+                // Create some dummy orders
+                ClientMarket.createOrder(itemID, -30, 90);
+                ClientMarket.createOrder(itemID, -10, 80);
+                ClientMarket.createOrder(itemID, -8, 78);
+                ClientMarket.createOrder(itemID, -2, 75);
+                ClientMarket.createOrder(itemID, 1, 45);
+                ClientMarket.createOrder(itemID, 5, 44);
+                ClientMarket.createOrder(itemID, 20, 40);
+            }
+        }
     }
 
-    public static void setOrderBookVolume(ArrayList<Integer> orderBookVolume) {
-        orderbookVolumeChart.setOrderBookVolume(orderBookVolume);
-        //TradeScreen.orderBookVolume = orderBookVolume;
+    public static void updatePlotsData()
+    {
+        ClientTradeItem item = ClientMarket.getTradeItem(itemID);
+        if(item == null)
+        {
+            StockMarketMod.LOGGER.warn("Trade item not found: " + itemID);
+            return;
+        }
+        candleStickChart.setPriceHistory(item.getPriceHistory());
+        orderbookVolumeChart.setOrderBookVolume(item.getOrderBookVolume());
     }
 
     private void onItemSelected(String itemId)
     {
         StockMarketMod.LOGGER.info("Item selected: " + itemId);
+
+        ClientMarket.unsubscribeMarketUpdate(itemID);
         this.itemID = itemId;
+        ClientMarket.subscribeMarketUpdate(itemID);
+        itemStack = getItemStackFromId(itemID);
         //RequestPricePacket.generateRequest(itemId);
-        candleStickChart.setPriceHistory(ClientMarket.getPriceHistory(itemID));
+        updatePlotsData();
     }
 
     @Override
@@ -170,6 +201,16 @@ public class TradeScreen extends Screen {
 
         candleStickChart.render(graphics);
         orderbookVolumeChart.render(graphics);
+
+        // Example item to render
+
+
+        // X and Y position on the screen
+        int x = this.width / 2;
+        int y = this.height / 2;
+
+        // Draw the item
+        graphics.renderItem(itemStack, x, y);
 
 
         /*
@@ -200,13 +241,13 @@ public class TradeScreen extends Screen {
     private void onSellMarketButtonPressed(Button button)
     {
         StockMarketMod.LOGGER.info("Sell button pressed");
-        TransactionRequestPacket.generateRequest(itemID, -1);
+        ClientMarket.createOrder(itemID, -1);
         //RequestPricePacket.generateRequest(itemID);
     }
     private void onBuyMarketButtonPressed(Button button)
     {
         StockMarketMod.LOGGER.info("Buy button pressed");
-        TransactionRequestPacket.generateRequest(itemID, 1);
+        ClientMarket.createOrder(itemID, 1);
         //RequestPricePacket.generateRequest(itemID);
     }
 
@@ -214,7 +255,7 @@ public class TradeScreen extends Screen {
     {
         StockMarketMod.LOGGER.info("Sell button pressed");
         saveInputValue();
-        TransactionRequestPacket.generateRequest(itemID, -1, targetPrice);
+        ClientMarket.createOrder(itemID, -1, targetPrice);
         //RequestPricePacket.generateRequest(itemID);
     }
 
@@ -222,7 +263,7 @@ public class TradeScreen extends Screen {
     {
         StockMarketMod.LOGGER.info("Buy button pressed");
         saveInputValue();
-        TransactionRequestPacket.generateRequest(itemID, 1, targetPrice);
+        ClientMarket.createOrder(itemID, 1, targetPrice);
         //RequestPricePacket.generateRequest(itemID);
     }
     private void onSelectItemButtonPressed(Button button)
@@ -289,5 +330,22 @@ public class TradeScreen extends Screen {
             return true;
         }
         return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+
+    public static ItemStack getItemStackFromId(String itemId) {
+        // Convert the string ID to a ResourceLocation
+        ResourceLocation resourceLocation = new ResourceLocation(itemId);
+
+        // Get the item from the registry
+        Item item = BuiltInRegistries.ITEM.get(resourceLocation);
+
+        // Check if the item exists
+        if (item == null) {
+            throw new IllegalArgumentException("Invalid item ID: " + itemId);
+        }
+
+        // Return an ItemStack of the item
+        return new ItemStack(item);
     }
 }

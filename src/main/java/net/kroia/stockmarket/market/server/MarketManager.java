@@ -1,11 +1,10 @@
-package net.kroia.stockmarket.market;
+package net.kroia.stockmarket.market.server;
 
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.market.order.Order;
+import net.kroia.stockmarket.market.server.order.Order;
+import net.kroia.stockmarket.util.OrderbookVolume;
 import net.kroia.stockmarket.util.PriceHistory;
 import net.kroia.stockmarket.util.Timestamp;
-
-import java.util.ArrayList;
 
 public class MarketManager {
     private final String itemID;
@@ -65,8 +64,9 @@ public class MarketManager {
         return matchingEngine.getTradeVolume();
     }
 
-    public ArrayList<Integer> getOrderBookVolume(int tiles, int minPrice, int maxPrice)
+    public OrderbookVolume getOrderBookVolume(int tiles, int minPrice, int maxPrice)
     {
+
         return matchingEngine.getOrderBookVolume(tiles, minPrice, maxPrice);
     }
 }

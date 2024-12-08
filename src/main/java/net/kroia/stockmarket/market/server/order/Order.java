@@ -1,4 +1,4 @@
-package net.kroia.stockmarket.market.order;
+package net.kroia.stockmarket.market.server.order;
 
 import net.kroia.stockmarket.StockMarketMod;
 import net.minecraft.world.entity.player.Player;

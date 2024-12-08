@@ -6,7 +6,7 @@ import java.util.ArrayList;
 
 public class OrderbookVolumeChart {
 
-    private ArrayList<Integer> orderBookVolume;
+    private OrderbookVolume orderBookVolume;
 
     private int chartPositionX;
     private int chartPositionY;
@@ -31,7 +31,7 @@ public class OrderbookVolumeChart {
         this.chartViewHeight = height;
     }
 
-    public void setOrderBookVolume(ArrayList<Integer> orderBookVolume)
+    public void setOrderBookVolume(OrderbookVolume orderBookVolume)
     {
         this.orderBookVolume = orderBookVolume;
     }
@@ -42,14 +42,15 @@ public class OrderbookVolumeChart {
             return;
         int x = chartPositionX;
         int y = chartPositionY + chartViewHeight;
-        int barHeight = chartViewHeight / orderBookVolume.size();
-        int maxVolume = orderBookVolume.stream().max(Integer::compareTo).orElse(0);
-        for(int volume : orderBookVolume)
-        {
-            if(volume > 0) {
-                int barWidth = map(volume, 0, maxVolume, 0, chartViewWidth);
+        int barHeight = chartViewHeight / orderBookVolume.getTiles();
+        int[] volume = orderBookVolume.getVolume();
+        // Get max volume of volume
+        int maxVolume = orderBookVolume.getMaxVolume();
+        for (int vol : volume) {
+            if (vol > 0) {
+                int barWidth = map(vol, 0, maxVolume, 0, chartViewWidth);
                 int xPos = x + chartViewWidth - barWidth;
-                graphics.fill(xPos, y, xPos + barWidth,y+ barHeight, 0x8800FFFF);
+                graphics.fill(xPos, y, xPos + barWidth, y + barHeight, 0x8800FFFF);
             }
             y -= barHeight;
         }

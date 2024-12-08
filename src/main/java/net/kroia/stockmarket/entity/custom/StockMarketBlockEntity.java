@@ -31,7 +31,7 @@ public class StockMarketBlockEntity extends BlockEntity implements MenuProvider 
     public StockMarketBlockEntity(BlockPos pos, BlockState state) {
         super(ModEntities.STOCK_MARKET_BLOCK_ENTITY.get(), pos, state);
         StockMarketMod.LOGGER.info("ChartBlockEntity created at position " + pos);
-        itemID = "item.minecraft.diamond";
+        itemID = "minecraft:diamond";
     }
 
     public void setItemID(String itemID) {

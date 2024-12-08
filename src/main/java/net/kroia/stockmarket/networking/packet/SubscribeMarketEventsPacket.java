@@ -1,7 +1,7 @@
 package net.kroia.stockmarket.networking.packet;
 
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.market.ServerMarket;
+import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.networking.ModMessages;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;

@@ -1,9 +1,10 @@
-package net.kroia.stockmarket.market;
+package net.kroia.stockmarket.market.server;
 
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.market.order.LimitOrder;
-import net.kroia.stockmarket.market.order.MarketOrder;
-import net.kroia.stockmarket.market.order.Order;
+import net.kroia.stockmarket.market.server.order.LimitOrder;
+import net.kroia.stockmarket.market.server.order.MarketOrder;
+import net.kroia.stockmarket.market.server.order.Order;
+import net.kroia.stockmarket.util.OrderbookVolume;
 
 import java.util.*;
 
@@ -208,11 +209,12 @@ public class MatchingEngine {
      * @param maxPrice The maximum price of the heatmap.
      * @return An array of integers representing the volume in each tile.
      */
-    public ArrayList<Integer> getOrderBookVolume(int tiles, int minPrice, int maxPrice)
+    public OrderbookVolume getOrderBookVolume(int tiles, int minPrice, int maxPrice)
     {
+        OrderbookVolume orderbookVolume = new OrderbookVolume(tiles, minPrice, maxPrice);
         int priceRange = maxPrice - minPrice;
         int priceStep = priceRange / tiles;
-        int volume[] = new int[tiles];
+        int[] volume = new int[tiles];
         for(LimitOrder order : spotBuyOrders)
         {
             int index = (order.getPrice() - minPrice) / priceStep;
@@ -225,12 +227,8 @@ public class MatchingEngine {
             if(index >= 0 && index < tiles)
                 volume[index] += -order.getAmount();
         }
-        ArrayList<Integer> result = new ArrayList<>();
-        for(int i=0; i<tiles; i++)
-        {
-            result.add(volume[i]);
-        }
-        return result;
+        orderbookVolume.setVolume(volume);
+        return orderbookVolume;
     }
 
 

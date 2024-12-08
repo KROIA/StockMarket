@@ -5,13 +5,14 @@ import net.kroia.stockmarket.block.ModBlocks;
 import net.kroia.stockmarket.entity.ModEntities;
 import net.kroia.stockmarket.item.ModCreativeModTabs;
 import net.kroia.stockmarket.item.ModItems;
-import net.kroia.stockmarket.market.ClientMarket;
-import net.kroia.stockmarket.market.ServerMarket;
+import net.kroia.stockmarket.market.client.ClientMarket;
+import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.menu.ModMenus;
 import net.kroia.stockmarket.networking.ModMessages;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.BuildCreativeModeTabContentsEvent;
 import net.minecraftforge.event.TickEvent;
@@ -69,6 +70,18 @@ public class StockMarketMod
         ModMessages.register();
         onServerTickSetup();
 
+        LOGGER.info("HELLO FROM CLIENT COMMON SETUP");
+
+
+    }
+    @SubscribeEvent
+    public void onPlayerLogin(ClientPlayerNetworkEvent.LoggingIn event) {
+        // This code runs when the player enters a server on the client side
+        System.out.println("Player has logged into a server!");
+
+        // Call your desired function here
+        //performClientSideAction();
+        //ClientMarket.init();
     }
 
     // Add the example block item to the building blocks tab
@@ -105,7 +118,7 @@ public class StockMarketMod
             // Some client setup code
             LOGGER.info("HELLO FROM CLIENT SETUP");
             LOGGER.info("MINECRAFT NAME >> {}", Minecraft.getInstance().getUser().getName());
-            ClientMarket.init();
+
         }
     }
 

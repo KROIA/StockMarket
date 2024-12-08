@@ -4,6 +4,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.flag.FeatureFlagSet;
@@ -32,7 +33,10 @@ public class ItemSelectionScreen extends CreativeModeInventoryScreen {
                 // Get the Item from the clicked slot
                 Item clickedItem = clickedStack.getItem();
 
-                String itemId = clickedItem.getDescriptionId();
+                //String itemId = clickedItem.getDescriptionId();
+                //String itemId = clickedItem.builtInRegistryHolder().key().location().toString();
+                String itemId = BuiltInRegistries.ITEM.getKey(clickedItem).toString();
+
                 onItemSelected.accept(itemId);
 
                 // Return to parent screen
