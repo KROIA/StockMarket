@@ -60,20 +60,25 @@ public class OrderbookVolumeChart {
             return;
         int x = chartPositionX;
 
-        int barHeight = chartViewHeight / orderBookVolume.getTiles();
-        int y = chartPositionY + chartViewHeight+barHeight/2;
+        float barHeight = (float)chartViewHeight / orderBookVolume.getTiles();
+        int y = (int)(chartPositionY + chartViewHeight+barHeight/2);
         int[] volume = orderBookVolume.getVolume();
         // Get max volume of volume
         int maxVolume = orderBookVolume.getMaxVolume();
+        int i = 1;
+        int lastY = y;
         for (int vol : volume) {
+            lastY = y;
+            y = (int)(chartPositionY + chartViewHeight+barHeight/2 - barHeight*i);
             int absVol = Math.abs(vol);
             if (absVol > 0) {
                 int color = vol > 0 ? colorBuy : colorSell;
                 int barWidth = map(absVol, 0, maxVolume, 0, chartViewWidth);
                 int xPos = x + chartViewWidth - barWidth;
-                graphics.fill(xPos, y, xPos + barWidth, y - barHeight, color);
+                graphics.fill(xPos, lastY, xPos + barWidth, y, color);
             }
-            y -= barHeight;
+
+            i++;
         }
 
     }

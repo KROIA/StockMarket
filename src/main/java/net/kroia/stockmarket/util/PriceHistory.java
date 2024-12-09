@@ -4,9 +4,11 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.network.FriendlyByteBuf;
 
+import java.util.ArrayList;
+
 public class PriceHistory implements ServerSaveable {
 
-    private final int maxHistorySize = 10;
+    private final int maxHistorySize = 100;
     private int[] lowPrice = new int[maxHistorySize];
     private int[] highPrice = new int[maxHistorySize];
     private int[] closePrice = new int[maxHistorySize];
@@ -174,16 +176,50 @@ public class PriceHistory implements ServerSaveable {
 
     @Override
     public void load(CompoundTag tag) {
-        lowPrice = tag.getIntArray("lowPrice");
-        highPrice = tag.getIntArray("highPrice");
-        closePrice = tag.getIntArray("closePrice");
+        int tmpLowPrice[] = tag.getIntArray("lowPrice");
+        int tmpHighPrice[] = tag.getIntArray("highPrice");
+        int tmpClosePrice[] = tag.getIntArray("closePrice");
         oldestClosePrice = tag.getInt("oldestClosePrice");
-
+        Timestamp tmpTimeStamps[] = new Timestamp[maxHistorySize];
         ListTag times = tag.getList("timeStamps", 10);
-        for (int i = 0; i < maxHistorySize; i++) {
+        for (int i = 0; i < tmpLowPrice.length; i++) {
             CompoundTag timeTag = times.getCompound(i);
-            timeStamps[i].load(timeTag);
+            tmpTimeStamps[i].load(timeTag);
         }
 
+        if(tmpLowPrice.length != maxHistorySize)
+        {
+            if(tmpLowPrice.length < maxHistorySize)
+            {
+                for(int i=0; i<maxHistorySize-tmpLowPrice.length; i++)
+                {
+                    lowPrice[i] = tmpLowPrice[0];
+                    highPrice[i] = tmpHighPrice[0];
+                    closePrice[i] = tmpClosePrice[0];
+                    timeStamps[i] = tmpTimeStamps[0];
+                }
+                for(int i=maxHistorySize-tmpLowPrice.length; i<maxHistorySize; i++)
+                {
+                    lowPrice[i] = tmpLowPrice[i-maxHistorySize+tmpLowPrice.length];
+                    highPrice[i] = tmpHighPrice[i-maxHistorySize+tmpLowPrice.length];
+                    closePrice[i] = tmpClosePrice[i-maxHistorySize+tmpLowPrice.length];
+                    timeStamps[i] = tmpTimeStamps[i-maxHistorySize+tmpLowPrice.length];
+                }
+            }
+            else {
+                for(int i=0; i<maxHistorySize; i++)
+                {
+                    lowPrice[i] = tmpLowPrice[tmpLowPrice.length-maxHistorySize+i];
+                    highPrice[i] = tmpHighPrice[tmpLowPrice.length-maxHistorySize+i];
+                    closePrice[i] = tmpClosePrice[tmpLowPrice.length-maxHistorySize+i];
+                    timeStamps[i] = tmpTimeStamps[tmpLowPrice.length-maxHistorySize+i];
+                }
+            }
+        }
+        else {
+            lowPrice = tmpLowPrice;
+            highPrice = tmpHighPrice;
+            closePrice = tmpClosePrice;
+        }
     }
 }

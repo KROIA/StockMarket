@@ -53,7 +53,7 @@ public class UpdateTradeItemsPacket {
         for(var entry : serverTradeItemMap.entrySet())
         {
             ServerTradeItem item = entry.getValue();
-            updatePricePackets.add(new UpdatePricePacket(item.getItemID()));
+            updatePricePackets.add(new UpdatePricePacket(item.getItemID(), player.getStringUUID()));
             i++;
         }
 

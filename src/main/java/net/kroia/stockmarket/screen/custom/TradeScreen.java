@@ -35,13 +35,12 @@ import java.util.ArrayList;
 public class TradeScreen extends Screen {
 
 
-    private static final Component TITLE = Component.translatable("gui."+ StockMarketMod.MODID+".stock_market_block_screen");
-    private static final Component SELL_BUTTON_TEXT = Component.translatable("gui."+ StockMarketMod.MODID+".stock_market_block_screen.sell_button");
-    private static final Component BUY_BUTTON_TEXT = Component.translatable("gui."+ StockMarketMod.MODID+".stock_market_block_screen.buy_button");
-    private static final Component SELECT_ITEM_BUTTON_TEXT = Component.translatable("gui."+ StockMarketMod.MODID+".stock_market_block_screen.select_item_button");
-
-    private static final Component AMOUNT_BOX_TOOLTIP = Component.translatable("gui."+ StockMarketMod.MODID+".stock_market_block_screen.amount_box_tooltip");
-    private static final Component PRICE_BOX_TOOLTIP = Component.translatable("gui."+ StockMarketMod.MODID+".stock_market_block_screen.price_box_tooltip");
+    private static final Component TITLE = Component.translatable("gui." + StockMarketMod.MODID + ".stock_market_block_screen");
+    private static final Component SELL_BUTTON_TEXT = Component.translatable("gui." + StockMarketMod.MODID + ".stock_market_block_screen.sell_button");
+    private static final Component BUY_BUTTON_TEXT = Component.translatable("gui." + StockMarketMod.MODID + ".stock_market_block_screen.buy_button");
+    private static final Component SELECT_ITEM_BUTTON_TEXT = Component.translatable("gui." + StockMarketMod.MODID + ".stock_market_block_screen.select_item_button");
+    private static final Component AMOUNT_BOX_TOOLTIP = Component.translatable("gui." + StockMarketMod.MODID + ".stock_market_block_screen.amount_box_tooltip");
+    private static final Component PRICE_BOX_TOOLTIP = Component.translatable("gui." + StockMarketMod.MODID + ".stock_market_block_screen.price_box_tooltip");
 
 
     private final int backgroundColor = 0x7F404040;
@@ -77,7 +76,6 @@ public class TradeScreen extends Screen {
     private Rectangle sellMarketButtonRect;
 
 
-
     private static String itemID;
     private static ItemStack itemStack;
 
@@ -90,7 +88,6 @@ public class TradeScreen extends Screen {
 
     private ColoredButton sellLimitButton;
     private ColoredButton buyLimitButton;
-
 
 
     private static int targetPrice = 0;
@@ -108,16 +105,12 @@ public class TradeScreen extends Screen {
         this.blockEntity = blockEntity;
 
 
-
-
-
         TradeScreen.candleStickChart = new CandleStickChart(this);
         orderListWidget = new OrderListWidget(this);
         instance = this;
         this.itemID = blockEntity.getItemID();
         this.targetAmount = blockEntity.getAmount();
         this.targetPrice = blockEntity.getPrice();
-
 
 
     }
@@ -144,8 +137,14 @@ public class TradeScreen extends Screen {
         itemID = packet.getItemID();
         targetAmount = packet.getAmount();
         targetPrice = packet.getPrice();
-        if(instance != null)
-            instance.init();
+        if (instance != null) {
+            //instance.init();
+            instance.priceBox.setValue(String.valueOf(targetPrice));
+            instance.amountBox.setValue(String.valueOf(targetAmount));
+            itemStack = getItemStackFromId(itemID);
+            ClientMarket.subscribeMarketUpdate(itemID);
+        }
+
     }
 
     @Override
@@ -157,77 +156,79 @@ public class TradeScreen extends Screen {
         padding = 10;
         int uiElementPadding = 2;
         int buttonHeight = 16;
-        int chartWidth = (this.width*3)/4;
-        int buttonSectionLeft = chartWidth+5;
-        chartRect = new Rectangle(0, 0, chartWidth, this.height/2);
+        int chartWidth = (this.width * 3) / 4;
+        int buttonSectionLeft = chartWidth + 5;
+        chartRect = new Rectangle(0, 0, chartWidth, this.height / 2);
 
-        selectItemButtonRect = new Rectangle(buttonSectionLeft, 0, this.width-buttonSectionLeft, buttonHeight);
-        amountEditRect = new Rectangle(buttonSectionLeft + selectItemButtonRect.width/2, buttonHeight+uiElementPadding, selectItemButtonRect.width/2, buttonHeight);
+        selectItemButtonRect = new Rectangle(buttonSectionLeft, 0, this.width - buttonSectionLeft, buttonHeight);
+        amountEditRect = new Rectangle(buttonSectionLeft + selectItemButtonRect.width / 2, buttonHeight + uiElementPadding, selectItemButtonRect.width / 2, buttonHeight);
 
         // Market
         int marketYPos = 50;
-        marketLabelRect = new Rectangle(buttonSectionLeft, marketYPos, this.width-buttonSectionLeft, buttonHeight);
-        buyMarketButtonRect = new Rectangle(buttonSectionLeft, marketYPos+buttonHeight+uiElementPadding, (this.width-buttonSectionLeft)/2, buttonHeight);
-        sellMarketButtonRect = new Rectangle(buttonSectionLeft + (this.width-buttonSectionLeft)/2, marketYPos+buttonHeight+uiElementPadding, (this.width-buttonSectionLeft)/2, buttonHeight);
+        marketLabelRect = new Rectangle(buttonSectionLeft, marketYPos, this.width - buttonSectionLeft, buttonHeight);
+        buyMarketButtonRect = new Rectangle(buttonSectionLeft, marketYPos + buttonHeight + uiElementPadding, (this.width - buttonSectionLeft) / 2, buttonHeight);
+        sellMarketButtonRect = new Rectangle(buttonSectionLeft + (this.width - buttonSectionLeft) / 2, marketYPos + buttonHeight + uiElementPadding, (this.width - buttonSectionLeft) / 2, buttonHeight);
 
 
         // Limit
         int limitYPos = 100;
-        limitLabelRect = new Rectangle(buttonSectionLeft, limitYPos, this.width-buttonSectionLeft, buttonHeight);
-        limitPriceEditRect = new Rectangle(buttonSectionLeft + selectItemButtonRect.width/2, limitYPos+buttonHeight+uiElementPadding, selectItemButtonRect.width/2, buttonHeight);
-        buyLimitButtonRect = new Rectangle(buttonSectionLeft, limitYPos+2*(buttonHeight+uiElementPadding), (this.width-buttonSectionLeft)/2, buttonHeight);
-        sellLimitButtonRect = new Rectangle(buttonSectionLeft + (this.width-buttonSectionLeft)/2, limitYPos+2*(buttonHeight+uiElementPadding), (this.width-buttonSectionLeft)/2, buttonHeight);
-
-
+        limitLabelRect = new Rectangle(buttonSectionLeft, limitYPos, this.width - buttonSectionLeft, buttonHeight);
+        limitPriceEditRect = new Rectangle(buttonSectionLeft + selectItemButtonRect.width / 2, limitYPos + buttonHeight + uiElementPadding, selectItemButtonRect.width / 2, buttonHeight);
+        buyLimitButtonRect = new Rectangle(buttonSectionLeft, limitYPos + 2 * (buttonHeight + uiElementPadding), (this.width - buttonSectionLeft) / 2, buttonHeight);
+        sellLimitButtonRect = new Rectangle(buttonSectionLeft + (this.width - buttonSectionLeft) / 2, limitYPos + 2 * (buttonHeight + uiElementPadding), (this.width - buttonSectionLeft) / 2, buttonHeight);
 
 
         //int buttonVSpacing = 5;
         //int currentY = 0;
 
-        candleStickChart.setChartView(chartRect.x+padding,chartRect.y+padding, chartRect.width-50-2*padding, chartRect.height-2*padding);
-        orderbookVolumeChart.setChartView(chartRect.x+chartRect.width-50-padding, chartRect.y+padding, 50, chartRect.height-2*padding);
+        candleStickChart.setChartView(chartRect.x + padding, chartRect.y + padding, chartRect.width - 50 - 2 * padding, chartRect.height - 2 * padding);
+        orderbookVolumeChart.setChartView(chartRect.x + chartRect.width - 50 - padding, chartRect.y + padding, 50, chartRect.height - 2 * padding);
 
 
-        sellLimitButton = (ColoredButton)addRenderableWidget(ColoredButton.builder(SELL_BUTTON_TEXT,
-                this::onSellLimitButtonPressed)
+        sellLimitButton = (ColoredButton) addRenderableWidget(ColoredButton.builder(SELL_BUTTON_TEXT,
+                        this::onSellLimitButtonPressed)
                 .hoverColor(sellButtonHoverColor)
                 .normalColor(sellButtonNormalColor)
-                .bounds(sellLimitButtonRect.x,sellLimitButtonRect.y,sellLimitButtonRect.width,sellLimitButtonRect.height).build());
-        buyLimitButton = (ColoredButton)addRenderableWidget(ColoredButton.builder(BUY_BUTTON_TEXT,
-                this::onBuyLimitButtonPressed)
+                .bounds(sellLimitButtonRect.x, sellLimitButtonRect.y, sellLimitButtonRect.width, sellLimitButtonRect.height).build());
+
+
+        buyLimitButton = (ColoredButton) addRenderableWidget(ColoredButton.builder(BUY_BUTTON_TEXT,
+                        this::onBuyLimitButtonPressed)
                 .hoverColor(buyButtonHoverColor)
                 .normalColor(buyButtonNormalColor)
-                .bounds(buyLimitButtonRect.x, buyLimitButtonRect.y,buyLimitButtonRect.width,buyLimitButtonRect.height).build());
-
+                .bounds(buyLimitButtonRect.x, buyLimitButtonRect.y, buyLimitButtonRect.width, buyLimitButtonRect.height).build());
 
 
         // Add a button to open the item selection dialog
         selectItemButton = addRenderableWidget(Button.builder(SELECT_ITEM_BUTTON_TEXT,
                 this::onSelectItemButtonPressed).bounds(selectItemButtonRect.x, selectItemButtonRect.y, selectItemButtonRect.width, selectItemButtonRect.height).build());
 
-        this.amountBox = new EditBox(this.font, amountEditRect.x, amountEditRect.y, amountEditRect.width-2, amountEditRect.height, Component.literal("Enter an integer"));
+        this.amountBox = new EditBox(this.font, amountEditRect.x, amountEditRect.y, amountEditRect.width - 2, amountEditRect.height, Component.literal("Enter an integer"));
         this.amountBox.setMaxLength(10); // Max length of input
         this.amountBox.setFilter(input -> input.matches("\\d*")); // Allow only digits
         this.addRenderableWidget(this.amountBox);
 
+
         // Add the EditBox to the screen
-        this.priceBox = new EditBox(this.font, limitPriceEditRect.x, limitPriceEditRect.y, limitPriceEditRect.width-2, limitPriceEditRect.height, Component.literal("Enter an integer"));
+
+        this.priceBox = new EditBox(this.font, limitPriceEditRect.x, limitPriceEditRect.y, limitPriceEditRect.width - 2, limitPriceEditRect.height, Component.literal("Enter an integer"));
         this.priceBox.setMaxLength(10); // Max length of input
         this.priceBox.setFilter(input -> input.matches("\\d*")); // Allow only digits
         this.addRenderableWidget(this.priceBox);
 
-        sellMarketButton = (ColoredButton)addRenderableWidget(ColoredButton.builder(SELL_BUTTON_TEXT,
-                this::onSellMarketButtonPressed)
+        sellMarketButton = (ColoredButton) addRenderableWidget(ColoredButton.builder(SELL_BUTTON_TEXT,
+                        this::onSellMarketButtonPressed)
                 .hoverColor(sellButtonHoverColor)
                 .normalColor(sellButtonNormalColor)
-                .bounds(sellMarketButtonRect.x, sellMarketButtonRect.y,sellMarketButtonRect.width,sellMarketButtonRect.height).build());
-        buyMarketButton = (ColoredButton)addRenderableWidget(ColoredButton.builder(BUY_BUTTON_TEXT,
-                this::onBuyMarketButtonPressed)
+                .bounds(sellMarketButtonRect.x, sellMarketButtonRect.y, sellMarketButtonRect.width, sellMarketButtonRect.height).build());
+
+        buyMarketButton = (ColoredButton) addRenderableWidget(ColoredButton.builder(BUY_BUTTON_TEXT,
+                        this::onBuyMarketButtonPressed)
                 .hoverColor(buyButtonHoverColor)
                 .normalColor(buyButtonNormalColor)
-                .bounds(buyMarketButtonRect.x, buyMarketButtonRect.y,buyMarketButtonRect.width,buyMarketButtonRect.height).build());
+                .bounds(buyMarketButtonRect.x, buyMarketButtonRect.y, buyMarketButtonRect.width, buyMarketButtonRect.height).build());
 
-        orderListWidget.init(0, chartRect.y+chartRect.height, chartRect.width, this.height-chartRect.height);
+        orderListWidget.init(0, chartRect.y + chartRect.height, chartRect.width, this.height - chartRect.height);
 
         // Register the event listener when the screen is initialized
         MinecraftForge.EVENT_BUS.register(this);
@@ -244,6 +245,7 @@ public class TradeScreen extends Screen {
     public static String getItemID() {
         return itemID;
     }
+
     @SubscribeEvent
     public void onTick(TickEvent.ClientTickEvent event) {
         // Ensure we only handle ticks when this screen is active
@@ -259,15 +261,13 @@ public class TradeScreen extends Screen {
         }*/
     }
 
-    public static void onAvailableTradeItemsChanged()
-    {
+    public static void onAvailableTradeItemsChanged() {
         // check if screen is visible
-        if(instance.minecraft.screen == instance)
-        {
+        if (instance.minecraft.screen == instance) {
             //ClientMarket.subscribeMarketUpdate(itemID);
             //updatePlotsData();
 
-            if(!test) {
+            if (!test) {
                 test = true;
                 // Create some dummy orders
                 ClientMarket.createOrder(itemID, -30, 90);
@@ -281,11 +281,9 @@ public class TradeScreen extends Screen {
         }
     }
 
-    public static void updatePlotsData(int minPrice, int maxPrice)
-    {
+    public static void updatePlotsData(int minPrice, int maxPrice) {
         ClientTradeItem item = ClientMarket.getTradeItem(itemID);
-        if(item == null)
-        {
+        if (item == null) {
             StockMarketMod.LOGGER.warn("Trade item not found: " + itemID);
             return;
         }
@@ -295,8 +293,7 @@ public class TradeScreen extends Screen {
         orderListWidget.init();
     }
 
-    private void onItemSelected(String itemId)
-    {
+    private void onItemSelected(String itemId) {
         StockMarketMod.LOGGER.info("Item selected: " + itemId);
 
         ClientMarket.unsubscribeMarketUpdate(itemID);
@@ -324,14 +321,13 @@ public class TradeScreen extends Screen {
         int y = 0;
 
 
-
         int price = ClientMarket.getPrice(itemID);
         // Draw the item
         graphics.renderItem(itemStack, selectItemButtonRect.x, selectItemButtonRect.y);
         int textHeight = this.font.lineHeight;
-        graphics.drawString(this.font, "Price: " + price, selectItemButtonRect.x+selectItemButtonRect.height, selectItemButtonRect.y+textHeight/2, 0xFFFFFF);
-        graphics.drawString(this.font, "Amount:", selectItemButtonRect.x, amountEditRect.y+textHeight/2, 0xFFFFFF);
-        graphics.drawString(this.font, "Limit price:", selectItemButtonRect.x, limitPriceEditRect.y+textHeight/2, 0xFFFFFF);
+        graphics.drawString(this.font, "Price: " + price, selectItemButtonRect.x + selectItemButtonRect.height, selectItemButtonRect.y + textHeight / 2, 0xFFFFFF);
+        graphics.drawString(this.font, "Amount:", selectItemButtonRect.x, amountEditRect.y + textHeight / 2, 0xFFFFFF);
+        graphics.drawString(this.font, "Limit price:", selectItemButtonRect.x, limitPriceEditRect.y + textHeight / 2, 0xFFFFFF);
 
         super.render(graphics, mouseX, mouseY, partialTick);
 
@@ -378,20 +374,19 @@ public class TradeScreen extends Screen {
     }
 
     private void drawLine(GuiGraphics graphics, int x1, int y1, int x2, int y2, int color, int width) {
-        graphics.fill(x1, y1-width/2, x2, y1+width/2, color);
-        graphics.fill(x2-width/2, y2, x2+width/2, y1, color);
+        graphics.fill(x1, y1 - width / 2, x2, y1 + width / 2, color);
+        graphics.fill(x2 - width / 2, y2, x2 + width / 2, y1, color);
     }
 
-    private void drawText(GuiGraphics graphics, Rectangle box, String text)
-    {
+    private void drawText(GuiGraphics graphics, Rectangle box, String text) {
         int textWidth = this.font.width(text);
         int textHeight = this.font.lineHeight;
         int x = box.x + (box.width - textWidth) / 2;
         int y = box.y + (box.height - textHeight) / 2;
         graphics.drawString(this.font, text, x, y, 0xFFFFFF);
     }
-    private void drawToolTipForElement(GuiGraphics graphics, AbstractWidget widget, int mouseX, int mouseY, Component tooltip)
-    {
+
+    private void drawToolTipForElement(GuiGraphics graphics, AbstractWidget widget, int mouseX, int mouseY, Component tooltip) {
         if (widget.isMouseOver(mouseX, mouseY)) {
             // Render a tooltip
             graphics.renderTooltip(
@@ -409,23 +404,21 @@ public class TradeScreen extends Screen {
         return false;
     }
 
-    private void onSellMarketButtonPressed(Button button)
-    {
+    private void onSellMarketButtonPressed(Button button) {
         StockMarketMod.LOGGER.info("Sell button pressed");
         saveAmount();
         ClientMarket.createOrder(itemID, -targetAmount);
         //RequestPricePacket.generateRequest(itemID);
     }
-    private void onBuyMarketButtonPressed(Button button)
-    {
+
+    private void onBuyMarketButtonPressed(Button button) {
         StockMarketMod.LOGGER.info("Buy button pressed");
         saveAmount();
         ClientMarket.createOrder(itemID, targetAmount);
         //RequestPricePacket.generateRequest(itemID);
     }
 
-    private void onSellLimitButtonPressed(Button button)
-    {
+    private void onSellLimitButtonPressed(Button button) {
         StockMarketMod.LOGGER.info("Sell button pressed");
         saveAmount();
         saveLimitPrice();
@@ -433,16 +426,15 @@ public class TradeScreen extends Screen {
         //RequestPricePacket.generateRequest(itemID);
     }
 
-    private void onBuyLimitButtonPressed(Button button)
-    {
+    private void onBuyLimitButtonPressed(Button button) {
         StockMarketMod.LOGGER.info("Buy button pressed");
         saveAmount();
         saveLimitPrice();
         ClientMarket.createOrder(itemID, targetAmount, targetPrice);
         //RequestPricePacket.generateRequest(itemID);
     }
-    private void onSelectItemButtonPressed(Button button)
-    {
+
+    private void onSelectItemButtonPressed(Button button) {
         StockMarketMod.LOGGER.info("Select item button pressed");
 
         // Check if the player has operator permissions (level 2 or higher)
@@ -487,6 +479,7 @@ public class TradeScreen extends Screen {
             this.targetPrice = 0;
         }
     }
+
     private void saveAmount() {
         // Retrieve the value from the EditBox
         String text = this.amountBox.getValue();
@@ -503,9 +496,6 @@ public class TradeScreen extends Screen {
             this.targetAmount = 0;
         }
     }
-
-
-
 
 
     @Override
@@ -527,9 +517,8 @@ public class TradeScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if(button == 0)
-        {
-            if(orderListWidget.handleMouseClick(mouseX, mouseY))
+        if (button == 0) {
+            if (orderListWidget.handleMouseClick(mouseX, mouseY))
                 return true;
             if (this.priceBox.mouseClicked(mouseX, mouseY, button)) {
                 this.setFocused(this.priceBox);
@@ -559,7 +548,7 @@ public class TradeScreen extends Screen {
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
         // Handle scrolling
-        if(orderListWidget.mouseScrolled(mouseX, mouseY, delta))
+        if (orderListWidget.mouseScrolled(mouseX, mouseY, delta))
             return true;
         return super.mouseScrolled(mouseX, mouseY, delta);
     }

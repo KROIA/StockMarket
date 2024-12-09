@@ -9,9 +9,8 @@ import java.io.IOException;
 
 public class DataHandler {
     private static final String FILE_NAME = "StockMarket_data.dat";
+    private static final boolean COMPRESSED = false;
     private static File saveFolder;
-   // private CompoundTag data = new CompoundTag();
-
 
     public static void setSaveFolder(File folder) {
         saveFolder = folder;
@@ -37,7 +36,10 @@ public class DataHandler {
             data.put("market", marketData);
 
 
-            NbtIo.writeCompressed(data, file);
+            if(COMPRESSED)
+                NbtIo.writeCompressed(data, file);
+            else
+                NbtIo.write(data, file);
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -54,7 +56,11 @@ public class DataHandler {
         if (file.exists()) {
             try {
                 CompoundTag data = new CompoundTag();
-                data = NbtIo.readCompressed(file);
+
+                if(COMPRESSED)
+                    data = NbtIo.readCompressed(file);
+                else
+                    data = NbtIo.read(file);
 
                 // Load server market
                 ServerMarket market = new ServerMarket();

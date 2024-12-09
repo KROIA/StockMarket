@@ -189,17 +189,8 @@ public class StockMarketMod
                 lastTimeMinute = currentTimeMinute;
 
                 ServerMarket.shiftPriceHistory();
+                ServerMarket.updateBot();
             }
-
-            /*
-            if (currentTimeMinute != lastTimeMinute) { // Check if one minute has passed
-                lastTimeMinute = currentTimeMinute; // Update the last execution time
-
-                LOGGER.info("One minute has passed");
-                Market.shiftPriceHistory();
-                // Call the executeServerSideCode method
-                //executeServerSideCode();
-            }*/
         }
     }
 
@@ -209,8 +200,13 @@ public class StockMarketMod
 
     public static ServerPlayer getPlayerByUUID(String uuid)
     {
-        // Parse the UUID string into a UUID object
-        UUID playerUUID = UUID.fromString(uuid);
+        UUID playerUUID;
+        try {
+            playerUUID = UUID.fromString(uuid);
+        } catch (IllegalArgumentException e) {
+            System.err.println("Invalid UUID string: " + uuid);
+            return null;
+        }
 
         // Get the Minecraft server instance
         MinecraftServer server = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();

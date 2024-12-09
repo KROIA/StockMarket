@@ -84,6 +84,7 @@ public class ServerMarket implements ServerSaveable
             return;
         }
         item.addOrder(order);
+        item.updateBot();
     }
     public static void cancelOrder(long orderID)
     {
@@ -114,6 +115,27 @@ public class ServerMarket implements ServerSaveable
             return new ArrayList<>();
         }
         return item.getOrders();
+    }
+    public static ArrayList<Order> getOrders(String itemID, String playerUUID)
+    {
+        ServerTradeItem item = tradeItems.get(itemID);
+        if(item == null)
+        {
+            msgTradeItemNotFound(itemID);
+            return new ArrayList<>();
+        }
+        ArrayList<Order> orders = new ArrayList<>();
+        item.getOrders(playerUUID, orders);
+        return orders;
+    }
+    public static ArrayList<Order> getOrdersFromUser(String playerUUID)
+    {
+        ArrayList<Order> orders = new ArrayList<>();
+        for(ServerTradeItem item : tradeItems.values())
+        {
+            item.getOrders(playerUUID, orders);
+        }
+        return orders;
     }
 
 
@@ -233,6 +255,14 @@ public class ServerMarket implements ServerSaveable
             ServerMarket.addPlayerUpdateSubscription(itemID, player);
         } else {
             ServerMarket.removePlayerUpdateSubscription(itemID, player);
+        }
+    }
+
+    public static void updateBot()
+    {
+        for(ServerTradeItem item : tradeItems.values())
+        {
+            item.updateBot();
         }
     }
 

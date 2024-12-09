@@ -25,6 +25,8 @@ public abstract class Order {
 
     protected String invalidReason = "";
 
+    protected boolean isBot = false;
+
     public enum Status {
         PENDING,
         PROCESSED,
@@ -44,6 +46,14 @@ public abstract class Order {
         this.playerUUID = playerUUID;
         //this.itemID = itemID;
         this.amount = amount;
+    }
+    public Order(String playerUUID, String itemID, int amount, boolean isBot) {
+        this.itemID = itemID;
+        this.orderID = uniqueOrderID();
+        this.playerUUID = playerUUID;
+        //this.itemID = itemID;
+        this.amount = amount;
+        this.isBot = isBot;
     }
     protected Order()
     {
@@ -69,6 +79,7 @@ public abstract class Order {
         averagePrice = buf.readInt();
         status = Status.valueOf(buf.readUtf());
         invalidReason = buf.readUtf();
+        isBot = buf.readBoolean();
     }
 
     public void copyFrom(Order other)
@@ -81,6 +92,14 @@ public abstract class Order {
         averagePrice = other.averagePrice;
         status = other.status;
         invalidReason = other.invalidReason;
+        isBot = other.isBot;
+    }
+
+    public void markAsBot() {
+        isBot = true;
+    }
+    public boolean isBot() {
+        return isBot;
     }
 
     public static long uniqueOrderID()
@@ -151,13 +170,15 @@ public abstract class Order {
         if(status == this.status)
             return;
         this.status = status;
-        if(StockMarketMod.isServer())
+        if(StockMarketMod.isServer() && !isBot)
         {
             ResponseOrderPacket.sendResponse(this);
         }
     }
 
     public void notifyPlayer() {
+        if(isBot)
+            return;
         if(StockMarketMod.isServer())
         {
             ResponseOrderPacket.sendResponse(this);
@@ -181,7 +202,8 @@ public abstract class Order {
     public void changeAveragePrice(int filledAmount, int fillPrice) {
         if(filledAmount == 0)
             return;
-        averagePrice = (Math.abs(this.filledAmount) * averagePrice + Math.abs(filledAmount) * fillPrice) / Math.abs(this.amount);
+        int fillVolume = Math.abs(filledAmount);
+        averagePrice = (fillVolume * averagePrice + Math.abs(filledAmount) * fillPrice) / fillVolume;
     }
 
     /**
@@ -227,6 +249,7 @@ public abstract class Order {
         buf.writeInt(averagePrice);
         buf.writeUtf(status.toString());
         buf.writeUtf(invalidReason);
+        buf.writeBoolean(isBot);
     }
 
 }

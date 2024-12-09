@@ -83,8 +83,13 @@ public class CandleStickChart {
 
 
         int labelWidth = 0;
+        int yAxisLabelIncrement = 10;
+        if(chartViewMaxPrice - chartViewMinPrice > 10)
+        {
+            yAxisLabelIncrement = (chartViewMaxPrice - chartViewMinPrice)/10;
+        }
         // Draw yAxis
-        for(int i=chartViewMinPrice; i<=chartViewMaxPrice; i+=10)
+        for(int i=chartViewMinPrice; i<=chartViewMaxPrice; i+=yAxisLabelIncrement)
         {
             int y = getChartYPos(i);
 
@@ -97,20 +102,26 @@ public class CandleStickChart {
 
         }
 
-        int x = 0;
+
         int candleWidth = 0;
         if(priceHistory != null)
         {
             candleWidth = (chartViewWidth-labelWidth) / priceHistory.size();
+            candleWidth = candleWidth | 1; // Make sure it is odd
+            if(candleWidth < 3)
+                candleWidth = 3;
         }
-        for(int i=0; i<priceHistory.size(); i++)
+        int x = chartViewWidth-labelWidth-candleWidth;
+        for(int i=priceHistory.size()-1; i>=0; i--)
         {
             int low = priceHistory.getLowPrice(i);
             int high = priceHistory.getHighPrice(i);
             int close = priceHistory.getClosePrice(i);
             int open = priceHistory.getOpenPrice(i);
             renderCandle(graphics, x, candleWidth, plotXOffset+labelWidth, plotYOffset, open, close, high, low);
-            x += candleWidth;
+            x -= candleWidth;
+            if(x < 0)
+                break;
         }
     }
 
@@ -142,15 +153,15 @@ public class CandleStickChart {
 
         if((bodyYMax) - wickYMax > 0) {
             // Wick up
-            graphics.fill(xOffset + x + candleWidth / 2 - 1, yOffset + bodyYMax,
-                          xOffset + x + candleWidth / 2 + 1, yOffset + wickYMax, color);
+            graphics.fill(xOffset + x + candleWidth / 2, yOffset + bodyYMax,
+                          xOffset + x + candleWidth / 2+1, yOffset + wickYMax, color);
         }
 
         if(wickYMin - (bodyYMin) > 0)
         {
             // Wick down
-            graphics.fill(xOffset + x + candleWidth / 2 - 1, yOffset + bodyYMin,
-                          xOffset + x + candleWidth / 2 + 1, yOffset + wickYMin, color);
+            graphics.fill(xOffset + x + candleWidth / 2, yOffset + bodyYMin,
+                          xOffset + x + candleWidth / 2+1, yOffset + wickYMin, color);
         }
 
         graphics.fill(xOffset + x, yOffset + bodyYMin,

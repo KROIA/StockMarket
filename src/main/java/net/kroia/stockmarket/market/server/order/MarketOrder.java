@@ -34,9 +34,13 @@ public class MarketOrder extends Order {
 
     @Override
     public String toString() {
-        ServerPlayer player = StockMarketMod.getPlayerByUUID(playerUUID);
-        String playerName = player == null ? "UUID:"+playerUUID : player.getName().getString();
-
+        String playerName;
+        if(this.isBot) {
+            playerName = playerUUID;
+        }else {
+            ServerPlayer player = StockMarketMod.getPlayerByUUID(playerUUID);
+            playerName = player == null ? "UUID:" + playerUUID : player.getName().getString();
+        }
         return "MarketOrder{ Owner: " + playerName + " Amount: " + amount + " Filled: " + filledAmount + " AveragePrice: " + averagePrice + " Status:" + status+
                 (status==Status.INVALID?" Invalid reason: "+invalidReason:"")+" }";
     }

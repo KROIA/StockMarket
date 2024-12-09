@@ -70,6 +70,16 @@ public class UpdatePricePacket {
     }
     public UpdatePricePacket(String itemID)
     {
+        commonSetup(itemID);
+        this.orders = ServerMarket.getOrders(itemID);
+    }
+    public UpdatePricePacket(String itemID, String playerUUID)
+    {
+        commonSetup(itemID);
+        this.orders = ServerMarket.getOrders(itemID, playerUUID);
+    }
+    private void commonSetup(String itemID)
+    {
         if(!ServerMarket.hasItem(itemID))
         {
             StockMarketMod.LOGGER.warn("Item not found: " + itemID);
@@ -88,7 +98,7 @@ public class UpdatePricePacket {
         {
             range = 10;
         }
-        int tiles = 20;
+
 
 
         minPrice -= range;
@@ -98,20 +108,24 @@ public class UpdatePricePacket {
         minPrice = (minPrice / 10) * 10;
         maxPrice = (maxPrice / 10) * 10;
 
+        int tiles = 50;
+        if(maxPrice-minPrice < tiles)
+        {
+            tiles = maxPrice-minPrice;
+        }
+
 
 
         OrderbookVolume orderBookVolume = ServerMarket.getOrderBookVolume(itemID, tiles, minPrice, maxPrice);
-
         this.priceHistory = history;
         this.orderBookVolume = orderBookVolume;
         this.minPrice = minPrice;
         this.maxPrice = maxPrice;
-        this.orders = ServerMarket.getOrders(itemID);
     }
 
     public static void sendPacket(String itemID, ServerPlayer player)
     {
-        UpdatePricePacket packet = new UpdatePricePacket(itemID);
+        UpdatePricePacket packet = new UpdatePricePacket(itemID, player.getStringUUID());
         ModMessages.sendToPlayer(packet, player);
     }
 

@@ -68,6 +68,10 @@ public class ServerTradeItem implements ServerSaveable {
     {
         return marketManager.getOrders();
     }
+    public void getOrders(String playerUUID, ArrayList<Order> orders)
+    {
+        marketManager.getOrders(playerUUID, orders);
+    }
 
     public void shiftPriceHistory()
     {
@@ -111,6 +115,11 @@ public class ServerTradeItem implements ServerSaveable {
         UpdatePricePacket.sendPacket(itemID, player);
     }
 
+    public void updateBot()
+    {
+        marketManager.updateBot();
+        notifySubscribers();
+    }
 
     @Override
     public void save(CompoundTag tag) {

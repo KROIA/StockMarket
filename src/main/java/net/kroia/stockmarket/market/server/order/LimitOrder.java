@@ -20,6 +20,12 @@ public class LimitOrder extends Order implements ServerSaveable {
 
         StockMarketMod.LOGGER.info("LimitOrder created: " + toString());
     }
+    public LimitOrder(String playerUUID, String itemID, int amount, int price, boolean isBot) {
+        super(playerUUID, itemID, amount, isBot);
+        this.price = price;
+
+        StockMarketMod.LOGGER.info("LimitOrder created: " + toString());
+    }
     public LimitOrder(CompoundTag loadFromTag)
     {
         super();
@@ -49,8 +55,13 @@ public class LimitOrder extends Order implements ServerSaveable {
 
     @Override
     public String toString() {
-        ServerPlayer player = StockMarketMod.getPlayerByUUID(playerUUID);
-        String playerName = player == null ? "UUID:"+playerUUID : player.getName().getString();
+        String playerName;
+        if(this.isBot) {
+            playerName = playerUUID;
+        }else {
+            ServerPlayer player = StockMarketMod.getPlayerByUUID(playerUUID);
+            playerName = player == null ? "UUID:" + playerUUID : player.getName().getString();
+        }
 
         return "LimitOrder{ Owner: " + playerName + " Amount: " + amount + " Filled: " + filledAmount + " Price: " + price + " AveragePrice: " + averagePrice + " Status:" + status+
                 (status==Status.INVALID?" Invalid reason: "+invalidReason:"")+" }";
@@ -87,6 +98,7 @@ public class LimitOrder extends Order implements ServerSaveable {
         tag.putInt("averagePrice", averagePrice);
         tag.putString("status", status.toString());
         tag.putString("invalidReason", invalidReason);
+        tag.putBoolean("isBot", isBot);
     }
 
     @Override
@@ -100,6 +112,7 @@ public class LimitOrder extends Order implements ServerSaveable {
         averagePrice = tag.getInt("averagePrice");
         status = Status.valueOf(tag.getString("status"));
         invalidReason = tag.getString("invalidReason");
+        isBot = tag.getBoolean("isBot");
     }
 
 

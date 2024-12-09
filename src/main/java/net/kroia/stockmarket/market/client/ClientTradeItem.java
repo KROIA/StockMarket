@@ -20,6 +20,7 @@ public class ClientTradeItem {
     private int visualMinPrice = 0;
     private int visualMaxPrice = 0;
 
+    // Orders that belong to this user
     private final Map<Long, Order> orders = new HashMap<>();
 
 

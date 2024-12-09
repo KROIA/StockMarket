@@ -14,6 +14,7 @@ public class MarketManager implements ServerSaveable {
     private String itemID;
 
     private MatchingEngine matchingEngine;
+    private ServerTradingBot tradingBot;
 
     private PriceHistory priceHistory;
     private int lowPrice;
@@ -23,6 +24,8 @@ public class MarketManager implements ServerSaveable {
     {
         this.itemID = itemID;
         matchingEngine = new MatchingEngine(initialPrice);
+        tradingBot = new ServerTradingBot(matchingEngine, itemID);
+        matchingEngine.setTradingBot(tradingBot);
         priceHistory = history;
 
         lowPrice = initialPrice;
@@ -53,6 +56,19 @@ public class MarketManager implements ServerSaveable {
     public ArrayList<Order> getOrders()
     {
         return matchingEngine.getOrders();
+    }
+
+    public void getOrders(String playerUUID, ArrayList<Order> orders)
+    {
+        matchingEngine.getOrders(playerUUID, orders);
+    }
+
+    public void updateBot()
+    {
+        if(tradingBot != null)
+        {
+            tradingBot.setCurrentPrice(matchingEngine.getPrice());
+        }
     }
 
     public void shiftPriceHistory()
@@ -99,6 +115,13 @@ public class MarketManager implements ServerSaveable {
         tag.put("matchingEngine", matchingEngineTag);
 
 
+        if(tradingBot != null)
+        {
+            CompoundTag tradingBotTag = new CompoundTag();
+            tradingBot.save(tradingBotTag);
+            tag.put("tradingBot", tradingBotTag);
+        }
+
 
     }
 
@@ -110,5 +133,11 @@ public class MarketManager implements ServerSaveable {
 
         CompoundTag matchingEngineTag = tag.getCompound("matchingEngine");
         matchingEngine.load(matchingEngineTag);
+
+        if(tag.contains("tradingBot") && tradingBot != null)
+        {
+            CompoundTag tradingBotTag = tag.getCompound("tradingBot");
+            tradingBot.load(tradingBotTag);
+        }
     }
 }
