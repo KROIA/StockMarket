@@ -34,7 +34,13 @@ public class ResponseOrderPacket {
         StockMarketMod.LOGGER.info("[SERVER] Sending ResponseOrderPacket for order: "+order.toString());
 
 
-        ModMessages.sendToPlayer(new ResponseOrderPacket(order), order.getPlayer());
+        ServerPlayer player = StockMarketMod.getPlayerByUUID(order.getPlayerUUID());
+        if(player == null)
+        {
+            StockMarketMod.LOGGER.warn("[SERVER] Player not found for order: "+order.toString());
+            return;
+        }
+        ModMessages.sendToPlayer(new ResponseOrderPacket(order), player);
     }
 
     public Order getOrder() {

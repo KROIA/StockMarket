@@ -32,10 +32,8 @@ public class CandleStickChart {
         this.parent = parent;
     }
 
-    public void setChartView(int minPrice, int maxPrice, int xPos, int yPos, int width, int height)
+    public void setChartView(int xPos, int yPos, int width, int height)
     {
-        this.chartViewMinPrice = minPrice;
-        this.chartViewMaxPrice = maxPrice;
         this.chartViewWidth = width;
         this.chartViewHeight = height;
         this.plotXOffset = xPos;

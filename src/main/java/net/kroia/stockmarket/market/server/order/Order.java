@@ -2,6 +2,8 @@ package net.kroia.stockmarket.market.server.order;
 
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.networking.packet.ResponseOrderPacket;
+import net.kroia.stockmarket.util.ServerSaveable;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
@@ -14,7 +16,7 @@ public abstract class Order {
 
     protected long orderID;
     protected String itemID;
-    protected ServerPlayer player;
+    protected String playerUUID;
     //private final String itemID;
     protected int amount;
     protected int filledAmount = 0;
@@ -36,12 +38,16 @@ public abstract class Order {
     }
     protected Status status = Status.PENDING;
 
-    public Order(ServerPlayer player, String itemID, int amount) {
+    public Order(String playerUUID, String itemID, int amount) {
         this.itemID = itemID;
         this.orderID = uniqueOrderID();
-        this.player = player;
+        this.playerUUID = playerUUID;
         //this.itemID = itemID;
         this.amount = amount;
+    }
+    protected Order()
+    {
+
     }
 
     public static Order construct(FriendlyByteBuf buf)
@@ -57,8 +63,7 @@ public abstract class Order {
     {
         orderID = buf.readLong();
         itemID = buf.readUtf();
-        String playerUUID = buf.readUtf();
-        player = StockMarketMod.getPlayerByUUID(playerUUID);
+        playerUUID = buf.readUtf();
         amount = buf.readInt();
         filledAmount = buf.readInt();
         averagePrice = buf.readInt();
@@ -70,7 +75,7 @@ public abstract class Order {
     {
         orderID = other.orderID;
         itemID = other.itemID;
-        player = other.player;
+        playerUUID = other.playerUUID;
         amount = other.amount;
         filledAmount = other.filledAmount;
         averagePrice = other.averagePrice;
@@ -97,15 +102,15 @@ public abstract class Order {
     {
         return  orderID == other.orderID &&
                 itemID.equals(other.itemID) &&
-                player == other.player &&
+                playerUUID.compareTo(other.playerUUID)==0 &&
                 amount == other.amount &&
                 filledAmount == other.filledAmount &&
                 averagePrice == other.averagePrice &&
                 status == other.status;
     }
 
-    public ServerPlayer getPlayer() {
-        return player;
+    public String getPlayerUUID() {
+        return playerUUID;
     }
     public long getOrderID() {
         return orderID;
@@ -129,17 +134,17 @@ public abstract class Order {
     }
 
     public void markAsProcessed() {
-        setStatus(Status.PROCESSED);
         StockMarketMod.LOGGER.info("Order processed: " + toString());
+        setStatus(Status.PROCESSED);
     }
     public void markAsInvalid(String reason) {
-        setStatus(Status.INVALID);
         invalidReason = reason;
         StockMarketMod.LOGGER.info("Order invalid: " + toString());
+        setStatus(Status.INVALID);
     }
     public void markAsCancelled() {
-        setStatus(Status.CANCELLED);
         StockMarketMod.LOGGER.info("Order canceled: " + toString());
+        setStatus(Status.CANCELLED);
     }
 
     private void setStatus(Status status) {
@@ -216,11 +221,12 @@ public abstract class Order {
     public void toBytes(FriendlyByteBuf buf) {
         buf.writeLong(orderID);
         buf.writeUtf(itemID);
-        buf.writeUtf(player.getStringUUID());
+        buf.writeUtf(playerUUID);
         buf.writeInt(amount);
         buf.writeInt(filledAmount);
         buf.writeInt(averagePrice);
         buf.writeUtf(status.toString());
         buf.writeUtf(invalidReason);
     }
+
 }

@@ -5,13 +5,16 @@ import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.MarketOrder;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.util.OrderbookVolume;
+import net.kroia.stockmarket.util.ServerSaveable;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 
 import java.util.*;
 
 /*
     * The MatchingEngine class is responsible for matching buy and sell orders.
  */
-public class MatchingEngine {
+public class MatchingEngine implements ServerSaveable {
     private int price;
     private int tradeVolume;
 
@@ -226,4 +229,49 @@ public class MatchingEngine {
     }
 
 
+    @Override
+    public void save(CompoundTag tag) {
+        ListTag buyOrdersList = new ListTag();
+        ListTag sellOrdersList = new ListTag();
+        for(LimitOrder order : limitBuyOrders)
+        {
+            CompoundTag orderTag = new CompoundTag();
+            order.save(orderTag);
+            buyOrdersList.add(orderTag);
+        }
+
+        for(LimitOrder order : limitSellOrders)
+        {
+            CompoundTag orderTag = new CompoundTag();
+            order.save(orderTag);
+            sellOrdersList.add(orderTag);
+        }
+
+        tag.putInt("price", price);
+        tag.putInt("trade_volume", tradeVolume);
+        tag.put("buy_orders", buyOrdersList);
+        tag.put("sell_orders", sellOrdersList);
+    }
+
+    @Override
+    public void load(CompoundTag tag) {
+        price = tag.getInt("price");
+        tradeVolume = tag.getInt("trade_volume");
+        ListTag buyOrdersList = tag.getList("buy_orders", 10);
+        ListTag sellOrdersList = tag.getList("sell_orders", 10);
+        for(int i = 0; i < buyOrdersList.size(); i++)
+        {
+            CompoundTag orderTag = buyOrdersList.getCompound(i);
+            LimitOrder order = new LimitOrder(orderTag);
+            limitBuyOrders.add(order);
+        }
+
+        for(int i = 0; i < sellOrdersList.size(); i++)
+        {
+            CompoundTag orderTag = sellOrdersList.getCompound(i);
+            LimitOrder order = new LimitOrder(orderTag);
+            limitSellOrders.add(order);
+        }
+
+    }
 }

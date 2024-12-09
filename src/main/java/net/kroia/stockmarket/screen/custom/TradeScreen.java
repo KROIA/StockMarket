@@ -5,6 +5,7 @@ import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
 import net.kroia.stockmarket.market.client.ClientMarket;
 import net.kroia.stockmarket.market.client.ClientTradeItem;
+import net.kroia.stockmarket.networking.packet.StockMarketBlockEntityLoadPacket;
 import net.kroia.stockmarket.networking.packet.StockMarketBlockEntitySavePacket;
 import net.kroia.stockmarket.screen.uiElements.ColoredButton;
 import net.kroia.stockmarket.util.CandleStickChart;
@@ -99,7 +100,7 @@ public class TradeScreen extends Screen {
     static int tickPhaseCount = 0;
 
     static TradeScreen instance;
-    static boolean test = false;
+    static boolean test = true;
     static StockMarketBlockEntity blockEntity;
 
     public TradeScreen(StockMarketBlockEntity blockEntity) {
@@ -136,7 +137,7 @@ public class TradeScreen extends Screen {
         //SubscribeMarketEventsPacket.generateRequest(itemID, false);
     }
 
-    public static void handlePacket(StockMarketBlockEntitySavePacket packet) {
+    public static void handlePacket(StockMarketBlockEntityLoadPacket packet) {
         //blockEntity.setItemID(packet.getItemID());
         //blockEntity.setAmount(packet.getAmount());
         //blockEntity.setPrice(packet.getPrice());
@@ -183,7 +184,7 @@ public class TradeScreen extends Screen {
         //int buttonVSpacing = 5;
         //int currentY = 0;
 
-        candleStickChart.setChartView(0, 100, chartRect.x+padding,chartRect.y+padding, chartRect.width-50-2*padding, chartRect.height-2*padding);
+        candleStickChart.setChartView(chartRect.x+padding,chartRect.y+padding, chartRect.width-50-2*padding, chartRect.height-2*padding);
         orderbookVolumeChart.setChartView(chartRect.x+chartRect.width-50-padding, chartRect.y+padding, 50, chartRect.height-2*padding);
 
 

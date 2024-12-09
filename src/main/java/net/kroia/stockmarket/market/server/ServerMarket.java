@@ -7,6 +7,9 @@ import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.networking.packet.*;
 import net.kroia.stockmarket.util.OrderbookVolume;
 import net.kroia.stockmarket.util.PriceHistory;
+import net.kroia.stockmarket.util.ServerSaveable;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.lang.reflect.Array;
@@ -14,7 +17,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
-public class ServerMarket
+public class ServerMarket implements ServerSaveable
 {
     //private static final Map<String, MarketManager> marketManagers = new HashMap<>();
     //private static final Map<String, ArrayList<ServerPlayer>> playerSubscriptions = new HashMap<>();
@@ -195,12 +198,12 @@ public class ServerMarket
         switch(orderType)
         {
             case limit:
-                LimitOrder limitOrder = new LimitOrder(player, itemID, amount, price);
+                LimitOrder limitOrder = new LimitOrder(player.getStringUUID(), itemID, amount, price);
                 ServerMarket.addOrder(limitOrder);
                 //StockMarketMod.LOGGER.info("[SERVER] Player "+context.getSender().getName().getString()+" is selling "+this.amount+" of "+this.itemID+" with a limit order");
                 break;
             case market:
-                MarketOrder marketOrder = new MarketOrder(player, itemID, amount);
+                MarketOrder marketOrder = new MarketOrder(player.getStringUUID(), itemID, amount);
                 ServerMarket.addOrder(marketOrder);
                 //StockMarketMod.LOGGER.info("[SERVER] Player "+context.getSender().getName().getString()+" is selling "+this.amount+" of "+this.itemID+" with a market order");
                 break;
@@ -230,6 +233,41 @@ public class ServerMarket
             ServerMarket.addPlayerUpdateSubscription(itemID, player);
         } else {
             ServerMarket.removePlayerUpdateSubscription(itemID, player);
+        }
+    }
+
+    @Override
+    public void save(CompoundTag tag) {
+        tag.putInt("shiftPriceHistoryInterval", shiftPriceHistoryInterval);
+
+        ListTag tradeItems = new ListTag();
+        for(ServerTradeItem tradeItem : ServerMarket.tradeItems.values())
+        {
+            CompoundTag tradeItemTag = new CompoundTag();
+            tradeItem.save(tradeItemTag);
+            tradeItems.add(tradeItemTag);
+        }
+        tag.put("tradeItems", tradeItems);
+
+    }
+
+    @Override
+    public void load(CompoundTag tag) {
+        try {
+            shiftPriceHistoryInterval = tag.getInt("shiftPriceHistoryInterval");
+
+            ListTag tradeItems = tag.getList("tradeItems", 10);
+            Map<String, ServerTradeItem> tradeItemsMap = new HashMap<>();
+            for(int i = 0; i < tradeItems.size(); i++)
+            {
+                CompoundTag tradeItemTag = tradeItems.getCompound(i);
+                ServerTradeItem tradeItem = new ServerTradeItem(tradeItemTag);
+                tradeItemsMap.put(tradeItem.getItemID(), tradeItem);
+            }
+            ServerMarket.tradeItems.clear();
+            ServerMarket.tradeItems.putAll(tradeItemsMap);
+        } catch (Exception e) {
+            StockMarketMod.LOGGER.error("[SERVER] Error loading shiftPriceHistoryInterval from NBT");
         }
     }
 }

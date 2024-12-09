@@ -5,12 +5,14 @@ import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.networking.packet.UpdatePricePacket;
 import net.kroia.stockmarket.util.OrderbookVolume;
 import net.kroia.stockmarket.util.PriceHistory;
+import net.kroia.stockmarket.util.ServerSaveable;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.ArrayList;
 
-public class ServerTradeItem {
-    private final String itemID;
+public class ServerTradeItem implements ServerSaveable {
+    private String itemID;
     private final PriceHistory priceHistory;
     private final ArrayList<ServerPlayer> subscribers = new ArrayList<>();
     private final MarketManager marketManager;
@@ -20,6 +22,13 @@ public class ServerTradeItem {
         this.itemID = itemID;
         this.priceHistory = new PriceHistory(itemID, startPrice);
         this.marketManager = new MarketManager(itemID, startPrice, priceHistory);
+    }
+
+    public ServerTradeItem(CompoundTag tag)
+    {
+        this.priceHistory = new PriceHistory("", 0);
+        this.marketManager = new MarketManager("", 0, priceHistory);
+        load(tag);
     }
 
     public String getItemID()
@@ -103,4 +112,31 @@ public class ServerTradeItem {
     }
 
 
+    @Override
+    public void save(CompoundTag tag) {
+        tag.putString("itemID", itemID);
+        CompoundTag matchingEngineTag = new CompoundTag();
+        marketManager.save(matchingEngineTag);
+        tag.put("matchingEngine", matchingEngineTag);
+
+        CompoundTag priceHistoryTag = new CompoundTag();
+        priceHistory.save(priceHistoryTag);
+        tag.put("priceHistory", priceHistoryTag);
+    }
+
+    @Override
+    public void load(CompoundTag tag) {
+        itemID = tag.getString("itemID");
+        marketManager.load(tag.getCompound("matchingEngine"));
+
+        priceHistory.load(tag.getCompound("priceHistory"));
+
+
+
+        marketManager.setItemID(itemID);
+        priceHistory.setItemID(itemID);
+
+
+
+    }
 }

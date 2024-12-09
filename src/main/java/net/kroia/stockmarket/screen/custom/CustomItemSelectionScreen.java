@@ -148,9 +148,7 @@ public class CustomItemSelectionScreen extends Screen {
 
             if (mouseX >= x && mouseX < x + ROW_HEIGHT && mouseY >= y && mouseY < y + ROW_HEIGHT) {
                 TooltipFlag flag = this.minecraft.options.advancedItemTooltips ? TooltipFlag.Default.ADVANCED : TooltipFlag.Default.NORMAL;
-                //String tooltipText = filteredItems.get(i).getHoverName().getString();
                 graphics.renderTooltip(this.font, filteredItems.get(i), mouseX, mouseY);
-               // graphics.renderTooltip(this.font, (Component) filteredItems.get(i).getTooltipLines(this.minecraft.player, flag), mouseX, mouseY);
             }
         }
     }

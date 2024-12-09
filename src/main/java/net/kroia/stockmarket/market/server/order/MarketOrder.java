@@ -8,8 +8,8 @@ import net.minecraft.world.entity.player.Player;
 public class MarketOrder extends Order {
 
 
-    public MarketOrder(ServerPlayer player, String itemID, int amount) {
-        super(player, itemID, amount);
+    public MarketOrder(String playerUUID, String itemID, int amount) {
+        super(playerUUID, itemID, amount);
 
         StockMarketMod.LOGGER.info("MarketOrder created: " + toString());
     }
@@ -34,7 +34,10 @@ public class MarketOrder extends Order {
 
     @Override
     public String toString() {
-        return "MarketOrder{ Owner: " + player.getName() + " Amount: " + amount + " Filled: " + filledAmount + " AveragePrice: " + averagePrice + " Status:" + status+
+        ServerPlayer player = StockMarketMod.getPlayerByUUID(playerUUID);
+        String playerName = player == null ? "UUID:"+playerUUID : player.getName().getString();
+
+        return "MarketOrder{ Owner: " + playerName + " Amount: " + amount + " Filled: " + filledAmount + " AveragePrice: " + averagePrice + " Status:" + status+
                 (status==Status.INVALID?" Invalid reason: "+invalidReason:"")+" }";
     }
 

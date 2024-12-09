@@ -4,12 +4,14 @@ import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.util.OrderbookVolume;
 import net.kroia.stockmarket.util.PriceHistory;
+import net.kroia.stockmarket.util.ServerSaveable;
 import net.kroia.stockmarket.util.Timestamp;
+import net.minecraft.nbt.CompoundTag;
 
 import java.util.ArrayList;
 
-public class MarketManager {
-    private final String itemID;
+public class MarketManager implements ServerSaveable {
+    private String itemID;
 
     private MatchingEngine matchingEngine;
 
@@ -25,6 +27,13 @@ public class MarketManager {
 
         lowPrice = initialPrice;
         highPrice = initialPrice;
+    }
+
+    public void setPriceHistory(PriceHistory priceHistory) {
+        this.priceHistory = priceHistory;
+    }
+    public void setItemID(String itemID) {
+        this.itemID = itemID;
     }
 
     public void addOrder(Order order)
@@ -77,5 +86,29 @@ public class MarketManager {
     public OrderbookVolume getOrderBookVolume(int tiles, int minPrice, int maxPrice)
     {
         return matchingEngine.getOrderBookVolume(tiles, minPrice, maxPrice);
+    }
+
+    @Override
+    public void save(CompoundTag tag) {
+      //  tag.putString("itemID", itemID);
+        tag.putInt("lowPrice", lowPrice);
+        tag.putInt("highPrice", highPrice);
+
+        CompoundTag matchingEngineTag = new CompoundTag();
+        matchingEngine.save(matchingEngineTag);
+        tag.put("matchingEngine", matchingEngineTag);
+
+
+
+    }
+
+    @Override
+    public void load(CompoundTag tag) {
+       // itemID = tag.getString("itemID");
+        lowPrice = tag.getInt("lowPrice");
+        highPrice = tag.getInt("highPrice");
+
+        CompoundTag matchingEngineTag = tag.getCompound("matchingEngine");
+        matchingEngine.load(matchingEngineTag);
     }
 }

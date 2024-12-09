@@ -1,10 +1,11 @@
 package net.kroia.stockmarket.util;
 
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 
 import java.util.Calendar;
 
-public class Timestamp {
+public class Timestamp implements ServerSaveable {
 
     int day;
     int month;
@@ -91,5 +92,23 @@ public class Timestamp {
         buf.writeInt(year);
         buf.writeInt(hour);
         buf.writeInt(minute);
+    }
+
+    @Override
+    public void save(CompoundTag tag) {
+        tag.putInt("day", day);
+        tag.putInt("month", month);
+        tag.putInt("year", year);
+        tag.putInt("hour", hour);
+        tag.putInt("minute", minute);
+    }
+
+    @Override
+    public void load(CompoundTag tag) {
+        day = tag.getInt("day");
+        month = tag.getInt("month");
+        year = tag.getInt("year");
+        hour = tag.getInt("hour");
+        minute = tag.getInt("minute");
     }
 }

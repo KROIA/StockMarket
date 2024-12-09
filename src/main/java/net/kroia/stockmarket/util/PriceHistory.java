@@ -1,8 +1,10 @@
 package net.kroia.stockmarket.util;
 
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.network.FriendlyByteBuf;
 
-public class PriceHistory {
+public class PriceHistory implements ServerSaveable {
 
     private final int maxHistorySize = 10;
     private int[] lowPrice = new int[maxHistorySize];
@@ -11,7 +13,7 @@ public class PriceHistory {
     private int oldestClosePrice = 0;
     private Timestamp[] timeStamps = new Timestamp[maxHistorySize];
 
-    private final String itemID;
+    private String itemID;
 
     public PriceHistory(String itemID) {
         this.itemID = itemID;
@@ -31,6 +33,9 @@ public class PriceHistory {
             timeStamps[i] = new Timestamp();
         }
     }
+    public void setItemID(String itemID) {
+        this.itemID = itemID;
+    }
 
     public void clear()
     {
@@ -44,7 +49,7 @@ public class PriceHistory {
 
     public int size()
     {
-        return maxHistorySize;
+        return lowPrice.length;
     }
 
     public String getItemID()
@@ -151,4 +156,34 @@ public class PriceHistory {
     }
 
 
+    @Override
+    public void save(CompoundTag tag) {
+        tag.putIntArray("lowPrice", lowPrice);
+        tag.putIntArray("highPrice", highPrice);
+        tag.putIntArray("closePrice", closePrice);
+        tag.putInt("oldestClosePrice", oldestClosePrice);
+
+        ListTag times = new ListTag();
+        for (int i = 0; i < maxHistorySize; i++) {
+            CompoundTag timeTag = new CompoundTag();
+            timeStamps[i].save(timeTag);
+            times.add(timeTag);
+        }
+        tag.put("timeStamps", times);
+    }
+
+    @Override
+    public void load(CompoundTag tag) {
+        lowPrice = tag.getIntArray("lowPrice");
+        highPrice = tag.getIntArray("highPrice");
+        closePrice = tag.getIntArray("closePrice");
+        oldestClosePrice = tag.getInt("oldestClosePrice");
+
+        ListTag times = tag.getList("timeStamps", 10);
+        for (int i = 0; i < maxHistorySize; i++) {
+            CompoundTag timeTag = times.getCompound(i);
+            timeStamps[i].load(timeTag);
+        }
+
+    }
 }
