@@ -200,4 +200,9 @@ public class ClientMarket {
     private static void msgTradeItemNotFound(String itemID) {
         StockMarketMod.LOGGER.warn("[CLIENT] Trade item not found: " + itemID);
     }
+
+    public static ArrayList<String> getAvailableTradeItemIdList()
+    {
+        return new ArrayList<>(tradeItems.keySet());
+    }
 }

@@ -69,6 +69,11 @@ public class ModMessages {
                 .encoder(StockMarketBlockEntitySavePacket::toBytes)
                 .consumerMainThread(StockMarketBlockEntitySavePacket::handle)
                 .add();
+        net.messageBuilder(StockMarketBlockEntitySavePacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(StockMarketBlockEntitySavePacket::new)
+                .encoder(StockMarketBlockEntitySavePacket::toBytes)
+                .consumerMainThread(StockMarketBlockEntitySavePacket::handle)
+                .add();
 
         net.messageBuilder(UpdateTradeItemsPacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)
                 .decoder(UpdateTradeItemsPacket::new)

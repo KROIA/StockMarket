@@ -42,7 +42,7 @@ public class StockMarketBlockEntity extends BlockEntity implements MenuProvider 
     public void setItemID(String itemID) {
         this.itemID = itemID;
         // save entity changes
-        setChanged();
+        //setChanged();
     }
 
     public String getItemID() {
@@ -60,12 +60,12 @@ public class StockMarketBlockEntity extends BlockEntity implements MenuProvider 
     public void setAmount(int amount)
     {
         this.amount = amount;
-        setChanged();
+        //setChanged();
     }
     public void setPrice(int price)
     {
         this.price = price;
-        setChanged();
+        //setChanged();
     }
 
     @Override
@@ -95,6 +95,7 @@ public class StockMarketBlockEntity extends BlockEntity implements MenuProvider 
         return ClientboundBlockEntityDataPacket.create(this);
     }
 
+/*
     @Override
     public @Nullable CompoundTag getUpdateTag()
     {
@@ -107,6 +108,15 @@ public class StockMarketBlockEntity extends BlockEntity implements MenuProvider 
     public void handleUpdateTag(CompoundTag tag) {
         super.handleUpdateTag(tag);
         // Deserialize your data
+        CompoundTag dataTag = tag.getCompound(StockMarketMod.MODID);
+        itemID = dataTag.getString("itemID");
+        amount = dataTag.getInt("amount");
+        price = dataTag.getInt("price");
+    }*/
+
+    @Override
+    public void load(CompoundTag tag) {
+        super.load(tag);
         CompoundTag dataTag = tag.getCompound(StockMarketMod.MODID);
         itemID = dataTag.getString("itemID");
         amount = dataTag.getInt("amount");

@@ -5,6 +5,7 @@ import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
 import net.kroia.stockmarket.market.client.ClientMarket;
 import net.kroia.stockmarket.market.client.ClientTradeItem;
+import net.kroia.stockmarket.networking.packet.StockMarketBlockEntitySavePacket;
 import net.kroia.stockmarket.screen.uiElements.ColoredButton;
 import net.kroia.stockmarket.util.CandleStickChart;
 import net.kroia.stockmarket.util.OrderListWidget;
@@ -91,8 +92,8 @@ public class TradeScreen extends Screen {
 
 
 
-    private int targetPrice = 0;
-    private int targetAmount = 0;
+    private static int targetPrice = 0;
+    private static int targetAmount = 0;
 
     static int lastTickPahaseCount = 0;
     static int tickPhaseCount = 0;
@@ -131,7 +132,19 @@ public class TradeScreen extends Screen {
         blockEntity.setItemID(itemID);
         blockEntity.setAmount(targetAmount);
         blockEntity.setPrice(targetPrice);
+        StockMarketBlockEntitySavePacket.sendPacketToServer(blockEntity.getBlockPos(), blockEntity);
         //SubscribeMarketEventsPacket.generateRequest(itemID, false);
+    }
+
+    public static void handlePacket(StockMarketBlockEntitySavePacket packet) {
+        //blockEntity.setItemID(packet.getItemID());
+        //blockEntity.setAmount(packet.getAmount());
+        //blockEntity.setPrice(packet.getPrice());
+        itemID = packet.getItemID();
+        targetAmount = packet.getAmount();
+        targetPrice = packet.getPrice();
+        if(instance != null)
+            instance.init();
     }
 
     @Override
@@ -439,13 +452,22 @@ public class TradeScreen extends Screen {
         FeatureFlagSet featureFlags = FeatureFlagSet.of();
 
         // Open the ItemSelectionScreen with operator status and feature flags
-        this.minecraft.setScreen(new ItemSelectionScreen(
+        /*this.minecraft.setScreen(new ItemSelectionScreen(
                 this.minecraft.player,
                 featureFlags,
                 isOperator, // Check if player is an operator
                 this,
+                this::onItemSelected,
+                ClientMarket.getAvailableTradeItemIdList()
+        ));*/
+
+        this.minecraft.setScreen(new CustomItemSelectionScreen(
+                this,
+                ClientMarket.getAvailableTradeItemIdList(),
                 this::onItemSelected
         ));
+
+
     }
 
     private void saveLimitPrice() {
