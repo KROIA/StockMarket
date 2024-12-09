@@ -10,7 +10,7 @@ import net.minecraft.world.entity.player.Player;
     * The LimitOrder class represents a spot order.
  */
 public class LimitOrder extends Order {
-    private final int price;
+    private int price;
 
     public LimitOrder(ServerPlayer player, String itemID, int amount, int price) {
         super(player, itemID, amount);
@@ -42,7 +42,8 @@ public class LimitOrder extends Order {
 
     @Override
     public String toString() {
-        return "LimitOrder{ Owner: " + player.getName() + " Amount: " + amount + " Filled: " + filledAmount + " Price: " + price + " AveragePrice: " + averagePrice + " Status:" + status+" }";
+        return "LimitOrder{ Owner: " + player.getName() + " Amount: " + amount + " Filled: " + filledAmount + " Price: " + price + " AveragePrice: " + averagePrice + " Status:" + status+
+                (status==Status.INVALID?" Invalid reason: "+invalidReason:"")+" }";
     }
 
     @Override
@@ -52,6 +53,16 @@ public class LimitOrder extends Order {
         buf.writeUtf(type.toString());
         super.toBytes(buf);
         buf.writeInt(price);
+    }
+
+    @Override
+    public void copyFrom(Order other) {
+        super.copyFrom(other);
+        if(other instanceof LimitOrder)
+        {
+            LimitOrder otherLimitOrder = (LimitOrder) other;
+            this.price = otherLimitOrder.price;
+        }
     }
 
 

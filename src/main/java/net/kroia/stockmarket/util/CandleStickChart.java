@@ -41,6 +41,11 @@ public class CandleStickChart {
         this.plotXOffset = xPos;
         this.plotYOffset = yPos;
     }
+    public void setMinMaxPrice(int minPrice, int maxPrice)
+    {
+        this.chartViewMinPrice = minPrice;
+        this.chartViewMaxPrice = maxPrice;
+    }
 
     public int getChartViewMinPrice()
     {

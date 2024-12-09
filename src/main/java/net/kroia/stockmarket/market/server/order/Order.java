@@ -12,18 +12,22 @@ import net.minecraft.world.entity.player.Player;
 public abstract class Order {
     private static long lastOrderID = 0;
 
-    protected final long orderID;
+    protected long orderID;
     protected String itemID;
-    protected final ServerPlayer player;
+    protected ServerPlayer player;
     //private final String itemID;
-    protected final int amount;
+    protected int amount;
     protected int filledAmount = 0;
 
     protected int averagePrice = 0;
 
+    protected String invalidReason = "";
+
     public enum Status {
         PENDING,
         PROCESSED,
+        PARTIAL,
+        CANCELLED,
         INVALID
     }
     public enum Type {
@@ -59,6 +63,19 @@ public abstract class Order {
         filledAmount = buf.readInt();
         averagePrice = buf.readInt();
         status = Status.valueOf(buf.readUtf());
+        invalidReason = buf.readUtf();
+    }
+
+    public void copyFrom(Order other)
+    {
+        orderID = other.orderID;
+        itemID = other.itemID;
+        player = other.player;
+        amount = other.amount;
+        filledAmount = other.filledAmount;
+        averagePrice = other.averagePrice;
+        status = other.status;
+        invalidReason = other.invalidReason;
     }
 
     public static long uniqueOrderID()
@@ -100,6 +117,9 @@ public abstract class Order {
     public int getAmount() {
         return amount;
     }
+    public String getInvalidReason() {
+        return invalidReason;
+    }
 
     public boolean isBuy() {
         return amount > 0;
@@ -112,9 +132,14 @@ public abstract class Order {
         setStatus(Status.PROCESSED);
         StockMarketMod.LOGGER.info("Order processed: " + toString());
     }
-    public void markAsInvalid() {
+    public void markAsInvalid(String reason) {
         setStatus(Status.INVALID);
+        invalidReason = reason;
         StockMarketMod.LOGGER.info("Order invalid: " + toString());
+    }
+    public void markAsCancelled() {
+        setStatus(Status.CANCELLED);
+        StockMarketMod.LOGGER.info("Order canceled: " + toString());
     }
 
     private void setStatus(Status status) {
@@ -149,6 +174,8 @@ public abstract class Order {
         this.averagePrice = averagePrice;
     }
     public void changeAveragePrice(int filledAmount, int fillPrice) {
+        if(filledAmount == 0)
+            return;
         averagePrice = (Math.abs(this.filledAmount) * averagePrice + Math.abs(filledAmount) * fillPrice) / Math.abs(this.amount);
     }
 
@@ -163,6 +190,11 @@ public abstract class Order {
         if(Math.abs(fillAmount) > Math.abs(amount))
             fillAmount = amount;
         filledAmount += fillAmount;
+        if(filledAmount != 0 && status == Status.PENDING)
+        {
+            setStatus(Status.PARTIAL);
+        }
+
         if(isFilled())
         {
             markAsProcessed();
@@ -189,5 +221,6 @@ public abstract class Order {
         buf.writeInt(filledAmount);
         buf.writeInt(averagePrice);
         buf.writeUtf(status.toString());
+        buf.writeUtf(invalidReason);
     }
 }

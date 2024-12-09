@@ -34,7 +34,8 @@ public class MarketOrder extends Order {
 
     @Override
     public String toString() {
-        return "MarketOrder{ Owner: " + player.getName() + " Amount: " + amount + " Filled: " + filledAmount + " AveragePrice: " + averagePrice + " Status:" + status+" }";
+        return "MarketOrder{ Owner: " + player.getName() + " Amount: " + amount + " Filled: " + filledAmount + " AveragePrice: " + averagePrice + " Status:" + status+
+                (status==Status.INVALID?" Invalid reason: "+invalidReason:"")+" }";
     }
 
     @Override
@@ -43,5 +44,14 @@ public class MarketOrder extends Order {
         Type type = Type.MARKET;
         buf.writeUtf(type.toString());
         super.toBytes(buf);
+    }
+
+    @Override
+    public void copyFrom(Order other) {
+        super.copyFrom(other);
+        if(other instanceof MarketOrder)
+        {
+            MarketOrder otherMarketOrder = (MarketOrder) other;
+        }
     }
 }

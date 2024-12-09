@@ -3,6 +3,7 @@ package net.kroia.stockmarket.entity.custom;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.entity.ModEntities;
 import net.kroia.stockmarket.menu.custom.ChartMenu;
+import net.kroia.stockmarket.networking.NetworkPacket;
 import net.kroia.stockmarket.util.CandleStickChart;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -27,19 +28,44 @@ public class StockMarketBlockEntity extends BlockEntity implements MenuProvider 
 
     // Current Item that the chart is displaying
     private String itemID;
+    private int amount;
+    private int price;
 
     public StockMarketBlockEntity(BlockPos pos, BlockState state) {
         super(ModEntities.STOCK_MARKET_BLOCK_ENTITY.get(), pos, state);
         StockMarketMod.LOGGER.info("ChartBlockEntity created at position " + pos);
         itemID = "minecraft:diamond";
+        amount = 1;
+        price = 1;
     }
 
     public void setItemID(String itemID) {
         this.itemID = itemID;
+        // save entity changes
+        setChanged();
     }
 
     public String getItemID() {
         return itemID;
+    }
+
+    public int getAmount()
+    {
+        return amount;
+    }
+    public int getPrice()
+    {
+        return price;
+    }
+    public void setAmount(int amount)
+    {
+        this.amount = amount;
+        setChanged();
+    }
+    public void setPrice(int price)
+    {
+        this.price = price;
+        setChanged();
     }
 
     @Override
@@ -59,6 +85,8 @@ public class StockMarketBlockEntity extends BlockEntity implements MenuProvider 
 
         CompoundTag dataTag = new CompoundTag();
         dataTag.putString("itemID", itemID);
+        dataTag.putInt("amount", amount);
+        dataTag.putInt("price", price);
         tag.put(StockMarketMod.MODID, dataTag);
     }
 
@@ -81,5 +109,9 @@ public class StockMarketBlockEntity extends BlockEntity implements MenuProvider 
         // Deserialize your data
         CompoundTag dataTag = tag.getCompound(StockMarketMod.MODID);
         itemID = dataTag.getString("itemID");
+        amount = dataTag.getInt("amount");
+        price = dataTag.getInt("price");
     }
+
+
 }

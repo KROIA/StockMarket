@@ -6,6 +6,8 @@ import net.kroia.stockmarket.util.OrderbookVolume;
 import net.kroia.stockmarket.util.PriceHistory;
 import net.kroia.stockmarket.util.Timestamp;
 
+import java.util.ArrayList;
+
 public class MarketManager {
     private final String itemID;
 
@@ -34,6 +36,14 @@ public class MarketManager {
         lowPrice = Math.min(lowPrice, price);
         highPrice = Math.max(highPrice, price);
         priceHistory.setCurrentPrice(price);
+    }
+    public boolean cancelOrder(long orderID)
+    {
+        return matchingEngine.cancelOrder(orderID);
+    }
+    public ArrayList<Order> getOrders()
+    {
+        return matchingEngine.getOrders();
     }
 
     public void shiftPriceHistory()
@@ -66,7 +76,6 @@ public class MarketManager {
 
     public OrderbookVolume getOrderBookVolume(int tiles, int minPrice, int maxPrice)
     {
-
         return matchingEngine.getOrderBookVolume(tiles, minPrice, maxPrice);
     }
 }

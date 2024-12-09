@@ -58,6 +58,18 @@ public class ModMessages {
                 .consumerMainThread(RequestTradeItemsPacket::handle)
                 .add();
 
+        net.messageBuilder(RequestOrderCancelPacket.class, id(), NetworkDirection.PLAY_TO_SERVER)
+                .decoder(RequestOrderCancelPacket::new)
+                .encoder(RequestOrderCancelPacket::toBytes)
+                .consumerMainThread(RequestOrderCancelPacket::handle)
+                .add();
+
+        net.messageBuilder(StockMarketBlockEntitySavePacket.class, id(), NetworkDirection.PLAY_TO_SERVER)
+                .decoder(StockMarketBlockEntitySavePacket::new)
+                .encoder(StockMarketBlockEntitySavePacket::toBytes)
+                .consumerMainThread(StockMarketBlockEntitySavePacket::handle)
+                .add();
+
         net.messageBuilder(UpdateTradeItemsPacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)
                 .decoder(UpdateTradeItemsPacket::new)
                 .encoder(UpdateTradeItemsPacket::toBytes)

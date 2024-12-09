@@ -34,6 +34,14 @@ public class ServerTradeItem {
 
     public void addSubscriber(ServerPlayer player)
     {
+        // Check if player already exists
+        for(ServerPlayer subscriber : subscribers)
+        {
+            if(subscriber.getUUID().equals(player.getUUID()))
+            {
+                return;
+            }
+        }
         subscribers.add(player);
         notifySubscriber(player);
     }
@@ -46,6 +54,10 @@ public class ServerTradeItem {
     public ArrayList<ServerPlayer> getSubscribers()
     {
         return subscribers;
+    }
+    public ArrayList<Order> getOrders()
+    {
+        return marketManager.getOrders();
     }
 
     public void shiftPriceHistory()
@@ -63,6 +75,14 @@ public class ServerTradeItem {
     {
         marketManager.addOrder(order);
         notifySubscribers();
+    }
+    public boolean cancelOrder(long orderID)
+    {
+        if(marketManager.cancelOrder(orderID)) {
+            notifySubscribers();
+            return true;
+        }
+        return false;
     }
 
     public OrderbookVolume getOrderBookVolume(int tiles, int minPrice, int maxPrice)

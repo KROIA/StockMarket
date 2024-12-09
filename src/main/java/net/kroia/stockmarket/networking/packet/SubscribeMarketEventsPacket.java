@@ -36,6 +36,12 @@ public class SubscribeMarketEventsPacket {
         ModMessages.sendToServer(new SubscribeMarketEventsPacket(itemID, subscribe));
     }
 
+    public String getItemID() {
+        return itemID;
+    }
+    public boolean doesSubscribe() {
+        return subscribe;
+    }
 
 
 
@@ -54,15 +60,7 @@ public class SubscribeMarketEventsPacket {
             ServerPlayer player = context.getSender();
 
             assert player != null;
-            StockMarketMod.LOGGER.info("[SERVER] Receiving SubscribeMarketEventsPacket for item "+itemID+
-                    " to "+(subscribe ? "subscribe" : "unsubscribe"));
-
-            // Subscribe or unsubscribe the player
-            if(subscribe) {
-                ServerMarket.addPlayerUpdateSubscription(itemID, player);
-            } else {
-                ServerMarket.removePlayerUpdateSubscription(itemID, player);
-            }
+            ServerMarket.handlePacket(player, this);
         });
         context.setPacketHandled(true);
     }

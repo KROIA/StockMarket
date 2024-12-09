@@ -11,6 +11,7 @@ import net.kroia.stockmarket.screen.custom.TradeScreen;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 public class ClientMarket {
 
@@ -46,7 +47,7 @@ public class ClientMarket {
             return;
         }
         tradeItem.handlePacket(packet);
-        TradeScreen.updatePlotsData();
+        TradeScreen.updatePlotsData(packet.getMinPrice(), packet.getMaxPrice());
     }
     public static void handlePacket(UpdateTradeItemsPacket packet)
     {
@@ -55,13 +56,30 @@ public class ClientMarket {
         StockMarketMod.LOGGER.info("Received " + updatePricePackets.size() + " trade items");
         for(UpdatePricePacket updatePricePacket : updatePricePackets)
         {
-            ClientTradeItem tradeItem = new ClientTradeItem(updatePricePacket.getPriceHistory().getItemID());
-            tradeItem.handlePacket(updatePricePacket);
-            tradeItems.put(tradeItem.getItemID(), tradeItem);
-            StockMarketMod.LOGGER.info("Trade item: " + tradeItem.getItemID());
+            ClientTradeItem orgInstance = ClientMarket.tradeItems.get(updatePricePacket.getPriceHistory().getItemID());
+            ClientTradeItem tradeItem;
+            if(orgInstance != null)
+            {
+                tradeItems.put(updatePricePacket.getPriceHistory().getItemID(), orgInstance);
+                orgInstance.handlePacket(updatePricePacket);
+                tradeItem = orgInstance;
+                continue;
+            }
+            else {
+                tradeItem = new ClientTradeItem(updatePricePacket.getPriceHistory().getItemID());
+                tradeItem.handlePacket(updatePricePacket);
+                tradeItems.put(tradeItem.getItemID(), tradeItem);
+            }
+
+            StockMarketMod.LOGGER.info("Trade item: {}", tradeItem.getItemID());
+            if(Objects.equals(updatePricePacket.getPriceHistory().getItemID(), TradeScreen.getItemID()))
+            {
+                TradeScreen.updatePlotsData(updatePricePacket.getMinPrice(), updatePricePacket.getMaxPrice());
+            }
         }
         ClientMarket.tradeItems = tradeItems;
         TradeScreen.onAvailableTradeItemsChanged();
+
     }
 
     public static void handlePacket(ResponseOrderPacket packet)
@@ -141,6 +159,21 @@ public class ClientMarket {
             return;
         }
         tradeItem.removeOrder(orderID);
+    }
+
+    public static void cancelOrder(Order order)
+    {
+        cancelOrder(order.getItemID(), order.getOrderID());
+    }
+    public static void cancelOrder(String itemID, long orderID)
+    {
+        ClientTradeItem tradeItem = tradeItems.get(itemID);
+        if(tradeItem == null)
+        {
+            msgTradeItemNotFound(itemID);
+            return;
+        }
+        tradeItem.cancelOrder(orderID);
     }
 
     public static void subscribeMarketUpdate(String itemID)

@@ -1,11 +1,15 @@
 package net.kroia.stockmarket.market.server;
 
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.market.server.order.LimitOrder;
+import net.kroia.stockmarket.market.server.order.MarketOrder;
 import net.kroia.stockmarket.market.server.order.Order;
+import net.kroia.stockmarket.networking.packet.*;
 import net.kroia.stockmarket.util.OrderbookVolume;
 import net.kroia.stockmarket.util.PriceHistory;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
@@ -78,6 +82,14 @@ public class ServerMarket
         }
         item.addOrder(order);
     }
+    public static void cancelOrder(long orderID)
+    {
+        for(ServerTradeItem item : tradeItems.values())
+        {
+            if(item.cancelOrder(orderID))
+                return;
+        }
+    }
 
     public static OrderbookVolume getOrderBookVolume(String itemID, int tiles, int minPrice, int maxPrice)
     {
@@ -88,6 +100,17 @@ public class ServerMarket
             return null;
         }
         return item.getOrderBookVolume(tiles, minPrice, maxPrice);
+    }
+
+    public static ArrayList<Order> getOrders(String itemID)
+    {
+        ServerTradeItem item = tradeItems.get(itemID);
+        if(item == null)
+        {
+            msgTradeItemNotFound(itemID);
+            return new ArrayList<>();
+        }
+        return item.getOrders();
     }
 
 
@@ -142,5 +165,71 @@ public class ServerMarket
     }
     private static void msgTradeItemNotFound(String itemID) {
         StockMarketMod.LOGGER.warn("[SERVER] Trade item not found: " + itemID);
+    }
+
+    public static void handlePacket(ServerPlayer player, RequestOrderCancelPacket packet)
+    {
+        StockMarketMod.LOGGER.info("[SERVER] Receiving RequestOrderCancelPacket for order "+packet.getOrderID()+" from the player "+player.getName().getString());
+        cancelOrder(packet.getOrderID());
+    }
+    public static void handlePacket(ServerPlayer player, RequestOrderPacket packet)
+    {
+        int amount = packet.getAmount();
+        String itemID = packet.getItemID();
+        String playerName = player.getName().getString();
+        RequestOrderPacket.OrderType orderType = packet.getOrderType();
+        int price = packet.getPrice();
+        StockMarketMod.LOGGER.info("[SERVER] Receiving RequestOrderPacket for item "+packet.getItemID()+" from the player "+playerName);
+
+        if(amount < 0)
+        {
+            // Selling
+            StockMarketMod.LOGGER.info("[SERVER] Player "+playerName+" is selling "+amount+" of "+itemID);
+        }
+        else if(amount > 0)
+        {
+            // Buying
+            StockMarketMod.LOGGER.info("[SERVER] Player "+playerName+" is buying "+amount+" of "+itemID);
+        }
+
+        switch(orderType)
+        {
+            case limit:
+                LimitOrder limitOrder = new LimitOrder(player, itemID, amount, price);
+                ServerMarket.addOrder(limitOrder);
+                //StockMarketMod.LOGGER.info("[SERVER] Player "+context.getSender().getName().getString()+" is selling "+this.amount+" of "+this.itemID+" with a limit order");
+                break;
+            case market:
+                MarketOrder marketOrder = new MarketOrder(player, itemID, amount);
+                ServerMarket.addOrder(marketOrder);
+                //StockMarketMod.LOGGER.info("[SERVER] Player "+context.getSender().getName().getString()+" is selling "+this.amount+" of "+this.itemID+" with a market order");
+                break;
+        }
+    }
+    public static void handlePacket(ServerPlayer player, RequestTradeItemsPacket packet)
+    {
+        UpdateTradeItemsPacket.sendResponse(player);
+    }
+    public static void handlePacket(ServerPlayer player, RequestPricePacket packet)
+    {
+        StockMarketMod.LOGGER.info("[SERVER] Receiving RequestPricePacket for item "+packet.getItemID()+" from the player "+player.getName().getString());
+
+        // Send the packet to the client
+        UpdatePricePacket.sendPacket(packet.getItemID(), player);
+    }
+    public static void handlePacket(ServerPlayer player, SubscribeMarketEventsPacket packet)
+    {
+        boolean subscribe = packet.doesSubscribe();
+        String itemID = packet.getItemID();
+
+        StockMarketMod.LOGGER.info("[SERVER] Receiving SubscribeMarketEventsPacket for item "+itemID+
+                " to "+(subscribe ? "subscribe" : "unsubscribe"));
+
+        // Subscribe or unsubscribe the player
+        if(subscribe) {
+            ServerMarket.addPlayerUpdateSubscription(itemID, player);
+        } else {
+            ServerMarket.removePlayerUpdateSubscription(itemID, player);
+        }
     }
 }

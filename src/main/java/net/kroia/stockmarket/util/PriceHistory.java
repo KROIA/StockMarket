@@ -104,6 +104,23 @@ public class PriceHistory {
         return closePrice[index-1];
     }
 
+    public int getLowestPrice()
+    {
+        int min = Integer.MAX_VALUE;
+        for (int i = 0; i < maxHistorySize; i++) {
+            min = Math.min(min, lowPrice[i]);
+        }
+        return min;
+    }
+    public int getHighestPrice()
+    {
+        int max = Integer.MIN_VALUE;
+        for (int i = 0; i < maxHistorySize; i++) {
+            max = Math.max(max, highPrice[i]);
+        }
+        return max;
+    }
+
     public Timestamp getTimeStamp(int index)
     {
         return timeStamps[index];

@@ -46,13 +46,25 @@ public class RequestOrderPacket {
         this.price = buf.readInt();
     }
 
+    public String getItemID() {
+        return itemID;
+    }
+    public int getAmount() {
+        return amount;
+    }
+    public OrderType getOrderType() {
+        return orderType;
+    }
+    public int getPrice() {
+        return price;
+    }
     public static void generateRequest(String itemID, int amount, int price) {
 
-        StockMarketMod.LOGGER.info("[CLIENT] Sending TransactionRequestPacket for item: "+itemID + " amount: "+amount);
+        StockMarketMod.LOGGER.info("[CLIENT] Sending RequestOrderPacket for item: "+itemID + " amount: "+amount);
         ModMessages.sendToServer(new RequestOrderPacket(itemID, amount, OrderType.limit, price));
     }
     public static void generateRequest(String itemID, int amount) {
-        StockMarketMod.LOGGER.info("[CLIENT] Sending TransactionRequestPacket for item: "+itemID + " amount: "+amount);
+        StockMarketMod.LOGGER.info("[CLIENT] Sending RequestOrderPacket for item: "+itemID + " amount: "+amount);
         ModMessages.sendToServer(new RequestOrderPacket(itemID, amount));
     }
 
@@ -81,32 +93,9 @@ public class RequestOrderPacket {
         context.enqueueWork(() -> {
             // HERE WE ARE ON THE SERVER!
             // Update client-side data
-            StockMarketMod.LOGGER.info("[SERVER] Receiving TransactionRequestPacket for item "+this.itemID+" from the player "+context.getSender().getName().getString());
-            ServerPlayer player = context.getSender();
-            if(this.amount < 0)
-            {
-                // Selling
-                StockMarketMod.LOGGER.info("[SERVER] Player "+context.getSender().getName().getString()+" is selling "+this.amount+" of "+this.itemID);
-            }
-            else if(this.amount > 0)
-            {
-                // Buying
-                StockMarketMod.LOGGER.info("[SERVER] Player "+context.getSender().getName().getString()+" is buying "+this.amount+" of "+this.itemID);
-            }
+            ServerMarket.handlePacket(context.getSender(), this);
 
-            switch(this.orderType)
-            {
-                case limit:
-                    LimitOrder limitOrder = new LimitOrder(player, itemID, amount, price);
-                    ServerMarket.addOrder(limitOrder);
-                    //StockMarketMod.LOGGER.info("[SERVER] Player "+context.getSender().getName().getString()+" is selling "+this.amount+" of "+this.itemID+" with a limit order");
-                    break;
-                case market:
-                    MarketOrder marketOrder = new MarketOrder(player, itemID, amount);
-                    ServerMarket.addOrder(marketOrder);
-                    //StockMarketMod.LOGGER.info("[SERVER] Player "+context.getSender().getName().getString()+" is selling "+this.amount+" of "+this.itemID+" with a market order");
-                    break;
-            }
+
 
             // Send the packet to the client
             //UpdatePricePacket.sendPacket(itemID, player);

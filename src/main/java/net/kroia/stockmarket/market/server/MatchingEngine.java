@@ -4,7 +4,6 @@ import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.MarketOrder;
 import net.kroia.stockmarket.market.server.order.Order;
-import net.kroia.stockmarket.networking.packet.ResponseOrderPacket;
 import net.kroia.stockmarket.util.OrderbookVolume;
 
 import java.util.*;
@@ -13,19 +12,15 @@ import java.util.*;
     * The MatchingEngine class is responsible for matching buy and sell orders.
  */
 public class MatchingEngine {
-
-
-    //private int buyPrice;
-    //private int sellPrice;
     private int price;
     private int tradeVolume;
 
     // Create a sorted queue for buy and sell orders, sorted by price.
-    private final PriorityQueue<LimitOrder> spotBuyOrders = new PriorityQueue<>((o1, o2) -> Double.compare(o2.getPrice(), o1.getPrice()));
-    private final PriorityQueue<LimitOrder> spotSellOrders = new PriorityQueue<>(Comparator.comparingDouble(LimitOrder::getPrice));
+    private final PriorityQueue<LimitOrder> limitBuyOrders = new PriorityQueue<>((o1, o2) -> Double.compare(o2.getPrice(), o1.getPrice()));
+    private final PriorityQueue<LimitOrder> limitSellOrders = new PriorityQueue<>(Comparator.comparingDouble(LimitOrder::getPrice));
 
-    public MatchingEngine(int initalPrice) {
-        this.price = initalPrice;
+    public MatchingEngine(int initialPrice) {
+        this.price = initialPrice;
         tradeVolume = 0;
     }
 
@@ -37,26 +32,24 @@ public class MatchingEngine {
             order.markAsProcessed();
             return;
         }
-        if (order instanceof LimitOrder)
+        if (order instanceof LimitOrder limitOrder)
         {
-            LimitOrder spotOrder = (LimitOrder) order;
-            spotOrder.setAveragePrice(spotOrder.getPrice());
-            if(!processSpotOrder(spotOrder))
+            limitOrder.setAveragePrice(limitOrder.getPrice());
+            if(!processSpotOrder(limitOrder))
             {
-                if (spotOrder.isBuy())
+                if (limitOrder.isBuy())
                 {
                     // Add the spot order to the buyOrders queue
-                    spotBuyOrders.add(spotOrder);
+                    limitBuyOrders.add(limitOrder);
                 }
                 else
                 {
                     // Add the spot order to the sellOrders queue
-                    spotSellOrders.add(spotOrder);
+                    limitSellOrders.add(limitOrder);
                 }
-                spotOrder.notifyPlayer();
+                limitOrder.notifyPlayer();
             }
-        } else if (order instanceof MarketOrder) {
-            MarketOrder marketOrder = (MarketOrder) order;
+        } else if (order instanceof MarketOrder marketOrder) {
             processMarketOrder(marketOrder);
             //marketOrder.notifyPlayer();
         } else {
@@ -64,23 +57,30 @@ public class MatchingEngine {
         }
     }
 
+    public ArrayList<Order> getOrders()
+    {
+        ArrayList<Order> orders = new ArrayList<>();
+        orders.addAll(limitBuyOrders);
+        orders.addAll(limitSellOrders);
+        return orders;
+    }
     private boolean processMarketOrder(MarketOrder marketOrder)
     {
         // Process the market order
         int amount = -marketOrder.getAmount();
-        PriorityQueue<LimitOrder> spotOrders = marketOrder.isBuy() ? spotSellOrders : spotBuyOrders;
+        PriorityQueue<LimitOrder> limitOrders = marketOrder.isBuy() ? limitSellOrders : limitBuyOrders;
         ArrayList<LimitOrder> toRemove = new ArrayList<>();
 
         int volume = 0;
-        for(LimitOrder spotOrder : spotOrders)
+        for(LimitOrder limitOrder : limitOrders)
         {
             int currentAmount = amount;
-            amount = spotOrder.fill(amount);
+            amount = limitOrder.fill(amount);
             int deltaVolume = currentAmount - amount;
             volume += deltaVolume;
-            price = spotOrder.getPrice();
-            if(spotOrder.isFilled())
-                toRemove.add(spotOrder);
+            price = limitOrder.getPrice();
+            if(limitOrder.isFilled())
+                toRemove.add(limitOrder);
             if(amount == 0)
             {
                 marketOrder.changeAveragePrice(deltaVolume, price);
@@ -89,20 +89,20 @@ public class MatchingEngine {
             }
 
         }
-        spotOrders.removeAll(toRemove);
+        limitOrders.removeAll(toRemove);
         tradeVolume += Math.abs(volume);
         if(amount == 0)
             return true;
 
-        marketOrder.markAsInvalid();
-        StockMarketMod.LOGGER.warn("Market order not fully processed: " + marketOrder.toString());
+        marketOrder.markAsInvalid("Not enough "+(marketOrder.isBuy()?"sell":"buy")+ " orders to fill the market order");
+        StockMarketMod.LOGGER.warn("Market order not fully processed: {}", marketOrder);
         return false;
     }
     private boolean processSpotOrder(LimitOrder spotOrder)
     {
         // Process the spot order
         int amount = -spotOrder.getAmount();
-        PriorityQueue<LimitOrder> spotOrders = spotOrder.isBuy() ? spotSellOrders : spotBuyOrders;
+        PriorityQueue<LimitOrder> spotOrders = spotOrder.isBuy() ? limitSellOrders : limitBuyOrders;
         ArrayList<LimitOrder> toRemove = new ArrayList<>();
 
         for(LimitOrder otherOrder : spotOrders)
@@ -139,6 +139,7 @@ public class MatchingEngine {
         }
         int deltaVolume = Math.abs(spotOrder.getAmount()+amount);
 
+
         spotOrder.changeAveragePrice(deltaVolume, price);
         spotOrder.fill(spotOrder.getAmount()+amount);
         tradeVolume += deltaVolume;
@@ -146,25 +147,11 @@ public class MatchingEngine {
         return amount == 0;
     }
 
-    /*public int getBuyPrice() {
-        return buyPrice;
+    public ArrayList<LimitOrder> getLimitBuyOrders() {
+        return new ArrayList<>(limitBuyOrders);
     }
-    public int getSellPrice() {
-        return sellPrice;
-    }
-
-    public int getPrice() {
-        return (int)((float)(buyPrice + sellPrice) * 0.5f);
-    }
-    public int getSpread() {
-        return sellPrice - buyPrice;
-    }*/
-
-    public ArrayList<LimitOrder> getSpotBuyOrders() {
-        return new ArrayList<>(spotBuyOrders);
-    }
-    public ArrayList<LimitOrder> getSpotSellOrders() {
-        return new ArrayList<>(spotSellOrders);
+    public ArrayList<LimitOrder> getLimitSellOrders() {
+        return new ArrayList<>(limitSellOrders);
     }
 
     public int getPrice() {
@@ -179,10 +166,33 @@ public class MatchingEngine {
         return volume;
     }
 
+    public boolean cancelOrder(long orderID)
+    {
+        for(LimitOrder order : limitBuyOrders)
+        {
+            if(order.getOrderID() == orderID)
+            {
+                order.markAsCancelled();
+                limitBuyOrders.remove(order);
+                return true;
+            }
+        }
+        for(LimitOrder order : limitSellOrders)
+        {
+            if(order.getOrderID() == orderID)
+            {
+                order.markAsCancelled();
+                limitSellOrders.remove(order);
+                return true;
+            }
+        }
+        return false;
+    }
+
     public String toString()
     {
         return "MatchingEngine{ Price: " + price + " TradeVolume: " + tradeVolume +
-                "Sell Orders: "+spotSellOrders.size()+" Buy Orders: "+spotBuyOrders.size()+" }";
+                "Sell Orders: "+ limitSellOrders.size()+" Buy Orders: "+ limitBuyOrders.size()+" }";
     }
 
     /**
@@ -197,19 +207,19 @@ public class MatchingEngine {
     {
         OrderbookVolume orderbookVolume = new OrderbookVolume(tiles, minPrice, maxPrice);
         int priceRange = maxPrice - minPrice;
-        int priceStep = priceRange / tiles;
+        float priceStep = (float)priceRange / (float)tiles;
         int[] volume = new int[tiles];
-        for(LimitOrder order : spotBuyOrders)
+        for(LimitOrder order : limitBuyOrders)
         {
-            int index = (order.getPrice() - minPrice) / priceStep;
+            int index = (int)((order.getPrice() - minPrice) / priceStep);
             if(index >= 0 && index < tiles)
-                volume[index] += order.getAmount();
+                volume[index] += order.getAmount()-order.getFilledAmount();
         }
-        for(LimitOrder order : spotSellOrders)
+        for(LimitOrder order : limitSellOrders)
         {
-            int index = (order.getPrice() - minPrice) / priceStep;
+            int index = (int)((order.getPrice() - minPrice) / priceStep);
             if(index >= 0 && index < tiles)
-                volume[index] += order.getAmount();
+                volume[index] += order.getAmount()-order.getFilledAmount();
         }
         orderbookVolume.setVolume(volume);
         return orderbookVolume;

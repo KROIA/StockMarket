@@ -53,9 +53,7 @@ public class UpdateTradeItemsPacket {
         for(var entry : serverTradeItemMap.entrySet())
         {
             ServerTradeItem item = entry.getValue();
-            PriceHistory priceHistory = item.getPriceHistory();
-            OrderbookVolume orderBookVolume = item.getOrderBookVolume(10,0,100);
-            updatePricePackets.add(new UpdatePricePacket(priceHistory, orderBookVolume));
+            updatePricePackets.add(new UpdatePricePacket(item.getItemID()));
             i++;
         }
 

@@ -12,10 +12,9 @@ import net.minecraftforge.fml.DistExecutor;
 public class ClientHooks {
     public static InteractionResult openStockMarketBlockScreen(BlockEntity entity, BlockPos pos)
     {
-        if(entity instanceof StockMarketBlockEntity)
+        if(entity instanceof StockMarketBlockEntity stockMarketBlockEntity)
         {
-            StockMarketBlockEntity stockMarketBlockEntity = (StockMarketBlockEntity)entity;
-            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> Minecraft.getInstance().setScreen(new TradeScreen(stockMarketBlockEntity.getItemID())));
+            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> Minecraft.getInstance().setScreen(new TradeScreen(stockMarketBlockEntity)));
             //Minecraft.getInstance().setScreen(new TradeScreen(stockMarketBlockEntity.getChartData()));
         }
         else

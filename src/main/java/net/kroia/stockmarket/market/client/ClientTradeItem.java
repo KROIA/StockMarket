@@ -1,11 +1,9 @@
 package net.kroia.stockmarket.market.client;
 
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.Order;
-import net.kroia.stockmarket.networking.packet.ResponseOrderPacket;
-import net.kroia.stockmarket.networking.packet.SubscribeMarketEventsPacket;
-import net.kroia.stockmarket.networking.packet.RequestOrderPacket;
-import net.kroia.stockmarket.networking.packet.UpdatePricePacket;
+import net.kroia.stockmarket.networking.packet.*;
 import net.kroia.stockmarket.util.OrderbookVolume;
 import net.kroia.stockmarket.util.PriceHistory;
 
@@ -19,6 +17,8 @@ public class ClientTradeItem {
     private final String itemID;
     private PriceHistory priceHistory;
     private OrderbookVolume orderBookVolume;
+    private int visualMinPrice = 0;
+    private int visualMaxPrice = 0;
 
     private final Map<Long, Order> orders = new HashMap<>();
 
@@ -33,36 +33,81 @@ public class ClientTradeItem {
     {
         priceHistory = packet.getPriceHistory();
         orderBookVolume = packet.getOrderBookVolume();
+        visualMinPrice = packet.getMinPrice();
+        visualMaxPrice = packet.getMaxPrice();
+        ArrayList<Order> orders = packet.getOrders();
+        this.orders.clear();
+        for(Order order : orders)
+        {
+            this.orders.put(order.getOrderID(), order);
+        }
     }
     public void handlePacket(ResponseOrderPacket packet)
     {
         Order order = packet.getOrder();
         Order oldOrder = orders.get(order.getOrderID());
-        orders.put(order.getOrderID(), order);
+        //orders.put(order.getOrderID(), order);
         boolean hasChanged = true;
         if(oldOrder != null)
         {
             hasChanged &= !oldOrder.equals(order);
+            if(hasChanged)
+                oldOrder.copyFrom(order);
         }
+        else
+            orders.put(order.getOrderID(), order);
+
         if(hasChanged)
         {
+
             // Print to user console
             //StockMarketMod.printToClientConsole("Order: " + order.getOrderID() + " has been updated: "+order.toString());
+
+            String limitText = "";
+            if(order instanceof LimitOrder)
+                limitText = "\n  Limit price :" + ((LimitOrder) order).getPrice();
             switch(order.getStatus())
             {
                 case PENDING:
-                    StockMarketMod.printToClientConsole("Order: " + order.getOrderID() + " is open\n"+
-                            "  "+order.getFilledAmount() + " of " + order.getAmount() + " filled");
+                    StockMarketMod.printToClientConsole((order.isBuy()?"Buy":"Sell") + " order has been placed"+
+                                    "\n  Amount: "+ Math.abs(order.getAmount()) +
+                                    limitText);
                     break;
                 case PROCESSED:
-                    StockMarketMod.printToClientConsole("Order: " + order.getOrderID() + " has been filled\n"+
-                            "  Average price: " + order.getAveragePrice());
+                    StockMarketMod.printToClientConsole((order.isBuy()?"Buy":"Sell") + " order has been filled"+
+                                    "\n  Amount: "+ Math.abs(order.getAmount()) +
+                                    limitText +
+                                    "\n  Average price: " + order.getAveragePrice());
+                    removeOrder(order.getOrderID());
                     break;
+
+                case CANCELLED:
+                    StockMarketMod.printToClientConsole((order.isBuy()?"Buy":"Sell") + " order has been cancelled"+
+                                    "\n  Amount: "+ Math.abs(order.getAmount()) +
+                                    limitText);
+                    removeOrder(order.getOrderID());
+                    break;
+
                 case INVALID:
-                    StockMarketMod.printToClientConsole("Order: " + order.getOrderID() + " is invalid and has been cancelled");
+                    StockMarketMod.printToClientConsole((order.isBuy()?"Buy":"Sell") + " order has been cancelled"+
+                                    "\n  Amount: "+ Math.abs(order.getAmount()) +
+                                    "\n  Filled amount: " + order.getFilledAmount() +
+                                    limitText +
+                                    "\n  Invalid reason: " + order.getInvalidReason());
+                    removeOrder(order.getOrderID());
                     break;
             }
         }
+    }
+
+    public void copyFrom(ClientTradeItem other)
+    {
+        priceHistory = other.priceHistory;
+        orderBookVolume = other.orderBookVolume;
+        visualMinPrice = other.visualMinPrice;
+        visualMaxPrice = other.visualMaxPrice;
+        orders.clear();
+        orders.putAll(other.orders);
     }
 
 
@@ -79,6 +124,15 @@ public class ClientTradeItem {
     public int getPrice()
     {
         return priceHistory.getCurrentPrice();
+    }
+
+    public int getVisualMinPrice()
+    {
+        return visualMinPrice;
+    }
+    public int getVisualMaxPrice()
+    {
+        return visualMaxPrice;
     }
 
     public boolean createOrder(int quantity, int price)
@@ -104,6 +158,10 @@ public class ClientTradeItem {
     public void removeOrder(long orderID)
     {
         orders.remove(orderID);
+    }
+    public void cancelOrder(long orderID)
+    {
+        RequestOrderCancelPacket.generateRequest(orderID);
     }
 
 
