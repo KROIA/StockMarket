@@ -5,6 +5,7 @@ import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.MarketOrder;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.util.OrderbookVolume;
+import net.kroia.stockmarket.util.PriceHistory;
 import net.kroia.stockmarket.util.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -22,23 +23,25 @@ public class MatchingEngine implements ServerSaveable {
     private final PriorityQueue<LimitOrder> limitBuyOrders = new PriorityQueue<>((o1, o2) -> Double.compare(o2.getPrice(), o1.getPrice()));
     private final PriorityQueue<LimitOrder> limitSellOrders = new PriorityQueue<>(Comparator.comparingDouble(LimitOrder::getPrice));
 
-    private ServerTradingBot tradingBot;
-    public MatchingEngine(int initialPrice, ServerTradingBot tradingBot)
+    private PriceHistory priceHistory;
+   // private ServerTradingBot tradingBot;
+    public MatchingEngine(int initialPrice, PriceHistory priceHistory)
     {
+        this.priceHistory = priceHistory;
         this.price = initialPrice;
         tradeVolume = 0;
-        this.tradingBot = tradingBot;
+       // this.tradingBot = tradingBot;
     }
-    public MatchingEngine(int initialPrice) {
+    /*public MatchingEngine(int initialPrice) {
         this.price = initialPrice;
         tradeVolume = 0;
         tradingBot = null;
-    }
+    }*/
 
-    public void setTradingBot(ServerTradingBot tradingBot)
+  /*  public void setTradingBot(ServerTradingBot tradingBot)
     {
         this.tradingBot = tradingBot;
-    }
+    }*/
 
 
 
@@ -116,7 +119,7 @@ public class MatchingEngine implements ServerSaveable {
             amount = limitOrder.fill(amount);
             int deltaVolume = currentAmount - amount;
             volume += deltaVolume;
-            price = limitOrder.getPrice();
+            setPrice(limitOrder.getPrice());
             if(limitOrder.isFilled())
                 toRemove.add(limitOrder);
             if(deltaVolume != 0)
@@ -152,7 +155,7 @@ public class MatchingEngine implements ServerSaveable {
             if(otherOrder.getPrice() == spotOrder.getPrice())
             {
                 amount = otherOrder.fill(amount);
-                price = otherOrder.getPrice();
+                setPrice(otherOrder.getPrice());
                 if(otherOrder.isFilled())
                     toRemove.add(otherOrder);
             }
@@ -161,14 +164,14 @@ public class MatchingEngine implements ServerSaveable {
                 if(spotOrder.isBuy() && spotOrder.getPrice() > otherOrder.getPrice())
                 {
                     amount = otherOrder.fill(amount);
-                    price = otherOrder.getPrice();
+                    setPrice(otherOrder.getPrice());
                     if(otherOrder.isFilled())
                         toRemove.add(otherOrder);
                 }
                 else if(spotOrder.isSell() && spotOrder.getPrice() < otherOrder.getPrice())
                 {
                     amount = otherOrder.fill(amount);
-                    price = otherOrder.getPrice();
+                    setPrice(otherOrder.getPrice());
                     if(otherOrder.isFilled())
                         toRemove.add(otherOrder);
                 }
@@ -217,6 +220,12 @@ public class MatchingEngine implements ServerSaveable {
     }
     public ArrayList<LimitOrder> getLimitSellOrders() {
         return new ArrayList<>(limitSellOrders);
+    }
+
+    private void setPrice(int price)
+    {
+        this.price = price;
+        priceHistory.setCurrentPrice(price);
     }
 
     public int getPrice() {

@@ -1,5 +1,6 @@
-package net.kroia.stockmarket.market.server;
+package net.kroia.stockmarket.market.server.bot;
 
+import net.kroia.stockmarket.market.server.MatchingEngine;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.util.ServerSaveable;
@@ -14,16 +15,15 @@ import java.util.ArrayList;
  */
 public class ServerTradingBot implements ServerSaveable {
 
-    private static long lastBotID = 0;
-    private String botUUID;
-    private String itemID;
-    private int currentPrice;
-    private MatchingEngine matchingEngine;
+    protected static long lastBotID = 0;
+    protected String botUUID;
+    protected String itemID;
+    protected MatchingEngine matchingEngine;
 
-    private final int maxOrderCount = 100;
+    protected final int maxOrderCount = 100;
 
-    private ArrayList<LimitOrder> buyOrders = new ArrayList<>();
-    private ArrayList<LimitOrder> sellOrders = new ArrayList<>();
+    protected ArrayList<LimitOrder> buyOrders = new ArrayList<>();
+    protected ArrayList<LimitOrder> sellOrders = new ArrayList<>();
 
     public ServerTradingBot(MatchingEngine matchingEngine, String itemID)
     {
@@ -32,43 +32,14 @@ public class ServerTradingBot implements ServerSaveable {
         this.matchingEngine = matchingEngine;
     }
 
-    public void setCurrentPrice(int price)
+    public void update()
     {
-        if(currentPrice != price)
-        {
-            currentPrice = price;
-            //updateOrders();
-          //  clearOrders();
-          //  createOrders();
-        }
         clearOrders();
         createOrders();
     }
 
-    public void updateOrders()
-    {
-        // Check if orders are filled
-        for(int i = 0; i < buyOrders.size(); i++)
-        {
-            LimitOrder order = buyOrders.get(i);
-            if(order.isFilled())
-            {
-                buyOrders.remove(i);
-                i--;
-            }
-        }
-        for(int i = 0; i < sellOrders.size(); i++)
-        {
-            LimitOrder order = sellOrders.get(i);
-            if(order.isFilled())
-            {
-                sellOrders.remove(i);
-                i--;
-            }
-        }
-    }
 
-    public void clearOrders()
+    protected void clearOrders()
     {
         matchingEngine.removeBuyOrder_internal(buyOrders);
         matchingEngine.removeSellOrder_internal(sellOrders);
@@ -76,9 +47,10 @@ public class ServerTradingBot implements ServerSaveable {
         sellOrders.clear();
     }
 
-    private void createOrders()
+    protected void createOrders()
     {
         int priceIncerement = 1;
+        int currentPrice = matchingEngine.getPrice();
         for(int i=1; i<=maxOrderCount/2; i++)
         {
             int sellPrice = currentPrice + i*priceIncerement;
@@ -106,10 +78,11 @@ public class ServerTradingBot implements ServerSaveable {
         }
     }
 
-    public int getAvailableVolume(int price)
+    protected int getAvailableVolume(int price)
     {
         if(price < 0)
             return 0;
+        int currentPrice = matchingEngine.getPrice();
         return getVolumeDistribution(currentPrice - price);
     }
 
@@ -119,7 +92,7 @@ public class ServerTradingBot implements ServerSaveable {
      *   x < 0: buy order volume
      *   x > 0: sell order volume
      */
-    public int getVolumeDistribution(int x)
+    protected int getVolumeDistribution(int x)
     {
         double fX = (double)Math.abs(x);
         double scale = 100;
@@ -138,13 +111,11 @@ public class ServerTradingBot implements ServerSaveable {
     @Override
     public void save(CompoundTag tag) {
         tag.putString("botUUID", botUUID);
-        tag.putInt("currentPrice", currentPrice);
     }
 
     @Override
     public void load(CompoundTag tag) {
         botUUID = tag.getString("botUUID");
-        currentPrice = tag.getInt("currentPrice");
 
         ArrayList<Order> orders = new ArrayList<>();
         matchingEngine.getOrders(botUUID, orders);

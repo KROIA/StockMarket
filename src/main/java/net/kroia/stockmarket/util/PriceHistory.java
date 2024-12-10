@@ -91,15 +91,27 @@ public class PriceHistory implements ServerSaveable {
     {
         return lowPrice[index];
     }
+    public int getLowPrice()
+    {
+        return lowPrice[maxHistorySize-1];
+    }
 
     public int getHighPrice(int index)
     {
         return highPrice[index];
     }
+    public int getHighPrice()
+    {
+        return highPrice[maxHistorySize-1];
+    }
 
     public int getClosePrice(int index)
     {
         return closePrice[index];
+    }
+    public int getClosePrice()
+    {
+        return closePrice[maxHistorySize-1];
     }
 
     public int getOpenPrice(int index)

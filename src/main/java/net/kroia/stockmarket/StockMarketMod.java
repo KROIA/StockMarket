@@ -2,6 +2,7 @@ package net.kroia.stockmarket;
 
 import com.mojang.logging.LogUtils;
 import net.kroia.stockmarket.block.ModBlocks;
+import net.kroia.stockmarket.command.ModCommands;
 import net.kroia.stockmarket.entity.ModEntities;
 import net.kroia.stockmarket.item.ModCreativeModTabs;
 import net.kroia.stockmarket.item.ModItems;
@@ -9,6 +10,7 @@ import net.kroia.stockmarket.market.client.ClientMarket;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.menu.ModMenus;
 import net.kroia.stockmarket.networking.ModMessages;
+import net.kroia.stockmarket.util.PlayerEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -18,6 +20,7 @@ import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.BuildCreativeModeTabContentsEvent;
+import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.server.ServerStartingEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -49,16 +52,19 @@ public class StockMarketMod
     private static Side side = Side.UNKNOWN;
     // Create a Deferred Register to hold Blocks which will all be registered under the "examplemod" namespace
 
-    private static long lastTimeMinute = 0;
+    private static long lastTimeMS = 0;
     public StockMarketMod()
     {
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
+        MinecraftForge.EVENT_BUS.register(this);
+
 
         ModCreativeModTabs.register(modEventBus);
         ModItems.register(modEventBus);
         ModBlocks.register(modEventBus);
         ModEntities.register(modEventBus);
         ModMenus.register(modEventBus);
+
 
 
         // Register the commonSetup method for modloading
@@ -79,6 +85,12 @@ public class StockMarketMod
         //DistExecutor.unsafeRunWhenOn(Dist.DEDICATED_SERVER, () -> this::setupServer);
         // Server setup is called both for dedicated and integrated server
         MinecraftForge.EVENT_BUS.addListener(this::onServerStarting);
+        // Register the event handler class to the Forge Event Bus
+       // MinecraftForge.EVENT_BUS.register(new PlayerEvents());
+    }
+    @SubscribeEvent
+    public void onRegisterCommands(RegisterCommandsEvent event) {
+        ModCommands.register(event.getDispatcher());
     }
 
     private void commonSetup(final FMLCommonSetupEvent event)
@@ -177,25 +189,25 @@ public class StockMarketMod
     }
 
     public void onServerTickSetup() {
-        lastTimeMinute = getCurrentTimeMinute();
+        lastTimeMS = getCurrentTimeMillis();
     }
 
     @SubscribeEvent
     public void onServerTick(TickEvent.ServerTickEvent event) {
         if (event.phase == TickEvent.Phase.END) {
-            long currentTimeMinute = getCurrentTimeMinute();
+            long currentTimeMillis = getCurrentTimeMillis();
 
-            if(currentTimeMinute - lastTimeMinute > ServerMarket.shiftPriceHistoryInterval) {
-                lastTimeMinute = currentTimeMinute;
+            if(currentTimeMillis - lastTimeMS > ServerMarket.shiftPriceHistoryInterval) {
+                lastTimeMS = currentTimeMillis;
 
                 ServerMarket.shiftPriceHistory();
-                ServerMarket.updateBot();
+                //ServerMarket.updateBot();
             }
         }
     }
 
-    public static long getCurrentTimeMinute() {
-        return System.currentTimeMillis()/500;
+    public static long getCurrentTimeMillis() {
+        return System.currentTimeMillis();
     }
 
     public static ServerPlayer getPlayerByUUID(String uuid)

@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.util;
 
+import net.kroia.stockmarket.bank.ServerBank;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtIo;
@@ -35,6 +36,12 @@ public class DataHandler {
             market.save(marketData);
             data.put("market", marketData);
 
+            CompoundTag bankData = new CompoundTag();
+            ServerBank bank = new ServerBank();
+            bank.save(bankData);
+            data.put("bank", bankData);
+
+
 
             if(COMPRESSED)
                 NbtIo.writeCompressed(data, file);
@@ -66,6 +73,11 @@ public class DataHandler {
                 ServerMarket market = new ServerMarket();
                 CompoundTag marketData = data.getCompound("market");
                 market.load(marketData);
+
+                ServerBank bank = new ServerBank();
+                CompoundTag bankData = data.getCompound("bank");
+                bank.load(bankData);
+
 
             } catch (IOException e) {
                 e.printStackTrace();

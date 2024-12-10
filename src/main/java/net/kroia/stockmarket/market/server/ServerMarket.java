@@ -22,7 +22,7 @@ public class ServerMarket implements ServerSaveable
     //private static final Map<String, MarketManager> marketManagers = new HashMap<>();
     //private static final Map<String, ArrayList<ServerPlayer>> playerSubscriptions = new HashMap<>();
     //private static MarketData marketData;
-    public static int shiftPriceHistoryInterval = 10; // in minutes
+    public static int shiftPriceHistoryInterval = 60000; // in ms
 
     private static final Map<String, ServerTradeItem> tradeItems = new HashMap<>();
 
@@ -258,13 +258,13 @@ public class ServerMarket implements ServerSaveable
         }
     }
 
-    public static void updateBot()
+   /* public static void updateBot()
     {
         for(ServerTradeItem item : tradeItems.values())
         {
             item.updateBot();
         }
-    }
+    }*/
 
     @Override
     public void save(CompoundTag tag) {

@@ -21,13 +21,13 @@ public class ServerTradeItem implements ServerSaveable {
     {
         this.itemID = itemID;
         this.priceHistory = new PriceHistory(itemID, startPrice);
-        this.marketManager = new MarketManager(itemID, startPrice, priceHistory);
+        this.marketManager = new MarketManager(this, startPrice, priceHistory);
     }
 
     public ServerTradeItem(CompoundTag tag)
     {
         this.priceHistory = new PriceHistory("", 0);
-        this.marketManager = new MarketManager("", 0, priceHistory);
+        this.marketManager = new MarketManager(this, 0, priceHistory);
         load(tag);
     }
 
@@ -103,7 +103,7 @@ public class ServerTradeItem implements ServerSaveable {
         return marketManager.getOrderBookVolume(tiles, minPrice, maxPrice);
     }
 
-    private void notifySubscribers()
+    public void notifySubscribers()
     {
         for(ServerPlayer player : subscribers)
         {

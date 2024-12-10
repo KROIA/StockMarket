@@ -13,6 +13,11 @@ public class MarketOrder extends Order {
 
         StockMarketMod.LOGGER.info("MarketOrder created: " + toString());
     }
+    public MarketOrder(String playerUUID, String itemID, int amount, boolean isBot) {
+        super(playerUUID, itemID, amount, isBot);
+
+        StockMarketMod.LOGGER.info("MarketOrder created: " + toString());
+    }
 
     public MarketOrder(FriendlyByteBuf buf)
     {
