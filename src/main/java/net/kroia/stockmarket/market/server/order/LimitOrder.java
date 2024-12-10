@@ -2,6 +2,8 @@ package net.kroia.stockmarket.market.server.order;
 
 import com.google.j2objc.annotations.ObjectiveCName;
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.bank.MoneyBank;
+import net.kroia.stockmarket.bank.ServerBank;
 import net.kroia.stockmarket.util.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
@@ -14,17 +16,29 @@ import net.minecraft.world.entity.player.Player;
 public class LimitOrder extends Order implements ServerSaveable {
     private int price;
 
-    public LimitOrder(String playerUUID, String itemID, int amount, int price) {
+    public static LimitOrder create(ServerPlayer player, String itemID, int amount, int price)
+    {
+        if(Order.tryReserveBankFund(player, amount, price))
+            return new LimitOrder(player.getUUID().toString(), itemID, amount, price);
+        return null;
+    }
+    public static LimitOrder createBotOrder(String uuid, MoneyBank botBank, String itemID, int amount, int price)
+    {
+        if(Order.tryReserveBankFund(botBank, uuid, amount, price))
+            return new LimitOrder(uuid, itemID, amount, price, true);
+        return new LimitOrder(uuid, itemID, amount, price, true);
+    }
+    protected LimitOrder(String playerUUID, String itemID, int amount, int price) {
         super(playerUUID, itemID, amount);
         this.price = price;
 
-        StockMarketMod.LOGGER.info("LimitOrder created: " + toString());
+        //StockMarketMod.LOGGER.info("LimitOrder created: " + toString());
     }
-    public LimitOrder(String playerUUID, String itemID, int amount, int price, boolean isBot) {
+    protected LimitOrder(String playerUUID, String itemID, int amount, int price, boolean isBot) {
         super(playerUUID, itemID, amount, isBot);
         this.price = price;
 
-        StockMarketMod.LOGGER.info("LimitOrder created: " + toString());
+        //StockMarketMod.LOGGER.info("LimitOrder created: " + toString());
     }
     public LimitOrder(CompoundTag loadFromTag)
     {
@@ -63,8 +77,14 @@ public class LimitOrder extends Order implements ServerSaveable {
             playerName = player == null ? "UUID:" + playerUUID : player.getName().getString();
         }
 
-        return "LimitOrder{ Owner: " + playerName + " Amount: " + amount + " Filled: " + filledAmount + " Price: " + price + " AveragePrice: " + averagePrice + " Status:" + status+
-                (status==Status.INVALID?" Invalid reason: "+invalidReason:"")+" }";
+        return "LimitOrder{\n  Owner: " + playerName +
+                "\n  Amount: " + amount +
+                "\n  Filled: " + filledAmount +
+                "\n  Price: " + price +
+                "\n  AveragePrice: " + averagePrice +
+                "\n  TransferedMoney: $" + transferedMoney +
+                "\n  Status:" + status+
+                (status==Status.INVALID?" Invalid reason: \n    "+invalidReason:"")+"\n}";
     }
 
     @Override
@@ -95,6 +115,7 @@ public class LimitOrder extends Order implements ServerSaveable {
         tag.putInt("price", price);
         tag.putInt("amount", amount);
         tag.putInt("filledAmount", filledAmount);
+        tag.putLong("transferedMoney", transferedMoney);
         tag.putInt("averagePrice", averagePrice);
         tag.putString("status", status.toString());
         tag.putString("invalidReason", invalidReason);
@@ -109,6 +130,7 @@ public class LimitOrder extends Order implements ServerSaveable {
         price = tag.getInt("price");
         amount = tag.getInt("amount");
         filledAmount = tag.getInt("filledAmount");
+        transferedMoney = tag.getLong("transferedMoney");
         averagePrice = tag.getInt("averagePrice");
         status = Status.valueOf(tag.getString("status"));
         invalidReason = tag.getString("invalidReason");

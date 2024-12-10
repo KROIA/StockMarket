@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.market.server.bot;
 
+import net.kroia.stockmarket.bank.BotMoneyBank;
 import net.kroia.stockmarket.market.server.MatchingEngine;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.Order;
@@ -7,6 +8,7 @@ import net.kroia.stockmarket.util.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
 
 import java.util.ArrayList;
+import java.util.UUID;
 
 /**
  * The ServerTradingBot simulates buy and sell orders to provide liquidity to the market.
@@ -25,9 +27,8 @@ public class ServerTradingBot implements ServerSaveable {
     protected ArrayList<LimitOrder> buyOrders = new ArrayList<>();
     protected ArrayList<LimitOrder> sellOrders = new ArrayList<>();
 
-    public ServerTradingBot(MatchingEngine matchingEngine, String itemID)
-    {
-        botUUID = "BOT" + lastBotID++;
+    public ServerTradingBot(MatchingEngine matchingEngine, String itemID) {
+        botUUID = BotMoneyBank.getInstance().getUserUUID().toString();
         this.itemID = itemID;
         this.matchingEngine = matchingEngine;
     }
@@ -43,12 +44,23 @@ public class ServerTradingBot implements ServerSaveable {
     {
         matchingEngine.removeBuyOrder_internal(buyOrders);
         matchingEngine.removeSellOrder_internal(sellOrders);
+
+        for(LimitOrder order : buyOrders)
+        {
+            order.markAsCancelled();
+        }
+        for(LimitOrder order : sellOrders)
+        {
+            order.markAsCancelled();
+        }
         buyOrders.clear();
         sellOrders.clear();
     }
 
     protected void createOrders()
     {
+        BotMoneyBank bank = BotMoneyBank.getInstance();
+
         int priceIncerement = 1;
         int currentPrice = matchingEngine.getPrice();
         for(int i=1; i<=maxOrderCount/2; i++)
@@ -57,19 +69,24 @@ public class ServerTradingBot implements ServerSaveable {
             int buyPrice = currentPrice - i*priceIncerement;
 
 
-
             int buyVolume = getAvailableVolume(buyPrice);
             if(buyVolume > 0) {
-                LimitOrder buyOrder = new LimitOrder(botUUID, itemID, buyVolume, buyPrice, true);
-                matchingEngine.addOrder(buyOrder);
-                buyOrders.add(buyOrder);
+
+                LimitOrder buyOrder = LimitOrder.createBotOrder(botUUID, bank, itemID, buyVolume, buyPrice);
+                if(buyOrder != null) {
+                    matchingEngine.addOrder(buyOrder);
+                    buyOrders.add(buyOrder);
+                }
             }
 
             int sellVolume = getAvailableVolume(sellPrice);
             if(sellVolume < 0) {
-                LimitOrder sellOrder = new LimitOrder(botUUID, itemID, sellVolume, sellPrice, true);
-                matchingEngine.addOrder(sellOrder);
-                sellOrders.add(sellOrder);
+                LimitOrder sellOrder = LimitOrder.createBotOrder(botUUID, bank, itemID, sellVolume, sellPrice);
+                if(sellOrder != null)
+                {
+                    matchingEngine.addOrder(sellOrder);
+                    sellOrders.add(sellOrder);
+                }
             }
 
 

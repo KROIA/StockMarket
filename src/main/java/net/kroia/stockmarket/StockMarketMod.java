@@ -1,6 +1,8 @@
 package net.kroia.stockmarket;
 
 import com.mojang.logging.LogUtils;
+import net.kroia.stockmarket.bank.BotMoneyBank;
+import net.kroia.stockmarket.bank.ServerBank;
 import net.kroia.stockmarket.block.ModBlocks;
 import net.kroia.stockmarket.command.ModCommands;
 import net.kroia.stockmarket.entity.ModEntities;
@@ -18,6 +20,7 @@ import net.minecraft.server.players.PlayerList;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
+import net.minecraftforge.client.event.RegisterClientCommandsEvent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.BuildCreativeModeTabContentsEvent;
 import net.minecraftforge.event.RegisterCommandsEvent;
@@ -56,7 +59,7 @@ public class StockMarketMod
     public StockMarketMod()
     {
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
-        MinecraftForge.EVENT_BUS.register(this);
+
 
 
         ModCreativeModTabs.register(modEventBus);
@@ -87,11 +90,20 @@ public class StockMarketMod
         MinecraftForge.EVENT_BUS.addListener(this::onServerStarting);
         // Register the event handler class to the Forge Event Bus
        // MinecraftForge.EVENT_BUS.register(new PlayerEvents());
+        MinecraftForge.EVENT_BUS.addListener(StockMarketMod::onRegisterCommands);
+        // Register client-side commands only on the client
+        //MinecraftForge.EVENT_BUS.addListener(StockMarketMod::onRegisterClientCommands);
     }
-    @SubscribeEvent
-    public void onRegisterCommands(RegisterCommandsEvent event) {
+
+    public static void onRegisterCommands(RegisterCommandsEvent event) {
         ModCommands.register(event.getDispatcher());
     }
+
+    /*
+    public static void onRegisterClientCommands(RegisterClientCommandsEvent event) {
+        // Client-side command registration
+        ModCommands.register(event.getDispatcher());
+    }*/
 
     private void commonSetup(final FMLCommonSetupEvent event)
     {
@@ -125,6 +137,7 @@ public class StockMarketMod
             side = Side.MULTIPLAYER_CLIENT;
         else
             side = Side.SINGLE_PLAYER;
+        MinecraftForge.EVENT_BUS.register(this);
     }
     private void setupServer() {
         LOGGER.info("HELLO from server starting");
@@ -134,6 +147,10 @@ public class StockMarketMod
             side = Side.MULTIPLAYER_SERVER;
         else
             side = Side.SINGLE_PLAYER;
+        if(BotMoneyBank.getInstance() == null)
+        {
+            ServerBank.createBotBankIfNotExist(UUID.randomUUID(), 1000_000);
+        }
         ServerMarket.init();
     }
     private void onServerStarting(net.minecraftforge.event.server.ServerStartingEvent event) {
@@ -219,6 +236,10 @@ public class StockMarketMod
             System.err.println("Invalid UUID string: " + uuid);
             return null;
         }
+        return getPlayerByUUID(playerUUID);
+    }
+    public static ServerPlayer getPlayerByUUID(UUID playerUUID)
+    {
 
         // Get the Minecraft server instance
         MinecraftServer server = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
@@ -232,6 +253,20 @@ public class StockMarketMod
         PlayerList playerList = server.getPlayerList();
         return playerList.getPlayer(playerUUID); // Returns null if the player is not online
     }
+    public static ServerPlayer getPlayerByName(String name)
+    {
+        // Get the Minecraft server instance
+        MinecraftServer server = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
+
+        if (server == null) {
+            throw new IllegalStateException("Server instance is null. Are you calling this from the server?");
+            //return null;
+        }
+
+        // Get the player list and fetch the player by name
+        PlayerList playerList = server.getPlayerList();
+        return playerList.getPlayerByName(name); // Returns null if the player is not online
+    }
 
     public static void printToClientConsole(String message) {
         // Check that the code is running on the client side
@@ -241,6 +276,24 @@ public class StockMarketMod
             );
         }
     }
+    public static void printToClientConsole(ServerPlayer player, String message)
+    {
+        player.sendSystemMessage(
+                net.minecraft.network.chat.Component.literal(message)
+        );
+    }
 
+    public static void printToClientConsole(UUID playerUUID, String message)
+    {
+        ServerPlayer player = getPlayerByUUID(playerUUID);
+        if(player == null)
+        {
+            LOGGER.warn("Player not found with UUID: " + playerUUID);
+            return;
+        }
+        player.sendSystemMessage(
+                net.minecraft.network.chat.Component.literal(message)
+        );
+    }
 
 }

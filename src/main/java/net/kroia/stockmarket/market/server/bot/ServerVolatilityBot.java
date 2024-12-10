@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.market.server.bot;
 
+import net.kroia.stockmarket.bank.BotMoneyBank;
 import net.kroia.stockmarket.market.server.MatchingEngine;
 import net.kroia.stockmarket.market.server.order.MarketOrder;
 import net.kroia.stockmarket.util.MeanRevertingRandomWalk;
@@ -28,8 +29,9 @@ public class ServerVolatilityBot extends ServerTradingBot {
         int orderVolume = (int)(randomWalk.nextValue()*volatility);
         if(orderVolume == 0)
             return;
+        BotMoneyBank bank = BotMoneyBank.getInstance();
 
-        MarketOrder order = new MarketOrder(this.botUUID, this.itemID, orderVolume, true);
+        MarketOrder order = MarketOrder.createBotOrder(this.botUUID,bank, this.itemID, orderVolume);
         matchingEngine.addOrder(order);
     }
 

@@ -26,7 +26,8 @@ public class ServerEvents {
                 File rootSaveFolder = server.getWorldPath(LevelResource.ROOT).toFile();
 
                 // Load data from the root save folder
-                DATA_HANDLER.loadFromFile(rootSaveFolder);
+                DATA_HANDLER.setSaveFolder(rootSaveFolder);
+                DATA_HANDLER.loadAll();
             }
         }
     }
@@ -39,10 +40,9 @@ public class ServerEvents {
 
             // Only save data for the main overworld level
             if (levelKey.equals(ServerLevel.OVERWORLD)) {
-                File rootSaveFolder = server.getWorldPath(LevelResource.ROOT).toFile();
 
                 // Save data to the root save folder
-                DATA_HANDLER.saveToFile(rootSaveFolder);
+                DATA_HANDLER.saveAll();
             }
         }
     }

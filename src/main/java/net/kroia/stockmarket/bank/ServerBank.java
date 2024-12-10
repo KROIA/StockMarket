@@ -9,43 +9,85 @@ import net.minecraft.server.level.ServerPlayer;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 public class ServerBank implements ServerSaveable {
-    private static Map<String, MoneyBank> bankMap = new HashMap<>();
+    private static Map<UUID, MoneyBank> bankMap = new HashMap<>();
+    private static Map<UUID, BotMoneyBank> botBankMap = new HashMap<>();
 
 
-    public static MoneyBank getBank(String userUUID) {
-        return bankMap.get(userUUID);
+    public static MoneyBank getBank(UUID userUUID) {
+        MoneyBank bank = bankMap.get(userUUID);
+        if(bank == null)
+            bank = getBotBank(userUUID);
+        return bank;
+    }
+    public static BotMoneyBank getBotBank(UUID botUUID) {
+        return botBankMap.get(botUUID);
     }
 
-    public static void createBankIfNotExist(ServerPlayer player, long balance) {
-        if(!bankMap.containsKey(player.getStringUUID()))
+    public static MoneyBank createBankIfNotExist(ServerPlayer player, long balance) {
+        MoneyBank bank = getBank(player.getUUID());
+        if(bank == null)
         {
-            createBank(player, balance);
+            return createBank(player, balance);
         }
+        return bank;
     }
-    public static void createBank(ServerPlayer player, long balance) {
-        String userUUID = player.getStringUUID();
-        if(bankMap.containsKey(userUUID))
+    public static MoneyBank createBank(ServerPlayer player, long balance) {
+        UUID userUUID = player.getUUID();
+        MoneyBank bank = getBank(userUUID);
+        if(bank != null)
         {
             StockMarketMod.LOGGER.warn("Bank already exists for user " + userUUID);
-            return;
+            return bank;
         }
-        bankMap.put(userUUID, new MoneyBank(userUUID, balance));
+        bank = new MoneyBank(userUUID, balance);
+        bankMap.put(userUUID, bank);
         String msg = "Bank account created with balance $"+balance;
         player.displayClientMessage(Component.literal(msg), false);
+        return bank;
+    }
+
+    public static BotMoneyBank createBotBankIfNotExist(UUID botUUID, long balance) {
+        BotMoneyBank bank = getBotBank(botUUID);
+        if(bank == null)
+        {
+            return createBotBank(botUUID, balance);
+        }
+        return bank;
+    }
+
+    public static BotMoneyBank createBotBank(UUID botUUID, long balance) {
+        BotMoneyBank bank = getBotBank(botUUID);
+        if(bank != null)
+        {
+            StockMarketMod.LOGGER.warn("Bank already exists for bot " + botUUID);
+            return bank;
+        }
+        bank = new BotMoneyBank(botUUID, balance);
+        botBankMap.put(botUUID, bank);
+        return bank;
     }
 
 
     @Override
     public void save(CompoundTag tag) {
         ListTag bankElements = new ListTag();
-        for (Map.Entry<String, MoneyBank> entry : bankMap.entrySet()) {
+        for (Map.Entry<UUID, MoneyBank> entry : bankMap.entrySet()) {
             CompoundTag bankTag = new CompoundTag();
             entry.getValue().save(bankTag);
             bankElements.add(bankTag);
         }
         tag.put("banks", bankElements);
+
+        ListTag botBankElements = new ListTag();
+        for (Map.Entry<UUID, BotMoneyBank> entry : botBankMap.entrySet()) {
+            CompoundTag bankTag = new CompoundTag();
+            entry.getValue().save(bankTag);
+            botBankElements.add(bankTag);
+        }
+        tag.put("botBanks", botBankElements);
     }
 
     @Override
@@ -56,6 +98,14 @@ public class ServerBank implements ServerSaveable {
             CompoundTag bankTag = bankElements.getCompound(i);
             MoneyBank bank = new MoneyBank(bankTag);
             bankMap.put(bank.getUserUUID(), bank);
+        }
+
+        ListTag botBankElements = tag.getList("botBanks", 10);
+        botBankMap.clear();
+        for (int i = 0; i < botBankElements.size(); i++) {
+            CompoundTag bankTag = botBankElements.getCompound(i);
+            BotMoneyBank bank = new BotMoneyBank(bankTag);
+            botBankMap.put(bank.getUserUUID(), bank);
         }
 
     }

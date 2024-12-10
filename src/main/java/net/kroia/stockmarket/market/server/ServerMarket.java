@@ -1,6 +1,8 @@
 package net.kroia.stockmarket.market.server;
 
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.bank.MoneyBank;
+import net.kroia.stockmarket.bank.ServerBank;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.MarketOrder;
 import net.kroia.stockmarket.market.server.order.Order;
@@ -77,6 +79,8 @@ public class ServerMarket implements ServerSaveable
 
     public static void addOrder(Order order)
     {
+        if(order == null)
+            return;
         ServerTradeItem item = tradeItems.get(order.getItemID());
         if(item == null)
         {
@@ -202,9 +206,16 @@ public class ServerMarket implements ServerSaveable
         int amount = packet.getAmount();
         String itemID = packet.getItemID();
         String playerName = player.getName().getString();
+        //MoneyBank playerBank = ServerBank.getBank(player.getUUID());
         RequestOrderPacket.OrderType orderType = packet.getOrderType();
         int price = packet.getPrice();
         StockMarketMod.LOGGER.info("[SERVER] Receiving RequestOrderPacket for item "+packet.getItemID()+" from the player "+playerName);
+
+        /*if(playerBank == null)
+        {
+            StockMarketMod.LOGGER.error("[SERVER] Player "+playerName+" does not have a bank account");
+            return;
+        }*/
 
         if(amount < 0)
         {
@@ -220,12 +231,12 @@ public class ServerMarket implements ServerSaveable
         switch(orderType)
         {
             case limit:
-                LimitOrder limitOrder = new LimitOrder(player.getStringUUID(), itemID, amount, price);
+                LimitOrder limitOrder = LimitOrder.create(player, itemID, amount, price);
                 ServerMarket.addOrder(limitOrder);
                 //StockMarketMod.LOGGER.info("[SERVER] Player "+context.getSender().getName().getString()+" is selling "+this.amount+" of "+this.itemID+" with a limit order");
                 break;
             case market:
-                MarketOrder marketOrder = new MarketOrder(player.getStringUUID(), itemID, amount);
+                MarketOrder marketOrder = MarketOrder.create(player, itemID, amount);
                 ServerMarket.addOrder(marketOrder);
                 //StockMarketMod.LOGGER.info("[SERVER] Player "+context.getSender().getName().getString()+" is selling "+this.amount+" of "+this.itemID+" with a market order");
                 break;

@@ -9,57 +9,85 @@ import java.io.File;
 import java.io.IOException;
 
 public class DataHandler {
-    private static final String FILE_NAME = "StockMarket_data.dat";
+    private static final String FOLDER_NAME = "stockmarket";
+
+    private static final String MARKET_DATA_FILE_NAME = "Market_data.dat";
+    private static final String BANK_DATA_FILE_NAME = "Bank_data.dat";
     private static final boolean COMPRESSED = false;
     private static File saveFolder;
 
     public static void setSaveFolder(File folder) {
-        saveFolder = folder;
+        File rootFolder = new File(folder, FOLDER_NAME);
+        // check if folder exists
+        if (!rootFolder.exists()) {
+            rootFolder.mkdirs();
+        }
+        saveFolder = rootFolder;
     }
     public static File getSaveFolder() {
         return saveFolder;
     }
 
-    public static void saveToFile(File saveFolder)
+    public static void saveAll()
     {
-        setSaveFolder(saveFolder);
-        saveToFile();
+        save_bank();
+        save_market();
     }
-    public static void saveToFile()
+
+    public static void loadAll()
     {
-        File file = new File(saveFolder, FILE_NAME);
-        try {
-            CompoundTag data = new CompoundTag();
-            // Save server market
+        load_market();
+        load_bank();
+    }
+
+
+    public static void save_market()
+    {
+        CompoundTag data = new CompoundTag();
+        ServerMarket market = new ServerMarket();
+        CompoundTag marketData = new CompoundTag();
+        market.save(marketData);
+        data.put("market", marketData);
+        saveDataCompound(MARKET_DATA_FILE_NAME, data);
+    }
+    public static void load_market()
+    {
+        CompoundTag data = readDataCompound(MARKET_DATA_FILE_NAME);
+        if(data != null)
+        {
+            // Load server market
             ServerMarket market = new ServerMarket();
-            CompoundTag marketData = new CompoundTag();
-            market.save(marketData);
-            data.put("market", marketData);
-
-            CompoundTag bankData = new CompoundTag();
-            ServerBank bank = new ServerBank();
-            bank.save(bankData);
-            data.put("bank", bankData);
-
-
-
-            if(COMPRESSED)
-                NbtIo.writeCompressed(data, file);
-            else
-                NbtIo.write(data, file);
-        } catch (IOException e) {
-            e.printStackTrace();
+            CompoundTag marketData = data.getCompound("market");
+            market.load(marketData);
         }
     }
 
-    public static void loadFromFile(File saveFolder)
+    public static void save_bank()
     {
-        setSaveFolder(saveFolder);
-        loadFromFile();
+        CompoundTag data = new CompoundTag();
+        ServerBank bank = new ServerBank();
+        CompoundTag bankData = new CompoundTag();
+        bank.save(bankData);
+        data.put("bank", bankData);
+        saveDataCompound(BANK_DATA_FILE_NAME, data);
     }
-    public static void loadFromFile()
+
+    public static void load_bank()
     {
-        File file = new File(saveFolder, FILE_NAME);
+        CompoundTag data = readDataCompound(BANK_DATA_FILE_NAME);
+        if(data != null)
+        {
+            ServerBank bank = new ServerBank();
+            CompoundTag bankData = data.getCompound("bank");
+            bank.load(bankData);
+        }
+    }
+
+
+    private static CompoundTag readDataCompound(String fileName)
+    {
+        CompoundTag dataOut = new CompoundTag();
+        File file = new File(saveFolder, fileName);
         if (file.exists()) {
             try {
                 CompoundTag data = new CompoundTag();
@@ -69,19 +97,23 @@ public class DataHandler {
                 else
                     data = NbtIo.read(file);
 
-                // Load server market
-                ServerMarket market = new ServerMarket();
-                CompoundTag marketData = data.getCompound("market");
-                market.load(marketData);
-
-                ServerBank bank = new ServerBank();
-                CompoundTag bankData = data.getCompound("bank");
-                bank.load(bankData);
-
-
+                dataOut = data;
+                return dataOut;
             } catch (IOException e) {
                 e.printStackTrace();
             }
+        }
+        return null;
+    }
+    public static void saveDataCompound(String fileName, CompoundTag data) {
+        File file = new File(saveFolder, fileName);
+        try {
+            if (COMPRESSED)
+                NbtIo.writeCompressed(data, file);
+            else
+                NbtIo.write(data, file);
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 }

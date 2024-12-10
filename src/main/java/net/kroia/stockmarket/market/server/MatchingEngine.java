@@ -48,6 +48,8 @@ public class MatchingEngine implements ServerSaveable {
 
     public void addOrder(Order order)
     {
+        if(order == null)
+            return;
         if(order.getAmount() == 0)
         {
             order.markAsProcessed();
@@ -58,7 +60,6 @@ public class MatchingEngine implements ServerSaveable {
 
     private void handleNewOrder(Order order)
     {
-
         if (order instanceof LimitOrder limitOrder)
         {
             limitOrder.setAveragePrice(limitOrder.getPrice());
@@ -105,7 +106,50 @@ public class MatchingEngine implements ServerSaveable {
                 orders.add(order);
         }
     }
+
+    /**
+     * Processes a market order by filling it with the best available limit orders.
+     * @param marketOrder The market order to process.
+     * @return true if the market order has been fully processed, false otherwise.
+     */
     private boolean processMarketOrder(MarketOrder marketOrder)
+    {
+        PriorityQueue<LimitOrder> limitOrders = marketOrder.isBuy() ? limitSellOrders : limitBuyOrders;
+        ArrayList<LimitOrder> toRemove = new ArrayList<>();
+
+        int fillVolume = Math.abs(marketOrder.getAmount());
+        for(LimitOrder limitOrder : limitOrders)
+        {
+            int filledVolume = Order.fill(marketOrder, limitOrder, limitOrder.getPrice());
+
+            if(filledVolume != 0) {
+                setPrice(limitOrder.getPrice());
+                if(limitOrder.isFilled())
+                    toRemove.add(limitOrder);
+            }
+
+            fillVolume -= filledVolume;
+
+            if(fillVolume <= 0)
+            {
+                if(fillVolume<0)
+                {
+                    limitOrders.removeAll(toRemove);
+                    throw new IllegalStateException("Market order overfilled");
+                }
+                break;
+            }
+        }
+        limitOrders.removeAll(toRemove);
+        if(fillVolume != 0)
+        {
+            marketOrder.markAsInvalid("Not enough "+(marketOrder.isBuy()?"sell":"buy")+
+                    " orders to fill the market order: "+marketOrder);
+            return false;
+        }
+        return true;
+    }
+    /*private boolean processMarketOrder(MarketOrder marketOrder)
     {
         // Process the market order
         int amount = -marketOrder.getAmount();
@@ -141,7 +185,60 @@ public class MatchingEngine implements ServerSaveable {
         marketOrder.markAsInvalid("Not enough "+(marketOrder.isBuy()?"sell":"buy")+ " orders to fill the market order");
         StockMarketMod.LOGGER.warn("Market order not fully processed: {}", marketOrder);
         return false;
+    }*/
+
+
+    private boolean processSpotOrder(LimitOrder limitOrder)
+    {
+        // Process the spot order
+        int fillVolume = Math.abs(limitOrder.getAmount());
+        PriorityQueue<LimitOrder> limitOrders = limitOrder.isBuy() ? limitSellOrders : limitBuyOrders;
+        ArrayList<LimitOrder> toRemove = new ArrayList<>();
+
+        for(LimitOrder otherOrder : limitOrders)
+        {
+            LimitOrder fillWith = null;
+            if(otherOrder.getPrice() == limitOrder.getPrice())
+            {
+                fillWith = otherOrder;
+            }
+            else
+            {
+                if(limitOrder.isBuy() && limitOrder.getPrice() > otherOrder.getPrice())
+                {
+                    fillWith = otherOrder;
+                }
+                else if(limitOrder.isSell() && limitOrder.getPrice() < otherOrder.getPrice())
+                {
+                    fillWith = otherOrder;
+                }
+            }
+            if(fillWith == null)
+                continue;
+
+            int filledVolume = Order.fill(limitOrder, fillWith, limitOrder.getPrice());
+            if(filledVolume != 0)
+            {
+                setPrice(fillWith.getPrice());
+                if(fillWith.isFilled())
+                    toRemove.add(fillWith);
+            }
+            fillVolume -= filledVolume;
+
+            if(fillVolume <= 0)
+            {
+                if(fillVolume<0)
+                {
+                    limitOrders.removeAll(toRemove);
+                    throw new IllegalStateException("Limit order overfilled");
+                }
+                break;
+            }
+        }
+        limitOrders.removeAll(toRemove);
+        return fillVolume == 0;
     }
+    /*
     private boolean processSpotOrder(LimitOrder spotOrder)
     {
 
@@ -183,27 +280,7 @@ public class MatchingEngine implements ServerSaveable {
             }
         }
 
-        /*int botPrice = spotOrder.getPrice();
-        if(tradingBot != null && amount != 0)
-        {
-            int botAmount = tradingBot.getAvailableVolume(botPrice);
-            if(botAmount < 0 && spotOrder.isBuy())
-            {
-                if(-botAmount > amount)
-                    amount = 0;
-                else
-                    amount += botAmount;
-                price = botPrice;
-            }
-            else if(botAmount > 0 && spotOrder.isSell())
-            {
-                if(botAmount > amount)
-                    amount = 0;
-                else
-                    amount -= botAmount;
-                price = botPrice;
-            }
-        }*/
+
 
         int deltaVolume = Math.abs(spotOrder.getAmount()+amount);
 
@@ -214,7 +291,7 @@ public class MatchingEngine implements ServerSaveable {
         spotOrders.removeAll(toRemove);
         return amount == 0;
     }
-
+*/
     public ArrayList<LimitOrder> getLimitBuyOrders() {
         return new ArrayList<>(limitBuyOrders);
     }

@@ -1,27 +1,56 @@
 package net.kroia.stockmarket.market.server.order;
 
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.bank.MoneyBank;
+import net.kroia.stockmarket.market.server.ServerMarket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 
 public class MarketOrder extends Order {
+    private long lockedMoney = 0;
 
-
-    public MarketOrder(String playerUUID, String itemID, int amount) {
+    public static MarketOrder create(ServerPlayer player, String itemID, int amount)
+    {
+        int currentPrice = ServerMarket.getPrice(itemID);
+        if(Order.tryReserveBankFund(player, amount, currentPrice)) {
+            MarketOrder order = new MarketOrder(player.getUUID().toString(), itemID, amount);
+            if(amount > 0)
+                order.lockedMoney = amount * currentPrice;
+            return order;
+        }
+        return null;
+    }
+    public static MarketOrder createBotOrder(String uuid, MoneyBank botBank, String itemID, int amount)
+    {
+        int currentPrice = ServerMarket.getPrice(itemID);
+        if(Order.tryReserveBankFund(botBank, uuid, amount, currentPrice)){
+            MarketOrder order = new MarketOrder(uuid, itemID, amount, true);
+            if(amount > 0)
+                order.lockedMoney = amount * currentPrice;
+            return order;
+        }
+        return null;
+    }
+    protected MarketOrder(String playerUUID, String itemID, int amount) {
         super(playerUUID, itemID, amount);
 
-        StockMarketMod.LOGGER.info("MarketOrder created: " + toString());
+        //StockMarketMod.LOGGER.info("MarketOrder created: " + toString());
     }
-    public MarketOrder(String playerUUID, String itemID, int amount, boolean isBot) {
+    protected MarketOrder(String playerUUID, String itemID, int amount, boolean isBot) {
         super(playerUUID, itemID, amount, isBot);
 
-        StockMarketMod.LOGGER.info("MarketOrder created: " + toString());
+        //StockMarketMod.LOGGER.info("MarketOrder created: " + toString());
     }
 
     public MarketOrder(FriendlyByteBuf buf)
     {
         super(buf);
+    }
+
+
+    public long getLockedMoney() {
+        return lockedMoney;
     }
 
 
@@ -46,8 +75,13 @@ public class MarketOrder extends Order {
             ServerPlayer player = StockMarketMod.getPlayerByUUID(playerUUID);
             playerName = player == null ? "UUID:" + playerUUID : player.getName().getString();
         }
-        return "MarketOrder{ Owner: " + playerName + " Amount: " + amount + " Filled: " + filledAmount + " AveragePrice: " + averagePrice + " Status:" + status+
-                (status==Status.INVALID?" Invalid reason: "+invalidReason:"")+" }";
+        return "MarketOrder{\n  Owner: " + playerName +
+                "\n  Amount: " + amount +
+                "\n  Filled: " + filledAmount +
+                "\n  AveragePrice: " + averagePrice +
+                "\n  TransferedMoney: $" + transferedMoney +
+                "\n  Status:" + status+
+                (status==Status.INVALID?" Invalid reason: \n    "+invalidReason:"")+"\n}";
     }
 
     @Override

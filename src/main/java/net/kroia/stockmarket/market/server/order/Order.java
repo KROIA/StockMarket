@@ -1,12 +1,16 @@
 package net.kroia.stockmarket.market.server.order;
 
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.bank.MoneyBank;
+import net.kroia.stockmarket.bank.ServerBank;
 import net.kroia.stockmarket.networking.packet.ResponseOrderPacket;
 import net.kroia.stockmarket.util.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
+
+import java.util.UUID;
 
 /*
     * The Order class represents a buy or sell order.
@@ -22,6 +26,7 @@ public abstract class Order {
     protected int filledAmount = 0;
 
     protected int averagePrice = 0;
+    protected long transferedMoney = 0;
 
     protected String invalidReason = "";
 
@@ -40,14 +45,14 @@ public abstract class Order {
     }
     protected Status status = Status.PENDING;
 
-    public Order(String playerUUID, String itemID, int amount) {
+    protected Order(String playerUUID, String itemID, int amount) {
         this.itemID = itemID;
         this.orderID = uniqueOrderID();
         this.playerUUID = playerUUID;
         //this.itemID = itemID;
         this.amount = amount;
     }
-    public Order(String playerUUID, String itemID, int amount, boolean isBot) {
+    protected Order(String playerUUID, String itemID, int amount, boolean isBot) {
         this.itemID = itemID;
         this.orderID = uniqueOrderID();
         this.playerUUID = playerUUID;
@@ -58,6 +63,26 @@ public abstract class Order {
     protected Order()
     {
 
+    }
+    protected static boolean tryReserveBankFund(ServerPlayer player, int amount, int price)
+    {
+        MoneyBank bank = ServerBank.getBank(player.getUUID());
+        return tryReserveBankFund(bank, player.getName().toString(), amount, price);
+    }
+    protected static boolean tryReserveBankFund(MoneyBank bank, String playerName, int amount, int price)
+    {
+        if(bank == null)
+        {
+            StockMarketMod.LOGGER.warn("Bank not found for player " + playerName);
+            return false;
+        }
+        if(amount > 0) {
+            if (!bank.lockAmount((long) price * amount)) {
+                StockMarketMod.LOGGER.warn("Insufficient funds for player " + playerName);
+                return false;
+            }
+        }
+        return true;
     }
 
     public static Order construct(FriendlyByteBuf buf)
@@ -76,6 +101,7 @@ public abstract class Order {
         playerUUID = buf.readUtf();
         amount = buf.readInt();
         filledAmount = buf.readInt();
+        transferedMoney = buf.readLong();
         averagePrice = buf.readInt();
         status = Status.valueOf(buf.readUtf());
         invalidReason = buf.readUtf();
@@ -89,6 +115,7 @@ public abstract class Order {
         playerUUID = other.playerUUID;
         amount = other.amount;
         filledAmount = other.filledAmount;
+        transferedMoney = other.transferedMoney;
         averagePrice = other.averagePrice;
         status = other.status;
         invalidReason = other.invalidReason;
@@ -124,6 +151,7 @@ public abstract class Order {
                 playerUUID.compareTo(other.playerUUID)==0 &&
                 amount == other.amount &&
                 filledAmount == other.filledAmount &&
+                transferedMoney == other.transferedMoney &&
                 averagePrice == other.averagePrice &&
                 status == other.status;
     }
@@ -136,6 +164,12 @@ public abstract class Order {
     }
     public String getItemID() {
         return itemID;
+    }
+    public long getTransferedMoney() {
+        return transferedMoney;
+    }
+    public void addTransferedMoney(long money) {
+        transferedMoney += money;
     }
 
     public int getAmount() {
@@ -159,11 +193,28 @@ public abstract class Order {
     public void markAsInvalid(String reason) {
         invalidReason = reason;
         StockMarketMod.LOGGER.info("Order invalid: " + toString());
+        unlockLockedMoney();
         setStatus(Status.INVALID);
     }
     public void markAsCancelled() {
         StockMarketMod.LOGGER.info("Order canceled: " + toString());
+        unlockLockedMoney();
         setStatus(Status.CANCELLED);
+    }
+    private void unlockLockedMoney()
+    {
+        MoneyBank bank = ServerBank.getBank(UUID.fromString(playerUUID));
+        if(bank != null)
+        {
+            if(this instanceof LimitOrder limitOrder)
+            {
+                bank.unlockAmount((long) limitOrder.getPrice() * limitOrder.getAmount());
+            }
+            else if(this instanceof  MarketOrder marketOrder)
+            {
+                bank.unlockAmount(marketOrder.getLockedMoney());
+            }
+        }
     }
 
     private void setStatus(Status status) {
@@ -211,7 +262,7 @@ public abstract class Order {
      * @param amount The amount to fill the order with.
      * @return The remaining amount that could not be filled.
      */
-    public int fill(int amount)
+    /*public int fill(int amount)
     {
         int fillAmount = this.amount - filledAmount;
         if(Math.abs(fillAmount) > Math.abs(amount))
@@ -227,6 +278,91 @@ public abstract class Order {
             markAsProcessed();
         }
         return amount - fillAmount;
+    }*/
+    /*public int fill(Order other)
+    {
+        int fillAmount = amount - filledAmount;
+        if(Math.abs(fillAmount) > Math.abs(other.amount))
+            fillAmount = other.amount;
+        filledAmount += fillAmount;
+        if(filledAmount != 0 && status == Status.PENDING)
+        {
+            setStatus(Status.PARTIAL);
+        }
+
+        if(isFilled())
+        {
+            markAsProcessed();
+        }
+        return other.amount - fillAmount;
+    }*/
+    public static int fill(Order o1, Order o2, int currentPrice)
+    {
+        int fillAmount1 = o1.amount - o1.filledAmount;
+        int fillAmount2 = o2.amount - o2.filledAmount;
+        if(fillAmount1 > 0 && fillAmount2 > 0 || fillAmount1 < 0 && fillAmount2 < 0)
+        {
+            // same sign -> both buy or both sell
+            return 0;
+        }
+        int fillVolume = Math.min(Math.abs(fillAmount1), Math.abs(fillAmount2));
+        int fillAmount = fillVolume;
+        if(fillAmount1 < 0)
+            fillAmount = -fillVolume;
+
+        long money = fillVolume * currentPrice;
+
+        UUID playerUUID1 = UUID.fromString(o1.playerUUID);
+        UUID playerUUID2 = UUID.fromString(o2.playerUUID);
+        MoneyBank bank1 = ServerBank.getBank(playerUUID1);
+        MoneyBank bank2 = ServerBank.getBank(playerUUID2);
+        if(bank1 == null || bank2 == null)
+        {
+            StockMarketMod.LOGGER.error("Bank not found for player: " + o1.playerUUID + " or " + o2.playerUUID+
+                    " Order1: " + o1 + " Order2: " + o2+
+                    " Can't fill order");
+            return 0;
+        }
+
+        UUID senderUUID = fillAmount > 0 ? playerUUID1 : playerUUID2;
+        UUID receiverUUID = fillAmount > 0 ? playerUUID2 : playerUUID1;
+        MoneyBank senderBank = fillAmount > 0 ? bank1 : bank2;
+        MoneyBank receiverBank = fillAmount > 0 ? bank2 : bank1;
+        Order senderOrder = fillAmount > 0 ? o1 : o2;
+        Order receiverOrder = fillAmount > 0 ? o2 : o1;
+
+        if(!senderBank.transferFromLockedPrefered(money, receiverBank))
+        {
+            long missingAmount = (money - senderBank.getBalance()-senderBank.getLockedBalance());
+            StockMarketMod.LOGGER.error("Insufficient funds from player: " + senderUUID.toString()+
+                    " Order1: " + senderOrder + " Order2: " + receiverOrder+
+                    " Can't fill order");
+            senderOrder.markAsInvalid("Insufficient funds");
+            StockMarketMod.printToClientConsole(senderUUID, "Insufficient funds to consume order:\n  "+receiverOrder.toString()+
+                    "\n  price: $"+currentPrice+
+                    "\n  amount: "+fillVolume+
+                    "\n  total cost: $"+money +
+                    "\n  missing: $"+missingAmount);
+
+            return 0;
+        }
+        else {
+            senderOrder.filledAmount += fillVolume;
+            senderOrder.addTransferedMoney(-money);
+            receiverOrder.filledAmount -= fillVolume;
+            receiverOrder.addTransferedMoney(money);
+
+            if(senderOrder.isFilled())
+                senderOrder.markAsProcessed();
+            else if(senderOrder.status == Status.PENDING)
+                senderOrder.setStatus(Status.PARTIAL);
+
+            if(receiverOrder.isFilled())
+                receiverOrder.markAsProcessed();
+            else if(receiverOrder.status == Status.PENDING)
+                receiverOrder.setStatus(Status.PARTIAL);
+        }
+        return fillVolume;
     }
 
     public boolean isFilled() {
@@ -246,6 +382,7 @@ public abstract class Order {
         buf.writeUtf(playerUUID);
         buf.writeInt(amount);
         buf.writeInt(filledAmount);
+        buf.writeLong(transferedMoney);
         buf.writeInt(averagePrice);
         buf.writeUtf(status.toString());
         buf.writeUtf(invalidReason);
