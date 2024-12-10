@@ -1,6 +1,9 @@
 package net.kroia.stockmarket.market.server.bot;
 
-import net.kroia.stockmarket.bank.BotMoneyBank;
+import net.kroia.stockmarket.banking.ServerBankManager;
+import net.kroia.stockmarket.banking.bank.Bank;
+import net.kroia.stockmarket.banking.bank.BotMoneyBank;
+import net.kroia.stockmarket.market.server.MarketManager;
 import net.kroia.stockmarket.market.server.MatchingEngine;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.Order;
@@ -18,8 +21,7 @@ import java.util.UUID;
 public class ServerTradingBot implements ServerSaveable {
 
     protected static long lastBotID = 0;
-    protected String botUUID;
-    protected String itemID;
+    protected MarketManager parent;
     protected MatchingEngine matchingEngine;
 
     protected final int maxOrderCount = 100;
@@ -27,9 +29,8 @@ public class ServerTradingBot implements ServerSaveable {
     protected ArrayList<LimitOrder> buyOrders = new ArrayList<>();
     protected ArrayList<LimitOrder> sellOrders = new ArrayList<>();
 
-    public ServerTradingBot(MatchingEngine matchingEngine, String itemID) {
-        botUUID = BotMoneyBank.getInstance().getUserUUID().toString();
-        this.itemID = itemID;
+    public ServerTradingBot(MarketManager parent, MatchingEngine matchingEngine) {
+        this.parent = parent;
         this.matchingEngine = matchingEngine;
     }
 
@@ -37,6 +38,15 @@ public class ServerTradingBot implements ServerSaveable {
     {
         clearOrders();
         createOrders();
+    }
+
+    public UUID getUUID()
+    {
+        return ServerBankManager.getBotUser().getOwnerUUID();
+    }
+    public String getItemID()
+    {
+        return parent.getItemID();
     }
 
 
@@ -59,7 +69,8 @@ public class ServerTradingBot implements ServerSaveable {
 
     protected void createOrders()
     {
-        BotMoneyBank bank = BotMoneyBank.getInstance();
+        Bank bank = ServerBankManager.getBotUser().getMoneyBank();
+        String botUUID = getUUID().toString();
 
         int priceIncerement = 1;
         int currentPrice = matchingEngine.getPrice();
@@ -72,7 +83,7 @@ public class ServerTradingBot implements ServerSaveable {
             int buyVolume = getAvailableVolume(buyPrice);
             if(buyVolume > 0) {
 
-                LimitOrder buyOrder = LimitOrder.createBotOrder(botUUID, bank, itemID, buyVolume, buyPrice);
+                LimitOrder buyOrder = LimitOrder.createBotOrder(botUUID, bank, getItemID(), buyVolume, buyPrice);
                 if(buyOrder != null) {
                     matchingEngine.addOrder(buyOrder);
                     buyOrders.add(buyOrder);
@@ -81,7 +92,7 @@ public class ServerTradingBot implements ServerSaveable {
 
             int sellVolume = getAvailableVolume(sellPrice);
             if(sellVolume < 0) {
-                LimitOrder sellOrder = LimitOrder.createBotOrder(botUUID, bank, itemID, sellVolume, sellPrice);
+                LimitOrder sellOrder = LimitOrder.createBotOrder(botUUID, bank, getItemID(), sellVolume, sellPrice);
                 if(sellOrder != null)
                 {
                     matchingEngine.addOrder(sellOrder);
@@ -127,15 +138,13 @@ public class ServerTradingBot implements ServerSaveable {
 
     @Override
     public void save(CompoundTag tag) {
-        tag.putString("botUUID", botUUID);
+
     }
 
     @Override
     public void load(CompoundTag tag) {
-        botUUID = tag.getString("botUUID");
-
         ArrayList<Order> orders = new ArrayList<>();
-        matchingEngine.getOrders(botUUID, orders);
+        matchingEngine.getOrders(getUUID().toString(), orders);
         for(Order order : orders)
         {
             if(order instanceof LimitOrder)

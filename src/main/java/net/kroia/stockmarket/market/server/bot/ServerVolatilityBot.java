@@ -1,6 +1,9 @@
 package net.kroia.stockmarket.market.server.bot;
 
-import net.kroia.stockmarket.bank.BotMoneyBank;
+import net.kroia.stockmarket.banking.ServerBankManager;
+import net.kroia.stockmarket.banking.bank.Bank;
+import net.kroia.stockmarket.banking.bank.BotMoneyBank;
+import net.kroia.stockmarket.market.server.MarketManager;
 import net.kroia.stockmarket.market.server.MatchingEngine;
 import net.kroia.stockmarket.market.server.order.MarketOrder;
 import net.kroia.stockmarket.util.MeanRevertingRandomWalk;
@@ -10,8 +13,8 @@ public class ServerVolatilityBot extends ServerTradingBot {
     private int volatility;
     private MeanRevertingRandomWalk randomWalk;
 
-    public ServerVolatilityBot(MatchingEngine matchingEngine, String itemID, int volatility) {
-        super(matchingEngine, itemID);
+    public ServerVolatilityBot(MarketManager parent, MatchingEngine matchingEngine, int volatility) {
+        super(parent, matchingEngine);
         this.volatility = volatility;
         randomWalk = new MeanRevertingRandomWalk(0.1, 0.05);
     }
@@ -29,9 +32,9 @@ public class ServerVolatilityBot extends ServerTradingBot {
         int orderVolume = (int)(randomWalk.nextValue()*volatility);
         if(orderVolume == 0)
             return;
-        BotMoneyBank bank = BotMoneyBank.getInstance();
+        Bank bank = ServerBankManager.getBotUser().getMoneyBank();
 
-        MarketOrder order = MarketOrder.createBotOrder(this.botUUID,bank, this.itemID, orderVolume);
+        MarketOrder order = MarketOrder.createBotOrder(getUUID().toString(),bank, getItemID(), orderVolume);
         matchingEngine.addOrder(order);
     }
 

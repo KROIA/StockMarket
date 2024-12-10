@@ -1,6 +1,6 @@
 package net.kroia.stockmarket.util;
 
-import net.kroia.stockmarket.bank.ServerBank;
+import net.kroia.stockmarket.banking.ServerBankManager;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtIo;
@@ -36,8 +36,8 @@ public class DataHandler {
 
     public static void loadAll()
     {
-        load_market();
         load_bank();
+        load_market();
     }
 
 
@@ -65,10 +65,9 @@ public class DataHandler {
     public static void save_bank()
     {
         CompoundTag data = new CompoundTag();
-        ServerBank bank = new ServerBank();
         CompoundTag bankData = new CompoundTag();
-        bank.save(bankData);
-        data.put("bank", bankData);
+        ServerBankManager.saveToTag(bankData);
+        data.put("banking", bankData);
         saveDataCompound(BANK_DATA_FILE_NAME, data);
     }
 
@@ -77,9 +76,8 @@ public class DataHandler {
         CompoundTag data = readDataCompound(BANK_DATA_FILE_NAME);
         if(data != null)
         {
-            ServerBank bank = new ServerBank();
-            CompoundTag bankData = data.getCompound("bank");
-            bank.load(bankData);
+            CompoundTag bankData = data.getCompound("banking");
+            ServerBankManager.loadFromTag(bankData);
         }
     }
 

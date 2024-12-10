@@ -1,18 +1,16 @@
 package net.kroia.stockmarket;
 
 import com.mojang.logging.LogUtils;
-import net.kroia.stockmarket.bank.BotMoneyBank;
-import net.kroia.stockmarket.bank.ServerBank;
+import net.kroia.stockmarket.banking.bank.BotMoneyBank;
+import net.kroia.stockmarket.banking.ServerBankManager;
 import net.kroia.stockmarket.block.ModBlocks;
 import net.kroia.stockmarket.command.ModCommands;
 import net.kroia.stockmarket.entity.ModEntities;
 import net.kroia.stockmarket.item.ModCreativeModTabs;
 import net.kroia.stockmarket.item.ModItems;
-import net.kroia.stockmarket.market.client.ClientMarket;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.menu.ModMenus;
 import net.kroia.stockmarket.networking.ModMessages;
-import net.kroia.stockmarket.util.PlayerEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -20,12 +18,10 @@ import net.minecraft.server.players.PlayerList;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
-import net.minecraftforge.client.event.RegisterClientCommandsEvent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.BuildCreativeModeTabContentsEvent;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.event.server.ServerStartingEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.DistExecutor;
@@ -147,11 +143,8 @@ public class StockMarketMod
             side = Side.MULTIPLAYER_SERVER;
         else
             side = Side.SINGLE_PLAYER;
-        if(BotMoneyBank.getInstance() == null)
-        {
-            ServerBank.createBotBankIfNotExist(UUID.randomUUID(), 1000_000);
-        }
-        ServerMarket.init();
+
+
     }
     private void onServerStarting(net.minecraftforge.event.server.ServerStartingEvent event) {
         // This event triggers for both dedicated and integrated servers
@@ -278,6 +271,8 @@ public class StockMarketMod
     }
     public static void printToClientConsole(ServerPlayer player, String message)
     {
+        if(player == null)
+            return;
         player.sendSystemMessage(
                 net.minecraft.network.chat.Component.literal(message)
         );
@@ -288,7 +283,7 @@ public class StockMarketMod
         ServerPlayer player = getPlayerByUUID(playerUUID);
         if(player == null)
         {
-            LOGGER.warn("Player not found with UUID: " + playerUUID);
+            //LOGGER.warn("Player not found with UUID: " + playerUUID);
             return;
         }
         player.sendSystemMessage(

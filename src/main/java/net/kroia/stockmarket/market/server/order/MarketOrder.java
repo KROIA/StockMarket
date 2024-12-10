@@ -1,11 +1,11 @@
 package net.kroia.stockmarket.market.server.order;
 
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.bank.MoneyBank;
+import net.kroia.stockmarket.banking.bank.Bank;
+import net.kroia.stockmarket.banking.bank.MoneyBank;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.player.Player;
 
 public class MarketOrder extends Order {
     private long lockedMoney = 0;
@@ -16,18 +16,18 @@ public class MarketOrder extends Order {
         if(Order.tryReserveBankFund(player, amount, currentPrice)) {
             MarketOrder order = new MarketOrder(player.getUUID().toString(), itemID, amount);
             if(amount > 0)
-                order.lockedMoney = amount * currentPrice;
+                order.lockedMoney = Math.abs(amount) * currentPrice;
             return order;
         }
         return null;
     }
-    public static MarketOrder createBotOrder(String uuid, MoneyBank botBank, String itemID, int amount)
+    public static MarketOrder createBotOrder(String uuid, Bank botBank, String itemID, int amount)
     {
         int currentPrice = ServerMarket.getPrice(itemID);
         if(Order.tryReserveBankFund(botBank, uuid, amount, currentPrice)){
             MarketOrder order = new MarketOrder(uuid, itemID, amount, true);
             if(amount > 0)
-                order.lockedMoney = amount * currentPrice;
+                order.lockedMoney = Math.abs(amount) * currentPrice;
             return order;
         }
         return null;

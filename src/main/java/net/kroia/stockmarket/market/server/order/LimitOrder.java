@@ -1,14 +1,12 @@
 package net.kroia.stockmarket.market.server.order;
 
-import com.google.j2objc.annotations.ObjectiveCName;
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.bank.MoneyBank;
-import net.kroia.stockmarket.bank.ServerBank;
+import net.kroia.stockmarket.banking.bank.Bank;
+import net.kroia.stockmarket.banking.bank.MoneyBank;
 import net.kroia.stockmarket.util.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.player.Player;
 
 /*
     * The LimitOrder class represents a spot order.
@@ -22,7 +20,7 @@ public class LimitOrder extends Order implements ServerSaveable {
             return new LimitOrder(player.getUUID().toString(), itemID, amount, price);
         return null;
     }
-    public static LimitOrder createBotOrder(String uuid, MoneyBank botBank, String itemID, int amount, int price)
+    public static LimitOrder createBotOrder(String uuid, Bank botBank, String itemID, int amount, int price)
     {
         if(Order.tryReserveBankFund(botBank, uuid, amount, price))
             return new LimitOrder(uuid, itemID, amount, price, true);

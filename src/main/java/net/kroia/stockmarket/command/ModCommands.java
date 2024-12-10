@@ -8,50 +8,24 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.bank.MoneyBank;
-import net.kroia.stockmarket.bank.ServerBank;
+import net.kroia.stockmarket.banking.BankUser;
+import net.kroia.stockmarket.banking.bank.Bank;
+import net.kroia.stockmarket.banking.bank.MoneyBank;
+import net.kroia.stockmarket.banking.ServerBankManager;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.players.PlayerList;
-import org.apache.logging.log4j.core.jmx.Server;
 
-import java.util.Optional;
+import java.util.Objects;
 import java.util.UUID;
-import java.util.function.Supplier;
 
 public class ModCommands {
     // Method to register commands
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        /*dispatcher.register(Commands.literal("mycommand")
-                .then(Commands.literal("subcommand")
-                        .executes(ModCommands::runSubCommand))
-                .executes(ModCommands::runMainCommand));*/
 
-        //dispatcher.register(Commands.literal("money")
-        //        .executes(ModCommands::command_money));
-
-        /*dispatcher.register(Commands.literal("money")
-                .then(Commands.literal("add").executes(ModCommands::command_money_add))
-                .executes(ModCommands::command_money));*/
-
-        /*
-        dispatcher.register(
-                Commands.literal("money")
-                        .then(Commands.literal("add")
-                                .requires(source -> source.hasPermission(2)) // Admin-only for adding money
-                                .then(Commands.argument("amount", IntegerArgumentType.integer(0))
-                                        .executes(ModCommands::addMoneyToSelf)) // Add to self
-                                .then(Commands.argument("target", StringArgumentType.string()) // Add to others
-                                        .then(Commands.argument("amount", IntegerArgumentType.integer(0))
-                                                .executes(ModCommands::addMoneyToUser))))
-                        .executes(ModCommands::getMoney) // Show balance
-        );
-
-        */
-
+        // /money add <amount> [username]
         dispatcher.register(
                 Commands.literal("money")
                         .then(Commands.literal("add")
@@ -111,6 +85,34 @@ public class ModCommands {
                         })
 
         );
+
+        // /bank
+        dispatcher.register(
+                Commands.literal("bank")
+                        .then(Commands.literal("show")
+                                .executes(context -> {
+                                    CommandSourceStack source = context.getSource();
+                                    ServerPlayer player = source.getPlayerOrException();
+
+                                    // Execute the balance command on the server
+                                    return bank_show(player, player.getName().getString());
+                                })
+                                .requires(source -> source.hasPermission(2))
+                                .then(Commands.argument("username", StringArgumentType.string())
+                                        .executes(context -> {
+                                            CommandSourceStack source = context.getSource();
+                                            ServerPlayer player = source.getPlayerOrException();
+
+                                            // Get arguments
+                                            String username = StringArgumentType.getString(context, "username");
+
+
+                                            // Execute the command on the server
+                                            return bank_show(player, username);
+                                        })
+                                )
+                        )
+        );
     }
 
     private static int executeAddMoney(ServerPlayer executor, String username, int amount) {
@@ -122,7 +124,7 @@ public class ModCommands {
             );
             return Command.SINGLE_SUCCESS;
         }
-        ServerBank.getBank(targetPlayer.getUUID()).deposit(amount); // Example call
+        ServerBankManager.getMoneyBank(targetPlayer.getUUID()).deposit(amount); // Example call
         executor.sendSystemMessage(
                 Component.literal("Added " + amount + " to " + username + "'s account!")
         );
@@ -145,8 +147,8 @@ public class ModCommands {
             );
             return Command.SINGLE_SUCCESS;
         }
-        MoneyBank fromBank = ServerBank.getBank(from.getUUID());
-        MoneyBank toBank = ServerBank.getBank(to.getUUID());
+        Bank fromBank = ServerBankManager.getMoneyBank(from.getUUID());
+        Bank toBank = ServerBankManager.getMoneyBank(to.getUUID());
 
         if(fromBank.transfer(amount, toBank))
         {
@@ -164,111 +166,29 @@ public class ModCommands {
 
     private static int showBalance(ServerPlayer player) {
         // Server-side logic for showing the balance
-        long balance = ServerBank.getBank(player.getUUID()).getBalance(); // Example call
+        long balance = ServerBankManager.getMoneyBank(player.getUUID()).getBalance(); // Example call
         player.sendSystemMessage(Component.literal("Your balance: " + balance));
         return Command.SINGLE_SUCCESS;
     }
 
-    private static int addMoneyToUser(CommandContext<CommandSourceStack> context) {
-        String targetName = StringArgumentType.getString(context, "target");
-        int amount = IntegerArgumentType.getInteger(context, "amount");
-        CommandSourceStack source = context.getSource();
-        MinecraftServer server = source.getServer();
-
-        // Attempt to find the player online
-        ServerPlayer targetPlayer = server.getPlayerList().getPlayerByName(targetName);
-        if (targetPlayer != null) {
-            // Player is online
-            UUID targetUUID = targetPlayer.getUUID();
-            ServerBank.getBank(targetUUID).deposit(amount);
-            source.sendSuccess(() -> Component.literal("Added " + amount + " money to " + targetName + "'s account!"), true);
-        } else {
-            // Player is offline, attempt to resolve GameProfile and UUID
-            GameProfile targetProfile = server.getProfileCache().get(targetName).orElse(null);
-            if (targetProfile != null) {
-                UUID targetUUID = targetProfile.getId();
-                ServerBank.getBank(targetUUID).deposit(amount);
-                source.sendSuccess(() -> Component.literal("Added " + amount + " money to " + targetName + "'s account!"), true);
-            } else {
-                source.sendFailure(Component.literal("Player " + targetName + " not found."));
-            }
+    private static int bank_show(ServerPlayer player, String targetPlayer) {
+        // Server-side logic for showing the balance
+        MinecraftServer server = player.getServer();
+        UUID targetPlayerUUID = null;
+        assert server != null;
+        GameProfile profile = Objects.requireNonNull(server.getProfileCache()).get(targetPlayer).get();
+        if (profile != null) {
+            targetPlayerUUID = profile.getId(); // Returns the UUID as a string
+        }
+        if(targetPlayerUUID == null) {
+            player.sendSystemMessage(
+                    Component.literal("Player " + targetPlayer + " not found.")
+            );
+            return Command.SINGLE_SUCCESS;
         }
 
-        return 1; // Command executed successfully
+        BankUser user = ServerBankManager.getUser(targetPlayerUUID);
+        player.sendSystemMessage(Component.literal(user.toString()));
+        return Command.SINGLE_SUCCESS;
     }
-
-    private static int addMoneyToSelf(CommandContext<CommandSourceStack> context) {
-        int amount = IntegerArgumentType.getInteger(context, "amount");
-        CommandSourceStack source = context.getSource();
-
-        try {
-            ServerPlayer player = source.getPlayerOrException();
-            ServerBank.getBank(player.getUUID()).deposit(amount);
-            source.sendSuccess(() -> Component.literal("Added " + amount + " money to your account!"), true);
-        } catch (CommandSyntaxException e) {
-            source.sendFailure(Component.literal("You must be a player to execute this command."));
-        }
-
-        return 1; // Command executed successfully
-    }
-
-    private static int getMoney(CommandContext<CommandSourceStack> context) {
-        CommandSourceStack source = context.getSource();
-
-        try {
-            ServerPlayer player = source.getPlayerOrException();
-            long balance = ServerBank.getBank(player.getUUID()).getBalance();
-            source.sendSuccess(() -> Component.literal("Your current balance is: " + balance), false);
-        } catch (CommandSyntaxException e) {
-            source.sendFailure(Component.literal("You must be a player to execute this command."));
-        }
-
-        return 1; // Command executed successfully
-    }
-    // Main command logic
-    /*private static int runMainCommand(CommandContext<CommandSourceStack> context) {
-        context.getSource().sendSuccess((Supplier<Component>) Component.literal("Main command executed!"), false);
-        return 1; // Return a result code
-    }
-
-    // Subcommand logic
-    private static int runSubCommand(CommandContext<CommandSourceStack> context) {
-        context.getSource().sendSuccess((Supplier<Component>) Component.literal("Subcommand executed!"), false);
-        return 1; // Return a result code
-    }*/
-
-    /*
-    private static int command_money(CommandContext<CommandSourceStack> context) {
-        ServerPlayer player = context.getSource().getPlayer();
-        if(player == null) {
-            return 0;
-        }
-
-        MoneyBank bank = ServerBank.getBank(player.getStringUUID());
-        if(bank == null) {
-            return 0;
-        }
-
-        context.getSource().sendSuccess((Supplier<Component>) Component.literal("You have $"+bank.getBalance()), false);
-        return 1; // Return a result code
-    }
-
-    private static int command_money_add(CommandContext<CommandSourceStack> context) {
-        ServerPlayer player = context.getSource().getPlayer();
-        if(player == null) {
-            return 0;
-        }
-
-        MoneyBank bank = ServerBank.getBank(player.getStringUUID());
-        if(bank == null) {
-            return 0;
-        }
-
-        int amount = context.getArgument("amount", Integer.class);
-        bank.deposit(amount);
-
-
-        context.getSource().sendSuccess((Supplier<Component>) Component.literal("You have $"+bank.getBalance()), false);
-        return 1; // Return a result code
-    }*/
 }

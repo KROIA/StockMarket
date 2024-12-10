@@ -38,8 +38,8 @@ public class MarketManager implements ServerSaveable {
         this.tradeItem = tradeItem;
         this.itemID = tradeItem.getItemID();
         matchingEngine = new MatchingEngine(initialPrice, history);
-        tradingBot = new ServerTradingBot(matchingEngine, itemID);
-        volatilityBot = new ServerVolatilityBot(matchingEngine, itemID, 10);
+        tradingBot = new ServerTradingBot(this, matchingEngine);
+        volatilityBot = new ServerVolatilityBot(this, matchingEngine, 10);
         //matchingEngine.setTradingBot(tradingBot);
         priceHistory = history;
 
@@ -80,6 +80,10 @@ public class MarketManager implements ServerSaveable {
         matchingEngine.getOrders(playerUUID, orders);
     }
 
+    public String getItemID()
+    {
+        return itemID;
+    }
     public void updateBot()
     {
         if(tradingBot != null)
@@ -155,7 +159,7 @@ public class MarketManager implements ServerSaveable {
 
     @Override
     public void save(CompoundTag tag) {
-      //  tag.putString("itemID", itemID);
+        tag.putString("itemID", itemID);
         //tag.putInt("lowPrice", lowPrice);
         //tag.putInt("highPrice", highPrice);
 
@@ -170,13 +174,19 @@ public class MarketManager implements ServerSaveable {
             tradingBot.save(tradingBotTag);
             tag.put("tradingBot", tradingBotTag);
         }
+        if(volatilityBot != null)
+        {
+            CompoundTag volatilityBotTag = new CompoundTag();
+            volatilityBot.save(volatilityBotTag);
+            tag.put("volatilityBot", volatilityBotTag);
+        }
 
 
     }
 
     @Override
     public void load(CompoundTag tag) {
-       // itemID = tag.getString("itemID");
+        itemID = tag.getString("itemID");
         //lowPrice = tag.getInt("lowPrice");
         //highPrice = tag.getInt("highPrice");
 
@@ -187,6 +197,12 @@ public class MarketManager implements ServerSaveable {
         {
             CompoundTag tradingBotTag = tag.getCompound("tradingBot");
             tradingBot.load(tradingBotTag);
+        }
+
+        if(tag.contains("volatilityBot") && volatilityBot != null)
+        {
+            CompoundTag volatilityBotTag = tag.getCompound("volatilityBot");
+            volatilityBot.load(volatilityBotTag);
         }
     }
 }

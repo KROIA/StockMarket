@@ -120,7 +120,7 @@ public class MatchingEngine implements ServerSaveable {
         int fillVolume = Math.abs(marketOrder.getAmount());
         for(LimitOrder limitOrder : limitOrders)
         {
-            int filledVolume = Order.fill(marketOrder, limitOrder, limitOrder.getPrice());
+            int filledVolume = TransactionEnginge.fill(marketOrder, limitOrder, limitOrder.getPrice());
 
             if(filledVolume != 0) {
                 setPrice(limitOrder.getPrice());
@@ -216,7 +216,7 @@ public class MatchingEngine implements ServerSaveable {
             if(fillWith == null)
                 continue;
 
-            int filledVolume = Order.fill(limitOrder, fillWith, limitOrder.getPrice());
+            int filledVolume = TransactionEnginge.fill(limitOrder, fillWith, limitOrder.getPrice());
             if(filledVolume != 0)
             {
                 setPrice(fillWith.getPrice());

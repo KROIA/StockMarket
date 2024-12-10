@@ -1,4 +1,5 @@
 package net.kroia.stockmarket.util;
+import net.kroia.stockmarket.market.server.ServerMarket;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -25,9 +26,13 @@ public class ServerEvents {
             if (levelKey.equals(ServerLevel.OVERWORLD)) {
                 File rootSaveFolder = server.getWorldPath(LevelResource.ROOT).toFile();
 
+
+
                 // Load data from the root save folder
                 DATA_HANDLER.setSaveFolder(rootSaveFolder);
                 DATA_HANDLER.loadAll();
+
+                ServerMarket.init();
             }
         }
     }

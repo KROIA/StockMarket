@@ -169,7 +169,7 @@ public class UpdatePricePacket {
         NetworkEvent.Context context = contextSupplier.get();
         // Check if on server or client
         if(contextSupplier.get().getDirection().getReceptionSide().isClient()) {
-            StockMarketMod.LOGGER.info("[CLIENT] Received current prices from the server");
+            //StockMarketMod.LOGGER.info("[CLIENT] Received current prices from the server");
             // HERE WE ARE ON THE CLIENT!
             // Update client-side data
             // Get the data from the packet

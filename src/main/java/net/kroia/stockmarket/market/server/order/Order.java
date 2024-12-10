@@ -1,14 +1,12 @@
 package net.kroia.stockmarket.market.server.order;
 
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.bank.MoneyBank;
-import net.kroia.stockmarket.bank.ServerBank;
+import net.kroia.stockmarket.banking.bank.Bank;
+import net.kroia.stockmarket.banking.bank.MoneyBank;
+import net.kroia.stockmarket.banking.ServerBankManager;
 import net.kroia.stockmarket.networking.packet.ResponseOrderPacket;
-import net.kroia.stockmarket.util.ServerSaveable;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.player.Player;
 
 import java.util.UUID;
 
@@ -66,10 +64,10 @@ public abstract class Order {
     }
     protected static boolean tryReserveBankFund(ServerPlayer player, int amount, int price)
     {
-        MoneyBank bank = ServerBank.getBank(player.getUUID());
+        Bank bank = ServerBankManager.getMoneyBank(player.getUUID());
         return tryReserveBankFund(bank, player.getName().toString(), amount, price);
     }
-    protected static boolean tryReserveBankFund(MoneyBank bank, String playerName, int amount, int price)
+    protected static boolean tryReserveBankFund(Bank bank, String playerName, int amount, int price)
     {
         if(bank == null)
         {
@@ -187,28 +185,31 @@ public abstract class Order {
     }
 
     public void markAsProcessed() {
-        StockMarketMod.LOGGER.info("Order processed: " + toString());
+        if(!isBot)
+            StockMarketMod.LOGGER.info("Order processed: " + toString());
         setStatus(Status.PROCESSED);
     }
     public void markAsInvalid(String reason) {
         invalidReason = reason;
-        StockMarketMod.LOGGER.info("Order invalid: " + toString());
+        if(!isBot)
+            StockMarketMod.LOGGER.info("Order invalid: " + toString());
         unlockLockedMoney();
         setStatus(Status.INVALID);
     }
     public void markAsCancelled() {
-        StockMarketMod.LOGGER.info("Order canceled: " + toString());
+        if(!isBot)
+            StockMarketMod.LOGGER.info("Order canceled: " + toString());
         unlockLockedMoney();
         setStatus(Status.CANCELLED);
     }
     private void unlockLockedMoney()
     {
-        MoneyBank bank = ServerBank.getBank(UUID.fromString(playerUUID));
+        Bank bank = ServerBankManager.getMoneyBank(UUID.fromString(playerUUID));
         if(bank != null)
         {
             if(this instanceof LimitOrder limitOrder)
             {
-                bank.unlockAmount((long) limitOrder.getPrice() * limitOrder.getAmount());
+                bank.unlockAmount((long) limitOrder.getPrice() * Math.abs(limitOrder.getAmount()));
             }
             else if(this instanceof  MarketOrder marketOrder)
             {
@@ -217,7 +218,7 @@ public abstract class Order {
         }
     }
 
-    private void setStatus(Status status) {
+    public void setStatus(Status status) {
         if(status == this.status)
             return;
         this.status = status;
@@ -296,7 +297,7 @@ public abstract class Order {
         }
         return other.amount - fillAmount;
     }*/
-    public static int fill(Order o1, Order o2, int currentPrice)
+    /*public static int fill(Order o1, Order o2, int currentPrice)
     {
         int fillAmount1 = o1.amount - o1.filledAmount;
         int fillAmount2 = o2.amount - o2.filledAmount;
@@ -314,8 +315,8 @@ public abstract class Order {
 
         UUID playerUUID1 = UUID.fromString(o1.playerUUID);
         UUID playerUUID2 = UUID.fromString(o2.playerUUID);
-        MoneyBank bank1 = ServerBank.getBank(playerUUID1);
-        MoneyBank bank2 = ServerBank.getBank(playerUUID2);
+        MoneyBank bank1 = ServerBankManager.getBank(playerUUID1);
+        MoneyBank bank2 = ServerBankManager.getBank(playerUUID2);
         if(bank1 == null || bank2 == null)
         {
             StockMarketMod.LOGGER.error("Bank not found for player: " + o1.playerUUID + " or " + o2.playerUUID+
@@ -363,12 +364,15 @@ public abstract class Order {
                 receiverOrder.setStatus(Status.PARTIAL);
         }
         return fillVolume;
-    }
+    }*/
 
     public boolean isFilled() {
         return Math.abs(filledAmount) >= Math.abs(amount);
     }
 
+    public void addFilledAmount(int amount) {
+        filledAmount += amount;
+    }
     public int getFilledAmount() {
         return filledAmount;
     }

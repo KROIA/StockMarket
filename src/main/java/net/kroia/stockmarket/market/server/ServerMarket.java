@@ -1,8 +1,7 @@
 package net.kroia.stockmarket.market.server;
 
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.bank.MoneyBank;
-import net.kroia.stockmarket.bank.ServerBank;
+import net.kroia.stockmarket.banking.ServerBankManager;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.MarketOrder;
 import net.kroia.stockmarket.market.server.order.Order;
@@ -14,10 +13,10 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.server.level.ServerPlayer;
 
-import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 public class ServerMarket implements ServerSaveable
 {
@@ -30,17 +29,12 @@ public class ServerMarket implements ServerSaveable
 
     public static void init()
     {
-        addTradeItem("minecraft:diamond", 50);
-        addTradeItem("minecraft:iron_ingot", 10);
-        addTradeItem("minecraft:gold_ingot", 25);
-        /*marketData = new MarketData();
-        Map<String, PriceHistory> prices = marketData.getPrices();
-        for(String itemID : prices.keySet())
-        {
-            PriceHistory priceHistory = prices.get(itemID);
-            MarketManager marketManager = new MarketManager(itemID, priceHistory.getCurrentPrice(), priceHistory);
-            marketManagers.put(itemID, marketManager);
-        }*/
+        ServerBankManager.createBotUser();
+        //ServerBankManager.createUser(UUID.randomUUID(), new ArrayList<>(), true, 1000_000);
+        addTradeItemIfNotExists("minecraft:diamond", 50);
+        addTradeItemIfNotExists("minecraft:iron_ingot", 10);
+        addTradeItemIfNotExists("minecraft:gold_ingot", 25);
+
     }
 
     public static void addTradeItem(String itemID, int startPrice)
@@ -48,6 +42,15 @@ public class ServerMarket implements ServerSaveable
         if(tradeItems.containsKey(itemID))
         {
             StockMarketMod.LOGGER.warn("[SERVER] Trade item already exists: " + itemID);
+            return;
+        }
+        ServerTradeItem tradeItem = new ServerTradeItem(itemID, startPrice);
+        tradeItems.put(itemID, tradeItem);
+    }
+    public static void addTradeItemIfNotExists(String itemID, int startPrice)
+    {
+        if(tradeItems.containsKey(itemID))
+        {
             return;
         }
         ServerTradeItem tradeItem = new ServerTradeItem(itemID, startPrice);
@@ -206,14 +209,14 @@ public class ServerMarket implements ServerSaveable
         int amount = packet.getAmount();
         String itemID = packet.getItemID();
         String playerName = player.getName().getString();
-        //MoneyBank playerBank = ServerBank.getBank(player.getUUID());
+        //MoneyBank playerBank = ServerBankManager.getBank(player.getUUID());
         RequestOrderPacket.OrderType orderType = packet.getOrderType();
         int price = packet.getPrice();
         StockMarketMod.LOGGER.info("[SERVER] Receiving RequestOrderPacket for item "+packet.getItemID()+" from the player "+playerName);
 
         /*if(playerBank == null)
         {
-            StockMarketMod.LOGGER.error("[SERVER] Player "+playerName+" does not have a bank account");
+            StockMarketMod.LOGGER.error("[SERVER] Player "+playerName+" does not have a banking account");
             return;
         }*/
 
