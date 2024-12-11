@@ -1,6 +1,8 @@
 package net.kroia.stockmarket;
 
+import net.kroia.stockmarket.entity.custom.BankTerminalBlockEntity;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
+import net.kroia.stockmarket.screen.custom.BankTerminalScreen;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
@@ -15,11 +17,23 @@ public class ClientHooks {
         if(entity instanceof StockMarketBlockEntity stockMarketBlockEntity)
         {
             DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> Minecraft.getInstance().setScreen(new TradeScreen(stockMarketBlockEntity)));
-            //Minecraft.getInstance().setScreen(new TradeScreen(stockMarketBlockEntity.getChartData()));
-        }
+      }
         else
         {
             StockMarketMod.LOGGER.warn("Block entity at position: "+pos+" is not of type StockMarketBlockEntity");
+            return InteractionResult.FAIL;
+        }
+        return InteractionResult.SUCCESS;
+    }
+    public static InteractionResult openBankTerminalBlockScreen(BlockEntity entity, BlockPos pos)
+    {
+        if(entity instanceof BankTerminalBlockEntity bankTerminalBlockEntity)
+        {
+            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> Minecraft.getInstance().setScreen(new BankTerminalScreen(bankTerminalBlockEntity)));
+        }
+        else
+        {
+            StockMarketMod.LOGGER.warn("Block entity at position: "+pos+" is not of type BankTerminalBlockEntity");
             return InteractionResult.FAIL;
         }
         return InteractionResult.SUCCESS;

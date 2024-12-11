@@ -30,7 +30,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 // StockMarketBlockEntity.java
-public class StockMarketBlockEntity extends BlockEntity implements MenuProvider {
+public class StockMarketBlockEntity extends BlockEntity /*implements MenuProvider */{
 
 
     //private ArrayList<CandleStickChart.CandleData> chartData;
@@ -42,7 +42,7 @@ public class StockMarketBlockEntity extends BlockEntity implements MenuProvider 
 
     public StockMarketBlockEntity(BlockPos pos, BlockState state) {
         super(ModEntities.STOCK_MARKET_BLOCK_ENTITY.get(), pos, state);
-        StockMarketMod.LOGGER.info("ChartBlockEntity created at position " + pos);
+        StockMarketMod.LOGGER.info("StockMarketBlockEntity created at position " + pos);
         itemID = "minecraft:diamond";
         amount = 1;
         price = 1;
@@ -92,7 +92,7 @@ public class StockMarketBlockEntity extends BlockEntity implements MenuProvider 
     }
 
 
-
+/*
     @Override
     public Component getDisplayName() {
         return Component.translatable("container.chart");
@@ -101,7 +101,7 @@ public class StockMarketBlockEntity extends BlockEntity implements MenuProvider 
     @Override
     public AbstractContainerMenu createMenu(int id, Inventory playerInventory, Player player) {
         return new ChartMenu(id, playerInventory, this, ContainerLevelAccess.NULL);
-    }
+    }*/
 
     @Override
     protected void saveAdditional(@Nullable CompoundTag tag)

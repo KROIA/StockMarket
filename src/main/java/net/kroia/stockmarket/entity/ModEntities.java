@@ -2,6 +2,7 @@ package net.kroia.stockmarket.entity;
 
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.block.ModBlocks;
+import net.kroia.stockmarket.entity.custom.BankTerminalBlockEntity;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -21,6 +22,9 @@ public class ModEntities {
             BLOCK_ENTITIES.register("stock_market_block_entity",
                     () -> BlockEntityType.Builder.of(StockMarketBlockEntity::new, ModBlocks.STOCK_MARKET_BLOCK.get()).build(null));
 
+    public static final RegistryObject<BlockEntityType<BankTerminalBlockEntity>> BANK_TERMINAL_BLOCK_ENTITY =
+            BLOCK_ENTITIES.register("bank_terminal_block_entity",
+                    () -> BlockEntityType.Builder.of(BankTerminalBlockEntity::new, ModBlocks.BANK_TERMINAL_BLOCK.get()).build(null));
 
 
     public static void register(IEventBus eventBus) {

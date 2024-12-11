@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.block;
 
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.block.custom.BankTerminalBlock;
 import net.kroia.stockmarket.block.custom.StockMarketBlock;
 import net.kroia.stockmarket.item.ModItems;
 import net.minecraft.world.item.BlockItem;
@@ -21,6 +22,7 @@ public class ModBlocks {
 
 
     public static final RegistryObject<Block> STOCK_MARKET_BLOCK = registerBlock(StockMarketBlock.NAME, StockMarketBlock::new);
+    public static final RegistryObject<Block> BANK_TERMINAL_BLOCK = registerBlock(BankTerminalBlock.NAME, BankTerminalBlock::new);
 
 
     private static <T extends Block> RegistryObject<T> registerBlock(String name, Supplier<T> block)

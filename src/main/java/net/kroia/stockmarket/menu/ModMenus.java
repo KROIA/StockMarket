@@ -11,10 +11,10 @@ import net.minecraftforge.registries.RegistryObject;
 
 public class ModMenus {
     public static final DeferredRegister<MenuType<?>> MENUS = DeferredRegister.create(ForgeRegistries.MENU_TYPES, StockMarketMod.MODID);
-
+/*
     public static final RegistryObject<MenuType<ChartMenu>> CHART_MENU = MENUS.register("chart_menu",
             () -> IForgeMenuType.create((id, inventory, data) -> new ChartMenu(id, inventory, data)));
-
+*/
     public static void register(IEventBus eventBus) {
         MENUS.register(eventBus);
     }

@@ -21,11 +21,12 @@ public class ModCreativeModTabs {
                        // pOutput.accept(ModItems.SAPPHIRE.get());
                        // pOutput.accept(ModItems.RAW_SAPPHIRE.get());
 
-                        pOutput.accept(Items.DIAMOND);
+                        //pOutput.accept(Items.DIAMOND);
 
                        // pOutput.accept(ModBlocks.SAPPHIRE_BLOCK.get());
                        // pOutput.accept(ModBlocks.RAW_SAPPHIRE_BLOCK.get());
                         pOutput.accept(ModBlocks.STOCK_MARKET_BLOCK.get());
+                        pOutput.accept(ModBlocks.BANK_TERMINAL_BLOCK.get());
 
                     })
                     .build());
