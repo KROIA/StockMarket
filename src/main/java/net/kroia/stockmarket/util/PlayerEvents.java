@@ -15,6 +15,7 @@ public class PlayerEvents {
     @SubscribeEvent
     public static void onPlayerJoin(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
+            ServerPlayerList.addPlayer(player);
             ServerBankManager.createUser(player.getUUID(),new ArrayList<>(),true, 1000);
 
             //player.sendSystemMessage(Component.literal("Welcome to the server, " + player.getName().getString() + "!"));

@@ -85,6 +85,13 @@ public class Timestamp implements ServerSaveable {
         this.hour = buf.readInt();
         this.minute = buf.readInt();
     }
+    public Timestamp(CompoundTag tag) {
+        this.day = tag.getInt("day");
+        this.month = tag.getInt("month");
+        this.year = tag.getInt("year");
+        this.hour = tag.getInt("hour");
+        this.minute = tag.getInt("minute");
+    }
 
     public void toBytes(FriendlyByteBuf buf) {
         buf.writeInt(day);

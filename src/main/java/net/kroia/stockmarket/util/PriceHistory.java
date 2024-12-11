@@ -196,7 +196,7 @@ public class PriceHistory implements ServerSaveable {
         ListTag times = tag.getList("timeStamps", 10);
         for (int i = 0; i < tmpLowPrice.length; i++) {
             CompoundTag timeTag = times.getCompound(i);
-            tmpTimeStamps[i].load(timeTag);
+            tmpTimeStamps[i] = new Timestamp(timeTag);
         }
 
         if(tmpLowPrice.length != maxHistorySize)

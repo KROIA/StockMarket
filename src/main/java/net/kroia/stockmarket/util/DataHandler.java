@@ -11,6 +11,7 @@ import java.io.IOException;
 public class DataHandler {
     private static final String FOLDER_NAME = "stockmarket";
 
+    private static final String PLAYER_DATA_FILE_NAME = "Player_data.dat";
     private static final String MARKET_DATA_FILE_NAME = "Market_data.dat";
     private static final String BANK_DATA_FILE_NAME = "Bank_data.dat";
     private static final boolean COMPRESSED = false;
@@ -30,16 +31,32 @@ public class DataHandler {
 
     public static void saveAll()
     {
+        save_player();
         save_bank();
         save_market();
     }
 
     public static void loadAll()
     {
+        load_player();
         load_bank();
         load_market();
     }
 
+    public static void save_player()
+    {
+        CompoundTag data = new CompoundTag();
+        ServerPlayerList.saveToTag(data);
+        saveDataCompound(PLAYER_DATA_FILE_NAME, data);
+    }
+    public static void load_player()
+    {
+        CompoundTag data = readDataCompound(PLAYER_DATA_FILE_NAME);
+        if(data != null)
+        {
+            ServerPlayerList.loadFromTag(data);
+        }
+    }
 
     public static void save_market()
     {

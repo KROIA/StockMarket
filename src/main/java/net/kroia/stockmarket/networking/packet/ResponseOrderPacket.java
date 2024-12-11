@@ -6,6 +6,7 @@ import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.MarketOrder;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.networking.ModMessages;
+import net.kroia.stockmarket.util.ServerPlayerList;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;
@@ -34,7 +35,7 @@ public class ResponseOrderPacket {
         StockMarketMod.LOGGER.info("[SERVER] Sending ResponseOrderPacket for order: "+order.toString());
 
 
-        ServerPlayer player = StockMarketMod.getPlayerByUUID(order.getPlayerUUID());
+        ServerPlayer player =  ServerPlayerList.getPlayer(order.getPlayerUUID());
         if(player == null)
         {
             StockMarketMod.LOGGER.warn("[SERVER] Player not found for order: "+order.toString());

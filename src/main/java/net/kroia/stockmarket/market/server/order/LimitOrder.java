@@ -3,6 +3,7 @@ package net.kroia.stockmarket.market.server.order;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.banking.bank.Bank;
 import net.kroia.stockmarket.banking.bank.MoneyBank;
+import net.kroia.stockmarket.util.ServerPlayerList;
 import net.kroia.stockmarket.util.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
@@ -16,15 +17,15 @@ public class LimitOrder extends Order implements ServerSaveable {
 
     public static LimitOrder create(ServerPlayer player, String itemID, int amount, int price)
     {
-        if(Order.tryReserveBankFund(player, amount, price))
+        if(Order.tryReserveBankFund(player, itemID, amount, price))
             return new LimitOrder(player.getUUID().toString(), itemID, amount, price);
         return null;
     }
-    public static LimitOrder createBotOrder(String uuid, Bank botBank, String itemID, int amount, int price)
+    public static LimitOrder createBotOrder(String uuid, Bank botMoneyBank, Bank botItemBank, String itemID, int amount, int price)
     {
-        if(Order.tryReserveBankFund(botBank, uuid, amount, price))
+        if(Order.tryReserveBankFund(botMoneyBank, botItemBank, uuid, itemID, amount, price, null))
             return new LimitOrder(uuid, itemID, amount, price, true);
-        return new LimitOrder(uuid, itemID, amount, price, true);
+        return null;
     }
     protected LimitOrder(String playerUUID, String itemID, int amount, int price) {
         super(playerUUID, itemID, amount);
@@ -71,7 +72,7 @@ public class LimitOrder extends Order implements ServerSaveable {
         if(this.isBot) {
             playerName = playerUUID;
         }else {
-            ServerPlayer player = StockMarketMod.getPlayerByUUID(playerUUID);
+            ServerPlayer player = ServerPlayerList.getPlayer(playerUUID);
             playerName = player == null ? "UUID:" + playerUUID : player.getName().getString();
         }
 

@@ -44,8 +44,7 @@ public class ServerMarket implements ServerSaveable
             StockMarketMod.LOGGER.warn("[SERVER] Trade item already exists: " + itemID);
             return;
         }
-        ServerTradeItem tradeItem = new ServerTradeItem(itemID, startPrice);
-        tradeItems.put(itemID, tradeItem);
+        addTradeItem_internal(itemID, startPrice);
     }
     public static void addTradeItemIfNotExists(String itemID, int startPrice)
     {
@@ -53,8 +52,23 @@ public class ServerMarket implements ServerSaveable
         {
             return;
         }
+        addTradeItem_internal(itemID, startPrice);
+    }
+    private static void addTradeItem_internal(String itemID, int startPrice)
+    {
         ServerTradeItem tradeItem = new ServerTradeItem(itemID, startPrice);
         tradeItems.put(itemID, tradeItem);
+        ServerBankManager.getBotUser().createItemBank(itemID, 1000_000);
+    }
+
+    public static ArrayList<String> getTradeItemIDs()
+    {
+        ArrayList<String> tradeItemsList = new ArrayList<>();
+        for(ServerTradeItem tradeItem : tradeItems.values())
+        {
+            tradeItemsList.add(tradeItem.getItemID());
+        }
+        return tradeItemsList;
     }
 
     public static boolean hasItem(String itemID)

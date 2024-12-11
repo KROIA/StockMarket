@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.market.server.bot;
 
+import net.kroia.stockmarket.banking.BankUser;
 import net.kroia.stockmarket.banking.ServerBankManager;
 import net.kroia.stockmarket.banking.bank.Bank;
 import net.kroia.stockmarket.banking.bank.BotMoneyBank;
@@ -69,7 +70,10 @@ public class ServerTradingBot implements ServerSaveable {
 
     protected void createOrders()
     {
-        Bank bank = ServerBankManager.getBotUser().getMoneyBank();
+        BankUser user = ServerBankManager.getBotUser();
+        Bank moneyBank = user.getMoneyBank();
+        String itemID = parent.getItemID();
+        Bank itemBank = user.getBank(itemID);
         String botUUID = getUUID().toString();
 
         int priceIncerement = 1;
@@ -83,7 +87,7 @@ public class ServerTradingBot implements ServerSaveable {
             int buyVolume = getAvailableVolume(buyPrice);
             if(buyVolume > 0) {
 
-                LimitOrder buyOrder = LimitOrder.createBotOrder(botUUID, bank, getItemID(), buyVolume, buyPrice);
+                LimitOrder buyOrder = LimitOrder.createBotOrder(botUUID, moneyBank, itemBank, itemID, buyVolume, buyPrice);
                 if(buyOrder != null) {
                     matchingEngine.addOrder(buyOrder);
                     buyOrders.add(buyOrder);
@@ -92,7 +96,7 @@ public class ServerTradingBot implements ServerSaveable {
 
             int sellVolume = getAvailableVolume(sellPrice);
             if(sellVolume < 0) {
-                LimitOrder sellOrder = LimitOrder.createBotOrder(botUUID, bank, getItemID(), sellVolume, sellPrice);
+                LimitOrder sellOrder = LimitOrder.createBotOrder(botUUID, moneyBank, itemBank,  itemID, sellVolume, sellPrice);
                 if(sellOrder != null)
                 {
                     matchingEngine.addOrder(sellOrder);

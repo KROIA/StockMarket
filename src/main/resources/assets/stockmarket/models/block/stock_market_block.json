@@ -1,6 +1,12 @@
 {
   "parent": "minecraft:block/cube_all",
   "textures": {
-    "all": "stockmarket:block/stock_market_block"
+    "west": "stockmarket:block/stock_market_block",
+    "east": "stockmarket:block/stock_market_block",
+    "north": "stockmarket:block/stock_market_block_front",
+    "south": "stockmarket:block/stock_market_block",
+    "down": "stockmarket:block/stock_market_block",
+    "up": "stockmarket:block/stock_market_block",
+    "particle": "stockmarket:block/stock_market_block"
   }
 }

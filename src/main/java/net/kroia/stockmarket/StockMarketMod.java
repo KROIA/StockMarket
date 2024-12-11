@@ -1,5 +1,6 @@
 package net.kroia.stockmarket;
 
+import com.mojang.authlib.GameProfile;
 import com.mojang.logging.LogUtils;
 import net.kroia.stockmarket.banking.bank.BotMoneyBank;
 import net.kroia.stockmarket.banking.ServerBankManager;
@@ -9,11 +10,15 @@ import net.kroia.stockmarket.entity.ModEntities;
 import net.kroia.stockmarket.item.ModCreativeModTabs;
 import net.kroia.stockmarket.item.ModItems;
 import net.kroia.stockmarket.market.server.ServerMarket;
+import net.kroia.stockmarket.market.server.ServerTradeItem;
 import net.kroia.stockmarket.menu.ModMenus;
 import net.kroia.stockmarket.networking.ModMessages;
+import net.kroia.stockmarket.util.ServerPlayerList;
 import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.players.GameProfileCache;
 import net.minecraft.server.players.PlayerList;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraftforge.api.distmarker.Dist;
@@ -29,8 +34,13 @@ import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.minecraftforge.server.ServerLifecycleHooks;
 import org.slf4j.Logger;
 
+import java.lang.reflect.Field;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 // The value here should match an entry in the META-INF/mods.toml file
@@ -41,6 +51,8 @@ public class StockMarketMod
     public static final String MODID = "stockmarket";
     // Directly reference a slf4j logger
     public static final Logger LOGGER = LogUtils.getLogger();
+
+
 
     public enum Side {
         MULTIPLAYER_CLIENT,
@@ -220,46 +232,6 @@ public class StockMarketMod
         return System.currentTimeMillis();
     }
 
-    public static ServerPlayer getPlayerByUUID(String uuid)
-    {
-        UUID playerUUID;
-        try {
-            playerUUID = UUID.fromString(uuid);
-        } catch (IllegalArgumentException e) {
-            System.err.println("Invalid UUID string: " + uuid);
-            return null;
-        }
-        return getPlayerByUUID(playerUUID);
-    }
-    public static ServerPlayer getPlayerByUUID(UUID playerUUID)
-    {
-
-        // Get the Minecraft server instance
-        MinecraftServer server = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
-
-        if (server == null) {
-            System.err.println("Server instance is null. Are you calling this from the server?");
-            return null;
-        }
-
-        // Get the player list and fetch the player by UUID
-        PlayerList playerList = server.getPlayerList();
-        return playerList.getPlayer(playerUUID); // Returns null if the player is not online
-    }
-    public static ServerPlayer getPlayerByName(String name)
-    {
-        // Get the Minecraft server instance
-        MinecraftServer server = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
-
-        if (server == null) {
-            throw new IllegalStateException("Server instance is null. Are you calling this from the server?");
-            //return null;
-        }
-
-        // Get the player list and fetch the player by name
-        PlayerList playerList = server.getPlayerList();
-        return playerList.getPlayerByName(name); // Returns null if the player is not online
-    }
 
     public static void printToClientConsole(String message) {
         // Check that the code is running on the client side
@@ -280,10 +252,9 @@ public class StockMarketMod
 
     public static void printToClientConsole(UUID playerUUID, String message)
     {
-        ServerPlayer player = getPlayerByUUID(playerUUID);
+        ServerPlayer player = ServerPlayerList.getPlayer(playerUUID);
         if(player == null)
         {
-            //LOGGER.warn("Player not found with UUID: " + playerUUID);
             return;
         }
         player.sendSystemMessage(

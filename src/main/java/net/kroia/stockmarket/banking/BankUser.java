@@ -4,6 +4,7 @@ import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.banking.bank.Bank;
 import net.kroia.stockmarket.banking.bank.ItemBank;
 import net.kroia.stockmarket.banking.bank.MoneyBank;
+import net.kroia.stockmarket.util.ServerPlayerList;
 import net.kroia.stockmarket.util.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -48,9 +49,18 @@ public class BankUser implements ServerSaveable {
     {
         return bankMap.get(itemID);
     }
+    public boolean removeBank(String itemID)
+    {
+        return bankMap.remove(itemID) != null;
+    }
     public Bank getMoneyBank()
     {
         return bankMap.get(MoneyBank.ITEM_ID);
+    }
+
+    public HashMap<String, Bank> getBankMap()
+    {
+        return bankMap;
     }
 
     @Override
@@ -86,7 +96,12 @@ public class BankUser implements ServerSaveable {
     }
     public ServerPlayer getOwner()
     {
-        return StockMarketMod.getPlayerByUUID(userUUID);
+        return ServerPlayerList.getPlayer(userUUID);
+    }
+
+    public String getOwnerName()
+    {
+        return ServerPlayerList.getPlayerName(userUUID);
     }
 
     public String toString()
@@ -95,6 +110,8 @@ public class BankUser implements ServerSaveable {
         ServerPlayer player = getOwner();
         if(player != null)
             owner = player.getName().getString();
+        else
+            owner = ServerPlayerList.getPlayerName(getOwnerUUID());
         StringBuilder content = new StringBuilder("BankUser: " + owner + "\n");
         for(Bank bank : bankMap.values())
         {

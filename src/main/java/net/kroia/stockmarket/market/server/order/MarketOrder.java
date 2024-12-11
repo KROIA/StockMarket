@@ -4,6 +4,7 @@ import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.banking.bank.Bank;
 import net.kroia.stockmarket.banking.bank.MoneyBank;
 import net.kroia.stockmarket.market.server.ServerMarket;
+import net.kroia.stockmarket.util.ServerPlayerList;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -13,7 +14,7 @@ public class MarketOrder extends Order {
     public static MarketOrder create(ServerPlayer player, String itemID, int amount)
     {
         int currentPrice = ServerMarket.getPrice(itemID);
-        if(Order.tryReserveBankFund(player, amount, currentPrice)) {
+        if(Order.tryReserveBankFund(player, itemID, amount, currentPrice)) {
             MarketOrder order = new MarketOrder(player.getUUID().toString(), itemID, amount);
             if(amount > 0)
                 order.lockedMoney = Math.abs(amount) * currentPrice;
@@ -21,10 +22,10 @@ public class MarketOrder extends Order {
         }
         return null;
     }
-    public static MarketOrder createBotOrder(String uuid, Bank botBank, String itemID, int amount)
+    public static MarketOrder createBotOrder(String uuid, Bank botMoneyBank, Bank botItemBank, String itemID, int amount)
     {
         int currentPrice = ServerMarket.getPrice(itemID);
-        if(Order.tryReserveBankFund(botBank, uuid, amount, currentPrice)){
+        if(Order.tryReserveBankFund(botMoneyBank, botItemBank, uuid, itemID, amount, currentPrice, null)){
             MarketOrder order = new MarketOrder(uuid, itemID, amount, true);
             if(amount > 0)
                 order.lockedMoney = Math.abs(amount) * currentPrice;
@@ -72,7 +73,7 @@ public class MarketOrder extends Order {
         if(this.isBot) {
             playerName = playerUUID;
         }else {
-            ServerPlayer player = StockMarketMod.getPlayerByUUID(playerUUID);
+            ServerPlayer player = ServerPlayerList.getPlayer(playerUUID);
             playerName = player == null ? "UUID:" + playerUUID : player.getName().getString();
         }
         return "MarketOrder{\n  Owner: " + playerName +

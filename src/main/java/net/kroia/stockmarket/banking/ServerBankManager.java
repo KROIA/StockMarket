@@ -1,9 +1,13 @@
 package net.kroia.stockmarket.banking;
 
 import net.kroia.stockmarket.banking.bank.Bank;
+import net.kroia.stockmarket.networking.packet.RequestBankDataPacket;
+import net.kroia.stockmarket.networking.packet.UpdateBankDataPacket;
+import net.kroia.stockmarket.util.ServerPlayerList;
 import net.kroia.stockmarket.util.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.server.level.ServerPlayer;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -14,6 +18,7 @@ public class ServerBankManager implements ServerSaveable {
 
     private static Map<UUID, BankUser> userMap = new HashMap<>();
     private static BankUser botUser;
+    public static final String BOT_USER_NAME = "StockMarketBot";
    //private static Map<UUID, MoneyBank> bankMap = new HashMap<>();
    //private static Map<UUID, BotMoneyBank> botBankMap = new HashMap<>();
 
@@ -76,7 +81,9 @@ public class ServerBankManager implements ServerSaveable {
     {
         if(botUser != null)
             return botUser;
-        botUser = new BankUser(UUID.randomUUID());
+        UUID botUUID = UUID.nameUUIDFromBytes(BOT_USER_NAME.getBytes());
+        ServerPlayerList.addPlayer(botUUID, BOT_USER_NAME);
+        botUser = new BankUser(botUUID);
         botUser.createMoneyBank(1000_000);
         userMap.put(botUser.getOwnerUUID(), botUser);
         return botUser;
@@ -154,8 +161,17 @@ public class ServerBankManager implements ServerSaveable {
             userMap.put(user.getOwnerUUID(), user);
             if(user.getOwnerUUID().compareTo(botUUID) == 0)
             {
+                if(botUser != null)
+                    ServerPlayerList.removePlayer(botUser.getOwnerUUID());
                 botUser = user;
+                ServerPlayerList.addPlayer(botUUID, BOT_USER_NAME);
+
             }
         }
     }
+
+    /*public static void handlePacket(ServerPlayer sender, RequestBankDataPacket packet)
+    {
+        UpdateBankDataPacket.sendPacket(sender);
+    }*/
 }

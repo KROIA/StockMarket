@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.market.server.order;
 
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.banking.BankUser;
 import net.kroia.stockmarket.banking.bank.Bank;
 import net.kroia.stockmarket.banking.bank.MoneyBank;
 import net.kroia.stockmarket.banking.ServerBankManager;
@@ -62,21 +63,50 @@ public abstract class Order {
     {
 
     }
-    protected static boolean tryReserveBankFund(ServerPlayer player, int amount, int price)
+    protected static boolean tryReserveBankFund(ServerPlayer player, String itemID, int amount, int price)
     {
-        Bank bank = ServerBankManager.getMoneyBank(player.getUUID());
-        return tryReserveBankFund(bank, player.getName().toString(), amount, price);
+        BankUser bankUser = ServerBankManager.getUser(player.getUUID());
+        if(bankUser == null)
+        {
+            StockMarketMod.LOGGER.warn("BankUser not found for player " + player.getName().getString());
+            StockMarketMod.printToClientConsole(player, "User "+player.getName().getString()+" not found does not own a bank");
+            return false;
+        }
+
+        Bank moneyBank = bankUser.getMoneyBank();
+        Bank itemBank = bankUser.getBank(itemID);
+
+        return tryReserveBankFund(moneyBank,itemBank, player.getName().getString(), itemID, amount, price, player);
     }
-    protected static boolean tryReserveBankFund(Bank bank, String playerName, int amount, int price)
+    protected static boolean tryReserveBankFund(Bank moneyBank, Bank itemBank, String playerName, String itemID, int amount, int price, ServerPlayer dbgPlayer)
     {
-        if(bank == null)
+        if(moneyBank == null)
         {
             StockMarketMod.LOGGER.warn("Bank not found for player " + playerName);
+            if(dbgPlayer != null)
+                StockMarketMod.printToClientConsole(dbgPlayer, "User "+playerName+" does not own a money bank");
+            return false;
+        }
+        if(itemBank == null)
+        {
+            StockMarketMod.LOGGER.warn("User + " + playerName + " has no bank for item " + itemID);
+            if(dbgPlayer != null)
+                StockMarketMod.printToClientConsole(dbgPlayer, "User "+playerName+" does not own a bank for item "+itemID);
             return false;
         }
         if(amount > 0) {
-            if (!bank.lockAmount((long) price * amount)) {
+            if (!moneyBank.lockAmount((long) price * amount)){
                 StockMarketMod.LOGGER.warn("Insufficient funds for player " + playerName);
+                if(dbgPlayer != null)
+                    StockMarketMod.printToClientConsole(dbgPlayer, "Insufficient funds to buy "+amount+" "+itemID+" for $"+price+" each");
+                return false;
+            }
+        }
+        else {
+            if (!itemBank.lockAmount(-amount)){
+                StockMarketMod.LOGGER.warn("Insufficient items ("+itemID+") for player " + playerName);
+                if(dbgPlayer != null)
+                    StockMarketMod.printToClientConsole(dbgPlayer, "Insufficient items to sell "+-amount+" "+itemID);
                 return false;
             }
         }
@@ -204,17 +234,40 @@ public abstract class Order {
     }
     private void unlockLockedMoney()
     {
-        Bank bank = ServerBankManager.getMoneyBank(UUID.fromString(playerUUID));
-        if(bank != null)
+        BankUser user = ServerBankManager.getUser(UUID.fromString(playerUUID));
+        if(user == null)
         {
-            if(this instanceof LimitOrder limitOrder)
-            {
-                bank.unlockAmount((long) limitOrder.getPrice() * Math.abs(limitOrder.getAmount()));
-            }
-            else if(this instanceof  MarketOrder marketOrder)
-            {
-                bank.unlockAmount(marketOrder.getLockedMoney());
-            }
+            StockMarketMod.LOGGER.error("BankUser not found for player " + playerUUID);
+            return;
+        }
+        Bank moneyBank = user.getMoneyBank();
+        Bank itemBank = user.getBank(itemID);
+        if(moneyBank == null)
+        {
+            StockMarketMod.LOGGER.error("MoneyBank not found for player " + playerUUID);
+            return;
+        }
+        if(itemBank == null)
+        {
+            StockMarketMod.LOGGER.error("ItemBank not found for player " + playerUUID);
+            return;
+        }
+
+
+        if(this instanceof LimitOrder limitOrder)
+        {
+            if(limitOrder.isBuy())
+                moneyBank.unlockAmount((long) limitOrder.getPrice() * Math.abs(limitOrder.getAmount()-limitOrder.getFilledAmount()));
+            else
+                itemBank.unlockAmount(Math.abs(limitOrder.getAmount()+limitOrder.getFilledAmount()));
+
+        }
+        else if(this instanceof  MarketOrder marketOrder)
+        {
+            if(marketOrder.isBuy())
+                moneyBank.unlockAmount(marketOrder.getLockedMoney());
+            else
+                itemBank.unlockAmount(Math.abs(marketOrder.getAmount()+marketOrder.getFilledAmount()));
         }
     }
 

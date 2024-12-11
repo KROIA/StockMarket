@@ -2,10 +2,7 @@ package net.kroia.stockmarket.market.client;
 
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.order.Order;
-import net.kroia.stockmarket.networking.packet.RequestTradeItemsPacket;
-import net.kroia.stockmarket.networking.packet.ResponseOrderPacket;
-import net.kroia.stockmarket.networking.packet.UpdatePricePacket;
-import net.kroia.stockmarket.networking.packet.UpdateTradeItemsPacket;
+import net.kroia.stockmarket.networking.packet.*;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
 
 import java.util.ArrayList;
@@ -16,6 +13,7 @@ import java.util.Objects;
 public class ClientMarket {
 
     private static Map<String, ClientTradeItem> tradeItems = new HashMap<>();
+
 
     ClientMarket()
     {
@@ -92,6 +90,9 @@ public class ClientMarket {
         }
         tradeItem.handlePacket(packet);
     }
+
+
+
 
     public static ClientTradeItem getTradeItem(String itemID)
     {

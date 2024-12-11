@@ -2,9 +2,11 @@
 package net.kroia.stockmarket.screen.custom;
 
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.banking.bank.ClientBankManager;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
 import net.kroia.stockmarket.market.client.ClientMarket;
 import net.kroia.stockmarket.market.client.ClientTradeItem;
+import net.kroia.stockmarket.networking.packet.RequestBankDataPacket;
 import net.kroia.stockmarket.networking.packet.StockMarketBlockEntityLoadPacket;
 import net.kroia.stockmarket.networking.packet.StockMarketBlockEntitySavePacket;
 import net.kroia.stockmarket.screen.uiElements.ColoredButton;
@@ -61,6 +63,8 @@ public class TradeScreen extends Screen {
     private Rectangle chartRect;
 
     private Rectangle selectItemButtonRect;
+    private Rectangle currentBalanceRectTop;
+    private Rectangle currentBalanceRectBottom;
     private Rectangle amountEditRect;
 
     // Limit
@@ -93,8 +97,7 @@ public class TradeScreen extends Screen {
     private static int targetPrice = 0;
     private static int targetAmount = 0;
 
-    static int lastTickPahaseCount = 0;
-    static int tickPhaseCount = 0;
+    static long lastTickCount = 0;
 
     static TradeScreen instance;
     static boolean test = true;
@@ -134,6 +137,7 @@ public class TradeScreen extends Screen {
         //blockEntity.setItemID(packet.getItemID());
         //blockEntity.setAmount(packet.getAmount());
         //blockEntity.setPrice(packet.getPrice());
+        RequestBankDataPacket.sendRequest();
         itemID = packet.getItemID();
         targetAmount = packet.getAmount();
         targetPrice = packet.getPrice();
@@ -160,18 +164,23 @@ public class TradeScreen extends Screen {
         int buttonSectionLeft = chartWidth + 5;
         chartRect = new Rectangle(0, 0, chartWidth, this.height / 2);
 
-        selectItemButtonRect = new Rectangle(buttonSectionLeft, 0, this.width - buttonSectionLeft, buttonHeight);
-        amountEditRect = new Rectangle(buttonSectionLeft + selectItemButtonRect.width / 2, buttonHeight + uiElementPadding, selectItemButtonRect.width / 2, buttonHeight);
+        currentBalanceRectTop = new Rectangle(buttonSectionLeft, 0, this.width - buttonSectionLeft, buttonHeight);
+        currentBalanceRectBottom = new Rectangle(buttonSectionLeft, buttonHeight, this.width - buttonSectionLeft, buttonHeight);
+        selectItemButtonRect = new Rectangle(buttonSectionLeft, 2*(buttonHeight + uiElementPadding), this.width - buttonSectionLeft, buttonHeight);
+
+        // Amount
+        int amountYPos = 50;
+        amountEditRect = new Rectangle(buttonSectionLeft + selectItemButtonRect.width / 2, amountYPos, selectItemButtonRect.width / 2, buttonHeight);
 
         // Market
-        int marketYPos = 50;
+        int marketYPos = 80;
         marketLabelRect = new Rectangle(buttonSectionLeft, marketYPos, this.width - buttonSectionLeft, buttonHeight);
         buyMarketButtonRect = new Rectangle(buttonSectionLeft, marketYPos + buttonHeight + uiElementPadding, (this.width - buttonSectionLeft) / 2, buttonHeight);
         sellMarketButtonRect = new Rectangle(buttonSectionLeft + (this.width - buttonSectionLeft) / 2, marketYPos + buttonHeight + uiElementPadding, (this.width - buttonSectionLeft) / 2, buttonHeight);
 
 
         // Limit
-        int limitYPos = 100;
+        int limitYPos = 130;
         limitLabelRect = new Rectangle(buttonSectionLeft, limitYPos, this.width - buttonSectionLeft, buttonHeight);
         limitPriceEditRect = new Rectangle(buttonSectionLeft + selectItemButtonRect.width / 2, limitYPos + buttonHeight + uiElementPadding, selectItemButtonRect.width / 2, buttonHeight);
         buyLimitButtonRect = new Rectangle(buttonSectionLeft, limitYPos + 2 * (buttonHeight + uiElementPadding), (this.width - buttonSectionLeft) / 2, buttonHeight);
@@ -240,6 +249,7 @@ public class TradeScreen extends Screen {
         this.amountBox.setValue(String.valueOf(targetAmount));
         itemStack = getItemStackFromId(itemID);
         ClientMarket.subscribeMarketUpdate(itemID);
+        RequestBankDataPacket.sendRequest();
     }
 
     public static String getItemID() {
@@ -248,6 +258,15 @@ public class TradeScreen extends Screen {
 
     @SubscribeEvent
     public void onTick(TickEvent.ClientTickEvent event) {
+        if(event.phase == TickEvent.Phase.END)
+        {
+            long currentTickCount = System.currentTimeMillis();
+            if(currentTickCount - lastTickCount > 1000)
+            {
+                lastTickCount = currentTickCount;
+                RequestBankDataPacket.sendRequest();
+            }
+        }
         // Ensure we only handle ticks when this screen is active
         /*if(this.minecraft.screen == this && event.phase == TickEvent.Phase.END)
         {
@@ -321,11 +340,26 @@ public class TradeScreen extends Screen {
         int y = 0;
 
 
-        int price = ClientMarket.getPrice(itemID);
+
+        int textHeight = this.font.lineHeight;
+
+        // Draw the title
+        graphics.fill(currentBalanceRectTop.x, currentBalanceRectTop.y, currentBalanceRectBottom.x+currentBalanceRectBottom.width, currentBalanceRectBottom.y+currentBalanceRectBottom.height,
+                backgroundColor);
+        drawText(graphics, currentBalanceRectTop, "Your balance");
+        graphics.renderItem(itemStack, currentBalanceRectBottom.x, currentBalanceRectBottom.y);
+        graphics.drawString(this.font,  String.valueOf(ClientBankManager.getBalance(itemID)), currentBalanceRectBottom.x+selectItemButtonRect.height, currentBalanceRectBottom.y+ textHeight / 2, 0xFFFFFF);
+        graphics.drawString(this.font, "$"+ ClientBankManager.getBalance(), currentBalanceRectBottom.x+currentBalanceRectBottom.width/2, currentBalanceRectBottom.y + textHeight / 2, 0xFFFFFF);
+
+
         // Draw the item
         graphics.renderItem(itemStack, selectItemButtonRect.x, selectItemButtonRect.y);
-        int textHeight = this.font.lineHeight;
+
+        int price = ClientMarket.getPrice(itemID);
         graphics.drawString(this.font, "Price: " + price, selectItemButtonRect.x + selectItemButtonRect.height, selectItemButtonRect.y + textHeight / 2, 0xFFFFFF);
+
+        graphics.fill(selectItemButtonRect.x, selectItemButtonRect.y, sellLimitButtonRect.x+sellLimitButtonRect.width, sellLimitButtonRect.y+sellLimitButtonRect.height,
+                backgroundColor);
         graphics.drawString(this.font, "Amount:", selectItemButtonRect.x, amountEditRect.y + textHeight / 2, 0xFFFFFF);
         graphics.drawString(this.font, "Limit price:", selectItemButtonRect.x, limitPriceEditRect.y + textHeight / 2, 0xFFFFFF);
 

@@ -70,6 +70,12 @@ public class ModMessages {
                 .consumerMainThread(StockMarketBlockEntitySavePacket::handle)
                 .add();
 
+        net.messageBuilder(RequestBankDataPacket.class, id(), NetworkDirection.PLAY_TO_SERVER)
+                .decoder(RequestBankDataPacket::new)
+                .encoder(RequestBankDataPacket::toBytes)
+                .consumerMainThread(RequestBankDataPacket::handle)
+                .add();
+
         net.messageBuilder(StockMarketBlockEntityLoadPacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)
                 .decoder(StockMarketBlockEntityLoadPacket::new)
                 .encoder(StockMarketBlockEntityLoadPacket::toBytes)
@@ -86,6 +92,12 @@ public class ModMessages {
                 .decoder(ResponseOrderPacket::new)
                 .encoder(ResponseOrderPacket::toBytes)
                 .consumerMainThread(ResponseOrderPacket::handle)
+                .add();
+
+        net.messageBuilder(UpdateBankDataPacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(UpdateBankDataPacket::new)
+                .encoder(UpdateBankDataPacket::toBytes)
+                .consumerMainThread(UpdateBankDataPacket::handle)
                 .add();
     }
 
