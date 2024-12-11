@@ -46,7 +46,7 @@ public class ModCommands {
                                             String username = player.getName().getString();
                                             int amount = IntegerArgumentType.getInteger(context, "amount");
 
-                                            // Execute the command on the server
+                                            // Execute the command on the server_sender
                                             return executeAddMoney(player, username, amount);
                                         })) // Add to self
                                 .then(Commands.argument("username", StringArgumentType.string())
@@ -59,7 +59,7 @@ public class ModCommands {
                                                     String username = StringArgumentType.getString(context, "username");
                                                     int amount = IntegerArgumentType.getInteger(context, "amount");
 
-                                                    // Execute the command on the server
+                                                    // Execute the command on the server_sender
                                                     return executeAddMoney(player, username, amount);
                                                 })
                                         )
@@ -77,7 +77,7 @@ public class ModCommands {
                                                     String toPlayer = StringArgumentType.getString(context, "username");
                                                     int amount = IntegerArgumentType.getInteger(context, "amount");
 
-                                                    // Execute the command on the server
+                                                    // Execute the command on the server_sender
                                                     return executeAddMoneySend(player,fromPlayer, toPlayer, amount);
                                                 })
                                         )
@@ -87,7 +87,7 @@ public class ModCommands {
                             CommandSourceStack source = context.getSource();
                             ServerPlayer player = source.getPlayerOrException();
 
-                            // Execute the balance command on the server
+                            // Execute the balance command on the server_sender
                             return showBalance(player);
                         })
 
@@ -105,7 +105,7 @@ public class ModCommands {
                             CommandSourceStack source = context.getSource();
                             ServerPlayer player = source.getPlayerOrException();
 
-                            // Execute the balance command on the server
+                            // Execute the balance command on the server_sender
                             return bank_show(player, player.getName().getString());
                         })
                         .then(Commands.argument("username", StringArgumentType.string()).suggests((context, builder) -> {
@@ -119,7 +119,7 @@ public class ModCommands {
                                             ServerPlayer player = source.getPlayerOrException();
                                             String username = StringArgumentType.getString(context, "username");
 
-                                            // Execute the balance command on the server
+                                            // Execute the balance command on the server_sender
                                             return bank_show(player, username);
                                         })
                                 )
@@ -142,7 +142,7 @@ public class ModCommands {
                                                             String username = StringArgumentType.getString(context, "username");
 
 
-                                                            // Execute the command on the server
+                                                            // Execute the command on the server_sender
                                                             return bank_create(player, username, itemID, balance);
                                                         })
                                                 )
@@ -167,7 +167,7 @@ public class ModCommands {
                                                             String username = StringArgumentType.getString(context, "username");
 
 
-                                                            // Execute the command on the server
+                                                            // Execute the command on the server_sender
                                                             return bank_setBalance(player, username, itemID, balance);
                                                         })
                                                 )
@@ -190,7 +190,7 @@ public class ModCommands {
                                                     String username = StringArgumentType.getString(context, "username");
 
 
-                                                    // Execute the command on the server
+                                                    // Execute the command on the server_sender
                                                     return bank_delete(player, username, itemID);
                                                 })
                                         )

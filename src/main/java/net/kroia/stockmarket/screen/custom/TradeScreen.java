@@ -6,9 +6,9 @@ import net.kroia.stockmarket.banking.bank.ClientBankManager;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
 import net.kroia.stockmarket.market.client.ClientMarket;
 import net.kroia.stockmarket.market.client.ClientTradeItem;
-import net.kroia.stockmarket.networking.packet.RequestBankDataPacket;
-import net.kroia.stockmarket.networking.packet.StockMarketBlockEntityLoadPacket;
-import net.kroia.stockmarket.networking.packet.StockMarketBlockEntitySavePacket;
+import net.kroia.stockmarket.networking.packet.client_sender.request.RequestBankDataPacket;
+import net.kroia.stockmarket.networking.packet.server_sender.update.entity.SyncStockMarketBlockEntityPacket;
+import net.kroia.stockmarket.networking.packet.client_sender.update.entity.UpdateStockMarketBlockEntityPacket;
 import net.kroia.stockmarket.screen.uiElements.ColoredButton;
 import net.kroia.stockmarket.util.CandleStickChart;
 import net.kroia.stockmarket.util.OrderListWidget;
@@ -18,11 +18,9 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
-import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.flag.FeatureFlagSet;
 import net.minecraft.world.item.Item;
@@ -30,9 +28,6 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
-import org.w3c.dom.css.Rect;
-
-import java.util.ArrayList;
 
 public class TradeScreen extends Screen {
 
@@ -129,11 +124,11 @@ public class TradeScreen extends Screen {
         blockEntity.setItemID(itemID);
         blockEntity.setAmount(targetAmount);
         blockEntity.setPrice(targetPrice);
-        StockMarketBlockEntitySavePacket.sendPacketToServer(blockEntity.getBlockPos(), blockEntity);
-        //SubscribeMarketEventsPacket.generateRequest(itemID, false);
+        UpdateStockMarketBlockEntityPacket.sendPacketToServer(blockEntity.getBlockPos(), blockEntity);
+        //UpdateSubscribeMarketEventsPacket.generateRequest(itemID, false);
     }
 
-    public static void handlePacket(StockMarketBlockEntityLoadPacket packet) {
+    public static void handlePacket(SyncStockMarketBlockEntityPacket packet) {
         //blockEntity.setItemID(packet.getItemID());
         //blockEntity.setAmount(packet.getAmount());
         //blockEntity.setPrice(packet.getPrice());
@@ -241,7 +236,7 @@ public class TradeScreen extends Screen {
 
         // Register the event listener when the screen is initialized
         MinecraftForge.EVENT_BUS.register(this);
-        //SubscribeMarketEventsPacket.generateRequest(itemID, true);
+        //UpdateSubscribeMarketEventsPacket.generateRequest(itemID, true);
 
         //updatePlotsData();
         // Set value of the EditBox

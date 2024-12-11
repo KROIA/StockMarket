@@ -72,7 +72,7 @@ public class DataHandler {
         CompoundTag data = readDataCompound(MARKET_DATA_FILE_NAME);
         if(data != null)
         {
-            // Load server market
+            // Load server_sender market
             ServerMarket market = new ServerMarket();
             CompoundTag marketData = data.getCompound("market");
             market.load(marketData);

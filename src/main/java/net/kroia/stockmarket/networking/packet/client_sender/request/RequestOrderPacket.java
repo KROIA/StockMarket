@@ -1,12 +1,9 @@
-package net.kroia.stockmarket.networking.packet;
+package net.kroia.stockmarket.networking.packet.client_sender.request;
 
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.ServerMarket;
-import net.kroia.stockmarket.market.server.order.LimitOrder;
-import net.kroia.stockmarket.market.server.order.MarketOrder;
 import net.kroia.stockmarket.networking.ModMessages;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;
 
 import java.util.function.Supplier;
@@ -78,9 +75,9 @@ public class RequestOrderPacket {
 
     public void handle(Supplier<NetworkEvent.Context> contextSupplier) {
         NetworkEvent.Context context = contextSupplier.get();
-        // Check if on server or client
+        // Check if on server_sender or client
         if(contextSupplier.get().getDirection().getReceptionSide().isClient()) {
-            //StockMarketMod.LOGGER.info("[CLIENT] Received current prices from the server");
+            //StockMarketMod.LOGGER.info("[CLIENT] Received current prices from the server_sender");
             // HERE WE ARE ON THE CLIENT!
             // Update client-side data
             // Get the data from the packet
@@ -98,7 +95,7 @@ public class RequestOrderPacket {
 
 
             // Send the packet to the client
-            //UpdatePricePacket.sendPacket(itemID, player);
+            //SyncPricePacket.sendPacket(itemID, player);
 
         });
         context.setPacketHandled(true);

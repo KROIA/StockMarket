@@ -1,12 +1,12 @@
 package net.kroia.stockmarket.banking.bank;
 
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.networking.packet.UpdateBankDataPacket;
+import net.kroia.stockmarket.networking.packet.server_sender.update.SyncBankDataPacket;
 
 public class ClientBankManager {
-    private static UpdateBankDataPacket bankDataPacket;
+    private static SyncBankDataPacket bankDataPacket;
 
-    public static void handlePacket(UpdateBankDataPacket packet)
+    public static void handlePacket(SyncBankDataPacket packet)
     {
         bankDataPacket = packet;
     }

@@ -3,7 +3,11 @@ package net.kroia.stockmarket.market.client;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.Order;
-import net.kroia.stockmarket.networking.packet.*;
+import net.kroia.stockmarket.networking.packet.client_sender.request.RequestOrderCancelPacket;
+import net.kroia.stockmarket.networking.packet.client_sender.request.RequestOrderPacket;
+import net.kroia.stockmarket.networking.packet.client_sender.update.UpdateSubscribeMarketEventsPacket;
+import net.kroia.stockmarket.networking.packet.server_sender.update.SyncOrderPacket;
+import net.kroia.stockmarket.networking.packet.server_sender.update.SyncPricePacket;
 import net.kroia.stockmarket.util.OrderbookVolume;
 import net.kroia.stockmarket.util.PriceHistory;
 
@@ -30,7 +34,7 @@ public class ClientTradeItem {
         this.priceHistory = new PriceHistory(itemID, 0);
     }
 
-    public void handlePacket(UpdatePricePacket packet)
+    public void handlePacket(SyncPricePacket packet)
     {
         priceHistory = packet.getPriceHistory();
         orderBookVolume = packet.getOrderBookVolume();
@@ -43,7 +47,7 @@ public class ClientTradeItem {
             this.orders.put(order.getOrderID(), order);
         }
     }
-    public void handlePacket(ResponseOrderPacket packet)
+    public void handlePacket(SyncOrderPacket packet)
     {
         Order order = packet.getOrder();
         Order oldOrder = orders.get(order.getOrderID());
@@ -173,11 +177,11 @@ public class ClientTradeItem {
 
     public void subscribe()
     {
-        SubscribeMarketEventsPacket.generateRequest(itemID, true);
+        UpdateSubscribeMarketEventsPacket.generateRequest(itemID, true);
     }
 
     public void unsubscribe()
     {
-        SubscribeMarketEventsPacket.generateRequest(itemID, false);
+        UpdateSubscribeMarketEventsPacket.generateRequest(itemID, false);
     }
 }

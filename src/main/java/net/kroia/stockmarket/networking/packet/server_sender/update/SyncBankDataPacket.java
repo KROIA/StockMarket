@@ -1,24 +1,19 @@
-package net.kroia.stockmarket.networking.packet;
+package net.kroia.stockmarket.networking.packet.server_sender.update;
 
 import net.kroia.stockmarket.banking.BankUser;
 import net.kroia.stockmarket.banking.ServerBankManager;
 import net.kroia.stockmarket.banking.bank.Bank;
 import net.kroia.stockmarket.banking.bank.ClientBankManager;
 import net.kroia.stockmarket.banking.bank.MoneyBank;
-import net.kroia.stockmarket.market.client.ClientMarket;
-import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.networking.ModMessages;
-import net.kroia.stockmarket.util.OrderbookVolume;
-import net.kroia.stockmarket.util.PriceHistory;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.function.Supplier;
 
-public class UpdateBankDataPacket {
+public class SyncBankDataPacket {
 
     public class BankData{
         private String itemID;
@@ -56,7 +51,7 @@ public class UpdateBankDataPacket {
 
     HashMap<String, BankData> bankData;
 
-    public UpdateBankDataPacket(BankUser user) {
+    public SyncBankDataPacket(BankUser user) {
         bankData = new HashMap<>();
         HashMap<String, Bank> bankMap = user.getBankMap();
         for(Bank bank : bankMap.values())
@@ -65,7 +60,7 @@ public class UpdateBankDataPacket {
             bankData.put(data.itemID, data);
         }
     }
-    public UpdateBankDataPacket(FriendlyByteBuf buf) {
+    public SyncBankDataPacket(FriendlyByteBuf buf) {
         fromBytes(buf);
     }
 
@@ -102,7 +97,7 @@ public class UpdateBankDataPacket {
         BankUser user = ServerBankManager.getUser(player.getUUID());
         if(user == null)
             return;
-        UpdateBankDataPacket packet = new UpdateBankDataPacket(user);
+        SyncBankDataPacket packet = new SyncBankDataPacket(user);
         ModMessages.sendToPlayer(packet, player);
     }
 
@@ -124,9 +119,9 @@ public class UpdateBankDataPacket {
 
     public void handle(Supplier<NetworkEvent.Context> contextSupplier) {
         NetworkEvent.Context context = contextSupplier.get();
-        // Check if on server or client
+        // Check if on server_sender or client
         if(contextSupplier.get().getDirection().getReceptionSide().isClient()) {
-            //StockMarketMod.LOGGER.info("[CLIENT] Received current prices from the server");
+            //StockMarketMod.LOGGER.info("[CLIENT] Received current prices from the server_sender");
             // HERE WE ARE ON THE CLIENT!
             ClientBankManager.handlePacket(this);
             context.setPacketHandled(true);

@@ -16,7 +16,7 @@ public interface NetworkPacket {
     default void handle(Supplier<NetworkEvent.Context> contextSupplier)
     {
         NetworkEvent.Context context = contextSupplier.get();
-        // Check if on server or client
+        // Check if on server_sender or client
         if(contextSupplier.get().getDirection().getReceptionSide().isClient()) {
             // HERE WE ARE ON THE CLIENT!
             context.setPacketHandled(this.handleClient());

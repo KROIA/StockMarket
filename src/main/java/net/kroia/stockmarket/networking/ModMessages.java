@@ -2,7 +2,12 @@ package net.kroia.stockmarket.networking;
 
 
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.networking.packet.*;
+import net.kroia.stockmarket.networking.packet.client_sender.request.*;
+import net.kroia.stockmarket.networking.packet.client_sender.update.entity.UpdateStockMarketBlockEntityPacket;
+import net.kroia.stockmarket.networking.packet.client_sender.update.UpdateSubscribeMarketEventsPacket;
+import net.kroia.stockmarket.networking.packet.server_sender.update.*;
+import net.kroia.stockmarket.networking.packet.server_sender.update.entity.SyncBankTerminalBlockEntityPacket;
+import net.kroia.stockmarket.networking.packet.server_sender.update.entity.SyncStockMarketBlockEntityPacket;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkDirection;
@@ -28,10 +33,10 @@ public class ModMessages {
 
         INSTANCE = net;
 
-        net.messageBuilder(UpdatePricePacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)
-                .decoder(UpdatePricePacket::new)
-                .encoder(UpdatePricePacket::toBytes)
-                .consumerMainThread(UpdatePricePacket::handle)
+        net.messageBuilder(SyncPricePacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(SyncPricePacket::new)
+                .encoder(SyncPricePacket::toBytes)
+                .consumerMainThread(SyncPricePacket::handle)
                 .add();
 
         net.messageBuilder(RequestPricePacket.class, id(), NetworkDirection.PLAY_TO_SERVER)
@@ -46,10 +51,10 @@ public class ModMessages {
                 .consumerMainThread(RequestOrderPacket::handle)
                 .add();
 
-        net.messageBuilder(SubscribeMarketEventsPacket.class, id(), NetworkDirection.PLAY_TO_SERVER)
-                .decoder(SubscribeMarketEventsPacket::new)
-                .encoder(SubscribeMarketEventsPacket::toBytes)
-                .consumerMainThread(SubscribeMarketEventsPacket::handle)
+        net.messageBuilder(UpdateSubscribeMarketEventsPacket.class, id(), NetworkDirection.PLAY_TO_SERVER)
+                .decoder(UpdateSubscribeMarketEventsPacket::new)
+                .encoder(UpdateSubscribeMarketEventsPacket::toBytes)
+                .consumerMainThread(UpdateSubscribeMarketEventsPacket::handle)
                 .add();
 
         net.messageBuilder(RequestTradeItemsPacket.class, id(), NetworkDirection.PLAY_TO_SERVER)
@@ -64,10 +69,10 @@ public class ModMessages {
                 .consumerMainThread(RequestOrderCancelPacket::handle)
                 .add();
 
-        net.messageBuilder(StockMarketBlockEntitySavePacket.class, id(), NetworkDirection.PLAY_TO_SERVER)
-                .decoder(StockMarketBlockEntitySavePacket::new)
-                .encoder(StockMarketBlockEntitySavePacket::toBytes)
-                .consumerMainThread(StockMarketBlockEntitySavePacket::handle)
+        net.messageBuilder(UpdateStockMarketBlockEntityPacket.class, id(), NetworkDirection.PLAY_TO_SERVER)
+                .decoder(UpdateStockMarketBlockEntityPacket::new)
+                .encoder(UpdateStockMarketBlockEntityPacket::toBytes)
+                .consumerMainThread(UpdateStockMarketBlockEntityPacket::handle)
                 .add();
 
         net.messageBuilder(RequestBankDataPacket.class, id(), NetworkDirection.PLAY_TO_SERVER)
@@ -76,28 +81,34 @@ public class ModMessages {
                 .consumerMainThread(RequestBankDataPacket::handle)
                 .add();
 
-        net.messageBuilder(StockMarketBlockEntityLoadPacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)
-                .decoder(StockMarketBlockEntityLoadPacket::new)
-                .encoder(StockMarketBlockEntityLoadPacket::toBytes)
-                .consumerMainThread(StockMarketBlockEntityLoadPacket::handle)
+        net.messageBuilder(SyncStockMarketBlockEntityPacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(SyncStockMarketBlockEntityPacket::new)
+                .encoder(SyncStockMarketBlockEntityPacket::toBytes)
+                .consumerMainThread(SyncStockMarketBlockEntityPacket::handle)
                 .add();
 
-        net.messageBuilder(UpdateTradeItemsPacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)
-                .decoder(UpdateTradeItemsPacket::new)
-                .encoder(UpdateTradeItemsPacket::toBytes)
-                .consumerMainThread(UpdateTradeItemsPacket::handle)
+        net.messageBuilder(SyncTradeItemsPacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(SyncTradeItemsPacket::new)
+                .encoder(SyncTradeItemsPacket::toBytes)
+                .consumerMainThread(SyncTradeItemsPacket::handle)
                 .add();
 
-        net.messageBuilder(ResponseOrderPacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)
-                .decoder(ResponseOrderPacket::new)
-                .encoder(ResponseOrderPacket::toBytes)
-                .consumerMainThread(ResponseOrderPacket::handle)
+        net.messageBuilder(SyncOrderPacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(SyncOrderPacket::new)
+                .encoder(SyncOrderPacket::toBytes)
+                .consumerMainThread(SyncOrderPacket::handle)
                 .add();
 
-        net.messageBuilder(UpdateBankDataPacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)
-                .decoder(UpdateBankDataPacket::new)
-                .encoder(UpdateBankDataPacket::toBytes)
-                .consumerMainThread(UpdateBankDataPacket::handle)
+        net.messageBuilder(SyncBankDataPacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(SyncBankDataPacket::new)
+                .encoder(SyncBankDataPacket::toBytes)
+                .consumerMainThread(SyncBankDataPacket::handle)
+                .add();
+
+        net.messageBuilder(SyncBankTerminalBlockEntityPacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)
+                .decoder(SyncBankTerminalBlockEntityPacket::new)
+                .encoder(SyncBankTerminalBlockEntityPacket::toBytes)
+                .consumerMainThread(SyncBankTerminalBlockEntityPacket::handle)
                 .add();
     }
 

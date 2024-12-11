@@ -5,7 +5,13 @@ import net.kroia.stockmarket.banking.ServerBankManager;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.MarketOrder;
 import net.kroia.stockmarket.market.server.order.Order;
-import net.kroia.stockmarket.networking.packet.*;
+import net.kroia.stockmarket.networking.packet.client_sender.request.RequestOrderCancelPacket;
+import net.kroia.stockmarket.networking.packet.client_sender.request.RequestOrderPacket;
+import net.kroia.stockmarket.networking.packet.client_sender.request.RequestPricePacket;
+import net.kroia.stockmarket.networking.packet.client_sender.request.RequestTradeItemsPacket;
+import net.kroia.stockmarket.networking.packet.client_sender.update.UpdateSubscribeMarketEventsPacket;
+import net.kroia.stockmarket.networking.packet.server_sender.update.SyncPricePacket;
+import net.kroia.stockmarket.networking.packet.server_sender.update.SyncTradeItemsPacket;
 import net.kroia.stockmarket.util.OrderbookVolume;
 import net.kroia.stockmarket.util.PriceHistory;
 import net.kroia.stockmarket.util.ServerSaveable;
@@ -16,7 +22,6 @@ import net.minecraft.server.level.ServerPlayer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 
 public class ServerMarket implements ServerSaveable
 {
@@ -261,21 +266,21 @@ public class ServerMarket implements ServerSaveable
     }
     public static void handlePacket(ServerPlayer player, RequestTradeItemsPacket packet)
     {
-        UpdateTradeItemsPacket.sendResponse(player);
+        SyncTradeItemsPacket.sendResponse(player);
     }
     public static void handlePacket(ServerPlayer player, RequestPricePacket packet)
     {
         StockMarketMod.LOGGER.info("[SERVER] Receiving RequestPricePacket for item "+packet.getItemID()+" from the player "+player.getName().getString());
 
         // Send the packet to the client
-        UpdatePricePacket.sendPacket(packet.getItemID(), player);
+        SyncPricePacket.sendPacket(packet.getItemID(), player);
     }
-    public static void handlePacket(ServerPlayer player, SubscribeMarketEventsPacket packet)
+    public static void handlePacket(ServerPlayer player, UpdateSubscribeMarketEventsPacket packet)
     {
         boolean subscribe = packet.doesSubscribe();
         String itemID = packet.getItemID();
 
-        StockMarketMod.LOGGER.info("[SERVER] Receiving SubscribeMarketEventsPacket for item "+itemID+
+        StockMarketMod.LOGGER.info("[SERVER] Receiving UpdateSubscribeMarketEventsPacket for item "+itemID+
                 " to "+(subscribe ? "subscribe" : "unsubscribe"));
 
         // Subscribe or unsubscribe the player

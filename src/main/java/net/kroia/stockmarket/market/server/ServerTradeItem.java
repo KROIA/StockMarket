@@ -1,8 +1,7 @@
 package net.kroia.stockmarket.market.server;
 
-import net.kroia.stockmarket.market.client.ClientTradeItem;
 import net.kroia.stockmarket.market.server.order.Order;
-import net.kroia.stockmarket.networking.packet.UpdatePricePacket;
+import net.kroia.stockmarket.networking.packet.server_sender.update.SyncPricePacket;
 import net.kroia.stockmarket.util.OrderbookVolume;
 import net.kroia.stockmarket.util.PriceHistory;
 import net.kroia.stockmarket.util.ServerSaveable;
@@ -107,12 +106,12 @@ public class ServerTradeItem implements ServerSaveable {
     {
         for(ServerPlayer player : subscribers)
         {
-            UpdatePricePacket.sendPacket(itemID, player);
+            SyncPricePacket.sendPacket(itemID, player);
         }
     }
     private void notifySubscriber(ServerPlayer player)
     {
-        UpdatePricePacket.sendPacket(itemID, player);
+        SyncPricePacket.sendPacket(itemID, player);
     }
 
     public void updateBot()

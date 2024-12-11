@@ -64,11 +64,11 @@ public class ServerPlayerList implements ServerSaveable {
         if(uuid == null)
             return null;
 
-        // Get the Minecraft server instance
+        // Get the Minecraft server_sender instance
         MinecraftServer server = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
 
         if (server == null) {
-            System.err.println("Server instance is null. Are you calling this from the server?");
+            System.err.println("Server instance is null. Are you calling this from the server_sender?");
             return null;
         }
 

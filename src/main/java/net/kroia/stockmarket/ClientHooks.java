@@ -7,6 +7,7 @@ import net.kroia.stockmarket.screen.custom.TradeScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.DistExecutor;
@@ -25,11 +26,11 @@ public class ClientHooks {
         }
         return InteractionResult.SUCCESS;
     }
-    public static InteractionResult openBankTerminalBlockScreen(BlockEntity entity, BlockPos pos)
+    public static InteractionResult openBankTerminalBlockScreen(BlockEntity entity, BlockPos pos, Inventory playerInventory)
     {
         if(entity instanceof BankTerminalBlockEntity bankTerminalBlockEntity)
         {
-            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> Minecraft.getInstance().setScreen(new BankTerminalScreen(bankTerminalBlockEntity)));
+            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> Minecraft.getInstance().setScreen(new BankTerminalScreen(bankTerminalBlockEntity, playerInventory)));
         }
         else
         {

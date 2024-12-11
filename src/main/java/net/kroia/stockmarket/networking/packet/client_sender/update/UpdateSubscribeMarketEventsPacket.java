@@ -1,4 +1,4 @@
-package net.kroia.stockmarket.networking.packet;
+package net.kroia.stockmarket.networking.packet.client_sender.update;
 
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.ServerMarket;
@@ -9,16 +9,16 @@ import net.minecraftforge.network.NetworkEvent;
 
 import java.util.function.Supplier;
 
-public class SubscribeMarketEventsPacket {
+public class UpdateSubscribeMarketEventsPacket {
     private final String itemID;
     private final boolean subscribe;
 
-    public SubscribeMarketEventsPacket(String itemID, boolean subscribe) {
+    public UpdateSubscribeMarketEventsPacket(String itemID, boolean subscribe) {
         this.itemID = itemID;
         this.subscribe = subscribe;
     }
 
-    public SubscribeMarketEventsPacket(FriendlyByteBuf buf)
+    public UpdateSubscribeMarketEventsPacket(FriendlyByteBuf buf)
     {
         this.itemID = buf.readUtf();
         this.subscribe = buf.readBoolean();
@@ -31,9 +31,9 @@ public class SubscribeMarketEventsPacket {
     }
 
     public static void generateRequest(String itemID, boolean subscribe) {
-        StockMarketMod.LOGGER.info("[CLIENT] Sending SubscribeMarketEventsPacket for item "+itemID+
+        StockMarketMod.LOGGER.info("[CLIENT] Sending UpdateSubscribeMarketEventsPacket for item "+itemID+
                 " to "+(subscribe ? "subscribe" : "unsubscribe"));
-        ModMessages.sendToServer(new SubscribeMarketEventsPacket(itemID, subscribe));
+        ModMessages.sendToServer(new UpdateSubscribeMarketEventsPacket(itemID, subscribe));
     }
 
     public String getItemID() {
@@ -47,7 +47,7 @@ public class SubscribeMarketEventsPacket {
 
     public void handle(Supplier<NetworkEvent.Context> contextSupplier) {
         NetworkEvent.Context context = contextSupplier.get();
-        // Check if on server or client
+        // Check if on server_sender or client
         if(contextSupplier.get().getDirection().getReceptionSide().isClient()) {
             // HERE WE ARE ON THE CLIENT!
             context.setPacketHandled(true);

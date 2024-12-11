@@ -1,9 +1,7 @@
-package net.kroia.stockmarket.networking.packet;
+package net.kroia.stockmarket.networking.packet.server_sender.update;
 
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.client.ClientMarket;
-import net.kroia.stockmarket.market.server.order.LimitOrder;
-import net.kroia.stockmarket.market.server.order.MarketOrder;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.networking.ModMessages;
 import net.kroia.stockmarket.util.ServerPlayerList;
@@ -13,14 +11,14 @@ import net.minecraftforge.network.NetworkEvent;
 
 import java.util.function.Supplier;
 
-public class ResponseOrderPacket {
+public class SyncOrderPacket {
 
     private Order order;
 
-    public ResponseOrderPacket(Order order) {
+    public SyncOrderPacket(Order order) {
         this.order = order;
     }
-    public ResponseOrderPacket(FriendlyByteBuf buf)
+    public SyncOrderPacket(FriendlyByteBuf buf)
     {
         this.order = Order.construct(buf);
     }
@@ -32,7 +30,7 @@ public class ResponseOrderPacket {
     public static void sendResponse(Order order) {
         String itemID = order.getItemID();
 
-        StockMarketMod.LOGGER.info("[SERVER] Sending ResponseOrderPacket for order: "+order.toString());
+        StockMarketMod.LOGGER.info("[SERVER] Sending SyncOrderPacket for order: "+order.toString());
 
 
         ServerPlayer player =  ServerPlayerList.getPlayer(order.getPlayerUUID());
@@ -41,7 +39,7 @@ public class ResponseOrderPacket {
             StockMarketMod.LOGGER.warn("[SERVER] Player not found for order: "+order.toString());
             return;
         }
-        ModMessages.sendToPlayer(new ResponseOrderPacket(order), player);
+        ModMessages.sendToPlayer(new SyncOrderPacket(order), player);
     }
 
     public Order getOrder() {
@@ -50,7 +48,7 @@ public class ResponseOrderPacket {
 
     public void handle(Supplier<NetworkEvent.Context> contextSupplier) {
         NetworkEvent.Context context = contextSupplier.get();
-        // Check if on server or client
+        // Check if on server_sender or client
         if(contextSupplier.get().getDirection().getReceptionSide().isClient()) {
             // HERE WE ARE ON THE CLIENT!
             ClientMarket.handlePacket(this);

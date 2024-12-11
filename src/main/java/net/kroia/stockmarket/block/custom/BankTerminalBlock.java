@@ -4,13 +4,13 @@ import net.kroia.stockmarket.ClientHooks;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.entity.custom.BankTerminalBlockEntity;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
-import net.kroia.stockmarket.networking.packet.StockMarketBlockEntityLoadPacket;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.BlockPlaceContext;
@@ -101,7 +101,7 @@ public class BankTerminalBlock extends Block implements EntityBlock {
             if (blockEntity instanceof StockMarketBlockEntity) {
                 StockMarketBlockEntity blockBEntity = (StockMarketBlockEntity) blockEntity;
 
-                // Perform server-side logic
+                // Perform server_sender-side logic
                 System.out.println("Server: Detected Block B with data: "); //+ blockBEntity.getCustomData());
                 //blockBEntity.setCustomData(42); // Example: Modify BlockEntity dataä
                 return true;
@@ -131,9 +131,9 @@ public class BankTerminalBlock extends Block implements EntityBlock {
     public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
         if (!level.isClientSide && player instanceof ServerPlayer)
         {
-            StockMarketMod.LOGGER.info("server use BankTerminalBlock");
-            //StockMarketBlockEntityLoadPacket.sendPacketToClient(pos, (StockMarketBlockEntity) level.getBlockEntity(pos), (ServerPlayer) player);
-            // Open the screen on the server side
+            StockMarketMod.LOGGER.info("server_sender use BankTerminalBlock");
+            //SyncStockMarketBlockEntityPacket.sendPacketToClient(pos, (StockMarketBlockEntity) level.getBlockEntity(pos), (ServerPlayer) player);
+            // Open the screen on the server_sender side
             //NetworkHooks.openScreen((ServerPlayer) player, new SimpleMenuProvider(
             //        (id, playerInventory, playerEntity) -> new ChartMenu(id, playerInventory,
             //                (StockMarketBlockEntity) level.getBlockEntity(pos),
@@ -144,7 +144,8 @@ public class BankTerminalBlock extends Block implements EntityBlock {
             StockMarketMod.LOGGER.info("client use BankTerminalBlock");
             //Minecraft.getInstance().setScreen(new TradeScreen(((StockMarketBlockEntity) level.getBlockEntity(pos)).getChartData()));
             BlockEntity entity = level.getBlockEntity(pos);
-            return ClientHooks.openBankTerminalBlockScreen(entity, pos);
+            Inventory playerInventory = player.getInventory();
+            return ClientHooks.openBankTerminalBlockScreen(entity, pos, playerInventory);
         }
         return InteractionResult.SUCCESS;  // Indicate the interaction was successful
     }

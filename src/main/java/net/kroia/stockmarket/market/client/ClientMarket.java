@@ -2,7 +2,10 @@ package net.kroia.stockmarket.market.client;
 
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.order.Order;
-import net.kroia.stockmarket.networking.packet.*;
+import net.kroia.stockmarket.networking.packet.client_sender.request.RequestTradeItemsPacket;
+import net.kroia.stockmarket.networking.packet.server_sender.update.SyncOrderPacket;
+import net.kroia.stockmarket.networking.packet.server_sender.update.SyncPricePacket;
+import net.kroia.stockmarket.networking.packet.server_sender.update.SyncTradeItemsPacket;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
 
 import java.util.ArrayList;
@@ -36,7 +39,7 @@ public class ClientMarket {
         return tradeItem.getPrice();
     }
 
-    public static void handlePacket(UpdatePricePacket packet)
+    public static void handlePacket(SyncPricePacket packet)
     {
         ClientTradeItem tradeItem = tradeItems.get(packet.getPriceHistory().getItemID());
         if(tradeItem == null)
@@ -47,32 +50,32 @@ public class ClientMarket {
         tradeItem.handlePacket(packet);
         TradeScreen.updatePlotsData(packet.getMinPrice(), packet.getMaxPrice());
     }
-    public static void handlePacket(UpdateTradeItemsPacket packet)
+    public static void handlePacket(SyncTradeItemsPacket packet)
     {
         Map<String, ClientTradeItem> tradeItems = new HashMap<>();
-        ArrayList<UpdatePricePacket> updatePricePackets = packet.getUpdatePricePackets();
-        StockMarketMod.LOGGER.info("Received " + updatePricePackets.size() + " trade items");
-        for(UpdatePricePacket updatePricePacket : updatePricePackets)
+        ArrayList<SyncPricePacket> syncPricePackets = packet.getUpdatePricePackets();
+        StockMarketMod.LOGGER.info("Received " + syncPricePackets.size() + " trade items");
+        for(SyncPricePacket syncPricePacket : syncPricePackets)
         {
-            ClientTradeItem orgInstance = ClientMarket.tradeItems.get(updatePricePacket.getPriceHistory().getItemID());
+            ClientTradeItem orgInstance = ClientMarket.tradeItems.get(syncPricePacket.getPriceHistory().getItemID());
             ClientTradeItem tradeItem;
             if(orgInstance != null)
             {
-                tradeItems.put(updatePricePacket.getPriceHistory().getItemID(), orgInstance);
-                orgInstance.handlePacket(updatePricePacket);
+                tradeItems.put(syncPricePacket.getPriceHistory().getItemID(), orgInstance);
+                orgInstance.handlePacket(syncPricePacket);
                 tradeItem = orgInstance;
                 continue;
             }
             else {
-                tradeItem = new ClientTradeItem(updatePricePacket.getPriceHistory().getItemID());
-                tradeItem.handlePacket(updatePricePacket);
+                tradeItem = new ClientTradeItem(syncPricePacket.getPriceHistory().getItemID());
+                tradeItem.handlePacket(syncPricePacket);
                 tradeItems.put(tradeItem.getItemID(), tradeItem);
             }
 
             StockMarketMod.LOGGER.info("Trade item: {}", tradeItem.getItemID());
-            if(Objects.equals(updatePricePacket.getPriceHistory().getItemID(), TradeScreen.getItemID()))
+            if(Objects.equals(syncPricePacket.getPriceHistory().getItemID(), TradeScreen.getItemID()))
             {
-                TradeScreen.updatePlotsData(updatePricePacket.getMinPrice(), updatePricePacket.getMaxPrice());
+                TradeScreen.updatePlotsData(syncPricePacket.getMinPrice(), syncPricePacket.getMaxPrice());
             }
         }
         ClientMarket.tradeItems = tradeItems;
@@ -80,7 +83,7 @@ public class ClientMarket {
 
     }
 
-    public static void handlePacket(ResponseOrderPacket packet)
+    public static void handlePacket(SyncOrderPacket packet)
     {
         ClientTradeItem tradeItem = tradeItems.get(packet.getOrder().getItemID());
         if(tradeItem == null)

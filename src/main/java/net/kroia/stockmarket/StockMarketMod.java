@@ -81,7 +81,7 @@ public class StockMarketMod
         // Register the commonSetup method for modloading
         modEventBus.addListener(this::commonSetup);
 
-        // Register ourselves for server and other game events we are interested in
+        // Register ourselves for server_sender and other game events we are interested in
         // MinecraftForge.EVENT_BUS.register(this);
         //modEventBus.addListener(this::onServerStarting);
 
@@ -91,10 +91,10 @@ public class StockMarketMod
 
 
 
-        // Register event listeners to differentiate client and server
+        // Register event listeners to differentiate client and server_sender
         DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> this::setupClient);
         //DistExecutor.unsafeRunWhenOn(Dist.DEDICATED_SERVER, () -> this::setupServer);
-        // Server setup is called both for dedicated and integrated server
+        // Server setup is called both for dedicated and integrated server_sender
         MinecraftForge.EVENT_BUS.addListener(this::onServerStarting);
         // Register the event handler class to the Forge Event Bus
        // MinecraftForge.EVENT_BUS.register(new PlayerEvents());
@@ -129,8 +129,8 @@ public class StockMarketMod
     }
     @SubscribeEvent
     public void onPlayerLogin(ClientPlayerNetworkEvent.LoggingIn event) {
-        // This code runs when the player enters a server on the client side
-        System.out.println("Player has logged into a server!");
+        // This code runs when the player enters a server_sender on the client side
+        System.out.println("Player has logged into a server_sender!");
 
         // Call your desired function here
         //performClientSideAction();
@@ -148,8 +148,8 @@ public class StockMarketMod
         MinecraftForge.EVENT_BUS.register(this);
     }
     private void setupServer() {
-        LOGGER.info("HELLO from server starting");
-        // Register ourselves for server-side events
+        LOGGER.info("HELLO from server_sender starting");
+        // Register ourselves for server_sender-side events
         MinecraftForge.EVENT_BUS.addListener(this::onServerTick);
         if(side == Side.UNKNOWN)
             side = Side.MULTIPLAYER_SERVER;
@@ -185,8 +185,8 @@ public class StockMarketMod
     /*@SubscribeEvent
     public void onServerStarting(ServerStartingEvent event)
     {
-        // Do something when the server starts
-        LOGGER.info("HELLO from server starting");
+        // Do something when the server_sender starts
+        LOGGER.info("HELLO from server_sender starting");
         ServerMarket.init();
 
 

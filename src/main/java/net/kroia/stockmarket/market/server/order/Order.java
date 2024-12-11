@@ -3,9 +3,8 @@ package net.kroia.stockmarket.market.server.order;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.banking.BankUser;
 import net.kroia.stockmarket.banking.bank.Bank;
-import net.kroia.stockmarket.banking.bank.MoneyBank;
 import net.kroia.stockmarket.banking.ServerBankManager;
-import net.kroia.stockmarket.networking.packet.ResponseOrderPacket;
+import net.kroia.stockmarket.networking.packet.server_sender.update.SyncOrderPacket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -277,7 +276,7 @@ public abstract class Order {
         this.status = status;
         if(StockMarketMod.isServer() && !isBot)
         {
-            ResponseOrderPacket.sendResponse(this);
+            SyncOrderPacket.sendResponse(this);
         }
     }
 
@@ -286,7 +285,7 @@ public abstract class Order {
             return;
         if(StockMarketMod.isServer())
         {
-            ResponseOrderPacket.sendResponse(this);
+            SyncOrderPacket.sendResponse(this);
         }
         else
         {

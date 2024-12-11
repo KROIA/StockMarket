@@ -11,23 +11,23 @@ import java.util.ArrayList;
 @Mod.EventBusSubscriber
 public class PlayerEvents {
 
-    // Called when a player joins the server
+    // Called when a player joins the server_sender
     @SubscribeEvent
     public static void onPlayerJoin(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
             ServerPlayerList.addPlayer(player);
             ServerBankManager.createUser(player.getUUID(),new ArrayList<>(),true, 1000);
 
-            //player.sendSystemMessage(Component.literal("Welcome to the server, " + player.getName().getString() + "!"));
-            //System.out.println(player.getName().getString() + " joined the server.");
+            //player.sendSystemMessage(Component.literal("Welcome to the server_sender, " + player.getName().getString() + "!"));
+            //System.out.println(player.getName().getString() + " joined the server_sender.");
         }
     }
 
-    // Called when a player leaves the server
+    // Called when a player leaves the server_sender
     @SubscribeEvent
     public static void onPlayerLeave(PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
-            //System.out.println(player.getName().getString() + " left the server.");
+            //System.out.println(player.getName().getString() + " left the server_sender.");
         }
     }
 }

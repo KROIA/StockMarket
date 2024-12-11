@@ -1,18 +1,16 @@
-package net.kroia.stockmarket.networking.packet;
+package net.kroia.stockmarket.networking.packet.client_sender.update.entity;
 
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
 import net.kroia.stockmarket.networking.ModMessages;
-import net.kroia.stockmarket.screen.custom.TradeScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;
-import org.apache.logging.log4j.core.jmx.Server;
 
 import java.util.function.Supplier;
 
-public class StockMarketBlockEntitySavePacket {
+public class UpdateStockMarketBlockEntityPacket {
     private final BlockPos pos;
     private final String itemID;
     private final int amount;
@@ -20,7 +18,7 @@ public class StockMarketBlockEntitySavePacket {
 
 
 
-    public StockMarketBlockEntitySavePacket(BlockPos pos, StockMarketBlockEntity blockEntity) {
+    public UpdateStockMarketBlockEntityPacket(BlockPos pos, StockMarketBlockEntity blockEntity) {
         this.pos = pos;
         this.itemID = blockEntity.getItemID();
         this.amount = blockEntity.getAmount();
@@ -28,7 +26,7 @@ public class StockMarketBlockEntitySavePacket {
     }
 
 
-    public StockMarketBlockEntitySavePacket(FriendlyByteBuf buf) {
+    public UpdateStockMarketBlockEntityPacket(FriendlyByteBuf buf) {
         this.pos = buf.readBlockPos();
         this.itemID = buf.readUtf();
         this.amount = buf.readInt();
@@ -52,12 +50,12 @@ public class StockMarketBlockEntitySavePacket {
     }
 
     public static void sendPacketToServer(BlockPos pos, StockMarketBlockEntity blockEntity) {
-        StockMarketMod.LOGGER.info("[CLIENT] Sending StockMarketBlockEntitySavePacket");
-        ModMessages.sendToServer(new StockMarketBlockEntitySavePacket(pos, blockEntity));
+        StockMarketMod.LOGGER.info("[CLIENT] Sending UpdateStockMarketBlockEntityPacket");
+        ModMessages.sendToServer(new UpdateStockMarketBlockEntityPacket(pos, blockEntity));
     }
     /*public static void sendPacketToClient(BlockPos pos, StockMarketBlockEntity blockEntity, ServerPlayer player) {
-        StockMarketMod.LOGGER.info("[SERVER] Sending StockMarketBlockEntitySavePacket");
-        ModMessages.sendToPlayer(new StockMarketBlockEntitySavePacket(pos, blockEntity), player);
+        StockMarketMod.LOGGER.info("[SERVER] Sending UpdateStockMarketBlockEntityPacket");
+        ModMessages.sendToPlayer(new UpdateStockMarketBlockEntityPacket(pos, blockEntity), player);
     }*/
 
     public void toBytes(FriendlyByteBuf buf)
@@ -70,9 +68,9 @@ public class StockMarketBlockEntitySavePacket {
 
     public void handle(Supplier<NetworkEvent.Context> contextSupplier) {
         NetworkEvent.Context context = contextSupplier.get();
-        // Check if on server or client
+        // Check if on server_sender or client
         if(contextSupplier.get().getDirection().getReceptionSide().isClient()) {
-            //StockMarketMod.LOGGER.info("[CLIENT] Received current prices from the server");
+            //StockMarketMod.LOGGER.info("[CLIENT] Received current prices from the server_sender");
             // HERE WE ARE ON THE CLIENT!
             // Update client-side data
             // Get the data from the packet
@@ -87,7 +85,7 @@ public class StockMarketBlockEntitySavePacket {
             // HERE WE ARE ON THE SERVER!
             // Update client-side data
             ServerPlayer player = context.getSender();
-            StockMarketMod.LOGGER.info("[SERVER] Received StockMarketBlockEntitySavePacket from client");
+            StockMarketMod.LOGGER.info("[SERVER] Received UpdateStockMarketBlockEntityPacket from client");
             StockMarketBlockEntity blockEntity = (StockMarketBlockEntity) player.level().getBlockEntity(this.pos);
             if(blockEntity == null)
             {

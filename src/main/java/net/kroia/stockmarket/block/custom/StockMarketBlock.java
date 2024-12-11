@@ -3,8 +3,7 @@ package net.kroia.stockmarket.block.custom;
 import net.kroia.stockmarket.ClientHooks;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
-import net.kroia.stockmarket.networking.packet.StockMarketBlockEntityLoadPacket;
-import net.kroia.stockmarket.networking.packet.StockMarketBlockEntitySavePacket;
+import net.kroia.stockmarket.networking.packet.server_sender.update.entity.SyncStockMarketBlockEntityPacket;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerPlayer;
@@ -89,9 +88,9 @@ public class StockMarketBlock extends Block implements EntityBlock {
     public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
         if (!level.isClientSide && player instanceof ServerPlayer)
         {
-            StockMarketMod.LOGGER.info("server use StockMarketBlock");
-            StockMarketBlockEntityLoadPacket.sendPacketToClient(pos, (StockMarketBlockEntity) level.getBlockEntity(pos), (ServerPlayer) player);
-            // Open the screen on the server side
+            StockMarketMod.LOGGER.info("server_sender use StockMarketBlock");
+            SyncStockMarketBlockEntityPacket.sendPacketToClient(pos, (StockMarketBlockEntity) level.getBlockEntity(pos), (ServerPlayer) player);
+            // Open the screen on the server_sender side
             //NetworkHooks.openScreen((ServerPlayer) player, new SimpleMenuProvider(
             //        (id, playerInventory, playerEntity) -> new ChartMenu(id, playerInventory,
             //                (StockMarketBlockEntity) level.getBlockEntity(pos),

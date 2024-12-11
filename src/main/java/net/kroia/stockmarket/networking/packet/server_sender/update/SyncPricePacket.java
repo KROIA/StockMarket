@@ -1,4 +1,4 @@
-package net.kroia.stockmarket.networking.packet;
+package net.kroia.stockmarket.networking.packet.server_sender.update;
 
 
 import net.kroia.stockmarket.StockMarketMod;
@@ -6,20 +6,16 @@ import net.kroia.stockmarket.market.client.ClientMarket;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.networking.ModMessages;
-import net.kroia.stockmarket.screen.custom.TradeScreen;
 import net.kroia.stockmarket.util.OrderbookVolume;
 import net.kroia.stockmarket.util.PriceHistory;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.network.chat.LastSeenMessages;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;
 
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.function.Supplier;
 
-public class UpdatePricePacket {
+public class SyncPricePacket {
     //private String itemID;
     //private int price;
     private PriceHistory priceHistory;
@@ -30,14 +26,14 @@ public class UpdatePricePacket {
     private ArrayList<Order> orders;
 
 
-    public UpdatePricePacket() {
+    public SyncPricePacket() {
 
     }
-    /*public UpdatePricePacket(String itemID, int price) {
+    /*public SyncPricePacket(String itemID, int price) {
         this.itemID = itemID;
         this.price = price;
     }*/
-    public UpdatePricePacket(PriceHistory priceHistory, OrderbookVolume orderBookVolume, int minPrice, int maxPrice, ArrayList<Order> orders) {
+    public SyncPricePacket(PriceHistory priceHistory, OrderbookVolume orderBookVolume, int minPrice, int maxPrice, ArrayList<Order> orders) {
         this.priceHistory = priceHistory;
         this.orderBookVolume = orderBookVolume;
         this.minPrice = minPrice;
@@ -45,7 +41,7 @@ public class UpdatePricePacket {
         this.orders = orders;
     }
 
-    public UpdatePricePacket(FriendlyByteBuf buf) {
+    public SyncPricePacket(FriendlyByteBuf buf) {
         priceHistory = new PriceHistory(buf);
         orderBookVolume = new OrderbookVolume(buf);
         minPrice = buf.readInt();
@@ -68,12 +64,12 @@ public class UpdatePricePacket {
             prices.put(itemName, price);
         }*/
     }
-    public UpdatePricePacket(String itemID)
+    public SyncPricePacket(String itemID)
     {
         commonSetup(itemID);
         this.orders = ServerMarket.getOrders(itemID);
     }
-    public UpdatePricePacket(String itemID, String playerUUID)
+    public SyncPricePacket(String itemID, String playerUUID)
     {
         commonSetup(itemID);
         this.orders = ServerMarket.getOrders(itemID, playerUUID);
@@ -125,7 +121,7 @@ public class UpdatePricePacket {
 
     public static void sendPacket(String itemID, ServerPlayer player)
     {
-        UpdatePricePacket packet = new UpdatePricePacket(itemID, player.getStringUUID());
+        SyncPricePacket packet = new SyncPricePacket(itemID, player.getStringUUID());
         ModMessages.sendToPlayer(packet, player);
     }
 
@@ -167,9 +163,9 @@ public class UpdatePricePacket {
 
     public void handle(Supplier<NetworkEvent.Context> contextSupplier) {
         NetworkEvent.Context context = contextSupplier.get();
-        // Check if on server or client
+        // Check if on server_sender or client
         if(contextSupplier.get().getDirection().getReceptionSide().isClient()) {
-            //StockMarketMod.LOGGER.info("[CLIENT] Received current prices from the server");
+            //StockMarketMod.LOGGER.info("[CLIENT] Received current prices from the server_sender");
             // HERE WE ARE ON THE CLIENT!
             // Update client-side data
             // Get the data from the packet

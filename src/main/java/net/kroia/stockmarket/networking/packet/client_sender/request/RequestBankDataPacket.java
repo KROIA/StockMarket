@@ -1,15 +1,11 @@
-package net.kroia.stockmarket.networking.packet;
+package net.kroia.stockmarket.networking.packet.client_sender.request;
 
-import net.kroia.stockmarket.banking.BankUser;
-import net.kroia.stockmarket.banking.ServerBankManager;
-import net.kroia.stockmarket.banking.bank.ClientBankManager;
-import net.kroia.stockmarket.banking.bank.MoneyBank;
 import net.kroia.stockmarket.networking.ModMessages;
+import net.kroia.stockmarket.networking.packet.server_sender.update.SyncBankDataPacket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;
 
-import java.util.HashMap;
 import java.util.function.Supplier;
 
 public class RequestBankDataPacket {
@@ -36,9 +32,9 @@ public class RequestBankDataPacket {
 
     public void handle(Supplier<NetworkEvent.Context> contextSupplier) {
         NetworkEvent.Context context = contextSupplier.get();
-        // Check if on server or client
+        // Check if on server_sender or client
         if(contextSupplier.get().getDirection().getReceptionSide().isClient()) {
-            //StockMarketMod.LOGGER.info("[CLIENT] Received current prices from the server");
+            //StockMarketMod.LOGGER.info("[CLIENT] Received current prices from the server_sender");
             // HERE WE ARE ON THE CLIENT!
 
             context.setPacketHandled(true);
@@ -51,7 +47,7 @@ public class RequestBankDataPacket {
             // Update client-side data
             ServerPlayer player = context.getSender();
             //ServerBankManager.handlePacket(player,this);
-            UpdateBankDataPacket.sendPacket(player);
+            SyncBankDataPacket.sendPacket(player);
         });
         context.setPacketHandled(true);
     }

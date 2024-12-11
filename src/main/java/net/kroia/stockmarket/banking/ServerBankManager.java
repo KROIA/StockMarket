@@ -1,13 +1,10 @@
 package net.kroia.stockmarket.banking;
 
 import net.kroia.stockmarket.banking.bank.Bank;
-import net.kroia.stockmarket.networking.packet.RequestBankDataPacket;
-import net.kroia.stockmarket.networking.packet.UpdateBankDataPacket;
 import net.kroia.stockmarket.util.ServerPlayerList;
 import net.kroia.stockmarket.util.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
-import net.minecraft.server.level.ServerPlayer;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -172,6 +169,6 @@ public class ServerBankManager implements ServerSaveable {
 
     /*public static void handlePacket(ServerPlayer sender, RequestBankDataPacket packet)
     {
-        UpdateBankDataPacket.sendPacket(sender);
+        SyncBankDataPacket.sendPacket(sender);
     }*/
 }
