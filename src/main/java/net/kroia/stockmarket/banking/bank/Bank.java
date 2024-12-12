@@ -88,10 +88,13 @@ public class Bank implements ServerSaveable {
     }
 
 
-    public void deposit(long amount) {
-        dbg_checkValueIsNegative(amount);
+    public boolean deposit(long amount) {
+        if(amount <= 0)
+            return false;
+        //dbg_checkValueIsNegative(amount);
         addBalanceInternal(amount);
         notifyUser("Deposited " + amount+ " of "+itemID);
+        return true;
     }
 
 
@@ -100,16 +103,16 @@ public class Bank implements ServerSaveable {
     }
 
     public boolean withdraw(long amount) {
-        if (balance < amount) {
+        if (balance < amount || amount < 0) {
             return false;
         }
-        dbg_checkValueIsNegative(amount);
+        //dbg_checkValueIsNegative(amount);
         addBalanceInternal(-amount);
         notifyUser("Withdrew " + amount + " of "+itemID);
         return true;
     }
     public boolean transfer(long amount, Bank other) {
-        if (balance < amount) {
+        if (balance < amount || amount < 0) {
             return false;
         }
         dbg_checkValueIsNegative(amount);
@@ -119,17 +122,19 @@ public class Bank implements ServerSaveable {
         return true;
     }
     public boolean transferFromLocked(long amount, Bank other) {
-        if (lockedBalance < amount) {
+        if (lockedBalance < amount || amount < 0) {
             return false;
         }
-        dbg_checkValueIsNegative(amount);
+        //dbg_checkValueIsNegative(amount);
         lockedBalance -= amount;
         other.deposit(amount);
         notifyUser_transfer(amount, itemID, other);
         return true;
     }
     public boolean transferFromLockedPrefered(long amount, Bank other) {
-        dbg_checkValueIsNegative(amount);
+        if(amount < 0)
+            return false;
+        //dbg_checkValueIsNegative(amount);
         long origAmount = amount;
         if (lockedBalance < amount) {
             if (balance+lockedBalance < amount) {

@@ -36,7 +36,7 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
         private int x;
         private int y;
         private int width;
-        private int targetAmount = 0;
+        private long targetAmount = 0;
         public ItemStack stack;
         public final String itemID;
 
@@ -87,7 +87,7 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
         {
             return y;
         }
-        public int getTargetAmount()
+        public long getTargetAmount()
         {
             saveAmount();
             return targetAmount;
@@ -103,7 +103,7 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
 
             if (!text.isEmpty()) {
                 try {
-                    this.targetAmount = Integer.parseInt(text);
+                    this.targetAmount = Long.parseLong(text);
                 } catch (NumberFormatException e) {
                     // Handle invalid input (shouldn't happen due to input filter)
                     this.targetAmount = 0;
@@ -115,7 +115,7 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
         }
         private void onReceiveItemsFromMarket(Button pButton) {
             //StockMarketMod.LOGGER.info("Sending item: "+itemID + " amount: "+getTargetAmount());
-            HashMap<String, Integer> itemTransferToMarketAmounts = new HashMap<>();
+            HashMap<String, Long> itemTransferToMarketAmounts = new HashMap<>();
             itemTransferToMarketAmounts.put(itemID, getTargetAmount());
             UpdateBankTerminalBlockEntityPacket.sendPacketToServer(parent.menu.getBlockPos(), itemTransferToMarketAmounts, false);
             //RequestOrderPacket.generateRequest(itemID, getTargetAmount());
@@ -291,7 +291,7 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
             //}
         }
 
-        HashMap<String, Integer> itemTransferToMarketAmounts = new HashMap<>();
+        HashMap<String, Long> itemTransferToMarketAmounts = new HashMap<>();
         UpdateBankTerminalBlockEntityPacket.sendPacketToServer(this.menu.getBlockPos(), itemTransferToMarketAmounts, true);
     }
     private void onReceiveItemsFromMarket(Button pButton) {
@@ -304,12 +304,12 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
                 //RequestOrderPacket.generateRequest(button.itemID, button.getTargetAmount());
            // }
         }
-        HashMap<String, Integer> itemTransferToMarketAmounts = new HashMap<>();
+        HashMap<String, Long> itemTransferToMarketAmounts = new HashMap<>();
         for(BankElement button : bankElements)
         {
             //if(button.isToggled())
             //{
-                int amount = button.getTargetAmount();
+                long amount = button.getTargetAmount();
                 if(amount > 0)
                 {
                     itemTransferToMarketAmounts.put(button.itemID, amount);

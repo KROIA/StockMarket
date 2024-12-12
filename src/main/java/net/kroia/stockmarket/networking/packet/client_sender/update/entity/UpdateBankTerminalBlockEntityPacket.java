@@ -2,7 +2,6 @@ package net.kroia.stockmarket.networking.packet.client_sender.update.entity;
 
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.entity.custom.BankTerminalBlockEntity;
-import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
 import net.kroia.stockmarket.networking.ModMessages;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
@@ -17,24 +16,24 @@ public class UpdateBankTerminalBlockEntityPacket {
 
     private final BlockPos pos;
 
-    private final HashMap<String, Integer> itemTransferToMarketAmounts;
+    private final HashMap<String, Long> itemTransferFromMarket;
     private final boolean sendItemsToMarket;
-    public UpdateBankTerminalBlockEntityPacket(BlockPos pos, HashMap<String, Integer> itemTransferToMarketAmounts, boolean sendItemsToMarket) {
+    public UpdateBankTerminalBlockEntityPacket(BlockPos pos, HashMap<String, Long> itemTransferToMarketAmounts, boolean sendItemsToMarket) {
         this.pos = pos;
-        this.itemTransferToMarketAmounts = itemTransferToMarketAmounts;
+        this.itemTransferFromMarket = itemTransferToMarketAmounts;
         this.sendItemsToMarket = sendItemsToMarket;
     }
 
 
     public UpdateBankTerminalBlockEntityPacket(FriendlyByteBuf buf) {
         this.pos = buf.readBlockPos();
-        this.itemTransferToMarketAmounts = new HashMap<>();
+        this.itemTransferFromMarket = new HashMap<>();
         this.sendItemsToMarket = buf.readBoolean();
         int size = buf.readInt();
         for (int i = 0; i < size; i++) {
             String itemID = buf.readUtf();
-            int amount = buf.readInt();
-            this.itemTransferToMarketAmounts.put(itemID, amount);
+            long amount = buf.readLong();
+            this.itemTransferFromMarket.put(itemID, amount);
         }
     }
 
@@ -42,15 +41,15 @@ public class UpdateBankTerminalBlockEntityPacket {
         return pos;
     }
 
-    public HashMap<String, Integer> getItemTransferToMarketAmounts() {
-        return itemTransferToMarketAmounts;
+    public HashMap<String, Long> getItemTransferFromMarket() {
+        return itemTransferFromMarket;
     }
     public boolean isSendItemsToMarket() {
         return sendItemsToMarket;
     }
 
 
-    public static void sendPacketToServer(BlockPos pos, HashMap<String, Integer> itemTransferToMarketAmounts, boolean sendItemsToMarket) {
+    public static void sendPacketToServer(BlockPos pos, HashMap<String, Long> itemTransferToMarketAmounts, boolean sendItemsToMarket) {
         StockMarketMod.LOGGER.info("[CLIENT] Sending UpdateBankTerminalBlockEntityPacket");
         ModMessages.sendToServer(new UpdateBankTerminalBlockEntityPacket(pos, itemTransferToMarketAmounts, sendItemsToMarket));
     }
@@ -63,10 +62,10 @@ public class UpdateBankTerminalBlockEntityPacket {
     {
         buf.writeBlockPos(pos);
         buf.writeBoolean(sendItemsToMarket);
-        buf.writeInt(itemTransferToMarketAmounts.size());
-        itemTransferToMarketAmounts.forEach((itemID, amount) -> {
+        buf.writeInt(itemTransferFromMarket.size());
+        itemTransferFromMarket.forEach((itemID, amount) -> {
             buf.writeUtf(itemID);
-            buf.writeInt(amount);
+            buf.writeLong(amount);
         });
     }
 
