@@ -85,12 +85,12 @@ public class Timestamp implements ServerSaveable {
         this.hour = buf.readInt();
         this.minute = buf.readInt();
     }
-    public Timestamp(CompoundTag tag) {
-        this.day = tag.getInt("day");
-        this.month = tag.getInt("month");
-        this.year = tag.getInt("year");
-        this.hour = tag.getInt("hour");
-        this.minute = tag.getInt("minute");
+
+    public static Timestamp loadFromTag(CompoundTag tag) {
+        Timestamp timestamp = new Timestamp();
+        if(timestamp.load(tag))
+            return timestamp;
+        return null;
     }
 
     public void toBytes(FriendlyByteBuf buf) {
@@ -102,20 +102,30 @@ public class Timestamp implements ServerSaveable {
     }
 
     @Override
-    public void save(CompoundTag tag) {
+    public boolean save(CompoundTag tag) {
         tag.putInt("day", day);
         tag.putInt("month", month);
         tag.putInt("year", year);
         tag.putInt("hour", hour);
         tag.putInt("minute", minute);
+        return true;
     }
 
     @Override
-    public void load(CompoundTag tag) {
+    public boolean load(CompoundTag tag) {
+        if(tag == null)
+            return false;
+        if(     !tag.contains("day") ||
+                !tag.contains("month") ||
+                !tag.contains("year") ||
+                !tag.contains("hour") ||
+                !tag.contains("minute"))
+            return false;
         day = tag.getInt("day");
         month = tag.getInt("month");
         year = tag.getInt("year");
         hour = tag.getInt("hour");
         minute = tag.getInt("minute");
+        return true;
     }
 }

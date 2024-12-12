@@ -30,7 +30,7 @@ public class ClientHooks {
     {
         if(entity instanceof BankTerminalBlockEntity bankTerminalBlockEntity)
         {
-            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> Minecraft.getInstance().setScreen(new BankTerminalScreen(bankTerminalBlockEntity, playerInventory)));
+            //DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> Minecraft.getInstance().setScreen(new BankTerminalScreen(bankTerminalBlockEntity, playerInventory)));
         }
         else
         {

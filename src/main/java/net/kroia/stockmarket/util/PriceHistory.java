@@ -171,7 +171,8 @@ public class PriceHistory implements ServerSaveable {
 
 
     @Override
-    public void save(CompoundTag tag) {
+    public boolean save(CompoundTag tag) {
+        boolean success = true;
         tag.putIntArray("lowPrice", lowPrice);
         tag.putIntArray("highPrice", highPrice);
         tag.putIntArray("closePrice", closePrice);
@@ -180,23 +181,37 @@ public class PriceHistory implements ServerSaveable {
         ListTag times = new ListTag();
         for (int i = 0; i < maxHistorySize; i++) {
             CompoundTag timeTag = new CompoundTag();
-            timeStamps[i].save(timeTag);
+            success &= timeStamps[i].save(timeTag);
             times.add(timeTag);
         }
         tag.put("timeStamps", times);
+        return success;
     }
 
     @Override
-    public void load(CompoundTag tag) {
-        int tmpLowPrice[] = tag.getIntArray("lowPrice");
-        int tmpHighPrice[] = tag.getIntArray("highPrice");
-        int tmpClosePrice[] = tag.getIntArray("closePrice");
+    public boolean load(CompoundTag tag) {
+        if(tag == null)
+            return false;
+
+        if(!tag.contains("lowPrice") ||
+           !tag.contains("highPrice") ||
+           !tag.contains("closePrice") ||
+           !tag.contains("oldestClosePrice") ||
+           !tag.contains("timeStamps"))
+            return false;
+        boolean success = true;
+
+        int[] tmpLowPrice = tag.getIntArray("lowPrice");
+        int[] tmpHighPrice = tag.getIntArray("highPrice");
+        int[] tmpClosePrice = tag.getIntArray("closePrice");
         oldestClosePrice = tag.getInt("oldestClosePrice");
-        Timestamp tmpTimeStamps[] = new Timestamp[maxHistorySize];
+        Timestamp[] tmpTimeStamps = new Timestamp[maxHistorySize];
         ListTag times = tag.getList("timeStamps", 10);
         for (int i = 0; i < tmpLowPrice.length; i++) {
             CompoundTag timeTag = times.getCompound(i);
-            tmpTimeStamps[i] = new Timestamp(timeTag);
+            tmpTimeStamps[i] = Timestamp.loadFromTag(timeTag);
+            if(tmpTimeStamps[i] == null)
+                success = false;
         }
 
         if(tmpLowPrice.length != maxHistorySize)
@@ -233,5 +248,6 @@ public class PriceHistory implements ServerSaveable {
             highPrice = tmpHighPrice;
             closePrice = tmpClosePrice;
         }
+        return success;
     }
 }

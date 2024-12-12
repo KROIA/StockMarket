@@ -65,15 +65,21 @@ public class ServerVolatilityBot extends ServerTradingBot {
 
 
     @Override
-    public void save(CompoundTag tag) {
-        super.save(tag);
+    public boolean save(CompoundTag tag) {
+        boolean success = super.save(tag);
         tag.putInt("volatility", volatility);
+        return success;
     }
 
     @Override
-    public void load(CompoundTag tag) {
-        super.load(tag);
+    public boolean load(CompoundTag tag) {
+        if(tag == null)
+            return false;
+        boolean success = super.load(tag);
+        if(!tag.contains("volatility"))
+            return false;
         volatility = tag.getInt("volatility");
+        return success;
     }
 
 }

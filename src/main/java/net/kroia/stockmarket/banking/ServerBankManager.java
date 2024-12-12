@@ -118,14 +118,23 @@ public class ServerBankManager implements ServerSaveable {
         return user.getMoneyBank();
     }
 
+    public static long getMoneyCirculation()
+    {
+        long total = 0;
+        for (Map.Entry<UUID, BankUser> entry : userMap.entrySet()) {
+            total += entry.getValue().getTotalBalance();
+        }
+        return total;
+    }
 
-    public static void saveToTag(CompoundTag tag)
+
+    public static boolean saveToTag(CompoundTag tag)
     {
         ServerBankManager tmp = new ServerBankManager();
-        tmp.save(tag);
+        return tmp.save(tag);
     }
     @Override
-    public void save(CompoundTag tag) {
+    public boolean save(CompoundTag tag) {
         if(botUser != null)
             tag.putUUID("botUUID", botUser.getOwnerUUID());
         ListTag bankElements = new ListTag();
@@ -135,15 +144,17 @@ public class ServerBankManager implements ServerSaveable {
             bankElements.add(bankTag);
         }
         tag.put("users", bankElements);
+        return true;
     }
 
-    public static void loadFromTag(CompoundTag tag)
+    public static boolean loadFromTag(CompoundTag tag)
     {
         ServerBankManager tmp = new ServerBankManager();
-        tmp.load(tag);
+        return tmp.load(tag);
     }
     @Override
-    public void load(CompoundTag tag) {
+    public boolean load(CompoundTag tag) {
+        boolean success = true;
         UUID botUUID = null;
         if(tag.contains("botUUID"))
         {
@@ -154,17 +165,23 @@ public class ServerBankManager implements ServerSaveable {
         userMap.clear();
         for (int i = 0; i < bankElements.size(); i++) {
             CompoundTag bankTag = bankElements.getCompound(i);
-            BankUser user = new BankUser(bankTag);
-            userMap.put(user.getOwnerUUID(), user);
-            if(user.getOwnerUUID().compareTo(botUUID) == 0)
+            BankUser user = BankUser.loadFromTag(bankTag);
+            if(user == null)
             {
-                if(botUser != null)
-                    ServerPlayerList.removePlayer(botUser.getOwnerUUID());
-                botUser = user;
-                ServerPlayerList.addPlayer(botUUID, BOT_USER_NAME);
-
+                success = false;
+                continue;
+            }
+            userMap.put(user.getOwnerUUID(), user);
+            if(botUUID != null) {
+                if (user.getOwnerUUID().compareTo(botUUID) == 0) {
+                    if (botUser != null)
+                        ServerPlayerList.removePlayer(botUser.getOwnerUUID());
+                    botUser = user;
+                    ServerPlayerList.addPlayer(botUUID, BOT_USER_NAME);
+                }
             }
         }
+        return success;
     }
 
     /*public static void handlePacket(ServerPlayer sender, RequestBankDataPacket packet)

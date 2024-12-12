@@ -13,14 +13,19 @@ import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.market.server.ServerTradeItem;
 import net.kroia.stockmarket.menu.ModMenus;
 import net.kroia.stockmarket.networking.ModMessages;
+import net.kroia.stockmarket.screen.custom.BankTerminalScreen;
 import net.kroia.stockmarket.util.ServerPlayerList;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.MenuScreens;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.GameProfileCache;
 import net.minecraft.server.players.PlayerList;
 import net.minecraft.world.item.CreativeModeTabs;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
 import net.minecraftforge.common.MinecraftForge;
@@ -34,6 +39,7 @@ import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.server.ServerLifecycleHooks;
 import org.slf4j.Logger;
 
@@ -206,6 +212,8 @@ public class StockMarketMod
             // Some client setup code
             //LOGGER.info("HELLO FROM CLIENT SETUP");
             //LOGGER.info("MINECRAFT NAME >> {}", Minecraft.getInstance().getUser().getName());
+            MenuScreens.register(ModMenus.BANK_TERMINAL_CONTAINER_MENU.get(), BankTerminalScreen::new);
+
 
         }
     }
@@ -260,6 +268,17 @@ public class StockMarketMod
         player.sendSystemMessage(
                 net.minecraft.network.chat.Component.literal(message)
         );
+    }
+
+    public static ItemStack createItemStackFromId(String itemId, int amount) {
+        ResourceLocation resourceLocation = new ResourceLocation(itemId); // "minecraft:diamond"
+        Item item = ForgeRegistries.ITEMS.getValue(resourceLocation); // Get the item from the registry
+
+        if (item != null) {
+            return new ItemStack(item, amount); // Create an ItemStack with the specified amount
+        }
+
+        return ItemStack.EMPTY; // Return an empty stack if the item is not found
     }
 
 }

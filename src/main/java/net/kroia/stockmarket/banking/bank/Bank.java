@@ -37,7 +37,7 @@ public class Bank implements ServerSaveable {
         load(tag);
     }
 
-    public static Bank construct(BankUser owner, CompoundTag tag) {
+    public static Bank loadFromTag(BankUser owner, CompoundTag tag) {
         BankType type = BankType.valueOf(tag.getString("BankType"));
         switch(type)
         {
@@ -60,6 +60,10 @@ public class Bank implements ServerSaveable {
     }
     public long getLockedBalance() {
         return lockedBalance;
+    }
+
+    public long getTotalBalance() {
+        return balance + lockedBalance;
     }
     public String getItemID() {
         return itemID;
@@ -192,17 +196,25 @@ public class Bank implements ServerSaveable {
     }
 
     @Override
-    public void save(CompoundTag tag) {
+    public boolean save(CompoundTag tag) {
         tag.putString("itemID", itemID);
         tag.putLong("balance", balance);
         tag.putLong("lockedBalance", lockedBalance);
+        return true;
     }
 
     @Override
-    public void load(CompoundTag tag) {
+    public boolean load(CompoundTag tag) {
+        if(tag == null)
+            return false;
+        if(     !tag.contains("itemID") ||
+                !tag.contains("balance") ||
+                !tag.contains("lockedBalance"))
+            return false;
         itemID = tag.getString("itemID");
         setBalanceInternal(tag.getLong("balance"));
         lockedBalance = tag.getLong("lockedBalance");
+        return balance >= 0 && lockedBalance >= 0 && !itemID.isEmpty();
     }
 
     private void addBalanceInternal(long balance) {

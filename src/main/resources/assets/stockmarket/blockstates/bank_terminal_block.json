@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "stockmarket:block/bank_terminal_block" },
+    "facing=east":  { "model": "stockmarket:block/bank_terminal_block", "y": 90 },
+    "facing=south": { "model": "stockmarket:block/bank_terminal_block", "y": 180 },
+    "facing=west":  { "model": "stockmarket:block/bank_terminal_block", "y": 270 }
+  }
+}

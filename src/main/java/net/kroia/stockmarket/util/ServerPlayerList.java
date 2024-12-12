@@ -81,14 +81,19 @@ public class ServerPlayerList implements ServerSaveable {
         return getPlayer(getPlayerUUID(name));
     }
 
-    public static void saveToTag(CompoundTag tag)
+    public static boolean saveToTag(CompoundTag tag)
     {
         ServerPlayerList playerList = new ServerPlayerList();
-        playerList.save(tag);
+        return playerList.save(tag);
+    }
+    public static boolean loadFromTag(CompoundTag tag)
+    {
+        ServerPlayerList playerList = new ServerPlayerList();
+        return playerList.load(tag);
     }
 
     @Override
-    public void save(CompoundTag tag) {
+    public boolean save(CompoundTag tag) {
         ListTag users = new ListTag();
         for (Map.Entry<UUID, String> entry : uuidToNameMap.entrySet()) {
             CompoundTag bankTag = new CompoundTag();
@@ -97,23 +102,27 @@ public class ServerPlayerList implements ServerSaveable {
             users.add(bankTag);
         }
         tag.put("users", users);
-    }
-
-    public static void loadFromTag(CompoundTag tag)
-    {
-        ServerPlayerList playerList = new ServerPlayerList();
-        playerList.load(tag);
+        return true;
     }
 
     @Override
-    public void load(CompoundTag tag) {
+    public boolean load(CompoundTag tag) {
+        if(tag == null)
+            return false;
+        if(!tag.contains("users"))
+            return false;
+        boolean success = true;
         ListTag users = tag.getList("users", 10);
         for (int i = 0; i < users.size(); i++) {
             CompoundTag userTag = users.getCompound(i);
+            if(!userTag.contains("uuid") || !userTag.contains("name")){
+                success = false;
+                continue;
+            }
             UUID uuid = userTag.getUUID("uuid");
             String name = userTag.getString("name");
             addPlayer(uuid, name);
         }
-
+        return success;
     }
 }

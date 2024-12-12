@@ -207,7 +207,8 @@ public class TradeScreen extends Screen {
         selectItemButton = addRenderableWidget(Button.builder(SELECT_ITEM_BUTTON_TEXT,
                 this::onSelectItemButtonPressed).bounds(selectItemButtonRect.x, selectItemButtonRect.y, selectItemButtonRect.width, selectItemButtonRect.height).build());
 
-        this.amountBox = new EditBox(this.font, amountEditRect.x, amountEditRect.y, amountEditRect.width - 2, amountEditRect.height, Component.literal("Enter an integer"));
+        int editBoxPadding = 3;
+        this.amountBox = new EditBox(this.font, amountEditRect.x+editBoxPadding, amountEditRect.y+editBoxPadding, amountEditRect.width - editBoxPadding*2, amountEditRect.height-editBoxPadding*2, Component.literal("Enter an integer"));
         this.amountBox.setMaxLength(10); // Max length of input
         this.amountBox.setFilter(input -> input.matches("\\d*")); // Allow only digits
         this.addRenderableWidget(this.amountBox);
@@ -215,7 +216,7 @@ public class TradeScreen extends Screen {
 
         // Add the EditBox to the screen
 
-        this.priceBox = new EditBox(this.font, limitPriceEditRect.x, limitPriceEditRect.y, limitPriceEditRect.width - 2, limitPriceEditRect.height, Component.literal("Enter an integer"));
+        this.priceBox = new EditBox(this.font, limitPriceEditRect.x+editBoxPadding, limitPriceEditRect.y+editBoxPadding, limitPriceEditRect.width - editBoxPadding*2, limitPriceEditRect.height-editBoxPadding*2, Component.literal("Enter an integer"));
         this.priceBox.setMaxLength(10); // Max length of input
         this.priceBox.setFilter(input -> input.matches("\\d*")); // Allow only digits
         this.addRenderableWidget(this.priceBox);
@@ -259,6 +260,7 @@ public class TradeScreen extends Screen {
             if(currentTickCount - lastTickCount > 1000)
             {
                 lastTickCount = currentTickCount;
+                //StockMarketMod.LOGGER.info("Requesting bank data");
                 RequestBankDataPacket.sendRequest();
             }
         }

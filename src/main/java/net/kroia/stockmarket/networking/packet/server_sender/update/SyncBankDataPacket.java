@@ -91,6 +91,9 @@ public class SyncBankDataPacket {
         return bankData.containsKey(itemID);
     }
 
+    public HashMap<String, BankData> getBankData() {
+        return bankData;
+    }
 
     public static void sendPacket(ServerPlayer player)
     {

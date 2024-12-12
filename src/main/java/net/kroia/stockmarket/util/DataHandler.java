@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.util;
 
+import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.banking.ServerBankManager;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.minecraft.nbt.CompoundTag;
@@ -7,6 +8,8 @@ import net.minecraft.nbt.NbtIo;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 
 public class DataHandler {
     private static final String FOLDER_NAME = "stockmarket";
@@ -16,6 +19,14 @@ public class DataHandler {
     private static final String BANK_DATA_FILE_NAME = "Bank_data.dat";
     private static final boolean COMPRESSED = false;
     private static File saveFolder;
+
+    private final ScheduledExecutorService saveScheduler = Executors.newSingleThreadScheduledExecutor();
+
+
+    public DataHandler()
+    {
+        saveScheduler.scheduleAtFixedRate(DataHandler::saveAll, 0, 1, java.util.concurrent.TimeUnit.MINUTES);
+    }
 
     public static void setSaveFolder(File folder) {
         File rootFolder = new File(folder, FOLDER_NAME);
@@ -29,73 +40,95 @@ public class DataHandler {
         return saveFolder;
     }
 
-    public static void saveAll()
+    public static boolean saveAll()
     {
-        save_player();
-        save_bank();
-        save_market();
+        StockMarketMod.LOGGER.info("Saving StockMarket Mod data...");
+        boolean success = true;
+        success &= save_player();
+        success &= save_bank();
+        success &= save_market();
+
+        if(success)
+            StockMarketMod.LOGGER.info("StockMarket Mod data saved successfully.");
+        else
+            StockMarketMod.LOGGER.error("Failed to save StockMarket Mod data.");
+        return success;
     }
 
-    public static void loadAll()
+    public static boolean loadAll()
     {
-        load_player();
-        load_bank();
-        load_market();
+        StockMarketMod.LOGGER.info("Loading StockMarket Mod data...");
+        boolean success = true;
+        success &= load_player();
+        success &= load_bank();
+        success &= load_market();
+
+        if(success)
+            StockMarketMod.LOGGER.info("StockMarket Mod data loaded successfully.");
+        else
+            StockMarketMod.LOGGER.error("Failed to load StockMarket Mod data.");
+        return success;
     }
 
-    public static void save_player()
+    public static boolean save_player()
     {
         CompoundTag data = new CompoundTag();
         ServerPlayerList.saveToTag(data);
-        saveDataCompound(PLAYER_DATA_FILE_NAME, data);
+        return saveDataCompound(PLAYER_DATA_FILE_NAME, data);
     }
-    public static void load_player()
+    public static boolean load_player()
     {
         CompoundTag data = readDataCompound(PLAYER_DATA_FILE_NAME);
         if(data != null)
-        {
-            ServerPlayerList.loadFromTag(data);
-        }
+            return ServerPlayerList.loadFromTag(data);
+        return false;
     }
 
-    public static void save_market()
+    public static boolean save_market()
     {
+        boolean success = true;
         CompoundTag data = new CompoundTag();
         ServerMarket market = new ServerMarket();
         CompoundTag marketData = new CompoundTag();
-        market.save(marketData);
+        success &= market.save(marketData);
         data.put("market", marketData);
         saveDataCompound(MARKET_DATA_FILE_NAME, data);
+        return success;
     }
-    public static void load_market()
+    public static boolean load_market()
     {
         CompoundTag data = readDataCompound(MARKET_DATA_FILE_NAME);
-        if(data != null)
-        {
+        if(data == null)
+            return false;
             // Load server_sender market
-            ServerMarket market = new ServerMarket();
-            CompoundTag marketData = data.getCompound("market");
-            market.load(marketData);
-        }
+        ServerMarket market = new ServerMarket();
+        if(!data.contains("market"))
+            return false;
+        CompoundTag marketData = data.getCompound("market");
+        return market.load(marketData);
     }
 
-    public static void save_bank()
+    public static boolean save_bank()
     {
+        boolean success = true;
         CompoundTag data = new CompoundTag();
         CompoundTag bankData = new CompoundTag();
-        ServerBankManager.saveToTag(bankData);
+        success = ServerBankManager.saveToTag(bankData);
         data.put("banking", bankData);
         saveDataCompound(BANK_DATA_FILE_NAME, data);
+        return success;
     }
 
-    public static void load_bank()
+    public static boolean load_bank()
     {
         CompoundTag data = readDataCompound(BANK_DATA_FILE_NAME);
-        if(data != null)
-        {
-            CompoundTag bankData = data.getCompound("banking");
-            ServerBankManager.loadFromTag(bankData);
-        }
+        if(data == null)
+            return false;
+        if(!data.contains("banking"))
+            return false;
+
+        CompoundTag bankData = data.getCompound("banking");
+        return ServerBankManager.loadFromTag(bankData);
     }
 
 
@@ -120,7 +153,7 @@ public class DataHandler {
         }
         return null;
     }
-    public static void saveDataCompound(String fileName, CompoundTag data) {
+    public static boolean saveDataCompound(String fileName, CompoundTag data) {
         File file = new File(saveFolder, fileName);
         try {
             if (COMPRESSED)
@@ -129,6 +162,8 @@ public class DataHandler {
                 NbtIo.write(data, file);
         } catch (IOException e) {
             e.printStackTrace();
+            return false;
         }
+        return true;
     }
 }

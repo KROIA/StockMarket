@@ -23,11 +23,17 @@ public class ServerTradeItem implements ServerSaveable {
         this.marketManager = new MarketManager(this, startPrice, priceHistory);
     }
 
-    public ServerTradeItem(CompoundTag tag)
+    private ServerTradeItem()
     {
         this.priceHistory = new PriceHistory("", 0);
         this.marketManager = new MarketManager(this, 0, priceHistory);
-        load(tag);
+    }
+    public static ServerTradeItem loadFromTag(CompoundTag tag)
+    {
+        ServerTradeItem item = new ServerTradeItem();
+        if(item.load(tag))
+            return item;
+        return null;
     }
 
     public String getItemID()
@@ -121,30 +127,35 @@ public class ServerTradeItem implements ServerSaveable {
     }
 
     @Override
-    public void save(CompoundTag tag) {
+    public boolean save(CompoundTag tag) {
+        boolean success = true;
         tag.putString("itemID", itemID);
         CompoundTag matchingEngineTag = new CompoundTag();
-        marketManager.save(matchingEngineTag);
+        success &= marketManager.save(matchingEngineTag);
         tag.put("matchingEngine", matchingEngineTag);
 
         CompoundTag priceHistoryTag = new CompoundTag();
-        priceHistory.save(priceHistoryTag);
+        success &= priceHistory.save(priceHistoryTag);
         tag.put("priceHistory", priceHistoryTag);
+        return success;
     }
 
     @Override
-    public void load(CompoundTag tag) {
+    public boolean load(CompoundTag tag) {
+        if(tag == null)
+            return false;
+        if(     !tag.contains("itemID") ||
+                !tag.contains("matchingEngine") ||
+                !tag.contains("priceHistory"))
+            return false;
+
         itemID = tag.getString("itemID");
         marketManager.load(tag.getCompound("matchingEngine"));
 
         priceHistory.load(tag.getCompound("priceHistory"));
-
-
-
         marketManager.setItemID(itemID);
         priceHistory.setItemID(itemID);
 
-
-
+        return !itemID.isEmpty();
     }
 }

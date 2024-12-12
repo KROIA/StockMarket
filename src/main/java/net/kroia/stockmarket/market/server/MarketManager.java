@@ -39,7 +39,7 @@ public class MarketManager implements ServerSaveable {
         this.itemID = tradeItem.getItemID();
         matchingEngine = new MatchingEngine(initialPrice, history);
         tradingBot = new ServerTradingBot(this, matchingEngine);
-        volatilityBot = new ServerVolatilityBot(this, matchingEngine, 10);
+        volatilityBot = new ServerVolatilityBot(this, matchingEngine, 1);
         //matchingEngine.setTradingBot(tradingBot);
         priceHistory = history;
 
@@ -158,37 +158,41 @@ public class MarketManager implements ServerSaveable {
     }
 
     @Override
-    public void save(CompoundTag tag) {
+    public boolean save(CompoundTag tag) {
+        boolean success = true;
         tag.putString("itemID", itemID);
         //tag.putInt("lowPrice", lowPrice);
         //tag.putInt("highPrice", highPrice);
 
         CompoundTag matchingEngineTag = new CompoundTag();
-        matchingEngine.save(matchingEngineTag);
+        success &= matchingEngine.save(matchingEngineTag);
         tag.put("matchingEngine", matchingEngineTag);
 
 
         if(tradingBot != null)
         {
             CompoundTag tradingBotTag = new CompoundTag();
-            tradingBot.save(tradingBotTag);
+            success &= tradingBot.save(tradingBotTag);
             tag.put("tradingBot", tradingBotTag);
         }
         if(volatilityBot != null)
         {
             CompoundTag volatilityBotTag = new CompoundTag();
-            volatilityBot.save(volatilityBotTag);
+            success &= volatilityBot.save(volatilityBotTag);
             tag.put("volatilityBot", volatilityBotTag);
         }
 
-
+        return success;
     }
 
     @Override
-    public void load(CompoundTag tag) {
+    public boolean load(CompoundTag tag) {
+        if(tag == null)
+            return false;
+        if(     !tag.contains("itemID") ||
+                !tag.contains("matchingEngine"))
+            return false;
         itemID = tag.getString("itemID");
-        //lowPrice = tag.getInt("lowPrice");
-        //highPrice = tag.getInt("highPrice");
 
         CompoundTag matchingEngineTag = tag.getCompound("matchingEngine");
         matchingEngine.load(matchingEngineTag);
@@ -204,5 +208,7 @@ public class MarketManager implements ServerSaveable {
             CompoundTag volatilityBotTag = tag.getCompound("volatilityBot");
             volatilityBot.load(volatilityBotTag);
         }
+
+        return !itemID.isEmpty();
     }
 }

@@ -1,0 +1,12 @@
+{
+  "parent": "minecraft:block/cube_all",
+  "textures": {
+    "west":     "stockmarket:block/bank_terminal_block",
+    "east":     "stockmarket:block/bank_terminal_block",
+    "north":    "stockmarket:block/bank_terminal_block_front",
+    "south":    "stockmarket:block/bank_terminal_block",
+    "down":     "stockmarket:block/bank_terminal_block",
+    "up":       "stockmarket:block/bank_terminal_block",
+    "particle": "stockmarket:block/bank_terminal_block"
+  }
+}

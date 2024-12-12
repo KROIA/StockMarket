@@ -4,6 +4,6 @@ import net.minecraft.nbt.CompoundTag;
 
 public interface ServerSaveable {
 
-    void save(CompoundTag tag);
-    void load(CompoundTag tag);
+    boolean save(CompoundTag tag);
+    boolean load(CompoundTag tag);
 }

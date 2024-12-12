@@ -395,20 +395,21 @@ public class MatchingEngine implements ServerSaveable {
 
 
     @Override
-    public void save(CompoundTag tag) {
+    public boolean save(CompoundTag tag) {
+        boolean success = true;
         ListTag buyOrdersList = new ListTag();
         ListTag sellOrdersList = new ListTag();
         for(LimitOrder order : limitBuyOrders)
         {
             CompoundTag orderTag = new CompoundTag();
-            order.save(orderTag);
+            success &= order.save(orderTag);
             buyOrdersList.add(orderTag);
         }
 
         for(LimitOrder order : limitSellOrders)
         {
             CompoundTag orderTag = new CompoundTag();
-            order.save(orderTag);
+            success &= order.save(orderTag);
             sellOrdersList.add(orderTag);
         }
 
@@ -416,10 +417,19 @@ public class MatchingEngine implements ServerSaveable {
         tag.putInt("trade_volume", tradeVolume);
         tag.put("buy_orders", buyOrdersList);
         tag.put("sell_orders", sellOrdersList);
+        return success;
     }
 
     @Override
-    public void load(CompoundTag tag) {
+    public boolean load(CompoundTag tag) {
+        if(tag == null)
+            return false;
+        if(     !tag.contains("price") ||
+                !tag.contains("trade_volume") ||
+                !tag.contains("buy_orders") ||
+                !tag.contains("sell_orders"))
+            return false;
+        boolean success = true;
         price = tag.getInt("price");
         tradeVolume = tag.getInt("trade_volume");
         ListTag buyOrdersList = tag.getList("buy_orders", 10);
@@ -427,16 +437,22 @@ public class MatchingEngine implements ServerSaveable {
         for(int i = 0; i < buyOrdersList.size(); i++)
         {
             CompoundTag orderTag = buyOrdersList.getCompound(i);
-            LimitOrder order = new LimitOrder(orderTag);
-            limitBuyOrders.add(order);
+            LimitOrder order = LimitOrder.loadFromTag(orderTag);
+            if(order == null)
+                success = false;
+            else
+                limitBuyOrders.add(order);
         }
 
         for(int i = 0; i < sellOrdersList.size(); i++)
         {
             CompoundTag orderTag = sellOrdersList.getCompound(i);
-            LimitOrder order = new LimitOrder(orderTag);
-            limitSellOrders.add(order);
+            LimitOrder order = LimitOrder.loadFromTag(orderTag);
+            if(order == null)
+                success = false;
+            else
+                limitSellOrders.add(order);
         }
-
+        return success;
     }
 }

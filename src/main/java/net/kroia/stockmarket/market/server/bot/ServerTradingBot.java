@@ -27,6 +27,9 @@ public class ServerTradingBot implements ServerSaveable {
 
     protected final int maxOrderCount = 100;
 
+    protected double volumeScale = 100.0;
+    protected double volumeSpread = 10;
+
     protected ArrayList<LimitOrder> buyOrders = new ArrayList<>();
     protected ArrayList<LimitOrder> sellOrders = new ArrayList<>();
 
@@ -39,6 +42,19 @@ public class ServerTradingBot implements ServerSaveable {
     {
         clearOrders();
         createOrders();
+    }
+
+    public void setVolumeScale(double volumeScale) {
+        this.volumeScale = volumeScale;
+    }
+    public double getVolumeScale() {
+        return volumeScale;
+    }
+    public void setVolumeSpread(double volumeSpread) {
+        this.volumeSpread = volumeSpread;
+    }
+    public double getVolumeSpread() {
+        return volumeSpread;
     }
 
     public UUID getUUID()
@@ -127,11 +143,10 @@ public class ServerTradingBot implements ServerSaveable {
     protected int getVolumeDistribution(int x)
     {
         double fX = (double)Math.abs(x);
-        double scale = 100;
-        double exp = Math.exp(-fX*0.05);
+        double exp = Math.exp(-fX*1.f/volumeSpread);
         double random = Math.random()+1;
 
-        double volume = (scale*random) * (1 - exp) * exp;
+        double volume = (volumeScale*random) * (1 - exp) * exp;
 
         if(x < 0)
             return (int)-volume;
@@ -141,12 +156,24 @@ public class ServerTradingBot implements ServerSaveable {
     }
 
     @Override
-    public void save(CompoundTag tag) {
-
+    public boolean save(CompoundTag tag) {
+        tag.putDouble("volumeScale", volumeScale);
+        tag.putDouble("volumeSpread", volumeSpread);
+        return true;
     }
 
     @Override
-    public void load(CompoundTag tag) {
+    public boolean load(CompoundTag tag) {
+
+        if(tag == null)
+            return false;
+        if(!tag.contains("volumeScale") ||
+           !tag.contains("volumeSpread"))
+            return false;
+        volumeScale = tag.getDouble("volumeScale");
+        volumeSpread = tag.getDouble("volumeSpread");
+
+
         ArrayList<Order> orders = new ArrayList<>();
         matchingEngine.getOrders(getUUID().toString(), orders);
         for(Order order : orders)
@@ -164,5 +191,6 @@ public class ServerTradingBot implements ServerSaveable {
                 }
             }
         }
+        return true;
     }
 }

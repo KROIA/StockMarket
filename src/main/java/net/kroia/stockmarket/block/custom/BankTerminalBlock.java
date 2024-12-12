@@ -2,14 +2,18 @@ package net.kroia.stockmarket.block.custom;
 
 import net.kroia.stockmarket.ClientHooks;
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.entity.ModEntities;
 import net.kroia.stockmarket.entity.custom.BankTerminalBlockEntity;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
+import net.kroia.stockmarket.networking.packet.server_sender.update.SyncBankDataPacket;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.MenuProvider;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -25,12 +29,94 @@ import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.DirectionProperty;
 import net.minecraft.world.phys.BlockHitResult;
+import net.minecraftforge.items.ItemStackHandler;
+import net.minecraftforge.network.NetworkHooks;
 import org.jetbrains.annotations.Nullable;
 
 public class BankTerminalBlock extends Block implements EntityBlock {
 
     public static final String NAME = "bank_terminal_block";
+    public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
 
+    public BankTerminalBlock()
+    {
+        super(BlockBehaviour.Properties.copy(Blocks.IRON_BLOCK));
+        this.registerDefaultState(this.defaultBlockState().setValue(FACING, Direction.NORTH)); // Default facing
+
+    }
+    public BankTerminalBlock(Properties properties) {
+        super(properties);
+    }
+
+    @Nullable
+    @Override
+    public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
+        return ModEntities.BANK_TERMINAL_BLOCK_ENTITY.get().create(pos, state);
+    }
+
+    public void onPlace(BlockState state, Level level, BlockPos pos, BlockState oldState, boolean isMoving) {
+        super.onPlace(state, level, pos, oldState, isMoving);
+        if (!level.isClientSide) {
+            BlockEntity blockEntity = level.getBlockEntity(pos);
+            StockMarketMod.LOGGER.info("placing block");
+            if (blockEntity instanceof BankTerminalBlockEntity) {
+                StockMarketMod.LOGGER.info("Entity is BankTerminalBlock");
+                BankTerminalBlockEntity stockMarketBlock = (BankTerminalBlockEntity) blockEntity;
+                // Init stockMarketBlock entity if needed
+            }
+        }
+    }
+
+    @Override
+    public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hitResult) {
+        BlockEntity be = level.getBlockEntity(pos);
+        if (!(be instanceof BankTerminalBlockEntity blockEntity))
+            return InteractionResult.PASS;
+
+        if (level.isClientSide())
+            return InteractionResult.SUCCESS;
+
+        // open screen
+        if (player instanceof ServerPlayer sPlayer) {
+            MenuProvider menuProvider = blockEntity.getMenuProvider();
+            //sPlayer.openMenu(menuProvider);
+            // Open the menu
+            SyncBankDataPacket.sendPacket(sPlayer);
+            NetworkHooks.openScreen(sPlayer, menuProvider, pos);
+        }
+
+        return InteractionResult.CONSUME;
+    }
+
+    @Override
+    public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean isMoving) {
+        if (!level.isClientSide()) {
+            BlockEntity be = level.getBlockEntity(pos);
+            if (be instanceof BankTerminalBlockEntity blockEntity) {
+                ItemStackHandler inventory = blockEntity.getInventory();
+                for (int index = 0; index < inventory.getSlots(); index++) {
+                    ItemStack stack = inventory.getStackInSlot(index);
+                    var entity = new ItemEntity(level, pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D, stack);
+                    level.addFreshEntity(entity);
+                }
+            }
+        }
+
+        super.onRemove(state, level, pos, newState, isMoving);
+    }
+
+    @Override
+    protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
+        builder.add(FACING);
+    }
+
+    @Override
+    public BlockState getStateForPlacement(BlockPlaceContext context) {
+        return this.defaultBlockState().setValue(FACING, context.getHorizontalDirection().getOpposite());
+    }
+
+
+    /*
     public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
 
     public BankTerminalBlock()
@@ -127,9 +213,23 @@ public class BankTerminalBlock extends Block implements EntityBlock {
             level.removeBlockEntity(pos);
         }
     }
+
     @Override
     public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
-        if (!level.isClientSide && player instanceof ServerPlayer)
+        if (!level.isClientSide) { // Ensure this is only run on the server
+            BlockEntity blockEntity = level.getBlockEntity(pos);
+            if (blockEntity instanceof BankTerminalBlockEntity bankTerminalBlockEntity) {
+                ServerPlayer serverPlayer = (ServerPlayer) player;
+                //player.openMenu((BankTerminalBlockEntity) blockEntity); // Open the menu directly
+                serverPlayer.openMenu(bankTerminalBlockEntity);
+            } else {
+                throw new IllegalStateException("Missing BlockEntity at position: " + pos);
+            }
+        }
+        return InteractionResult.SUCCESS; // Indicate that the interaction happened
+*/
+
+        /*if (!level.isClientSide && player instanceof ServerPlayer)
         {
             StockMarketMod.LOGGER.info("server_sender use BankTerminalBlock");
             //SyncStockMarketBlockEntityPacket.sendPacketToClient(pos, (StockMarketBlockEntity) level.getBlockEntity(pos), (ServerPlayer) player);
@@ -148,5 +248,5 @@ public class BankTerminalBlock extends Block implements EntityBlock {
             return ClientHooks.openBankTerminalBlockScreen(entity, pos, playerInventory);
         }
         return InteractionResult.SUCCESS;  // Indicate the interaction was successful
-    }
+    }*/
 }

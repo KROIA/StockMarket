@@ -39,6 +39,21 @@ public class ServerMarket implements ServerSaveable
         addTradeItemIfNotExists("minecraft:diamond", 50);
         addTradeItemIfNotExists("minecraft:iron_ingot", 10);
         addTradeItemIfNotExists("minecraft:gold_ingot", 25);
+        addTradeItemIfNotExists("minecraft:emerald", 100);
+        addTradeItemIfNotExists("minecraft:coal", 5);
+        addTradeItemIfNotExists("minecraft:quartz", 5);
+        addTradeItemIfNotExists("minecraft:obsidian", 10);
+        addTradeItemIfNotExists("minecraft:glowstone", 10);
+        addTradeItemIfNotExists("minecraft:blaze_rod", 20);
+        addTradeItemIfNotExists("minecraft:ender_pearl", 50);
+        addTradeItemIfNotExists("minecraft:ghast_tear", 100);
+        addTradeItemIfNotExists("minecraft:shulker_shell", 200);
+        addTradeItemIfNotExists("minecraft:netherite_ingot", 500);
+        addTradeItemIfNotExists("minecraft:ancient_debris", 1000);
+        addTradeItemIfNotExists("minecraft:elytra", 5000);
+        addTradeItemIfNotExists("minecraft:dragon_egg", 10000);
+        addTradeItemIfNotExists("minecraft:enchanted_golden_apple", 1000);
+        addTradeItemIfNotExists("minecraft:totem_of_undying", 1000);
 
     }
 
@@ -300,23 +315,27 @@ public class ServerMarket implements ServerSaveable
     }*/
 
     @Override
-    public void save(CompoundTag tag) {
+    public boolean save(CompoundTag tag) {
+        boolean success = true;
         tag.putInt("shiftPriceHistoryInterval", shiftPriceHistoryInterval);
 
         ListTag tradeItems = new ListTag();
         for(ServerTradeItem tradeItem : ServerMarket.tradeItems.values())
         {
             CompoundTag tradeItemTag = new CompoundTag();
-            tradeItem.save(tradeItemTag);
+            success &= tradeItem.save(tradeItemTag);
             tradeItems.add(tradeItemTag);
         }
         tag.put("tradeItems", tradeItems);
-
+        return success;
     }
 
     @Override
-    public void load(CompoundTag tag) {
+    public boolean load(CompoundTag tag) {
+        boolean loadSuccess = true;
         try {
+            if(!tag.contains("shiftPriceHistoryInterval") || !tag.contains("tradeItems"))
+                return false;
             shiftPriceHistoryInterval = tag.getInt("shiftPriceHistoryInterval");
 
             ListTag tradeItems = tag.getList("tradeItems", 10);
@@ -324,13 +343,20 @@ public class ServerMarket implements ServerSaveable
             for(int i = 0; i < tradeItems.size(); i++)
             {
                 CompoundTag tradeItemTag = tradeItems.getCompound(i);
-                ServerTradeItem tradeItem = new ServerTradeItem(tradeItemTag);
+                ServerTradeItem tradeItem = ServerTradeItem.loadFromTag(tradeItemTag);
+                if(tradeItem == null)
+                {
+                    loadSuccess = false;
+                    continue;
+                }
                 tradeItemsMap.put(tradeItem.getItemID(), tradeItem);
             }
             ServerMarket.tradeItems.clear();
             ServerMarket.tradeItems.putAll(tradeItemsMap);
         } catch (Exception e) {
             StockMarketMod.LOGGER.error("[SERVER] Error loading shiftPriceHistoryInterval from NBT");
+            return false;
         }
+        return loadSuccess;
     }
 }

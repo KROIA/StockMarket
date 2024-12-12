@@ -3,6 +3,7 @@ package net.kroia.stockmarket.networking;
 
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.networking.packet.client_sender.request.*;
+import net.kroia.stockmarket.networking.packet.client_sender.update.entity.UpdateBankTerminalBlockEntityPacket;
 import net.kroia.stockmarket.networking.packet.client_sender.update.entity.UpdateStockMarketBlockEntityPacket;
 import net.kroia.stockmarket.networking.packet.client_sender.update.UpdateSubscribeMarketEventsPacket;
 import net.kroia.stockmarket.networking.packet.server_sender.update.*;
@@ -79,6 +80,12 @@ public class ModMessages {
                 .decoder(RequestBankDataPacket::new)
                 .encoder(RequestBankDataPacket::toBytes)
                 .consumerMainThread(RequestBankDataPacket::handle)
+                .add();
+
+        net.messageBuilder(UpdateBankTerminalBlockEntityPacket.class, id(), NetworkDirection.PLAY_TO_SERVER)
+                .decoder(UpdateBankTerminalBlockEntityPacket::new)
+                .encoder(UpdateBankTerminalBlockEntityPacket::toBytes)
+                .consumerMainThread(UpdateBankTerminalBlockEntityPacket::handle)
                 .add();
 
         net.messageBuilder(SyncStockMarketBlockEntityPacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)

@@ -16,14 +16,14 @@ public class MoneyBank extends Bank {
     }
 
     @Override
-    public void save(CompoundTag tag) {
+    public boolean save(CompoundTag tag) {
         tag.putString("BankType", BankType.MONEY.name());
-        super.save(tag);
+        return super.save(tag);
     }
 
     @Override
-    public void load(CompoundTag tag) {
-        super.load(tag);
+    public boolean load(CompoundTag tag) {
+        return super.load(tag);
     }
 
 

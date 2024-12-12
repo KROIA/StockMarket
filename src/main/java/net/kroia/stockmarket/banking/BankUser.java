@@ -1,6 +1,5 @@
 package net.kroia.stockmarket.banking;
 
-import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.banking.bank.Bank;
 import net.kroia.stockmarket.banking.bank.ItemBank;
 import net.kroia.stockmarket.banking.bank.MoneyBank;
@@ -21,9 +20,17 @@ public class BankUser implements ServerSaveable {
     public BankUser(UUID userUUID) {
         this.userUUID = userUUID;
     }
-    public BankUser(CompoundTag tag)
+
+    private BankUser()
     {
-        load(tag);
+
+    }
+    public static BankUser loadFromTag(CompoundTag tag)
+    {
+        BankUser user = new BankUser();
+        if(user.load(tag))
+            return user;
+        return null;
     }
 
     public Bank createMoneyBank(long startBalance)
@@ -57,6 +64,23 @@ public class BankUser implements ServerSaveable {
     {
         return bankMap.get(MoneyBank.ITEM_ID);
     }
+    public long getBalance()
+    {
+        Bank bank = getMoneyBank();
+        if(bank != null)
+            return bank.getBalance();
+        return 0;
+    }
+
+    public long getTotalBalance()
+    {
+        long total = 0;
+        for(Bank bank : bankMap.values())
+        {
+            total += bank.getTotalBalance();
+        }
+        return total;
+    }
 
     public HashMap<String, Bank> getBankMap()
     {
@@ -64,7 +88,7 @@ public class BankUser implements ServerSaveable {
     }
 
     @Override
-    public void save(CompoundTag tag) {
+    public boolean save(CompoundTag tag) {
         tag.putUUID("userUUID", userUUID);
 
         ListTag bankElements = new ListTag();
@@ -74,21 +98,25 @@ public class BankUser implements ServerSaveable {
             bankElements.add(bankTag);
         }
         tag.put("bankMap", bankElements);
-
+        return true;
     }
 
     @Override
-    public void load(CompoundTag tag) {
+    public boolean load(CompoundTag tag) {
+        boolean loadSuccess = true;
         userUUID = tag.getUUID("userUUID");
 
         ListTag bankElements = tag.getList("bankMap", 10);
         bankMap.clear();
         for (int i = 0; i < bankElements.size(); i++) {
             CompoundTag bankTag = bankElements.getCompound(i);
-            Bank bank = Bank.construct(this, bankTag);
+            Bank bank = Bank.loadFromTag(this, bankTag);
             if(bank != null)
                 bankMap.put(bank.getItemID(), bank);
+            else
+                loadSuccess = false;
         }
+        return loadSuccess;
     }
 
     public UUID getOwnerUUID() {

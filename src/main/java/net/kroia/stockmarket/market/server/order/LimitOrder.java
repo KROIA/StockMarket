@@ -39,10 +39,16 @@ public class LimitOrder extends Order implements ServerSaveable {
 
         //StockMarketMod.LOGGER.info("LimitOrder created: " + toString());
     }
-    public LimitOrder(CompoundTag loadFromTag)
+    private LimitOrder()
     {
         super();
-        load(loadFromTag);
+    }
+    public static LimitOrder loadFromTag(CompoundTag tag)
+    {
+        LimitOrder order = new LimitOrder();
+        if(order.load(tag))
+            return order;
+        return null;
     }
 
     public LimitOrder(FriendlyByteBuf buf)
@@ -107,7 +113,7 @@ public class LimitOrder extends Order implements ServerSaveable {
 
 
     @Override
-    public void save(CompoundTag tag) {
+    public boolean save(CompoundTag tag) {
         tag.putLong("orderID", orderID);
         tag.putString("itemID", itemID);
         tag.putString("playerUUID", playerUUID);
@@ -119,10 +125,25 @@ public class LimitOrder extends Order implements ServerSaveable {
         tag.putString("status", status.toString());
         tag.putString("invalidReason", invalidReason);
         tag.putBoolean("isBot", isBot);
+        return true;
     }
 
     @Override
-    public void load(CompoundTag tag) {
+    public boolean load(CompoundTag tag) {
+        if(tag == null)
+            return false;
+        if(     !tag.contains("orderID") ||
+                !tag.contains("itemID") ||
+                !tag.contains("playerUUID") ||
+                !tag.contains("price") ||
+                !tag.contains("amount") ||
+                !tag.contains("filledAmount") ||
+                !tag.contains("transferedMoney") ||
+                !tag.contains("averagePrice") ||
+                !tag.contains("status") ||
+                !tag.contains("invalidReason") ||
+                !tag.contains("isBot"))
+            return false;
         orderID = tag.getLong("orderID");
         itemID = tag.getString("itemID");
         playerUUID = tag.getString("playerUUID");
@@ -134,6 +155,7 @@ public class LimitOrder extends Order implements ServerSaveable {
         status = Status.valueOf(tag.getString("status"));
         invalidReason = tag.getString("invalidReason");
         isBot = tag.getBoolean("isBot");
+        return true;
     }
 
 

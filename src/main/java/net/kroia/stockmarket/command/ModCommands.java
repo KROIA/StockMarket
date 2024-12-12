@@ -33,6 +33,7 @@ public class ModCommands {
         // /money add                           - Add money to self
         // /money add <user>                    - Add money to another player
         // /money send <user> <amount>          - Send money to another player
+        // /money circulation                   - Show money circulation of all players + bots
         dispatcher.register(
                 Commands.literal("money")
                         .then(Commands.literal("add")
@@ -82,6 +83,15 @@ public class ModCommands {
                                                 })
                                         )
                                 )
+                        )
+                        .then(Commands.literal("circulation")
+                                .executes(context -> {
+                                    CommandSourceStack source = context.getSource();
+                                    ServerPlayer player = source.getPlayerOrException();
+                                    long circulation = ServerBankManager.getMoneyCirculation();
+                                    player.sendSystemMessage(Component.literal("Circulation: "+MoneyBank.ITEM_ID + circulation));
+                                    return Command.SINGLE_SUCCESS;
+                                })
                         )
                         .executes(context -> {
                             CommandSourceStack source = context.getSource();
