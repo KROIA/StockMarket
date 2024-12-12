@@ -23,6 +23,8 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntityTicker;
+import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
@@ -32,6 +34,9 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraftforge.items.ItemStackHandler;
 import net.minecraftforge.network.NetworkHooks;
 import org.jetbrains.annotations.Nullable;
+
+import java.util.HashMap;
+import java.util.UUID;
 
 public class BankTerminalBlock extends Block implements EntityBlock {
 
@@ -93,11 +98,13 @@ public class BankTerminalBlock extends Block implements EntityBlock {
         if (!level.isClientSide()) {
             BlockEntity be = level.getBlockEntity(pos);
             if (be instanceof BankTerminalBlockEntity blockEntity) {
-                ItemStackHandler inventory = blockEntity.getInventory();
-                for (int index = 0; index < inventory.getSlots(); index++) {
-                    ItemStack stack = inventory.getStackInSlot(index);
-                    var entity = new ItemEntity(level, pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D, stack);
-                    level.addFreshEntity(entity);
+                HashMap<UUID, ItemStackHandler> inventories = blockEntity.getPlayerInventories();
+                for (ItemStackHandler inventory : inventories.values()) {
+                    for (int index = 0; index < inventory.getSlots(); index++) {
+                        ItemStack stack = inventory.getStackInSlot(index);
+                        var entity = new ItemEntity(level, pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D, stack);
+                        level.addFreshEntity(entity);
+                    }
                 }
             }
         }
@@ -115,6 +122,11 @@ public class BankTerminalBlock extends Block implements EntityBlock {
         return this.defaultBlockState().setValue(FACING, context.getHorizontalDirection().getOpposite());
     }
 
+    @Nullable
+    @Override
+    public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
+        return type == ModEntities.BANK_TERMINAL_BLOCK_ENTITY.get() ? BankTerminalBlockEntity::tick : null;
+    }
 
     /*
     public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;

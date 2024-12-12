@@ -25,7 +25,7 @@ public class ServerTradingBot implements ServerSaveable {
     protected MarketManager parent;
     protected MatchingEngine matchingEngine;
 
-    protected final int maxOrderCount = 100;
+    protected final int maxOrderCount = 50;
 
     protected double volumeScale = 100.0;
     protected double volumeSpread = 10;
@@ -103,20 +103,23 @@ public class ServerTradingBot implements ServerSaveable {
             int buyVolume = getAvailableVolume(buyPrice);
             if(buyVolume > 0) {
 
-                LimitOrder buyOrder = LimitOrder.createBotOrder(botUUID, moneyBank, itemBank, itemID, buyVolume, buyPrice);
-                if(buyOrder != null) {
-                    matchingEngine.addOrder(buyOrder);
-                    buyOrders.add(buyOrder);
+                if(moneyBank.getBalance()>buyVolume*buyPrice) {
+                    LimitOrder buyOrder = LimitOrder.createBotOrder(botUUID, moneyBank, itemBank, itemID, buyVolume, buyPrice);
+                    if (buyOrder != null) {
+                        matchingEngine.addOrder(buyOrder);
+                        buyOrders.add(buyOrder);
+                    }
                 }
             }
 
             int sellVolume = getAvailableVolume(sellPrice);
             if(sellVolume < 0) {
-                LimitOrder sellOrder = LimitOrder.createBotOrder(botUUID, moneyBank, itemBank,  itemID, sellVolume, sellPrice);
-                if(sellOrder != null)
-                {
-                    matchingEngine.addOrder(sellOrder);
-                    sellOrders.add(sellOrder);
+                if(itemBank.getBalance() > -sellVolume) {
+                    LimitOrder sellOrder = LimitOrder.createBotOrder(botUUID, moneyBank, itemBank, itemID, sellVolume, sellPrice);
+                    if (sellOrder != null) {
+                        matchingEngine.addOrder(sellOrder);
+                        sellOrders.add(sellOrder);
+                    }
                 }
             }
 

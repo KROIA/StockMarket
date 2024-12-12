@@ -32,7 +32,6 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
         private static final Component RECEIVE_ITEMS_FROM_MARKET_BUTTON_TEXT = Component.translatable("gui." + StockMarketMod.MODID + ".bank_terminal_screen.bank_element.receive_items_from_market_button");
 
         public static final int HEIGHT = 18;
-        public static final int SELECTED_COLOR = 0xAAAAAAAA;
         public static final int textEditWidth = 100;
         private int x;
         private int y;
@@ -40,7 +39,6 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
         private int targetAmount = 0;
         public ItemStack stack;
         public final String itemID;
-       // private boolean toggled = false;
 
         public EditBox amountBox;
         public Button receiveItemsFromMarketButton;
@@ -64,7 +62,6 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
 
             receiveItemsFromMarketButton = Button.builder(RECEIVE_ITEMS_FROM_MARKET_BUTTON_TEXT, this::onReceiveItemsFromMarket)
                     .bounds(x+width-textEditWidth-100, y, 100, HEIGHT).build();
-            //this.amountBox.setValue("0");
         }
 
         public void render(GuiGraphics graphics)
@@ -80,24 +77,7 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
             graphics.drawString(Minecraft.getInstance().font, amountStr, x + HEIGHT+2, y + (HEIGHT - fontHeight)/2, 0xFFFFFF);
 
             amountBox.render(graphics, 0, 0, 0);
-            /*if(toggled)
-            {
-                graphics.fill(x, y, x + width-textEditWidth, y + HEIGHT, SELECTED_COLOR);
-            }*/
         }
-       /* public boolean checkClick(int mouseX, int mouseY)
-        {
-            if(mouseX >= x && mouseX <= x + width-textEditWidth && mouseY >= y && mouseY <= y + HEIGHT)
-            {
-                toggled = !toggled;
-                return true;
-            }
-            return false;
-        }
-        public boolean isToggled()
-        {
-            return toggled;
-        }*/
         public void setY(int y)
         {
             this.y = y;
@@ -213,10 +193,6 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
     @Override
     public void render(GuiGraphics pGuiGraphics, int pMouseX, int pMouseY, float pPartialTick) {
         super.render(pGuiGraphics, pMouseX, pMouseY, pPartialTick);
-
-        /*for (BankElement button : bankElements) {
-            button.render(pGuiGraphics);
-        }*/
 
         // Draw money string
         long money = ClientBankManager.getBalance();

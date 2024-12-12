@@ -14,6 +14,7 @@ import net.minecraft.world.inventory.ContainerLevelAccess;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraftforge.items.ItemStackHandler;
 import net.minecraftforge.items.SlotItemHandler;
 
 public class BankTerminalContainerMenu extends AbstractContainerMenu {
@@ -42,20 +43,18 @@ public class BankTerminalContainerMenu extends AbstractContainerMenu {
 
         createPlayerHotbar(playerInv);
         createPlayerInventory(playerInv);
-        createBlockEntityInventory(be);
+        createBlockEntityInventory(be.getInventory(playerInv.player.getUUID()));
     }
 
-    private void createBlockEntityInventory(BankTerminalBlockEntity be) {
-        be.getOptional().ifPresent(inventory -> {
-            for (int row = 0; row < 3; row++) {
-                for (int column = 0; column < 9; column++) {
-                    addSlot(new SlotItemHandler(inventory,
-                            column + (row * 9),
-                            8 + (column * 18)+POS_X,
-                            18 + (row * 18)+POS_Y));
-                }
+    private void createBlockEntityInventory(ItemStackHandler inventory) {
+        for (int row = 0; row < 3; row++) {
+            for (int column = 0; column < 9; column++) {
+                addSlot(new SlotItemHandler(inventory,
+                        column + (row * 9),
+                        8 + (column * 18)+POS_X,
+                        18 + (row * 18)+POS_Y));
             }
-        });
+        }
     }
 
     private void createPlayerInventory(Inventory playerInv) {
