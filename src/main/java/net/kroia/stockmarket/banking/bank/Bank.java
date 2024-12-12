@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.banking.bank;
 
+import net.kroia.stockmarket.ModSettings;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.banking.BankUser;
 import net.kroia.stockmarket.util.ServerPlayerList;
@@ -26,9 +27,12 @@ public class Bank implements ServerSaveable {
 
     String itemID;
 
+    String notificationItemName;
+
     public Bank(BankUser owner, String itemID, long balance) {
         this.owner = owner;
         this.itemID = itemID;
+        updateNotificationItemName();
         setBalanceInternal(balance);
         this.lockedBalance = 0;
     }
@@ -70,8 +74,23 @@ public class Bank implements ServerSaveable {
     }
 
     public void setBalance(long balance) {
+        if(balance < 0)
+            return;
+        long newBalance = balance - this.lockedBalance;
+        if(newBalance < 0)
+        {
+            warnUser("Problem while trying to set balance to "+balance+
+                    ".\nLocked balance is "+lockedBalance+" and your current balance is "+this.balance+
+                    ".\nBalance will be set to 0 and locked balance to "+balance+
+                    ".\nBecause of that, some limit orders may be cancelled.");
+
+            lockedBalance = balance;
+            setBalanceInternal(0);
+            return;
+        }
+
         setBalanceInternal(balance);
-        notifyUser("Balance set to " + this.balance + " for "+itemID);
+        notifyUser("Balance set to " + balance + ".");
     }
 
     public UUID getOwnerUUID() {
@@ -93,7 +112,7 @@ public class Bank implements ServerSaveable {
             return false;
         //dbg_checkValueIsNegative(amount);
         addBalanceInternal(amount);
-        notifyUser("Deposited " + amount+ " of "+itemID);
+        //notifyUser("Deposited " + amount+ ".");
         return true;
     }
 
@@ -108,7 +127,7 @@ public class Bank implements ServerSaveable {
         }
         //dbg_checkValueIsNegative(amount);
         addBalanceInternal(-amount);
-        notifyUser("Withdrew " + amount + " of "+itemID);
+        //notifyUser("Withdrew " + amount + ".");
         return true;
     }
     public boolean transfer(long amount, Bank other) {
@@ -118,7 +137,7 @@ public class Bank implements ServerSaveable {
         dbg_checkValueIsNegative(amount);
         addBalanceInternal(-amount);
         other.deposit(amount);
-        notifyUser_transfer(amount, itemID, other);
+        notifyUser_transfer(amount, other);
         return true;
     }
     public boolean transferFromLocked(long amount, Bank other) {
@@ -128,7 +147,7 @@ public class Bank implements ServerSaveable {
         //dbg_checkValueIsNegative(amount);
         lockedBalance -= amount;
         other.deposit(amount);
-        notifyUser_transfer(amount, itemID, other);
+        notifyUser_transfer(amount, other);
         return true;
     }
     public boolean transferFromLockedPrefered(long amount, Bank other) {
@@ -144,12 +163,12 @@ public class Bank implements ServerSaveable {
             lockedBalance = 0;
             addBalanceInternal(-amount);
             other.deposit(origAmount);
-            notifyUser_transfer(origAmount, itemID, other);
+            notifyUser_transfer(origAmount, other);
             return true;
         }
         lockedBalance -= amount;
         other.deposit(amount);
-        notifyUser_transfer(amount, itemID, other);
+        notifyUser_transfer(amount, other);
         return true;
     }
 
@@ -186,7 +205,7 @@ public class Bank implements ServerSaveable {
         addBalanceInternal(-amount);
         lockedBalance += amount;
         dbg_checkValueIsNegative(lockedBalance);
-        notifyUser("Locked " + amount);
+        //notifyUser("Locked " + amount+".");
         return true;
     }
     public boolean unlockAmount(long amount) {
@@ -196,7 +215,7 @@ public class Bank implements ServerSaveable {
         }
         addBalanceInternal(amount);
         lockedBalance -= amount;
-        notifyUser("Unlocked " + amount);
+        //notifyUser("Unlocked " + amount+".");
         return true;
     }
 
@@ -217,6 +236,7 @@ public class Bank implements ServerSaveable {
                 !tag.contains("lockedBalance"))
             return false;
         itemID = tag.getString("itemID");
+        updateNotificationItemName();
         setBalanceInternal(tag.getLong("balance"));
         lockedBalance = tag.getLong("lockedBalance");
         return balance >= 0 && lockedBalance >= 0 && !itemID.isEmpty();
@@ -232,21 +252,27 @@ public class Bank implements ServerSaveable {
     }
 
     private static void dbg_invalid_balance(long balance) {
-        StockMarketMod.LOGGER.warn("Invalid balance: " + balance);
+        throw new IllegalArgumentException("Balance is negative: "+balance);
     }
     private static void dbg_checkValueIsNegative(long value) {
         if(value < 0)
-            StockMarketMod.LOGGER.warn("Value is negative: " + value);
+            throw new IllegalArgumentException("Value is negative: "+value);
     }
 
 
-    protected void notifyUser_transfer(long amount, String itemID, Bank other) {
+    protected void notifyUser_transfer(long amount, Bank other) {
         if(amount == 0)
             return;
-        notifyUser("Transferred " + amount + " of "+itemID+" to user: "+ other.getOwnerName());
+        notifyUser("Transferred " + amount + " to user: "+ other.getOwnerName());
     }
+
+    protected void warnUser(String msg) {
+
+        StockMarketMod.printToClientConsole(getOwner(), "[Bank "+notificationItemName+" WARNING]: "+msg);
+    }
+
     protected void notifyUser(String msg) {
-        StockMarketMod.printToClientConsole(getOwner(), msg);
+        StockMarketMod.printToClientConsole(getOwner(), "[Bank "+notificationItemName+"]: "+msg);
     }
 
     public String toString()
@@ -261,10 +287,21 @@ public class Bank implements ServerSaveable {
     }
     public String toStringNoOwner()
     {
-        StringBuilder content = new StringBuilder("ItemID: \""+ itemID +"\" Balance: "+(balance+lockedBalance));
+        StringBuilder content = new StringBuilder(notificationItemName +" B: "+(balance+lockedBalance));
         if(lockedBalance > 0)
-            content.append(" (Free available: ").append(balance).append(", Locked: ").append(lockedBalance).append(")");
+            content.append(" (Free: ").append(balance).append(", Locked: ").append(lockedBalance).append(")");
         return content.toString();
     }
 
+    private void updateNotificationItemName() {
+        if(ModSettings.Bank.NOTIFICATION_USE_SHORT_ITEM_ID)
+        {
+            // minecraft:diamond -> diamond
+            notificationItemName = itemID.substring(itemID.lastIndexOf(':')+1);
+        }
+        else
+        {
+            notificationItemName = itemID;
+        }
+    }
 }

@@ -64,7 +64,7 @@ public class BankUser implements ServerSaveable {
     {
         return bankMap.get(MoneyBank.ITEM_ID);
     }
-    public long getBalance()
+    public long getMoneyBalance()
     {
         Bank bank = getMoneyBank();
         if(bank != null)
@@ -72,14 +72,12 @@ public class BankUser implements ServerSaveable {
         return 0;
     }
 
-    public long getTotalBalance()
+    public long getTotalMoneyBalance()
     {
-        long total = 0;
-        for(Bank bank : bankMap.values())
-        {
-            total += bank.getTotalBalance();
-        }
-        return total;
+        Bank bank = getMoneyBank();
+        if(bank != null)
+            return bank.getTotalBalance();
+        return 0;
     }
 
     public HashMap<String, Bank> getBankMap()

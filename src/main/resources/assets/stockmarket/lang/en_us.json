@@ -1,5 +1,6 @@
 {
   "block.stockmarket.stock_market_block": "Stock Market Block",
+  "block.stockmarket.bank_terminal_block": "Bank Terminal Block",
   "item.stockmarket.stock_market_block": "Stock Market Block",
   "container.stockmarket.bank_terminal_block_entity": "Bank Terminal",
   "gui.stockmarket.stock_market_block_screen": "Stock Market Block",

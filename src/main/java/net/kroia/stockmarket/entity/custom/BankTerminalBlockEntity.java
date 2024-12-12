@@ -7,6 +7,7 @@ import net.kroia.stockmarket.banking.ServerBankManager;
 import net.kroia.stockmarket.banking.bank.Bank;
 import net.kroia.stockmarket.block.custom.StockMarketBlock;
 import net.kroia.stockmarket.entity.ModEntities;
+import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.menu.custom.BankTerminalContainerMenu;
 import net.kroia.stockmarket.menu.custom.ChartMenu;
 import net.kroia.stockmarket.networking.packet.client_sender.update.entity.UpdateBankTerminalBlockEntityPacket;
@@ -43,6 +44,7 @@ import net.minecraftforge.items.ItemStackHandler;
 import net.minecraftforge.registries.ForgeRegistries;
 
 import javax.annotation.Nullable;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Objects;
 import java.util.UUID;
@@ -90,12 +92,21 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
             if(amount == 0)
                 return false;
             BankUser bank = ServerBankManager.getUser(playerID);
-            if(bank == null)
-                return false;
+            if(bank == null) {
+                // Create bank account for this item if it can be traded
+                ArrayList<String> keys = new ArrayList<>();
+                keys.add(itemID);
+                bank = ServerBankManager.createUser(playerID, keys, true,0 );
+            }
 
             Bank bankAccount = bank.getBank(itemID);
-            if(bankAccount == null)
-                return false;
+            if(bankAccount == null) {
+                // Create item bank account
+                if (ServerMarket.hasItem(itemID)) {
+                    bankAccount = bank.createItemBank(itemID, 0);
+                } else
+                    return false;
+            }
 
             setAmount(itemID, getAmount(itemID) + amount);
             return true;
@@ -126,9 +137,12 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 cancelTasks();
                 return false;
             }
-            for(String itemID : transferItems.keySet())
+            ArrayList<String> keys = new ArrayList<>(transferItems.keySet());
+            for(String itemID : keys)
             {
                 long amount = transferItems.get(itemID);
+                if(amount == 0)
+                    continue;
                 Bank bankAccount = bank.getBank(itemID);
                 if(bankAccount == null) {
                     cancelTask(itemID);
@@ -139,17 +153,26 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 if(amount < 0)
                 {
                     amount = Math.min(-amount, amountToProcess);
+                    if(amount <= 0) {
+                        cancelTask(itemID);
+                        continue;
+                    }
                     long removedAmount = inventory.removeItem(itemID, amount);
                     if(removedAmount > 0)
                     {
                         bankAccount.deposit(removedAmount);
                         setAmount(itemID, getAmount(itemID) + removedAmount);
+                        return true;
                     }
                 }
                 else
                 {
                     amount = Math.min(amount, amountToProcess);
                     amount = Math.min(amount, bankAccount.getBalance());
+                    if(amount <= 0) {
+                        cancelTask(itemID);
+                        continue;
+                    }
                     long addedAmount = inventory.addItem(itemID, amount);
                     if(addedAmount > 0)
                     {
@@ -158,13 +181,17 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                             // error
                             StockMarketMod.LOGGER.error("Failed to withdraw " + addedAmount + " " + itemID + " from bank account of user " + playerID);
                             inventory.removeItem(itemID, addedAmount);
+                            cancelTask(itemID);
                             continue;
                         }
                         setAmount(itemID, getAmount(itemID) - addedAmount);
+                        return true;
                     }
+                    else
+                        cancelTask(itemID); // inventory full
                 }
             }
-            return true;
+            return false;
         }
 
         public static TransferTask createFromTag(BankTerminalBlockEntity blockEntity,CompoundTag tag)
@@ -340,19 +367,23 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         }
 
     }
-    private class PlayerData implements ServerSaveable
+    private static class PlayerData implements ServerSaveable
     {
         private UUID playerID;
         private TerminalInventory inventory;
         private TransferTask transferTask;
+
+        private final BankTerminalBlockEntity blockEntity;
         public PlayerData(UUID playerID, BankTerminalBlockEntity blockEntity)
         {
+            this.blockEntity = blockEntity;
             this.playerID = playerID;
             this.inventory = new TerminalInventory(blockEntity, 27);
             this.transferTask = new TransferTask(blockEntity, playerID, new HashMap<>());
         }
         private PlayerData(BankTerminalBlockEntity blockEntity)
         {
+            this.blockEntity = blockEntity;
             playerID = new UUID(0, 0);
             inventory = new TerminalInventory(blockEntity, 27);
             transferTask = new TransferTask(blockEntity);
@@ -369,7 +400,10 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
 
         public static PlayerData createFromTag(BankTerminalBlockEntity blockEntity, CompoundTag tag)
         {
-            return PlayerData.createFromTag(blockEntity, tag);
+            PlayerData playerData = new PlayerData(blockEntity);
+            if(playerData.load(tag))
+                return playerData;
+            return null;
         }
 
         @Override
@@ -392,7 +426,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
             playerID = tag.getUUID("PlayerID");
             inventory.deserializeNBT(tag.getCompound("Inventory"));
             CompoundTag transferTaskTag = tag.getCompound("TransferTask");
-            transferTask = TransferTask.createFromTag(BankTerminalBlockEntity.this,transferTaskTag);
+            transferTask = TransferTask.createFromTag(blockEntity,transferTaskTag);
             return transferTask != null;
         }
     }

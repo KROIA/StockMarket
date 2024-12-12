@@ -29,7 +29,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
     @Override
     public void createOrders() {
 
-        int orderVolume = (int)(randomWalk.nextValue()*volatility);
+        int orderVolume = (int)((randomWalk.nextValue()+1)*volatility);
         if(orderVolume == 0)
             return;
         Bank moneyBank = ServerBankManager.getBotUser().getMoneyBank();
@@ -50,11 +50,10 @@ public class ServerVolatilityBot extends ServerTradingBot {
     public int getVolumeDistribution(int x)
     {
         double fX = (double)Math.abs(x);
-        double scale = 100;
-        double exp = Math.exp(-fX*0.05);
+        double exp = Math.exp(-fX*1.f/this.volumeSpread);
         double random = Math.random()+1;
 
-        double volume = (scale*random) * (1 - exp) * exp;
+        double volume = (super.volumeScale*random) * (1 - exp) * exp;
 
         if(x < 0)
             return (int)-volume;

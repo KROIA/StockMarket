@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.market.server;
 
+import net.kroia.stockmarket.ModSettings;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
@@ -38,8 +39,10 @@ public class MarketManager implements ServerSaveable {
         this.tradeItem = tradeItem;
         this.itemID = tradeItem.getItemID();
         matchingEngine = new MatchingEngine(initialPrice, history);
-        tradingBot = new ServerTradingBot(this, matchingEngine);
-        volatilityBot = new ServerVolatilityBot(this, matchingEngine, 1);
+        if(ModSettings.MarketBot.ENABLED) {
+            tradingBot = new ServerTradingBot(this, matchingEngine);
+            volatilityBot = new ServerVolatilityBot(this, matchingEngine, ModSettings.MarketBot.VolatilityBot.VOLATILITY);
+        }
         //matchingEngine.setTradingBot(tradingBot);
         priceHistory = history;
 

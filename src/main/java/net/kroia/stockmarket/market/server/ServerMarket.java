@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.market.server;
 
+import net.kroia.stockmarket.ModSettings;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.banking.ServerBankManager;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
@@ -36,24 +37,10 @@ public class ServerMarket implements ServerSaveable
     {
         ServerBankManager.createBotUser();
         //ServerBankManager.createUser(UUID.randomUUID(), new ArrayList<>(), true, 1000_000);
-        addTradeItemIfNotExists("minecraft:diamond", 50);
-        addTradeItemIfNotExists("minecraft:iron_ingot", 10);
-        addTradeItemIfNotExists("minecraft:gold_ingot", 25);
-        addTradeItemIfNotExists("minecraft:emerald", 100);
-        addTradeItemIfNotExists("minecraft:coal", 5);
-        addTradeItemIfNotExists("minecraft:quartz", 5);
-        addTradeItemIfNotExists("minecraft:obsidian", 10);
-        addTradeItemIfNotExists("minecraft:glowstone", 10);
-        addTradeItemIfNotExists("minecraft:blaze_rod", 20);
-        addTradeItemIfNotExists("minecraft:ender_pearl", 50);
-        addTradeItemIfNotExists("minecraft:ghast_tear", 100);
-        addTradeItemIfNotExists("minecraft:shulker_shell", 200);
-        addTradeItemIfNotExists("minecraft:netherite_ingot", 500);
-        addTradeItemIfNotExists("minecraft:ancient_debris", 1000);
-        addTradeItemIfNotExists("minecraft:elytra", 5000);
-        addTradeItemIfNotExists("minecraft:dragon_egg", 10000);
-        addTradeItemIfNotExists("minecraft:enchanted_golden_apple", 1000);
-        addTradeItemIfNotExists("minecraft:totem_of_undying", 1000);
+        for(var item : ModSettings.Market.TRADABLE_ITEMS.entrySet())
+        {
+            addTradeItemIfNotExists(item.getKey(), item.getValue());
+        }
 
     }
 

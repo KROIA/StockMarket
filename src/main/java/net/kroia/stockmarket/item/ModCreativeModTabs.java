@@ -15,20 +15,14 @@ public class ModCreativeModTabs {
     public static final DeferredRegister<CreativeModeTab> CREATIVE_MODE_TABS =
             DeferredRegister.create(Registries.CREATIVE_MODE_TAB, StockMarketMod.MODID);
 
-    public static final RegistryObject<CreativeModeTab> TUTORIAL_TAB = CREATIVE_MODE_TABS.register("tockmarket_tab",
+    public static final RegistryObject<CreativeModeTab> STOCK_MARKET_TAB = CREATIVE_MODE_TABS.register("stockmarket_tab",
             () -> CreativeModeTab.builder().title(Component.translatable("Stock Market"))
                     .displayItems((pParameters, pOutput) -> {
-                       // pOutput.accept(ModItems.SAPPHIRE.get());
-                       // pOutput.accept(ModItems.RAW_SAPPHIRE.get());
-
-                        //pOutput.accept(Items.DIAMOND);
-
-                       // pOutput.accept(ModBlocks.SAPPHIRE_BLOCK.get());
-                       // pOutput.accept(ModBlocks.RAW_SAPPHIRE_BLOCK.get());
                         pOutput.accept(ModBlocks.STOCK_MARKET_BLOCK.get());
                         pOutput.accept(ModBlocks.BANK_TERMINAL_BLOCK.get());
 
                     })
+                    .icon(() -> new ItemStack(ModBlocks.STOCK_MARKET_BLOCK.get()))
                     .build());
 
 

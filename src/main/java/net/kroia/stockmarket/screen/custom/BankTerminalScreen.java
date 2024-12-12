@@ -216,7 +216,7 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
 
     public void handleTick() {
         tickCount++;
-        if(tickCount - lastTickCount > 40)
+        if(tickCount - lastTickCount > 10)
         {
             RequestBankDataPacket.sendRequest();
             StockMarketMod.LOGGER.info("Updating bank terminal screen");

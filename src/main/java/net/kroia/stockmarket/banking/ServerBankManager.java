@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.banking;
 
+import net.kroia.stockmarket.ModSettings;
+import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.banking.bank.Bank;
 import net.kroia.stockmarket.util.ServerPlayerList;
 import net.kroia.stockmarket.util.ServerSaveable;
@@ -15,7 +17,6 @@ public class ServerBankManager implements ServerSaveable {
 
     private static Map<UUID, BankUser> userMap = new HashMap<>();
     private static BankUser botUser;
-    public static final String BOT_USER_NAME = "StockMarketBot";
    //private static Map<UUID, MoneyBank> bankMap = new HashMap<>();
    //private static Map<UUID, BotMoneyBank> botBankMap = new HashMap<>();
 
@@ -76,12 +77,12 @@ public class ServerBankManager implements ServerSaveable {
 
     public static BankUser createBotUser()
     {
-        if(botUser != null)
+        if(botUser != null || !ModSettings.MarketBot.ENABLED)
             return botUser;
-        UUID botUUID = UUID.nameUUIDFromBytes(BOT_USER_NAME.getBytes());
-        ServerPlayerList.addPlayer(botUUID, BOT_USER_NAME);
+        UUID botUUID = UUID.nameUUIDFromBytes(ModSettings.MarketBot.USER_NAME.getBytes());
+        ServerPlayerList.addPlayer(botUUID, ModSettings.MarketBot.USER_NAME);
         botUser = new BankUser(botUUID);
-        botUser.createMoneyBank(1000_000);
+        botUser.createMoneyBank(ModSettings.MarketBot.STARTING_BALANCE);
         userMap.put(botUser.getOwnerUUID(), botUser);
         return botUser;
     }
@@ -101,6 +102,8 @@ public class ServerBankManager implements ServerSaveable {
             user.createItemBank(itemID, 0);
         if(createMoneyBank)
             user.createMoneyBank(startMoney);
+        StockMarketMod.printToClientConsole(userUUID, "A bank account has been created for you.\n" +
+                "You can access your account using the Bank Terminal block\nor the /bank command.");
         userMap.put(userUUID, user);
         return user;
     }
@@ -122,7 +125,7 @@ public class ServerBankManager implements ServerSaveable {
     {
         long total = 0;
         for (Map.Entry<UUID, BankUser> entry : userMap.entrySet()) {
-            total += entry.getValue().getTotalBalance();
+            total += entry.getValue().getTotalMoneyBalance();
         }
         return total;
     }
@@ -156,7 +159,7 @@ public class ServerBankManager implements ServerSaveable {
     public boolean load(CompoundTag tag) {
         boolean success = true;
         UUID botUUID = null;
-        if(tag.contains("botUUID"))
+        if(tag.contains("botUUID") && ModSettings.MarketBot.ENABLED)
         {
             botUUID = tag.getUUID("botUUID");
         }
@@ -177,7 +180,7 @@ public class ServerBankManager implements ServerSaveable {
                     if (botUser != null)
                         ServerPlayerList.removePlayer(botUser.getOwnerUUID());
                     botUser = user;
-                    ServerPlayerList.addPlayer(botUUID, BOT_USER_NAME);
+                    ServerPlayerList.addPlayer(botUUID, ModSettings.MarketBot.USER_NAME);
                 }
             }
         }

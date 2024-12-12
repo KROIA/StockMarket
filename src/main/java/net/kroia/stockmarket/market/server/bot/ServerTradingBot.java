@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.market.server.bot;
 
+import net.kroia.stockmarket.ModSettings;
 import net.kroia.stockmarket.banking.BankUser;
 import net.kroia.stockmarket.banking.ServerBankManager;
 import net.kroia.stockmarket.banking.bank.Bank;
@@ -21,14 +22,13 @@ import java.util.UUID;
  */
 public class ServerTradingBot implements ServerSaveable {
 
-    protected static long lastBotID = 0;
     protected MarketManager parent;
     protected MatchingEngine matchingEngine;
 
-    protected final int maxOrderCount = 50;
+    protected final int maxOrderCount = ModSettings.MarketBot.MAX_ORDERS;
 
-    protected double volumeScale = 100.0;
-    protected double volumeSpread = 10;
+    protected double volumeScale = ModSettings.MarketBot.VOLUME_SCALE;
+    protected double volumeSpread = ModSettings.MarketBot.VOLUME_SPREAD;
 
     protected ArrayList<LimitOrder> buyOrders = new ArrayList<>();
     protected ArrayList<LimitOrder> sellOrders = new ArrayList<>();
@@ -103,7 +103,7 @@ public class ServerTradingBot implements ServerSaveable {
             int buyVolume = getAvailableVolume(buyPrice);
             if(buyVolume > 0) {
 
-                if(moneyBank.getBalance()>buyVolume*buyPrice) {
+                if(moneyBank.getBalance()>(buyVolume*2)*buyPrice) {
                     LimitOrder buyOrder = LimitOrder.createBotOrder(botUUID, moneyBank, itemBank, itemID, buyVolume, buyPrice);
                     if (buyOrder != null) {
                         matchingEngine.addOrder(buyOrder);

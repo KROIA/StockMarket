@@ -8,6 +8,7 @@ import com.mojang.brigadier.arguments.LongArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import net.kroia.stockmarket.ModSettings;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.banking.BankUser;
 import net.kroia.stockmarket.banking.bank.Bank;
@@ -119,7 +120,7 @@ public class ModCommands {
                             return bank_show(player, player.getName().getString());
                         })
                         .then(Commands.argument("username", StringArgumentType.string()).suggests((context, builder) -> {
-                                            builder.suggest("\""+ServerBankManager.BOT_USER_NAME+"\"");
+                                            builder.suggest("\""+ ModSettings.MarketBot.USER_NAME +"\"");
                                             return builder.buildFuture();
                                         })
                                 .requires(source -> source.hasPermission(2))
