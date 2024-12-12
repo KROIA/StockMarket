@@ -9,6 +9,8 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.util.UUID;
+
 /*
     * The LimitOrder class represents a spot order.
  */
@@ -18,22 +20,22 @@ public class LimitOrder extends Order implements ServerSaveable {
     public static LimitOrder create(ServerPlayer player, String itemID, int amount, int price)
     {
         if(Order.tryReserveBankFund(player, itemID, amount, price))
-            return new LimitOrder(player.getUUID().toString(), itemID, amount, price);
+            return new LimitOrder(player.getUUID(), itemID, amount, price);
         return null;
     }
-    public static LimitOrder createBotOrder(String uuid, Bank botMoneyBank, Bank botItemBank, String itemID, int amount, int price)
+    public static LimitOrder createBotOrder(UUID playerUUID, Bank botMoneyBank, Bank botItemBank, String itemID, int amount, int price)
     {
-        if(Order.tryReserveBankFund(botMoneyBank, botItemBank, uuid, itemID, amount, price, null))
-            return new LimitOrder(uuid, itemID, amount, price, true);
+        if(Order.tryReserveBankFund(botMoneyBank, botItemBank, playerUUID, itemID, amount, price, null))
+            return new LimitOrder(playerUUID, itemID, amount, price, true);
         return null;
     }
-    protected LimitOrder(String playerUUID, String itemID, int amount, int price) {
+    protected LimitOrder(UUID playerUUID, String itemID, int amount, int price) {
         super(playerUUID, itemID, amount);
         this.price = price;
 
         //StockMarketMod.LOGGER.info("LimitOrder created: " + toString());
     }
-    protected LimitOrder(String playerUUID, String itemID, int amount, int price, boolean isBot) {
+    protected LimitOrder(UUID playerUUID, String itemID, int amount, int price, boolean isBot) {
         super(playerUUID, itemID, amount, isBot);
         this.price = price;
 
@@ -74,15 +76,12 @@ public class LimitOrder extends Order implements ServerSaveable {
 
     @Override
     public String toString() {
-        String playerName;
-        if(this.isBot) {
-            playerName = playerUUID;
-        }else {
-            ServerPlayer player = ServerPlayerList.getPlayer(playerUUID);
-            playerName = player == null ? "UUID:" + playerUUID : player.getName().getString();
-        }
+        String playerName = ServerPlayerList.getPlayerName(playerUUID);
+        if(playerName.isEmpty())
+            playerName = playerUUID.toString();
 
         return "LimitOrder{\n  Owner: " + playerName +
+                "\n  OrderID: " + orderID +
                 "\n  Amount: " + amount +
                 "\n  Filled: " + filledAmount +
                 "\n  Price: " + price +
@@ -116,7 +115,7 @@ public class LimitOrder extends Order implements ServerSaveable {
     public boolean save(CompoundTag tag) {
         tag.putLong("orderID", orderID);
         tag.putString("itemID", itemID);
-        tag.putString("playerUUID", playerUUID);
+        tag.putUUID("playerUUID", playerUUID);
         tag.putInt("price", price);
         tag.putInt("amount", amount);
         tag.putInt("filledAmount", filledAmount);
@@ -146,7 +145,7 @@ public class LimitOrder extends Order implements ServerSaveable {
             return false;
         orderID = tag.getLong("orderID");
         itemID = tag.getString("itemID");
-        playerUUID = tag.getString("playerUUID");
+        playerUUID = tag.getUUID("playerUUID");
         price = tag.getInt("price");
         amount = tag.getInt("amount");
         filledAmount = tag.getInt("filledAmount");

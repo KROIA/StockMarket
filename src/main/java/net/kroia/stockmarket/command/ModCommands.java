@@ -162,6 +162,7 @@ public class ModCommands {
                                 .then(Commands.literal("setBalance")
                                         .then(Commands.argument("itemID", StringArgumentType.string()).suggests((context, builder) -> {
                                                     ArrayList<String> suggestions = ServerMarket.getTradeItemIDs();
+                                                    builder.suggest("\""+MoneyBank.ITEM_ID+"\"");
                                                     for(String suggestion : suggestions) {
                                                         builder.suggest("\""+suggestion+"\"");
                                                     }

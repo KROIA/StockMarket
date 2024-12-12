@@ -2,7 +2,11 @@ package net.kroia.stockmarket.market.server;
 
 import net.kroia.stockmarket.ModSettings;
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.banking.BankUser;
 import net.kroia.stockmarket.banking.ServerBankManager;
+import net.kroia.stockmarket.banking.bank.Bank;
+import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
+import net.kroia.stockmarket.market.server.bot.ServerTradingBotFactory;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.MarketOrder;
 import net.kroia.stockmarket.market.server.order.Order;
@@ -23,23 +27,51 @@ import net.minecraft.server.level.ServerPlayer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 public class ServerMarket implements ServerSaveable
 {
     //private static final Map<String, MarketManager> marketManagers = new HashMap<>();
     //private static final Map<String, ArrayList<ServerPlayer>> playerSubscriptions = new HashMap<>();
     //private static MarketData marketData;
-    public static int shiftPriceHistoryInterval = 60000; // in ms
+    public static long shiftPriceHistoryInterval = ModSettings.Market.SHIFT_PRICE_CANCLE_INTERVAL_MS; // in ms
 
     private static final Map<String, ServerTradeItem> tradeItems = new HashMap<>();
 
     public static void init()
     {
-        ServerBankManager.createBotUser();
+
         //ServerBankManager.createUser(UUID.randomUUID(), new ArrayList<>(), true, 1000_000);
         for(var item : ModSettings.Market.TRADABLE_ITEMS.entrySet())
         {
             addTradeItemIfNotExists(item.getKey(), item.getValue());
+        }
+
+        if(ModSettings.MarketBot.ENABLED)
+        {
+            BankUser botUser = ServerBankManager.createBotUser();
+            StockMarketMod.LOGGER.info("[SERVER] Creating trading bots");
+            HashMap<String, ArrayList<ServerTradingBotFactory.BotBuilderContainer>> bots = ModSettings.MarketBot.createBots();
+
+            for(var item : bots.entrySet())
+            {
+                int botCount = getBotCount(item.getKey());
+                if(botCount > 0)
+                    continue;
+                for(ServerTradingBotFactory.BotBuilderContainer container : item.getValue())
+                {
+                    Bank itemBank = botUser.getBank(container.itemID);
+                    if(itemBank == null)
+                    {
+                        itemBank = botUser.createItemBank(container.itemID, container.initialItemStock);
+                    }
+                    if(itemBank.getTotalBalance() < container.initialItemStock)
+                    {
+                        itemBank.setBalance(container.initialItemStock-itemBank.getLockedBalance());
+                    }
+                    addTradingBot(item.getKey(), container.bot);
+                }
+            }
         }
 
     }
@@ -65,7 +97,7 @@ public class ServerMarket implements ServerSaveable
     {
         ServerTradeItem tradeItem = new ServerTradeItem(itemID, startPrice);
         tradeItems.put(itemID, tradeItem);
-        ServerBankManager.getBotUser().createItemBank(itemID, 1000_000);
+        //ServerBankManager.getBotUser().createItemBank(itemID, 1000_000);
     }
 
     public static ArrayList<String> getTradeItemIDs()
@@ -83,9 +115,50 @@ public class ServerMarket implements ServerSaveable
         return tradeItems.containsKey(itemID);
     }
 
+    public static void addTradingBot(String itemID, ServerTradingBot bot)
+    {
+        ServerTradeItem item = tradeItems.get(itemID);
+        if(item == null)
+        {
+            msgTradeItemNotFound(itemID);
+            return;
+        }
+        item.addTradingBot(bot);
+    }
+    public static void removeTradingBot(String itemID, ServerTradingBot bot)
+    {
+        ServerTradeItem item = tradeItems.get(itemID);
+        if(item == null)
+        {
+            msgTradeItemNotFound(itemID);
+            return;
+        }
+        item.removeTradingBot(bot);
+    }
+    public static void removeAllBots(String itemID)
+    {
+        ServerTradeItem item = tradeItems.get(itemID);
+        if(item == null)
+        {
+            msgTradeItemNotFound(itemID);
+            return;
+        }
+        item.removeAllBots();
+    }
+    public static int getBotCount(String itemID)
+    {
+        ServerTradeItem item = tradeItems.get(itemID);
+        if(item == null)
+        {
+            msgTradeItemNotFound(itemID);
+            return 0;
+        }
+        return item.getBotCount();
+    }
+
     public static void shiftPriceHistory()
     {
-        StockMarketMod.LOGGER.info("Shifting price history");
+        //StockMarketMod.LOGGER.info("Shifting price history");
         for(ServerTradeItem marketManager : tradeItems.values())
         {
             marketManager.shiftPriceHistory();
@@ -112,7 +185,7 @@ public class ServerMarket implements ServerSaveable
             return;
         }
         item.addOrder(order);
-        item.updateBot();
+        //item.updateBot();
     }
     public static void cancelOrder(long orderID)
     {
@@ -144,7 +217,7 @@ public class ServerMarket implements ServerSaveable
         }
         return item.getOrders();
     }
-    public static ArrayList<Order> getOrders(String itemID, String playerUUID)
+    public static ArrayList<Order> getOrders(String itemID, UUID playerUUID)
     {
         ServerTradeItem item = tradeItems.get(itemID);
         if(item == null)
@@ -156,7 +229,7 @@ public class ServerMarket implements ServerSaveable
         item.getOrders(playerUUID, orders);
         return orders;
     }
-    public static ArrayList<Order> getOrdersFromUser(String playerUUID)
+    public static ArrayList<Order> getOrdersFromUser(UUID playerUUID)
     {
         ArrayList<Order> orders = new ArrayList<>();
         for(ServerTradeItem item : tradeItems.values())
@@ -304,7 +377,7 @@ public class ServerMarket implements ServerSaveable
     @Override
     public boolean save(CompoundTag tag) {
         boolean success = true;
-        tag.putInt("shiftPriceHistoryInterval", shiftPriceHistoryInterval);
+        tag.putLong("shiftPriceHistoryInterval", shiftPriceHistoryInterval);
 
         ListTag tradeItems = new ListTag();
         for(ServerTradeItem tradeItem : ServerMarket.tradeItems.values())
@@ -323,7 +396,7 @@ public class ServerMarket implements ServerSaveable
         try {
             if(!tag.contains("shiftPriceHistoryInterval") || !tag.contains("tradeItems"))
                 return false;
-            shiftPriceHistoryInterval = tag.getInt("shiftPriceHistoryInterval");
+            shiftPriceHistoryInterval = tag.getLong("shiftPriceHistoryInterval");
 
             ListTag tradeItems = tag.getList("tradeItems", 10);
             Map<String, ServerTradeItem> tradeItemsMap = new HashMap<>();
@@ -341,7 +414,8 @@ public class ServerMarket implements ServerSaveable
             ServerMarket.tradeItems.clear();
             ServerMarket.tradeItems.putAll(tradeItemsMap);
         } catch (Exception e) {
-            StockMarketMod.LOGGER.error("[SERVER] Error loading shiftPriceHistoryInterval from NBT");
+            StockMarketMod.LOGGER.error("[SERVER] Error loading ServerMarket from NBT");
+            e.printStackTrace();
             return false;
         }
         return loadSuccess;

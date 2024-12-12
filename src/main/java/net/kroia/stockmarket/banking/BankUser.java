@@ -9,6 +9,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -138,10 +139,39 @@ public class BankUser implements ServerSaveable {
             owner = player.getName().getString();
         else
             owner = ServerPlayerList.getPlayerName(getOwnerUUID());
-        StringBuilder content = new StringBuilder("BankUser: " + owner + "\n");
+        StringBuilder content = new StringBuilder("Bank of: " + owner + "\n");
+        ArrayList<String> itemNames = new ArrayList<>();
+        ArrayList<String> itemBalances = new ArrayList<>();
+
+        if(bankMap.containsKey(MoneyBank.ITEM_ID)) {
+            itemNames.add(bankMap.get(MoneyBank.ITEM_ID).getNotificationItemName());
+            itemBalances.add(String.valueOf(bankMap.get(MoneyBank.ITEM_ID).getBalance()));
+        }
+
         for(Bank bank : bankMap.values())
         {
-            content.append("  ").append(bank.toStringNoOwner()).append("\n");
+            if(bank.getItemID().equals(MoneyBank.ITEM_ID))
+                continue;
+            itemNames.add(bank.getNotificationItemName());
+            itemBalances.add(String.valueOf(bank.getTotalBalance()));
+        }
+        int maxAmountLength = 0;
+        for(String itemName : itemBalances)
+        {
+            if(itemName.length() > maxAmountLength)
+                maxAmountLength = itemName.length();
+        }
+        for(int i=0; i<itemNames.size(); i++)
+        {
+
+            content.append(" | ");
+            for(int j=0; j<=maxAmountLength-itemBalances.get(i).length(); j++)
+                content.append("_");
+            content.append(itemBalances.get(i)).append(" ");
+
+            content.append(" ").append(itemNames.get(i)).append("\n");
+
+
         }
         return content.toString();
     }

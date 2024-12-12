@@ -11,8 +11,16 @@ import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.util.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.LongArrayTag;
+import net.minecraft.nbt.LongTag;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.PriorityQueue;
 import java.util.UUID;
 
 /**
@@ -22,39 +30,178 @@ import java.util.UUID;
  */
 public class ServerTradingBot implements ServerSaveable {
 
-    protected MarketManager parent;
-    protected MatchingEngine matchingEngine;
+    public static class Settings implements ServerSaveable
+    {
+        public boolean enabled = true;
+        public int maxOrderCount = ModSettings.MarketBot.MAX_ORDERS;
+        public double volumeScale = ModSettings.MarketBot.VOLUME_SCALE;
+        public double volumeSpread = ModSettings.MarketBot.VOLUME_SPREAD;
+        public long updateTimerIntervallMS = ModSettings.MarketBot.UPDATE_TIMER_INTERVAL_MS;
 
-    protected final int maxOrderCount = ModSettings.MarketBot.MAX_ORDERS;
+        @Override
+        public boolean save(CompoundTag tag) {
+            tag.putBoolean("enabled", enabled);
+            tag.putInt("maxOrderCount", maxOrderCount);
+            tag.putDouble("volumeScale", volumeScale);
+            tag.putDouble("volumeSpread", volumeSpread);
+            tag.putLong("updateTimerIntervallMS", updateTimerIntervallMS);
+            return false;
+        }
 
-    protected double volumeScale = ModSettings.MarketBot.VOLUME_SCALE;
-    protected double volumeSpread = ModSettings.MarketBot.VOLUME_SPREAD;
+        @Override
+        public boolean load(CompoundTag tag) {
+            if(tag == null)
+                return false;
+            if(!tag.contains("enabled") ||
+                !tag.contains("maxOrderCount") ||
+                !tag.contains("volumeScale") ||
+                !tag.contains("volumeSpread") ||
+                !tag.contains("updateTimerIntervallMS"))
+                 return false;
+            enabled = tag.getBoolean("enabled");
+            maxOrderCount = tag.getInt("maxOrderCount");
+            volumeScale = tag.getDouble("volumeScale");
+            volumeSpread = tag.getDouble("volumeSpread");
+            updateTimerIntervallMS = tag.getLong("updateTimerIntervallMS");
+            return true;
+        }
+    }
+
+
+    //protected MarketManager parent;
+    protected Settings settings;
+    private MatchingEngine matchingEngine;
+    MarketManager parent;
+
+
+    //protected final int maxOrderCount = ModSettings.MarketBot.MAX_ORDERS;
+
+    //protected double volumeScale = ModSettings.MarketBot.VOLUME_SCALE;
+    //protected double volumeSpread = ModSettings.MarketBot.VOLUME_SPREAD;
 
     protected ArrayList<LimitOrder> buyOrders = new ArrayList<>();
     protected ArrayList<LimitOrder> sellOrders = new ArrayList<>();
 
-    public ServerTradingBot(MarketManager parent, MatchingEngine matchingEngine) {
-        this.parent = parent;
-        this.matchingEngine = matchingEngine;
+
+    //protected long updateTimerIntervallMS = ModSettings.MarketBot.UPDATE_TIMER_INTERVAL_MS;
+
+    //protected boolean enabled = true;
+    private long[] tmp_load_buyOrderIDs = null;
+    private long[] tmp_load_sellOrderIDs = null;
+
+
+    private long lastMillis = 0;
+
+    public ServerTradingBot() {
+        settings = new Settings();
+        MinecraftForge.EVENT_BUS.addListener(this::onServerTick);
+    }
+    protected ServerTradingBot(Settings settings) {
+        this.settings = settings;
+        MinecraftForge.EVENT_BUS.addListener(this::onServerTick);
     }
 
-    public void update()
+    public void setSettings(Settings settings)
+    {
+        this.settings = settings;
+    }
+    public Settings getSettings()
+    {
+        return this.settings;
+    }
+    public void setParent(MarketManager parent)
+    {
+        this.parent = parent;
+    }
+    public MarketManager getParent()
+    {
+        return this.parent;
+    }
+    /*public ServerTradingBot(MarketManager parent, MatchingEngine matchingEngine) {
+       // this.parent = parent;
+        this.matchingEngine = matchingEngine;
+
+        MinecraftForge.EVENT_BUS.addListener(this::onServerTick);
+    }*/
+
+    protected void update()
     {
         clearOrders();
         createOrders();
     }
 
+    protected MatchingEngine getMatchingEngine()
+    {
+        return matchingEngine;
+    }
+    public void setMatchingEngine(MatchingEngine matchingEngine)
+    {
+        this.matchingEngine = matchingEngine;
+        if(tmp_load_buyOrderIDs != null)
+        {
+            PriorityQueue<LimitOrder> orders = matchingEngine.getBuyOrders();
+            HashMap<Long, LimitOrder> orderMap = new HashMap<>();
+            for(LimitOrder order : orders)
+            {
+                orderMap.put(order.getOrderID(), order);
+            }
+            for(long orderID : tmp_load_buyOrderIDs)
+            {
+                LimitOrder order = orderMap.get(orderID);
+                if(order == null)
+                    continue;
+                buyOrders.add(order);
+            }
+            tmp_load_buyOrderIDs = null;
+        }
+
+        if(tmp_load_sellOrderIDs != null)
+        {
+            PriorityQueue<LimitOrder> orders = matchingEngine.getSellOrders();
+            HashMap<Long, LimitOrder> orderMap = new HashMap<>();
+            for(LimitOrder order : orders)
+            {
+                orderMap.put(order.getOrderID(), order);
+            }
+            for(long orderID : tmp_load_sellOrderIDs)
+            {
+                LimitOrder order = orderMap.get(orderID);
+                if(order == null)
+                    continue;
+                sellOrders.add(order);
+            }
+            tmp_load_sellOrderIDs = null;
+        }
+    }
+
     public void setVolumeScale(double volumeScale) {
-        this.volumeScale = volumeScale;
+        this.settings.volumeScale = volumeScale;
     }
     public double getVolumeScale() {
-        return volumeScale;
+        return this.settings.volumeScale;
     }
     public void setVolumeSpread(double volumeSpread) {
-        this.volumeSpread = volumeSpread;
+        this.settings.volumeSpread = volumeSpread;
     }
     public double getVolumeSpread() {
-        return volumeSpread;
+        return this.settings.volumeSpread;
+    }
+
+    public void setUpdateInterval(long intervalMillis)
+    {
+        this.settings.updateTimerIntervallMS = intervalMillis;
+    }
+    public long getUpdateInterval()
+    {
+        return this.settings.updateTimerIntervallMS;
+    }
+    public void setEnabled(boolean enabled)
+    {
+        this.settings.enabled = enabled;
+    }
+    public boolean isEnabled()
+    {
+        return this.settings.enabled;
     }
 
     public UUID getUUID()
@@ -67,7 +214,7 @@ public class ServerTradingBot implements ServerSaveable {
     }
 
 
-    protected void clearOrders()
+    public void clearOrders()
     {
         matchingEngine.removeBuyOrder_internal(buyOrders);
         matchingEngine.removeSellOrder_internal(sellOrders);
@@ -90,11 +237,11 @@ public class ServerTradingBot implements ServerSaveable {
         Bank moneyBank = user.getMoneyBank();
         String itemID = parent.getItemID();
         Bank itemBank = user.getBank(itemID);
-        String botUUID = getUUID().toString();
+        UUID botUUID = getUUID();
 
         int priceIncerement = 1;
         int currentPrice = matchingEngine.getPrice();
-        for(int i=1; i<=maxOrderCount/2; i++)
+        for(int i=1; i<=this.settings.maxOrderCount/2; i++)
         {
             int sellPrice = currentPrice + i*priceIncerement;
             int buyPrice = currentPrice - i*priceIncerement;
@@ -146,10 +293,10 @@ public class ServerTradingBot implements ServerSaveable {
     protected int getVolumeDistribution(int x)
     {
         double fX = (double)Math.abs(x);
-        double exp = Math.exp(-fX*1.f/volumeSpread);
+        double exp = Math.exp(-fX*1.f/this.settings.volumeSpread);
         double random = Math.random()+1;
 
-        double volume = (volumeScale*random) * (1 - exp) * exp;
+        double volume = (this.settings.volumeScale*random) * (1 - exp) * exp;
 
         if(x < 0)
             return (int)-volume;
@@ -160,8 +307,26 @@ public class ServerTradingBot implements ServerSaveable {
 
     @Override
     public boolean save(CompoundTag tag) {
-        tag.putDouble("volumeScale", volumeScale);
-        tag.putDouble("volumeSpread", volumeSpread);
+        CompoundTag settingsTag = new CompoundTag();
+        settings.save(settingsTag);
+        tag.putString("class", this.getClass().getSimpleName());
+        tag.put("settings", settingsTag);
+
+        // Save order ids
+        long[] buyOrderIDs = new long[buyOrders.size()];
+        for(int i=0; i<buyOrders.size(); i++)
+        {
+            buyOrderIDs[i] = buyOrders.get(i).getOrderID();
+        }
+        tag.putLongArray("buyOrderIDs", buyOrderIDs);
+
+        long[] sellOrderIDs = new long[sellOrders.size()];
+        for(int i=0; i<sellOrders.size(); i++)
+        {
+            sellOrderIDs[i] = sellOrders.get(i).getOrderID();
+        }
+        tag.putLongArray("sellOrderIDs", sellOrderIDs);
+
         return true;
     }
 
@@ -170,30 +335,33 @@ public class ServerTradingBot implements ServerSaveable {
 
         if(tag == null)
             return false;
-        if(!tag.contains("volumeScale") ||
-           !tag.contains("volumeSpread"))
+        if(!tag.contains("settings"))
             return false;
-        volumeScale = tag.getDouble("volumeScale");
-        volumeSpread = tag.getDouble("volumeSpread");
+        CompoundTag settingsTag = tag.getCompound("settings");
+        settings.load(settingsTag);
+
+        if(tag.contains("buyOrderIDs"))
+            tmp_load_buyOrderIDs = tag.getLongArray("buyOrderIDs");
+        if(tag.contains("sellOrderIDs"))
+            tmp_load_sellOrderIDs = tag.getLongArray("sellOrderIDs");
 
 
-        ArrayList<Order> orders = new ArrayList<>();
-        matchingEngine.getOrders(getUUID().toString(), orders);
-        for(Order order : orders)
-        {
-            if(order instanceof LimitOrder)
-            {
-                LimitOrder limitOrder = (LimitOrder) order;
-                if(limitOrder.isBuy())
-                {
-                    buyOrders.add(limitOrder);
-                }
-                else
-                {
-                    sellOrders.add(limitOrder);
-                }
+
+
+        return true;
+    }
+
+    @SubscribeEvent
+    public void onServerTick(TickEvent.ServerTickEvent event) {
+        if(!this.settings.enabled || matchingEngine == null || parent == null)
+            return;
+        if (event.phase == TickEvent.Phase.END) {
+            long currentTime = System.currentTimeMillis();
+
+            if(currentTime - lastMillis > this.settings.updateTimerIntervallMS) {
+                lastMillis = currentTime;
+                update();
             }
         }
-        return true;
     }
 }

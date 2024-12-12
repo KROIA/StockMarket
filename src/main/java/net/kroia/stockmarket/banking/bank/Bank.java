@@ -219,6 +219,12 @@ public class Bank implements ServerSaveable {
         return true;
     }
 
+    public void unlockAll()
+    {
+        addBalanceInternal(lockedBalance);
+        lockedBalance = 0;
+    }
+
     @Override
     public boolean save(CompoundTag tag) {
         tag.putString("itemID", itemID);
@@ -263,7 +269,7 @@ public class Bank implements ServerSaveable {
     protected void notifyUser_transfer(long amount, Bank other) {
         if(amount == 0)
             return;
-        notifyUser("Transferred " + amount + " to user: "+ other.getOwnerName());
+        notifyUser("Transferred " + amount + " → user: "+ other.getOwnerName());
     }
 
     protected void warnUser(String msg) {
@@ -285,9 +291,13 @@ public class Bank implements ServerSaveable {
             owner = ServerPlayerList.getPlayerName(getOwnerUUID());
         return "Owner: "+owner+" "+toStringNoOwner();
     }
+
+    public String getNotificationItemName() {
+        return notificationItemName;
+    }
     public String toStringNoOwner()
     {
-        StringBuilder content = new StringBuilder(notificationItemName +" B: "+(balance+lockedBalance));
+        StringBuilder content = new StringBuilder(notificationItemName +" Balance: "+(balance+lockedBalance));
         if(lockedBalance > 0)
             content.append(" (Free: ").append(balance).append(", Locked: ").append(lockedBalance).append(")");
         return content.toString();

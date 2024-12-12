@@ -10,12 +10,36 @@ import net.kroia.stockmarket.util.MeanRevertingRandomWalk;
 import net.minecraft.nbt.CompoundTag;
 
 public class ServerVolatilityBot extends ServerTradingBot {
-    private int volatility;
+    public static class Settings extends ServerTradingBot.Settings
+    {
+        public double volatility = 5;
+        public Settings()
+        {
+            super();
+            this.updateTimerIntervallMS = 100;
+        }
+        @Override
+        public boolean save(CompoundTag tag) {
+            boolean success = super.save(tag);
+            tag.putDouble("volatility", volatility);
+            return success;
+        }
+
+        @Override
+        public boolean load(CompoundTag tag) {
+            if(tag == null)
+                return false;
+            boolean success = super.load(tag);
+            if(!tag.contains("volatility"))
+                return false;
+            volatility = tag.getDouble("volatility");
+            return success;
+        }
+    }
     private MeanRevertingRandomWalk randomWalk;
 
-    public ServerVolatilityBot(MarketManager parent, MatchingEngine matchingEngine, int volatility) {
-        super(parent, matchingEngine);
-        this.volatility = volatility;
+    public ServerVolatilityBot() {
+        super(new Settings());
         randomWalk = new MeanRevertingRandomWalk(0.1, 0.05);
     }
 
@@ -29,15 +53,15 @@ public class ServerVolatilityBot extends ServerTradingBot {
     @Override
     public void createOrders() {
 
-        int orderVolume = (int)((randomWalk.nextValue()+1)*volatility);
+        int orderVolume = (int)((randomWalk.nextValue())*((Settings)this.settings).volatility);
         if(orderVolume == 0)
             return;
         Bank moneyBank = ServerBankManager.getBotUser().getMoneyBank();
         Bank itemBank = ServerBankManager.getBotUser().getBank(getItemID());
 
 
-        MarketOrder order = MarketOrder.createBotOrder(getUUID().toString(),moneyBank,itemBank, getItemID(), orderVolume);
-        matchingEngine.addOrder(order);
+        MarketOrder order = MarketOrder.createBotOrder(getUUID(),moneyBank,itemBank, getItemID(), orderVolume);
+        getMatchingEngine().addOrder(order);
     }
 
     /**
@@ -50,10 +74,10 @@ public class ServerVolatilityBot extends ServerTradingBot {
     public int getVolumeDistribution(int x)
     {
         double fX = (double)Math.abs(x);
-        double exp = Math.exp(-fX*1.f/this.volumeSpread);
+        double exp = Math.exp(-fX*1.f/this.settings.volumeSpread);
         double random = Math.random()+1;
 
-        double volume = (super.volumeScale*random) * (1 - exp) * exp;
+        double volume = (super.settings.volumeScale*random) * (1 - exp) * exp;
 
         if(x < 0)
             return (int)-volume;
@@ -64,9 +88,17 @@ public class ServerVolatilityBot extends ServerTradingBot {
 
 
     @Override
+    public void setSettings(ServerTradingBot.Settings settings) {
+        if(settings instanceof Settings) {
+            super.setSettings(settings);
+        }
+        else
+            throw new IllegalArgumentException("Settings must be of type ServerVolatilityBot.Settings");
+    }
+    @Override
     public boolean save(CompoundTag tag) {
         boolean success = super.save(tag);
-        tag.putInt("volatility", volatility);
+        tag.putDouble("volatility", ((Settings)this.settings).volatility);
         return success;
     }
 
@@ -77,7 +109,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
         boolean success = super.load(tag);
         if(!tag.contains("volatility"))
             return false;
-        volatility = tag.getInt("volatility");
+        ((Settings)this.settings).volatility = tag.getInt("volatility");
         return success;
     }
 

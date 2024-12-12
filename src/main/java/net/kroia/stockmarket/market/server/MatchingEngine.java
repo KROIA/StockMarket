@@ -93,7 +93,7 @@ public class MatchingEngine implements ServerSaveable {
         return orders;
     }
 
-    public void getOrders(String playerUUID, ArrayList<Order> orders)
+    public void getOrders(UUID playerUUID, ArrayList<Order> orders)
     {
         for(LimitOrder order : limitBuyOrders)
         {
@@ -105,6 +105,14 @@ public class MatchingEngine implements ServerSaveable {
             if(order.getPlayerUUID().equals(playerUUID))
                 orders.add(order);
         }
+    }
+    public PriorityQueue<LimitOrder> getBuyOrders()
+    {
+        return limitBuyOrders;
+    }
+    public PriorityQueue<LimitOrder> getSellOrders()
+    {
+        return limitSellOrders;
     }
 
     /**
@@ -144,48 +152,11 @@ public class MatchingEngine implements ServerSaveable {
         if(fillVolume != 0)
         {
             marketOrder.markAsInvalid("Not enough "+(marketOrder.isBuy()?"sell":"buy")+
-                    " orders to fill the market order: "+marketOrder);
+                    " orders to fill the market order");
             return false;
         }
         return true;
     }
-    /*private boolean processMarketOrder(MarketOrder marketOrder)
-    {
-        // Process the market order
-        int amount = -marketOrder.getAmount();
-        PriorityQueue<LimitOrder> limitOrders = marketOrder.isBuy() ? limitSellOrders : limitBuyOrders;
-        ArrayList<LimitOrder> toRemove = new ArrayList<>();
-
-        int volume = 0;
-        for(LimitOrder limitOrder : limitOrders)
-        {
-            int currentAmount = amount;
-            amount = limitOrder.fill(amount);
-            int deltaVolume = currentAmount - amount;
-            volume += deltaVolume;
-            setPrice(limitOrder.getPrice());
-            if(limitOrder.isFilled())
-                toRemove.add(limitOrder);
-            if(deltaVolume != 0)
-            {
-                marketOrder.changeAveragePrice(deltaVolume, price);
-                marketOrder.fill(deltaVolume);
-            }
-            if(amount == 0)
-            {
-                break;
-            }
-
-        }
-        limitOrders.removeAll(toRemove);
-        tradeVolume += Math.abs(volume);
-        if(amount == 0)
-            return true;
-
-        marketOrder.markAsInvalid("Not enough "+(marketOrder.isBuy()?"sell":"buy")+ " orders to fill the market order");
-        StockMarketMod.LOGGER.warn("Market order not fully processed: {}", marketOrder);
-        return false;
-    }*/
 
 
     private boolean processSpotOrder(LimitOrder limitOrder)
@@ -238,60 +209,7 @@ public class MatchingEngine implements ServerSaveable {
         limitOrders.removeAll(toRemove);
         return fillVolume == 0;
     }
-    /*
-    private boolean processSpotOrder(LimitOrder spotOrder)
-    {
 
-        // Process the spot order
-        int amount = -spotOrder.getAmount();
-        PriorityQueue<LimitOrder> spotOrders = spotOrder.isBuy() ? limitSellOrders : limitBuyOrders;
-        ArrayList<LimitOrder> toRemove = new ArrayList<>();
-
-        for(LimitOrder otherOrder : spotOrders)
-        {
-            if(otherOrder.getPrice() == spotOrder.getPrice())
-            {
-                amount = otherOrder.fill(amount);
-                setPrice(otherOrder.getPrice());
-                if(otherOrder.isFilled())
-                    toRemove.add(otherOrder);
-            }
-            else
-            {
-                if(spotOrder.isBuy() && spotOrder.getPrice() > otherOrder.getPrice())
-                {
-                    amount = otherOrder.fill(amount);
-                    setPrice(otherOrder.getPrice());
-                    if(otherOrder.isFilled())
-                        toRemove.add(otherOrder);
-                }
-                else if(spotOrder.isSell() && spotOrder.getPrice() < otherOrder.getPrice())
-                {
-                    amount = otherOrder.fill(amount);
-                    setPrice(otherOrder.getPrice());
-                    if(otherOrder.isFilled())
-                        toRemove.add(otherOrder);
-                }
-            }
-
-            if(amount == 0)
-            {
-                break;
-            }
-        }
-
-
-
-        int deltaVolume = Math.abs(spotOrder.getAmount()+amount);
-
-
-        spotOrder.changeAveragePrice(deltaVolume, price);
-        spotOrder.fill(spotOrder.getAmount()+amount);
-        tradeVolume += deltaVolume;
-        spotOrders.removeAll(toRemove);
-        return amount == 0;
-    }
-*/
     public ArrayList<LimitOrder> getLimitBuyOrders() {
         return new ArrayList<>(limitBuyOrders);
     }
@@ -391,6 +309,43 @@ public class MatchingEngine implements ServerSaveable {
         }
         orderbookVolume.setVolume(volume);
         return orderbookVolume;
+    }
+
+    public int getVolume(int price)
+    {
+        int volume = 0;
+        if(price < this.price)
+        {
+            for(LimitOrder order : limitBuyOrders)
+            {
+                if(order.getPrice() == price)
+                    volume += order.getAmount()-order.getFilledAmount();
+            }
+        }
+        else
+        {
+            for(LimitOrder order : limitSellOrders)
+            {
+                if(order.getPrice() == price)
+                    volume += order.getAmount()-order.getFilledAmount();
+            }
+        }
+        return volume;
+    }
+    public int getVolume(int minPrice, int maxPrice)
+    {
+        int volume = 0;
+        for(LimitOrder order : limitBuyOrders)
+        {
+            if(order.getPrice() >= minPrice && order.getPrice() <= maxPrice)
+                volume += order.getAmount()-order.getFilledAmount();
+        }
+        for(LimitOrder order : limitSellOrders)
+        {
+            if(order.getPrice() >= minPrice && order.getPrice() <= maxPrice)
+                volume += order.getAmount()-order.getFilledAmount();
+        }
+        return volume;
     }
 
 

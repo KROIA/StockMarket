@@ -95,7 +95,7 @@ public class TradeScreen extends Screen {
     static long lastTickCount = 0;
 
     static TradeScreen instance;
-    static boolean test = true;
+    //static boolean test = true;
     static StockMarketBlockEntity blockEntity;
 
     public TradeScreen(StockMarketBlockEntity blockEntity) {
@@ -283,7 +283,7 @@ public class TradeScreen extends Screen {
             //ClientMarket.subscribeMarketUpdate(itemID);
             //updatePlotsData();
 
-            if (!test) {
+            /*if (!test) {
                 test = true;
                 // Create some dummy orders
                 ClientMarket.createOrder(itemID, -30, 90);
@@ -293,17 +293,18 @@ public class TradeScreen extends Screen {
                 ClientMarket.createOrder(itemID, 1, 45);
                 ClientMarket.createOrder(itemID, 5, 44);
                 ClientMarket.createOrder(itemID, 20, 40);
-            }
+            }*/
         }
     }
 
-    public static void updatePlotsData(int minPrice, int maxPrice) {
+    public static void updatePlotsData() {
         ClientTradeItem item = ClientMarket.getTradeItem(itemID);
         if (item == null) {
             StockMarketMod.LOGGER.warn("Trade item not found: " + itemID);
             return;
         }
-        candleStickChart.setMinMaxPrice(minPrice, maxPrice);
+
+        candleStickChart.setMinMaxPrice(item.getVisualMinPrice(), item.getVisualMaxPrice());
         candleStickChart.setPriceHistory(item.getPriceHistory());
         orderbookVolumeChart.setOrderBookVolume(item.getOrderBookVolume());
         orderListWidget.init();

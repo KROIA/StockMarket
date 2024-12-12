@@ -51,7 +51,7 @@ public class SyncTradeItemsPacket {
         for(var entry : serverTradeItemMap.entrySet())
         {
             ServerTradeItem item = entry.getValue();
-            syncPricePackets.add(new SyncPricePacket(item.getItemID(), player.getStringUUID()));
+            syncPricePackets.add(new SyncPricePacket(item.getItemID(), player.getUUID()));
             i++;
         }
 

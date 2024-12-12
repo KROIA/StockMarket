@@ -13,6 +13,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;
 
 import java.util.ArrayList;
+import java.util.UUID;
 import java.util.function.Supplier;
 
 public class SyncPricePacket {
@@ -69,7 +70,7 @@ public class SyncPricePacket {
         commonSetup(itemID);
         this.orders = ServerMarket.getOrders(itemID);
     }
-    public SyncPricePacket(String itemID, String playerUUID)
+    public SyncPricePacket(String itemID, UUID playerUUID)
     {
         commonSetup(itemID);
         this.orders = ServerMarket.getOrders(itemID, playerUUID);
@@ -121,7 +122,7 @@ public class SyncPricePacket {
 
     public static void sendPacket(String itemID, ServerPlayer player)
     {
-        SyncPricePacket packet = new SyncPricePacket(itemID, player.getStringUUID());
+        SyncPricePacket packet = new SyncPricePacket(itemID, player.getUUID());
         ModMessages.sendToPlayer(packet, player);
     }
 

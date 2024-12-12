@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.market.server;
 
+import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncPricePacket;
 import net.kroia.stockmarket.util.OrderbookVolume;
@@ -7,8 +8,12 @@ import net.kroia.stockmarket.util.PriceHistory;
 import net.kroia.stockmarket.util.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 import java.util.ArrayList;
+import java.util.UUID;
 
 public class ServerTradeItem implements ServerSaveable {
     private String itemID;
@@ -16,17 +21,25 @@ public class ServerTradeItem implements ServerSaveable {
     private final ArrayList<ServerPlayer> subscribers = new ArrayList<>();
     private final MarketManager marketManager;
 
+    private long lastMillis = 0;
+    protected long updateTimerIntervallMS = 100;
+
+
     public ServerTradeItem(String itemID, int startPrice)
     {
         this.itemID = itemID;
         this.priceHistory = new PriceHistory(itemID, startPrice);
         this.marketManager = new MarketManager(this, startPrice, priceHistory);
+
+        MinecraftForge.EVENT_BUS.addListener(this::onServerTick);
     }
 
     private ServerTradeItem()
     {
         this.priceHistory = new PriceHistory("", 0);
         this.marketManager = new MarketManager(this, 0, priceHistory);
+
+        MinecraftForge.EVENT_BUS.addListener(this::onServerTick);
     }
     public static ServerTradeItem loadFromTag(CompoundTag tag)
     {
@@ -34,6 +47,32 @@ public class ServerTradeItem implements ServerSaveable {
         if(item.load(tag))
             return item;
         return null;
+    }
+
+    public void addTradingBot(ServerTradingBot bot)
+    {
+        marketManager.addTradingBot(bot);
+    }
+    public void removeTradingBot(ServerTradingBot bot)
+    {
+        marketManager.removeTradingBot(bot);
+    }
+    public void removeAllBots()
+    {
+        marketManager.removeAllBots();
+    }
+    public int getBotCount()
+    {
+        return marketManager.getBotCount();
+    }
+
+    public void setUpdateInterval(long intervalMillis)
+    {
+        updateTimerIntervallMS = intervalMillis;
+    }
+    public long getUpdateInterval()
+    {
+        return updateTimerIntervallMS;
     }
 
     public String getItemID()
@@ -73,7 +112,7 @@ public class ServerTradeItem implements ServerSaveable {
     {
         return marketManager.getOrders();
     }
-    public void getOrders(String playerUUID, ArrayList<Order> orders)
+    public void getOrders(UUID playerUUID, ArrayList<Order> orders)
     {
         marketManager.getOrders(playerUUID, orders);
     }
@@ -120,11 +159,6 @@ public class ServerTradeItem implements ServerSaveable {
         SyncPricePacket.sendPacket(itemID, player);
     }
 
-    public void updateBot()
-    {
-        marketManager.updateBot();
-        notifySubscribers();
-    }
 
     @Override
     public boolean save(CompoundTag tag) {
@@ -157,5 +191,19 @@ public class ServerTradeItem implements ServerSaveable {
         priceHistory.setItemID(itemID);
 
         return !itemID.isEmpty();
+    }
+
+    @SubscribeEvent
+    public void onServerTick(TickEvent.ServerTickEvent event) {
+        if(subscribers.size() == 0)
+            return;
+        if (event.phase == TickEvent.Phase.END) {
+            long currentTime = System.currentTimeMillis();
+
+            if(currentTime - lastMillis > updateTimerIntervallMS) {
+                lastMillis = currentTime;
+                notifySubscribers();
+            }
+        }
     }
 }

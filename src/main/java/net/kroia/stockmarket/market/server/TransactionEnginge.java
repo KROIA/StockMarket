@@ -32,8 +32,8 @@ public class TransactionEnginge {
 
         long money = fillVolume * currentPrice;
 
-        UUID playerUUID1 = UUID.fromString(o1.getPlayerUUID());
-        UUID playerUUID2 = UUID.fromString(o2.getPlayerUUID());
+        UUID playerUUID1 = o1.getPlayerUUID();
+        UUID playerUUID2 = o2.getPlayerUUID();
         BankUser user1 = ServerBankManager.getUser(playerUUID1);
         BankUser user2 = ServerBankManager.getUser(playerUUID2);
         if(user2 == null)

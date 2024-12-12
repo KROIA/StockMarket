@@ -1,5 +1,11 @@
 package net.kroia.stockmarket;
 
+import net.kroia.stockmarket.market.server.bot.ServerMarketMakerBot;
+import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
+import net.kroia.stockmarket.market.server.bot.ServerTradingBotFactory;
+import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
+
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -16,6 +22,7 @@ public class ModSettings {
 
     public static final class Market
     {
+        public static final long SHIFT_PRICE_CANCLE_INTERVAL_MS = 10000;
         public static final HashMap<String, Integer> TRADABLE_ITEMS;
         static{
             TRADABLE_ITEMS = new HashMap<>();
@@ -45,26 +52,43 @@ public class ModSettings {
         public static final boolean ENABLED = true;
 
         public static final String USER_NAME = "StockMarketBot";
-        public static final long STARTING_BALANCE = 1000000;
+        public static final long STARTING_BALANCE = 1000000; // Money balance
 
-        public static final HashMap<String, Long> STARTING_STOCKS = new HashMap<>(
-            Map.of(
-                "minecraft:iron_ingot", 1000L,
-                "minecraft:gold_ingot", 1000L,
-                "minecraft:diamond", 1000L,
-                "minecraft:emerald", 1000L
-            )
-        );
+        public static final HashMap<String, Long> STARTING_STOCKS;
+        static{
+            STARTING_STOCKS = new HashMap<>();
+            STARTING_STOCKS.put("minecraft:iron_ingot", 1000L);
+            STARTING_STOCKS.put("minecraft:gold_ingot", 1000L);
+            STARTING_STOCKS.put("minecraft:diamond", 1000L);
+            STARTING_STOCKS.put("minecraft:emerald", 1000L);
+        }
         public static final int MAX_ORDERS = 50;
 
         public static final double VOLUME_SCALE = 10;
         public static final double VOLUME_SPREAD = 10;
+        public static final long UPDATE_TIMER_INTERVAL_MS = 1000;
 
         public static final class VolatilityBot
         {
             public static final int VOLATILITY = 1;
         }
 
+        private static HashMap<String, ArrayList<ServerTradingBotFactory.BotBuilderContainer>> bots;
+        public static HashMap<String, ArrayList<ServerTradingBotFactory.BotBuilderContainer>> createBots()
+        {
+            if(bots != null)
+                return bots;
+            bots = new HashMap<>();
+
+            ServerTradingBotFactory.botTableBuilder(bots, "minecraft:diamond", new ServerTradingBot(), new ServerTradingBot.Settings(), 1000);
+            ServerTradingBotFactory.botTableBuilder(bots, "minecraft:diamond", new ServerVolatilityBot(), new ServerVolatilityBot.Settings(),1000);
+            ServerTradingBotFactory.botTableBuilder(bots, "minecraft:iron_ingot", new ServerVolatilityBot(), new ServerVolatilityBot.Settings(), 1000);
+            ServerTradingBotFactory.botTableBuilder(bots, "minecraft:emerald", new ServerTradingBot(), new ServerTradingBot.Settings(), 100);
+            ServerTradingBotFactory.botTableBuilder(bots, "minecraft:gold_ingot", new ServerTradingBot(), new ServerTradingBot.Settings(), 100);
+            ServerTradingBotFactory.botTableBuilder(bots, "minecraft:gold_ingot", new ServerMarketMakerBot(), new ServerMarketMakerBot.Settings(), 1000);
+
+            return bots;
+        }
     }
 
 }

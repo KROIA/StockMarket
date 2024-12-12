@@ -8,6 +8,8 @@ import net.kroia.stockmarket.util.ServerPlayerList;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.util.UUID;
+
 public class MarketOrder extends Order {
     private long lockedMoney = 0;
 
@@ -15,30 +17,30 @@ public class MarketOrder extends Order {
     {
         int currentPrice = ServerMarket.getPrice(itemID);
         if(Order.tryReserveBankFund(player, itemID, amount, currentPrice)) {
-            MarketOrder order = new MarketOrder(player.getUUID().toString(), itemID, amount);
+            MarketOrder order = new MarketOrder(player.getUUID(), itemID, amount);
             if(amount > 0)
                 order.lockedMoney = Math.abs(amount) * currentPrice;
             return order;
         }
         return null;
     }
-    public static MarketOrder createBotOrder(String uuid, Bank botMoneyBank, Bank botItemBank, String itemID, int amount)
+    public static MarketOrder createBotOrder(UUID playerUUID, Bank botMoneyBank, Bank botItemBank, String itemID, int amount)
     {
         int currentPrice = ServerMarket.getPrice(itemID);
-        if(Order.tryReserveBankFund(botMoneyBank, botItemBank, uuid, itemID, amount, currentPrice, null)){
-            MarketOrder order = new MarketOrder(uuid, itemID, amount, true);
+        if(Order.tryReserveBankFund(botMoneyBank, botItemBank, playerUUID, itemID, amount, currentPrice, null)){
+            MarketOrder order = new MarketOrder(playerUUID, itemID, amount, true);
             if(amount > 0)
                 order.lockedMoney = Math.abs(amount) * currentPrice;
             return order;
         }
         return null;
     }
-    protected MarketOrder(String playerUUID, String itemID, int amount) {
+    protected MarketOrder(UUID playerUUID, String itemID, int amount) {
         super(playerUUID, itemID, amount);
 
         //StockMarketMod.LOGGER.info("MarketOrder created: " + toString());
     }
-    protected MarketOrder(String playerUUID, String itemID, int amount, boolean isBot) {
+    protected MarketOrder(UUID playerUUID, String itemID, int amount, boolean isBot) {
         super(playerUUID, itemID, amount, isBot);
 
         //StockMarketMod.LOGGER.info("MarketOrder created: " + toString());
@@ -69,14 +71,11 @@ public class MarketOrder extends Order {
 
     @Override
     public String toString() {
-        String playerName;
-        if(this.isBot) {
-            playerName = playerUUID;
-        }else {
-            ServerPlayer player = ServerPlayerList.getPlayer(playerUUID);
-            playerName = player == null ? "UUID:" + playerUUID : player.getName().getString();
-        }
+        String playerName = ServerPlayerList.getPlayerName(playerUUID);
+        if(playerName.isEmpty())
+            playerName = playerUUID.toString();
         return "MarketOrder{\n  Owner: " + playerName +
+                "\n  OrderID: " + orderID +
                 "\n  Amount: " + amount +
                 "\n  Filled: " + filledAmount +
                 "\n  AveragePrice: " + averagePrice +

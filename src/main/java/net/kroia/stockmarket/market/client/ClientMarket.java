@@ -48,7 +48,7 @@ public class ClientMarket {
             return;
         }
         tradeItem.handlePacket(packet);
-        TradeScreen.updatePlotsData(packet.getMinPrice(), packet.getMaxPrice());
+        TradeScreen.updatePlotsData();
     }
     public static void handlePacket(SyncTradeItemsPacket packet)
     {
@@ -75,7 +75,7 @@ public class ClientMarket {
             StockMarketMod.LOGGER.info("Trade item: {}", tradeItem.getItemID());
             if(Objects.equals(syncPricePacket.getPriceHistory().getItemID(), TradeScreen.getItemID()))
             {
-                TradeScreen.updatePlotsData(syncPricePacket.getMinPrice(), syncPricePacket.getMaxPrice());
+                TradeScreen.updatePlotsData();
             }
         }
         ClientMarket.tradeItems = tradeItems;

@@ -5,6 +5,7 @@ import net.kroia.stockmarket.banking.BankUser;
 import net.kroia.stockmarket.banking.bank.Bank;
 import net.kroia.stockmarket.banking.ServerBankManager;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncOrderPacket;
+import net.kroia.stockmarket.util.ServerPlayerList;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -18,7 +19,7 @@ public abstract class Order {
 
     protected long orderID;
     protected String itemID;
-    protected String playerUUID;
+    protected UUID playerUUID;
     //private final String itemID;
     protected int amount;
     protected int filledAmount = 0;
@@ -43,14 +44,14 @@ public abstract class Order {
     }
     protected Status status = Status.PENDING;
 
-    protected Order(String playerUUID, String itemID, int amount) {
+    protected Order(UUID playerUUID, String itemID, int amount) {
         this.itemID = itemID;
         this.orderID = uniqueOrderID();
         this.playerUUID = playerUUID;
         //this.itemID = itemID;
         this.amount = amount;
     }
-    protected Order(String playerUUID, String itemID, int amount, boolean isBot) {
+    protected Order(UUID playerUUID, String itemID, int amount, boolean isBot) {
         this.itemID = itemID;
         this.orderID = uniqueOrderID();
         this.playerUUID = playerUUID;
@@ -74,28 +75,32 @@ public abstract class Order {
 
         Bank moneyBank = bankUser.getMoneyBank();
         Bank itemBank = bankUser.getBank(itemID);
+        if(itemBank == null)
+        {
+            itemBank = bankUser.createItemBank(itemID, 0);
+        }
 
-        return tryReserveBankFund(moneyBank,itemBank, player.getName().getString(), itemID, amount, price, player);
+        return tryReserveBankFund(moneyBank, itemBank, player.getUUID(), itemID, amount, price, player);
     }
-    protected static boolean tryReserveBankFund(Bank moneyBank, Bank itemBank, String playerName, String itemID, int amount, int price, ServerPlayer dbgPlayer)
+    protected static boolean tryReserveBankFund(Bank moneyBank, Bank itemBank, UUID playerUUID, String itemID, int amount, int price, ServerPlayer dbgPlayer)
     {
         if(moneyBank == null)
         {
-            StockMarketMod.LOGGER.warn("Bank not found for player " + playerName);
+            StockMarketMod.LOGGER.warn("Bank not found for player " + ServerPlayerList.getPlayerName(playerUUID));
             if(dbgPlayer != null)
-                StockMarketMod.printToClientConsole(dbgPlayer, "User "+playerName+" does not own a money bank");
+                StockMarketMod.printToClientConsole(dbgPlayer, "User "+ServerPlayerList.getPlayerName(playerUUID)+" does not own a money bank");
             return false;
         }
         if(itemBank == null)
         {
-            StockMarketMod.LOGGER.warn("User + " + playerName + " has no bank for item " + itemID);
+            StockMarketMod.LOGGER.warn("User + " + ServerPlayerList.getPlayerName(playerUUID) + " has no bank for item " + itemID);
             if(dbgPlayer != null)
-                StockMarketMod.printToClientConsole(dbgPlayer, "User "+playerName+" does not own a bank for item "+itemID);
+                StockMarketMod.printToClientConsole(dbgPlayer, "User "+ServerPlayerList.getPlayerName(playerUUID)+" does not own a bank for item "+itemID);
             return false;
         }
         if(amount > 0) {
             if (!moneyBank.lockAmount((long) price * amount)){
-                StockMarketMod.LOGGER.warn("Insufficient funds for player " + playerName);
+                StockMarketMod.LOGGER.warn("Insufficient funds for player " + ServerPlayerList.getPlayerName(playerUUID));
                 if(dbgPlayer != null)
                     StockMarketMod.printToClientConsole(dbgPlayer, "Insufficient funds to buy "+amount+" "+itemID+" for $"+price+" each");
                 return false;
@@ -103,7 +108,7 @@ public abstract class Order {
         }
         else {
             if (!itemBank.lockAmount(-amount)){
-                StockMarketMod.LOGGER.warn("Insufficient items ("+itemID+") for player " + playerName);
+                StockMarketMod.LOGGER.warn("Insufficient items ("+itemID+") for player " + ServerPlayerList.getPlayerName(playerUUID));
                 if(dbgPlayer != null)
                     StockMarketMod.printToClientConsole(dbgPlayer, "Insufficient items to sell "+-amount+" "+itemID);
                 return false;
@@ -125,7 +130,7 @@ public abstract class Order {
     {
         orderID = buf.readLong();
         itemID = buf.readUtf();
-        playerUUID = buf.readUtf();
+        playerUUID = buf.readUUID();
         amount = buf.readInt();
         filledAmount = buf.readInt();
         transferedMoney = buf.readLong();
@@ -174,7 +179,7 @@ public abstract class Order {
     boolean isEqual(Order other)
     {
         return  orderID == other.orderID &&
-                itemID.equals(other.itemID) &&
+                itemID.compareTo(other.itemID)==0 &&
                 playerUUID.compareTo(other.playerUUID)==0 &&
                 amount == other.amount &&
                 filledAmount == other.filledAmount &&
@@ -183,7 +188,7 @@ public abstract class Order {
                 status == other.status;
     }
 
-    public String getPlayerUUID() {
+    public UUID getPlayerUUID() {
         return playerUUID;
     }
     public long getOrderID() {
@@ -220,8 +225,10 @@ public abstract class Order {
     }
     public void markAsInvalid(String reason) {
         invalidReason = reason;
-        if(!isBot)
+        if(!isBot) {
             StockMarketMod.LOGGER.info("Order invalid: " + toString());
+            StockMarketMod.printToClientConsole(getPlayerUUID(), "Order invalid: " + reason);
+        }
         unlockLockedMoney();
         setStatus(Status.INVALID);
     }
@@ -233,22 +240,22 @@ public abstract class Order {
     }
     private void unlockLockedMoney()
     {
-        BankUser user = ServerBankManager.getUser(UUID.fromString(playerUUID));
+        BankUser user = ServerBankManager.getUser(playerUUID);
         if(user == null)
         {
-            StockMarketMod.LOGGER.error("BankUser not found for player " + playerUUID);
+            StockMarketMod.LOGGER.error("BankUser not found for player " + ServerPlayerList.getPlayerName(playerUUID));
             return;
         }
         Bank moneyBank = user.getMoneyBank();
         Bank itemBank = user.getBank(itemID);
         if(moneyBank == null)
         {
-            StockMarketMod.LOGGER.error("MoneyBank not found for player " + playerUUID);
+            StockMarketMod.LOGGER.error("MoneyBank not found for player " + ServerPlayerList.getPlayerName(playerUUID));
             return;
         }
         if(itemBank == null)
         {
-            StockMarketMod.LOGGER.error("ItemBank not found for player " + playerUUID);
+            StockMarketMod.LOGGER.error("ItemBank not found for player " + ServerPlayerList.getPlayerName(playerUUID));
             return;
         }
 
@@ -264,9 +271,9 @@ public abstract class Order {
         else if(this instanceof  MarketOrder marketOrder)
         {
             if(marketOrder.isBuy())
-                moneyBank.unlockAmount(marketOrder.getLockedMoney());
+                moneyBank.unlockAmount(marketOrder.getLockedMoney()-Math.abs(marketOrder.getTransferedMoney()));
             else
-                itemBank.unlockAmount(Math.abs(marketOrder.getAmount()+marketOrder.getFilledAmount()));
+                itemBank.unlockAmount(Math.abs(marketOrder.getAmount())-Math.abs(marketOrder.getFilledAmount()));
         }
     }
 
@@ -327,7 +334,7 @@ public abstract class Order {
     public void toBytes(FriendlyByteBuf buf) {
         buf.writeLong(orderID);
         buf.writeUtf(itemID);
-        buf.writeUtf(playerUUID);
+        buf.writeUUID(playerUUID);
         buf.writeInt(amount);
         buf.writeInt(filledAmount);
         buf.writeLong(transferedMoney);
