@@ -8,6 +8,7 @@ import net.kroia.stockmarket.banking.bank.BotMoneyBank;
 import net.kroia.stockmarket.market.server.MarketManager;
 import net.kroia.stockmarket.market.server.MatchingEngine;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
+import net.kroia.stockmarket.market.server.order.MarketOrder;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.util.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
@@ -214,6 +215,8 @@ public class ServerTradingBot implements ServerSaveable {
     }
 
 
+
+
     public void clearOrders()
     {
         matchingEngine.removeBuyOrder_internal(buyOrders);
@@ -251,30 +254,124 @@ public class ServerTradingBot implements ServerSaveable {
             if(buyVolume > 0) {
 
                 if(moneyBank.getBalance()>(buyVolume*2)*buyPrice) {
-                    LimitOrder buyOrder = LimitOrder.createBotOrder(botUUID, moneyBank, itemBank, itemID, buyVolume, buyPrice);
-                    if (buyOrder != null) {
-                        matchingEngine.addOrder(buyOrder);
-                        buyOrders.add(buyOrder);
-                    }
+                    limitTrade(buyVolume, buyPrice);
                 }
             }
 
             int sellVolume = getAvailableVolume(sellPrice);
             if(sellVolume < 0) {
                 if(itemBank.getBalance() > -sellVolume) {
-                    LimitOrder sellOrder = LimitOrder.createBotOrder(botUUID, moneyBank, itemBank, itemID, sellVolume, sellPrice);
-                    if (sellOrder != null) {
-                        matchingEngine.addOrder(sellOrder);
-                        sellOrders.add(sellOrder);
-                    }
+                    sellLimit(-sellVolume, sellPrice);
                 }
             }
-
-
-
-
         }
     }
+
+    protected boolean buyLimit(int volume, int price)
+    {
+        if(volume <= 0 || price < 0 || matchingEngine == null)
+            return false;
+        BankUser user = ServerBankManager.getBotUser();
+        Bank moneyBank = user.getMoneyBank();
+        String itemID = parent.getItemID();
+        Bank itemBank = user.getBank(itemID);
+        UUID botUUID = getUUID();
+        LimitOrder buyOrder = LimitOrder.createBotOrder(botUUID, moneyBank, itemBank, itemID, volume, price);
+        if(buyOrder != null)
+        {
+            matchingEngine.addOrder(buyOrder);
+            buyOrders.add(buyOrder);
+            return true;
+        }
+        return false;
+    }
+    protected boolean sellLimit(int volume, int price)
+    {
+        if(volume <= 0 || price < 0 || matchingEngine == null)
+            return false;
+        BankUser user = ServerBankManager.getBotUser();
+        Bank moneyBank = user.getMoneyBank();
+        String itemID = parent.getItemID();
+        Bank itemBank = user.getBank(itemID);
+        UUID botUUID = getUUID();
+        LimitOrder sellOrder = LimitOrder.createBotOrder(botUUID, moneyBank, itemBank, itemID, -volume, price);
+        if(sellOrder != null)
+        {
+            matchingEngine.addOrder(sellOrder);
+            sellOrders.add(sellOrder);
+            return true;
+        }
+        return false;
+    }
+    protected boolean limitTrade(int volume, int price)
+    {
+        if(volume == 0 || price < 0 || matchingEngine == null)
+            return false;
+        BankUser user = ServerBankManager.getBotUser();
+        Bank moneyBank = user.getMoneyBank();
+        String itemID = parent.getItemID();
+        Bank itemBank = user.getBank(itemID);
+        UUID botUUID = getUUID();
+        LimitOrder order = LimitOrder.createBotOrder(botUUID, moneyBank, itemBank, itemID, volume, price);
+        if(order != null)
+        {
+            matchingEngine.addOrder(order);
+            return true;
+        }
+        return false;
+    }
+    protected boolean buyMarket(int volume)
+    {
+        if(volume <= 0 || matchingEngine == null)
+            return false;
+        BankUser user = ServerBankManager.getBotUser();
+        Bank moneyBank = user.getMoneyBank();
+        String itemID = parent.getItemID();
+        Bank itemBank = user.getBank(itemID);
+        UUID botUUID = getUUID();
+        MarketOrder buyOrder = MarketOrder.createBotOrder(botUUID, moneyBank, itemBank, itemID, volume);
+        if(buyOrder != null)
+        {
+            matchingEngine.addOrder(buyOrder);
+            return true;
+        }
+        return false;
+    }
+    protected boolean sellMarket(int volume)
+    {
+        if(volume == 0 || matchingEngine == null)
+            return false;
+        BankUser user = ServerBankManager.getBotUser();
+        Bank moneyBank = user.getMoneyBank();
+        String itemID = parent.getItemID();
+        Bank itemBank = user.getBank(itemID);
+        UUID botUUID = getUUID();
+        MarketOrder sellOrder = MarketOrder.createBotOrder(botUUID, moneyBank, itemBank, itemID, volume);
+        if(sellOrder != null)
+        {
+            matchingEngine.addOrder(sellOrder);
+            return true;
+        }
+        return false;
+    }
+    protected boolean marketTrade(int volume)
+    {
+        if(volume == 0 || matchingEngine == null)
+            return false;
+        BankUser user = ServerBankManager.getBotUser();
+        Bank moneyBank = user.getMoneyBank();
+        String itemID = parent.getItemID();
+        Bank itemBank = user.getBank(itemID);
+        UUID botUUID = getUUID();
+        MarketOrder order = MarketOrder.createBotOrder(botUUID, moneyBank, itemBank, itemID, volume);
+        if(order != null)
+        {
+            matchingEngine.addOrder(order);
+            return true;
+        }
+        return false;
+    }
+
 
     protected int getAvailableVolume(int price)
     {

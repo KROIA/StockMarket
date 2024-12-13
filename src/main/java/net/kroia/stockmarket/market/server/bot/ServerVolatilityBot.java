@@ -56,12 +56,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
         int orderVolume = (int)((randomWalk.nextValue())*((Settings)this.settings).volatility);
         if(orderVolume == 0)
             return;
-        Bank moneyBank = ServerBankManager.getBotUser().getMoneyBank();
-        Bank itemBank = ServerBankManager.getBotUser().getBank(getItemID());
-
-
-        MarketOrder order = MarketOrder.createBotOrder(getUUID(),moneyBank,itemBank, getItemID(), orderVolume);
-        getMatchingEngine().addOrder(order);
+        marketTrade(orderVolume);
     }
 
     /**

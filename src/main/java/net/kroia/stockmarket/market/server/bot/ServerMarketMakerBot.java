@@ -126,9 +126,8 @@ public class ServerMarketMakerBot extends ServerTradingBot {
 
         orderVolume = Math.min(orderVolume, maxVolume);
 
-        MarketOrder order = MarketOrder.createBotOrder(getUUID(),moneyBank,itemBank, getItemID(), orderVolume);
-        getMatchingEngine().addOrder(order);
-        print("Book swipe up: "+orderVolume+" @ "+upperPrice);
+        if(marketTrade(orderVolume))
+            print("Book swipe up: "+orderVolume+" @ "+upperPrice);
         currentAction = Action.IDLE;
     }
     private void action_book_swipe_down()
@@ -152,9 +151,8 @@ public class ServerMarketMakerBot extends ServerTradingBot {
 
         orderVolume = Math.min(orderVolume, maxVolume);
 
-        MarketOrder order = MarketOrder.createBotOrder(getUUID(),moneyBank,itemBank, getItemID(), -orderVolume);
-        getMatchingEngine().addOrder(order);
-        print("Book swipe down: "+orderVolume+" @ "+lowerPrice);
+        if(marketTrade(-orderVolume))
+            print("Book swipe down: "+orderVolume+" @ "+lowerPrice);
         currentAction = Action.IDLE;
     }
     private void action_bullish()
@@ -166,9 +164,8 @@ public class ServerMarketMakerBot extends ServerTradingBot {
         Bank moneyBank = ServerBankManager.getBotUser().getMoneyBank();
         Bank itemBank = ServerBankManager.getBotUser().getBank(getItemID());
 
-        MarketOrder order = MarketOrder.createBotOrder(getUUID(),moneyBank,itemBank, getItemID(), orderVolume);
-        getMatchingEngine().addOrder(order);
-        print("Bullish: "+orderVolume);
+        if(marketTrade(orderVolume))
+            print("Bullish: "+orderVolume);
     }
     private void action_bearish()
     {
@@ -179,9 +176,8 @@ public class ServerMarketMakerBot extends ServerTradingBot {
         Bank moneyBank = ServerBankManager.getBotUser().getMoneyBank();
         Bank itemBank = ServerBankManager.getBotUser().getBank(getItemID());
 
-        MarketOrder order = MarketOrder.createBotOrder(getUUID(),moneyBank,itemBank, getItemID(), -orderVolume);
-        getMatchingEngine().addOrder(order);
-        print("Bearish: "+orderVolume);
+        if(marketTrade(-orderVolume))
+            print("Bearish: "+orderVolume);
     }
 
 
