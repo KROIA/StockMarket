@@ -31,8 +31,12 @@ public class ModCommands {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
 
         // /money                               - Show balance
-        // /money add                           - Add money to self
-        // /money add <user>                    - Add money to another player
+        // /money add <amount>                  - Add money to self
+        // /money add <user> <amount>           - Add money to another player
+        // /money set <amount>                  - Set money to self
+        // /money set <user> <amount>           - Set money to another player
+        // /money remove <amount>               - Remove money from self
+        // /money remove <user> <amount>        - Remove money from another player
         // /money send <user> <amount>          - Send money to another player
         // /money circulation                   - Show money circulation of all players + bots
         dispatcher.register(
@@ -67,6 +71,66 @@ public class ModCommands {
                                         )
                                 )
                         )
+                        .then(Commands.literal("set")
+                                .requires(source -> source.hasPermission(2)) // Admin-only for adding money
+                                .then(Commands.argument("amount", IntegerArgumentType.integer(0))
+                                        .executes(context -> {
+                                            CommandSourceStack source = context.getSource();
+                                            ServerPlayer player = source.getPlayerOrException();
+
+                                            // Get arguments
+                                            String username = player.getName().getString();
+                                            int amount = IntegerArgumentType.getInteger(context, "amount");
+
+                                            // Execute the command on the server_sender
+                                            return executeSetMoney(player, username, amount);
+                                        })) // Add to self
+                                .then(Commands.argument("username", StringArgumentType.string())
+                                        .then(Commands.argument("amount", IntegerArgumentType.integer(0))
+                                                .executes(context -> {
+                                                    CommandSourceStack source = context.getSource();
+                                                    ServerPlayer player = source.getPlayerOrException();
+
+                                                    // Get arguments
+                                                    String username = StringArgumentType.getString(context, "username");
+                                                    int amount = IntegerArgumentType.getInteger(context, "amount");
+
+                                                    // Execute the command on the server_sender
+                                                    return executeSetMoney(player, username, amount);
+                                                })
+                                        )
+                                )
+                        )
+                        .then(Commands.literal("remove")
+                                .requires(source -> source.hasPermission(2)) // Admin-only for adding money
+                                .then(Commands.argument("amount", IntegerArgumentType.integer(0))
+                                        .executes(context -> {
+                                            CommandSourceStack source = context.getSource();
+                                            ServerPlayer player = source.getPlayerOrException();
+
+                                            // Get arguments
+                                            String username = player.getName().getString();
+                                            int amount = IntegerArgumentType.getInteger(context, "amount");
+
+                                            // Execute the command on the server_sender
+                                            return executeRemoveMoney(player, username, amount);
+                                        })) // Add to self
+                                .then(Commands.argument("username", StringArgumentType.string())
+                                        .then(Commands.argument("amount", IntegerArgumentType.integer(0))
+                                                .executes(context -> {
+                                                    CommandSourceStack source = context.getSource();
+                                                    ServerPlayer player = source.getPlayerOrException();
+
+                                                    // Get arguments
+                                                    String username = StringArgumentType.getString(context, "username");
+                                                    int amount = IntegerArgumentType.getInteger(context, "amount");
+
+                                                    // Execute the command on the server_sender
+                                                    return executeRemoveMoney(player, username, amount);
+                                                })
+                                        )
+                                )
+                        )
                         .then(Commands.literal("send")
                                 .then(Commands.argument("username", StringArgumentType.string())
                                         .then(Commands.argument("amount", IntegerArgumentType.integer(0))
@@ -80,7 +144,7 @@ public class ModCommands {
                                                     int amount = IntegerArgumentType.getInteger(context, "amount");
 
                                                     // Execute the command on the server_sender
-                                                    return executeAddMoneySend(player,fromPlayer, toPlayer, amount);
+                                                    return executeSendMoney(player,fromPlayer, toPlayer, amount);
                                                 })
                                         )
                                 )
@@ -216,49 +280,135 @@ public class ModCommands {
 
     private static int executeAddMoney(ServerPlayer executor, String username, int amount) {
         // Server-side logic for adding money
-        ServerPlayer targetPlayer = executor.getServer().getPlayerList().getPlayerByName(username);
-        if(targetPlayer == null) {
+        UUID playerUUID = ServerPlayerList.getPlayerUUID(username);
+        if(playerUUID == null)
+        {
             executor.sendSystemMessage(
                     Component.literal("Player " + username + " not found.")
             );
             return Command.SINGLE_SUCCESS;
         }
-        ServerBankManager.getMoneyBank(targetPlayer.getUUID()).deposit(amount); // Example call
+        Bank bank = ServerBankManager.getMoneyBank(playerUUID);
+        if(bank == null)
+        {
+            executor.sendSystemMessage(
+                    Component.literal("Bank not found for " + username)
+            );
+            return Command.SINGLE_SUCCESS;
+        }
+        bank.deposit(amount);
         executor.sendSystemMessage(
                 Component.literal("Added " + amount + " to " + username + "'s account!")
         );
         return Command.SINGLE_SUCCESS;
     }
-
-    private static int executeAddMoneySend(ServerPlayer executor, String fromUser, String toUser, int amount) {
+    private static int executeSetMoney(ServerPlayer executor, String username, int amount) {
         // Server-side logic for adding money
-        ServerPlayer from = executor.getServer().getPlayerList().getPlayerByName(fromUser);
-        ServerPlayer to = executor.getServer().getPlayerList().getPlayerByName(toUser);
-        if(from == null) {
+        UUID playerUUID = ServerPlayerList.getPlayerUUID(username);
+        if(playerUUID == null)
+        {
+            executor.sendSystemMessage(
+                    Component.literal("Player " + username + " not found.")
+            );
+            return Command.SINGLE_SUCCESS;
+        }
+        Bank bank = ServerBankManager.getMoneyBank(playerUUID);
+        if(bank == null)
+        {
+            executor.sendSystemMessage(
+                    Component.literal("Bank not found for " + username)
+            );
+            return Command.SINGLE_SUCCESS;
+        }
+        bank.setBalance(amount);
+        executor.sendSystemMessage(
+                Component.literal("Set " + amount + " to " + username + "'s account!")
+        );
+        return Command.SINGLE_SUCCESS;
+    }
+    private static int executeRemoveMoney(ServerPlayer executor, String username, int amount) {
+        // Server-side logic for adding money
+        UUID playerUUID = ServerPlayerList.getPlayerUUID(username);
+        if(playerUUID == null)
+        {
+            executor.sendSystemMessage(
+                    Component.literal("Player " + username + " not found.")
+            );
+            return Command.SINGLE_SUCCESS;
+        }
+        Bank bank = ServerBankManager.getMoneyBank(playerUUID);
+        if(bank == null)
+        {
+            executor.sendSystemMessage(
+                    Component.literal("Bank not found for " + username)
+            );
+            return Command.SINGLE_SUCCESS;
+        }
+        if(bank.getBalance() >= amount) {
+            bank.withdraw(amount);
+
+            executor.sendSystemMessage(
+                    Component.literal("Removed " + amount + " from " + username + "'s account!")
+            );
+        }
+        else {
+            executor.sendSystemMessage(
+                    Component.literal("Not enough money in " + username + "'s account!")
+            );
+        }
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private static int executeSendMoney(ServerPlayer executor, String fromUser, String toUser, int amount) {
+        // Server-side logic for adding money
+        ServerPlayer fromPlayer = ServerPlayerList.getPlayer(fromUser);
+        UUID fromPlayerUUID = ServerPlayerList.getPlayerUUID(fromUser);
+        if(fromPlayerUUID == null)
+        {
             executor.sendSystemMessage(
                     Component.literal("Player " + fromUser + " not found.")
             );
             return Command.SINGLE_SUCCESS;
         }
-        if(to == null) {
+        ServerPlayer toPlayer = ServerPlayerList.getPlayer(toUser);
+        UUID toPlayerUUID = ServerPlayerList.getPlayerUUID(toUser);
+        if(toPlayerUUID == null)
+        {
             executor.sendSystemMessage(
                     Component.literal("Player " + toUser + " not found.")
             );
             return Command.SINGLE_SUCCESS;
         }
-        Bank fromBank = ServerBankManager.getMoneyBank(from.getUUID());
-        Bank toBank = ServerBankManager.getMoneyBank(to.getUUID());
 
+        Bank fromBank = ServerBankManager.getMoneyBank(fromPlayerUUID);
+        Bank toBank = ServerBankManager.getMoneyBank(toPlayerUUID);
+
+        if(fromBank == null)
+        {
+            if(fromPlayer != null)
+                StockMarketMod.printToClientConsole(fromPlayer, "You don't have a money bank account.");
+            return Command.SINGLE_SUCCESS;
+        }
+        if(toBank == null)
+        {
+            if(fromPlayer != null)
+                StockMarketMod.printToClientConsole(fromPlayer, toUser + " doesn't have a money bank account.");
+            return Command.SINGLE_SUCCESS;
+        }
         if(fromBank.transfer(amount, toBank))
         {
-            StockMarketMod.printToClientConsole(from, "Transfered " + amount + "$ from " + fromUser + " to " + toUser + "'s account!");
-            StockMarketMod.printToClientConsole(to, "Received " + amount + "$ from " + fromUser + "'s account!");
+            if(fromPlayer != null)
+                StockMarketMod.printToClientConsole(fromPlayer, "Transfered " + amount + "$ from " + fromUser + " to " + toUser + "'s account!");
+            if(toPlayer != null)
+                StockMarketMod.printToClientConsole(fromPlayer, "Received " + amount + "$ from " + fromUser + "'s account!");
         }
         else {
-            if(fromBank.getBalance() < amount)
-                StockMarketMod.printToClientConsole(from, "You don't have enough money to transfer " + amount + "$!");
-            else
-                StockMarketMod.printToClientConsole(from, "Failed to transfer " + amount + "$ to " + toUser + "'s account!");
+            if (fromPlayer != null) {
+                if (fromBank.getBalance() < amount)
+                    StockMarketMod.printToClientConsole(fromPlayer, "You don't have enough money to transfer " + amount + "$!");
+                else
+                    StockMarketMod.printToClientConsole(fromPlayer, "Failed to transfer " + amount + "$ to " + toUser + "'s account!");
+            }
         }
         return Command.SINGLE_SUCCESS;
     }

@@ -40,12 +40,34 @@ public class ServerPlayerList implements ServerSaveable {
 
     public static String getPlayerName(UUID uuid)
     {
-        return uuidToNameMap.get(uuid);
+        if(uuid == null)
+            return null;
+        String name = uuidToNameMap.get(uuid);
+        if(name != null)
+            return name;
+
+        ServerPlayer player = getPlayer(name);
+        if(player == null)
+            return null;
+        addPlayer(player);
+        name = player.getName().toString();
+        return name;
     }
 
     public static UUID getPlayerUUID(String name)
     {
-        return nameToUUIDMap.get(name);
+        if(name == null)
+            return null;
+        UUID playerUUID = nameToUUIDMap.get(name);
+        if(playerUUID != null)
+            return playerUUID;
+
+        ServerPlayer player = getPlayer(name);
+        if(player == null)
+            return null;
+        addPlayer(player);
+        playerUUID = player.getUUID();
+        return playerUUID;
     }
 
     public static boolean hasPlayer(UUID uuid)
@@ -68,8 +90,7 @@ public class ServerPlayerList implements ServerSaveable {
         MinecraftServer server = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
 
         if (server == null) {
-            System.err.println("Server instance is null. Are you calling this from the server_sender?");
-            return null;
+            throw new IllegalStateException("Server instance is null. Are you calling this from the server_sender?");
         }
 
         // Get the player list and fetch the player by UUID
@@ -78,7 +99,18 @@ public class ServerPlayerList implements ServerSaveable {
     }
     public static ServerPlayer getPlayer(String name)
     {
-        return getPlayer(getPlayerUUID(name));
+        if(name == null)
+            return null;
+        // Get the Minecraft server_sender instance
+        MinecraftServer server = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
+
+        if (server == null) {
+            throw new IllegalStateException("Server instance is null. Are you calling this from the server_sender?");
+        }
+
+        // Get the player list and fetch the player by UUID
+        PlayerList playerList = server.getPlayerList();
+        return playerList.getPlayerByName(name); // Returns null if the player is not online
     }
 
     public static boolean saveToTag(CompoundTag tag)
