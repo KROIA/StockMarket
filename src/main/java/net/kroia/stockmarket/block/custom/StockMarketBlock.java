@@ -24,22 +24,14 @@ import net.minecraft.world.level.block.state.properties.DirectionProperty;
 import net.minecraft.world.phys.BlockHitResult;
 import org.jetbrains.annotations.Nullable;
 
-public class StockMarketBlock extends Block implements EntityBlock {
+public class StockMarketBlock extends TerminalBlock implements EntityBlock {
 
     public static final String NAME = "stock_market_block";
 
-    public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
-
     public StockMarketBlock()
     {
-        super(BlockBehaviour.Properties.copy(Blocks.IRON_BLOCK));
-        this.registerDefaultState(this.defaultBlockState().setValue(FACING, Direction.NORTH)); // Default facing
-
+        super();
     }
-    public StockMarketBlock(Properties pProperties) {
-        super(pProperties);
-    }
-
     @Nullable
     @Override
     public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
@@ -49,23 +41,13 @@ public class StockMarketBlock extends Block implements EntityBlock {
         super.onPlace(state, level, pos, oldState, isMoving);
         if (!level.isClientSide) {
             BlockEntity blockEntity = level.getBlockEntity(pos);
-            StockMarketMod.LOGGER.info("placing block");
+            //StockMarketMod.LOGGER.info("placing block");
             if (blockEntity instanceof StockMarketBlockEntity) {
-                StockMarketMod.LOGGER.info("Entity is StockMarketBlock");
+                //StockMarketMod.LOGGER.info("Entity is StockMarketBlock");
                 StockMarketBlockEntity stockMarketBlock = (StockMarketBlockEntity) blockEntity;
                 // Init stockMarketBlock entity if needed
             }
         }
-    }
-
-    @Override
-    protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
-        builder.add(FACING);
-    }
-
-    @Override
-    public BlockState getStateForPlacement(BlockPlaceContext context) {
-        return this.defaultBlockState().setValue(FACING, context.getHorizontalDirection().getOpposite());
     }
 
     @Override
@@ -85,24 +67,14 @@ public class StockMarketBlock extends Block implements EntityBlock {
         }
     }
     @Override
-    public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
+    public void openGui(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
         if (!level.isClientSide && player instanceof ServerPlayer)
         {
-            StockMarketMod.LOGGER.info("server_sender use StockMarketBlock");
             SyncStockMarketBlockEntityPacket.sendPacketToClient(pos, (StockMarketBlockEntity) level.getBlockEntity(pos), (ServerPlayer) player);
-            // Open the screen on the server_sender side
-            //NetworkHooks.openScreen((ServerPlayer) player, new SimpleMenuProvider(
-            //        (id, playerInventory, playerEntity) -> new ChartMenu(id, playerInventory,
-            //                (StockMarketBlockEntity) level.getBlockEntity(pos),
-            //                ContainerLevelAccess.create(level,pos)),
-            //        Component.translatable("container.chart")));
         } else if (level.isClientSide) {
             // On the client side, open the TradeScreen
-            StockMarketMod.LOGGER.info("client use StockMarketBlock");
-            //Minecraft.getInstance().setScreen(new TradeScreen(((StockMarketBlockEntity) level.getBlockEntity(pos)).getChartData()));
             BlockEntity entity = level.getBlockEntity(pos);
-            return ClientHooks.openStockMarketBlockScreen(entity, pos);
+            ClientHooks.openStockMarketBlockScreen(entity, pos);
         }
-        return InteractionResult.SUCCESS;  // Indicate the interaction was successful
     }
 }

@@ -22,7 +22,7 @@ public class ModSettings {
 
     public static final class Market
     {
-        public static final long SHIFT_PRICE_CANCLE_INTERVAL_MS = 10000;
+        public static final long SHIFT_PRICE_CANCLE_INTERVAL_MS = 60000;
         public static final HashMap<String, Integer> TRADABLE_ITEMS;
         static{
             TRADABLE_ITEMS = new HashMap<>();
@@ -66,7 +66,7 @@ public class ModSettings {
 
         public static final double VOLUME_SCALE = 10;
         public static final double VOLUME_SPREAD = 10;
-        public static final long UPDATE_TIMER_INTERVAL_MS = 1000;
+        public static final long UPDATE_TIMER_INTERVAL_MS = 10000;
 
         public static final class VolatilityBot
         {

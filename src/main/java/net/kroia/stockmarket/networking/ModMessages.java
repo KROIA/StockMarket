@@ -120,10 +120,18 @@ public class ModMessages {
     }
 
     public static <MSG> void sendToServer(MSG message) {
-        INSTANCE.sendToServer(message);
+        try{
+            INSTANCE.sendToServer(message);
+        } catch (Exception e) {
+            StockMarketMod.LOGGER.error("Failed to send message to server_sender: " + e.getMessage());
+        }
     }
 
     public static <MSG> void sendToPlayer(MSG message, ServerPlayer player) {
-        INSTANCE.send(PacketDistributor.PLAYER.with(() -> player), message);
+        try{
+            INSTANCE.send(PacketDistributor.PLAYER.with(() -> player), message);
+        } catch (Exception e) {
+            StockMarketMod.LOGGER.error("Failed to send message to player: " + e.getMessage());
+        }
     }
 }

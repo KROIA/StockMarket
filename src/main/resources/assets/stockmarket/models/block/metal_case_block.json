@@ -3,7 +3,7 @@
   "textures": {
     "west": "stockmarket:block/metal_case_block",
     "east": "stockmarket:block/metal_case_block",
-    "north": "stockmarket:block/stock_market_block_front",
+    "north": "stockmarket:block/metal_case_block",
     "south": "stockmarket:block/metal_case_block",
     "down": "stockmarket:block/metal_case_block",
     "up": "stockmarket:block/metal_case_block",

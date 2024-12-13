@@ -1,0 +1,20 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "S": {
+      "item": "stockmarket:software"
+    },
+    "T": {
+      "item": "minecraft:gold_ingot"
+    }
+  },
+  "pattern": [
+    "ST"
+  ],
+  "result": {
+    "count": 1,
+    "item": "stockmarket:banking_software"
+  },
+  "show_notification": true
+}

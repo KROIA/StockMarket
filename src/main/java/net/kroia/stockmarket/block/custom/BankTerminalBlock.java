@@ -38,19 +38,13 @@ import org.jetbrains.annotations.Nullable;
 import java.util.HashMap;
 import java.util.UUID;
 
-public class BankTerminalBlock extends Block implements EntityBlock {
+public class BankTerminalBlock extends TerminalBlock implements EntityBlock {
 
     public static final String NAME = "bank_terminal_block";
-    public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
 
     public BankTerminalBlock()
     {
-        super(BlockBehaviour.Properties.copy(Blocks.IRON_BLOCK));
-        this.registerDefaultState(this.defaultBlockState().setValue(FACING, Direction.NORTH)); // Default facing
-
-    }
-    public BankTerminalBlock(Properties properties) {
-        super(properties);
+        super();
     }
 
     @Nullable
@@ -63,9 +57,9 @@ public class BankTerminalBlock extends Block implements EntityBlock {
         super.onPlace(state, level, pos, oldState, isMoving);
         if (!level.isClientSide) {
             BlockEntity blockEntity = level.getBlockEntity(pos);
-            StockMarketMod.LOGGER.info("placing block");
+            //StockMarketMod.LOGGER.info("placing block");
             if (blockEntity instanceof BankTerminalBlockEntity) {
-                StockMarketMod.LOGGER.info("Entity is BankTerminalBlock");
+                //StockMarketMod.LOGGER.info("Entity is BankTerminalBlock");
                 BankTerminalBlockEntity stockMarketBlock = (BankTerminalBlockEntity) blockEntity;
                 // Init stockMarketBlock entity if needed
             }
@@ -73,13 +67,13 @@ public class BankTerminalBlock extends Block implements EntityBlock {
     }
 
     @Override
-    public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hitResult) {
+    public void openGui(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hitResult) {
         BlockEntity be = level.getBlockEntity(pos);
         if (!(be instanceof BankTerminalBlockEntity blockEntity))
-            return InteractionResult.PASS;
+            return;
 
         if (level.isClientSide())
-            return InteractionResult.SUCCESS;
+            return;
 
         // open screen
         if (player instanceof ServerPlayer sPlayer) {
@@ -89,8 +83,6 @@ public class BankTerminalBlock extends Block implements EntityBlock {
             SyncBankDataPacket.sendPacket(sPlayer);
             NetworkHooks.openScreen(sPlayer, menuProvider, pos);
         }
-
-        return InteractionResult.CONSUME;
     }
 
     @Override
@@ -112,15 +104,7 @@ public class BankTerminalBlock extends Block implements EntityBlock {
         super.onRemove(state, level, pos, newState, isMoving);
     }
 
-    @Override
-    protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
-        builder.add(FACING);
-    }
 
-    @Override
-    public BlockState getStateForPlacement(BlockPlaceContext context) {
-        return this.defaultBlockState().setValue(FACING, context.getHorizontalDirection().getOpposite());
-    }
 
     @Nullable
     @Override

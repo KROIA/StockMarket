@@ -1,0 +1,25 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "P": {
+      "item": "minecraft:paper"
+    },
+    "T": {
+      "item": "minecraft:ink_sac"
+    },
+    "I": {
+      "item": "minecraft:iron_nugget"
+    }
+  },
+  "pattern": [
+    "ITI",
+    "ITI",
+    "PPP"
+  ],
+  "result": {
+    "count": 5,
+    "item": "stockmarket:software"
+  },
+  "show_notification": true
+}

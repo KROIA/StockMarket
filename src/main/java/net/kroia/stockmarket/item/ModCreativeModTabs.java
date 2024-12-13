@@ -18,9 +18,19 @@ public class ModCreativeModTabs {
     public static final RegistryObject<CreativeModeTab> STOCK_MARKET_TAB = CREATIVE_MODE_TABS.register("stockmarket_tab",
             () -> CreativeModeTab.builder().title(Component.translatable("Stock Market"))
                     .displayItems((pParameters, pOutput) -> {
+                        pOutput.accept(ModBlocks.METAL_CASE_BLOCK.get());
+                        pOutput.accept(ModBlocks.TERMINAL_BLOCK.get());
                         pOutput.accept(ModBlocks.STOCK_MARKET_BLOCK.get());
                         pOutput.accept(ModBlocks.BANK_TERMINAL_BLOCK.get());
 
+
+                        pOutput.accept(ModItems.DISPLAY.get());
+                        pOutput.accept(ModItems.CIRCUIT_BOARD.get());
+
+
+                        pOutput.accept(ModItems.SOFTWARE.get());
+                        pOutput.accept(ModItems.BANKING_SOFTWARE.get());
+                        pOutput.accept(ModItems.TRADING_SOFTWARE.get());
                     })
                     .icon(() -> new ItemStack(ModBlocks.STOCK_MARKET_BLOCK.get()))
                     .build());

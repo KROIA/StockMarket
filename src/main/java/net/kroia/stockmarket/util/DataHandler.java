@@ -90,7 +90,7 @@ public class DataHandler {
         CompoundTag data = new CompoundTag();
         ServerMarket market = new ServerMarket();
         CompoundTag marketData = new CompoundTag();
-        success &= market.save(marketData);
+        success = market.save(marketData);
         data.put("market", marketData);
         saveDataCompound(MARKET_DATA_FILE_NAME, data);
         return success;

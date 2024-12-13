@@ -1,0 +1,5 @@
+{
+  "variants": {
+    "": { "model": "stockmarket:block/metal_case_block" }
+  }
+}

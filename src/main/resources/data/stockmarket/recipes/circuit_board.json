@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "C": {"item": "minecraft:copper_ingot"},
+    "P": {"item": "minecraft:paper"},
+    "Q": {"item": "minecraft:quartz"}
+  },
+  "pattern": [
+    " Q ",
+    "CCC",
+    "PPP"
+  ],
+  "result": {
+    "count": 1,
+    "item": "stockmarket:circuit_board"
+  },
+  "show_notification": true
+}

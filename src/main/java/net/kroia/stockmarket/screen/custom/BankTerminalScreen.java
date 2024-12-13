@@ -17,6 +17,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
+import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -25,7 +26,7 @@ import net.minecraftforge.fml.common.Mod;
 import java.util.ArrayList;
 import java.util.HashMap;
 
-@Mod.EventBusSubscriber(modid = StockMarketMod.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
+//@Mod.EventBusSubscriber(modid = StockMarketMod.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalContainerMenu> {
     private class BankElement
     {
@@ -62,6 +63,8 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
 
             receiveItemsFromMarketButton = Button.builder(RECEIVE_ITEMS_FROM_MARKET_BUTTON_TEXT, this::onReceiveItemsFromMarket)
                     .bounds(x+width-textEditWidth-100, y, 100, HEIGHT).build();
+
+
         }
 
         public void render(GuiGraphics graphics)
@@ -153,6 +156,10 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
         super.titleLabelY += BankTerminalContainerMenu.POS_Y;
         super.inventoryLabelX += BankTerminalContainerMenu.POS_X;
         super.inventoryLabelY += BankTerminalContainerMenu.POS_Y;
+
+        // Subscribe to eventbus
+        //MinecraftForge.EVENT_BUS.register(this);
+        MinecraftForge.EVENT_BUS.addListener(this::onTick);
     }
 
     @Override
@@ -204,13 +211,14 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
     }
 
     // Method to handle the tick event
-    @SubscribeEvent(priority = EventPriority.NORMAL)
-    public static void onTick(TickEvent.ClientTickEvent event) {
+   // @SubscribeEvent(priority = EventPriority.NORMAL)
+    public void onTick(TickEvent.ClientTickEvent event) {
         if (event.phase == TickEvent.Phase.END) {
-            if (Minecraft.getInstance().screen instanceof BankTerminalScreen screen) {
+            /*if (Minecraft.getInstance().screen instanceof BankTerminalScreen screen) {
                 // This will only run when the screen is an instance of BankTerminalScreen
                 screen.handleTick();
-            }
+            }*/
+            handleTick();
         }
     }
 
