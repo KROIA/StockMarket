@@ -270,8 +270,11 @@ public abstract class Order {
         }
         else if(this instanceof  MarketOrder marketOrder)
         {
-            if(marketOrder.isBuy())
-                moneyBank.unlockAmount(marketOrder.getLockedMoney()-Math.abs(marketOrder.getTransferedMoney()));
+            if(marketOrder.isBuy()) {
+                long amount = marketOrder.getLockedMoney() - Math.abs(marketOrder.getTransferedMoney());
+                if(amount > 0)
+                    moneyBank.unlockAmount(amount);
+            }
             else
                 itemBank.unlockAmount(Math.abs(marketOrder.getAmount())-Math.abs(marketOrder.getFilledAmount()));
         }

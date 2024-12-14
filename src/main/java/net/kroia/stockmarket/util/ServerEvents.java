@@ -27,10 +27,12 @@ public class ServerEvents {
                 File rootSaveFolder = server.getWorldPath(LevelResource.ROOT).toFile();
 
 
-
+                DATA_HANDLER.startTimer();
                 // Load data from the root save folder
                 DATA_HANDLER.setSaveFolder(rootSaveFolder);
                 DATA_HANDLER.loadAll();
+
+
 
                 ServerMarket.init();
             }
@@ -48,6 +50,7 @@ public class ServerEvents {
 
                 // Save data to the root save folder
                 DATA_HANDLER.saveAll();
+                DATA_HANDLER.stopTimer();
             }
         }
     }

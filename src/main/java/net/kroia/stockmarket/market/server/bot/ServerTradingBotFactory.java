@@ -66,7 +66,7 @@ public class ServerTradingBotFactory {
         public long initialItemStock;
     }
     public static <T extends ServerTradingBot> void botTableBuilder(
-            HashMap<String, ArrayList<BotBuilderContainer>> table,
+            HashMap<String, BotBuilderContainer> table,
             String itemID,
             ServerTradingBot instance,
             T.Settings settings,
@@ -78,17 +78,11 @@ public class ServerTradingBotFactory {
         instance.setSettings(settings);
         if(instance.getSettings() != settings)
             return;
-        if(!table.containsKey(itemID))
-        {
-            ArrayList<BotBuilderContainer> bots = new ArrayList<>();
-            table.put(itemID, bots);
-        }
-        ArrayList<BotBuilderContainer> bots = table.get(itemID);
         BotBuilderContainer container = new BotBuilderContainer();
         container.bot = instance;
         container.settings = settings;
         container.itemID = itemID;
         container.initialItemStock = initialItemStock;
-        bots.add(container);
+        table.put(itemID, container);
     }
 }

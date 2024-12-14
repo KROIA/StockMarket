@@ -1,6 +1,5 @@
 package net.kroia.stockmarket.market.server;
 
-import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.MarketOrder;
 import net.kroia.stockmarket.market.server.order.Order;
@@ -63,16 +62,16 @@ public class MatchingEngine implements ServerSaveable {
         if (order instanceof LimitOrder limitOrder)
         {
             limitOrder.setAveragePrice(limitOrder.getPrice());
-            if(!processSpotOrder(limitOrder))
+            if(!processLimitOrder(limitOrder))
             {
                 if (limitOrder.isBuy())
                 {
-                    // Add the spot order to the buyOrders queue
+                    // Add the limit order to the buyOrders queue
                     limitBuyOrders.add(limitOrder);
                 }
                 else
                 {
-                    // Add the spot order to the sellOrders queue
+                    // Add the limit order to the sellOrders queue
                     limitSellOrders.add(limitOrder);
                 }
                 limitOrder.notifyPlayer();
@@ -159,9 +158,9 @@ public class MatchingEngine implements ServerSaveable {
     }
 
 
-    private boolean processSpotOrder(LimitOrder limitOrder)
+    private boolean processLimitOrder(LimitOrder limitOrder)
     {
-        // Process the spot order
+        // Process the limit order
         int fillVolume = Math.abs(limitOrder.getAmount());
         PriorityQueue<LimitOrder> limitOrders = limitOrder.isBuy() ? limitSellOrders : limitBuyOrders;
         ArrayList<LimitOrder> toRemove = new ArrayList<>();

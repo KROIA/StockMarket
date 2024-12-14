@@ -22,7 +22,7 @@ public class ModSettings {
 
     public static final class Market
     {
-        public static final long SHIFT_PRICE_CANCLE_INTERVAL_MS = 60000;
+        public static final long SHIFT_PRICE_CANCLE_INTERVAL_MS = 5000;
         public static final HashMap<String, Integer> TRADABLE_ITEMS;
         static{
             TRADABLE_ITEMS = new HashMap<>();
@@ -64,28 +64,28 @@ public class ModSettings {
         }
         public static final int MAX_ORDERS = 50;
 
-        public static final double VOLUME_SCALE = 10;
+        public static final double VOLUME_SCALE = 50;
         public static final double VOLUME_SPREAD = 10;
-        public static final long UPDATE_TIMER_INTERVAL_MS = 10000;
+        public static final long UPDATE_TIMER_INTERVAL_MS = 100;
 
         public static final class VolatilityBot
         {
             public static final int VOLATILITY = 1;
         }
 
-        private static HashMap<String, ArrayList<ServerTradingBotFactory.BotBuilderContainer>> bots;
-        public static HashMap<String, ArrayList<ServerTradingBotFactory.BotBuilderContainer>> createBots()
+        private static HashMap<String, ServerTradingBotFactory.BotBuilderContainer> bots;
+        public static HashMap<String, ServerTradingBotFactory.BotBuilderContainer> createBots()
         {
             if(bots != null)
                 return bots;
             bots = new HashMap<>();
 
-            ServerTradingBotFactory.botTableBuilder(bots, "minecraft:diamond", new ServerTradingBot(), new ServerTradingBot.Settings(), 1000);
-            ServerTradingBotFactory.botTableBuilder(bots, "minecraft:diamond", new ServerVolatilityBot(), new ServerVolatilityBot.Settings(),1000);
-            ServerTradingBotFactory.botTableBuilder(bots, "minecraft:iron_ingot", new ServerVolatilityBot(), new ServerVolatilityBot.Settings(), 1000);
-            ServerTradingBotFactory.botTableBuilder(bots, "minecraft:emerald", new ServerTradingBot(), new ServerTradingBot.Settings(), 100);
-            ServerTradingBotFactory.botTableBuilder(bots, "minecraft:gold_ingot", new ServerTradingBot(), new ServerTradingBot.Settings(), 100);
-            ServerTradingBotFactory.botTableBuilder(bots, "minecraft:gold_ingot", new ServerMarketMakerBot(), new ServerMarketMakerBot.Settings(), 1000);
+            //ServerTradingBotFactory.botTableBuilder(bots, "minecraft:diamond", new ServerTradingBot(), new ServerTradingBot.Settings(), 10000);
+            ServerTradingBotFactory.botTableBuilder(bots, "minecraft:diamond", new ServerVolatilityBot(), new ServerVolatilityBot.Settings(),10000);
+            //ServerTradingBotFactory.botTableBuilder(bots, "minecraft:iron_ingot", new ServerVolatilityBot(), new ServerVolatilityBot.Settings(), 1000);
+            //ServerTradingBotFactory.botTableBuilder(bots, "minecraft:emerald", new ServerTradingBot(), new ServerTradingBot.Settings(), 100);
+            //ServerTradingBotFactory.botTableBuilder(bots, "minecraft:gold_ingot", new ServerTradingBot(), new ServerTradingBot.Settings(), 100);
+            //ServerTradingBotFactory.botTableBuilder(bots, "minecraft:gold_ingot", new ServerMarketMakerBot(), new ServerMarketMakerBot.Settings(), 1000);
 
             return bots;
         }

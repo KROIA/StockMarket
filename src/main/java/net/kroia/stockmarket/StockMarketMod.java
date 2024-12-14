@@ -1,6 +1,7 @@
 package net.kroia.stockmarket;
 
 import com.mojang.authlib.GameProfile;
+import com.mojang.brigadier.Command;
 import com.mojang.logging.LogUtils;
 import net.kroia.stockmarket.banking.bank.BotMoneyBank;
 import net.kroia.stockmarket.banking.ServerBankManager;
@@ -26,6 +27,7 @@ import net.minecraft.server.players.PlayerList;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
 import net.minecraftforge.common.MinecraftForge;
@@ -269,6 +271,23 @@ public class StockMarketMod
                 net.minecraft.network.chat.Component.literal(message)
         );
     }
+    public static void printToClientConsone(String msg)
+    {
+        MinecraftServer server = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
+
+        if (server == null) {
+            throw new IllegalStateException("Server instance is null. Are you calling this from the server_sender?");
+        }
+
+        // Get the player list and fetch the player by UUID
+        PlayerList playerList = server.getPlayerList();
+        for(ServerPlayer player : playerList.getPlayers())
+        {
+            player.sendSystemMessage(
+                    net.minecraft.network.chat.Component.literal(msg)
+            );
+        }
+    }
 
     public static ItemStack createItemStackFromId(String itemId, int amount) {
         ResourceLocation resourceLocation = new ResourceLocation(itemId); // "minecraft:diamond"
@@ -279,6 +298,19 @@ public class StockMarketMod
         }
 
         return ItemStack.EMPTY; // Return an empty stack if the item is not found
+    }
+    public static String getNormalizedItemID(String maybeNotCompleteItemID)
+    {
+        ItemStack itemStack = StockMarketMod.createItemStackFromId(maybeNotCompleteItemID,1);
+        if(itemStack == null) {
+            return null;
+        }
+        if(itemStack.getItem() == Items.AIR) {
+            return null;
+        }
+        // Get the item's ResourceLocation
+        ResourceLocation itemLocation = ForgeRegistries.ITEMS.getKey(itemStack.getItem());
+        return itemLocation.toString();
     }
 
 }

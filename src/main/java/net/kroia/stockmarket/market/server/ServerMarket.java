@@ -22,7 +22,9 @@ import net.kroia.stockmarket.util.PriceHistory;
 import net.kroia.stockmarket.util.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.players.PlayerList;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -51,27 +53,26 @@ public class ServerMarket implements ServerSaveable
         {
             BankUser botUser = ServerBankManager.createBotUser();
             StockMarketMod.LOGGER.info("[SERVER] Creating trading bots");
-            HashMap<String, ArrayList<ServerTradingBotFactory.BotBuilderContainer>> bots = ModSettings.MarketBot.createBots();
+            HashMap<String, ServerTradingBotFactory.BotBuilderContainer> bots = ModSettings.MarketBot.createBots();
 
             for(var item : bots.entrySet())
             {
-                int botCount = getBotCount(item.getKey());
-                if(botCount > 0)
+                boolean hasBot = hasTradingBot(item.getKey());
+                if(hasBot)
                     continue;
-                for(ServerTradingBotFactory.BotBuilderContainer container : item.getValue())
+                ServerTradingBotFactory.BotBuilderContainer container = item.getValue();
+                Bank itemBank = botUser.getBank(container.itemID);
+                if(itemBank == null)
                 {
-                    Bank itemBank = botUser.getBank(container.itemID);
-                    if(itemBank == null)
-                    {
-                        itemBank = botUser.createItemBank(container.itemID, container.initialItemStock);
-                    }
-                    if(itemBank.getTotalBalance() < container.initialItemStock)
-                    {
-                        itemBank.setBalance(container.initialItemStock-itemBank.getLockedBalance());
-                    }
-                    addTradingBot(item.getKey(), container.bot);
+                    itemBank = botUser.createItemBank(container.itemID, container.initialItemStock);
                 }
+                if(itemBank.getTotalBalance() < container.initialItemStock)
+                {
+                    itemBank.setBalance(container.initialItemStock-itemBank.getLockedBalance());
+                }
+                setTradingBot(item.getKey(), container.bot);
             }
+            bots.clear();
         }
 
     }
@@ -97,7 +98,19 @@ public class ServerMarket implements ServerSaveable
     {
         ServerTradeItem tradeItem = new ServerTradeItem(itemID, startPrice);
         tradeItems.put(itemID, tradeItem);
-        //ServerBankManager.getBotUser().createItemBank(itemID, 1000_000);
+
+        MinecraftServer server = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
+
+        if (server == null) {
+            throw new IllegalStateException("Server instance is null. Are you calling this from the server_sender?");
+        }
+
+        // Get the player list and fetch the player by UUID
+        PlayerList playerList = server.getPlayerList();
+        for(ServerPlayer player : playerList.getPlayers())
+        {
+            SyncTradeItemsPacket.sendResponse(player);
+        }
     }
 
     public static ArrayList<String> getTradeItemIDs()
@@ -115,7 +128,7 @@ public class ServerMarket implements ServerSaveable
         return tradeItems.containsKey(itemID);
     }
 
-    public static void addTradingBot(String itemID, ServerTradingBot bot)
+    public static void setTradingBot(String itemID, ServerTradingBot bot)
     {
         ServerTradeItem item = tradeItems.get(itemID);
         if(item == null)
@@ -123,9 +136,9 @@ public class ServerMarket implements ServerSaveable
             msgTradeItemNotFound(itemID);
             return;
         }
-        item.addTradingBot(bot);
+        item.setTradingBot(bot);
     }
-    public static void removeTradingBot(String itemID, ServerTradingBot bot)
+    public static void removeTradingBot(String itemID)
     {
         ServerTradeItem item = tradeItems.get(itemID);
         if(item == null)
@@ -133,27 +146,27 @@ public class ServerMarket implements ServerSaveable
             msgTradeItemNotFound(itemID);
             return;
         }
-        item.removeTradingBot(bot);
+        item.removeTradingBot();
     }
-    public static void removeAllBots(String itemID)
+    public static boolean hasTradingBot(String itemID)
     {
         ServerTradeItem item = tradeItems.get(itemID);
         if(item == null)
         {
             msgTradeItemNotFound(itemID);
-            return;
+            return false;
         }
-        item.removeAllBots();
+        return item.hasTradingBot();
     }
-    public static int getBotCount(String itemID)
+    public static ServerTradingBot getTradingBot(String itemID)
     {
         ServerTradeItem item = tradeItems.get(itemID);
         if(item == null)
         {
             msgTradeItemNotFound(itemID);
-            return 0;
+            return null;
         }
-        return item.getBotCount();
+        return item.getTradingBot();
     }
 
     public static void shiftPriceHistory()

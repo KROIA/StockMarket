@@ -49,21 +49,21 @@ public class ServerTradeItem implements ServerSaveable {
         return null;
     }
 
-    public void addTradingBot(ServerTradingBot bot)
+    public void setTradingBot(ServerTradingBot bot)
     {
-        marketManager.addTradingBot(bot);
+        marketManager.setTradingBot(bot);
     }
-    public void removeTradingBot(ServerTradingBot bot)
+    public void removeTradingBot()
     {
-        marketManager.removeTradingBot(bot);
+        marketManager.removeTradingBot();
     }
-    public void removeAllBots()
+    public boolean hasTradingBot()
     {
-        marketManager.removeAllBots();
+        return marketManager.hasTradingBot();
     }
-    public int getBotCount()
+    public ServerTradingBot getTradingBot()
     {
-        return marketManager.getBotCount();
+        return marketManager.getTradingBot();
     }
 
     public void setUpdateInterval(long intervalMillis)

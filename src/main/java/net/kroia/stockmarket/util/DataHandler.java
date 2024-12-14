@@ -3,6 +3,7 @@ package net.kroia.stockmarket.util;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.banking.ServerBankManager;
 import net.kroia.stockmarket.market.server.ServerMarket;
+import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtIo;
 
@@ -20,13 +21,23 @@ public class DataHandler {
     private static final boolean COMPRESSED = false;
     private static File saveFolder;
 
-    private final ScheduledExecutorService saveScheduler = Executors.newSingleThreadScheduledExecutor();
+    private static final ScheduledExecutorService saveScheduler = Executors.newSingleThreadScheduledExecutor();
 
 
     public DataHandler()
     {
+
+    }
+
+    public static void startTimer()
+    {
         saveScheduler.scheduleAtFixedRate(DataHandler::saveAll, 0, 1, java.util.concurrent.TimeUnit.MINUTES);
     }
+    public static void stopTimer()
+    {
+        saveScheduler.shutdown();
+    }
+
 
     public static void setSaveFolder(File folder) {
         File rootFolder = new File(folder, FOLDER_NAME);

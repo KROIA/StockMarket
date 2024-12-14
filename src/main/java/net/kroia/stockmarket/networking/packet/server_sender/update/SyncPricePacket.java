@@ -105,6 +105,8 @@ public class SyncPricePacket {
         minPrice = (minPrice / 10) * 10;
         maxPrice = (maxPrice / 10) * 10;
 
+        minPrice = Math.max(0, minPrice);
+
         int tiles = 50;
         if(maxPrice-minPrice < tiles)
         {

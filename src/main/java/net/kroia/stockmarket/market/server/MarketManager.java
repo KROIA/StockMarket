@@ -2,8 +2,11 @@ package net.kroia.stockmarket.market.server;
 
 import net.kroia.stockmarket.ModSettings;
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.banking.ServerBankManager;
+import net.kroia.stockmarket.banking.bank.Bank;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBotFactory;
+import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.util.OrderbookVolume;
 import net.kroia.stockmarket.util.PriceHistory;
@@ -19,7 +22,7 @@ public class MarketManager implements ServerSaveable {
     private String itemID;
 
     private MatchingEngine matchingEngine;
-    private final ArrayList<ServerTradingBot> tradingBots = new ArrayList<>();
+    private ServerTradingBot tradingBot;
 
     private PriceHistory priceHistory;
     //private ServerTradeItem tradeItem;
@@ -32,7 +35,7 @@ public class MarketManager implements ServerSaveable {
         priceHistory = history;
     }
 
-    public void addTradingBot(ServerTradingBot bot)
+    public void setTradingBot(ServerTradingBot bot)
     {
         if(!ModSettings.MarketBot.ENABLED)
         {
@@ -41,36 +44,50 @@ public class MarketManager implements ServerSaveable {
         }
         if(bot.getParent()!= null)
         {
-            bot.getParent().removeTradingBot(bot);
+            bot.getParent().removeTradingBot();
+        }
+        // Check if bot aleady has a item bank
+        Bank itemBank = ServerBankManager.getBotUser().getBank(itemID);
+        if(itemBank == null)
+        {
+            itemBank = ServerBankManager.getBotUser().createItemBank(itemID, 0);
+        }
+        else {
+            if(bot instanceof ServerVolatilityBot volatilityBot)
+            {
+                ServerVolatilityBot.Settings settings = (ServerVolatilityBot.Settings) volatilityBot.getSettings();
+                if(settings != null)
+                {
+                    if(settings.targetItemBalance == 0)
+                    {
+                        settings.targetItemBalance = itemBank.getBalance()/2;
+                    }
+                }
+            }
         }
         bot.setParent(this);
         bot.setMatchingEngine(matchingEngine);
-        tradingBots.add(bot);
-        bot.setEnabled(true);
+        tradingBot = bot;
+        //bot.setEnabled(true);
     }
-    public void removeTradingBot(ServerTradingBot bot)
+    public void removeTradingBot()
     {
-        if(bot != null && tradingBots.contains(bot) && bot.getParent() == this)
-        {
-            bot.setEnabled(false);
-            bot.setParent(null);
-            bot.setMatchingEngine(null);
-            tradingBots.remove(bot);
+        if(tradingBot != null) {
+            tradingBot.setEnabled(false);
+            tradingBot.clearOrders();
+            tradingBot.setParent(null);
+            tradingBot.setMatchingEngine(null);
+
         }
+        tradingBot = null;
     }
-    public void removeAllBots()
+    public boolean hasTradingBot()
     {
-        for(ServerTradingBot bot : tradingBots)
-        {
-            bot.setEnabled(false);
-            bot.setParent(null);
-            bot.setMatchingEngine(null);
-        }
-        tradingBots.clear();
+        return tradingBot != null;
     }
-    public int getBotCount()
+    public ServerTradingBot getTradingBot()
     {
-        return tradingBots.size();
+        return tradingBot;
     }
 
     public void setPriceHistory(PriceHistory priceHistory) {
@@ -168,14 +185,13 @@ public class MarketManager implements ServerSaveable {
         success &= matchingEngine.save(matchingEngineTag);
         tag.put("matchingEngine", matchingEngineTag);
 
-        ListTag tradingBotList = new ListTag();
-        for(ServerTradingBot bot : tradingBots)
+        CompoundTag botTag = new CompoundTag();
+        if(tradingBot != null)
         {
-            CompoundTag tradingBotTag = new CompoundTag();
-            success &= bot.save(tradingBotTag);
-            tradingBotList.add(tradingBotTag);
+            success &= tradingBot.save(botTag);
+            tag.put("tradingBot", botTag);
         }
-        tag.put("tradingBots", tradingBotList);
+
 
         return success;
     }
@@ -193,16 +209,12 @@ public class MarketManager implements ServerSaveable {
         CompoundTag matchingEngineTag = tag.getCompound("matchingEngine");
         success &= matchingEngine.load(matchingEngineTag);
 
-        if(tag.contains("tradingBots"))
+        if(tag.contains("tradingBot"))
         {
-            removeAllBots();
-            ListTag tradingBotList = tag.getList("tradingBots", 10);
-            for (int i = 0; i < tradingBotList.size(); i++) {
-                CompoundTag tradingBotTag = tradingBotList.getCompound(i);
-                ServerTradingBot bot = ServerTradingBotFactory.loadFromTag(tradingBotTag);
-                if(bot != null)
-                    addTradingBot(bot);
-            }
+            CompoundTag tradingBotTag = tag.getCompound("tradingBot");
+            ServerTradingBot bot = ServerTradingBotFactory.loadFromTag(tradingBotTag);
+            if(bot != null)
+                setTradingBot(bot);
         }
 
         return !itemID.isEmpty() && success;

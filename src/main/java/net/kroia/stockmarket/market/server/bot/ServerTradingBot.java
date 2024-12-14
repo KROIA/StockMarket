@@ -95,11 +95,11 @@ public class ServerTradingBot implements ServerSaveable {
 
     public ServerTradingBot() {
         settings = new Settings();
-        MinecraftForge.EVENT_BUS.addListener(this::onServerTick);
+       // MinecraftForge.EVENT_BUS.addListener(this::onServerTick);
     }
     protected ServerTradingBot(Settings settings) {
         this.settings = settings;
-        MinecraftForge.EVENT_BUS.addListener(this::onServerTick);
+        //MinecraftForge.EVENT_BUS.addListener(this::onServerTick);
     }
 
     public void setSettings(Settings settings)
@@ -113,6 +113,14 @@ public class ServerTradingBot implements ServerSaveable {
     public void setParent(MarketManager parent)
     {
         this.parent = parent;
+        if(this.parent != null)
+        {
+            MinecraftForge.EVENT_BUS.addListener(this::onServerTick);
+        }
+        else
+        {
+            MinecraftForge.EVENT_BUS.unregister(this);
+        }
     }
     public MarketManager getParent()
     {
@@ -267,6 +275,26 @@ public class ServerTradingBot implements ServerSaveable {
         }
     }
 
+    protected int getMarketVolume(int price)
+    {
+        if(matchingEngine == null)
+            return 0;
+        return matchingEngine.getVolume(price);
+    }
+    protected int getMarketVolume(int minPrice, int maxPrice)
+    {
+        if(matchingEngine == null)
+            return 0;
+        return matchingEngine.getVolume(minPrice, maxPrice);
+    }
+
+    protected int getCurrentPrice()
+    {
+        if(matchingEngine == null)
+            return 0;
+        return matchingEngine.getPrice();
+    }
+
     protected boolean buyLimit(int volume, int price)
     {
         if(volume <= 0 || price < 0 || matchingEngine == null)
@@ -316,6 +344,10 @@ public class ServerTradingBot implements ServerSaveable {
         if(order != null)
         {
             matchingEngine.addOrder(order);
+            if(volume > 0)
+                buyOrders.add(order);
+            else
+                sellOrders.add(order);
             return true;
         }
         return false;
@@ -444,7 +476,7 @@ public class ServerTradingBot implements ServerSaveable {
 
 
 
-
+        setSettings(settings);
         return true;
     }
 
