@@ -1,0 +1,7 @@
+{
+  "values": [
+    "stockmarket:stock_market_block",
+    "stockmarket:bank_terminal_block",
+    "stockmarket:terminal_block"
+  ]
+}

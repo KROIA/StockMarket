@@ -31,7 +31,8 @@ public class DataHandler {
 
     public static void startTimer()
     {
-        saveScheduler.scheduleAtFixedRate(DataHandler::saveAll, 0, 1, java.util.concurrent.TimeUnit.MINUTES);
+
+        saveScheduler.scheduleAtFixedRate(DataHandler::saveAll, 1, 1, java.util.concurrent.TimeUnit.MINUTES);
     }
     public static void stopTimer()
     {
@@ -149,7 +150,7 @@ public class DataHandler {
         File file = new File(saveFolder, fileName);
         if (file.exists()) {
             try {
-                CompoundTag data = new CompoundTag();
+                CompoundTag data;
 
                 if(COMPRESSED)
                     data = NbtIo.readCompressed(file);
