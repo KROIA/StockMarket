@@ -227,7 +227,7 @@ Open that block using right click. A window will appear.
 Place your item stacks in the blocks inventory and press the button **Send items to market**.
 This will transfer the items to your bank account.
 <div align="center">
-    <img src="documentation/images/bankingView.PNG" > 
+    <img src="documentation/images/bankingView.png" > 
 </div>
 <br>
 
@@ -243,7 +243,7 @@ If you want to create a limt order, you have to type in the desired price.
 Click on the **sell** button for market or limit order to execute the trade.
 A market order is executet directly but the limit order will be listed on the left side until it is filled or gets canceled.
 <div align="center">
-    <img src="documentation/images/tradingView.PNG" > 
+    <img src="documentation/images/tradingView.png" > 
 </div>
 
 ---
@@ -262,7 +262,7 @@ Type the amount you want to receive back in to the text field and click **Receiv
 
 
 <div align="center">
-    <img src="documentation/images/bankingView.PNG" > 
+    <img src="documentation/images/bankingView.png" > 
 </div>
 <br>
 
