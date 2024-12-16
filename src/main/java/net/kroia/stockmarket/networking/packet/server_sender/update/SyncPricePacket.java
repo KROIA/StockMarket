@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.networking.packet.server_sender.update;
 
 
+import net.kroia.stockmarket.ModSettings;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.client.ClientMarket;
 import net.kroia.stockmarket.market.server.ServerMarket;
@@ -107,7 +108,7 @@ public class SyncPricePacket {
 
         minPrice = Math.max(0, minPrice);
 
-        int tiles = 50;
+        int tiles = ModSettings.UI.MAX_ORDERBOOK_TILES;
         if(maxPrice-minPrice < tiles)
         {
             tiles = maxPrice-minPrice;

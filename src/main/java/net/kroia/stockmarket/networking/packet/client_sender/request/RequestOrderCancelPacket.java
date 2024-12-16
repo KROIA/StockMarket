@@ -21,7 +21,7 @@ public class RequestOrderCancelPacket {
 
     public static void generateRequest(long orderID) {
 
-        StockMarketMod.LOGGER.info("[CLIENT] Sending RequestOrderCancelPacket for order: "+orderID);
+        //StockMarketMod.LOGGER.info("[CLIENT] Sending RequestOrderCancelPacket for order: "+orderID);
         ModMessages.sendToServer(new RequestOrderCancelPacket(orderID));
     }
 

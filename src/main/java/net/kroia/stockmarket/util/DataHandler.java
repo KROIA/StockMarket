@@ -21,7 +21,7 @@ public class DataHandler {
     private static final boolean COMPRESSED = false;
     private static File saveFolder;
 
-    private static final ScheduledExecutorService saveScheduler = Executors.newSingleThreadScheduledExecutor();
+    private static ScheduledExecutorService saveScheduler;
 
 
     public DataHandler()
@@ -31,7 +31,7 @@ public class DataHandler {
 
     public static void startTimer()
     {
-
+        saveScheduler = Executors.newSingleThreadScheduledExecutor();
         saveScheduler.scheduleAtFixedRate(DataHandler::saveAll, 1, 1, java.util.concurrent.TimeUnit.MINUTES);
     }
     public static void stopTimer()
@@ -160,6 +160,11 @@ public class DataHandler {
                 dataOut = data;
                 return dataOut;
             } catch (IOException e) {
+                StockMarketMod.LOGGER.error("Failed to read data from file: " + fileName);
+                e.printStackTrace();
+            } catch(Exception e)
+            {
+                StockMarketMod.LOGGER.error("Failed to read data from file: " + fileName);
                 e.printStackTrace();
             }
         }
@@ -173,6 +178,12 @@ public class DataHandler {
             else
                 NbtIo.write(data, file);
         } catch (IOException e) {
+            StockMarketMod.LOGGER.error("Failed to save data to file: " + fileName);
+            e.printStackTrace();
+            return false;
+        } catch(Exception e)
+        {
+            StockMarketMod.LOGGER.error("Failed to save data to file: " + fileName);
             e.printStackTrace();
             return false;
         }

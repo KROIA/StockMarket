@@ -51,7 +51,7 @@ public class SyncStockMarketBlockEntityPacket {
     }
 
     public static void sendPacketToClient(BlockPos pos, StockMarketBlockEntity blockEntity, ServerPlayer player) {
-        StockMarketMod.LOGGER.info("[SERVER] Sending UpdateStockMarketBlockEntityPacket");
+        //StockMarketMod.LOGGER.info("[SERVER] Sending UpdateStockMarketBlockEntityPacket");
         ModMessages.sendToPlayer(new SyncStockMarketBlockEntityPacket(pos, blockEntity), player);
     }
 

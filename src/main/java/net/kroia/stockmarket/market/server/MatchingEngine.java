@@ -61,7 +61,7 @@ public class MatchingEngine implements ServerSaveable {
     {
         if (order instanceof LimitOrder limitOrder)
         {
-            limitOrder.setAveragePrice(limitOrder.getPrice());
+            //limitOrder.setAveragePrice(limitOrder.getPrice());
             if(!processLimitOrder(limitOrder))
             {
                 if (limitOrder.isBuy())
@@ -256,6 +256,58 @@ public class MatchingEngine implements ServerSaveable {
         }
         return false;
     }
+    public void cancelAllOrders(UUID playerOwner)
+    {
+        ArrayList<LimitOrder> toRemove = new ArrayList<>();
+        for(LimitOrder order : limitBuyOrders)
+        {
+            if(order.getPlayerUUID().equals(playerOwner))
+            {
+                order.markAsCancelled();
+                toRemove.add(order);
+            }
+        }
+        limitBuyOrders.removeAll(toRemove);
+        toRemove.clear();
+        for(LimitOrder order : limitSellOrders)
+        {
+            if(order.getPlayerUUID().equals(playerOwner))
+            {
+                order.markAsCancelled();
+                toRemove.add(order);
+            }
+        }
+        limitSellOrders.removeAll(toRemove);
+    }
+    /*public int cancleOrdersUntilItemVolumeReached(UUID playerOwner, int volume)
+    {
+        int volumeRemoved = 0;
+        ArrayList<LimitOrder> toRemove = new ArrayList<>();
+        for(LimitOrder order : limitBuyOrders)
+        {
+            if(order.getPlayerUUID().equals(playerOwner))
+            {
+                volumeRemoved += order.getAmount();
+                toRemove.add(order);
+                if(volumeRemoved >= volume)
+                    break;
+            }
+        }
+        limitBuyOrders.removeAll(toRemove);
+        toRemove.clear();
+        for(LimitOrder order : limitSellOrders)
+        {
+            if(order.getPlayerUUID().equals(playerOwner))
+            {
+                volumeRemoved += order.getAmount();
+                toRemove.add(order);
+                if(volumeRemoved >= volume)
+                    break;
+            }
+        }
+        limitSellOrders.removeAll(toRemove);
+        return volumeRemoved;
+    }*/
     public boolean removeOrder_internal(LimitOrder toRemove)
     {
         return limitBuyOrders.remove(toRemove) || limitSellOrders.remove(toRemove);

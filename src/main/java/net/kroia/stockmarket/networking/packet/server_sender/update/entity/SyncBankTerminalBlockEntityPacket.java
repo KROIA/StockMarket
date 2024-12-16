@@ -51,7 +51,7 @@ public class SyncBankTerminalBlockEntityPacket {
     }
 
     public static void sendPacketToClient(BlockPos pos, StockMarketBlockEntity blockEntity, ServerPlayer player) {
-        StockMarketMod.LOGGER.info("[SERVER] Sending SyncBankTerminalBlockEntityPacket");
+        //StockMarketMod.LOGGER.info("[SERVER] Sending SyncBankTerminalBlockEntityPacket");
         ModMessages.sendToPlayer(new SyncStockMarketBlockEntityPacket(pos, blockEntity), player);
     }
 

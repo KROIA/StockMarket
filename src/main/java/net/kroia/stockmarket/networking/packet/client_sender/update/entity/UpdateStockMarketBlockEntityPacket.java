@@ -50,7 +50,7 @@ public class UpdateStockMarketBlockEntityPacket {
     }
 
     public static void sendPacketToServer(BlockPos pos, StockMarketBlockEntity blockEntity) {
-        StockMarketMod.LOGGER.info("[CLIENT] Sending UpdateStockMarketBlockEntityPacket");
+       //StockMarketMod.LOGGER.info("[CLIENT] Sending UpdateStockMarketBlockEntityPacket");
         ModMessages.sendToServer(new UpdateStockMarketBlockEntityPacket(pos, blockEntity));
     }
     /*public static void sendPacketToClient(BlockPos pos, StockMarketBlockEntity blockEntity, ServerPlayer player) {
@@ -85,7 +85,7 @@ public class UpdateStockMarketBlockEntityPacket {
             // HERE WE ARE ON THE SERVER!
             // Update client-side data
             ServerPlayer player = context.getSender();
-            StockMarketMod.LOGGER.info("[SERVER] Received UpdateStockMarketBlockEntityPacket from client");
+           // StockMarketMod.LOGGER.info("[SERVER] Received UpdateStockMarketBlockEntityPacket from client");
             StockMarketBlockEntity blockEntity = (StockMarketBlockEntity) player.level().getBlockEntity(this.pos);
             if(blockEntity == null)
             {

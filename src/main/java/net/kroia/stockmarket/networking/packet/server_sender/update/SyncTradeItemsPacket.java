@@ -44,7 +44,7 @@ public class SyncTradeItemsPacket {
 
     public static void sendResponse(ServerPlayer player)
     {
-        StockMarketMod.LOGGER.info("[SERVER] Sending SyncTradeItemsPacket");
+        //StockMarketMod.LOGGER.info("[SERVER] Sending SyncTradeItemsPacket");
         Map<String, ServerTradeItem> serverTradeItemMap = ServerMarket.getTradeItems();
         ArrayList<SyncPricePacket> syncPricePackets = new ArrayList<>();
         int i=0;

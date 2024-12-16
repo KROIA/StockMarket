@@ -57,11 +57,11 @@ public class RequestOrderPacket {
     }
     public static void generateRequest(String itemID, int amount, int price) {
 
-        StockMarketMod.LOGGER.info("[CLIENT] Sending RequestOrderPacket for item: "+itemID + " amount: "+amount);
+        //StockMarketMod.LOGGER.info("[CLIENT] Sending RequestOrderPacket for item: "+itemID + " amount: "+amount);
         ModMessages.sendToServer(new RequestOrderPacket(itemID, amount, OrderType.limit, price));
     }
     public static void generateRequest(String itemID, int amount) {
-        StockMarketMod.LOGGER.info("[CLIENT] Sending RequestOrderPacket for item: "+itemID + " amount: "+amount);
+        //StockMarketMod.LOGGER.info("[CLIENT] Sending RequestOrderPacket for item: "+itemID + " amount: "+amount);
         ModMessages.sendToServer(new RequestOrderPacket(itemID, amount));
     }
 

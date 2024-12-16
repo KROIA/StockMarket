@@ -78,7 +78,7 @@ public class MarketOrder extends Order {
                 "\n  OrderID: " + orderID +
                 "\n  Amount: " + amount +
                 "\n  Filled: " + filledAmount +
-                "\n  AveragePrice: " + averagePrice +
+                "\n  AveragePrice: " + getAveragePrice() +
                 "\n  TransferedMoney: $" + transferedMoney +
                 "\n  Status:" + status+
                 (status==Status.INVALID?" Invalid reason: \n    "+invalidReason:"")+"\n}";

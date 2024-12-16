@@ -30,7 +30,7 @@ public class SyncOrderPacket {
     public static void sendResponse(Order order) {
         String itemID = order.getItemID();
 
-        StockMarketMod.LOGGER.info("[SERVER] Sending SyncOrderPacket for order: "+order.toString());
+        //StockMarketMod.LOGGER.info("[SERVER] Sending SyncOrderPacket for order: "+order.toString());
 
 
         ServerPlayer player =  ServerPlayerList.getPlayer(order.getPlayerUUID());

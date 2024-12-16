@@ -1,13 +1,9 @@
 package net.kroia.stockmarket;
 
-import net.kroia.stockmarket.market.server.bot.ServerMarketMakerBot;
-import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBotFactory;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Map;
 
 public class ModSettings {
     public static final class Player
@@ -18,11 +14,18 @@ public class ModSettings {
     public static final class Bank
     {
         public static final boolean NOTIFICATION_USE_SHORT_ITEM_ID = true;
+        public static final int ITEM_TRANSFER_TICK_INTERVAL = 20;
+    }
+
+    public static final class UI
+    {
+        public static final int PRICE_HISTORY_SIZE = 100;
+        public static final int MAX_ORDERBOOK_TILES = 100;
     }
 
     public static final class Market
     {
-        public static final long SHIFT_PRICE_CANCLE_INTERVAL_MS = 5000;
+        public static final long SHIFT_PRICE_CANDLE_INTERVAL_MS = 60000;
         public static final HashMap<String, Integer> TRADABLE_ITEMS;
         static{
             TRADABLE_ITEMS = new HashMap<>();
@@ -31,6 +34,9 @@ public class ModSettings {
             TRADABLE_ITEMS.put("minecraft:gold_ingot", 25);
             TRADABLE_ITEMS.put("minecraft:emerald", 100);
             TRADABLE_ITEMS.put("minecraft:coal", 5);
+            TRADABLE_ITEMS.put("minecraft:oak_log", 5);
+            TRADABLE_ITEMS.put("minecraft:netherite_scrap", 5);
+
             //TRADABLE_ITEMS.put("minecraft:quartz", 5);
             //TRADABLE_ITEMS.put("minecraft:obsidian", 10);
             //TRADABLE_ITEMS.put("minecraft:glowstone", 10);
@@ -52,40 +58,32 @@ public class ModSettings {
         public static final boolean ENABLED = true;
 
         public static final String USER_NAME = "StockMarketBot";
-        public static final long STARTING_BALANCE = 1000000; // Money balance
+        public static final long STARTING_BALANCE = 1000_000_000; // Money balance
 
-        public static final HashMap<String, Long> STARTING_STOCKS;
-        static{
-            STARTING_STOCKS = new HashMap<>();
-            STARTING_STOCKS.put("minecraft:iron_ingot", 1000L);
-            STARTING_STOCKS.put("minecraft:gold_ingot", 1000L);
-            STARTING_STOCKS.put("minecraft:diamond", 1000L);
-            STARTING_STOCKS.put("minecraft:emerald", 1000L);
-        }
-        public static final int MAX_ORDERS = 50;
+        public static final int MAX_ORDERS = 100;
 
         public static final double VOLUME_SCALE = 50;
         public static final double VOLUME_SPREAD = 10;
-        public static final long UPDATE_TIMER_INTERVAL_MS = 100;
-
-        public static final class VolatilityBot
-        {
-            public static final int VOLATILITY = 1;
-        }
-
-        private static HashMap<String, ServerTradingBotFactory.BotBuilderContainer> bots;
+        public static final double VOLUME_RANDOMNESS = 2;
+        public static final long UPDATE_TIMER_INTERVAL_MS = 500;
         public static HashMap<String, ServerTradingBotFactory.BotBuilderContainer> createBots()
         {
-            if(bots != null)
-                return bots;
+            HashMap<String, ServerTradingBotFactory.BotBuilderContainer> bots = new HashMap<>();
             bots = new HashMap<>();
 
-            //ServerTradingBotFactory.botTableBuilder(bots, "minecraft:diamond", new ServerTradingBot(), new ServerTradingBot.Settings(), 10000);
-            ServerTradingBotFactory.botTableBuilder(bots, "minecraft:diamond", new ServerVolatilityBot(), new ServerVolatilityBot.Settings(),10000);
-            //ServerTradingBotFactory.botTableBuilder(bots, "minecraft:iron_ingot", new ServerVolatilityBot(), new ServerVolatilityBot.Settings(), 1000);
-            //ServerTradingBotFactory.botTableBuilder(bots, "minecraft:emerald", new ServerTradingBot(), new ServerTradingBot.Settings(), 100);
-            //ServerTradingBotFactory.botTableBuilder(bots, "minecraft:gold_ingot", new ServerTradingBot(), new ServerTradingBot.Settings(), 100);
-            //ServerTradingBotFactory.botTableBuilder(bots, "minecraft:gold_ingot", new ServerMarketMakerBot(), new ServerMarketMakerBot.Settings(), 1000);
+            ServerTradingBotFactory.botTableBuilder(bots, "minecraft:diamond", new ServerVolatilityBot(),
+                    new ServerVolatilityBot.Settings(100,1000,5000,60000,1000,0.1,10,0.1,0.1,0.1),1000);
+            ServerTradingBotFactory.botTableBuilder(bots, "minecraft:iron_ingot", new ServerVolatilityBot(),
+                    new ServerVolatilityBot.Settings(100,10000,5000,60000,300,0.1,10,0.1,0.1,0.1),10000);
+            ServerTradingBotFactory.botTableBuilder(bots, "minecraft:gold_ingot", new ServerVolatilityBot(),
+                    new ServerVolatilityBot.Settings(100,1000,5000,60000,200,0.1,10,0.1,0.1,0.1),1000);
+            ServerTradingBotFactory.botTableBuilder(bots, "minecraft:coal", new ServerVolatilityBot(),
+                    new ServerVolatilityBot.Settings(100,1000,5000,60000,50,0.1,10,0.1,0.1,0.1),1000);
+            ServerTradingBotFactory.botTableBuilder(bots, "minecraft:oak_log", new ServerVolatilityBot(),
+                    new ServerVolatilityBot.Settings(100,1000,5000,60000,200,0.1,10,0.1,0.1,0.1),1000);
+            ServerTradingBotFactory.botTableBuilder(bots, "minecraft:netherite_scrap", new ServerVolatilityBot(),
+                    new ServerVolatilityBot.Settings(100,1000,5000,60000,200,0.1,10,0.1,0.1,0.1),100);
+
 
             return bots;
         }

@@ -24,7 +24,7 @@ public abstract class Order {
     protected int amount;
     protected int filledAmount = 0;
 
-    protected int averagePrice = 0;
+    //protected int averagePrice = 0;
     protected long transferedMoney = 0;
 
     protected String invalidReason = "";
@@ -134,7 +134,7 @@ public abstract class Order {
         amount = buf.readInt();
         filledAmount = buf.readInt();
         transferedMoney = buf.readLong();
-        averagePrice = buf.readInt();
+        //averagePrice = buf.readInt();
         status = Status.valueOf(buf.readUtf());
         invalidReason = buf.readUtf();
         isBot = buf.readBoolean();
@@ -148,7 +148,7 @@ public abstract class Order {
         amount = other.amount;
         filledAmount = other.filledAmount;
         transferedMoney = other.transferedMoney;
-        averagePrice = other.averagePrice;
+        //averagePrice = other.averagePrice;
         status = other.status;
         invalidReason = other.invalidReason;
         isBot = other.isBot;
@@ -184,7 +184,7 @@ public abstract class Order {
                 amount == other.amount &&
                 filledAmount == other.filledAmount &&
                 transferedMoney == other.transferedMoney &&
-                averagePrice == other.averagePrice &&
+               // averagePrice == other.averagePrice &&
                 status == other.status;
     }
 
@@ -308,9 +308,9 @@ public abstract class Order {
     }
 
     public int getAveragePrice() {
-        return averagePrice;
+        return this.filledAmount == 0 ? 0 : (int)(Math.round(Math.abs((double)this.transferedMoney / this.filledAmount)));
     }
-    public void setAveragePrice(int averagePrice) {
+    /*public void setAveragePrice(int averagePrice) {
         this.averagePrice = averagePrice;
     }
     public void changeAveragePrice(int filledAmount, int fillPrice) {
@@ -318,7 +318,7 @@ public abstract class Order {
             return;
         int fillVolume = Math.abs(filledAmount);
         averagePrice = (fillVolume * averagePrice + Math.abs(filledAmount) * fillPrice) / fillVolume;
-    }
+    }*/
 
     public boolean isFilled() {
         return Math.abs(filledAmount) >= Math.abs(amount);
@@ -341,7 +341,7 @@ public abstract class Order {
         buf.writeInt(amount);
         buf.writeInt(filledAmount);
         buf.writeLong(transferedMoney);
-        buf.writeInt(averagePrice);
+        //buf.writeInt(averagePrice);
         buf.writeUtf(status.toString());
         buf.writeUtf(invalidReason);
         buf.writeBoolean(isBot);

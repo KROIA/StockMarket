@@ -35,7 +35,7 @@ public class RequestTradeItemsPacket {
 
 
     public static void generateRequest() {
-        StockMarketMod.LOGGER.info("[CLIENT] Sending RequestTradeItemsPacket");
+        //StockMarketMod.LOGGER.info("[CLIENT] Sending RequestTradeItemsPacket");
         ModMessages.sendToServer(new RequestTradeItemsPacket());
     }
 

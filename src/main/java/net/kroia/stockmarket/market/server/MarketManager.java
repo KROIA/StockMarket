@@ -111,6 +111,11 @@ public class MarketManager implements ServerSaveable {
     {
         return matchingEngine.cancelOrder(orderID);
     }
+
+    public void cancelAllOrders(UUID playerUUID)
+    {
+        matchingEngine.cancelAllOrders(playerUUID);
+    }
     public ArrayList<Order> getOrders()
     {
         return matchingEngine.getOrders();

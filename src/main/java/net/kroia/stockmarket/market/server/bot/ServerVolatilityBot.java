@@ -19,7 +19,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
     {
         public double volatility = 100;
         public double lastError = 0;
-        public double integradedError = 0;
+        public double integratedError = 0;
         public double randomWalkDifferencePercentage = 0;
         public int targetPrice = 0;
         public long targetItemBalance = 0;
@@ -27,6 +27,8 @@ public class ServerVolatilityBot extends ServerTradingBot {
         public long minTimerMillis = 1000;
         public long maxTimerMillis = 10000;
         public int imbalancePriceRange = 100;
+        public double imbalancePriceChangeFactor = 0.1;
+        public double imbalancePriceChangeQuadFactor = 10;
 
         public double pid_p = 0.1;
         public double pid_d = 0.1;
@@ -35,20 +37,46 @@ public class ServerVolatilityBot extends ServerTradingBot {
         public Settings()
         {
             super();
-            this.updateTimerIntervallMS = 100;
+            //this.updateTimerIntervallMS = 100;
+        }
+        public Settings(double volatility,
+                        long targetItemBalance,
+                        long minTimerMillis,
+                        long maxTimerMillis,
+                        int imbalancePriceRange,
+                        double imbalancePriceChangeFactor,
+                        double imbalancePriceChangeQuadFactor,
+                        double pid_p,
+                        double pid_d,
+                        double pid_i)
+        {
+            this();
+            this.volatility = volatility;
+            this.targetItemBalance = targetItemBalance;
+            this.minTimerMillis = minTimerMillis;
+            this.maxTimerMillis = maxTimerMillis;
+            this.imbalancePriceRange = imbalancePriceRange;
+            this.imbalancePriceChangeFactor = imbalancePriceChangeFactor;
+            this.imbalancePriceChangeQuadFactor = imbalancePriceChangeQuadFactor;
+            this.pid_p = pid_p;
+            this.pid_d = pid_d;
+            this.pid_i = pid_i;
         }
         @Override
         public boolean save(CompoundTag tag) {
             boolean success = super.save(tag);
             tag.putDouble("volatility", volatility);
             tag.putDouble("lastError", lastError);
-            tag.putDouble("integradedError", integradedError);
+            tag.putDouble("integratedError", integratedError);
             tag.putDouble("randomWalkDifferencePercentage", randomWalkDifferencePercentage);
             tag.putInt("targetPrice", targetPrice);
             tag.putLong("targetItemBalance", targetItemBalance);
             tag.putLong("timerMillis", timerMillis);
             tag.putLong("minTimerMillis", minTimerMillis);
             tag.putLong("maxTimerMillis", maxTimerMillis);
+            tag.putInt("imbalancePriceRange", imbalancePriceRange);
+            tag.putDouble("imbalancePriceChangeFactor", imbalancePriceChangeFactor);
+            tag.putDouble("imbalancePriceChangeQuadFactor", imbalancePriceChangeQuadFactor);
             tag.putDouble("pid_p", pid_p);
             tag.putDouble("pid_d", pid_d);
             tag.putDouble("pid_i", pid_i);
@@ -64,26 +92,32 @@ public class ServerVolatilityBot extends ServerTradingBot {
             boolean success = super.load(tag);
             if(!tag.contains("volatility") ||
                !tag.contains("lastError") ||
-               !tag.contains("integradedError") ||
+               !tag.contains("integratedError") ||
                !tag.contains("randomWalkDifferencePercentage") ||
                !tag.contains("targetPrice") ||
                !tag.contains("targetItemBalance") ||
                !tag.contains("timerMillis") ||
                !tag.contains("minTimerMillis") ||
                !tag.contains("maxTimerMillis")||
+                !tag.contains("imbalancePriceRange") ||
+                !tag.contains("imbalancePriceChangeFactor") ||
+                !tag.contains("imbalancePriceChangeQuadFactor") ||
                !tag.contains("pid_p") ||
                !tag.contains("pid_d") ||
                !tag.contains("pid_i"))
                 return false;
             volatility = tag.getDouble("volatility");
             lastError = tag.getDouble("lastError");
-            integradedError = tag.getDouble("integradedError");
+            integratedError = tag.getDouble("integratedError");
             randomWalkDifferencePercentage = tag.getDouble("randomWalkTargetPrice");
             targetPrice = tag.getInt("targetPrice");
             targetItemBalance = tag.getLong("targetItemBalance");
             timerMillis = tag.getLong("timerMillis");
             minTimerMillis = tag.getLong("minTimerMillis");
             maxTimerMillis = tag.getLong("maxTimerMillis");
+            imbalancePriceRange = tag.getInt("imbalancePriceRange");
+            imbalancePriceChangeFactor = tag.getDouble("imbalancePriceChangeFactor");
+            imbalancePriceChangeQuadFactor = tag.getDouble("imbalancePriceChangeQuadFactor");
             pid_p = tag.getDouble("pid_p");
             pid_d = tag.getDouble("pid_d");
             pid_i = tag.getDouble("pid_i");
@@ -152,8 +186,23 @@ public class ServerVolatilityBot extends ServerTradingBot {
             settings.targetPrice = 1;
         }
         else {
-            int itemImbalance = (int) (((settings.targetItemBalance - currentItemBalance) * settings.imbalancePriceRange / (double) settings.targetItemBalance) / 2 + settings.imbalancePriceRange);
-            settings.targetPrice = (int) ((settings.randomWalkDifferencePercentage + 1) * itemImbalance);
+            int averageTargetPrice =  (settings.imbalancePriceRange/2);
+
+            double normalizedDifference = (settings.targetItemBalance - currentItemBalance)/(double)settings.targetItemBalance;
+            // Linear part
+            double imbalancePriceOffset = (normalizedDifference * settings.imbalancePriceChangeFactor);
+            if(normalizedDifference > 0)
+            {
+                // Quadratic part only active for positive differences
+                double quadraticPart = normalizedDifference*normalizedDifference  * settings.imbalancePriceChangeQuadFactor;
+                imbalancePriceOffset += quadraticPart;
+            }
+
+            int targetPrice = averageTargetPrice + (int)(imbalancePriceOffset * settings.imbalancePriceRange);
+            settings.targetPrice = (int) ((settings.randomWalkDifferencePercentage + 1) * targetPrice);
+
+            if(settings.targetPrice < 0)
+                settings.targetPrice = 0;
         }
 
 
@@ -165,51 +214,76 @@ public class ServerVolatilityBot extends ServerTradingBot {
         int currentPrice = getCurrentPrice();
         double error = settings.targetPrice - currentPrice;
 
-        settings.integradedError += error*deltaT*settings.pid_i;
-        settings.integradedError = Math.min(1, Math.max(-1, settings.integradedError));
+        settings.integratedError += error*deltaT*settings.pid_i;
+        settings.integratedError = Math.min(1, Math.max(-1, settings.integratedError));
 
         double proportionalError = error * settings.pid_p;
         double derivativeError = (error - settings.lastError) / deltaT * settings.pid_d;
         settings.lastError = error;
         //derivativeError = Math.min(100, Math.max(-5, derivativeError));
+        double speed = proportionalError + derivativeError + settings.integratedError;
 
-        double speed = proportionalError + derivativeError + settings.integradedError;
+
+
+
+
+
         int randomScale = Math.abs((int)speed)+1;
         int volume = (int)(speed)+random.nextInt(randomScale)*2-randomScale;
 
+        //currentItemBalance = itemBank.getTotalBalance();
+        //if(volume > 0 || volume < 0 && currentItemBalance > -volume*currentPrice)
+        if(volume < 0 && itemBank.getBalance() < -volume)
+            volume = (int)-itemBank.getBalance();
         marketTrade(volume);
-       // StockMarketMod.LOGGER.info("VolatilityBot: targetPrice: "+settings.targetPrice+" speed: "+speed+" volume: "+volume+" error: "+error+ " P: "+proportionalError+" D: "+derivativeError+" I: "+settings.integradedError);
+        //StockMarketMod.LOGGER.info("VolatilityBot: targetPrice: "+settings.targetPrice+" speed: "+speed+" volume: "+volume+" error: "+error+ " P: "+proportionalError+" D: "+derivativeError+" I: "+settings.integratedError);
 
+        // Create Limit orders
         clearOrders();
         currentPrice = getCurrentPrice();
         int priceIncerement = 1;
         double imbalanceFactor = 0;
         if(settings.targetItemBalance > 0)
         {
-            imbalanceFactor = (settings.targetItemBalance - currentItemBalance)/(double)settings.targetItemBalance/4;
+            imbalanceFactor = Math.tanh((settings.targetItemBalance - currentItemBalance)/(double)settings.targetItemBalance/4);
         }
+        int startBuyPrice = currentPrice;
+        int startSellPrice = currentPrice;
+        if(currentPrice == 0)
+            startBuyPrice = 1;
+
         for(int i=1; i<=this.settings.maxOrderCount/2; i++)
         {
-            int sellPrice = currentPrice + i*priceIncerement;
-            int buyPrice = currentPrice - i*priceIncerement;
+            int sellPrice = startSellPrice + i*priceIncerement;
+            int buyPrice = startBuyPrice - i*priceIncerement;
+
+
+
 
 
             int buyVolume = (int)(getAvailableVolume(buyPrice) * (1 + imbalanceFactor))+1;
-            if(buyVolume > 0) {
+            if(buyVolume > 0 && buyPrice >= 0) {
 
                 if(moneyBank.getBalance()>(buyVolume*2)*buyPrice) {
                     limitTrade(buyVolume, buyPrice);
                 }
             }
 
-            int sellVolume = (int)(getAvailableVolume(sellPrice) * (1-imbalanceFactor))+1;
-            if(sellVolume < 0) {
-                if(itemBank.getBalance() > -sellVolume) {
+            if(itemBank.getBalance() > 10) {
+                int sellVolume = (int) (getAvailableVolume(sellPrice) * (1 - imbalanceFactor)) + 1;
+                if (sellVolume < 0 && sellPrice >= 0) {
+                    if (itemBank.getBalance()/2 < -sellVolume)
+                        sellVolume = (int) -itemBank.getBalance()/2;
+
                     sellLimit(-sellVolume, sellPrice);
+
                 }
             }
+
+
         }
     }
+
 
     /**
      * Creates a disribution that can be mapped to buy and sell orders
@@ -217,12 +291,12 @@ public class ServerVolatilityBot extends ServerTradingBot {
      *   x < 0: buy order volume
      *   x > 0: sell order volume
      */
-    @Override
+   /* @Override
     public int getVolumeDistribution(int x)
     {
         double fX = (double)Math.abs(x);
         double exp = Math.exp(-fX*1.f/this.settings.volumeSpread);
-        double random = Math.random()+1;
+        double random = Math.random()*this.settings.volumeRandomness;
 
         double volume = (super.settings.volumeScale*random) * (1 - exp) * exp;
 
@@ -231,7 +305,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
         return (int)volume;
 
         //return -x*;
-    }
+    }*/
 
 
     @Override
@@ -294,6 +368,18 @@ public class ServerVolatilityBot extends ServerTradingBot {
     public int getImbalancePriceRange() {
         return settings.imbalancePriceRange;
     }
+    public void setImbalancePriceChangeFactor(double imbalancePriceChangeFactor) {
+        settings.imbalancePriceChangeFactor = imbalancePriceChangeFactor;
+    }
+    public double getImbalancePriceChangeFactor() {
+        return settings.imbalancePriceChangeFactor;
+    }
+    public void setImbalancePriceChangeQuadFactor(double imbalancePriceChangeQuadFactor) {
+        settings.imbalancePriceChangeQuadFactor = imbalancePriceChangeQuadFactor;
+    }
+    public double getImbalancePriceChangeQuadFactor() {
+        return settings.imbalancePriceChangeQuadFactor;
+    }
     public void setPidP(double pid_p) {
         settings.pid_p = pid_p;
     }
@@ -312,8 +398,8 @@ public class ServerVolatilityBot extends ServerTradingBot {
     public double getPidI() {
         return settings.pid_i;
     }
-    public double getIntegradedError() {
-        return settings.integradedError;
+    public double getintegratedError() {
+        return settings.integratedError;
     }
 
 

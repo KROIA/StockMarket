@@ -14,6 +14,7 @@ import net.kroia.stockmarket.util.CandleStickChart;
 import net.kroia.stockmarket.util.OrderListWidget;
 import net.kroia.stockmarket.util.OrderbookVolumeChart;
 import net.kroia.stockmarket.util.geometry.Rectangle;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
@@ -535,6 +536,11 @@ public class TradeScreen extends Screen {
         if (this.priceBox.isFocused()) {
             return this.priceBox.keyPressed(keyCode, scanCode, modifiers)
                     || this.priceBox.canConsumeInput();
+        }
+        // Check if the pressed key matches the inventory key binding
+        if (keyCode == Minecraft.getInstance().options.keyInventory.getKey().getValue()) {
+            onClose(); // Close the screen
+            return true; // Indicate the event was handled
         }
         return super.keyPressed(keyCode, scanCode, modifiers);
     }

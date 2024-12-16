@@ -272,6 +272,7 @@ Type the amount you want to receive back in to the text field and click **Receiv
 
 ## Commands
 
+
 | Command | Description | Admin only |
 |---------|-------------|------------|
 | /money                           											| Show balance                                  |  |
@@ -288,12 +289,22 @@ Type the amount you want to receive back in to the text field and click **Receiv
 | /bank [username] create [itemID] [amount]            						| Create a bank for another player         		| :heavy_check_mark: |
 | /bank [username] setBalance [itemID] [amount]        						| Set balance of a bank for another player 		| :heavy_check_mark: |
 | /bank [username] delete [itemID]                     						| Delete a bank for another player         		| :heavy_check_mark: |
+| /StockMarket setPriceCandleTimeInterval <seconds>                         | Set price candle time interval                | :heavy_check_mark: |
+| /StockMarket createDefaultBots                                            | Create default bots                           | :heavy_check_mark: |
+| /StockMarket order cancelAll                                              | Cancel all orders                             |  |
+| /StockMarket order cancelAll <itemID>                                     | Cancel all orders of an item                  |  |
+| /StockMarket order <username> cancelAll                                   | Cancel all orders of a player                 | :heavy_check_mark: |
+| /StockMarket order <username> cancelAll <itemID>                          | Cancel all orders of a player for an item     | :heavy_check_mark: |
 | /StockMarket [itemID] bot settings get                                    | Get bot settings                         		| :heavy_check_mark: |
 | /StockMarket [itemID] bot settings set enabled                            | Enable bot                               		| :heavy_check_mark: |
 | /StockMarket [itemID] bot settings set disabled                           | Disable bot                              		| :heavy_check_mark: |
 | /StockMarket [itemID] bot settings set volatility [volatility]            | Set volatility                           		| :heavy_check_mark: |
 | /StockMarket [itemID] bot settings set imbalancePriceRange [priceRange]   | Set imbalance price range                		| :heavy_check_mark: |
 | /StockMarket [itemID] bot settings set targetItemBalance [balance]        | Set target item balance                  		| :heavy_check_mark: |
+| /StockMarket [itemID] bot settings set maxOrderCount [orderCount]         | Set max order count                           | :heavy_check_mark: |
+| /StockMarket [itemID] bot settings set volumeScale [volumeScale]          | Set volume scale                              | :heavy_check_mark: |
+| /StockMarket [itemID] bot settings set volumeSpread [volumeSpread]        | Set volume spread                             | :heavy_check_mark: |
+| /StockMarket [itemID] bot settings set volumeRandomness [volumeRandomness]| Set volume randomness                         | :heavy_check_mark: |
 | /StockMarket [itemID] bot settings set timer [timer]                      | Set timer                                		| :heavy_check_mark: |
 | /StockMarket [itemID] bot settings set minTimer [timer]                   | Set min timer                            		| :heavy_check_mark: |
 | /StockMarket [itemID] bot settings set maxTimer [timer]                   | Set max timer                            		| :heavy_check_mark: |
@@ -303,7 +314,9 @@ Type the amount you want to receive back in to the text field and click **Receiv
 | /StockMarket [itemID] bot create                                          | Create bot                               		| :heavy_check_mark: |
 | /StockMarket [itemID] bot remove                                          | Remove bot                               		| :heavy_check_mark: |
 | /StockMarket [itemID] create                                              | Create marketplace                       		| :heavy_check_mark: |
+| /StockMarket [itemID] remove                                              | Remove marketplace                            | :heavy_check_mark: |
 | /StockMarket [itemID] currentPrice                                        | Get current price                        		| :heavy_check_mark: |
+
 
 
 

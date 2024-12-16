@@ -89,7 +89,7 @@ public class Bank implements ServerSaveable {
             return;
         }
 
-        setBalanceInternal(balance);
+        setBalanceInternal(newBalance);
         notifyUser("Balance set to " + balance + ".");
     }
 
@@ -254,6 +254,7 @@ public class Bank implements ServerSaveable {
     private void setBalanceInternal(long balance) {
         if(balance < 0)
             dbg_invalid_balance(balance);
+
         this.balance = balance;
     }
 

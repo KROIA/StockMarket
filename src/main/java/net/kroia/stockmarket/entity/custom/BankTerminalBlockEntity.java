@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.entity.custom;
 
 import com.mojang.datafixers.util.Pair;
+import net.kroia.stockmarket.ModSettings;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.banking.BankUser;
 import net.kroia.stockmarket.banking.ServerBankManager;
@@ -437,7 +438,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
     private final HashMap<UUID, PlayerData> playerDataTable = new HashMap<>();
 
 
-    private int transferTickAmount = 1;
+    private int transferTickAmount = ModSettings.Bank.ITEM_TRANSFER_TICK_INTERVAL;
     private int lastTickCounter = 0;
     private int tickCounter = 0;
 
@@ -452,7 +453,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         CompoundTag data = nbt.getCompound(StockMarketMod.MODID);
 
        // this.inventory.deserializeNBT(tutorialmodData.getCompound("Inventory"));
-        transferTickAmount = data.getInt("TransferTickAmount");
+        //transferTickAmount = data.getInt("TransferTickAmount");
 
         ListTag playerDataTag = data.getList("PlayerData", ListTag.TAG_COMPOUND);
         for(int i = 0; i < playerDataTag.size(); i++)
@@ -471,7 +472,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         super.saveAdditional(nbt);
         CompoundTag data = new CompoundTag();
         //tutorialmodData.put("Inventory", this.inventory.serializeNBT());
-        data.putInt("TransferTickAmount", transferTickAmount);
+        //data.putInt("TransferTickAmount", transferTickAmount);
         ListTag playerInventoriesTag = new ListTag();
         for(UUID playerID : playerDataTable.keySet())
         {

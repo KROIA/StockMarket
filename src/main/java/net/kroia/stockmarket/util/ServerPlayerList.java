@@ -54,6 +54,10 @@ public class ServerPlayerList implements ServerSaveable {
         return name;
     }
 
+    public static Map<UUID, String> getUuidToNameMap() {
+        return uuidToNameMap;
+    }
+
     public static UUID getPlayerUUID(String name)
     {
         if(name == null)

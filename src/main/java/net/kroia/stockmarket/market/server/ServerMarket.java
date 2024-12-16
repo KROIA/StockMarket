@@ -36,7 +36,7 @@ public class ServerMarket implements ServerSaveable
     //private static final Map<String, MarketManager> marketManagers = new HashMap<>();
     //private static final Map<String, ArrayList<ServerPlayer>> playerSubscriptions = new HashMap<>();
     //private static MarketData marketData;
-    public static long shiftPriceHistoryInterval = ModSettings.Market.SHIFT_PRICE_CANCLE_INTERVAL_MS; // in ms
+    public static long shiftPriceHistoryInterval = ModSettings.Market.SHIFT_PRICE_CANDLE_INTERVAL_MS; // in ms
 
     private static final Map<String, ServerTradeItem> tradeItems = new HashMap<>();
 
@@ -49,6 +49,12 @@ public class ServerMarket implements ServerSaveable
             addTradeItemIfNotExists(item.getKey(), item.getValue());
         }
 
+
+
+    }
+
+    public static void createDefaultBots()
+    {
         if(ModSettings.MarketBot.ENABLED)
         {
             BankUser botUser = ServerBankManager.createBotUser();
@@ -74,7 +80,6 @@ public class ServerMarket implements ServerSaveable
             }
             bots.clear();
         }
-
     }
 
     public static void addTradeItem(String itemID, int startPrice)
@@ -93,6 +98,17 @@ public class ServerMarket implements ServerSaveable
             return;
         }
         addTradeItem_internal(itemID, startPrice);
+    }
+    public static void removeTradingItem(String itemID)
+    {
+        ServerTradeItem item = tradeItems.get(itemID);
+        if(item == null)
+        {
+            msgTradeItemNotFound(itemID);
+            return;
+        }
+        item.removeTradingBot();
+        tradeItems.remove(itemID);
     }
     private static void addTradeItem_internal(String itemID, int startPrice)
     {
@@ -207,6 +223,24 @@ public class ServerMarket implements ServerSaveable
             if(item.cancelOrder(orderID))
                 return;
         }
+    }
+
+    public static void cancelAllOrders(UUID playerUUID)
+    {
+        for(ServerTradeItem item : tradeItems.values())
+        {
+            item.cancelAllOrders(playerUUID);
+        }
+    }
+    public static void cancelAllOrders(UUID playerUUID, String itemID)
+    {
+        ServerTradeItem item = tradeItems.get(itemID);
+        if(item == null)
+        {
+            msgTradeItemNotFound(itemID);
+            return;
+        }
+        item.cancelAllOrders(playerUUID);
     }
 
     public static OrderbookVolume getOrderBookVolume(String itemID, int tiles, int minPrice, int maxPrice)

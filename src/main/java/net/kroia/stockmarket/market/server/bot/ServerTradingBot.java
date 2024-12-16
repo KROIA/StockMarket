@@ -37,6 +37,7 @@ public class ServerTradingBot implements ServerSaveable {
         public int maxOrderCount = ModSettings.MarketBot.MAX_ORDERS;
         public double volumeScale = ModSettings.MarketBot.VOLUME_SCALE;
         public double volumeSpread = ModSettings.MarketBot.VOLUME_SPREAD;
+        public double volumeRandomness = ModSettings.MarketBot.VOLUME_RANDOMNESS;
         public long updateTimerIntervallMS = ModSettings.MarketBot.UPDATE_TIMER_INTERVAL_MS;
 
         @Override
@@ -45,6 +46,7 @@ public class ServerTradingBot implements ServerSaveable {
             tag.putInt("maxOrderCount", maxOrderCount);
             tag.putDouble("volumeScale", volumeScale);
             tag.putDouble("volumeSpread", volumeSpread);
+            tag.putDouble("volumeRandomness", volumeRandomness);
             tag.putLong("updateTimerIntervallMS", updateTimerIntervallMS);
             return false;
         }
@@ -57,12 +59,14 @@ public class ServerTradingBot implements ServerSaveable {
                 !tag.contains("maxOrderCount") ||
                 !tag.contains("volumeScale") ||
                 !tag.contains("volumeSpread") ||
+                !tag.contains("volumeRandomness") ||
                 !tag.contains("updateTimerIntervallMS"))
                  return false;
             enabled = tag.getBoolean("enabled");
             maxOrderCount = tag.getInt("maxOrderCount");
             volumeScale = tag.getDouble("volumeScale");
             volumeSpread = tag.getDouble("volumeSpread");
+            volumeRandomness = tag.getDouble("volumeRandomness");
             updateTimerIntervallMS = tag.getLong("updateTimerIntervallMS");
             return true;
         }
@@ -110,6 +114,8 @@ public class ServerTradingBot implements ServerSaveable {
     {
         return this.settings;
     }
+
+
     public void setParent(MarketManager parent)
     {
         this.parent = parent;
@@ -183,6 +189,15 @@ public class ServerTradingBot implements ServerSaveable {
         }
     }
 
+    public void setMaxOrderCount(int maxOrderCount)
+    {
+        this.settings.maxOrderCount = maxOrderCount;
+    }
+    public int getMaxOrderCount()
+    {
+        return this.settings.maxOrderCount;
+    }
+
     public void setVolumeScale(double volumeScale) {
         this.settings.volumeScale = volumeScale;
     }
@@ -194,6 +209,12 @@ public class ServerTradingBot implements ServerSaveable {
     }
     public double getVolumeSpread() {
         return this.settings.volumeSpread;
+    }
+    public void setVolumeRandomness(double volumeRandomness) {
+        this.settings.volumeRandomness = volumeRandomness;
+    }
+    public double getVolumeRandomness() {
+        return this.settings.volumeRandomness;
     }
 
     public void setUpdateInterval(long intervalMillis)
@@ -423,9 +444,9 @@ public class ServerTradingBot implements ServerSaveable {
     {
         double fX = (double)Math.abs(x);
         double exp = Math.exp(-fX*1.f/this.settings.volumeSpread);
-        double random = Math.random()+1;
+        double random = Math.random()*this.settings.volumeRandomness;
 
-        double volume = (this.settings.volumeScale*random) * (1 - exp) * exp;
+        double volume = (this.settings.volumeScale*(random+1)) * (1 - exp) * exp;
 
         if(x < 0)
             return (int)-volume;

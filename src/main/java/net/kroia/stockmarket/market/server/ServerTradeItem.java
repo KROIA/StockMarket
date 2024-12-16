@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.market.server;
 
+import net.kroia.stockmarket.banking.ServerBankManager;
+import net.kroia.stockmarket.banking.bank.Bank;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncPricePacket;
@@ -140,6 +142,15 @@ public class ServerTradeItem implements ServerSaveable {
             return true;
         }
         return false;
+    }
+
+    public void cancelAllOrders(UUID playerUUID)
+    {
+        marketManager.cancelAllOrders(playerUUID);
+        Bank itemBank = ServerBankManager.getUser(playerUUID).getBank(itemID);
+        if(itemBank != null)
+            itemBank.unlockAll();
+        notifySubscribers();
     }
 
     public OrderbookVolume getOrderBookVolume(int tiles, int minPrice, int maxPrice)

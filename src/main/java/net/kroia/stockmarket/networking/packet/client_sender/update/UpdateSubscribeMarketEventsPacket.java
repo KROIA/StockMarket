@@ -31,8 +31,8 @@ public class UpdateSubscribeMarketEventsPacket {
     }
 
     public static void generateRequest(String itemID, boolean subscribe) {
-        StockMarketMod.LOGGER.info("[CLIENT] Sending UpdateSubscribeMarketEventsPacket for item "+itemID+
-                " to "+(subscribe ? "subscribe" : "unsubscribe"));
+        /*StockMarketMod.LOGGER.info("[CLIENT] Sending UpdateSubscribeMarketEventsPacket for item "+itemID+
+                " to "+(subscribe ? "subscribe" : "unsubscribe"));*/
         ModMessages.sendToServer(new UpdateSubscribeMarketEventsPacket(itemID, subscribe));
     }
 

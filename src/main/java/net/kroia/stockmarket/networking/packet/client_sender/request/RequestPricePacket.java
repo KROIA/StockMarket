@@ -26,7 +26,7 @@ public class RequestPricePacket {
     }
 
     public static void generateRequest(String itemID) {
-        StockMarketMod.LOGGER.info("[CLIENT] Sending RequestPricePacket for item "+itemID);
+        //StockMarketMod.LOGGER.info("[CLIENT] Sending RequestPricePacket for item "+itemID);
         ModMessages.sendToServer(new RequestPricePacket(itemID));
     }
 

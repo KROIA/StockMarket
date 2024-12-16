@@ -85,7 +85,7 @@ public class LimitOrder extends Order implements ServerSaveable {
                 "\n  Amount: " + amount +
                 "\n  Filled: " + filledAmount +
                 "\n  Price: " + price +
-                "\n  AveragePrice: " + averagePrice +
+                "\n  AveragePrice: " + getAveragePrice() +
                 "\n  TransferedMoney: $" + transferedMoney +
                 "\n  Status:" + status+
                 (status==Status.INVALID?" Invalid reason: \n    "+invalidReason:"")+"\n}";
@@ -120,7 +120,7 @@ public class LimitOrder extends Order implements ServerSaveable {
         tag.putInt("amount", amount);
         tag.putInt("filledAmount", filledAmount);
         tag.putLong("transferedMoney", transferedMoney);
-        tag.putInt("averagePrice", averagePrice);
+        //tag.putInt("averagePrice", averagePrice);
         tag.putString("status", status.toString());
         tag.putString("invalidReason", invalidReason);
         tag.putBoolean("isBot", isBot);
@@ -138,7 +138,7 @@ public class LimitOrder extends Order implements ServerSaveable {
                 !tag.contains("amount") ||
                 !tag.contains("filledAmount") ||
                 !tag.contains("transferedMoney") ||
-                !tag.contains("averagePrice") ||
+                //!tag.contains("averagePrice") ||
                 !tag.contains("status") ||
                 !tag.contains("invalidReason") ||
                 !tag.contains("isBot"))
@@ -150,7 +150,7 @@ public class LimitOrder extends Order implements ServerSaveable {
         amount = tag.getInt("amount");
         filledAmount = tag.getInt("filledAmount");
         transferedMoney = tag.getLong("transferedMoney");
-        averagePrice = tag.getInt("averagePrice");
+        //averagePrice = tag.getInt("averagePrice");
         status = Status.valueOf(tag.getString("status"));
         invalidReason = tag.getString("invalidReason");
         isBot = tag.getBoolean("isBot");

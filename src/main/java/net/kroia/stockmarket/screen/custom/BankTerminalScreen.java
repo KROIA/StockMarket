@@ -214,11 +214,11 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
    // @SubscribeEvent(priority = EventPriority.NORMAL)
     public void onTick(TickEvent.ClientTickEvent event) {
         if (event.phase == TickEvent.Phase.END) {
-            /*if (Minecraft.getInstance().screen instanceof BankTerminalScreen screen) {
+            if (Minecraft.getInstance().screen instanceof BankTerminalScreen screen) {
                 // This will only run when the screen is an instance of BankTerminalScreen
                 screen.handleTick();
-            }*/
-            handleTick();
+            }
+            //handleTick();
         }
     }
 
@@ -227,7 +227,7 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
         if(tickCount - lastTickCount > 10)
         {
             RequestBankDataPacket.sendRequest();
-            StockMarketMod.LOGGER.info("Updating bank terminal screen");
+            //StockMarketMod.LOGGER.info("Updating bank terminal screen");
             lastTickCount = tickCount;
             buildItemButtons();
         }
