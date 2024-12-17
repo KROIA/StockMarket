@@ -225,41 +225,43 @@ A limit order requires an **amount** and **price** at which the trade gets execu
 #### Selling Items
 To sell items the item must be available on the market. This is managed by the server admin.<br>
 Assuming the item can be traded on the market, you first have to deposit the item to your bank account. This can be done using the **Bank Terminal Block**.<br>
-Open that block using right click. A window will appear.
-Place your item stacks in the blocks inventory and press the button **Send items to market**.
-This will transfer the items to your bank account.
+Open that block using right click. A window will appear.<br>
+Place your item stacks in the blocks inventory and press the button **Send items to market**.<br>
+This will transfer the items to your bank account.<br>
 <div align="center">
     <img src="documentation/images/bankingView.png" > 
 </div>
 <br>
 
-Now open the **Stock Market Terminal Block** using right click.
-This opens the trading window.
-On the left side you can see the [Candle stick chart](#candle-stick-chart)
-On the left edge of the chart is the price axis.
-On the right edge of the chart is the [Order Book](#order-book) volume displayed.
-On the right side of the window is the interaction panel. There you can select the desired item to be traded. Just click on the button and a list of all tradable items will appear.
-Type the amount of items you want to buy/sell.
-Decide whether you want to execute a market-order or a limit order.
-If you want to create a limt order, you have to type in the desired price.
-Click on the **sell** button for market or limit order to execute the trade.
-A market-order is executet directly but the limit order will be listed on the left side until it is filled or gets canceled.
+Now open the **Stock Market Terminal Block** using right click.<br>
+This opens the trading window.<br>
+On the left side you can see the [Candle stick chart](#candle-stick-chart)<br>
+On the left edge of the chart is the price axis.<br>
+On the right edge of the chart is the [Order Book](#order-book) volume displayed.<br>
+On the right side of the window is the interaction panel. There you can select the desired item to be traded. Just click on the button and a list of all tradable items will appear.<br>
+Type the amount of items you want to buy/sell.<br>
+Decide whether you want to execute a market-order or a limit order.<br>
+If you want to create a limt order, you have to type in the desired price.<br>
+Click on the **sell** button for market or limit order to execute the trade.<br>
+A market-order is executet directly but the limit order will be listed on the left side until it is filled or gets canceled.<br>
 <div align="center">
     <img src="documentation/images/tradingView.png" > 
 </div>
 
 ---
 ### Buying Items
-To buy a item you have to get some money first. You can do that by selling other items or receiving money from other players. A server admin can also provide you money...
-Assuming you have money, open the **Stock Market Terminal Block**
-Select the item you want to trade by pressing the button on the top right with the Label "Price: XX".
-Type the amount you want to buy, type a limit price if you want to execute a limit order.
-Clock on the **buy** button.
-A market-order gets executed directly but a limit order may take some time until it gets filled by the market.
+To buy a item you have to get some money first. You can do that by selling other items or receiving money from other players.<br>
+A server admin can also provide you money...<br>
+Assuming you have money, open the **Stock Market Terminal Block**<br>
+Select the item you want to trade by pressing the button on the top right with the Label "Price: XX".<br>
+Type the amount you want to buy, type a limit price if you want to execute a limit order.<br>
+Clock on the **buy** button.<br>
+A market-order gets executed directly but a limit order may take some time until it gets filled by the market.<br>
 
-Once you have received the items, you can go to the **Bank Terminal Block**.
-On the left side you can see your items on the bank account.
-Type the amount you want to receive back in to the text field and click **Receive items from market**. The items will be transfered to the Bank Terminal Block
+Once you have received the items, you can go to the **Bank Terminal Block**.<br>
+On the left side you can see your items on the bank account.<br>
+Type the amount you want to receive back in to the text field and click **Receive items from market**.<br>
+The items will be transfered to the Bank Terminal Block.<br>
 
 
 
@@ -282,9 +284,7 @@ Each player receives its bank account with 0 balance.
     The simplest way to setup the bots is by calling the command bellow.<br>
     This command creats a bot for each market which was added by default from the mod.<br>
     You may want to change the settings for the bots later.<br>
-    <code>
-    /StockMarket createDefaultBots
-    </code>
+<code>/StockMarket createDefaultBots</code>
 </details>
 
 <details close> 
@@ -293,13 +293,9 @@ Each player receives its bank account with 0 balance.
     </summary>
     Replace the <b>[itemID]</b> with the minecraft item ID for which you want to create a market.<br>
     Check out the website <a href="https://minecraftitemids.com/">https://minecraftitemids.com/</a> to find the item ID you need.<br>
-    <code>
-        /StockMarket [itemID] create
-    </code><br>
+    <code>/StockMarket [itemID] create</code><br>
     You may need to type the <b>"</b> in order to type a string that contains <b>:</b>.<br>
-    <code>
-        /StockMarket "minecraft:copper_ingot" create
-    </code>
+    <code>/StockMarket "minecraft:copper_ingot" create</code>
 </details>
 
 <details close> 
@@ -308,82 +304,32 @@ Each player receives its bank account with 0 balance.
     </summary>
     To create a bot from scratch make sure the market, for which you want to create the bot, already exists. <br>
     Type the following command, replace the item ID with your markets item ID.<br>
-    <code>
-        /StockMarket "minecraft:copper_ingot" bot create
-    </code><br>
+    <code>/StockMarket "minecraft:copper_ingot" bot create</code><br>
     The bot gets created but is not active, you have to configure it first.<br>
     Type the following command to read the settings the bot has by default:<br>
-    <code>
-        /StockMarket "minecraft:copper_ingot" bot settings get
-    </code><br>
+    <code>/StockMarket "minecraft:copper_ingot" bot settings get</code><br>
     To set a setting you can type the following and use the auto complete to select your desired parameter.<br>
     (**[parameter]** is a placeholder for your chosen parameter you want to set)<br>
-    <code>
-        /StockMarket "minecraft:copper_ingot" bot settings set [parameter]
-    </code><br>
+    <code>/StockMarket "minecraft:copper_ingot" bot settings set [parameter]</code><br>
     If you are not sure about what you have to set to which value, just let the values on default. <br>
     The only values you have to change because they are unique for each item are the following:<br>
-    - <b>Target Price Range</b> Defines the range the bot will try to move the price around. The value you have to set is the upper bound of the range. The lower bound is automaticly 0.<br>
-    - <b>Target Item Balance</b> Defines the amount of items the bot try's to hold in its bank account. If player buy to many items from a bot, the bot will rise the price. When players sell to many items, <br>
+    - <b>Target Price Range</b><br> Defines the range the bot will try to move the price around. The value you have to set is the upper bound of the range. The lower bound is automaticly 0.<br>
+    - <b>Target Item Balance</b><br> Defines the amount of items the bot try's to hold in its bank account. If player buy to many items from a bot, the bot will rise the price. When players sell to many items, <br>
     the bot will lower the price. When the bot holds exactly the target amount balance, the price will move to the <b>target_price_range_value/2</b>.<br>
     Lets say you want the bot to hold <b>1000 copper ingots</b> and the price should than be at around 100$, you have to type the following:<br>
-    <code>
-    /StockMarket "minecraft:copper_ingot" bot settings set targetItemBalance 1000
-    </code><br>
-    <code>
-    /StockMarket "minecraft:copper_ingot" bot settings set targetPriceRange 200
-    </code><br>
+    <code>/StockMarket "minecraft:copper_ingot" bot settings set targetItemBalance 1000</code><br>
+    <code>/StockMarket "minecraft:copper_ingot" bot settings set targetPriceRange 200</code><br>
     Before the bot can be enabled, you have to overwrite the item balance of the bot.<br>
-    <code>
-    /bank "StockMarketBot" setBalance "minecraft:copper_ingot" 1000
-    </code><br>
+    <code>/bank "StockMarketBot" setBalance "minecraft:copper_ingot" 1000</code><br>
     If you want the bot to start the market at the <b>target_price_range_value/2</b> you must give the bot the same amount of items as you have set the <b>Target Item Balance</b>.<br>
-    If you want to create an artificial demand from the bot at the start, you can give less to the bot.<br>
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Warning Message</title>
-        <style>
-            .warning-box {
-                border-left: 5px solid #f39c12;
-                background-color: #fcf8e3;
-                padding: 10px 15px;
-                margin: 10px 0;
-                font-family: Arial, sans-serif;
-                font-size: 14px;
-            }
-            .warning-box .icon {
-                font-weight: bold;
-                color: #e67e22;
-                margin-right: 5px;
-            }
-            .warning-box p {
-                margin: 5px 0;
-            }
-            .warning-box .nested {
-                margin-left: 20px;
-                border-left: 3px solid #f39c12;
-                padding-left: 10px;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="warning-box">
-            <span class="icon">⚠️</span>
-            <p>Do not set the item balance to 0 since this will break the bot.<br>
-            The bot must always have some items and money, otherwise he can't place orders.</p>
-            <div class="nested">
-                <p></p>
-            </div>
-        </div>
-    </body>
+    If you want to create an artificial demand from the bot at the start, you can give less to the bot.<br><br>
+   <div style="border-left: 7px solid #f39c12; background-color: #fcf8e3; padding: 20px; margin: 10px 0;">
+      <p><strong>⚠️ Warning:</strong> Do not set the item balance to 0 since this will break the bot.</br>
+       The bot must always have some items and money, otherwise it can't place orders.</p>
+    </div>
     You may want to change the money balance of the bot.<br>
-    <code>
-        /bank "StockMarketBot" show
-    </code><br>
-    <code>
-        /bank "StockMarketBot" setBalance "$" 1000000000
-    </code><br>
+    <code>/bank "StockMarketBot" show</code><br>
+    <code>/bank "StockMarketBot" setBalance "$" 1000000000</code><br>
 </details>
 
 <details close> 
