@@ -6,14 +6,14 @@ import net.kroia.stockmarket.banking.bank.Bank;
 import net.kroia.stockmarket.banking.bank.ClientBankManager;
 import net.kroia.stockmarket.banking.bank.MoneyBank;
 import net.kroia.stockmarket.networking.ModMessages;
+import net.kroia.stockmarket.networking.packet.NetworkPacket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraftforge.network.NetworkEvent;
 
 import java.util.HashMap;
 import java.util.function.Supplier;
 
-public class SyncBankDataPacket {
+public class SyncBankDataPacket extends NetworkPacket {
 
     public class BankData{
         private String itemID;
@@ -52,6 +52,7 @@ public class SyncBankDataPacket {
     HashMap<String, BankData> bankData;
 
     public SyncBankDataPacket(BankUser user) {
+        super();
         bankData = new HashMap<>();
         HashMap<String, Bank> bankMap = user.getBankMap();
         for(Bank bank : bankMap.values())
@@ -61,7 +62,7 @@ public class SyncBankDataPacket {
         }
     }
     public SyncBankDataPacket(FriendlyByteBuf buf) {
-        fromBytes(buf);
+        super(buf);
     }
 
     public long getBalance(String itemID)
@@ -104,12 +105,15 @@ public class SyncBankDataPacket {
         ModMessages.sendToPlayer(packet, player);
     }
 
+    @Override
     public void toBytes(FriendlyByteBuf buf) {
         buf.writeInt(bankData.size());
         bankData.forEach((itemID, data) -> {
             data.toBytes(buf);
         });
     }
+
+    @Override
     public void fromBytes(FriendlyByteBuf buf) {
         int size = buf.readInt();
         bankData = new HashMap<>();
@@ -120,23 +124,8 @@ public class SyncBankDataPacket {
         }
     }
 
-    public void handle(Supplier<NetworkEvent.Context> contextSupplier) {
-        NetworkEvent.Context context = contextSupplier.get();
-        // Check if on server_sender or client
-        if(contextSupplier.get().getDirection().getReceptionSide().isClient()) {
-            //StockMarketMod.LOGGER.info("[CLIENT] Received current prices from the server_sender");
-            // HERE WE ARE ON THE CLIENT!
-            ClientBankManager.handlePacket(this);
-            context.setPacketHandled(true);
-            return;
-        }
-
-
-        context.enqueueWork(() -> {
-            // HERE WE ARE ON THE SERVER!
-            // Update client-side data
-
-        });
-        context.setPacketHandled(true);
+    @Override
+    protected void handleOnClient() {
+        ClientBankManager.handlePacket(this);
     }
 }

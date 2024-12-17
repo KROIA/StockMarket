@@ -3,23 +3,24 @@ package net.kroia.stockmarket.networking.packet.server_sender.update.entity;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
 import net.kroia.stockmarket.networking.ModMessages;
+import net.kroia.stockmarket.networking.packet.NetworkPacket;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraftforge.network.NetworkEvent;
 
 import java.util.function.Supplier;
 
-public class SyncStockMarketBlockEntityPacket {
-    private final BlockPos pos;
-    private final String itemID;
-    private final int amount;
-    private final int price;
+public class SyncStockMarketBlockEntityPacket extends NetworkPacket {
+    private BlockPos pos;
+    private String itemID;
+    private int amount;
+    private int price;
 
 
 
     public SyncStockMarketBlockEntityPacket(BlockPos pos, StockMarketBlockEntity blockEntity) {
+        super();
         this.pos = pos;
         this.itemID = blockEntity.getItemID();
         this.amount = blockEntity.getAmount();
@@ -28,10 +29,7 @@ public class SyncStockMarketBlockEntityPacket {
 
 
     public SyncStockMarketBlockEntityPacket(FriendlyByteBuf buf) {
-        this.pos = buf.readBlockPos();
-        this.itemID = buf.readUtf();
-        this.amount = buf.readInt();
-        this.price = buf.readInt();
+        super(buf);
     }
 
     public BlockPos getPos() {
@@ -55,6 +53,7 @@ public class SyncStockMarketBlockEntityPacket {
         ModMessages.sendToPlayer(new SyncStockMarketBlockEntityPacket(pos, blockEntity), player);
     }
 
+    @Override
     public void toBytes(FriendlyByteBuf buf)
     {
         buf.writeBlockPos(pos);
@@ -62,27 +61,17 @@ public class SyncStockMarketBlockEntityPacket {
         buf.writeInt(amount);
         buf.writeInt(price);
     }
+    @Override
+    public void fromBytes(FriendlyByteBuf buf)
+    {
+        this.pos = buf.readBlockPos();
+        this.itemID = buf.readUtf();
+        this.amount = buf.readInt();
+        this.price = buf.readInt();
+    }
 
-    public void handle(Supplier<NetworkEvent.Context> contextSupplier) {
-        NetworkEvent.Context context = contextSupplier.get();
-        // Check if on server_sender or client
-        if(contextSupplier.get().getDirection().getReceptionSide().isClient()) {
-            //StockMarketMod.LOGGER.info("[CLIENT] Received current prices from the server_sender");
-            // HERE WE ARE ON THE CLIENT!
-            // Update client-side data
-            // Get the data from the packet
-            //MarketData.setPrice(this.itemID, this.price);
-            TradeScreen.handlePacket(this);
-            context.setPacketHandled(true);
-            return;
-        }
-
-
-        context.enqueueWork(() -> {
-            // HERE WE ARE ON THE SERVER!
-
-
-        });
-        context.setPacketHandled(true);
+    @Override
+    protected void handleOnClient() {
+        TradeScreen.handlePacket(this);
     }
 }

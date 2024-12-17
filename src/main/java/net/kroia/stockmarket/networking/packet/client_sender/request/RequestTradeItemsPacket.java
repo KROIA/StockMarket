@@ -3,35 +3,26 @@ package net.kroia.stockmarket.networking.packet.client_sender.request;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.networking.ModMessages;
+import net.kroia.stockmarket.networking.packet.NetworkPacket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraftforge.network.NetworkEvent;
+import net.minecraftforge.event.network.CustomPayloadEvent;
+
 
 import java.util.function.Supplier;
 
-public class RequestTradeItemsPacket {
+public class RequestTradeItemsPacket extends NetworkPacket {
 
 
     public RequestTradeItemsPacket()
     {
-        //updatePricePackets = null;
+        super();
     }
 
 
     public RequestTradeItemsPacket(FriendlyByteBuf buf) {
-        //int size = buf.readInt();
-        //if(size == 0)
-        //    return;
-
-        /*for (int i = 0; i < size; i++) {
-            this.updatePricePackets.add(new SyncPricePacket(buf));
-        }*/
+        super(buf);
     }
-
-    public void toBytes(FriendlyByteBuf buf) {
-
-    }
-
 
 
     public static void generateRequest() {
@@ -41,23 +32,8 @@ public class RequestTradeItemsPacket {
 
 
 
-    public void handle(Supplier<NetworkEvent.Context> contextSupplier) {
-        NetworkEvent.Context context = contextSupplier.get();
-        // Check if on server_sender or client
-        if(contextSupplier.get().getDirection().getReceptionSide().isClient()) {
-            // HERE WE ARE ON THE CLIENT!
-            context.setPacketHandled(true);
-            return;
-        }
-
-        context.enqueueWork(() -> {
-            // HERE WE ARE ON THE SERVER!
-            // Update client-side data
-            ServerPlayer player = context.getSender();
-            assert player != null;
-            ServerMarket.handlePacket(player, this);
-        });
-        context.setPacketHandled(true);
+    @Override
+    protected void handleOnServer(ServerPlayer sender) {
+        ServerMarket.handlePacket(sender, this);
     }
-
 }

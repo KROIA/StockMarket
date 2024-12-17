@@ -11,7 +11,7 @@ import net.kroia.stockmarket.util.OrderbookVolume;
 import net.kroia.stockmarket.util.PriceHistory;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraftforge.network.NetworkEvent;
+import net.minecraftforge.event.network.CustomPayloadEvent;
 
 import java.util.ArrayList;
 import java.util.UUID;
@@ -165,10 +165,9 @@ public class SyncPricePacket {
         });*/
     }
 
-    public void handle(Supplier<NetworkEvent.Context> contextSupplier) {
-        NetworkEvent.Context context = contextSupplier.get();
+    public void handle(CustomPayloadEvent.Context context) {
         // Check if on server_sender or client
-        if(contextSupplier.get().getDirection().getReceptionSide().isClient()) {
+        if(context.isClientSide()) {
             //StockMarketMod.LOGGER.info("[CLIENT] Received current prices from the server_sender");
             // HERE WE ARE ON THE CLIENT!
             // Update client-side data

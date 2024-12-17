@@ -7,14 +7,10 @@ import net.kroia.stockmarket.networking.packet.client_sender.update.entity.Updat
 import net.kroia.stockmarket.networking.packet.client_sender.update.entity.UpdateStockMarketBlockEntityPacket;
 import net.kroia.stockmarket.networking.packet.client_sender.update.UpdateSubscribeMarketEventsPacket;
 import net.kroia.stockmarket.networking.packet.server_sender.update.*;
-import net.kroia.stockmarket.networking.packet.server_sender.update.entity.SyncBankTerminalBlockEntityPacket;
 import net.kroia.stockmarket.networking.packet.server_sender.update.entity.SyncStockMarketBlockEntityPacket;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraftforge.network.NetworkDirection;
-import net.minecraftforge.network.NetworkRegistry;
-import net.minecraftforge.network.PacketDistributor;
-import net.minecraftforge.network.simple.SimpleChannel;
+import net.minecraftforge.network.*;
 
 public class ModMessages {
     private static SimpleChannel INSTANCE;
@@ -25,11 +21,11 @@ public class ModMessages {
     }
 
     public static void register() {
-        SimpleChannel net = NetworkRegistry.ChannelBuilder
+        SimpleChannel net = ChannelBuilder
                 .named(new ResourceLocation(StockMarketMod.MODID, "messages"))
-                .networkProtocolVersion(() -> "1.0")
-                .clientAcceptedVersions(s -> true)
-                .serverAcceptedVersions(s -> true)
+                .networkProtocolVersion(1)
+                .clientAcceptedVersions((status, version) -> true)
+                .serverAcceptedVersions((status, version) -> true)
                 .simpleChannel();
 
         INSTANCE = net;
@@ -112,16 +108,11 @@ public class ModMessages {
                 .consumerMainThread(SyncBankDataPacket::handle)
                 .add();
 
-        net.messageBuilder(SyncBankTerminalBlockEntityPacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)
-                .decoder(SyncBankTerminalBlockEntityPacket::new)
-                .encoder(SyncBankTerminalBlockEntityPacket::toBytes)
-                .consumerMainThread(SyncBankTerminalBlockEntityPacket::handle)
-                .add();
     }
 
     public static <MSG> void sendToServer(MSG message) {
         try{
-            INSTANCE.sendToServer(message);
+            INSTANCE.send(message, PacketDistributor.SERVER.noArg());
         } catch (Exception e) {
             StockMarketMod.LOGGER.error("Failed to send message to server_sender: " + e.getMessage());
         }
@@ -129,7 +120,7 @@ public class ModMessages {
 
     public static <MSG> void sendToPlayer(MSG message, ServerPlayer player) {
         try{
-            INSTANCE.send(PacketDistributor.PLAYER.with(() -> player), message);
+            INSTANCE.send(message, PacketDistributor.PLAYER.with(player));
         } catch (Exception e) {
             StockMarketMod.LOGGER.error("Failed to send message to player: " + e.getMessage());
         }

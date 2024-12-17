@@ -3,26 +3,33 @@ package net.kroia.stockmarket.networking.packet.client_sender.request;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.networking.ModMessages;
+import net.kroia.stockmarket.networking.packet.NetworkPacket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraftforge.network.NetworkEvent;
+import net.minecraftforge.event.network.CustomPayloadEvent;
 
 import java.util.function.Supplier;
 
-public class RequestPricePacket {
+public class RequestPricePacket extends NetworkPacket {
 
 
     private String itemID;
     public RequestPricePacket(String itemID) {
+        super();
         this.itemID = itemID;
     }
 
     public RequestPricePacket(FriendlyByteBuf buf) {
-        this.itemID = buf.readUtf();
+        super(buf);
     }
 
+    @Override
     public void toBytes(FriendlyByteBuf buf) {
         buf.writeUtf(itemID);
+    }
+    @Override
+    public void fromBytes(FriendlyByteBuf buf) {
+        this.itemID = buf.readUtf();
     }
 
     public static void generateRequest(String itemID) {
@@ -34,23 +41,9 @@ public class RequestPricePacket {
         return itemID;
     }
 
-    public void handle(Supplier<NetworkEvent.Context> contextSupplier) {
-        NetworkEvent.Context context = contextSupplier.get();
-        // Check if on server_sender or client
-        if(contextSupplier.get().getDirection().getReceptionSide().isClient()) {
-            // HERE WE ARE ON THE CLIENT!
-            context.setPacketHandled(true);
-            return;
-        }
-
-        context.enqueueWork(() -> {
-            // HERE WE ARE ON THE SERVER!
-            // Update client-side data
-            ServerPlayer player = context.getSender();
-
-            assert player != null;
-            ServerMarket.handlePacket(player, this);
-        });
-        context.setPacketHandled(true);
+    @Override
+    protected void handleOnServer(ServerPlayer sender)
+    {
+        ServerMarket.handlePacket(sender, this);
     }
 }

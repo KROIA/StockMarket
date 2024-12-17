@@ -4,27 +4,35 @@ import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.client.ClientMarket;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.networking.ModMessages;
+import net.kroia.stockmarket.networking.packet.NetworkPacket;
 import net.kroia.stockmarket.util.ServerPlayerList;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraftforge.network.NetworkEvent;
 
 import java.util.function.Supplier;
 
-public class SyncOrderPacket {
+public class SyncOrderPacket extends NetworkPacket {
 
     private Order order;
 
     public SyncOrderPacket(Order order) {
+        super();
         this.order = order;
     }
     public SyncOrderPacket(FriendlyByteBuf buf)
     {
-        this.order = Order.construct(buf);
+        super(buf);
+
     }
 
+    @Override
     public void toBytes(FriendlyByteBuf buf) {
         order.toBytes(buf);
+    }
+
+    @Override
+    public void fromBytes(FriendlyByteBuf buf) {
+        this.order = Order.construct(buf);
     }
 
     public static void sendResponse(Order order) {
@@ -46,21 +54,8 @@ public class SyncOrderPacket {
         return order;
     }
 
-    public void handle(Supplier<NetworkEvent.Context> contextSupplier) {
-        NetworkEvent.Context context = contextSupplier.get();
-        // Check if on server_sender or client
-        if(contextSupplier.get().getDirection().getReceptionSide().isClient()) {
-            // HERE WE ARE ON THE CLIENT!
-            ClientMarket.handlePacket(this);
-            context.setPacketHandled(true);
-            return;
-        }
-
-        context.enqueueWork(() -> {
-            // HERE WE ARE ON THE SERVER!
-            // Update client-side data
-
-        });
-        context.setPacketHandled(true);
+    @Override
+    protected void handleOnClient() {
+        ClientMarket.handlePacket(this);
     }
 }

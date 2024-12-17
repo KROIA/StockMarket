@@ -3,12 +3,14 @@ package net.kroia.stockmarket.networking.packet.client_sender.request;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.networking.ModMessages;
+import net.kroia.stockmarket.networking.packet.NetworkPacket;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraftforge.network.NetworkEvent;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraftforge.event.network.CustomPayloadEvent;
 
 import java.util.function.Supplier;
 
-public class RequestOrderPacket {
+public class RequestOrderPacket extends NetworkPacket {
 
     private String itemID;
     private int amount;
@@ -20,16 +22,19 @@ public class RequestOrderPacket {
     private OrderType orderType;
 
     public RequestOrderPacket() {
+        super();
         itemID = "";
         amount = 0;
     }
     public RequestOrderPacket(String itemID, int amount) {
+        super();
         this.itemID = itemID;
         this.amount = amount;
         this.orderType = OrderType.market;
         this.price = 0;
     }
     public RequestOrderPacket(String itemID, int amount, OrderType orderType, int price) {
+        super();
         this.itemID = itemID;
         this.amount = amount;
         this.orderType = orderType;
@@ -37,10 +42,7 @@ public class RequestOrderPacket {
     }
 
     public RequestOrderPacket(FriendlyByteBuf buf) {
-        this.itemID = buf.readUtf();
-        this.amount = buf.readInt();
-        this.orderType = OrderType.valueOf(buf.readUtf());
-        this.price = buf.readInt();
+        super(buf);
     }
 
     public String getItemID() {
@@ -65,6 +67,7 @@ public class RequestOrderPacket {
         ModMessages.sendToServer(new RequestOrderPacket(itemID, amount));
     }
 
+    @Override
     public void toBytes(FriendlyByteBuf buf)
     {
         buf.writeUtf(itemID);
@@ -73,31 +76,19 @@ public class RequestOrderPacket {
         buf.writeInt(price);
     }
 
-    public void handle(Supplier<NetworkEvent.Context> contextSupplier) {
-        NetworkEvent.Context context = contextSupplier.get();
-        // Check if on server_sender or client
-        if(contextSupplier.get().getDirection().getReceptionSide().isClient()) {
-            //StockMarketMod.LOGGER.info("[CLIENT] Received current prices from the server_sender");
-            // HERE WE ARE ON THE CLIENT!
-            // Update client-side data
-            // Get the data from the packet
-            //MarketData.setPrice(this.itemID, this.price);
-            context.setPacketHandled(true);
-            return;
-        }
-
-
-        context.enqueueWork(() -> {
-            // HERE WE ARE ON THE SERVER!
-            // Update client-side data
-            ServerMarket.handlePacket(context.getSender(), this);
-
-
-
-            // Send the packet to the client
-            //SyncPricePacket.sendPacket(itemID, player);
-
-        });
-        context.setPacketHandled(true);
+    @Override
+    public void fromBytes(FriendlyByteBuf buf)
+    {
+        this.itemID = buf.readUtf();
+        this.amount = buf.readInt();
+        this.orderType = OrderType.valueOf(buf.readUtf());
+        this.price = buf.readInt();
     }
+
+    @Override
+    protected void handleOnServer(ServerPlayer sender) {
+        ServerMarket.handlePacket(sender, this);
+    }
+
+
 }

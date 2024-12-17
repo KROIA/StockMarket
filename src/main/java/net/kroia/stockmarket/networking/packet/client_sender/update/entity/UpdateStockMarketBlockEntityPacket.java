@@ -3,22 +3,24 @@ package net.kroia.stockmarket.networking.packet.client_sender.update.entity;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
 import net.kroia.stockmarket.networking.ModMessages;
+import net.kroia.stockmarket.networking.packet.NetworkPacket;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraftforge.network.NetworkEvent;
+import net.minecraftforge.event.network.CustomPayloadEvent;
 
 import java.util.function.Supplier;
 
-public class UpdateStockMarketBlockEntityPacket {
-    private final BlockPos pos;
-    private final String itemID;
-    private final int amount;
-    private final int price;
+public class UpdateStockMarketBlockEntityPacket extends NetworkPacket {
+    private BlockPos pos;
+    private String itemID;
+    private int amount;
+    private int price;
 
 
 
     public UpdateStockMarketBlockEntityPacket(BlockPos pos, StockMarketBlockEntity blockEntity) {
+        super();
         this.pos = pos;
         this.itemID = blockEntity.getItemID();
         this.amount = blockEntity.getAmount();
@@ -27,10 +29,7 @@ public class UpdateStockMarketBlockEntityPacket {
 
 
     public UpdateStockMarketBlockEntityPacket(FriendlyByteBuf buf) {
-        this.pos = buf.readBlockPos();
-        this.itemID = buf.readUtf();
-        this.amount = buf.readInt();
-        this.price = buf.readInt();
+        super(buf);
     }
 
     public BlockPos getPos() {
@@ -58,6 +57,7 @@ public class UpdateStockMarketBlockEntityPacket {
         ModMessages.sendToPlayer(new UpdateStockMarketBlockEntityPacket(pos, blockEntity), player);
     }*/
 
+    @Override
     public void toBytes(FriendlyByteBuf buf)
     {
         buf.writeBlockPos(pos);
@@ -66,40 +66,29 @@ public class UpdateStockMarketBlockEntityPacket {
         buf.writeInt(price);
     }
 
-    public void handle(Supplier<NetworkEvent.Context> contextSupplier) {
-        NetworkEvent.Context context = contextSupplier.get();
-        // Check if on server_sender or client
-        if(contextSupplier.get().getDirection().getReceptionSide().isClient()) {
-            //StockMarketMod.LOGGER.info("[CLIENT] Received current prices from the server_sender");
-            // HERE WE ARE ON THE CLIENT!
-            // Update client-side data
-            // Get the data from the packet
-            //MarketData.setPrice(this.itemID, this.price);
-            //TradeScreen.handlePacket(this);
-            context.setPacketHandled(true);
+    @Override
+    public void fromBytes(FriendlyByteBuf buf)
+    {
+        this.pos = buf.readBlockPos();
+        this.itemID = buf.readUtf();
+        this.amount = buf.readInt();
+        this.price = buf.readInt();
+    }
+
+    @Override
+    protected void handleOnServer(ServerPlayer sender)
+    {
+        StockMarketMod.LOGGER.info("[SERVER] Received UpdateStockMarketBlockEntityPacket from client");
+        StockMarketBlockEntity blockEntity = (StockMarketBlockEntity) sender.level().getBlockEntity(this.pos);
+        if(blockEntity == null)
+        {
+            StockMarketMod.LOGGER.error("BlockEntity not found at position "+this.pos);
             return;
         }
-
-
-        context.enqueueWork(() -> {
-            // HERE WE ARE ON THE SERVER!
-            // Update client-side data
-            ServerPlayer player = context.getSender();
-           // StockMarketMod.LOGGER.info("[SERVER] Received UpdateStockMarketBlockEntityPacket from client");
-            StockMarketBlockEntity blockEntity = (StockMarketBlockEntity) player.level().getBlockEntity(this.pos);
-            if(blockEntity == null)
-            {
-                StockMarketMod.LOGGER.error("BlockEntity not found at position "+this.pos);
-                return;
-            }
-            blockEntity.setItemID(this.itemID);
-            blockEntity.setAmount(this.amount);
-            blockEntity.setPrice(this.price);
-            blockEntity.setChanged();
-            player.level().getChunkAt(this.pos).setUnsaved(true);
-
-
-        });
-        context.setPacketHandled(true);
+        blockEntity.setItemID(this.itemID);
+        blockEntity.setAmount(this.amount);
+        blockEntity.setPrice(this.price);
+        blockEntity.setChanged();
+        sender.level().getChunkAt(this.pos).setUnsaved(true);
     }
 }
