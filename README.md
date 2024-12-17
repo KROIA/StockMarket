@@ -494,21 +494,6 @@ Example with a buy limit order:
 3) If the order was not filled completly, the remaining amount will stay at that position as a normal limit buy order.
 
 As you can see in the pictures below, the current price is always that price, where the matching engine has last processed 2 orders.
-<table>
-<tr>
-<td>
-<div align="center">
-    <img src="documentation/images/orderBookLimitBuy.gif" > 
-</div>
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/orderBookMarketBuy.gif" > 
-</div>
-</td>
-</tr>
-</table>
-
 
 ---
 ## Terminology
