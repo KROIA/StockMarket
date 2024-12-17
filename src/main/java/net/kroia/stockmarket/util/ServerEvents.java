@@ -50,8 +50,8 @@ public class ServerEvents {
             if (levelKey.equals(ServerLevel.OVERWORLD)) {
 
                 // Save data to the root save folder
-                DATA_HANDLER.saveAll();
                 DATA_HANDLER.stopTimer();
+                DATA_HANDLER.saveAll();
             }
         }
     }

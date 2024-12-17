@@ -31,7 +31,7 @@ StockMarket is a Minecraft mod that brings a better way for trading to the game.
 - Adds a banking system to the game for money and items.
 - Adds new blocks to interact with the market or bank account.
 - Implementation of a [matching engine](#matching-engine) inspired by the real market.
-
+- Configurable bot which provides the market with liquidity and volatility 
 
 
 
@@ -322,7 +322,62 @@ Type the amount you want to receive back in to the text field and click **Receiv
 
 
 ## Stock Market Bot
+The StockMarketBot has multiple purposes. 
+- Providing the market with liquidity
+- Changing price depending on supply and demand
+- Source for capital for players (if they start with 0 money)
+
+#### Providing liquidity
+Liquidity is a very important part of every market. 
+For example if player A wants to buy wood, someone has to sell the same amount.
+Without the counterpart, a trade can't be made.
+Since it is unlikely that a server creates enough sell/buy orders to create this
+liquidity, the bot is used to provide both buy and sell orders.
+The bot will buy if a player wants to sell, and he will sell if a player wants to buy.
+The bot can only sell so many items it has and he also can only buy as long as he has money.
+The bot always needs some balance of items and money. Without that its function will break.
+
+#### Changing price
+The bot is responsible for the most price movements you see on the chart.
+The bot is always buying and selling to it self. 
+Using a combination of [limit](#limit-order) and [market](#market-order) -orders will create 
+movements in price.<br>
+To create a random price chart that also stays in its realistic bounds, multiple stages are needed.
+1) **Defining parameters**
+    - target stock balance
+    - target price range
+    - Otherwise
+
+2) **Defining a target price the market should move to**
+    Depending on how many items the bot holds and what its target item balance is,
+    it will try to rise or lower the price.
+    For example if the bot holds 1000 items, wants to hold 500,
+    the bot will lower the target price, making it attractive to players to buy.
+    In the case the bot has more items than the target stock balance,
+    the target price fall linear and also can reach a price of 0.
+    In the case the bot holds less than he wants, the target price will 
+    rise quadraticly, producing a even larger price increase.
+    The reason for that is, that the bot is dependend on enough supplies to work correct,
+    a larger price increase makes it lucrative for players to sell to the bot.
+
+
+    Additionaly some random noise is used to create the volatility.
+    This noise is added to the target price and is generated using a 
+    [Random Walk](#random-walk) generator.
+
+3) **Move the market to the target price**
+    To change the price the bot creates market sell/buy orders. 
+    The market oder will fill the previously placed limit orders from the bot or a player.
+    [Learn why a price moves here](#why-does-a-price-move).
+    The size of the market order defines how fast the price will change.
+    A [PID-Controller](#pid-controller) is used to generate the buy/sell market orders.
+    The PID-Controller will make sure to generate the right amount of orders until the 
+    target price is reached.
+
+
 :construction:
+
+---
 
 <table>
 <tr>
@@ -342,6 +397,9 @@ Type the amount you want to receive back in to the text field and click **Receiv
 
 
 
+## Why does a price move?
+
+
 
 ## Terminology
 ### Order Book
@@ -352,3 +410,7 @@ Type the amount you want to receive back in to the text field and click **Receiv
 
 ### Candle Stick Chart
 :construction:
+
+### Random Walk
+
+### PID-Controller

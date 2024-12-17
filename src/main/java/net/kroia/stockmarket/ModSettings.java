@@ -62,7 +62,7 @@ public class ModSettings {
 
         public static final int MAX_ORDERS = 100;
 
-        public static final double VOLUME_SCALE = 50;
+        public static final double VOLUME_SCALE = 10;
         public static final double VOLUME_SPREAD = 10;
         public static final double VOLUME_RANDOMNESS = 2;
         public static final long UPDATE_TIMER_INTERVAL_MS = 500;

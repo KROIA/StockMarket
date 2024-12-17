@@ -6,11 +6,15 @@ import net.kroia.stockmarket.market.server.ServerMarket;
 import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtIo;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.fml.common.Mod;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+
 
 public class DataHandler {
     private static final String FOLDER_NAME = "stockmarket";
@@ -21,22 +25,37 @@ public class DataHandler {
     private static final boolean COMPRESSED = false;
     private static File saveFolder;
 
-    private static ScheduledExecutorService saveScheduler;
-
+   // private static ScheduledExecutorService saveScheduler;
+    private static final long SAVE_TICK_INTERVAL = 20 * 60; // 20 ticks per second * 60 seconds per minute
+    private static int saveTickCounter = 0;
 
     public DataHandler()
     {
+        MinecraftForge.EVENT_BUS.addListener(this::onServerTick);
+    }
 
+    private void onServerTick(net.minecraftforge.event.TickEvent.ServerTickEvent event)
+    {
+        if(event.phase == net.minecraftforge.event.TickEvent.Phase.END)
+        {
+            saveTickCounter++;
+            if(saveTickCounter >= SAVE_TICK_INTERVAL)
+            {
+                saveTickCounter = 0;
+                saveAll();
+            }
+        }
     }
 
     public static void startTimer()
     {
-        saveScheduler = Executors.newSingleThreadScheduledExecutor();
-        saveScheduler.scheduleAtFixedRate(DataHandler::saveAll, 1, 1, java.util.concurrent.TimeUnit.MINUTES);
+        //saveScheduler = Executors.newSingleThreadScheduledExecutor();
+        //saveScheduler.scheduleAtFixedRate(DataHandler::saveAll, 1, 1, java.util.concurrent.TimeUnit.MINUTES);
     }
+
     public static void stopTimer()
     {
-        saveScheduler.shutdown();
+        //saveScheduler.shutdown();
     }
 
 
