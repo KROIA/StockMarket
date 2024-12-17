@@ -255,7 +255,7 @@ public class TradeScreen extends Screen {
 
     @SubscribeEvent
     public void onTick(TickEvent.ClientTickEvent event) {
-        if(event.phase == TickEvent.Phase.END)
+        if(event.phase == TickEvent.Phase.END && this.minecraft.screen == this)
         {
             long currentTickCount = System.currentTimeMillis();
             if(currentTickCount - lastTickCount > 1000)
