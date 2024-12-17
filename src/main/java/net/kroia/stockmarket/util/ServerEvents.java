@@ -68,4 +68,14 @@ public class ServerEvents {
     public static DataHandler getDataHandler() {
         return DATA_HANDLER;
     }
+
+    @SubscribeEvent
+    public static void onWorldSave(LevelEvent.Save event) {
+        if (!event.getLevel().isClientSide() &&
+                event.getLevel() instanceof ServerLevel serverLevel &&
+                serverLevel.dimension().equals(ServerLevel.OVERWORLD)) {
+            DATA_HANDLER.saveAll();
+        }
+    }
+
 }

@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.util;
 
+import net.kroia.stockmarket.ModSettings;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.banking.ServerBankManager;
 import net.kroia.stockmarket.market.server.ServerMarket;
@@ -26,26 +27,25 @@ public class DataHandler {
     private static File saveFolder;
 
    // private static ScheduledExecutorService saveScheduler;
-    private static final long SAVE_TICK_INTERVAL = 20 * 60; // 20 ticks per second * 60 seconds per minute
     private static int saveTickCounter = 0;
 
     public DataHandler()
     {
-        MinecraftForge.EVENT_BUS.addListener(this::onServerTick);
+        //MinecraftForge.EVENT_BUS.addListener(this::onServerTick);
     }
 
-    private void onServerTick(net.minecraftforge.event.TickEvent.ServerTickEvent event)
+    /*private void onServerTick(net.minecraftforge.event.TickEvent.ServerTickEvent event)
     {
         if(event.phase == net.minecraftforge.event.TickEvent.Phase.END)
         {
             saveTickCounter++;
-            if(saveTickCounter >= SAVE_TICK_INTERVAL)
+            if(saveTickCounter >= ModSettings.SAVE_TICK_INTERVAL)
             {
                 saveTickCounter = 0;
                 saveAll();
             }
         }
-    }
+    }*/
 
     public static void startTimer()
     {

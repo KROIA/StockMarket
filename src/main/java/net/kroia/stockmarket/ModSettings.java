@@ -6,6 +6,8 @@ import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import java.util.HashMap;
 
 public class ModSettings {
+    //public static final long SAVE_TICK_INTERVAL = 20 * 60 * 5; // 20 ticks per second
+
     public static final class Player
     {
         public static final long STARTING_BALANCE = 0;
@@ -88,6 +90,8 @@ public class ModSettings {
                     new ServerVolatilityBot.Settings(100,1000,10000,300000,200,0.1,10,pidP,pidD,pidI,pidIBound),1000);
             ServerTradingBotFactory.botTableBuilder(bots, "minecraft:netherite_scrap", new ServerVolatilityBot(),
                     new ServerVolatilityBot.Settings(100,1000,10000,300000,200,0.1,10,pidP,pidD,pidI,pidIBound),100);
+            ServerTradingBotFactory.botTableBuilder(bots, "minecraft:emerald", new ServerVolatilityBot(),
+                    new ServerVolatilityBot.Settings(100,1000,10000,300000,50,0.1,10,pidP,pidD,pidI,pidIBound),100);
 
 
             return bots;

@@ -4,6 +4,7 @@ import net.kroia.stockmarket.ModSettings;
 import net.kroia.stockmarket.banking.ServerBankManager;
 import net.kroia.stockmarket.banking.bank.ClientBankManager;
 import net.kroia.stockmarket.market.client.ClientMarket;
+import net.kroia.stockmarket.market.server.ServerMarket;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -31,8 +32,9 @@ public class PlayerEvents {
     public static void onPlayerLeave(PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
             //System.out.println(player.getName().getString() + " left the server_sender.");
-            ClientBankManager.clear();
-            ClientMarket.clear();
+            //ClientBankManager.clear();
+            //ClientMarket.clear();
+            ServerMarket.removePlayerUpdateSubscription(player);
         }
     }
 }

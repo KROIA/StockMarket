@@ -229,7 +229,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
         marketTrade(volume);
         //StockMarketMod.LOGGER.info("VolatilityBot: targetPrice: "+settings.targetPrice+" speed: "+speed+" volume: "+volume+" error: "+error+ " P: "+proportionalError+" D: "+derivativeError+" I: "+settings.integratedError);
 
-        StockMarketMod.LOGGER.info(String.format(
+        /*StockMarketMod.LOGGER.info(String.format(
                 "VolatilityBot: %-12s %-12s %-8s %+.3f %-8s %+3.0f %-10s %+3.0f %-5s %+.3f %-3s %+.3f %-3s %+.3f",
                 "targetPrice:", settings.targetPrice,
                 "speed:", speed,
@@ -238,7 +238,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
                 "P:", proportionalError,
                 "D:", derivativeError,
                 "I:", settings.integratedError
-        ));
+        ));*/
 
         // Create Limit orders
         clearOrders();

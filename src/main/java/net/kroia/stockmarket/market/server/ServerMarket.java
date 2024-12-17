@@ -422,6 +422,13 @@ public class ServerMarket implements ServerSaveable
             ServerMarket.removePlayerUpdateSubscription(itemID, player);
         }
     }
+    public static void removePlayerUpdateSubscription(ServerPlayer player)
+    {
+        for(ServerTradeItem item : tradeItems.values())
+        {
+            item.removeSubscriber(player);
+        }
+    }
 
    /* public static void updateBot()
     {
