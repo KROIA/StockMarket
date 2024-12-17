@@ -456,24 +456,6 @@ To create a random price chart that also stays in its realistic bounds, multiple
 
 ---
 
-<table>
-<tr>
-<td>
-<div align="center">
-    <img src="documentation/images/tradingView.PNG" > 
-</div>
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/bankingView.PNG" > 
-</div>
-</td>
-</tr>
-</table>
-
-
-
-
 ## Why does a price move?
 If you don't know what a [Order Book](#order-book) is, learn the basics first and come back later.<br>
 A price can move in two ways:
