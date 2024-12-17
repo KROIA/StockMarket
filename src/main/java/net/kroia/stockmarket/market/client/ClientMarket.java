@@ -23,6 +23,11 @@ public class ClientMarket {
 
     }
 
+    public static void clear()
+    {
+        tradeItems.clear();
+    }
+
     public static void init()
     {
         RequestTradeItemsPacket.generateRequest();

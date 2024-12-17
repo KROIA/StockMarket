@@ -17,64 +17,6 @@ public class ServerBankManager implements ServerSaveable {
 
     private static Map<UUID, BankUser> userMap = new HashMap<>();
     private static BankUser botUser;
-   //private static Map<UUID, MoneyBank> bankMap = new HashMap<>();
-   //private static Map<UUID, BotMoneyBank> botBankMap = new HashMap<>();
-
-
-   /* public static MoneyBank getBank(UUID userUUID) {
-        MoneyBank bank = bankMap.get(userUUID);
-        if(bank == null)
-            bank = getBotBank(userUUID);
-        return bank;
-    }
-    public static BotMoneyBank getBotBank(UUID botUUID) {
-        return botBankMap.get(botUUID);
-    }
-
-    public static MoneyBank createBankIfNotExist(ServerPlayer player, long balance) {
-        MoneyBank bank = getBank(player.getUUID());
-        if(bank == null)
-        {
-            return createBank(player, balance);
-        }
-        return bank;
-    }
-    public static MoneyBank createBank(ServerPlayer player, long balance) {
-        UUID userUUID = player.getUUID();
-        MoneyBank bank = getBank(userUUID);
-        if(bank != null)
-        {
-            StockMarketMod.LOGGER.warn("Bank already exists for user " + userUUID);
-            return bank;
-        }
-        bank = new MoneyBank(userUUID, balance);
-        bankMap.put(userUUID, bank);
-        String msg = "Bank account created with balance $"+balance;
-        player.displayClientMessage(Component.literal(msg), false);
-        return bank;
-    }
-
-    public static BotMoneyBank createBotBankIfNotExist(UUID botUUID, long balance) {
-        BotMoneyBank bank = getBotBank(botUUID);
-        if(bank == null)
-        {
-            return createBotBank(botUUID, balance);
-        }
-        return bank;
-    }
-
-    public static BotMoneyBank createBotBank(UUID botUUID, long balance) {
-        BotMoneyBank bank = getBotBank(botUUID);
-        if(bank != null)
-        {
-            StockMarketMod.LOGGER.warn("Bank already exists for bot " + botUUID);
-            return bank;
-        }
-        bank = new BotMoneyBank(botUUID, balance);
-        botBankMap.put(botUUID, bank);
-        return bank;
-    }*/
-
     public static BankUser createBotUser()
     {
         if(botUser != null || !ModSettings.MarketBot.ENABLED)
@@ -111,6 +53,11 @@ public class ServerBankManager implements ServerSaveable {
     public static BankUser getUser(UUID userUUID)
     {
         return userMap.get(userUUID);
+    }
+    public static void clear()
+    {
+        userMap.clear();
+        botUser = null;
     }
 
     public static Bank getMoneyBank(UUID userUUID)

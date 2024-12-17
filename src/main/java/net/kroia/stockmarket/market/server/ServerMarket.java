@@ -53,11 +53,21 @@ public class ServerMarket implements ServerSaveable
 
     }
 
+    public static void clear()
+    {
+        for(ServerTradeItem item : tradeItems.values())
+        {
+            item.clear();
+        }
+        tradeItems.clear();
+        shiftPriceHistoryInterval = ModSettings.Market.SHIFT_PRICE_CANDLE_INTERVAL_MS;
+    }
+
     public static void createDefaultBots()
     {
         if(ModSettings.MarketBot.ENABLED)
         {
-            BankUser botUser = ServerBankManager.createBotUser();
+            BankUser botUser = ServerBankManager.getBotUser();
             StockMarketMod.LOGGER.info("[SERVER] Creating trading bots");
             HashMap<String, ServerTradingBotFactory.BotBuilderContainer> bots = ModSettings.MarketBot.createBots();
 

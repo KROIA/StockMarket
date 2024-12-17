@@ -25,8 +25,8 @@ public class ServerVolatilityBot extends ServerTradingBot {
         public int targetPrice = 0;
         public long targetItemBalance = 0;
         public long timerMillis = 10000;
-        public long minTimerMillis = 1000;
-        public long maxTimerMillis = 10000;
+        public long minTimerMillis = 10000;
+        public long maxTimerMillis = 120000;
         public int imbalancePriceRange = 100;
         public double imbalancePriceChangeFactor = 0.1;
         public double imbalancePriceChangeQuadFactor = 10;
@@ -50,7 +50,8 @@ public class ServerVolatilityBot extends ServerTradingBot {
                         double imbalancePriceChangeQuadFactor,
                         double pid_p,
                         double pid_d,
-                        double pid_i)
+                        double pid_i,
+                        double pid_iBound)
         {
             this();
             this.volatility = volatility;
@@ -63,6 +64,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
             this.pid_p = pid_p;
             this.pid_d = pid_d;
             this.pid_i = pid_i;
+            this.pid_iBound = pid_iBound;
         }
         @Override
         public boolean save(CompoundTag tag) {
@@ -225,7 +227,18 @@ public class ServerVolatilityBot extends ServerTradingBot {
         if(volume < 0 && itemBank.getBalance() < -volume)
             volume = (int)-itemBank.getBalance();
         marketTrade(volume);
-        StockMarketMod.LOGGER.info("VolatilityBot: targetPrice: "+settings.targetPrice+" speed: "+speed+" volume: "+volume+" error: "+error+ " P: "+proportionalError+" D: "+derivativeError+" I: "+settings.integratedError);
+        //StockMarketMod.LOGGER.info("VolatilityBot: targetPrice: "+settings.targetPrice+" speed: "+speed+" volume: "+volume+" error: "+error+ " P: "+proportionalError+" D: "+derivativeError+" I: "+settings.integratedError);
+
+        StockMarketMod.LOGGER.info(String.format(
+                "VolatilityBot: %-12s %-12s %-8s %+.3f %-8s %+3.0f %-10s %+3.0f %-5s %+.3f %-3s %+.3f %-3s %+.3f",
+                "targetPrice:", settings.targetPrice,
+                "speed:", speed,
+                "volume:", (double)volume,
+                "error:", error,
+                "P:", proportionalError,
+                "D:", derivativeError,
+                "I:", settings.integratedError
+        ));
 
         // Create Limit orders
         clearOrders();
@@ -234,7 +247,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
         double imbalanceFactor = 0;
         if(settings.targetItemBalance > 0)
         {
-            imbalanceFactor = Math.tanh((settings.targetItemBalance - currentItemBalance)/(double)settings.targetItemBalance/4);
+            imbalanceFactor = Math.tanh((settings.targetItemBalance - currentItemBalance)/(double)settings.targetItemBalance/4)*0.5;
         }
         int startBuyPrice = currentPrice;
         int startSellPrice = currentPrice;

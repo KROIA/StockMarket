@@ -51,6 +51,11 @@ public class ServerTradeItem implements ServerSaveable {
         return null;
     }
 
+    public void clear()
+    {
+        marketManager.clear();
+    }
+
     public void setTradingBot(ServerTradingBot bot)
     {
         marketManager.setTradingBot(bot);

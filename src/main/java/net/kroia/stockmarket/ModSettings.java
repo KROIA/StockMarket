@@ -60,7 +60,7 @@ public class ModSettings {
         public static final String USER_NAME = "StockMarketBot";
         public static final long STARTING_BALANCE = 1000_000_000; // Money balance
 
-        public static final int MAX_ORDERS = 100;
+        public static final int MAX_ORDERS = 200;
 
         public static final double VOLUME_SCALE = 10;
         public static final double VOLUME_SPREAD = 10;
@@ -71,18 +71,23 @@ public class ModSettings {
             HashMap<String, ServerTradingBotFactory.BotBuilderContainer> bots = new HashMap<>();
             bots = new HashMap<>();
 
+            double pidP = 0.1;
+            double pidI = 0.001;
+            double pidD = -0.01;
+            double pidIBound = 10;
+
             ServerTradingBotFactory.botTableBuilder(bots, "minecraft:diamond", new ServerVolatilityBot(),
-                    new ServerVolatilityBot.Settings(100,1000,5000,60000,1000,0.1,10,0.1,0.1,0.1),1000);
+                    new ServerVolatilityBot.Settings(100,1000,10000,300000,1000,0.1,10,pidP,pidD,pidI,pidIBound),1000);
             ServerTradingBotFactory.botTableBuilder(bots, "minecraft:iron_ingot", new ServerVolatilityBot(),
-                    new ServerVolatilityBot.Settings(100,10000,5000,60000,300,0.1,10,0.1,0.1,0.1),10000);
+                    new ServerVolatilityBot.Settings(100,10000,10000,300000,300,0.1,10,pidP,pidD,pidI,pidIBound),10000);
             ServerTradingBotFactory.botTableBuilder(bots, "minecraft:gold_ingot", new ServerVolatilityBot(),
-                    new ServerVolatilityBot.Settings(100,1000,5000,60000,200,0.1,10,0.1,0.1,0.1),1000);
+                    new ServerVolatilityBot.Settings(100,1000,10000,300000,200,0.1,10,pidP,pidD,pidI,pidIBound),1000);
             ServerTradingBotFactory.botTableBuilder(bots, "minecraft:coal", new ServerVolatilityBot(),
-                    new ServerVolatilityBot.Settings(100,1000,5000,60000,50,0.1,10,0.1,0.1,0.1),1000);
+                    new ServerVolatilityBot.Settings(100,1000,10000,300000,50,0.1,10,pidP,pidD,pidI,pidIBound),1000);
             ServerTradingBotFactory.botTableBuilder(bots, "minecraft:oak_log", new ServerVolatilityBot(),
-                    new ServerVolatilityBot.Settings(100,1000,5000,60000,200,0.1,10,0.1,0.1,0.1),1000);
+                    new ServerVolatilityBot.Settings(100,1000,10000,300000,200,0.1,10,pidP,pidD,pidI,pidIBound),1000);
             ServerTradingBotFactory.botTableBuilder(bots, "minecraft:netherite_scrap", new ServerVolatilityBot(),
-                    new ServerVolatilityBot.Settings(100,1000,5000,60000,200,0.1,10,0.1,0.1,0.1),100);
+                    new ServerVolatilityBot.Settings(100,1000,10000,300000,200,0.1,10,pidP,pidD,pidI,pidIBound),100);
 
 
             return bots;

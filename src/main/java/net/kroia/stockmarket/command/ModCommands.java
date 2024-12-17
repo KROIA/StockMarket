@@ -52,6 +52,13 @@ public class ModCommands {
         // /money circulation                   - Show money circulation of all players + bots
         dispatcher.register(
                 Commands.literal("money")
+                        .executes(context -> {
+                            CommandSourceStack source = context.getSource();
+                            ServerPlayer player = source.getPlayerOrException();
+
+                            // Execute the balance command on the server_sender
+                            return showBalance(player);
+                        })
                         .then(Commands.literal("add")
                                 .requires(source -> source.hasPermission(2)) // Admin-only for adding money
                                 .then(Commands.argument("amount", IntegerArgumentType.integer(0))
@@ -177,13 +184,7 @@ public class ModCommands {
                                     return Command.SINGLE_SUCCESS;
                                 })
                         )
-                        .executes(context -> {
-                            CommandSourceStack source = context.getSource();
-                            ServerPlayer player = source.getPlayerOrException();
 
-                            // Execute the balance command on the server_sender
-                            return showBalance(player);
-                        })
 
         );
 
@@ -349,7 +350,7 @@ public class ModCommands {
                                             CommandSourceStack source = context.getSource();
                                             ServerPlayer player = source.getPlayerOrException();
                                             int seconds = IntegerArgumentType.getInteger(context, "seconds");
-                                            ServerMarket.shiftPriceHistoryInterval = seconds * 1000;
+                                            ServerMarket.shiftPriceHistoryInterval = seconds * 1000L;
                                             // Execute the command on the server_sender
                                             return Command.SINGLE_SUCCESS;
                                         })
@@ -578,31 +579,8 @@ public class ModCommands {
                                                                         })
                                                                 )
                                                         )
-                                                        .then(Commands.literal("targetPriceRange")
-                                                                .then(Commands.argument("priceRange", IntegerArgumentType.integer(1))
-                                                                        .executes(context -> {
-                                                                            CommandSourceStack source = context.getSource();
-                                                                            ServerPlayer player = source.getPlayerOrException();
-                                                                            String itemID = StockMarketMod.getNormalizedItemID(StringArgumentType.getString(context, "itemID"));
-                                                                            if(itemID == null) {
-                                                                                player.sendSystemMessage(Component.literal("Item not found"));
-                                                                                return Command.SINGLE_SUCCESS;
-                                                                            }
-                                                                            int range = IntegerArgumentType.getInteger(context, "priceRange");
-                                                                            ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
-                                                                            if(bot instanceof ServerVolatilityBot volatilityBot) {
-                                                                                volatilityBot.setImbalancePriceRange(range);
-                                                                                player.sendSystemMessage(Component.literal("Target price range set to "+range));
-                                                                            }else {
-                                                                                player.sendSystemMessage(Component.literal("Bot not found"));
-                                                                            }
-                                                                            // Execute the command on the server_sender
-                                                                            return Command.SINGLE_SUCCESS;
-                                                                        })
-                                                                )
-                                                        )
                                                         .then(Commands.literal("imbalancePriceChangeFactorLinear")
-                                                                .then(Commands.argument("imbalancePriceChangeFactorLinear", DoubleArgumentType.doubleArg(0))
+                                                                .then(Commands.argument("factor", DoubleArgumentType.doubleArg(0))
                                                                         .executes(context -> {
                                                                             CommandSourceStack source = context.getSource();
                                                                             ServerPlayer player = source.getPlayerOrException();
@@ -611,7 +589,7 @@ public class ModCommands {
                                                                                 player.sendSystemMessage(Component.literal("Item not found"));
                                                                                 return Command.SINGLE_SUCCESS;
                                                                             }
-                                                                            double factor = DoubleArgumentType.getDouble(context, "imbalancePriceChangeFactorLinear");
+                                                                            double factor = DoubleArgumentType.getDouble(context, "factor");
                                                                             ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
                                                                             if(bot instanceof ServerVolatilityBot volatilityBot) {
                                                                                 volatilityBot.setImbalancePriceChangeFactor(factor);
@@ -625,7 +603,7 @@ public class ModCommands {
                                                                 )
                                                         )
                                                         .then(Commands.literal("imbalancePriceChangeFactorQuadratic")
-                                                                .then(Commands.argument("imbalancePriceChangeFactorQuadratic", DoubleArgumentType.doubleArg(0))
+                                                                .then(Commands.argument("factor", DoubleArgumentType.doubleArg(0))
                                                                         .executes(context -> {
                                                                             CommandSourceStack source = context.getSource();
                                                                             ServerPlayer player = source.getPlayerOrException();
@@ -634,7 +612,7 @@ public class ModCommands {
                                                                                 player.sendSystemMessage(Component.literal("Item not found"));
                                                                                 return Command.SINGLE_SUCCESS;
                                                                             }
-                                                                            double factor = DoubleArgumentType.getDouble(context, "imbalancePriceChangeFactorQuadratic");
+                                                                            double factor = DoubleArgumentType.getDouble(context, "factor");
                                                                             ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
                                                                             if(bot instanceof ServerVolatilityBot volatilityBot) {
                                                                                 volatilityBot.setImbalancePriceChangeQuadFactor(factor);
@@ -663,6 +641,29 @@ public class ModCommands {
                                                                                 ServerVolatilityBot volatilityBot = (ServerVolatilityBot) bot;
                                                                                 volatilityBot.setTargetItemBalance(balance);
                                                                                 player.sendSystemMessage(Component.literal("Target item balance set to "+balance));
+                                                                            }else {
+                                                                                player.sendSystemMessage(Component.literal("Bot not found"));
+                                                                            }
+                                                                            // Execute the command on the server_sender
+                                                                            return Command.SINGLE_SUCCESS;
+                                                                        })
+                                                                )
+                                                        )
+                                                        .then(Commands.literal("targetPriceRange")
+                                                                .then(Commands.argument("priceRange", IntegerArgumentType.integer(1))
+                                                                        .executes(context -> {
+                                                                            CommandSourceStack source = context.getSource();
+                                                                            ServerPlayer player = source.getPlayerOrException();
+                                                                            String itemID = StockMarketMod.getNormalizedItemID(StringArgumentType.getString(context, "itemID"));
+                                                                            if(itemID == null) {
+                                                                                player.sendSystemMessage(Component.literal("Item not found"));
+                                                                                return Command.SINGLE_SUCCESS;
+                                                                            }
+                                                                            int range = IntegerArgumentType.getInteger(context, "priceRange");
+                                                                            ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
+                                                                            if(bot instanceof ServerVolatilityBot volatilityBot) {
+                                                                                volatilityBot.setImbalancePriceRange(range);
+                                                                                player.sendSystemMessage(Component.literal("Target price range set to "+range));
                                                                             }else {
                                                                                 player.sendSystemMessage(Component.literal("Bot not found"));
                                                                             }

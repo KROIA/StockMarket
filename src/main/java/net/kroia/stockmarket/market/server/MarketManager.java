@@ -35,6 +35,16 @@ public class MarketManager implements ServerSaveable {
         priceHistory = history;
     }
 
+    public void clear()
+    {
+        if(tradingBot != null)
+        {
+            ServerTradingBot bot = tradingBot;
+            removeTradingBot();
+            bot.clearOrders();
+        }
+    }
+
     public void setTradingBot(ServerTradingBot bot)
     {
         if(!ModSettings.MarketBot.ENABLED)

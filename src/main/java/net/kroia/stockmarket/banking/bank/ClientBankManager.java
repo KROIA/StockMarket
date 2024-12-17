@@ -10,6 +10,10 @@ import java.util.HashMap;
 public class ClientBankManager {
     private static SyncBankDataPacket bankDataPacket;
 
+    public static void clear()
+    {
+        bankDataPacket = null;
+    }
     public static void handlePacket(SyncBankDataPacket packet)
     {
         bankDataPacket = packet;

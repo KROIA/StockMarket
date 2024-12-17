@@ -1,4 +1,7 @@
 package net.kroia.stockmarket.util;
+import net.kroia.stockmarket.ModSettings;
+import net.kroia.stockmarket.banking.BankUser;
+import net.kroia.stockmarket.banking.ServerBankManager;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
@@ -14,11 +17,12 @@ import java.io.File;
 
 @Mod.EventBusSubscriber
 public class ServerEvents {
-    private static final DataHandler DATA_HANDLER = new DataHandler();
+    private static DataHandler DATA_HANDLER;
 
     @SubscribeEvent
     public static void onServerStart(LevelEvent.Load event) {
         if (event.getLevel() instanceof ServerLevel serverLevel) {
+            DATA_HANDLER = new DataHandler();
             MinecraftServer server = serverLevel.getServer();
             ResourceKey<Level> levelKey = serverLevel.dimension();
 
@@ -32,6 +36,7 @@ public class ServerEvents {
                 DATA_HANDLER.setSaveFolder(rootSaveFolder);
                 DATA_HANDLER.loadAll();
                 DATA_HANDLER.startTimer();
+                ServerBankManager.createBotUser();
 
 
 
@@ -52,6 +57,10 @@ public class ServerEvents {
                 // Save data to the root save folder
                 DATA_HANDLER.stopTimer();
                 DATA_HANDLER.saveAll();
+
+                // Cleanup
+                ServerBankManager.clear();
+                ServerMarket.clear();
             }
         }
     }
