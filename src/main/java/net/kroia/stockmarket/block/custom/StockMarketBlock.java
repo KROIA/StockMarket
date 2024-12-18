@@ -67,7 +67,7 @@ public class StockMarketBlock extends TerminalBlock implements EntityBlock {
         }
     }
     @Override
-    public void openGui(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
+    public void openGui(Level level, BlockPos pos, Player player) {
         if (!level.isClientSide && player instanceof ServerPlayer)
         {
             SyncStockMarketBlockEntityPacket.sendPacketToClient(pos, (StockMarketBlockEntity) level.getBlockEntity(pos), (ServerPlayer) player);

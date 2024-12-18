@@ -5,6 +5,7 @@ import net.kroia.stockmarket.block.custom.StockMarketBlock;
 import net.kroia.stockmarket.entity.ModEntities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.world.entity.LivingEntity;
@@ -88,9 +89,9 @@ public class StockMarketBlockEntity extends BlockEntity /*implements MenuProvide
     }*/
 
     @Override
-    protected void saveAdditional(@Nullable CompoundTag tag)
+    protected void saveAdditional(@Nullable CompoundTag tag, HolderLookup.Provider pRegistries)
     {
-        super.saveAdditional(tag);
+        super.saveAdditional(tag, pRegistries);
 
         CompoundTag dataTag = new CompoundTag();
         dataTag.putString("itemID", itemID);
@@ -124,8 +125,8 @@ public class StockMarketBlockEntity extends BlockEntity /*implements MenuProvide
     }*/
 
     @Override
-    public void load(CompoundTag tag) {
-        super.load(tag);
+    public void loadAdditional(CompoundTag tag, HolderLookup.Provider pRegistries) {
+        super.loadAdditional(tag, pRegistries);
         CompoundTag dataTag = tag.getCompound(StockMarketMod.MODID);
         itemID = dataTag.getString("itemID");
         amount = dataTag.getInt("amount");
