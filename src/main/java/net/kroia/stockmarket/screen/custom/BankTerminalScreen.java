@@ -120,7 +120,7 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
             //RequestOrderPacket.generateRequest(itemID, getTargetAmount());
         }
     }
-    private static final ResourceLocation TEXTURE = new ResourceLocation(StockMarketMod.MODID, "textures/gui/example_menu.png");
+    private static final ResourceLocation TEXTURE = ResourceLocation.fromNamespaceAndPath(StockMarketMod.MODID, "textures/gui/example_menu.png");
 
     private static final Component SEND_ITEMS_TO_MARKET_BUTTON_TEXT = Component.translatable("gui." + StockMarketMod.MODID + ".bank_terminal_screen.send_items_to_market_button");
     private static final Component RECEIVE_ITEMS_FROM_MARKET_BUTTON_TEXT = Component.translatable("gui." + StockMarketMod.MODID + ".bank_terminal_screen.receive_items_from_market_button");

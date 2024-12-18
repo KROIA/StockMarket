@@ -22,7 +22,7 @@ public class ModMessages {
 
     public static void register() {
         SimpleChannel net = ChannelBuilder
-                .named(new ResourceLocation(StockMarketMod.MODID, "messages"))
+                .named(ResourceLocation.fromNamespaceAndPath(StockMarketMod.MODID, "messages"))
                 .networkProtocolVersion(1)
                 .clientAcceptedVersions((status, version) -> true)
                 .serverAcceptedVersions((status, version) -> true)

@@ -72,9 +72,9 @@ public class StockMarketMod
     // Create a Deferred Register to hold Blocks which will all be registered under the "examplemod" namespace
 
     private static long lastTimeMS = 0;
-    public StockMarketMod()
+    public StockMarketMod(FMLJavaModLoadingContext context)
     {
-        IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
+        IEventBus modEventBus = context.getModEventBus();
 
 
 
@@ -290,8 +290,7 @@ public class StockMarketMod
     }
 
     public static ItemStack createItemStackFromId(String itemId, int amount) {
-        ResourceLocation resourceLocation = new ResourceLocation(itemId); // "minecraft:diamond"
-        Item item = ForgeRegistries.ITEMS.getValue(resourceLocation); // Get the item from the registry
+        Item item = ForgeRegistries.ITEMS.getValue(ResourceLocation.parse(itemId)); // Get the item from the registry
 
         if (item != null) {
             return new ItemStack(item, amount); // Create an ItemStack with the specified amount

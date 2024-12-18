@@ -412,7 +412,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                 int count = stackTag.getInt("Count");
 
                 // Get the item using the itemID
-                Item item = ForgeRegistries.ITEMS.getValue(new ResourceLocation(itemID));
+                Item item = ForgeRegistries.ITEMS.getValue(ResourceLocation.parse(itemID));
                 ItemStack stack = new ItemStack(item, count);
 
                 // Set the NBT data if it exists

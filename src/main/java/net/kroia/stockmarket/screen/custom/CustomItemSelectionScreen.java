@@ -39,7 +39,7 @@ public class CustomItemSelectionScreen extends Screen {
 
         this.allowedItems = new HashSet<>();
         for(String itemId : allowedItemsIDs) {
-            this.allowedItems.add(new ResourceLocation(itemId));
+            this.allowedItems.add(ResourceLocation.parse(itemId));
         }
     }
 
@@ -115,11 +115,17 @@ public class CustomItemSelectionScreen extends Screen {
     }
 
     @Override
+    public void renderBackground(GuiGraphics pGuiGraphics, int pMouseX, int pMouseY, float pPartialTick)
+    {
+        super.renderBackground(pGuiGraphics, pMouseX, pMouseY, pPartialTick);
+    }
+    @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(graphics, mouseX, mouseY, partialTick);
-
+        //this.renderBackground(graphics, mouseX, mouseY, partialTick);
+        super.render(graphics, mouseX, mouseY, partialTick);
         // Draw search field
         this.searchField.render(graphics, mouseX, mouseY, partialTick);
+
 
         // Draw item grid
         int xStart = (this.width - ITEMS_PER_ROW * ROW_HEIGHT) / 2;
@@ -135,8 +141,7 @@ public class CustomItemSelectionScreen extends Screen {
             graphics.renderItem(filteredItems.get(i), x, y);
         }
 
-        // Draw back button
-        super.render(graphics, mouseX, mouseY, partialTick);
+
 
         // Draw tooltips
         for (int i = 0; i < filteredItems.size(); i++) {

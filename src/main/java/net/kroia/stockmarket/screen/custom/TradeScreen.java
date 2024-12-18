@@ -141,7 +141,7 @@ public class TradeScreen extends Screen {
             //instance.init();
             instance.priceBox.setValue(String.valueOf(targetPrice));
             instance.amountBox.setValue(String.valueOf(targetAmount));
-            itemStack = getItemStackFromId(itemID);
+            itemStack = StockMarketMod.createItemStackFromId(itemID,1);
             ClientMarket.subscribeMarketUpdate(itemID);
         }
 
@@ -244,7 +244,7 @@ public class TradeScreen extends Screen {
         // Set value of the EditBox
         this.priceBox.setValue(String.valueOf(targetPrice));
         this.amountBox.setValue(String.valueOf(targetAmount));
-        itemStack = getItemStackFromId(itemID);
+        itemStack = StockMarketMod.createItemStackFromId(itemID,1);
         ClientMarket.subscribeMarketUpdate(itemID);
         RequestBankDataPacket.sendRequest();
     }
@@ -317,7 +317,7 @@ public class TradeScreen extends Screen {
         ClientMarket.unsubscribeMarketUpdate(itemID);
         this.itemID = itemId;
         ClientMarket.subscribeMarketUpdate(itemID);
-        itemStack = getItemStackFromId(itemID);
+        itemStack = StockMarketMod.createItemStackFromId(itemID,1);
         //RequestPricePacket.generateRequest(itemId);
         //updatePlotsData();
     }
@@ -577,22 +577,6 @@ public class TradeScreen extends Screen {
         return super.mouseClicked(mouseX, mouseY, button);
     }
 
-
-    public static ItemStack getItemStackFromId(String itemId) {
-        // Convert the string ID to a ResourceLocation
-        ResourceLocation resourceLocation = new ResourceLocation(itemId);
-
-        // Get the item from the registry
-        Item item = BuiltInRegistries.ITEM.get(resourceLocation);
-
-        // Check if the item exists
-        if (item == null) {
-            throw new IllegalArgumentException("Invalid item ID: " + itemId);
-        }
-
-        // Return an ItemStack of the item
-        return new ItemStack(item);
-    }
 
     @Override
     public boolean mouseScrolled(double pMouseX, double pMouseY, double pScrollX, double pScrollY) {
