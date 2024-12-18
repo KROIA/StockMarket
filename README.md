@@ -460,9 +460,6 @@ To create a random price chart that also stays in its realistic bounds, multiple
     The PID-Controller will make sure to generate the right amount of orders until the 
     target price is reached.
 
-
-:construction:
-
 ---
 
 ## Why does a price move?
