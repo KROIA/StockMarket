@@ -7,7 +7,6 @@ import net.kroia.stockmarket.networking.packet.client_sender.update.entity.Updat
 import net.kroia.stockmarket.networking.packet.client_sender.update.entity.UpdateStockMarketBlockEntityPacket;
 import net.kroia.stockmarket.networking.packet.client_sender.update.UpdateSubscribeMarketEventsPacket;
 import net.kroia.stockmarket.networking.packet.server_sender.update.*;
-import net.kroia.stockmarket.networking.packet.server_sender.update.entity.SyncBankTerminalBlockEntityPacket;
 import net.kroia.stockmarket.networking.packet.server_sender.update.entity.SyncStockMarketBlockEntityPacket;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
@@ -112,11 +111,6 @@ public class ModMessages {
                 .consumerMainThread(SyncBankDataPacket::handle)
                 .add();
 
-        net.messageBuilder(SyncBankTerminalBlockEntityPacket.class, id(), NetworkDirection.PLAY_TO_CLIENT)
-                .decoder(SyncBankTerminalBlockEntityPacket::new)
-                .encoder(SyncBankTerminalBlockEntityPacket::toBytes)
-                .consumerMainThread(SyncBankTerminalBlockEntityPacket::handle)
-                .add();
     }
 
     public static <MSG> void sendToServer(MSG message) {
