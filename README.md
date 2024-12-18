@@ -35,6 +35,9 @@ StockMarket is a Minecraft mod that brings a better way for trading to the game.
 - Implementation of a [matching engine](#matching-engine) inspired by the real market.
 - Configurable [bot](#stock-market-bot) which provides the market with liquidity and volatility 
 
+---
+## Releases
+[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.1-blue)]([https://github.com/username/repo/releases/download/v1.0.0/mod-name-1.0.0.jar](https://github.com/KROIA/StockMarket/releases/download/v1.1.0/stockmarket_mc_1.20.1_forge_47.3.0_v1.1.0.jar))
 
 
 ---
