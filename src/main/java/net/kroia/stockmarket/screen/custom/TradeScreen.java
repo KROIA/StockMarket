@@ -255,7 +255,7 @@ public class TradeScreen extends Screen {
 
     @SubscribeEvent
     public void onTick(TickEvent.ClientTickEvent event) {
-        if(event.phase == TickEvent.Phase.END && this.minecraft.screen == this)
+        if(event.phase == TickEvent.Phase.END)
         {
             long currentTickCount = System.currentTimeMillis();
             if(currentTickCount - lastTickCount > 1000)
@@ -323,6 +323,20 @@ public class TradeScreen extends Screen {
     }
 
     @Override
+    public void renderBackground(GuiGraphics pGuiGraphics)
+    {
+        super.renderBackground(pGuiGraphics);
+        pGuiGraphics.fill(currentBalanceRectTop.x, currentBalanceRectTop.y, currentBalanceRectBottom.x+currentBalanceRectBottom.width, currentBalanceRectBottom.y+currentBalanceRectBottom.height,
+                backgroundColor);
+
+        // Draw plot background in gray
+        pGuiGraphics.fill(chartRect.x, chartRect.y,
+                chartRect.x + chartRect.width, chartRect.y + chartRect.height, backgroundColor);
+
+        pGuiGraphics.fill(selectItemButtonRect.x, selectItemButtonRect.y, sellLimitButtonRect.x+sellLimitButtonRect.width, sellLimitButtonRect.y+sellLimitButtonRect.height,
+                backgroundColor);
+    }
+    @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         //TutorialMod.LOGGER.info("Render Chart Screen");
         // Background is typically rendered first
@@ -333,6 +347,7 @@ public class TradeScreen extends Screen {
 
         // Render the widgets (buttons, labels, etc.)
         super.render(graphics, mouseX, mouseY, partialTick);
+        // super.render(graphics, mouseX, mouseY, partialTick);
 
         // X and Y position on the screen
         int x = this.width / 2;
@@ -343,8 +358,7 @@ public class TradeScreen extends Screen {
         int textHeight = this.font.lineHeight;
 
         // Draw the title
-        graphics.fill(currentBalanceRectTop.x, currentBalanceRectTop.y, currentBalanceRectBottom.x+currentBalanceRectBottom.width, currentBalanceRectBottom.y+currentBalanceRectBottom.height,
-                backgroundColor);
+
         drawText(graphics, currentBalanceRectTop, "Your balance");
         graphics.renderItem(itemStack, currentBalanceRectBottom.x, currentBalanceRectBottom.y);
         graphics.drawString(this.font,  String.valueOf(ClientBankManager.getBalance(itemID)), currentBalanceRectBottom.x+selectItemButtonRect.height, currentBalanceRectBottom.y+ textHeight / 2, 0xFFFFFF);
@@ -357,19 +371,16 @@ public class TradeScreen extends Screen {
         int price = ClientMarket.getPrice(itemID);
         graphics.drawString(this.font, "Price: " + price, selectItemButtonRect.x + selectItemButtonRect.height, selectItemButtonRect.y + textHeight / 2, 0xFFFFFF);
 
-        graphics.fill(selectItemButtonRect.x, selectItemButtonRect.y, sellLimitButtonRect.x+sellLimitButtonRect.width, sellLimitButtonRect.y+sellLimitButtonRect.height,
-                backgroundColor);
+
         graphics.drawString(this.font, "Amount:", selectItemButtonRect.x, amountEditRect.y + textHeight / 2, 0xFFFFFF);
         graphics.drawString(this.font, "Limit price:", selectItemButtonRect.x, limitPriceEditRect.y + textHeight / 2, 0xFFFFFF);
 
-        super.render(graphics, mouseX, mouseY, partialTick);
+
 
         // Draw the label above the EditBox
         //graphics.drawCenteredString(this.font, "Enter an integer:", 0, , 0xFFFFFF);
 
-        // Draw plot background in gray
-        graphics.fill(chartRect.x, chartRect.y,
-                chartRect.x + chartRect.width, chartRect.y + chartRect.height, backgroundColor);
+
         candleStickChart.render(graphics);
         //int buySellEdgeIndex = candleStickChart
         orderbookVolumeChart.render(graphics);
@@ -584,10 +595,10 @@ public class TradeScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    public boolean mouseScrolled(double pMouseX, double pMouseY, double pScrollX) {
         // Handle scrolling
-        if (orderListWidget.mouseScrolled(mouseX, mouseY, delta))
+        if (orderListWidget.mouseScrolled(pMouseX, pMouseY, pScrollX))
             return true;
-        return super.mouseScrolled(mouseX, mouseY, delta);
+        return super.mouseScrolled(pMouseX, pMouseY, pScrollX);
     }
 }

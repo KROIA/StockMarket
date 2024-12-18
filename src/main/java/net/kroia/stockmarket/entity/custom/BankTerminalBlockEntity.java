@@ -164,6 +164,9 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                         bankAccount.deposit(removedAmount);
                         setAmount(itemID, getAmount(itemID) + removedAmount);
                         return true;
+                    }else {
+                        cancelTask(itemID);
+                        continue;
                     }
                 }
                 else
