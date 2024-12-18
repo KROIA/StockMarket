@@ -124,7 +124,7 @@ public class StockMarketMod
     private void commonSetup(final FMLCommonSetupEvent event)
     {
         // Some common setup code
-        LOGGER.info("HELLO FROM COMMON SETUP");
+        //LOGGER.info("HELLO FROM COMMON SETUP");
 
 
 
@@ -138,7 +138,7 @@ public class StockMarketMod
     @SubscribeEvent
     public void onPlayerLogin(ClientPlayerNetworkEvent.LoggingIn event) {
         // This code runs when the player enters a server_sender on the client side
-        System.out.println("Player has logged into a server_sender!");
+        //System.out.println("Player has logged into a server_sender!");
 
         // Call your desired function here
         //performClientSideAction();
@@ -147,8 +147,8 @@ public class StockMarketMod
 
     private void setupClient()
     {
-        LOGGER.info("HELLO FROM CLIENT SETUP");
-        LOGGER.info("MINECRAFT NAME >> {}", Minecraft.getInstance().getUser().getName());
+        //LOGGER.info("HELLO FROM CLIENT SETUP");
+        //LOGGER.info("MINECRAFT NAME >> {}", Minecraft.getInstance().getUser().getName());
         if(side == Side.UNKNOWN)
             side = Side.MULTIPLAYER_CLIENT;
         else
@@ -156,7 +156,7 @@ public class StockMarketMod
         MinecraftForge.EVENT_BUS.register(this);
     }
     private void setupServer() {
-        LOGGER.info("HELLO from server_sender starting");
+        //LOGGER.info("HELLO from server_sender starting");
         // Register ourselves for server_sender-side events
         MinecraftForge.EVENT_BUS.addListener(this::onServerTick);
         if(side == Side.UNKNOWN)

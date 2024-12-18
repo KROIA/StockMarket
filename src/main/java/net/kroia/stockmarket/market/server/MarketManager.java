@@ -40,8 +40,8 @@ public class MarketManager implements ServerSaveable {
         if(tradingBot != null)
         {
             ServerTradingBot bot = tradingBot;
-            removeTradingBot();
             bot.clearOrders();
+            removeTradingBot();
         }
     }
 
