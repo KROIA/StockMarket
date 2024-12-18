@@ -59,8 +59,8 @@ public class ServerEvents {
                 DATA_HANDLER.saveAll();
 
                 // Cleanup
-                ServerBankManager.clear();
                 ServerMarket.clear();
+                ServerBankManager.clear();
             }
         }
     }
