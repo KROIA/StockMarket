@@ -1,38 +1,24 @@
 package net.kroia.stockmarket.block.custom;
 
 import net.kroia.stockmarket.ClientHooks;
-import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.entity.ModEntities;
 import net.kroia.stockmarket.entity.custom.BankTerminalBlockEntity;
-import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncBankDataPacket;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.InteractionResult;
 import net.minecraft.world.MenuProvider;
-import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.item.ItemEntity;
-import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityTicker;
 import net.minecraft.world.level.block.entity.BlockEntityType;
-import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.block.state.StateDefinition;
-import net.minecraft.world.level.block.state.properties.BlockStateProperties;
-import net.minecraft.world.level.block.state.properties.DirectionProperty;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraftforge.items.ItemStackHandler;
-import net.minecraftforge.network.NetworkHooks;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
@@ -67,7 +53,7 @@ public class BankTerminalBlock extends TerminalBlock implements EntityBlock {
     }
 
     @Override
-    public void openGui(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hitResult) {
+    public void openGui(Level level, BlockPos pos, Player player) {
         BlockEntity be = level.getBlockEntity(pos);
         if (!(be instanceof BankTerminalBlockEntity blockEntity))
             return;
@@ -81,7 +67,10 @@ public class BankTerminalBlock extends TerminalBlock implements EntityBlock {
             //sPlayer.openMenu(menuProvider);
             // Open the menu
             SyncBankDataPacket.sendPacket(sPlayer);
-            NetworkHooks.openScreen(sPlayer, menuProvider, pos);
+            //ClientHooks.openBankTerminalBlockScreen(sPlayer, menuProvider, pos);
+
+            //NetworkHooks.openScreen(sPlayer, menuProvider, pos);
+            sPlayer.openMenu(menuProvider, pos);
         }
     }
 

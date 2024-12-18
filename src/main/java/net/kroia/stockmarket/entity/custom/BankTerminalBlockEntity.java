@@ -16,6 +16,7 @@ import net.kroia.stockmarket.networking.packet.server_sender.update.SyncBankData
 import net.kroia.stockmarket.util.ServerSaveable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.NonNullList;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -32,6 +33,7 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerLevelAccess;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
@@ -56,7 +58,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         // negative values: send to market
         // positive values: send to inventory
         private final BankTerminalBlockEntity blockEntity;
-        private HashMap<String, Long> transferItems;
+        private final HashMap<String, Long> transferItems;
         private UUID playerID;
         public TransferTask(BankTerminalBlockEntity blockEntity, UUID playerID, HashMap<String, Long>transferItems)
         {
@@ -165,6 +167,10 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
                         setAmount(itemID, getAmount(itemID) + removedAmount);
                         return true;
                     }
+                    else {
+                        cancelTask(itemID);
+                        continue;
+                    }
                 }
                 else
                 {
@@ -239,7 +245,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
             return true;
         }
     }
-    private static class TerminalInventory extends ItemStackHandler
+    private static class TerminalInventory extends ItemStackHandler implements ServerSaveable
     {
         BankTerminalBlockEntity blockEntity;
         public TerminalInventory(BankTerminalBlockEntity blockEntity, int size) {
@@ -367,6 +373,57 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
             return orgAmount - amount;
         }
 
+        @Override
+        public boolean save(CompoundTag tag) {
+            ListTag itemList = new ListTag();
+
+            for (int i = 0; i < this.getSlots(); i++) {
+                ItemStack stack = this.getStackInSlot(i);
+                if (!stack.isEmpty()) {
+                    CompoundTag stackTag = new CompoundTag();
+                    stackTag.putInt("Slot", i);
+
+                    // Manually store the item ID and count
+                    Item item = stack.getItem();
+                    stackTag.putString("Item", ForgeRegistries.ITEMS.getKey(item).toString()); // Save the item ID
+                    stackTag.putInt("Count", stack.getCount()); // Save the stack count
+
+                    // Optionally save any NBT data attached to the ItemStack
+                    /*if (stack.has()) {
+                        stackTag.put("tag", stack.getTag());
+                    }*/
+
+                    itemList.add(stackTag);
+                }
+            }
+
+            tag.put("Items", itemList);
+            return false;
+        }
+
+        @Override
+        public boolean load(CompoundTag tag) {
+            ListTag itemList = tag.getList("Items", CompoundTag.TAG_COMPOUND); // 10 is the tag type for CompoundTag
+            for (int i = 0; i < itemList.size(); i++) {
+                CompoundTag stackTag = itemList.getCompound(i);
+
+                int slot = stackTag.getInt("Slot");
+                String itemID = stackTag.getString("Item");
+                int count = stackTag.getInt("Count");
+
+                // Get the item using the itemID
+                Item item = ForgeRegistries.ITEMS.getValue(ResourceLocation.parse(itemID));
+                ItemStack stack = new ItemStack(item, count);
+
+                // Set the NBT data if it exists
+                /*if (stackTag.contains("tag")) {
+                    stack.setTag(stackTag.getCompound("tag"));
+                }*/
+
+                this.setStackInSlot(slot, stack);
+            }
+            return false;
+        }
     }
     private static class PlayerData implements ServerSaveable
     {
@@ -410,7 +467,9 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         @Override
         public boolean save(CompoundTag tag) {
             tag.putUUID("PlayerID", playerID);
-            tag.put("Inventory", inventory.serializeNBT());
+            CompoundTag inventoryTag = new CompoundTag();
+            inventory.save(inventoryTag);
+            tag.put("Inventory", inventoryTag);
             CompoundTag transferTaskTag = new CompoundTag();
             if(!transferTask.save(transferTaskTag))
                 return false;
@@ -425,7 +484,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
             if(!tag.contains("PlayerID") || !tag.contains("Inventory") || !tag.contains("TransferTask"))
                 return false;
             playerID = tag.getUUID("PlayerID");
-            inventory.deserializeNBT(tag.getCompound("Inventory"));
+            inventory.load(tag.getCompound("Inventory"));
             CompoundTag transferTaskTag = tag.getCompound("TransferTask");
             transferTask = TransferTask.createFromTag(blockEntity,transferTaskTag);
             return transferTask != null;
@@ -448,8 +507,8 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
 
 
     @Override
-    public void load(CompoundTag nbt) {
-        super.load(nbt);
+    public void loadAdditional(CompoundTag nbt, HolderLookup.Provider pRegistries) {
+        super.loadAdditional(nbt, pRegistries);
         CompoundTag data = nbt.getCompound(StockMarketMod.MODID);
 
        // this.inventory.deserializeNBT(tutorialmodData.getCompound("Inventory"));
@@ -468,8 +527,8 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
     }
 
     @Override
-    protected void saveAdditional(CompoundTag nbt) {
-        super.saveAdditional(nbt);
+    protected void saveAdditional(CompoundTag nbt, HolderLookup.Provider pRegistries) {
+        super.saveAdditional(nbt, pRegistries);
         CompoundTag data = new CompoundTag();
         //tutorialmodData.put("Inventory", this.inventory.serializeNBT());
         //data.putInt("TransferTickAmount", transferTickAmount);

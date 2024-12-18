@@ -19,14 +19,10 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.eventbus.api.EventPriority;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 
-//@Mod.EventBusSubscriber(modid = StockMarketMod.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalContainerMenu> {
     private class BankElement
     {
@@ -124,7 +120,7 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
             //RequestOrderPacket.generateRequest(itemID, getTargetAmount());
         }
     }
-    private static final ResourceLocation TEXTURE = new ResourceLocation(StockMarketMod.MODID, "textures/gui/example_menu.png");
+    private static final ResourceLocation TEXTURE = ResourceLocation.fromNamespaceAndPath(StockMarketMod.MODID, "textures/gui/example_menu.png");
 
     private static final Component SEND_ITEMS_TO_MARKET_BUTTON_TEXT = Component.translatable("gui." + StockMarketMod.MODID + ".bank_terminal_screen.send_items_to_market_button");
     private static final Component RECEIVE_ITEMS_FROM_MARKET_BUTTON_TEXT = Component.translatable("gui." + StockMarketMod.MODID + ".bank_terminal_screen.receive_items_from_market_button");
@@ -189,7 +185,7 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
     @Override
     protected void renderBg(GuiGraphics pGuiGraphics, float pPartialTick, int pMouseX, int pMouseY) {
        // renderTransparentBackground(pGuiGraphics);
-        super.renderBackground(pGuiGraphics);
+       // super.renderBackground(pGuiGraphics, pMouseX, pMouseY, pPartialTick);
         pGuiGraphics.blit(TEXTURE, this.leftPos+BankTerminalContainerMenu.POS_X, this.topPos+BankTerminalContainerMenu.POS_Y, 0, 0, this.imageWidth, this.imageHeight);
 
 
@@ -366,16 +362,17 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
     }*/
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double deltaX, double deltaY) {
         // Handle scrolling
         if (this.isMouseOver(mouseX, mouseY)) {
-            if (delta > 0 && scrollOffset > 0) {
+            if (deltaX > 0 && scrollOffset > 0) {
                 scrollOffset--; // Scroll up
-            } else if (delta < 0 && scrollOffset < bankElements.size() - visibleCount) {
+            } else if (deltaX < 0 && scrollOffset < bankElements.size() - visibleCount) {
                 scrollOffset++; // Scroll down
             }
             return true;
         }
+        super.mouseScrolled(mouseX, mouseY, deltaX, deltaY);
         return false;
     }
 

@@ -141,7 +141,7 @@ public class TradeScreen extends Screen {
             //instance.init();
             instance.priceBox.setValue(String.valueOf(targetPrice));
             instance.amountBox.setValue(String.valueOf(targetAmount));
-            itemStack = getItemStackFromId(itemID);
+            itemStack = StockMarketMod.createItemStackFromId(itemID,1);
             ClientMarket.subscribeMarketUpdate(itemID);
         }
 
@@ -244,7 +244,7 @@ public class TradeScreen extends Screen {
         // Set value of the EditBox
         this.priceBox.setValue(String.valueOf(targetPrice));
         this.amountBox.setValue(String.valueOf(targetAmount));
-        itemStack = getItemStackFromId(itemID);
+        itemStack = StockMarketMod.createItemStackFromId(itemID,1);
         ClientMarket.subscribeMarketUpdate(itemID);
         RequestBankDataPacket.sendRequest();
     }
@@ -317,22 +317,37 @@ public class TradeScreen extends Screen {
         ClientMarket.unsubscribeMarketUpdate(itemID);
         this.itemID = itemId;
         ClientMarket.subscribeMarketUpdate(itemID);
-        itemStack = getItemStackFromId(itemID);
+        itemStack = StockMarketMod.createItemStackFromId(itemID,1);
         //RequestPricePacket.generateRequest(itemId);
         //updatePlotsData();
     }
 
     @Override
+    public void renderBackground(GuiGraphics pGuiGraphics, int pMouseX, int pMouseY, float pPartialTick)
+    {
+        super.renderBackground(pGuiGraphics, pMouseX, pMouseY, pPartialTick);
+        pGuiGraphics.fill(currentBalanceRectTop.x, currentBalanceRectTop.y, currentBalanceRectBottom.x+currentBalanceRectBottom.width, currentBalanceRectBottom.y+currentBalanceRectBottom.height,
+                backgroundColor);
+
+        // Draw plot background in gray
+        pGuiGraphics.fill(chartRect.x, chartRect.y,
+                chartRect.x + chartRect.width, chartRect.y + chartRect.height, backgroundColor);
+
+        pGuiGraphics.fill(selectItemButtonRect.x, selectItemButtonRect.y, sellLimitButtonRect.x+sellLimitButtonRect.width, sellLimitButtonRect.y+sellLimitButtonRect.height,
+                backgroundColor);
+    }
+    @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         //TutorialMod.LOGGER.info("Render Chart Screen");
         // Background is typically rendered first
-        this.renderBackground(graphics);
+
 
         // Render things here before widgets (background textures)
         // You can draw additional things like text, images, etc.
 
         // Render the widgets (buttons, labels, etc.)
         super.render(graphics, mouseX, mouseY, partialTick);
+       // super.render(graphics, mouseX, mouseY, partialTick);
 
         // X and Y position on the screen
         int x = this.width / 2;
@@ -343,8 +358,7 @@ public class TradeScreen extends Screen {
         int textHeight = this.font.lineHeight;
 
         // Draw the title
-        graphics.fill(currentBalanceRectTop.x, currentBalanceRectTop.y, currentBalanceRectBottom.x+currentBalanceRectBottom.width, currentBalanceRectBottom.y+currentBalanceRectBottom.height,
-                backgroundColor);
+
         drawText(graphics, currentBalanceRectTop, "Your balance");
         graphics.renderItem(itemStack, currentBalanceRectBottom.x, currentBalanceRectBottom.y);
         graphics.drawString(this.font,  String.valueOf(ClientBankManager.getBalance(itemID)), currentBalanceRectBottom.x+selectItemButtonRect.height, currentBalanceRectBottom.y+ textHeight / 2, 0xFFFFFF);
@@ -357,19 +371,16 @@ public class TradeScreen extends Screen {
         int price = ClientMarket.getPrice(itemID);
         graphics.drawString(this.font, "Price: " + price, selectItemButtonRect.x + selectItemButtonRect.height, selectItemButtonRect.y + textHeight / 2, 0xFFFFFF);
 
-        graphics.fill(selectItemButtonRect.x, selectItemButtonRect.y, sellLimitButtonRect.x+sellLimitButtonRect.width, sellLimitButtonRect.y+sellLimitButtonRect.height,
-                backgroundColor);
+
         graphics.drawString(this.font, "Amount:", selectItemButtonRect.x, amountEditRect.y + textHeight / 2, 0xFFFFFF);
         graphics.drawString(this.font, "Limit price:", selectItemButtonRect.x, limitPriceEditRect.y + textHeight / 2, 0xFFFFFF);
 
-        super.render(graphics, mouseX, mouseY, partialTick);
+
 
         // Draw the label above the EditBox
         //graphics.drawCenteredString(this.font, "Enter an integer:", 0, , 0xFFFFFF);
 
-        // Draw plot background in gray
-        graphics.fill(chartRect.x, chartRect.y,
-                chartRect.x + chartRect.width, chartRect.y + chartRect.height, backgroundColor);
+
         candleStickChart.render(graphics);
         //int buySellEdgeIndex = candleStickChart
         orderbookVolumeChart.render(graphics);
@@ -567,27 +578,11 @@ public class TradeScreen extends Screen {
     }
 
 
-    public static ItemStack getItemStackFromId(String itemId) {
-        // Convert the string ID to a ResourceLocation
-        ResourceLocation resourceLocation = new ResourceLocation(itemId);
-
-        // Get the item from the registry
-        Item item = BuiltInRegistries.ITEM.get(resourceLocation);
-
-        // Check if the item exists
-        if (item == null) {
-            throw new IllegalArgumentException("Invalid item ID: " + itemId);
-        }
-
-        // Return an ItemStack of the item
-        return new ItemStack(item);
-    }
-
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    public boolean mouseScrolled(double pMouseX, double pMouseY, double pScrollX, double pScrollY) {
         // Handle scrolling
-        if (orderListWidget.mouseScrolled(mouseX, mouseY, delta))
+        if (orderListWidget.mouseScrolled(pMouseX, pMouseY, pScrollX))
             return true;
-        return super.mouseScrolled(mouseX, mouseY, delta);
+        return super.mouseScrolled(pMouseX, pMouseY, pScrollX, pScrollY);
     }
 }

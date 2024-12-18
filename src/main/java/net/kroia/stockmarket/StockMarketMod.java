@@ -72,9 +72,9 @@ public class StockMarketMod
     // Create a Deferred Register to hold Blocks which will all be registered under the "examplemod" namespace
 
     private static long lastTimeMS = 0;
-    public StockMarketMod()
+    public StockMarketMod(FMLJavaModLoadingContext context)
     {
-        IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
+        IEventBus modEventBus = context.getModEventBus();
 
 
 
@@ -124,7 +124,7 @@ public class StockMarketMod
     private void commonSetup(final FMLCommonSetupEvent event)
     {
         // Some common setup code
-        LOGGER.info("HELLO FROM COMMON SETUP");
+        //LOGGER.info("HELLO FROM COMMON SETUP");
 
 
 
@@ -138,7 +138,7 @@ public class StockMarketMod
     @SubscribeEvent
     public void onPlayerLogin(ClientPlayerNetworkEvent.LoggingIn event) {
         // This code runs when the player enters a server_sender on the client side
-        System.out.println("Player has logged into a server_sender!");
+        //System.out.println("Player has logged into a server_sender!");
 
         // Call your desired function here
         //performClientSideAction();
@@ -147,8 +147,8 @@ public class StockMarketMod
 
     private void setupClient()
     {
-        LOGGER.info("HELLO FROM CLIENT SETUP");
-        LOGGER.info("MINECRAFT NAME >> {}", Minecraft.getInstance().getUser().getName());
+        //LOGGER.info("HELLO FROM CLIENT SETUP");
+        //LOGGER.info("MINECRAFT NAME >> {}", Minecraft.getInstance().getUser().getName());
         if(side == Side.UNKNOWN)
             side = Side.MULTIPLAYER_CLIENT;
         else
@@ -156,7 +156,7 @@ public class StockMarketMod
         MinecraftForge.EVENT_BUS.register(this);
     }
     private void setupServer() {
-        LOGGER.info("HELLO from server_sender starting");
+        //LOGGER.info("HELLO from server_sender starting");
         // Register ourselves for server_sender-side events
         MinecraftForge.EVENT_BUS.addListener(this::onServerTick);
         if(side == Side.UNKNOWN)
@@ -290,8 +290,7 @@ public class StockMarketMod
     }
 
     public static ItemStack createItemStackFromId(String itemId, int amount) {
-        ResourceLocation resourceLocation = new ResourceLocation(itemId); // "minecraft:diamond"
-        Item item = ForgeRegistries.ITEMS.getValue(resourceLocation); // Get the item from the registry
+        Item item = ForgeRegistries.ITEMS.getValue(ResourceLocation.parse(itemId)); // Get the item from the registry
 
         if (item != null) {
             return new ItemStack(item, amount); // Create an ItemStack with the specified amount

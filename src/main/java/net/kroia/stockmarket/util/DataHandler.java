@@ -6,13 +6,14 @@ import net.kroia.stockmarket.banking.ServerBankManager;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtAccounter;
 import net.minecraft.nbt.NbtIo;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.Mod;
 
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
+import java.nio.file.Path;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
@@ -170,11 +171,20 @@ public class DataHandler {
         if (file.exists()) {
             try {
                 CompoundTag data;
+                // Define a reasonable quota and depth for NBT reading
+                long quota = 2097152L; // 2 MB size limit
+                int maxDepth = 512; // Maximum allowed depth for NBT structures
 
-                if(COMPRESSED)
-                    data = NbtIo.readCompressed(file);
-                else
-                    data = NbtIo.read(file);
+                // Create an NbtAccounter
+                NbtAccounter accounter = new NbtAccounter(quota, maxDepth);
+
+                if (COMPRESSED)
+                    data = NbtIo.readCompressed(new FileInputStream(file), accounter);
+                else {
+                    DataInputStream dataInputStream = new DataInputStream(new FileInputStream(file));
+                    data = NbtIo.read(dataInputStream, accounter);
+                }
+
 
                 dataOut = data;
                 return dataOut;
@@ -193,9 +203,9 @@ public class DataHandler {
         File file = new File(saveFolder, fileName);
         try {
             if (COMPRESSED)
-                NbtIo.writeCompressed(data, file);
+                NbtIo.writeCompressed(data, file.toPath());
             else
-                NbtIo.write(data, file);
+                NbtIo.write(data, file.toPath());
         } catch (IOException e) {
             StockMarketMod.LOGGER.error("Failed to save data to file: " + fileName);
             e.printStackTrace();
