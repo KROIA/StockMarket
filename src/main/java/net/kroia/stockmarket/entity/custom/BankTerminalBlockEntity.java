@@ -56,7 +56,7 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
         // negative values: send to market
         // positive values: send to inventory
         private final BankTerminalBlockEntity blockEntity;
-        private HashMap<String, Long> transferItems;
+        private final HashMap<String, Long> transferItems;
         private UUID playerID;
         public TransferTask(BankTerminalBlockEntity blockEntity, UUID playerID, HashMap<String, Long>transferItems)
         {
@@ -367,6 +367,57 @@ public class BankTerminalBlockEntity  extends BlockEntity implements MenuProvide
             return orgAmount - amount;
         }
 
+        @Override
+        public boolean save(CompoundTag tag, HolderLookup.Provider lookup) {
+            ListTag itemList = new ListTag();
+
+            for (int i = 0; i < this.getSlots(); i++) {
+                ItemStack stack = this.getStackInSlot(i);
+                if (!stack.isEmpty()) {
+                    CompoundTag stackTag = new CompoundTag();
+                    stackTag.putInt("Slot", i);
+
+                    // Manually store the item ID and count
+                    Item item = stack.getItem();
+                    stackTag.putString("Item", ForgeRegistries.ITEMS.getKey(item).toString(); // Save the item ID
+                    stackTag.putInt("Count", stack.getCount()); // Save the stack count
+
+                    // Optionally save any NBT data attached to the ItemStack
+                    /*if (stack.has()) {
+                        stackTag.put("tag", stack.getTag());
+                    }*/
+
+                    itemList.add(stackTag);
+                }
+            }
+
+            tag.put("Items", itemList);
+            return false;
+        }
+
+        @Override
+        public boolean load(CompoundTag tag, HolderLookup.Provider lookup) {
+            ListTag itemList = tag.getList("Items", CompoundTag.TAG_COMPOUND); // 10 is the tag type for CompoundTag
+            for (int i = 0; i < itemList.size(); i++) {
+                CompoundTag stackTag = itemList.getCompound(i);
+
+                int slot = stackTag.getInt("Slot");
+                String itemID = stackTag.getString("Item");
+                int count = stackTag.getInt("Count");
+
+                // Get the item using the itemID
+                Item item = ForgeRegistries.ITEMS.getValue(new ResourceLocation(itemID));
+                ItemStack stack = new ItemStack(item, count);
+
+                // Set the NBT data if it exists
+                /*if (stackTag.contains("tag")) {
+                    stack.setTag(stackTag.getCompound("tag"));
+                }*/
+
+                this.setStackInSlot(slot, stack);
+            }
+            return false;
+        }
     }
     private static class PlayerData implements ServerSaveable
     {

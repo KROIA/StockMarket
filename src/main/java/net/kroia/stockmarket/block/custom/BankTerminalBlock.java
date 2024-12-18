@@ -53,7 +53,7 @@ public class BankTerminalBlock extends TerminalBlock implements EntityBlock {
     }
 
     @Override
-    public void openGui(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hitResult) {
+    public void openGui(Level level, BlockPos pos, Player player) {
         BlockEntity be = level.getBlockEntity(pos);
         if (!(be instanceof BankTerminalBlockEntity blockEntity))
             return;
