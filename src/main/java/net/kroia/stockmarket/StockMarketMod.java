@@ -246,8 +246,8 @@ public class StockMarketMod
     public static void printToClientConsole(String message) {
         // Check that the code is running on the client side
         if (Minecraft.getInstance().player != null) {
-            Minecraft.getInstance().player.sendSystemMessage(
-                    net.minecraft.network.chat.Component.literal(message)
+            Minecraft.getInstance().player.displayClientMessage(
+                    net.minecraft.network.chat.Component.literal(message),false
             );
         }
     }

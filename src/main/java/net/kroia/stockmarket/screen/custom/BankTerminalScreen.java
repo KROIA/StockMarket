@@ -186,7 +186,8 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
     protected void renderBg(GuiGraphics pGuiGraphics, float pPartialTick, int pMouseX, int pMouseY) {
        // renderTransparentBackground(pGuiGraphics);
        // super.renderBackground(pGuiGraphics, pMouseX, pMouseY, pPartialTick);
-        pGuiGraphics.blit(TEXTURE, this.leftPos+BankTerminalContainerMenu.POS_X, this.topPos+BankTerminalContainerMenu.POS_Y, 0, 0, this.imageWidth, this.imageHeight);
+
+      //  pGuiGraphics.blit(TEXTURE, this.leftPos+BankTerminalContainerMenu.POS_X, this.topPos+BankTerminalContainerMenu.POS_Y, 0, 0, this.imageWidth, this.imageHeight);
 
 
         pGuiGraphics.fill(receiveWindowBackgroundRect.x, receiveWindowBackgroundRect.y,

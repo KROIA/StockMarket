@@ -81,6 +81,6 @@ public class UpdateStockMarketBlockEntityPacket extends NetworkPacket {
         blockEntity.setAmount(this.amount);
         blockEntity.setPrice(this.price);
         blockEntity.setChanged();
-        sender.level().getChunkAt(this.pos).setUnsaved(true);
+        sender.level().getChunkAt(this.pos).markUnsaved();
     }
 }

@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.screen.custom;
 
+import net.kroia.stockmarket.StockMarketMod;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
@@ -20,7 +21,7 @@ import java.util.function.Consumer;
 
 public class CustomItemSelectionScreen extends Screen {
     private final Screen parentScreen;
-    private final Set<ResourceLocation> allowedItems;
+    private final Set<String> allowedItems;
     private final Consumer<String> onItemSelected;
 
     private EditBox searchField;
@@ -39,7 +40,7 @@ public class CustomItemSelectionScreen extends Screen {
 
         this.allowedItems = new HashSet<>();
         for(String itemId : allowedItemsIDs) {
-            this.allowedItems.add(ResourceLocation.parse(itemId));
+            this.allowedItems.add(itemId);
         }
     }
 
@@ -53,8 +54,8 @@ public class CustomItemSelectionScreen extends Screen {
         this.addWidget(this.searchField);
 
         // Populate displayed items
-        for (ResourceLocation id : allowedItems) {
-            Item item = BuiltInRegistries.ITEM.get(id);
+        for (String id : allowedItems) {
+            Item item = StockMarketMod.createItemStackFromId(id,1).getItem();
             if (item != null) {
                 displayedItems.add(new ItemStack(item));
             }
