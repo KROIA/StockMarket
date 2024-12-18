@@ -61,7 +61,7 @@ public class ModCommands {
                         })
                         .then(Commands.literal("add")
                                 .requires(source -> source.hasPermission(2)) // Admin-only for adding money
-                                .then(Commands.argument("amount", IntegerArgumentType.integer(0))
+                                .then(Commands.argument("amount", IntegerArgumentType.integer(1))
                                         .executes(context -> {
                                             CommandSourceStack source = context.getSource();
                                             ServerPlayer player = source.getPlayerOrException();
@@ -82,7 +82,7 @@ public class ModCommands {
                                                     }
                                                     return builder.buildFuture();
                                                 })
-                                        .then(Commands.argument("amount", IntegerArgumentType.integer(0))
+                                        .then(Commands.argument("amount", IntegerArgumentType.integer(1))
                                                 .executes(context -> {
                                                     CommandSourceStack source = context.getSource();
                                                     ServerPlayer player = source.getPlayerOrException();
@@ -111,7 +111,15 @@ public class ModCommands {
                                             // Execute the command on the server_sender
                                             return executeSetMoney(player, username, amount);
                                         })) // Add to self
-                                .then(Commands.argument("username", StringArgumentType.string())
+                                .then(Commands.argument("username", StringArgumentType.string()).suggests((context, builder) -> {
+                                                    //builder.suggest("\""+ ModSettings.MarketBot.USER_NAME +"\"");
+                                                    Map<UUID, String> uuidToNameMap = ServerPlayerList.getUuidToNameMap();
+                                                    for(String name : uuidToNameMap.values()) {
+
+                                                        builder.suggest("\""+name+"\"");
+                                                    }
+                                                    return builder.buildFuture();
+                                                })
                                         .then(Commands.argument("amount", IntegerArgumentType.integer(0))
                                                 .executes(context -> {
                                                     CommandSourceStack source = context.getSource();
@@ -129,7 +137,7 @@ public class ModCommands {
                         )
                         .then(Commands.literal("remove")
                                 .requires(source -> source.hasPermission(2)) // Admin-only for adding money
-                                .then(Commands.argument("amount", IntegerArgumentType.integer(0))
+                                .then(Commands.argument("amount", IntegerArgumentType.integer(1))
                                         .executes(context -> {
                                             CommandSourceStack source = context.getSource();
                                             ServerPlayer player = source.getPlayerOrException();
@@ -141,8 +149,16 @@ public class ModCommands {
                                             // Execute the command on the server_sender
                                             return executeRemoveMoney(player, username, amount);
                                         })) // Add to self
-                                .then(Commands.argument("username", StringArgumentType.string())
-                                        .then(Commands.argument("amount", IntegerArgumentType.integer(0))
+                                .then(Commands.argument("username", StringArgumentType.string()).suggests((context, builder) -> {
+                                                    //builder.suggest("\""+ ModSettings.MarketBot.USER_NAME +"\"");
+                                                    Map<UUID, String> uuidToNameMap = ServerPlayerList.getUuidToNameMap();
+                                                    for(String name : uuidToNameMap.values()) {
+
+                                                        builder.suggest("\""+name+"\"");
+                                                    }
+                                                    return builder.buildFuture();
+                                                })
+                                        .then(Commands.argument("amount", IntegerArgumentType.integer(1))
                                                 .executes(context -> {
                                                     CommandSourceStack source = context.getSource();
                                                     ServerPlayer player = source.getPlayerOrException();
@@ -158,8 +174,16 @@ public class ModCommands {
                                 )
                         )
                         .then(Commands.literal("send")
-                                .then(Commands.argument("username", StringArgumentType.string())
-                                        .then(Commands.argument("amount", IntegerArgumentType.integer(0))
+                                .then(Commands.argument("username", StringArgumentType.string()).suggests((context, builder) -> {
+                                                    //builder.suggest("\""+ ModSettings.MarketBot.USER_NAME +"\"");
+                                                    Map<UUID, String> uuidToNameMap = ServerPlayerList.getUuidToNameMap();
+                                                    for(String name : uuidToNameMap.values()) {
+
+                                                        builder.suggest("\""+name+"\"");
+                                                    }
+                                                    return builder.buildFuture();
+                                                })
+                                        .then(Commands.argument("amount", IntegerArgumentType.integer(1))
                                                 .executes(context -> {
                                                     CommandSourceStack source = context.getSource();
                                                     ServerPlayer player = source.getPlayerOrException();
@@ -1241,7 +1265,7 @@ public class ModCommands {
             if(fromPlayer != null)
                 StockMarketMod.printToClientConsole(fromPlayer, "Transfered " + amount + "$ from " + fromUser + " to " + toUser + "'s account!");
             if(toPlayer != null)
-                StockMarketMod.printToClientConsole(fromPlayer, "Received " + amount + "$ from " + fromUser + "'s account!");
+                StockMarketMod.printToClientConsole(toPlayer, "Received " + amount + "$ from " + fromUser + "'s account!");
         }
         else {
             if (fromPlayer != null) {
