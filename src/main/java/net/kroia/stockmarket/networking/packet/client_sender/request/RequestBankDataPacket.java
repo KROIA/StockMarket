@@ -5,9 +5,6 @@ import net.kroia.stockmarket.networking.packet.NetworkPacket;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncBankDataPacket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraftforge.event.network.CustomPayloadEvent;
-
-import java.util.function.Supplier;
 
 public class RequestBankDataPacket extends NetworkPacket {
 

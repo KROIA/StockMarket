@@ -326,7 +326,7 @@ public class TradeScreen extends Screen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         //TutorialMod.LOGGER.info("Render Chart Screen");
         // Background is typically rendered first
-        this.renderBackground(graphics);
+        this.renderBackground(graphics, mouseX, mouseY, partialTick);
 
         // Render things here before widgets (background textures)
         // You can draw additional things like text, images, etc.
@@ -584,10 +584,10 @@ public class TradeScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    public boolean mouseScrolled(double pMouseX, double pMouseY, double pScrollX, double pScrollY) {
         // Handle scrolling
-        if (orderListWidget.mouseScrolled(mouseX, mouseY, delta))
+        if (orderListWidget.mouseScrolled(pMouseX, pMouseY, pScrollX))
             return true;
-        return super.mouseScrolled(mouseX, mouseY, delta);
+        return super.mouseScrolled(pMouseX, pMouseY, pScrollX, pScrollY);
     }
 }

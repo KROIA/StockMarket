@@ -1,6 +1,5 @@
 package net.kroia.stockmarket.networking.packet.server_sender.update.entity;
 
-import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
 import net.kroia.stockmarket.networking.ModMessages;
 import net.kroia.stockmarket.networking.packet.NetworkPacket;
@@ -8,8 +7,6 @@ import net.kroia.stockmarket.screen.custom.TradeScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
-
-import java.util.function.Supplier;
 
 public class SyncStockMarketBlockEntityPacket extends NetworkPacket {
     private BlockPos pos;
@@ -49,7 +46,6 @@ public class SyncStockMarketBlockEntityPacket extends NetworkPacket {
     }
 
     public static void sendPacketToClient(BlockPos pos, StockMarketBlockEntity blockEntity, ServerPlayer player) {
-        //StockMarketMod.LOGGER.info("[SERVER] Sending UpdateStockMarketBlockEntityPacket");
         ModMessages.sendToPlayer(new SyncStockMarketBlockEntityPacket(pos, blockEntity), player);
     }
 

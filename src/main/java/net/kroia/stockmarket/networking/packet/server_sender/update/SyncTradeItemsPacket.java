@@ -1,6 +1,5 @@
 package net.kroia.stockmarket.networking.packet.server_sender.update;
 
-import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.client.ClientMarket;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.market.server.ServerTradeItem;
@@ -11,19 +10,28 @@ import net.minecraft.server.level.ServerPlayer;
 
 import java.util.ArrayList;
 import java.util.Map;
-import java.util.function.Supplier;
-
 public class SyncTradeItemsPacket extends NetworkPacket {
-    private ArrayList<SyncPricePacket> syncPricePackets = new ArrayList<>();
+    private ArrayList<SyncPricePacket> syncPricePackets;
 
+    public SyncTradeItemsPacket() {
+        super();
+        syncPricePackets = new ArrayList<>();
+    }
     public SyncTradeItemsPacket(ArrayList<SyncPricePacket> syncPricePackets) {
         super();
-        this.syncPricePackets = syncPricePackets;
+        this.syncPricePackets = new ArrayList<>();
+        this.syncPricePackets.addAll(syncPricePackets);
     }
 
     public SyncTradeItemsPacket(FriendlyByteBuf buf) {
         super(buf);
 
+        /*int size = buf.readInt();
+        if(size == 0)
+            return;
+        for (int i = 0; i < size; i++) {
+            this.syncPricePackets.add(new SyncPricePacket(buf));
+        }*/
     }
 
 
@@ -40,7 +48,8 @@ public class SyncTradeItemsPacket extends NetworkPacket {
         int size = buf.readInt();
         if(size == 0)
             return;
-
+        if(syncPricePackets == null)
+            syncPricePackets = new ArrayList<>();
         for (int i = 0; i < size; i++) {
             this.syncPricePackets.add(new SyncPricePacket(buf));
         }

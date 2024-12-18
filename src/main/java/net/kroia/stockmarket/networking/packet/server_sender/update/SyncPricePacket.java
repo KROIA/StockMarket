@@ -7,19 +7,15 @@ import net.kroia.stockmarket.market.client.ClientMarket;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.networking.ModMessages;
+import net.kroia.stockmarket.networking.packet.NetworkPacket;
 import net.kroia.stockmarket.util.OrderbookVolume;
 import net.kroia.stockmarket.util.PriceHistory;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraftforge.event.network.CustomPayloadEvent;
-
 import java.util.ArrayList;
 import java.util.UUID;
-import java.util.function.Supplier;
 
-public class SyncPricePacket {
-    //private String itemID;
-    //private int price;
+public class SyncPricePacket extends NetworkPacket {
     private PriceHistory priceHistory;
     private OrderbookVolume orderBookVolume;
     private int minPrice;
@@ -29,13 +25,11 @@ public class SyncPricePacket {
 
 
     public SyncPricePacket() {
+        super();
 
     }
-    /*public SyncPricePacket(String itemID, int price) {
-        this.itemID = itemID;
-        this.price = price;
-    }*/
     public SyncPricePacket(PriceHistory priceHistory, OrderbookVolume orderBookVolume, int minPrice, int maxPrice, ArrayList<Order> orders) {
+        super();
         this.priceHistory = priceHistory;
         this.orderBookVolume = orderBookVolume;
         this.minPrice = minPrice;
@@ -44,27 +38,7 @@ public class SyncPricePacket {
     }
 
     public SyncPricePacket(FriendlyByteBuf buf) {
-        priceHistory = new PriceHistory(buf);
-        orderBookVolume = new OrderbookVolume(buf);
-        minPrice = buf.readInt();
-        maxPrice = buf.readInt();
-
-        int size = buf.readInt();
-        orders = new ArrayList<>();
-        for (int i = 0; i < size; i++) {
-            Order order = Order.construct(buf);
-            orders.add(order);
-        }
-        //this.itemID = buf.readUtf();
-        //this.price = buf.readInt();
-        /*int size = buf.readInt();
-        this.prices = new HashMap<>();
-        for (int i = 0; i < size; i++) {
-            String itemName = buf.readUtf();
-            // Get Item from item name
-            Integer price = buf.readInt();
-            prices.put(itemName, price);
-        }*/
+        super(buf);
     }
     public SyncPricePacket(String itemID)
     {
@@ -145,6 +119,7 @@ public class SyncPricePacket {
         return orders;
     }
 
+    @Override
     public void toBytes(FriendlyByteBuf buf) {
         priceHistory.toBytes(buf);
         orderBookVolume.toBytes(buf);
@@ -155,38 +130,25 @@ public class SyncPricePacket {
         orders.forEach(order -> {
             order.toBytes(buf);
         });
-
-        //buf.writeUtf(itemID);
-        //buf.writeInt(price);
-        /*buf.writeInt(prices.size());
-        prices.forEach((itemName, price) -> {
-            buf.writeUtf(itemName);
-            buf.writeInt(price);
-        });*/
     }
 
-    public void handle(CustomPayloadEvent.Context context) {
-        // Check if on server_sender or client
-        if(context.isClientSide()) {
-            //StockMarketMod.LOGGER.info("[CLIENT] Received current prices from the server_sender");
-            // HERE WE ARE ON THE CLIENT!
-            // Update client-side data
-            // Get the data from the packet
-            //MarketData.setPrice(this.itemID, this.price);
-            //ClientMarket.setPriceHistory(priceHistory);
-            //TradeScreen.setOrderBookVolume(orderBookVolume);
-            //TradeScreen.updatePlotsData();
-            ClientMarket.handlePacket(this);
-            context.setPacketHandled(true);
-            return;
+    @Override
+    public void fromBytes(FriendlyByteBuf buf) {
+        priceHistory = new PriceHistory(buf);
+        orderBookVolume = new OrderbookVolume(buf);
+        minPrice = buf.readInt();
+        maxPrice = buf.readInt();
+
+        int size = buf.readInt();
+        orders = new ArrayList<>();
+        for (int i = 0; i < size; i++) {
+            Order order = Order.construct(buf);
+            orders.add(order);
         }
+    }
 
-
-        context.enqueueWork(() -> {
-            // HERE WE ARE ON THE SERVER!
-            // Update client-side data
-
-        });
-        context.setPacketHandled(true);
+    @Override
+    protected void handleOnClient() {
+        ClientMarket.handlePacket(this);
     }
 }

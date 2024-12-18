@@ -7,9 +7,6 @@ import net.kroia.stockmarket.networking.packet.NetworkPacket;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraftforge.event.network.CustomPayloadEvent;
-
-import java.util.function.Supplier;
 
 public class UpdateStockMarketBlockEntityPacket extends NetworkPacket {
     private BlockPos pos;
@@ -49,13 +46,8 @@ public class UpdateStockMarketBlockEntityPacket extends NetworkPacket {
     }
 
     public static void sendPacketToServer(BlockPos pos, StockMarketBlockEntity blockEntity) {
-       //StockMarketMod.LOGGER.info("[CLIENT] Sending UpdateStockMarketBlockEntityPacket");
         ModMessages.sendToServer(new UpdateStockMarketBlockEntityPacket(pos, blockEntity));
     }
-    /*public static void sendPacketToClient(BlockPos pos, StockMarketBlockEntity blockEntity, ServerPlayer player) {
-        StockMarketMod.LOGGER.info("[SERVER] Sending UpdateStockMarketBlockEntityPacket");
-        ModMessages.sendToPlayer(new UpdateStockMarketBlockEntityPacket(pos, blockEntity), player);
-    }*/
 
     @Override
     public void toBytes(FriendlyByteBuf buf)

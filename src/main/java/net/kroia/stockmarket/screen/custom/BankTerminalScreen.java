@@ -19,14 +19,10 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.eventbus.api.EventPriority;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 
-//@Mod.EventBusSubscriber(modid = StockMarketMod.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalContainerMenu> {
     private class BankElement
     {
@@ -189,7 +185,7 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
     @Override
     protected void renderBg(GuiGraphics pGuiGraphics, float pPartialTick, int pMouseX, int pMouseY) {
        // renderTransparentBackground(pGuiGraphics);
-        super.renderBackground(pGuiGraphics);
+       // super.renderBackground(pGuiGraphics, pMouseX, pMouseY, pPartialTick);
         pGuiGraphics.blit(TEXTURE, this.leftPos+BankTerminalContainerMenu.POS_X, this.topPos+BankTerminalContainerMenu.POS_Y, 0, 0, this.imageWidth, this.imageHeight);
 
 
@@ -366,16 +362,17 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
     }*/
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double deltaX, double deltaY) {
         // Handle scrolling
         if (this.isMouseOver(mouseX, mouseY)) {
-            if (delta > 0 && scrollOffset > 0) {
+            if (deltaX > 0 && scrollOffset > 0) {
                 scrollOffset--; // Scroll up
-            } else if (delta < 0 && scrollOffset < bankElements.size() - visibleCount) {
+            } else if (deltaX < 0 && scrollOffset < bankElements.size() - visibleCount) {
                 scrollOffset++; // Scroll down
             }
             return true;
         }
+        super.mouseScrolled(mouseX, mouseY, deltaX, deltaY);
         return false;
     }
 

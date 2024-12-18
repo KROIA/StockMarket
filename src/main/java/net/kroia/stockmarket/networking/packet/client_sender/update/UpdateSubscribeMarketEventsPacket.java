@@ -1,15 +1,10 @@
 package net.kroia.stockmarket.networking.packet.client_sender.update;
 
-import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.networking.ModMessages;
 import net.kroia.stockmarket.networking.packet.NetworkPacket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraftforge.event.network.CustomPayloadEvent;
-
-import java.util.function.Supplier;
-
 public class UpdateSubscribeMarketEventsPacket extends NetworkPacket {
     private String itemID;
     private boolean subscribe;
@@ -41,8 +36,6 @@ public class UpdateSubscribeMarketEventsPacket extends NetworkPacket {
     }
 
     public static void generateRequest(String itemID, boolean subscribe) {
-        /*StockMarketMod.LOGGER.info("[CLIENT] Sending UpdateSubscribeMarketEventsPacket for item "+itemID+
-                " to "+(subscribe ? "subscribe" : "unsubscribe"));*/
         ModMessages.sendToServer(new UpdateSubscribeMarketEventsPacket(itemID, subscribe));
     }
 

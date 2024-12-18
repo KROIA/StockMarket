@@ -11,7 +11,6 @@ import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.HashMap;
-import java.util.function.Supplier;
 
 public class SyncBankDataPacket extends NetworkPacket {
 

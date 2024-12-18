@@ -10,7 +10,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.entity.BlockEntity;
 
 import java.util.HashMap;
-import java.util.function.Supplier;
 
 public class UpdateBankTerminalBlockEntityPacket extends NetworkPacket {
 
@@ -43,13 +42,8 @@ public class UpdateBankTerminalBlockEntityPacket extends NetworkPacket {
 
 
     public static void sendPacketToServer(BlockPos pos, HashMap<String, Long> itemTransferToMarketAmounts, boolean sendItemsToMarket) {
-        //StockMarketMod.LOGGER.info("[CLIENT] Sending UpdateBankTerminalBlockEntityPacket");
         ModMessages.sendToServer(new UpdateBankTerminalBlockEntityPacket(pos, itemTransferToMarketAmounts, sendItemsToMarket));
     }
-    /*public static void sendPacketToClient(BlockPos pos, StockMarketBlockEntity blockEntity, ServerPlayer player) {
-        StockMarketMod.LOGGER.info("[SERVER] Sending UpdateStockMarketBlockEntityPacket");
-        ModMessages.sendToPlayer(new UpdateStockMarketBlockEntityPacket(pos, blockEntity), player);
-    }*/
 
     @Override
     public void toBytes(FriendlyByteBuf buf)

@@ -84,9 +84,9 @@ public class CustomItemSelectionScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double deltaX, double deltaY) {
         int maxScroll = Math.max(0, (filteredItems.size() + ITEMS_PER_ROW - 1) / ITEMS_PER_ROW - (this.height - 60) / ROW_HEIGHT);
-        scrollOffset = Math.max(0, Math.min(scrollOffset - (int) delta, maxScroll));
+        scrollOffset = Math.max(0, Math.min(scrollOffset - (int) deltaX, maxScroll));
         return true;
     }
 
@@ -116,7 +116,7 @@ public class CustomItemSelectionScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(graphics);
+        this.renderBackground(graphics, mouseX, mouseY, partialTick);
 
         // Draw search field
         this.searchField.render(graphics, mouseX, mouseY, partialTick);

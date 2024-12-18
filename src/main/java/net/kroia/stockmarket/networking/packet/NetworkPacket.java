@@ -3,6 +3,7 @@ package net.kroia.stockmarket.networking.packet;
 import net.kroia.stockmarket.banking.bank.ClientBankManager;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
+//import net.minecraftforge.network.NetworkEvent;
 import net.minecraftforge.event.network.CustomPayloadEvent;
 
 import java.util.function.Supplier;
@@ -51,9 +52,9 @@ public class NetworkPacket {
         }
         context.setPacketHandled(true);
     }
-
+/*
     // Before MC 1.20.2
-    /*public void handle(Supplier<NetworkEvent.Context> contextSupplier) {
+    public void handle(Supplier<NetworkEvent.Context> contextSupplier) {
         NetworkEvent.Context context = contextSupplier.get();
         // Check if on server_sender or client
         if(contextSupplier.get().getDirection().getReceptionSide().isClient()) {

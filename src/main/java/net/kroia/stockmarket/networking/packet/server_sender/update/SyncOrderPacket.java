@@ -8,9 +8,6 @@ import net.kroia.stockmarket.networking.packet.NetworkPacket;
 import net.kroia.stockmarket.util.ServerPlayerList;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
-
-import java.util.function.Supplier;
-
 public class SyncOrderPacket extends NetworkPacket {
 
     private Order order;
@@ -37,10 +34,6 @@ public class SyncOrderPacket extends NetworkPacket {
 
     public static void sendResponse(Order order) {
         String itemID = order.getItemID();
-
-        //StockMarketMod.LOGGER.info("[SERVER] Sending SyncOrderPacket for order: "+order.toString());
-
-
         ServerPlayer player =  ServerPlayerList.getPlayer(order.getPlayerUUID());
         if(player == null)
         {

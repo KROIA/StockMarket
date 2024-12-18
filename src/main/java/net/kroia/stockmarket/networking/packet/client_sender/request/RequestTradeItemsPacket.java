@@ -1,16 +1,10 @@
 package net.kroia.stockmarket.networking.packet.client_sender.request;
 
-import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.networking.ModMessages;
 import net.kroia.stockmarket.networking.packet.NetworkPacket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraftforge.event.network.CustomPayloadEvent;
-
-
-import java.util.function.Supplier;
-
 public class RequestTradeItemsPacket extends NetworkPacket {
 
 
