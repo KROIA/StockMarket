@@ -37,7 +37,13 @@ StockMarket is a Minecraft mod that brings a better way for trading to the game.
 
 ---
 ## Releases
-[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.1-blue)]([https://github.com/username/repo/releases/download/v1.0.0/mod-name-1.0.0.jar](https://github.com/KROIA/StockMarket/releases/download/v1.1.0/stockmarket_mc_1.20.1_forge_47.3.0_v1.1.0.jar))
+| Version | Release Date | Download |
+|---------|--------------|----------|
+|1.1.0    | 18.12.2024   | [![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21.1-green)](https://github.com/KROIA/StockMarket/releases/download/v1.1.0/stockmarket_mc_1.21.1_forge_52.0.28_v1.1.0.jar)<br>[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.6-blue)](https://github.com/KROIA/StockMarket/releases/download/v1.1.0/stockmarket_mc_1.20.6_forge_50.1.0_v1.1.0.jar)<br>[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.4-blue)](https://github.com/KROIA/StockMarket/releases/download/v1.1.0/stockmarket_mc_1.20.4_forge_49.1.0_v1.1.0.jar)<br>[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.3-blue)](https://github.com/KROIA/StockMarket/releases/download/v1.1.0/stockmarket_mc_1.20.3_forge_49.0.2_v1.1.0.jar)<br>[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.2-blue)](https://github.com/KROIA/StockMarket/releases/download/v1.1.0/stockmarket_mc_1.20.2_forge_48.1.0_v1.1.0.jar)<br>[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.1-blue)](https://github.com/KROIA/StockMarket/releases/download/v1.1.0/stockmarket_mc_1.20.1_forge_47.3.0_v1.1.0.jar) |
+
+
+
+
 
 
 ---
