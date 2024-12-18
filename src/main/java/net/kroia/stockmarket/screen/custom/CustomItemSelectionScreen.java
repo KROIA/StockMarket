@@ -84,9 +84,10 @@ public class CustomItemSelectionScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    //public boolean mouseScrolled(double mouseX, double mouseY, double deltaX, double deltaY) { // 1.20.2
+    public boolean mouseScrolled(double mouseX, double mouseY, double deltaX) {
         int maxScroll = Math.max(0, (filteredItems.size() + ITEMS_PER_ROW - 1) / ITEMS_PER_ROW - (this.height - 60) / ROW_HEIGHT);
-        scrollOffset = Math.max(0, Math.min(scrollOffset - (int) delta, maxScroll));
+        scrollOffset = Math.max(0, Math.min(scrollOffset - (int) deltaX, maxScroll));
         return true;
     }
 
@@ -114,12 +115,19 @@ public class CustomItemSelectionScreen extends Screen {
         return super.mouseClicked(mouseX, mouseY, button);
     }
 
+    //@Override // 1.20.2
+    public void renderBackground(GuiGraphics pGuiGraphics, int pMouseX, int pMouseY, float pPartialTick)
+    {
+        //super.renderBackground(pGuiGraphics, pMouseX, pMouseY, pPartialTick); // 1.20.2
+        super.renderBackground(pGuiGraphics);
+    }
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(graphics);
-
+        this.renderBackground(graphics, mouseX, mouseY, partialTick);
+        super.render(graphics, mouseX, mouseY, partialTick);
         // Draw search field
         this.searchField.render(graphics, mouseX, mouseY, partialTick);
+
 
         // Draw item grid
         int xStart = (this.width - ITEMS_PER_ROW * ROW_HEIGHT) / 2;
@@ -135,8 +143,7 @@ public class CustomItemSelectionScreen extends Screen {
             graphics.renderItem(filteredItems.get(i), x, y);
         }
 
-        // Draw back button
-        super.render(graphics, mouseX, mouseY, partialTick);
+
 
         // Draw tooltips
         for (int i = 0; i < filteredItems.size(); i++) {
