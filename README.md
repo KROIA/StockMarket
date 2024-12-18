@@ -485,7 +485,6 @@ As you can see in the pictures below, the current price is always that price, wh
 
 ---
 ## Terminology
----
 ### Order Book
 The Order Book is a list with all limit orders waiting to be processed. A buy order is always on a lower or equal price as the current market price and sell orders above or at the same price.
 When a buy order is at the same price like a sell order, they will get matched by the matching engine.
