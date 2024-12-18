@@ -8,7 +8,7 @@ public class MetalCaseBlock extends Block {
     public static final String NAME = "metal_case_block";
 
     public MetalCaseBlock() {
-        super(BlockBehaviour.Properties.copy(Blocks.IRON_BLOCK));
+        super(Properties.ofFullCopy(Blocks.IRON_BLOCK)); // Copy properties from iron block
         this.registerDefaultState(this.defaultBlockState()); // Default facing
     }
     public MetalCaseBlock(Properties pProperties) {

@@ -26,7 +26,7 @@ import org.jetbrains.annotations.NotNull;
 public class TerminalBlock extends Block {
     public static final String NAME = "terminal_block";
     public TerminalBlock() {
-        super(BlockBehaviour.Properties.copy(Blocks.IRON_BLOCK));
+        super(Properties.ofFullCopy(Blocks.IRON_BLOCK));
         this.registerDefaultState(this.defaultBlockState().setValue(FACING, Direction.NORTH)); // Default facing
     }
     public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
