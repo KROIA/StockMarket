@@ -20,7 +20,7 @@ public class ModCreativeModTabs {
                 builder -> builder
                         .icon(() -> new ItemStack(ModBlocks.STOCK_MARKET_BLOCK.get())) // Tab icon
                         .title(Component.translatable("itemGroup.stock_market")) // Translation key
-                        .displayItems((parameters, pOutput) -> {
+                        .displayItems((parameters, pOutput, a) -> {
                             // Add items to this tab
                             pOutput.accept(ModBlocks.METAL_CASE_BLOCK.get());
                             pOutput.accept(ModBlocks.TERMINAL_BLOCK.get());

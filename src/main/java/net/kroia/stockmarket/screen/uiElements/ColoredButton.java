@@ -63,7 +63,7 @@ public class ColoredButton extends Button {
     }
 
     @Override
-    public void renderWidget(PoseStack guiGraphics, int mouseX, int mouseY, float partialTicks) {
+    public void render(PoseStack guiGraphics, int mouseX, int mouseY, float partialTicks) {
         boolean hovered = this.isHoveredOrFocused();
         int color = hovered ? hoverColor : normalColor; // Bright green when hovered, dark green otherwise
 

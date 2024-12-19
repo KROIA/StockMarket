@@ -361,12 +361,12 @@ public class TradeScreen extends Screen {
 
         drawText(graphics, currentBalanceRectTop, "Your balance");
 
-        itemRenderer.renderGuiItem(graphics, itemStack, currentBalanceRectBottom.x, currentBalanceRectBottom.y);
+        itemRenderer.renderGuiItem( itemStack, currentBalanceRectBottom.x, currentBalanceRectBottom.y);
         Minecraft.getInstance().font.draw(graphics, String.valueOf(ClientBankManager.getBalance(itemID)), currentBalanceRectBottom.x+selectItemButtonRect.height, currentBalanceRectBottom.y+ textHeight / 2, 0xFFFFFF);
         Minecraft.getInstance().font.draw(graphics, "$"+ ClientBankManager.getBalance(), currentBalanceRectBottom.x+currentBalanceRectBottom.width/2, currentBalanceRectBottom.y + textHeight / 2, 0xFFFFFF);
 
         // Draw the item
-        itemRenderer.renderGuiItem(graphics, itemStack, selectItemButtonRect.x, selectItemButtonRect.y);
+        itemRenderer.renderGuiItem(itemStack, selectItemButtonRect.x, selectItemButtonRect.y);
 
         int price = ClientMarket.getPrice(itemID);
         Minecraft.getInstance().font.draw(graphics, "Price: "+ price, selectItemButtonRect.x+selectItemButtonRect.height, selectItemButtonRect.y + (float) textHeight/2, 0xFFFFFF);

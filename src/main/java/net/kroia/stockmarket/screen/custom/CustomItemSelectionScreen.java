@@ -140,7 +140,7 @@ public class CustomItemSelectionScreen extends Screen {
             int x = xStart + (i % ITEMS_PER_ROW) * ROW_HEIGHT;
             int y = yStart + row * ROW_HEIGHT;
 
-            Minecraft.getInstance().getItemRenderer().renderGuiItem(graphics, filteredItems.get(i), x, y);
+            Minecraft.getInstance().getItemRenderer().renderGuiItem(filteredItems.get(i), x, y);
         }
 
 

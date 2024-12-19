@@ -76,7 +76,7 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
             if(amount == 0)
                 stack.setCount(1);
             // Render the ItemStack at the given position
-            itemRenderer.renderGuiItem(graphics, stack, x+1, y+1);
+            itemRenderer.renderGuiItem(stack, x+1, y+1);
             if(amount == 0)
                 stack.setCount(0);
             String amountStr = "" + amount;
