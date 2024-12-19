@@ -22,7 +22,6 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.renderer.entity.ItemRenderer;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.flag.FeatureFlagSet;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.TickEvent;
@@ -188,23 +187,16 @@ public class TradeScreen extends Screen {
         orderbookVolumeChart.setChartView(chartRect.x + chartRect.width - 50 - padding, chartRect.y + padding, 50, chartRect.height - 2 * padding);
 
 
-        sellLimitButton = (ColoredButton) addRenderableWidget(ColoredButton.builder(SELL_BUTTON_TEXT,
-                        this::onSellLimitButtonPressed)
-                .hoverColor(sellButtonHoverColor)
-                .normalColor(sellButtonNormalColor)
-                .bounds(sellLimitButtonRect.x, sellLimitButtonRect.y, sellLimitButtonRect.width, sellLimitButtonRect.height).build());
+        sellLimitButton = (ColoredButton) addRenderableWidget(new ColoredButton(sellLimitButtonRect.x, sellLimitButtonRect.y, sellLimitButtonRect.width, sellLimitButtonRect.height,
+                SELL_BUTTON_TEXT, this::onSellLimitButtonPressed, sellButtonHoverColor, sellButtonNormalColor, 0xFFFFFF));
 
 
-        buyLimitButton = (ColoredButton) addRenderableWidget(ColoredButton.builder(BUY_BUTTON_TEXT,
-                        this::onBuyLimitButtonPressed)
-                .hoverColor(buyButtonHoverColor)
-                .normalColor(buyButtonNormalColor)
-                .bounds(buyLimitButtonRect.x, buyLimitButtonRect.y, buyLimitButtonRect.width, buyLimitButtonRect.height).build());
+        buyLimitButton = (ColoredButton) addRenderableWidget(new ColoredButton(buyLimitButtonRect.x, buyLimitButtonRect.y, buyLimitButtonRect.width, buyLimitButtonRect.height,
+                BUY_BUTTON_TEXT, this::onBuyLimitButtonPressed, buyButtonHoverColor, buyButtonNormalColor, 0xFFFFFF));
 
 
         // Add a button to open the item selection dialog
-        selectItemButton = addRenderableWidget(Button.builder(SELECT_ITEM_BUTTON_TEXT,
-                this::onSelectItemButtonPressed).bounds(selectItemButtonRect.x, selectItemButtonRect.y, selectItemButtonRect.width, selectItemButtonRect.height).build());
+        selectItemButton = addRenderableWidget(new Button(selectItemButtonRect.x, selectItemButtonRect.y, selectItemButtonRect.width, selectItemButtonRect.height, SELECT_ITEM_BUTTON_TEXT, this::onSelectItemButtonPressed));
 
         int editBoxPadding = 3;
         this.amountBox = new EditBox(this.font, amountEditRect.x+editBoxPadding, amountEditRect.y+editBoxPadding, amountEditRect.width - editBoxPadding*2, amountEditRect.height-editBoxPadding*2, Component.literal("Enter an integer"));
@@ -220,17 +212,11 @@ public class TradeScreen extends Screen {
         this.priceBox.setFilter(input -> input.matches("\\d*")); // Allow only digits
         this.addRenderableWidget(this.priceBox);
 
-        sellMarketButton = (ColoredButton) addRenderableWidget(ColoredButton.builder(SELL_BUTTON_TEXT,
-                        this::onSellMarketButtonPressed)
-                .hoverColor(sellButtonHoverColor)
-                .normalColor(sellButtonNormalColor)
-                .bounds(sellMarketButtonRect.x, sellMarketButtonRect.y, sellMarketButtonRect.width, sellMarketButtonRect.height).build());
+        sellMarketButton = (ColoredButton) addRenderableWidget(new ColoredButton(sellMarketButtonRect.x, sellMarketButtonRect.y, sellMarketButtonRect.width, sellMarketButtonRect.height,
+                SELL_BUTTON_TEXT, this::onSellMarketButtonPressed, sellButtonHoverColor, sellButtonNormalColor, 0xFFFFFF));
 
-        buyMarketButton = (ColoredButton) addRenderableWidget(ColoredButton.builder(BUY_BUTTON_TEXT,
-                        this::onBuyMarketButtonPressed)
-                .hoverColor(buyButtonHoverColor)
-                .normalColor(buyButtonNormalColor)
-                .bounds(buyMarketButtonRect.x, buyMarketButtonRect.y, buyMarketButtonRect.width, buyMarketButtonRect.height).build());
+        buyMarketButton = (ColoredButton) addRenderableWidget(new ColoredButton(buyMarketButtonRect.x, buyMarketButtonRect.y, buyMarketButtonRect.width, buyMarketButtonRect.height,
+                BUY_BUTTON_TEXT, this::onBuyMarketButtonPressed, buyButtonHoverColor, buyButtonNormalColor, 0xFFFFFF));
 
         orderListWidget.init(0, chartRect.y + chartRect.height, chartRect.width, this.height - chartRect.height);
 
@@ -481,19 +467,6 @@ public class TradeScreen extends Screen {
         // Check if the player has operator permissions (level 2 or higher)
         assert this.minecraft.player != null;
         boolean isOperator = this.minecraft.player.hasPermissions(2);
-
-        // Create an empty FeatureFlagSet if needed (you can add relevant flags if necessary)
-        FeatureFlagSet featureFlags = FeatureFlagSet.of();
-
-        // Open the ItemSelectionScreen with operator status and feature flags
-        /*this.minecraft.setScreen(new ItemSelectionScreen(
-                this.minecraft.player,
-                featureFlags,
-                isOperator, // Check if player is an operator
-                this,
-                this::onItemSelected,
-                ClientMarket.getAvailableTradeItemIdList()
-        ));*/
 
         this.minecraft.setScreen(new CustomItemSelectionScreen(
                 this,

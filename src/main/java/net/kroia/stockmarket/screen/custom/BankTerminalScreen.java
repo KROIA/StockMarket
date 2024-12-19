@@ -13,6 +13,7 @@ import net.kroia.stockmarket.util.geometry.Rectangle;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.renderer.entity.ItemRenderer;
 import net.minecraft.network.chat.Component;
@@ -61,9 +62,8 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
             this.amountBox.setMaxLength(10); // Max length of input
             this.amountBox.setFilter(input -> input.matches("\\d*")); // Allow only digits
 
-            receiveItemsFromMarketButton = Button.builder(RECEIVE_ITEMS_FROM_MARKET_BUTTON_TEXT, this::onReceiveItemsFromMarket)
-                    .bounds(x+width-textEditWidth-100, y, 100, HEIGHT).build();
-
+            receiveItemsFromMarketButton = new Button(x+width-textEditWidth-100, y, 100, HEIGHT, RECEIVE_ITEMS_FROM_MARKET_BUTTON_TEXT, this::onReceiveItemsFromMarket);
+            parent.addRenderableWidget(this.amountBox);
 
         }
 
@@ -89,7 +89,7 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
         public void setY(int y)
         {
             this.y = y;
-            amountBox.setY(y);
+            amountBox.y =y;
         }
         public int getY()
         {
@@ -181,10 +181,8 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
 
 
 
-        addRenderableWidget(Button.builder(SEND_ITEMS_TO_MARKET_BUTTON_TEXT, this::onTransmittItemsToMarket)
-                .bounds(sendItemsToMarketButtonRect.x, sendItemsToMarketButtonRect.y, sendItemsToMarketButtonRect.width, sendItemsToMarketButtonRect.height).build());
-        addRenderableWidget(Button.builder(RECEIVE_ITEMS_FROM_MARKET_BUTTON_TEXT, this::onReceiveItemsFromMarket)
-                .bounds(receiveItemsFromMarketButtonRect.x, receiveItemsFromMarketButtonRect.y, receiveItemsFromMarketButtonRect.width, receiveItemsFromMarketButtonRect.height).build());
+        addRenderableWidget(new Button(sendItemsToMarketButtonRect.x, sendItemsToMarketButtonRect.y, sendItemsToMarketButtonRect.width, sendItemsToMarketButtonRect.height, SEND_ITEMS_TO_MARKET_BUTTON_TEXT, this::onTransmittItemsToMarket));
+        addRenderableWidget(new Button(receiveItemsFromMarketButtonRect.x, receiveItemsFromMarketButtonRect.y, receiveItemsFromMarketButtonRect.width, receiveItemsFromMarketButtonRect.height,RECEIVE_ITEMS_FROM_MARKET_BUTTON_TEXT, this::onReceiveItemsFromMarket));
 
 
         buildItemButtons();
@@ -353,9 +351,10 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
                 for (int i = startIndex; i < endIndex; i++) {
                     BankElement view = bankElements.get(i);
                     EditBox amountBox = view.amountBox;
+
                     if(amountBox.isMouseOver((int)mouseX, (int)mouseY))
                     {
-                        //amountBox.setFocused(true);
+                        amountBox.mouseClicked(mouseX, mouseY, button);
                         this.setFocused(amountBox);
                         return true;
                     }
@@ -399,21 +398,22 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
 
     @Override
     public boolean charTyped(char codePoint, int modifiers) {
-        for(BankElement view : bankElements)
-        {
-            if(view.amountBox.isFocused())
-            {
-                if(view.amountBox.charTyped(codePoint, modifiers))
-                {
-                    if(view.getTargetAmount() > view.stack.getCount())
-                    {
+        GuiEventListener focused = this.getFocused();
+        if(focused instanceof EditBox exitBox) {
+            for (BankElement view : bankElements) {
+                if(view.amountBox != exitBox)
+                    continue;
+
+                if (view.amountBox.charTyped(codePoint, modifiers)) {
+                    if (view.getTargetAmount() > view.stack.getCount()) {
                         view.setTargetAmount(view.stack.getCount());
                     }
                     return true;
                 }
-                return false;
             }
+            return false;
         }
+
         return super.charTyped(codePoint, modifiers);
     }
 

@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.screen.custom;
 
 import com.mojang.blaze3d.vertex.PoseStack;
+import net.kroia.stockmarket.StockMarketMod;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
@@ -8,9 +9,9 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.TooltipFlag;
+import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -54,7 +55,7 @@ public class CustomItemSelectionScreen extends Screen {
 
         // Populate displayed items
         for (ResourceLocation id : allowedItems) {
-            Item item = BuiltInRegistries.ITEM.get(id);
+            Item item = ForgeRegistries.ITEMS.getValue(id);
             if (item != null) {
                 displayedItems.add(new ItemStack(item));
             }
@@ -62,10 +63,9 @@ public class CustomItemSelectionScreen extends Screen {
         this.filteredItems.addAll(this.displayedItems);
 
         // Add a back button
-        addRenderableWidget(Button.builder(Component.translatable("gui.back"),
-                button -> {
+        addRenderableWidget(new Button(this.width / 2 - 50, this.height - 30, 100, 20, Component.translatable("gui.back"), button -> {
                     this.minecraft.setScreen(parentScreen);
-                }).bounds(this.width / 2 - 50, this.height - 30, 100, 20).build());
+                }));
     }
 
     private void updateFilter(String filter) {
@@ -105,7 +105,7 @@ public class CustomItemSelectionScreen extends Screen {
 
                 if (mouseX >= x && mouseX < x + ROW_HEIGHT && mouseY >= y && mouseY < y + ROW_HEIGHT) {
                     ItemStack clickedStack = filteredItems.get(i);
-                    ResourceLocation itemId = BuiltInRegistries.ITEM.getKey(clickedStack.getItem());
+                    ResourceLocation itemId = ForgeRegistries.ITEMS.getKey(clickedStack.getItem());
                     onItemSelected.accept(itemId.toString());
                     this.minecraft.setScreen(parentScreen);
                     return true;

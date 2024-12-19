@@ -55,9 +55,7 @@ public class OrderListWidget {
             backgoundRect.y = y;
             backgoundRect.width = width;
             backgoundRect.height = height;
-            cancelButton = Button.builder(CANCEL_BUTTON_TEXT,
-                    this::onCancelButtonPressed)
-                    .bounds(x+width-buttonWidth-6, y, buttonWidth, height).build();
+            cancelButton = new Button(x+width-buttonWidth-6, y, buttonWidth, height,CANCEL_BUTTON_TEXT, this::onCancelButtonPressed);
             if(order.isBuy())
             {
                 orderDirectionStr = "Buy";
@@ -119,12 +117,12 @@ public class OrderListWidget {
         }
         public void setY(int y)
         {
-            cancelButton.setY(y);
+            cancelButton.y = y;
             backgoundRect.y = y;
         }
         public int getY()
         {
-            return cancelButton.getY();
+            return cancelButton.y;
         }
         public int getHeight()
         {
@@ -140,8 +138,8 @@ public class OrderListWidget {
         }
 
         private boolean isMouseOver(Button button, double mouseX, double mouseY) {
-            int x = button.getX();
-            int y = button.getY();
+            int x = button.x;
+            int y = button.y;
             int width = button.getWidth();
             int height = button.getHeight();
             return mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + height;

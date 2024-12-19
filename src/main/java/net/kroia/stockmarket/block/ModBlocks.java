@@ -5,6 +5,7 @@ import net.kroia.stockmarket.block.custom.BankTerminalBlock;
 import net.kroia.stockmarket.block.custom.MetalCaseBlock;
 import net.kroia.stockmarket.block.custom.StockMarketBlock;
 import net.kroia.stockmarket.block.custom.TerminalBlock;
+import net.kroia.stockmarket.item.ModCreativeModTabs;
 import net.kroia.stockmarket.item.ModItems;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
@@ -34,7 +35,7 @@ public class ModBlocks {
     }
     private static <T extends Block>RegistryObject<Item> registerBlockItem(String name, RegistryObject<T> block)
     {
-        return ModItems.ITEMS.register(name, () -> new BlockItem(block.get(), new Item.Properties()));
+        return ModItems.ITEMS.register(name, () -> new BlockItem(block.get(), new Item.Properties().tab(ModCreativeModTabs.STOCK_MARKET_TAB)));
     }
     public static void register(IEventBus eventBus)
     {

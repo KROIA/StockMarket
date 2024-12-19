@@ -24,14 +24,12 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.GameProfileCache;
 import net.minecraft.server.players.PlayerList;
-import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
 import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.event.CreativeModeTabEvent;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -80,7 +78,6 @@ public class StockMarketMod
 
 
         // Register event listeners
-        modEventBus.addListener(this::registerCreativeTabs);
         ModItems.register(modEventBus);
         ModBlocks.register(modEventBus);
         ModEntities.register(modEventBus);
@@ -107,11 +104,6 @@ public class StockMarketMod
         MinecraftForge.EVENT_BUS.addListener(StockMarketMod::onRegisterCommands);
         // Register client-side commands only on the client
         //MinecraftForge.EVENT_BUS.addListener(StockMarketMod::onRegisterClientCommands);
-    }
-
-    private void registerCreativeTabs(CreativeModeTabEvent.Register event) {
-        // Register the creative tabs
-        ModCreativeModTabs.registerCreativeTabs(event);
     }
 
     public static void onRegisterCommands(RegisterCommandsEvent event) {

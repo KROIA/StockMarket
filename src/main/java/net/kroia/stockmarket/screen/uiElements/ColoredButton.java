@@ -15,52 +15,14 @@ public class ColoredButton extends Button {
     public int normalColor = 0xFF008800;
     public int textColor = 0xFFFFFFFF;
 
-    public static ColoredButton.Builder builder(Component pMessage, OnPress pOnPress) {
-        return new ColoredButton.Builder(pMessage, pOnPress);
+
+    public ColoredButton(int pX, int pY, int pWidth, int pHeight, Component pMessage, OnPress pOnPress, int hoverColor, int normalColor, int textColor) {
+        super(pX, pY, pWidth, pHeight, pMessage, pOnPress);
+        this.hoverColor = hoverColor;
+        this.normalColor = normalColor;
+        this.textColor = textColor;
     }
 
-    protected ColoredButton(int pX, int pY, int pWidth, int pHeight, Component pMessage, OnPress pOnPress, CreateNarration pCreateNarration) {
-        super(pX, pY, pWidth, pHeight, pMessage, pOnPress, pCreateNarration);
-    }
-    protected ColoredButton(Builder builder) {
-        super(builder);
-    }
-
-    // Implement builder
-    @OnlyIn(Dist.CLIENT)
-    public static class Builder extends Button.Builder {
-        private int hoverColor = 0xFF00FF00;
-        private int normalColor = 0xFF008800;
-        private int textColor = 0xFFFFFFFF;
-        public Builder(Component pMessage, Button.OnPress onPress) {
-            super(pMessage, onPress);
-        }
-
-        public Builder hoverColor(int hoverColor) {
-            this.hoverColor = hoverColor;
-            return this;
-        }
-
-        public Builder normalColor(int normalColor) {
-            this.normalColor = normalColor;
-            return this;
-        }
-
-        public Builder textColor(int textColor) {
-            this.textColor = textColor;
-            return this;
-        }
-
-        @Override
-        public @NotNull Button build() {
-            ColoredButton button = new ColoredButton(this);
-            button.hoverColor = this.hoverColor;
-            button.normalColor = this.normalColor;
-            button.textColor = this.textColor;
-            return button;
-        }
-
-    }
 
     @Override
     public void render(PoseStack guiGraphics, int mouseX, int mouseY, float partialTicks) {
@@ -68,14 +30,14 @@ public class ColoredButton extends Button {
         int color = hovered ? hoverColor : normalColor; // Bright green when hovered, dark green otherwise
 
         // Draw the button background
-        fill(guiGraphics, this.getX(), this.getY(), this.getX() + this.getWidth(), this.getY() + this.getHeight(), color);
+        fill(guiGraphics, this.x, this.y, this.x + this.width, this.y + this.height, color);
 
         // Draw the button's text
         drawCenteredString(guiGraphics,
                 Minecraft.getInstance().font,
                 this.getMessage().getString(),
-                this.getX() + this.getWidth() / 2,
-                this.getY() + (this.getHeight() - Minecraft.getInstance().font.lineHeight) / 2,
+                this.x + this.getWidth() / 2,
+                this.y + (this.getHeight() - Minecraft.getInstance().font.lineHeight) / 2,
                 textColor // White text
         );
     }
