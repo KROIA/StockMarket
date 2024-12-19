@@ -1,10 +1,10 @@
 package net.kroia.stockmarket.screen.custom;
 
+import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -116,13 +116,13 @@ public class CustomItemSelectionScreen extends Screen {
     }
 
     //@Override // 1.20.2
-    public void renderBackground(GuiGraphics pGuiGraphics, int pMouseX, int pMouseY, float pPartialTick)
+    public void renderBackground(PoseStack pGuiGraphics, int pMouseX, int pMouseY, float pPartialTick)
     {
         //super.renderBackground(pGuiGraphics, pMouseX, pMouseY, pPartialTick); // 1.20.2
         super.renderBackground(pGuiGraphics);
     }
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    public void render(PoseStack graphics, int mouseX, int mouseY, float partialTick) {
         this.renderBackground(graphics, mouseX, mouseY, partialTick);
         super.render(graphics, mouseX, mouseY, partialTick);
         // Draw search field
@@ -140,7 +140,7 @@ public class CustomItemSelectionScreen extends Screen {
             int x = xStart + (i % ITEMS_PER_ROW) * ROW_HEIGHT;
             int y = yStart + row * ROW_HEIGHT;
 
-            graphics.renderItem(filteredItems.get(i), x, y);
+            Minecraft.getInstance().getItemRenderer().renderGuiItem(graphics, filteredItems.get(i), x, y);
         }
 
 
@@ -155,7 +155,7 @@ public class CustomItemSelectionScreen extends Screen {
 
             if (mouseX >= x && mouseX < x + ROW_HEIGHT && mouseY >= y && mouseY < y + ROW_HEIGHT) {
                 TooltipFlag flag = this.minecraft.options.advancedItemTooltips ? TooltipFlag.Default.ADVANCED : TooltipFlag.Default.NORMAL;
-                graphics.renderTooltip(this.font, filteredItems.get(i), mouseX, mouseY);
+                renderTooltip(graphics, filteredItems.get(i), mouseX, mouseY);
             }
         }
     }

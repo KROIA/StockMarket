@@ -26,7 +26,7 @@ public class BankTerminalContainerMenu extends AbstractContainerMenu {
 
     // Client Constructor
     public BankTerminalContainerMenu(int containerId, Inventory playerInv, FriendlyByteBuf additionalData) {
-        this(containerId, playerInv, playerInv.player.level().getBlockEntity(additionalData.readBlockPos()));
+        this(containerId, playerInv, playerInv.player.level.getBlockEntity(additionalData.readBlockPos()));
     }
 
     // Server Constructor

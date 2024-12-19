@@ -33,7 +33,7 @@ public class ChartMenu extends AbstractContainerMenu {
         this(
                 id,
                 playerInventory,
-                (StockMarketBlockEntity) playerInventory.player.level().getBlockEntity(buffer.readBlockPos()),
+                (StockMarketBlockEntity) playerInventory.player.level.getBlockEntity(buffer.readBlockPos()),
                 ContainerLevelAccess.NULL
         );
     }

@@ -1,6 +1,7 @@
 // TradeScreen.java
 package net.kroia.stockmarket.screen.custom;
 
+import com.mojang.blaze3d.vertex.PoseStack;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.banking.bank.ClientBankManager;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
@@ -15,16 +16,13 @@ import net.kroia.stockmarket.util.OrderListWidget;
 import net.kroia.stockmarket.util.OrderbookVolumeChart;
 import net.kroia.stockmarket.util.geometry.Rectangle;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.client.renderer.entity.ItemRenderer;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.flag.FeatureFlagSet;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.TickEvent;
@@ -323,24 +321,26 @@ public class TradeScreen extends Screen {
     }
 
     @Override
-    public void renderBackground(GuiGraphics pGuiGraphics)
+    public void renderBackground(PoseStack pGuiGraphics)
     {
         super.renderBackground(pGuiGraphics);
-        pGuiGraphics.fill(currentBalanceRectTop.x, currentBalanceRectTop.y, currentBalanceRectBottom.x+currentBalanceRectBottom.width, currentBalanceRectBottom.y+currentBalanceRectBottom.height,
+        fill(pGuiGraphics, currentBalanceRectTop.x, currentBalanceRectTop.y, currentBalanceRectBottom.x+currentBalanceRectBottom.width, currentBalanceRectBottom.y+currentBalanceRectBottom.height,
                 backgroundColor);
 
         // Draw plot background in gray
-        pGuiGraphics.fill(chartRect.x, chartRect.y,
+        fill(pGuiGraphics, chartRect.x, chartRect.y,
                 chartRect.x + chartRect.width, chartRect.y + chartRect.height, backgroundColor);
 
-        pGuiGraphics.fill(selectItemButtonRect.x, selectItemButtonRect.y, sellLimitButtonRect.x+sellLimitButtonRect.width, sellLimitButtonRect.y+sellLimitButtonRect.height,
+        fill(pGuiGraphics, selectItemButtonRect.x, selectItemButtonRect.y, sellLimitButtonRect.x+sellLimitButtonRect.width, sellLimitButtonRect.y+sellLimitButtonRect.height,
                 backgroundColor);
     }
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    public void render(PoseStack graphics, int mouseX, int mouseY, float partialTick) {
         //TutorialMod.LOGGER.info("Render Chart Screen");
         // Background is typically rendered first
         this.renderBackground(graphics);
+        ItemRenderer itemRenderer = Minecraft.getInstance().getItemRenderer();
+
 
         // Render things here before widgets (background textures)
         // You can draw additional things like text, images, etc.
@@ -360,21 +360,19 @@ public class TradeScreen extends Screen {
         // Draw the title
 
         drawText(graphics, currentBalanceRectTop, "Your balance");
-        graphics.renderItem(itemStack, currentBalanceRectBottom.x, currentBalanceRectBottom.y);
-        graphics.drawString(this.font,  String.valueOf(ClientBankManager.getBalance(itemID)), currentBalanceRectBottom.x+selectItemButtonRect.height, currentBalanceRectBottom.y+ textHeight / 2, 0xFFFFFF);
-        graphics.drawString(this.font, "$"+ ClientBankManager.getBalance(), currentBalanceRectBottom.x+currentBalanceRectBottom.width/2, currentBalanceRectBottom.y + textHeight / 2, 0xFFFFFF);
 
+        itemRenderer.renderGuiItem(graphics, itemStack, currentBalanceRectBottom.x, currentBalanceRectBottom.y);
+        Minecraft.getInstance().font.draw(graphics, String.valueOf(ClientBankManager.getBalance(itemID)), currentBalanceRectBottom.x+selectItemButtonRect.height, currentBalanceRectBottom.y+ textHeight / 2, 0xFFFFFF);
+        Minecraft.getInstance().font.draw(graphics, "$"+ ClientBankManager.getBalance(), currentBalanceRectBottom.x+currentBalanceRectBottom.width/2, currentBalanceRectBottom.y + textHeight / 2, 0xFFFFFF);
 
         // Draw the item
-        graphics.renderItem(itemStack, selectItemButtonRect.x, selectItemButtonRect.y);
+        itemRenderer.renderGuiItem(graphics, itemStack, selectItemButtonRect.x, selectItemButtonRect.y);
 
         int price = ClientMarket.getPrice(itemID);
-        graphics.drawString(this.font, "Price: " + price, selectItemButtonRect.x + selectItemButtonRect.height, selectItemButtonRect.y + textHeight / 2, 0xFFFFFF);
+        Minecraft.getInstance().font.draw(graphics, "Price: "+ price, selectItemButtonRect.x+selectItemButtonRect.height, selectItemButtonRect.y + (float) textHeight/2, 0xFFFFFF);
 
-
-        graphics.drawString(this.font, "Amount:", selectItemButtonRect.x, amountEditRect.y + textHeight / 2, 0xFFFFFF);
-        graphics.drawString(this.font, "Limit price:", selectItemButtonRect.x, limitPriceEditRect.y + textHeight / 2, 0xFFFFFF);
-
+        Minecraft.getInstance().font.draw(graphics, "Amount:", selectItemButtonRect.x, amountEditRect.y + (float) textHeight / 2, 0xFFFFFF);
+        Minecraft.getInstance().font.draw(graphics, "Limit price:", selectItemButtonRect.x, limitPriceEditRect.y + (float) textHeight / 2, 0xFFFFFF);
 
 
         // Draw the label above the EditBox
@@ -417,24 +415,23 @@ public class TradeScreen extends Screen {
         drawLine(graphics,10,10,150,150, color, 4);*/
     }
 
-    private void drawLine(GuiGraphics graphics, int x1, int y1, int x2, int y2, int color, int width) {
-        graphics.fill(x1, y1 - width / 2, x2, y1 + width / 2, color);
-        graphics.fill(x2 - width / 2, y2, x2 + width / 2, y1, color);
+    private void drawLine(PoseStack graphics, int x1, int y1, int x2, int y2, int color, int width) {
+        fill(graphics, x1, y1 - width / 2, x2, y1 + width / 2, color);
+        fill(graphics,x2 - width / 2, y2, x2 + width / 2, y1, color);
     }
 
-    private void drawText(GuiGraphics graphics, Rectangle box, String text) {
+    private void drawText(PoseStack graphics, Rectangle box, String text) {
         int textWidth = this.font.width(text);
         int textHeight = this.font.lineHeight;
         int x = box.x + (box.width - textWidth) / 2;
         int y = box.y + (box.height - textHeight) / 2;
-        graphics.drawString(this.font, text, x, y, 0xFFFFFF);
+        Minecraft.getInstance().font.draw(graphics, text, x, y, 0xFFFFFF);
     }
 
-    private void drawToolTipForElement(GuiGraphics graphics, AbstractWidget widget, int mouseX, int mouseY, Component tooltip) {
+    private void drawToolTipForElement(PoseStack graphics, AbstractWidget widget, int mouseX, int mouseY, Component tooltip) {
         if (widget.isMouseOver(mouseX, mouseY)) {
             // Render a tooltip
-            graphics.renderTooltip(
-                    this.font,
+            renderTooltip(graphics,
                     tooltip,
                     mouseX,
                     mouseY

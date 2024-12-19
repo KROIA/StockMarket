@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.util;
 
+import com.mojang.blaze3d.vertex.PoseStack;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.client.ClientMarket;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
@@ -8,11 +9,12 @@ import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
 import net.kroia.stockmarket.util.geometry.Rectangle;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
+
+import static net.minecraft.client.gui.GuiComponent.fill;
 
 public class OrderListWidget {
 
@@ -79,7 +81,7 @@ public class OrderListWidget {
             }
         }
 
-        public static void renderLegend(GuiGraphics graphics, Rectangle backgroundRect)
+        public static void renderLegend(PoseStack graphics, Rectangle backgroundRect)
         {
             drawText(graphics, backgroundRect, columnPos_direction, "BUY/SELL");
             drawText(graphics, backgroundRect, columnPos_type, "Type");
@@ -87,7 +89,7 @@ public class OrderListWidget {
             drawText(graphics, backgroundRect, columnPos_filled, "Filled");
             drawText(graphics, backgroundRect, columnPos_price, "Price");
         }
-        public void render(GuiGraphics graphics, int mouseX, int mouseY)
+        public void render(PoseStack graphics, int mouseX, int mouseY)
         {
             // Draw background rect
             backgoundRect.render(graphics, backgroundColor);
@@ -106,14 +108,14 @@ public class OrderListWidget {
             cancelButton.render(graphics, mouseX, mouseY, 0);
 
         }
-        private void drawText(GuiGraphics graphics, float relativeXPos, String text)
+        private void drawText(PoseStack graphics, float relativeXPos, String text)
         {
             drawText(graphics, backgoundRect, relativeXPos, text);
         }
-        private static void drawText(GuiGraphics graphics, Rectangle rect, float relativeXPos, String text)
+        private static void drawText(PoseStack graphics, Rectangle rect, float relativeXPos, String text)
         {
             int absXPos = rect.x + (int)(rect.width * relativeXPos);
-            graphics.drawString(Minecraft.getInstance().font, text, absXPos, rect.y + rect.height/2, 0xFFFFFFFF);
+            Minecraft.getInstance().font.draw(graphics, text, absXPos, rect.y + rect.height/2, 0xFFFFFFFF);
         }
         public void setY(int y)
         {
@@ -198,7 +200,7 @@ public class OrderListWidget {
     }
 
 
-    public void render(GuiGraphics graphics, int mouseX, int mouseY)
+    public void render(PoseStack graphics, int mouseX, int mouseY)
     {
         // Draw legend
         OrderView.renderLegend(graphics, new Rectangle(backgroundRect.x, backgroundRect.y, backgroundRect.width, buttonHeight));
@@ -218,7 +220,7 @@ public class OrderListWidget {
         if (orderViewList.size() > visibleCount) {
             int scrollbarHeight = (int) ((float) visibleCount / orderViewList.size() * (backgroundRect.height-buttonHeight));
             int scrollbarY = backgroundRect.y+buttonHeight + (int) ((float) scrollOffset / orderViewList.size() * (backgroundRect.height-buttonHeight));
-            graphics.fill(
+            fill(graphics,
                     backgroundRect.x + backgroundRect.width - 6, scrollbarY,
                     backgroundRect.x + backgroundRect.width, scrollbarY + scrollbarHeight,
                     0xFFAAAAAA // Scrollbar color
@@ -256,9 +258,9 @@ public class OrderListWidget {
     public boolean isMouseOver(double mouseX, double mouseY) {
         return backgroundRect.isMouseOver(mouseX, mouseY);
     }
-    private void drawText(GuiGraphics graphics, float relativeXPos, String text)
+    private void drawText(PoseStack graphics, float relativeXPos, String text)
     {
         int absXPos = backgroundRect.x + (int)(backgroundRect.width * relativeXPos);
-        graphics.drawString(Minecraft.getInstance().font, text, absXPos, backgroundRect.y + backgroundRect.height/2, 0xFFFFFFFF);
+        Minecraft.getInstance().font.draw(graphics, text, absXPos, backgroundRect.y + backgroundRect.height/2, 0xFFFFFFFF);
     }
 }

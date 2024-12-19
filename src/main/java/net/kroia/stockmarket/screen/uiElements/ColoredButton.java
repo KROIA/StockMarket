@@ -1,6 +1,6 @@
 package net.kroia.stockmarket.screen.uiElements;
+import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.network.chat.Component;
 import net.minecraftforge.api.distmarker.Dist;
@@ -63,15 +63,15 @@ public class ColoredButton extends Button {
     }
 
     @Override
-    public void renderWidget(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTicks) {
+    public void renderWidget(PoseStack guiGraphics, int mouseX, int mouseY, float partialTicks) {
         boolean hovered = this.isHoveredOrFocused();
         int color = hovered ? hoverColor : normalColor; // Bright green when hovered, dark green otherwise
 
         // Draw the button background
-        guiGraphics.fill(this.getX(), this.getY(), this.getX() + this.getWidth(), this.getY() + this.getHeight(), color);
+        fill(guiGraphics, this.getX(), this.getY(), this.getX() + this.getWidth(), this.getY() + this.getHeight(), color);
 
         // Draw the button's text
-        guiGraphics.drawCenteredString(
+        drawCenteredString(guiGraphics,
                 Minecraft.getInstance().font,
                 this.getMessage().getString(),
                 this.getX() + this.getWidth() / 2,

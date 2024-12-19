@@ -1,10 +1,9 @@
 package net.kroia.stockmarket.util;
 
+import com.mojang.blaze3d.vertex.PoseStack;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
-
-import java.util.ArrayList;
+import net.minecraft.client.gui.GuiComponent;
 
 public class CandleStickChart {
 
@@ -76,7 +75,7 @@ public class CandleStickChart {
 
     }
 
-    public void render(GuiGraphics graphics)
+    public void render(PoseStack graphics)
     {
         if(priceHistory == null)
             return;
@@ -97,8 +96,8 @@ public class CandleStickChart {
             String label = String.valueOf(i);
             Minecraft minecraft = getMinecraft();
             labelWidth = minecraft.font.width(label);
-            graphics.drawString(minecraft.font, label, plotXOffset, plotYOffset + y - 4, 0xFFFFFFFF, false);
-            graphics.fill(plotXOffset+labelWidth, plotYOffset + y, plotXOffset + chartViewWidth, plotYOffset + y + 1, 0xFF808080);
+            Minecraft.getInstance().font.draw(graphics, label, plotXOffset, plotYOffset + y - 4, 0xFFFFFFFF);
+            GuiComponent.fill(graphics, plotXOffset+labelWidth, plotYOffset + y, plotXOffset + chartViewWidth, plotYOffset + y + 1, 0xFF808080);
 
         }
 
@@ -126,8 +125,8 @@ public class CandleStickChart {
     }
 
 
-    public void renderCandle(GuiGraphics graphics, int x,int candleWidth, int xOffset, int yOffset,
-                                    int open, int close, int high, int low)
+    public void renderCandle(PoseStack graphics, int x, int candleWidth, int xOffset, int yOffset,
+                             int open, int close, int high, int low)
     {
         // int wickHighY = (int) (chartViewHeight - ((high - chartViewMinPrice) / (float) (chartViewMaxPrice - chartViewMinPrice)) * chartViewHeight);
         // int wickLowY = (int) (chartViewHeight - ((low - chartViewMinPrice) / (float) (chartViewMaxPrice - chartViewMinPrice)) * chartViewHeight);
@@ -153,18 +152,18 @@ public class CandleStickChart {
 
         if((bodyYMax) - wickYMax > 0) {
             // Wick up
-            graphics.fill(xOffset + x + candleWidth / 2, yOffset + bodyYMax,
+            GuiComponent.fill(graphics, xOffset + x + candleWidth / 2, yOffset + bodyYMax,
                           xOffset + x + candleWidth / 2+1, yOffset + wickYMax, color);
         }
 
         if(wickYMin - (bodyYMin) > 0)
         {
             // Wick down
-            graphics.fill(xOffset + x + candleWidth / 2, yOffset + bodyYMin,
+            GuiComponent.fill(graphics, xOffset + x + candleWidth / 2, yOffset + bodyYMin,
                           xOffset + x + candleWidth / 2+1, yOffset + wickYMin, color);
         }
 
-        graphics.fill(xOffset + x, yOffset + bodyYMin,
+        GuiComponent.fill(graphics, xOffset + x, yOffset + bodyYMin,
                 xOffset + x + candleWidth, yOffset + bodyYMax, color);
     }
 

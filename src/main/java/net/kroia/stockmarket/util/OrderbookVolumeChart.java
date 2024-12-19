@@ -1,8 +1,7 @@
 package net.kroia.stockmarket.util;
 
-import net.minecraft.client.gui.GuiGraphics;
-
-import java.util.ArrayList;
+import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.client.gui.GuiComponent;
 
 public class OrderbookVolumeChart {
 
@@ -54,7 +53,7 @@ public class OrderbookVolumeChart {
         this.orderBookVolume = orderBookVolume;
     }
 
-    public void render(GuiGraphics graphics)
+    public void render(PoseStack graphics)
     {
         if(orderBookVolume == null)
             return;
@@ -75,7 +74,7 @@ public class OrderbookVolumeChart {
                 int color = vol > 0 ? colorBuy : colorSell;
                 int barWidth = map(absVol, 0, maxVolume, 0, chartViewWidth);
                 int xPos = x + chartViewWidth - barWidth;
-                graphics.fill(xPos, lastY, xPos + barWidth, y, color);
+                GuiComponent.fill(graphics, xPos, lastY, xPos + barWidth, y, color);
             }
 
             i++;

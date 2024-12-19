@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.screen.custom;
 
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.datafixers.util.Pair;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.banking.bank.ClientBankManager;
@@ -9,19 +11,17 @@ import net.kroia.stockmarket.networking.packet.client_sender.update.entity.Updat
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncBankDataPacket;
 import net.kroia.stockmarket.util.geometry.Rectangle;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.renderer.entity.ItemRenderer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.eventbus.api.EventPriority;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
+
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -67,17 +67,22 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
 
         }
 
-        public void render(GuiGraphics graphics)
+        public void render(PoseStack graphics)
         {
+            // Get the instance of ItemRenderer
+            ItemRenderer itemRenderer = Minecraft.getInstance().getItemRenderer();
+
             int amount = stack.getCount();
             if(amount == 0)
                 stack.setCount(1);
-            graphics.renderItem(stack, x+1, y+1);
+            // Render the ItemStack at the given position
+            itemRenderer.renderGuiItem(graphics, stack, x+1, y+1);
             if(amount == 0)
                 stack.setCount(0);
             String amountStr = "" + amount;
             int fontHeight = Minecraft.getInstance().font.lineHeight;
-            graphics.drawString(Minecraft.getInstance().font, amountStr, x + HEIGHT+2, y + (HEIGHT - fontHeight)/2, 0xFFFFFF);
+
+            Minecraft.getInstance().font.draw(graphics, amountStr, x + HEIGHT+2, y + (HEIGHT - fontHeight)/2, 0xFFFFFF);
 
             amountBox.render(graphics, 0, 0, 0);
         }
@@ -187,24 +192,28 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
     }
 
     @Override
-    protected void renderBg(GuiGraphics pGuiGraphics, float pPartialTick, int pMouseX, int pMouseY) {
+    protected void renderBg(PoseStack pGuiGraphics, float pPartialTick, int pMouseX, int pMouseY) {
        // renderTransparentBackground(pGuiGraphics);
         super.renderBackground(pGuiGraphics);
-        pGuiGraphics.blit(TEXTURE, this.leftPos+BankTerminalContainerMenu.POS_X, this.topPos+BankTerminalContainerMenu.POS_Y, 0, 0, this.imageWidth, this.imageHeight);
+        // Render the background texture
+        // Bind the texture
+        RenderSystem.setShaderTexture(0, TEXTURE);
 
+        // Draw the texture
+        blit(pGuiGraphics,
+                this.leftPos+BankTerminalContainerMenu.POS_X, this.topPos+BankTerminalContainerMenu.POS_Y, 0, 0, this.imageWidth, this.imageHeight); // Width and height to render
 
-        pGuiGraphics.fill(receiveWindowBackgroundRect.x, receiveWindowBackgroundRect.y,
+        fill(pGuiGraphics, receiveWindowBackgroundRect.x, receiveWindowBackgroundRect.y,
                 receiveWindowBackgroundRect.x + receiveWindowBackgroundRect.width, receiveWindowBackgroundRect.y + receiveWindowBackgroundRect.height, 0x7F000000);
     }
 
     @Override
-    public void render(GuiGraphics pGuiGraphics, int pMouseX, int pMouseY, float pPartialTick) {
+    public void render(PoseStack pGuiGraphics, int pMouseX, int pMouseY, float pPartialTick) {
         super.render(pGuiGraphics, pMouseX, pMouseY, pPartialTick);
 
         // Draw money string
         long money = ClientBankManager.getBalance();
-        //pGuiGraphics.fill(balanceLabelRect.x, balanceLabelRect.y, balanceLabelRect.x + balanceLabelRect.width, balanceLabelRect.y + balanceLabelRect.height, 0x7F000000);
-        pGuiGraphics.drawString(font, "Balance: $" + money, balanceLabelRect.x, balanceLabelRect.y, 0xFFFFFF);
+        Minecraft.getInstance().font.draw(pGuiGraphics, "Balance: $" + money, balanceLabelRect.x, balanceLabelRect.y, 0xFFFFFF);
 
         drawItemScrolList(pGuiGraphics);
         renderTooltip(pGuiGraphics, pMouseX, pMouseY);
@@ -410,7 +419,7 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
 
 
 
-    private void drawItemScrolList(GuiGraphics graphics)
+    private void drawItemScrolList(PoseStack graphics)
     {
         // Render visible buttons
         int startIndex = Math.max(0, scrollOffset);
@@ -427,7 +436,7 @@ public class BankTerminalScreen extends AbstractContainerScreen<BankTerminalCont
         if (bankElements.size() > visibleCount) {
             int scrollbarHeight = (int) ((float) visibleCount / bankElements.size() * itemListViewRect.height);
             int scrollbarY = itemListViewRect.y + (int) ((float) scrollOffset / bankElements.size() * itemListViewRect.height);
-            graphics.fill(
+            fill(graphics,
                     itemListViewRect.x + itemListViewRect.width - 6, scrollbarY,
                     itemListViewRect.x + itemListViewRect.width, scrollbarY + scrollbarHeight,
                     0xFFAAAAAA // Scrollbar color

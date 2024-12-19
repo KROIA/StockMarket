@@ -31,7 +31,7 @@ import net.minecraft.world.item.Items;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
 import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.event.BuildCreativeModeTabContentsEvent;
+import net.minecraftforge.event.CreativeModeTabEvent;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -78,7 +78,9 @@ public class StockMarketMod
 
 
 
-        ModCreativeModTabs.register(modEventBus);
+
+        // Register event listeners
+        modEventBus.addListener(this::registerCreativeTabs);
         ModItems.register(modEventBus);
         ModBlocks.register(modEventBus);
         ModEntities.register(modEventBus);
@@ -94,10 +96,6 @@ public class StockMarketMod
         //modEventBus.addListener(this::onServerStarting);
 
 
-        // Register the item to a creative tab
-        modEventBus.addListener(this::addCreative);
-
-
 
         // Register event listeners to differentiate client and server_sender
         DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> this::setupClient);
@@ -109,6 +107,11 @@ public class StockMarketMod
         MinecraftForge.EVENT_BUS.addListener(StockMarketMod::onRegisterCommands);
         // Register client-side commands only on the client
         //MinecraftForge.EVENT_BUS.addListener(StockMarketMod::onRegisterClientCommands);
+    }
+
+    private void registerCreativeTabs(CreativeModeTabEvent.Register event) {
+        // Register the creative tabs
+        ModCreativeModTabs.registerCreativeTabs(event);
     }
 
     public static void onRegisterCommands(RegisterCommandsEvent event) {
@@ -180,29 +183,6 @@ public class StockMarketMod
         return side == Side.SINGLE_PLAYER || side == Side.MULTIPLAYER_SERVER;
     }
 
-    // Add the example block item to the building blocks tab
-    private void addCreative(BuildCreativeModeTabContentsEvent event)
-    {
-        if(event.getTabKey() == CreativeModeTabs.INGREDIENTS)
-        {
-            //event.accept()
-        }
-    }
-
-    // You can use SubscribeEvent and let the Event Bus discover methods to call
-    /*@SubscribeEvent
-    public void onServerStarting(ServerStartingEvent event)
-    {
-        // Do something when the server_sender starts
-        LOGGER.info("HELLO from server_sender starting");
-        ServerMarket.init();
-
-
-
-
-
-
-    }*/
 
     // You can use EventBusSubscriber to automatically register all static methods in the class annotated with @SubscribeEvent
     @Mod.EventBusSubscriber(modid = MODID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)

@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.util.geometry;
 
-import net.minecraft.client.gui.GuiGraphics;
+import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.client.gui.GuiComponent;
 
 public class Rectangle {
     public int x;
@@ -14,8 +15,8 @@ public class Rectangle {
         this.height = height;
     }
 
-    public void render(GuiGraphics graphics, int color) {
-        graphics.fill(x, y, x + width, y + height, color);
+    public void render(PoseStack graphics, int color) {
+        GuiComponent.fill(graphics,x, y, x + width, y + height, color);
     }
 
     public boolean isMouseOver(double mouseX, double mouseY) {
