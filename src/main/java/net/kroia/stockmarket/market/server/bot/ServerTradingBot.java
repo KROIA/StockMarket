@@ -1,20 +1,16 @@
 package net.kroia.stockmarket.market.server.bot;
 
-import net.kroia.stockmarket.ModSettings;
-import net.kroia.stockmarket.banking.BankUser;
-import net.kroia.stockmarket.banking.ServerBankManager;
-import net.kroia.stockmarket.banking.bank.Bank;
-import net.kroia.stockmarket.banking.bank.BotMoneyBank;
+import net.kroia.modutilities.ServerSaveable;
+import net.kroia.stockmarket.StockMarketModSettings;
+import net.kroia.banksystem.banking.BankUser;
+import net.kroia.banksystem.banking.ServerBankManager;
+import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.stockmarket.market.server.MarketManager;
 import net.kroia.stockmarket.market.server.MatchingEngine;
+import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.MarketOrder;
-import net.kroia.stockmarket.market.server.order.Order;
-import net.kroia.stockmarket.util.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.ListTag;
-import net.minecraft.nbt.LongArrayTag;
-import net.minecraft.nbt.LongTag;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -34,11 +30,11 @@ public class ServerTradingBot implements ServerSaveable {
     public static class Settings implements ServerSaveable
     {
         public boolean enabled = true;
-        public int maxOrderCount = ModSettings.MarketBot.MAX_ORDERS;
-        public double volumeScale = ModSettings.MarketBot.VOLUME_SCALE;
-        public double volumeSpread = ModSettings.MarketBot.VOLUME_SPREAD;
-        public double volumeRandomness = ModSettings.MarketBot.VOLUME_RANDOMNESS;
-        public long updateTimerIntervallMS = ModSettings.MarketBot.UPDATE_TIMER_INTERVAL_MS;
+        public int maxOrderCount = StockMarketModSettings.MarketBot.MAX_ORDERS;
+        public double volumeScale = StockMarketModSettings.MarketBot.VOLUME_SCALE;
+        public double volumeSpread = StockMarketModSettings.MarketBot.VOLUME_SPREAD;
+        public double volumeRandomness = StockMarketModSettings.MarketBot.VOLUME_RANDOMNESS;
+        public long updateTimerIntervallMS = StockMarketModSettings.MarketBot.UPDATE_TIMER_INTERVAL_MS;
 
         @Override
         public boolean save(CompoundTag tag) {
@@ -236,7 +232,7 @@ public class ServerTradingBot implements ServerSaveable {
 
     public UUID getUUID()
     {
-        return ServerBankManager.getBotUser().getOwnerUUID();
+        return ServerMarket.getBotUser().getPlayerUUID();
     }
     public String getItemID()
     {
@@ -265,7 +261,7 @@ public class ServerTradingBot implements ServerSaveable {
 
     protected void createOrders()
     {
-        BankUser user = ServerBankManager.getBotUser();
+        BankUser user = ServerMarket.getBotUser();
         Bank moneyBank = user.getMoneyBank();
         String itemID = parent.getItemID();
         Bank itemBank = user.getBank(itemID);
@@ -320,7 +316,7 @@ public class ServerTradingBot implements ServerSaveable {
     {
         if(volume <= 0 || price < 0 || matchingEngine == null)
             return false;
-        BankUser user = ServerBankManager.getBotUser();
+        BankUser user = ServerMarket.getBotUser();
         Bank moneyBank = user.getMoneyBank();
         String itemID = parent.getItemID();
         Bank itemBank = user.getBank(itemID);
@@ -338,7 +334,7 @@ public class ServerTradingBot implements ServerSaveable {
     {
         if(volume <= 0 || price < 0 || matchingEngine == null)
             return false;
-        BankUser user = ServerBankManager.getBotUser();
+        BankUser user = ServerMarket.getBotUser();
         Bank moneyBank = user.getMoneyBank();
         String itemID = parent.getItemID();
         Bank itemBank = user.getBank(itemID);
@@ -356,7 +352,7 @@ public class ServerTradingBot implements ServerSaveable {
     {
         if(volume == 0 || price < 0 || matchingEngine == null)
             return false;
-        BankUser user = ServerBankManager.getBotUser();
+        BankUser user = ServerMarket.getBotUser();
         Bank moneyBank = user.getMoneyBank();
         String itemID = parent.getItemID();
         Bank itemBank = user.getBank(itemID);
@@ -377,7 +373,7 @@ public class ServerTradingBot implements ServerSaveable {
     {
         if(volume <= 0 || matchingEngine == null)
             return false;
-        BankUser user = ServerBankManager.getBotUser();
+        BankUser user = ServerMarket.getBotUser();
         Bank moneyBank = user.getMoneyBank();
         String itemID = parent.getItemID();
         Bank itemBank = user.getBank(itemID);
@@ -394,7 +390,7 @@ public class ServerTradingBot implements ServerSaveable {
     {
         if(volume == 0 || matchingEngine == null)
             return false;
-        BankUser user = ServerBankManager.getBotUser();
+        BankUser user = ServerMarket.getBotUser();
         Bank moneyBank = user.getMoneyBank();
         String itemID = parent.getItemID();
         Bank itemBank = user.getBank(itemID);
@@ -411,7 +407,7 @@ public class ServerTradingBot implements ServerSaveable {
     {
         if(volume == 0 || matchingEngine == null)
             return false;
-        BankUser user = ServerBankManager.getBotUser();
+        BankUser user = ServerMarket.getBotUser();
         Bank moneyBank = user.getMoneyBank();
         String itemID = parent.getItemID();
         Bank itemBank = user.getBank(itemID);

@@ -1,13 +1,9 @@
 package net.kroia.stockmarket.market.server.bot;
 
-import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.banking.BankUser;
-import net.kroia.stockmarket.banking.ServerBankManager;
-import net.kroia.stockmarket.banking.bank.Bank;
-import net.kroia.stockmarket.banking.bank.BotMoneyBank;
-import net.kroia.stockmarket.market.server.MarketManager;
-import net.kroia.stockmarket.market.server.MatchingEngine;
-import net.kroia.stockmarket.market.server.order.MarketOrder;
+import net.kroia.banksystem.banking.BankUser;
+import net.kroia.banksystem.banking.ServerBankManager;
+import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.util.MeanRevertingRandomWalk;
 import net.minecraft.nbt.CompoundTag;
 
@@ -163,7 +159,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
 
     @Override
     public void createOrders() {
-        BankUser user = ServerBankManager.getBotUser();
+        BankUser user = ServerMarket.getBotUser();
         Bank moneyBank = user.getMoneyBank();
         String itemID = parent.getItemID();
         Bank itemBank = user.getBank(itemID);

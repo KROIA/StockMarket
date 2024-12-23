@@ -5,7 +5,7 @@ import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 
 import java.util.HashMap;
 
-public class ModSettings {
+public class StockMarketModSettings {
     //public static final long SAVE_TICK_INTERVAL = 20 * 60 * 5; // 20 ticks per second
 
     public static final class Player

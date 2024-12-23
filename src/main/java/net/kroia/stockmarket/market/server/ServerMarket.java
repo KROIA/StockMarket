@@ -1,10 +1,11 @@
 package net.kroia.stockmarket.market.server;
 
-import net.kroia.stockmarket.ModSettings;
+import net.kroia.banksystem.banking.BankUser;
+import net.kroia.banksystem.banking.ServerBankManager;
+import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.modutilities.ServerSaveable;
+import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.banking.BankUser;
-import net.kroia.stockmarket.banking.ServerBankManager;
-import net.kroia.stockmarket.banking.bank.Bank;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBotFactory;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
@@ -19,7 +20,6 @@ import net.kroia.stockmarket.networking.packet.server_sender.update.SyncPricePac
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncTradeItemsPacket;
 import net.kroia.stockmarket.util.OrderbookVolume;
 import net.kroia.stockmarket.util.PriceHistory;
-import net.kroia.stockmarket.util.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.server.MinecraftServer;
@@ -36,15 +36,17 @@ public class ServerMarket implements ServerSaveable
     //private static final Map<String, MarketManager> marketManagers = new HashMap<>();
     //private static final Map<String, ArrayList<ServerPlayer>> playerSubscriptions = new HashMap<>();
     //private static MarketData marketData;
-    public static long shiftPriceHistoryInterval = ModSettings.Market.SHIFT_PRICE_CANDLE_INTERVAL_MS; // in ms
+    public static long shiftPriceHistoryInterval = StockMarketModSettings.Market.SHIFT_PRICE_CANDLE_INTERVAL_MS; // in ms
 
     private static final Map<String, ServerTradeItem> tradeItems = new HashMap<>();
+
+    private static UUID botUserUUID = UUID.nameUUIDFromBytes(StockMarketModSettings.MarketBot.USER_NAME.getBytes());
 
     public static void init()
     {
 
         //ServerBankManager.createUser(UUID.randomUUID(), new ArrayList<>(), true, 1000_000);
-        for(var item : ModSettings.Market.TRADABLE_ITEMS.entrySet())
+        for(var item : StockMarketModSettings.Market.TRADABLE_ITEMS.entrySet())
         {
             addTradeItemIfNotExists(item.getKey(), item.getValue());
         }
@@ -60,16 +62,16 @@ public class ServerMarket implements ServerSaveable
             item.clear();
         }
         tradeItems.clear();
-        shiftPriceHistoryInterval = ModSettings.Market.SHIFT_PRICE_CANDLE_INTERVAL_MS;
+        shiftPriceHistoryInterval = StockMarketModSettings.Market.SHIFT_PRICE_CANDLE_INTERVAL_MS;
     }
 
     public static void createDefaultBots()
     {
-        if(ModSettings.MarketBot.ENABLED)
+        if(StockMarketModSettings.MarketBot.ENABLED)
         {
-            BankUser botUser = ServerBankManager.getBotUser();
+            BankUser botUser = getBotUser();
             StockMarketMod.LOGGER.info("[SERVER] Creating trading bots");
-            HashMap<String, ServerTradingBotFactory.BotBuilderContainer> bots = ModSettings.MarketBot.createBots();
+            HashMap<String, ServerTradingBotFactory.BotBuilderContainer> bots = StockMarketModSettings.MarketBot.createBots();
 
             for(var item : bots.entrySet())
             {
@@ -90,6 +92,19 @@ public class ServerMarket implements ServerSaveable
             }
             bots.clear();
         }
+    }
+
+    public static BankUser getBotUser()
+    {
+        return ServerBankManager.getUser(botUserUUID);
+    }
+    public static BankUser createBotUser()
+    {
+        BankUser bankUser = ServerBankManager.getUser(botUserUUID);
+        if(bankUser != null)
+            return bankUser;
+        bankUser = ServerBankManager.createUser(botUserUUID, StockMarketModSettings.MarketBot.USER_NAME, new ArrayList<>(), true, StockMarketModSettings.MarketBot.STARTING_BALANCE);
+        return bankUser;
     }
 
     public static void addTradeItem(String itemID, int startPrice)
@@ -451,6 +466,7 @@ public class ServerMarket implements ServerSaveable
             tradeItems.add(tradeItemTag);
         }
         tag.put("tradeItems", tradeItems);
+
         return success;
     }
 

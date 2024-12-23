@@ -1,9 +1,5 @@
 package net.kroia.stockmarket.util;
 
-import net.kroia.stockmarket.ModSettings;
-import net.kroia.stockmarket.banking.ServerBankManager;
-import net.kroia.stockmarket.banking.bank.ClientBankManager;
-import net.kroia.stockmarket.market.client.ClientMarket;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.event.entity.player.PlayerEvent;
@@ -20,8 +16,6 @@ public class PlayerEvents {
     public static void onPlayerJoin(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
             ServerPlayerList.addPlayer(player);
-            ServerBankManager.createUser(player.getUUID(),new ArrayList<>(),true, ModSettings.Player.STARTING_BALANCE);
-
             //player.sendSystemMessage(Component.literal("Welcome to the server_sender, " + player.getName().getString() + "!"));
             //System.out.println(player.getName().getString() + " joined the server_sender.");
         }

@@ -1,12 +1,12 @@
 {
   "parent": "minecraft:block/cube_all",
   "textures": {
-    "west": "stockmarket:block/metal_case_block",
-    "east": "stockmarket:block/metal_case_block",
+    "west": "banksystem:block/metal_case_block",
+    "east": "banksystem:block/metal_case_block",
     "north": "stockmarket:block/stock_market_block_front",
-    "south": "stockmarket:block/metal_case_block",
-    "down": "stockmarket:block/metal_case_block",
-    "up": "stockmarket:block/metal_case_block",
-    "particle": "stockmarket:block/metal_case_block"
+    "south": "banksystem:block/metal_case_block",
+    "down": "banksystem:block/metal_case_block",
+    "up": "banksystem:block/metal_case_block",
+    "particle": "banksystem:block/metal_case_block"
   }
 }

@@ -11,11 +11,11 @@
       "entries": [
         {
           "type": "minecraft:item",
-          "name": "stockmarket:terminal_block"
+          "name": "banksystem:terminal_block"
         }
       ],
       "rolls": 1.0
     }
   ],
-  "random_sequence": "stockmarket:blocks/terminal_block"
+  "random_sequence": "banksystem:blocks/terminal_block"
 }

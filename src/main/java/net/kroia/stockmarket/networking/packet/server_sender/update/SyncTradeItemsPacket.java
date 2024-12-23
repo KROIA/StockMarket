@@ -1,10 +1,10 @@
 package net.kroia.stockmarket.networking.packet.server_sender.update;
 
+import net.kroia.modutilities.networking.NetworkPacket;
 import net.kroia.stockmarket.market.client.ClientMarket;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.market.server.ServerTradeItem;
 import net.kroia.stockmarket.networking.ModMessages;
-import net.kroia.stockmarket.networking.packet.NetworkPacket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 

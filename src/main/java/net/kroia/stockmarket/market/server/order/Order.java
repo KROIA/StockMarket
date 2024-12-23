@@ -1,9 +1,9 @@
 package net.kroia.stockmarket.market.server.order;
 
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.banking.BankUser;
-import net.kroia.stockmarket.banking.bank.Bank;
-import net.kroia.stockmarket.banking.ServerBankManager;
+import net.kroia.banksystem.banking.BankUser;
+import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncOrderPacket;
 import net.kroia.stockmarket.util.ServerPlayerList;
 import net.minecraft.network.FriendlyByteBuf;

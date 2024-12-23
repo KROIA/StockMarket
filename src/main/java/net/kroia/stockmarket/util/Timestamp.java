@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.util;
 
+import net.kroia.modutilities.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 

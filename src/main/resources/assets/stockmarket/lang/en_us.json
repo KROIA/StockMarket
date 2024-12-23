@@ -1,24 +1,12 @@
 {
   "block.stockmarket.stock_market_block": "Stock Market Terminal Block",
-  "block.stockmarket.bank_terminal_block": "Bank Terminal Block",
-  "block.stockmarket.metal_case_block": "Metal Case Block",
-  "block.stockmarket.terminal_block": "Terminal Block",
   "item.stockmarket.stock_market_block": "Stock Market Block",
-  "item.stockmarket.bank_terminal_block": "Bank Terminal Block",
-  "item.stockmarket.metal_case_block": "Metal Case Block",
-  "item.stockmarket.display": "Display",
-  "item.stockmarket.circuit_board": "Circuit Board",
-  "item.stockmarket.software": "Empty Software",
   "item.stockmarket.trading_software": "Trading Software",
-  "item.stockmarket.banking_software": "Banking Software",
-  "container.stockmarket.bank_terminal_block_entity": "Bank Terminal",
   "gui.stockmarket.stock_market_block_screen": "Stock Market Block",
   "gui.stockmarket.stock_market_block_screen.sell_button": "Sell",
   "gui.stockmarket.stock_market_block_screen.buy_button": "Buy",
   "gui.stockmarket.stock_market_block_screen.select_item_button": "",
   "gui.stockmarket.stock_market_block_screen.order_list_widget.cancel_button_text": "Cancel",
   "gui.stockmarket.stock_market_block_screen.amount_box_tooltip": "Amount of items you want to buy or sell",
-  "gui.stockmarket.stock_market_block_screen.price_box_tooltip": "Price at which you want to buy or sell",
-  "gui.stockmarket.bank_terminal_screen.send_items_to_market_button": "Send items to market",
-  "gui.stockmarket.bank_terminal_screen.receive_items_from_market_button": "Receive items from market"
+  "gui.stockmarket.stock_market_block_screen.price_box_tooltip": "Price at which you want to buy or sell"
 }

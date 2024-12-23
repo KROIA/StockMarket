@@ -1,28 +1,20 @@
 package net.kroia.stockmarket;
 
-import com.mojang.authlib.GameProfile;
-import com.mojang.brigadier.Command;
 import com.mojang.logging.LogUtils;
-import net.kroia.stockmarket.banking.bank.BotMoneyBank;
-import net.kroia.stockmarket.banking.ServerBankManager;
 import net.kroia.stockmarket.block.ModBlocks;
 import net.kroia.stockmarket.command.ModCommands;
 import net.kroia.stockmarket.entity.ModEntities;
 import net.kroia.stockmarket.item.ModCreativeModTabs;
 import net.kroia.stockmarket.item.ModItems;
 import net.kroia.stockmarket.market.server.ServerMarket;
-import net.kroia.stockmarket.market.server.ServerTradeItem;
 import net.kroia.stockmarket.menu.ModMenus;
 import net.kroia.stockmarket.networking.ModMessages;
-import net.kroia.stockmarket.screen.custom.BankTerminalScreen;
 import net.kroia.stockmarket.util.ServerPlayerList;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.MenuScreens;
-import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.players.GameProfileCache;
 import net.minecraft.server.players.PlayerList;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
@@ -37,18 +29,14 @@ import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.DistExecutor;
+import net.minecraftforge.fml.ModList;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.registries.ForgeRegistries;
-import net.minecraftforge.server.ServerLifecycleHooks;
 import org.slf4j.Logger;
 
-import java.lang.reflect.Field;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
 import java.util.UUID;
 
 // The value here should match an entry in the META-INF/mods.toml file
@@ -133,7 +121,14 @@ public class StockMarketMod
 
         //LOGGER.info("HELLO FROM CLIENT COMMON SETUP");
 
-
+        if (ModList.get().isLoaded("banksystem"))
+        {
+            System.out.println("banksystem is loaded");
+        }
+        else
+        {
+            System.out.println("banksystem is not loaded");
+        }
     }
     @SubscribeEvent
     public void onPlayerLogin(ClientPlayerNetworkEvent.LoggingIn event) {
@@ -214,7 +209,6 @@ public class StockMarketMod
             // Some client setup code
             //LOGGER.info("HELLO FROM CLIENT SETUP");
             //LOGGER.info("MINECRAFT NAME >> {}", Minecraft.getInstance().getUser().getName());
-            MenuScreens.register(ModMenus.BANK_TERMINAL_CONTAINER_MENU.get(), BankTerminalScreen::new);
 
 
         }

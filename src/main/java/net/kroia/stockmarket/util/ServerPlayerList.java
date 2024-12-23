@@ -1,6 +1,6 @@
 package net.kroia.stockmarket.util;
 
-import net.kroia.stockmarket.banking.BankUser;
+import net.kroia.modutilities.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.server.MinecraftServer;

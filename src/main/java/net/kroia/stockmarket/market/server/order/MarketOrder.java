@@ -1,8 +1,6 @@
 package net.kroia.stockmarket.market.server.order;
 
-import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.banking.bank.Bank;
-import net.kroia.stockmarket.banking.bank.MoneyBank;
+import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.util.ServerPlayerList;
 import net.minecraft.network.FriendlyByteBuf;

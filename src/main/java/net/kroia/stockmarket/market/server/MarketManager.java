@@ -1,19 +1,17 @@
 package net.kroia.stockmarket.market.server;
 
-import net.kroia.stockmarket.ModSettings;
+import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.modutilities.ServerSaveable;
+import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.banking.ServerBankManager;
-import net.kroia.stockmarket.banking.bank.Bank;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBotFactory;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.util.OrderbookVolume;
 import net.kroia.stockmarket.util.PriceHistory;
-import net.kroia.stockmarket.util.ServerSaveable;
 import net.kroia.stockmarket.util.Timestamp;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.ListTag;
 
 import java.util.ArrayList;
 import java.util.UUID;
@@ -47,7 +45,7 @@ public class MarketManager implements ServerSaveable {
 
     public void setTradingBot(ServerTradingBot bot)
     {
-        if(!ModSettings.MarketBot.ENABLED)
+        if(!StockMarketModSettings.MarketBot.ENABLED)
         {
             StockMarketMod.LOGGER.warn("[MarketManager] Trading bots are disabled");
             return;
@@ -57,10 +55,10 @@ public class MarketManager implements ServerSaveable {
             bot.getParent().removeTradingBot();
         }
         // Check if bot aleady has a item bank
-        Bank itemBank = ServerBankManager.getBotUser().getBank(itemID);
+        Bank itemBank = ServerMarket.getBotUser().getBank(itemID);
         if(itemBank == null)
         {
-            itemBank = ServerBankManager.getBotUser().createItemBank(itemID, 0);
+            itemBank = ServerMarket.getBotUser().createItemBank(itemID, 0);
         }
         else {
             if(bot instanceof ServerVolatilityBot volatilityBot)

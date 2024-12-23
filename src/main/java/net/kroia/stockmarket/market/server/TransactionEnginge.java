@@ -1,10 +1,9 @@
 package net.kroia.stockmarket.market.server;
 
+import net.kroia.banksystem.banking.BankUser;
+import net.kroia.banksystem.banking.ServerBankManager;
+import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.banking.BankUser;
-import net.kroia.stockmarket.banking.bank.Bank;
-import net.kroia.stockmarket.banking.bank.MoneyBank;
-import net.kroia.stockmarket.banking.ServerBankManager;
 import net.kroia.stockmarket.market.server.order.Order;
 
 import java.util.UUID;

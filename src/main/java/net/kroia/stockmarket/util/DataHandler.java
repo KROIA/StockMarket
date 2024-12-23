@@ -1,20 +1,12 @@
 package net.kroia.stockmarket.util;
 
-import net.kroia.stockmarket.ModSettings;
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.banking.ServerBankManager;
 import net.kroia.stockmarket.market.server.ServerMarket;
-import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtIo;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.fml.common.Mod;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 
 
 public class DataHandler {
@@ -22,7 +14,6 @@ public class DataHandler {
 
     private static final String PLAYER_DATA_FILE_NAME = "Player_data.dat";
     private static final String MARKET_DATA_FILE_NAME = "Market_data.dat";
-    private static final String BANK_DATA_FILE_NAME = "Bank_data.dat";
     private static final boolean COMPRESSED = false;
     private static File saveFolder;
 
@@ -76,7 +67,6 @@ public class DataHandler {
         StockMarketMod.LOGGER.info("Saving StockMarket Mod data...");
         boolean success = true;
         success &= save_player();
-        success &= save_bank();
         success &= save_market();
 
         if(success)
@@ -91,7 +81,6 @@ public class DataHandler {
         StockMarketMod.LOGGER.info("Loading StockMarket Mod data...");
         boolean success = true;
         success &= load_player();
-        success &= load_bank();
         success &= load_market();
 
         if(success)
@@ -139,28 +128,6 @@ public class DataHandler {
         return market.load(marketData);
     }
 
-    public static boolean save_bank()
-    {
-        boolean success = true;
-        CompoundTag data = new CompoundTag();
-        CompoundTag bankData = new CompoundTag();
-        success = ServerBankManager.saveToTag(bankData);
-        data.put("banking", bankData);
-        saveDataCompound(BANK_DATA_FILE_NAME, data);
-        return success;
-    }
-
-    public static boolean load_bank()
-    {
-        CompoundTag data = readDataCompound(BANK_DATA_FILE_NAME);
-        if(data == null)
-            return false;
-        if(!data.contains("banking"))
-            return false;
-
-        CompoundTag bankData = data.getCompound("banking");
-        return ServerBankManager.loadFromTag(bankData);
-    }
 
 
     private static CompoundTag readDataCompound(String fileName)

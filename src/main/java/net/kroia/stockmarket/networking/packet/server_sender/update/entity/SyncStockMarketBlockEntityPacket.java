@@ -1,8 +1,8 @@
 package net.kroia.stockmarket.networking.packet.server_sender.update.entity;
 
+import net.kroia.modutilities.networking.NetworkPacket;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
 import net.kroia.stockmarket.networking.ModMessages;
-import net.kroia.stockmarket.networking.packet.NetworkPacket;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;

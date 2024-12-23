@@ -1,12 +1,12 @@
 // TradeScreen.java
 package net.kroia.stockmarket.screen.custom;
 
+import net.kroia.banksystem.banking.ClientBankManager;
+import net.kroia.banksystem.networking.packet.client_sender.request.RequestBankDataPacket;
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.banking.bank.ClientBankManager;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
 import net.kroia.stockmarket.market.client.ClientMarket;
 import net.kroia.stockmarket.market.client.ClientTradeItem;
-import net.kroia.stockmarket.networking.packet.client_sender.request.RequestBankDataPacket;
 import net.kroia.stockmarket.networking.packet.server_sender.update.entity.SyncStockMarketBlockEntityPacket;
 import net.kroia.stockmarket.networking.packet.client_sender.update.entity.UpdateStockMarketBlockEntityPacket;
 import net.kroia.stockmarket.screen.uiElements.ColoredButton;
@@ -20,11 +20,8 @@ import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.flag.FeatureFlagSet;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.TickEvent;

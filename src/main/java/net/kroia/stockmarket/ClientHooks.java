@@ -1,6 +1,6 @@
 package net.kroia.stockmarket;
 
-import net.kroia.stockmarket.entity.custom.BankTerminalBlockEntity;
+import net.kroia.banksystem.entity.custom.BankTerminalBlockEntity;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
 import net.minecraft.client.Minecraft;

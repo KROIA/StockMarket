@@ -1,15 +1,14 @@
 package net.kroia.stockmarket.util;
 
-import net.kroia.stockmarket.ModSettings;
+import net.kroia.modutilities.ServerSaveable;
+import net.kroia.stockmarket.StockMarketModSettings;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.network.FriendlyByteBuf;
 
-import java.util.ArrayList;
-
 public class PriceHistory implements ServerSaveable {
 
-    private final int maxHistorySize = ModSettings.UI.PRICE_HISTORY_SIZE;
+    private final int maxHistorySize = StockMarketModSettings.UI.PRICE_HISTORY_SIZE;
     private int[] lowPrice = new int[maxHistorySize];
     private int[] highPrice = new int[maxHistorySize];
     private int[] closePrice = new int[maxHistorySize];

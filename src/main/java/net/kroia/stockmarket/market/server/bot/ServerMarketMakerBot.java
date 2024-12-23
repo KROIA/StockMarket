@@ -1,10 +1,11 @@
 package net.kroia.stockmarket.market.server.bot;
 
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.banking.ServerBankManager;
-import net.kroia.stockmarket.banking.bank.Bank;
+import net.kroia.banksystem.banking.ServerBankManager;
+import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.stockmarket.market.server.MarketManager;
 import net.kroia.stockmarket.market.server.MatchingEngine;
+import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.market.server.order.MarketOrder;
 import net.kroia.stockmarket.util.MeanRevertingRandomWalk;
 import net.minecraft.nbt.CompoundTag;
@@ -119,8 +120,8 @@ public class ServerMarketMakerBot extends ServerTradingBot {
         int orderVolume = -engine.getVolume(currentPrice, upperPrice)/4;
         if(orderVolume == 0)
             return;
-        Bank moneyBank = ServerBankManager.getBotUser().getMoneyBank();
-        Bank itemBank = ServerBankManager.getBotUser().getBank(getItemID());
+        Bank moneyBank = ServerMarket.getBotUser().getMoneyBank();
+        Bank itemBank = ServerMarket.getBotUser().getBank(getItemID());
 
         int maxVolume = (int)(moneyBank.getBalance()/upperPrice);
 
@@ -144,8 +145,8 @@ public class ServerMarketMakerBot extends ServerTradingBot {
         int orderVolume = engine.getVolume(lowerPrice, currentPrice)/4;
         if(orderVolume == 0)
             return;
-        Bank moneyBank = ServerBankManager.getBotUser().getMoneyBank();
-        Bank itemBank = ServerBankManager.getBotUser().getBank(getItemID());
+        Bank moneyBank = ServerMarket.getBotUser().getMoneyBank();
+        Bank itemBank = ServerMarket.getBotUser().getBank(getItemID());
 
         int maxVolume = (int)(itemBank.getBalance());
 
@@ -161,8 +162,8 @@ public class ServerMarketMakerBot extends ServerTradingBot {
         if(orderVolume == 0)
             return;
         MatchingEngine engine = getMatchingEngine();
-        Bank moneyBank = ServerBankManager.getBotUser().getMoneyBank();
-        Bank itemBank = ServerBankManager.getBotUser().getBank(getItemID());
+        Bank moneyBank = ServerMarket.getBotUser().getMoneyBank();
+        Bank itemBank = ServerMarket.getBotUser().getBank(getItemID());
 
         if(marketTrade(orderVolume))
             print("Bullish: "+orderVolume);
@@ -173,8 +174,8 @@ public class ServerMarketMakerBot extends ServerTradingBot {
         if(orderVolume == 0)
             return;
         MatchingEngine engine = getMatchingEngine();
-        Bank moneyBank = ServerBankManager.getBotUser().getMoneyBank();
-        Bank itemBank = ServerBankManager.getBotUser().getBank(getItemID());
+        Bank moneyBank = ServerMarket.getBotUser().getMoneyBank();
+        Bank itemBank = ServerMarket.getBotUser().getBank(getItemID());
 
         if(marketTrade(-orderVolume))
             print("Bearish: "+orderVolume);

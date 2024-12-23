@@ -1,13 +1,13 @@
 package net.kroia.stockmarket.networking.packet.server_sender.update;
 
 
-import net.kroia.stockmarket.ModSettings;
+import net.kroia.modutilities.networking.NetworkPacket;
+import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.client.ClientMarket;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.networking.ModMessages;
-import net.kroia.stockmarket.networking.packet.NetworkPacket;
 import net.kroia.stockmarket.util.OrderbookVolume;
 import net.kroia.stockmarket.util.PriceHistory;
 import net.minecraft.network.FriendlyByteBuf;
@@ -82,7 +82,7 @@ public class SyncPricePacket extends NetworkPacket {
 
         minPrice = Math.max(0, minPrice);
 
-        int tiles = ModSettings.UI.MAX_ORDERBOOK_TILES;
+        int tiles = StockMarketModSettings.UI.MAX_ORDERBOOK_TILES;
         if(maxPrice-minPrice < tiles)
         {
             tiles = maxPrice-minPrice;
