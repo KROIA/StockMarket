@@ -1,6 +1,4 @@
 package net.kroia.stockmarket.util;
-import net.kroia.stockmarket.ModSettings;
-import net.kroia.stockmarket.banking.BankUser;
 import net.kroia.stockmarket.banking.ServerBankManager;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.minecraft.resources.ResourceKey;
@@ -9,8 +7,8 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.LevelResource;
 import net.minecraftforge.event.level.LevelEvent;
-import net.minecraftforge.event.server.ServerStartedEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.ModList;
 import net.minecraftforge.fml.common.Mod;
 
 import java.io.File;
@@ -38,6 +36,21 @@ public class ServerEvents {
                 DATA_HANDLER.startTimer();
                 ServerBankManager.createBotUser();
 
+
+                if (ModList.get().isLoaded("banksystem"))
+                {
+                    System.out.println("banksystem is loaded");
+
+                /*
+                if(TestAPI.getTestInterface() != null)
+                    TestAPI.getTestInterface().test();
+                else
+                    System.out.println("TestInterface is null");*/
+                }
+                else
+                {
+                    System.out.println("banksystem is not loaded");
+                }
 
 
                 ServerMarket.init();

@@ -121,6 +121,8 @@ repositories {
     // flatDir {
     //     dir 'libs'
     // }
+
+    maven { url 'https://jitpack.io' }
 }
 
 dependencies {
@@ -141,6 +143,8 @@ dependencies {
     // This maps to ./libs/coolmod-${mc_version}-${coolmod_version}.jar
     // The group id is ignored when searching -- in this case, it is "blank"
     // implementation fg.deobf("blank:coolmod-${mc_version}:${coolmod_version}")
+    //implementation 'com.github.KROIA:BankSystem:main-SNAPSHOT'
+    implementation fg.deobf("com.github.KROIA:BankSystem:mc_${minecraft_version}-SNAPSHOT")
 
     // For more info:
     // http://www.gradle.org/docs/current/userguide/artifact_dependencies_tutorial.html
@@ -206,3 +210,11 @@ publishing {
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8' // Use the UTF-8 charset for Java compilation
 }
+/*
+sourceSets {
+    main {
+        java {
+            srcDirs += file('external/utilities/src/main/java')
+        }
+    }
+}*/
