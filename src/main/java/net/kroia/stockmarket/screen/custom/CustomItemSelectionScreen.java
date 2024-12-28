@@ -1,11 +1,15 @@
 package net.kroia.stockmarket.screen.custom;
 
-import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.EditBox;
-import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.Item;
+import net.kroia.modutilities.ItemUtilities;
+import net.kroia.modutilities.gui.Gui;
+import net.kroia.modutilities.gui.GuiScreen;
+import net.kroia.modutilities.gui.elements.Button;
+import net.kroia.modutilities.gui.elements.ItemView;
+import net.kroia.modutilities.gui.elements.TextBox;
+import net.kroia.modutilities.gui.elements.VerticalListView;
+import net.kroia.modutilities.gui.elements.base.GuiElement;
+import net.kroia.modutilities.gui.elements.base.ListView;
+import net.kroia.modutilities.gui.layout.LayoutGrid;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
@@ -17,150 +21,95 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
 
-public class CustomItemSelectionScreen extends Screen {
-    private final Screen parentScreen;
-    private final Set<ResourceLocation> allowedItems;
+public class CustomItemSelectionScreen extends GuiScreen {
+    private class ItemButton extends ItemView {
+
+        public ItemButton(ItemStack stack) {
+            super(stack);
+        }
+
+        @Override
+        public void renderBackground()
+        {
+            super.renderBackground();
+            if(isMouseOver())
+            {
+                drawRect(0,0,getWidth(),getHeight(),0x80FFFFFF);
+            }
+        }
+        @Override
+        public boolean mouseClickedOverElement(int button) {
+            if (button == 0) {
+                onItemSelected.accept(BuiltInRegistries.ITEM.getKey(itemStack.getItem()).toString());
+                minecraft.setScreen(parentScreen);
+                return true;
+            }
+            return false;
+        }
+    }
+
+    private static final int menuWidth = 200;
+    private final GuiScreen parentScreen;
+    private final Set<ItemStack> allowedItems;
     private final Consumer<String> onItemSelected;
 
-    private EditBox searchField;
-    private List<ItemStack> displayedItems = new ArrayList<>();
-    private List<ItemStack> filteredItems = new ArrayList<>();
+    private final TextBox searchField;
+    private final ListView listView;
+    private final Button backButton;
 
-    private int scrollOffset = 0;
-    private static final int ITEMS_PER_ROW = 8;
-    private static final int ROW_HEIGHT = 20;
-    private static final int PADDING = 10;
 
-    public CustomItemSelectionScreen(Screen parentScreen, ArrayList<String> allowedItemsIDs, Consumer<String> onItemSelected) {
-        super(Component.translatable("item_selection.title"));
+
+    public CustomItemSelectionScreen(GuiScreen parentScreen, ArrayList<String> allowedItemsIDs, Consumer<String> onItemSelected, Component title) {
+        super(title);
         this.parentScreen = parentScreen;
         this.onItemSelected = onItemSelected;
 
         this.allowedItems = new HashSet<>();
         for(String itemId : allowedItemsIDs) {
-            this.allowedItems.add(new ResourceLocation(itemId));
+            this.allowedItems.add(ItemUtilities.createItemStackFromId(itemId));
         }
+
+        searchField = new TextBox();
+        searchField.setOnTextChanged(this::updateFilter);
+        listView = new VerticalListView();
+        listView.setLayout(new LayoutGrid(1, 0, false, false,0,menuWidth/20, GuiElement.Alignment.TOP));
+        backButton = new Button(TradeScreen.BACK_BUTTON.getString());
+        backButton.setOnFallingEdge(() -> minecraft.setScreen(parentScreen));
+
+        addElement(searchField);
+        addElement(listView);
+        addElement(backButton);
+
+        updateFilter();
     }
 
     @Override
-    protected void init() {
-        super.init();
+    protected void updateLayout(Gui gui) {
 
-        // Initialize search field
-        this.searchField = new EditBox(this.font, this.width / 2 - 100, PADDING, 200, 20, Component.translatable("item_selection.search"));
-        this.searchField.setResponder(this::updateFilter);
-        this.addWidget(this.searchField);
-
-        // Populate displayed items
-        for (ResourceLocation id : allowedItems) {
-            Item item = BuiltInRegistries.ITEM.get(id);
-            if (item != null) {
-                displayedItems.add(new ItemStack(item));
-            }
-        }
-        this.filteredItems.addAll(this.displayedItems);
-
-        // Add a back button
-        addRenderableWidget(Button.builder(Component.translatable("gui.back"),
-                button -> {
-                    this.minecraft.setScreen(parentScreen);
-                }).bounds(this.width / 2 - 50, this.height - 30, 100, 20).build());
+        int width = getWidth();
+        searchField.setBounds((width - menuWidth) / 2, 10, menuWidth, 20);
+        listView.setBounds((width - menuWidth) / 2, 40, menuWidth, getHeight() -80);
+        backButton.setBounds((width - menuWidth) / 2, getHeight() - 30, menuWidth, 20);
     }
 
-    private void updateFilter(String filter) {
-        filteredItems.clear();
+    private void updateFilter() {
+        String filter = searchField.getText();
+        listView.removeChilds();
+        listView.getLayout().enabled = false;
         if (filter.isEmpty()) {
-            filteredItems.addAll(displayedItems);
+            for (ItemStack stack : allowedItems) {
+                listView.addChild(new ItemButton(stack));
+            }
         } else {
             String lowerFilter = filter.toLowerCase();
-            for (ItemStack stack : displayedItems) {
+            for (ItemStack stack : allowedItems) {
                 String name = stack.getHoverName().getString().toLowerCase();
                 if (name.contains(lowerFilter)) {
-                    filteredItems.add(stack);
+                    listView.addChild(new ItemButton(stack));
                 }
             }
         }
-    }
-
-    @Override
-    //public boolean mouseScrolled(double mouseX, double mouseY, double deltaX, double deltaY) { // 1.20.2
-    public boolean mouseScrolled(double mouseX, double mouseY, double deltaX) {
-        int maxScroll = Math.max(0, (filteredItems.size() + ITEMS_PER_ROW - 1) / ITEMS_PER_ROW - (this.height - 60) / ROW_HEIGHT);
-        scrollOffset = Math.max(0, Math.min(scrollOffset - (int) deltaX, maxScroll));
-        return true;
-    }
-
-    @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button == 0) {
-            int xStart = (this.width - ITEMS_PER_ROW * ROW_HEIGHT) / 2;
-            int yStart = 40;
-            for (int i = 0; i < filteredItems.size(); i++) {
-                int row = (i / ITEMS_PER_ROW) - scrollOffset;
-                if (row < 0 || row >= (this.height - 60) / ROW_HEIGHT) continue;
-
-                int x = xStart + (i % ITEMS_PER_ROW) * ROW_HEIGHT;
-                int y = yStart + row * ROW_HEIGHT;
-
-                if (mouseX >= x && mouseX < x + ROW_HEIGHT && mouseY >= y && mouseY < y + ROW_HEIGHT) {
-                    ItemStack clickedStack = filteredItems.get(i);
-                    ResourceLocation itemId = BuiltInRegistries.ITEM.getKey(clickedStack.getItem());
-                    onItemSelected.accept(itemId.toString());
-                    this.minecraft.setScreen(parentScreen);
-                    return true;
-                }
-            }
-        }
-        return super.mouseClicked(mouseX, mouseY, button);
-    }
-
-    //@Override // 1.20.2
-    public void renderBackground(GuiGraphics pGuiGraphics, int pMouseX, int pMouseY, float pPartialTick)
-    {
-        //super.renderBackground(pGuiGraphics, pMouseX, pMouseY, pPartialTick); // 1.20.2
-        super.renderBackground(pGuiGraphics);
-    }
-    @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(graphics, mouseX, mouseY, partialTick);
-        super.render(graphics, mouseX, mouseY, partialTick);
-        // Draw search field
-        this.searchField.render(graphics, mouseX, mouseY, partialTick);
-
-
-        // Draw item grid
-        int xStart = (this.width - ITEMS_PER_ROW * ROW_HEIGHT) / 2;
-        int yStart = 40;
-
-        for (int i = 0; i < filteredItems.size(); i++) {
-            int row = (i / ITEMS_PER_ROW) - scrollOffset;
-            if (row < 0 || row >= (this.height - 60) / ROW_HEIGHT) continue;
-
-            int x = xStart + (i % ITEMS_PER_ROW) * ROW_HEIGHT;
-            int y = yStart + row * ROW_HEIGHT;
-
-            graphics.renderItem(filteredItems.get(i), x, y);
-        }
-
-
-
-        // Draw tooltips
-        for (int i = 0; i < filteredItems.size(); i++) {
-            int row = (i / ITEMS_PER_ROW) - scrollOffset;
-            if (row < 0 || row >= (this.height - 60) / ROW_HEIGHT) continue;
-
-            int x = xStart + (i % ITEMS_PER_ROW) * ROW_HEIGHT;
-            int y = yStart + row * ROW_HEIGHT;
-
-            if (mouseX >= x && mouseX < x + ROW_HEIGHT && mouseY >= y && mouseY < y + ROW_HEIGHT) {
-                TooltipFlag flag = this.minecraft.options.advancedItemTooltips ? TooltipFlag.Default.ADVANCED : TooltipFlag.Default.NORMAL;
-                graphics.renderTooltip(this.font, filteredItems.get(i), mouseX, mouseY);
-            }
-        }
-    }
-
-    @Override
-    public boolean isPauseScreen() {
-        return false;
+        listView.getLayout().enabled = true;
+        listView.layoutChangedInternal();
     }
 }

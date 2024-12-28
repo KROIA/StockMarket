@@ -23,6 +23,7 @@ public class TradeScreen extends GuiScreen {
     private static final String NAME = "trade_screen";
 
     private static final Component TITLE = Component.translatable(PREFIX + StockMarketMod.MODID + "."+NAME+".stock_market_block_screen");
+    private static final Component ITEM_SELECTION_SCREEN_TITLE = Component.translatable(PREFIX + StockMarketMod.MODID + "."+NAME+".item_selection_screen");
     public static final Component YOUR_BALANCE_LABEL = Component.translatable(PREFIX+StockMarketMod.MODID + "."+NAME+".your_balance");
     public static final Component CHANGE_ITEM_BUTTON = Component.translatable(PREFIX+StockMarketMod.MODID + "."+NAME+".change_item");
     public static final Component AMOUNT_LABEL = Component.translatable(PREFIX+StockMarketMod.MODID + "."+NAME+".amount");
@@ -35,6 +36,7 @@ public class TradeScreen extends GuiScreen {
     public static final Component CANCEL = Component.translatable(PREFIX+ StockMarketMod.MODID + "."+NAME+".cancel");
     public static final Component DIRECTION_LABEL = Component.translatable(PREFIX+ StockMarketMod.MODID + "."+NAME+".direction");
     public static final Component FILLED_LABEL = Component.translatable(PREFIX+ StockMarketMod.MODID + "."+NAME+".filled");
+    public static final Component BACK_BUTTON = Component.translatable(PREFIX+ StockMarketMod.MODID + "."+NAME+".back");
 
 
     public static final int colorGreen = 0x7F00FF00;
@@ -215,7 +217,8 @@ public class TradeScreen extends GuiScreen {
         this.minecraft.setScreen(new CustomItemSelectionScreen(
                 this,
                 ClientMarket.getAvailableTradeItemIdList(),
-                this::onItemSelected
+                this::onItemSelected,
+                ITEM_SELECTION_SCREEN_TITLE
         ));
     }
 }

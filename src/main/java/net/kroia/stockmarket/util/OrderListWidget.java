@@ -1,12 +1,12 @@
 package net.kroia.stockmarket.util;
 
+import net.kroia.modutilities.gui.geometry.Rectangle;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.client.ClientMarket;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.MarketOrder;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
-import net.kroia.stockmarket.util.geometry.Rectangle;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -254,7 +254,7 @@ public class OrderListWidget {
     }
 
     public boolean isMouseOver(double mouseX, double mouseY) {
-        return backgroundRect.isMouseOver(mouseX, mouseY);
+        return backgroundRect.contains(mouseX, mouseY);
     }
     private void drawText(GuiGraphics graphics, float relativeXPos, String text)
     {

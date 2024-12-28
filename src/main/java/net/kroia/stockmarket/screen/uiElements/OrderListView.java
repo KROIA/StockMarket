@@ -2,6 +2,7 @@ package net.kroia.stockmarket.screen.uiElements;
 
 import net.kroia.modutilities.gui.elements.VerticalListView;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
+import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.kroia.stockmarket.market.client.ClientMarket;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
@@ -27,10 +28,12 @@ public class OrderListView extends GuiElement {
         filledLabel = new Label(TradeScreen.FILLED_LABEL.getString());
         priceLabel = new Label(TradeScreen.PRICE_LABEL.getString());
 
-        directionLabel.setLayoutType(OrderView.layoutType);
-        amountLabel.setLayoutType(OrderView.layoutType);
-        filledLabel.setLayoutType(OrderView.layoutType);
-        priceLabel.setLayoutType(OrderView.layoutType);
+        directionLabel.setAlignment(OrderView.alignment);
+        amountLabel.setAlignment(OrderView.alignment);
+        filledLabel.setAlignment(OrderView.alignment);
+        priceLabel.setAlignment(OrderView.alignment);
+
+        activeOrderListView.setLayout(new LayoutVertical(0, 0, true, false));
 
 
         addChild(directionLabel);
@@ -59,6 +62,7 @@ public class OrderListView extends GuiElement {
         filledLabel.setBounds(amountLabel.getRight(),y,_filledWidthRatio,labelHeight);
         priceLabel.setBounds(filledLabel.getRight(),y,_priceWidthRatio,labelHeight);
         activeOrderListView.setBounds(0,y+labelHeight,getWidth(),getHeight()-priceLabel.getBottom());
+
     }
     @Override
     protected void render() {
@@ -101,8 +105,6 @@ public class OrderListView extends GuiElement {
                 viewContentChanged = true;
             }
         }
-        if(viewContentChanged)
-            activeOrderListView.relayout(0,0, VerticalListView.LayoutDirection.VERTICAL, true, false);
     }
 
 

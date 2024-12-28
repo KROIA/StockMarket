@@ -3,12 +3,10 @@ package net.kroia.stockmarket.screen.uiElements;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
-import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.client.ClientMarket;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
-import net.minecraft.network.chat.Component;
 
 public class OrderView extends GuiElement {
 
@@ -20,7 +18,7 @@ public class OrderView extends GuiElement {
     public static final int cancelWidthRatio = 20;
     public static final int summRatio = dirWidthRatio + amountWidthRatio + filledWidthRatio + priceWidthRatio + cancelWidthRatio;
 
-    public static final GuiElement.LayoutType layoutType = GuiElement.LayoutType.CENTER;
+    public static final GuiElement.Alignment alignment = GuiElement.Alignment.CENTER;
 
     private final Label directionLabel;
     private final Label amountLabel;
@@ -43,11 +41,11 @@ public class OrderView extends GuiElement {
         priceLabel = new Label();
         cancelButton = new Button(TradeScreen.CANCEL.getString(), this::onCancelOrder);
 
-        directionLabel.setLayoutType(layoutType);
-        amountLabel.setLayoutType(layoutType);
-        filledLabel.setLayoutType(layoutType);
-        priceLabel.setLayoutType(layoutType);
-        cancelButton.setLayoutType(layoutType);
+        directionLabel.setAlignment(alignment);
+        amountLabel.setAlignment(alignment);
+        filledLabel.setAlignment(alignment);
+        priceLabel.setAlignment(alignment);
+        cancelButton.setLayoutType(alignment);
 
         cancelButton.setIdleColor(cancelNormalColor);
         cancelButton.setHoverColor(cancelHoverColor);

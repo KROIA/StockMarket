@@ -64,19 +64,20 @@ public class TradePanel extends GuiElement {
         changeItemButton = new Button(CHANGE_ITEM_BUTTON.getString());
         changeItemButton.setOnFallingEdge(onItemChangeButtonClicked);
         yourItemBalanceLabel = new Label(YOUR_BALANCE_LABEL.getString());
-        yourItemBalanceLabel.setLayoutType(LayoutType.CENTER);
+        yourItemBalanceLabel.setAlignment(Alignment.CENTER);
         currentItemView = new ItemView();
         currentItemBalanceLabel = new Label();
-        currentItemBalanceLabel.setLayoutType(LayoutType.LEFT);
+        currentItemBalanceLabel.setAlignment(Alignment.LEFT);
         moneyItemView = new ItemView(new ItemStack(BankSystemItems.MONEY.get()));
+        moneyItemView.setShowTooltip(false);
         currentMoneyBalanceLabel = new Label();
-        currentMoneyBalanceLabel.setLayoutType(LayoutType.LEFT);
+        currentMoneyBalanceLabel.setAlignment(Alignment.LEFT);
         currentPriceTextLabel = new Label(PRICE_LABEL.getString());
-        currentPriceTextLabel.setLayoutType(LayoutType.RIGHT);
+        currentPriceTextLabel.setAlignment(Alignment.RIGHT);
         currentPriceLabel = new Label();
-        currentPriceLabel.setLayoutType(LayoutType.LEFT);
+        currentPriceLabel.setAlignment(Alignment.LEFT);
         amountLabel = new Label(AMOUNT_LABEL.getString()+":");
-        amountLabel.setLayoutType(LayoutType.RIGHT);
+        amountLabel.setAlignment(Alignment.RIGHT);
         amountTextBox = new TextBox(0,0,0);
         amountTextBox.setText(""+amount);
         amountTextBox.setAllowLetters(false);
@@ -87,7 +88,7 @@ public class TradePanel extends GuiElement {
         });
 
         marketOrderLabel = new Label(MARKET_ORDER_LABEL.getString());
-        marketOrderLabel.setLayoutType(LayoutType.CENTER);
+        marketOrderLabel.setAlignment(Alignment.CENTER);
         marketBuyButton = new Button(BUY.getString(), onMarketBuyButtonClicked);
         marketBuyButton.setHoverColor(buyButtonHoverColor);
         marketBuyButton.setIdleColor(buyButtonNormalColor);
@@ -98,9 +99,9 @@ public class TradePanel extends GuiElement {
         marketSellButton.setPressedColor(sellButtonPressedColor);
 
         limitOrderLabel = new Label(LIMIT_ORDER_LABEL.getString());
-        limitOrderLabel.setLayoutType(LayoutType.CENTER);
+        limitOrderLabel.setAlignment(Alignment.CENTER);
         limitPriceLabel = new Label(LIMIT_PRICE_LABEL.getString()+":");
-        limitPriceLabel.setLayoutType(LayoutType.RIGHT);
+        limitPriceLabel.setAlignment(Alignment.RIGHT);
         limitPriceTextBox = new TextBox(0,0,0);
         limitPriceTextBox.setText(""+limitPrice);
         limitPriceTextBox.setOnTextChanged(() -> {
@@ -180,7 +181,7 @@ public class TradePanel extends GuiElement {
     @Override
     protected void layoutChanged() {
         int padding = 4;
-        int spacing = 2;
+        int spacing = 4;
         int width = getWidth()-2*padding;
         int height = getHeight()-2*padding;
         int labelHeight = 14;
