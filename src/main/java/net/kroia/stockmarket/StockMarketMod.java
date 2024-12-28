@@ -4,14 +4,13 @@ import com.mojang.logging.LogUtils;
 import net.kroia.stockmarket.block.ModBlocks;
 import net.kroia.stockmarket.command.ModCommands;
 import net.kroia.stockmarket.entity.ModEntities;
-import net.kroia.stockmarket.item.ModCreativeModTabs;
+import net.kroia.stockmarket.item.StockMarketCreativeModeTab;
 import net.kroia.stockmarket.item.ModItems;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.menu.ModMenus;
 import net.kroia.stockmarket.networking.ModMessages;
 import net.kroia.stockmarket.util.ServerPlayerList;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screens.MenuScreens;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -66,7 +65,7 @@ public class StockMarketMod
 
 
 
-        ModCreativeModTabs.register(modEventBus);
+        StockMarketCreativeModeTab.register(modEventBus);
         ModItems.register(modEventBus);
         ModBlocks.register(modEventBus);
         ModEntities.register(modEventBus);

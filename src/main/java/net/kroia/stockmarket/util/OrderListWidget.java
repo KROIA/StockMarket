@@ -82,7 +82,7 @@ public class OrderListWidget {
         public static void renderLegend(GuiGraphics graphics, Rectangle backgroundRect)
         {
             drawText(graphics, backgroundRect, columnPos_direction, "BUY/SELL");
-            drawText(graphics, backgroundRect, columnPos_type, "Type");
+            //drawText(graphics, backgroundRect, columnPos_type, "Type");
             drawText(graphics, backgroundRect, columnPos_amount, "Amount");
             drawText(graphics, backgroundRect, columnPos_filled, "Filled");
             drawText(graphics, backgroundRect, columnPos_price, "Price");

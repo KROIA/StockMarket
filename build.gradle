@@ -118,13 +118,15 @@ repositories {
 
     // If you have mod jar dependencies in ./libs, you can declare them as a repository like so.
     // See https://docs.gradle.org/current/userguide/declaring_repositories.html#sub:flat_dir_resolver
-    // flatDir {
-    //     dir 'libs'
-    // }
+    flatDir {
+        dir "../../BankSystem/mc_${minecraft_version}_BankSystem/build/libs"
+    }
 
     maven { url 'https://jitpack.io' }
 }
-
+/*configurations.all {
+    resolutionStrategy.cacheDynamicVersionsFor 1, 'minutes'
+}*/
 dependencies {
     // Specify the version of Minecraft to use.
     // Any artifact can be supplied so long as it has a "userdev" classifier artifact and is a compatible patcher artifact.
@@ -144,7 +146,9 @@ dependencies {
     // The group id is ignored when searching -- in this case, it is "blank"
     // implementation fg.deobf("blank:coolmod-${mc_version}:${coolmod_version}")
     //implementation 'com.github.KROIA:BankSystem:main-SNAPSHOT'
-    implementation fg.deobf("com.github.KROIA:BankSystem:mc_${minecraft_version}-SNAPSHOT")
+    //implementation fg.deobf("com.github.KROIA:BankSystem:mc_${minecraft_version}-SNAPSHOT")
+    //implementation fg.deobf("com.github.KROIA:BankSystem:mc_${minecraft_version}_v1.1.1")
+    implementation fg.deobf("net.KROIA:banksystem:1.0.0")
 
     // For more info:
     // http://www.gradle.org/docs/current/userguide/artifact_dependencies_tutorial.html

@@ -139,6 +139,7 @@ public class ServerMarket implements ServerSaveable
     {
         ServerTradeItem tradeItem = new ServerTradeItem(itemID, startPrice);
         tradeItems.put(itemID, tradeItem);
+        ServerBankManager.allowItemID(itemID);
 
         MinecraftServer server = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
 

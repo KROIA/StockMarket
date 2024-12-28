@@ -3,10 +3,16 @@
   "item.stockmarket.stock_market_block": "Stock Market Block",
   "item.stockmarket.trading_software": "Trading Software",
   "gui.stockmarket.stock_market_block_screen": "Stock Market Block",
-  "gui.stockmarket.stock_market_block_screen.sell_button": "Sell",
-  "gui.stockmarket.stock_market_block_screen.buy_button": "Buy",
-  "gui.stockmarket.stock_market_block_screen.select_item_button": "",
-  "gui.stockmarket.stock_market_block_screen.order_list_widget.cancel_button_text": "Cancel",
-  "gui.stockmarket.stock_market_block_screen.amount_box_tooltip": "Amount of items you want to buy or sell",
-  "gui.stockmarket.stock_market_block_screen.price_box_tooltip": "Price at which you want to buy or sell"
+  "gui.stockmarket.trade_screen.your_balance": "Your Balance",
+  "gui.stockmarket.trade_screen.change_item": "Change Item",
+  "gui.stockmarket.trade_screen.amount": "Amount",
+  "gui.stockmarket.trade_screen.market_order": "Market Order",
+  "gui.stockmarket.trade_screen.limit_order": "Limit Order",
+  "gui.stockmarket.trade_screen.limit_price": "Limit Price",
+  "gui.stockmarket.trade_screen.price": "Price",
+  "gui.stockmarket.trade_screen.buy": "Buy",
+  "gui.stockmarket.trade_screen.sell": "Sell",
+  "gui.stockmarket.trade_screen.filled": "Filled",
+  "gui.stockmarket.trade_screen.cancel": "Cancel",
+  "gui.stockmarket.trade_screen.direction": "Buy/Sell"
 }

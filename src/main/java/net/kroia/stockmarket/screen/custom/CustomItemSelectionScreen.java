@@ -1,6 +1,5 @@
 package net.kroia.stockmarket.screen.custom;
 
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;

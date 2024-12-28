@@ -1,44 +1,36 @@
-package net.kroia.stockmarket.util;
+package net.kroia.stockmarket.screen.uiElements;
 
+import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
+import net.kroia.stockmarket.util.PriceHistory;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 
 import java.util.ArrayList;
 
-public class CandleStickChart {
+public class CandleStickChart extends GuiElement {
 
     private static int map(int value, int start1, int stop1, int start2, int stop2)
     {
         return start2 + (int)((float)((stop2 - start2) * ((value - start1)) / (float)(stop1 - start1)));
     }
 
-    private final int colorUp = 0x7F00FF00;
-    private final int colorDown = 0x7FFF0000;
+    private final int colorUp = TradeScreen.colorGreen;
+    private final int colorDown = TradeScreen.colorRed;
 
     private int chartViewMinPrice;
     private int chartViewMaxPrice;
-    private int chartViewWidth;
-    private int chartViewHeight;
-    //private int candleWidth;
-
-    private int plotXOffset = 100;
-    private int plotYOffset = 100;
-
     private PriceHistory priceHistory = null;
-    private final TradeScreen parent;
-    public CandleStickChart(TradeScreen parent)
-    {
-        this.parent = parent;
+
+    private static final int PADDING = 10;
+
+    public CandleStickChart(int x, int y, int width, int height) {
+        super(x, y, width, height);
+    }
+    public CandleStickChart() {
+        super(0,0,0,1);
     }
 
-    public void setChartView(int xPos, int yPos, int width, int height)
-    {
-        this.chartViewWidth = width;
-        this.chartViewHeight = height;
-        this.plotXOffset = xPos;
-        this.plotYOffset = yPos;
-    }
     public void setMinMaxPrice(int minPrice, int maxPrice)
     {
         this.chartViewMinPrice = minPrice;
@@ -53,52 +45,39 @@ public class CandleStickChart {
     {
         return chartViewMaxPrice;
     }
-    public int getChartViewWidth()
-    {
-        return chartViewWidth;
-    }
-    public int getChartViewHeight()
-    {
-        return chartViewHeight;
-    }
-    public int getChartPositionX()
-    {
-        return plotXOffset;
-    }
-    public int getChartPositionY()
-    {
-        return plotYOffset;
-    }
 
     public void setPriceHistory(PriceHistory priceHistory)
     {
         this.priceHistory = priceHistory;
-
     }
 
-    public void render(GuiGraphics graphics)
-    {
+    @Override
+    protected void render() {
         if(priceHistory == null)
             return;
 
 
         int labelWidth = 0;
+        int maxLabelWidth = 0;
         int yAxisLabelIncrement = 10;
+        int labelXPos = 5;
+        int chartWidth = 0;
         if(chartViewMaxPrice - chartViewMinPrice > 10)
         {
             yAxisLabelIncrement = (chartViewMaxPrice - chartViewMinPrice)/10;
         }
         // Draw yAxis
-        for(int i=chartViewMinPrice; i<=chartViewMaxPrice; i+=yAxisLabelIncrement)
+        for(int i=chartViewMaxPrice; i>chartViewMinPrice; i-=yAxisLabelIncrement)
         {
             int y = getChartYPos(i);
 
             // Draw text label
             String label = String.valueOf(i);
-            Minecraft minecraft = getMinecraft();
-            labelWidth = minecraft.font.width(label);
-            graphics.drawString(minecraft.font, label, plotXOffset, plotYOffset + y - 4, 0xFFFFFFFF, false);
-            graphics.fill(plotXOffset+labelWidth, plotYOffset + y, plotXOffset + chartViewWidth, plotYOffset + y + 1, 0xFF808080);
+            labelWidth = getFont().width(label);
+            maxLabelWidth = Math.max(maxLabelWidth, labelWidth);
+            drawText(label, labelXPos, y - 4, 0xFFFFFFFF);
+            chartWidth = getWidth()-maxLabelWidth-PADDING-labelXPos-5;
+            drawRect(labelXPos+maxLabelWidth+5,  y, chartWidth, 1, 0xFF808080);
 
         }
 
@@ -106,27 +85,32 @@ public class CandleStickChart {
         int candleWidth = 0;
         if(priceHistory != null)
         {
-            candleWidth = (chartViewWidth-labelWidth) / priceHistory.size();
+            candleWidth = chartWidth / priceHistory.size();
             candleWidth = candleWidth | 1; // Make sure it is odd
             if(candleWidth < 3)
                 candleWidth = 3;
         }
-        int x = chartViewWidth-labelWidth-candleWidth;
+        int x = getWidth()-PADDING-maxLabelWidth-candleWidth;
         for(int i=priceHistory.size()-1; i>=0; i--)
         {
             int low = priceHistory.getLowPrice(i);
             int high = priceHistory.getHighPrice(i);
             int close = priceHistory.getClosePrice(i);
             int open = priceHistory.getOpenPrice(i);
-            renderCandle(graphics, x, candleWidth, plotXOffset+labelWidth, plotYOffset, open, close, high, low);
+            renderCandle(x, candleWidth, maxLabelWidth, 0, open, close, high, low);
             x -= candleWidth;
-            if(x < 0)
+            if(x < labelXPos+5)
                 break;
         }
     }
 
+    @Override
+    protected void layoutChanged() {
 
-    public void renderCandle(GuiGraphics graphics, int x,int candleWidth, int xOffset, int yOffset,
+    }
+
+
+    public void renderCandle(int x,int candleWidth, int xOffset, int yOffset,
                                     int open, int close, int high, int low)
     {
         // int wickHighY = (int) (chartViewHeight - ((high - chartViewMinPrice) / (float) (chartViewMaxPrice - chartViewMinPrice)) * chartViewHeight);
@@ -153,28 +137,23 @@ public class CandleStickChart {
 
         if((bodyYMax) - wickYMax > 0) {
             // Wick up
-            graphics.fill(xOffset + x + candleWidth / 2, yOffset + bodyYMax,
-                          xOffset + x + candleWidth / 2+1, yOffset + wickYMax, color);
+            drawRect(xOffset + x + candleWidth / 2, yOffset + bodyYMax,
+                    1, wickYMax-bodyYMax, color);
         }
 
         if(wickYMin - (bodyYMin) > 0)
         {
             // Wick down
-            graphics.fill(xOffset + x + candleWidth / 2, yOffset + bodyYMin,
-                          xOffset + x + candleWidth / 2+1, yOffset + wickYMin, color);
+            drawRect(xOffset + x + candleWidth / 2, yOffset + bodyYMin,
+                          1, wickYMin-bodyYMin, color);
         }
 
-        graphics.fill(xOffset + x, yOffset + bodyYMin,
-                xOffset + x + candleWidth, yOffset + bodyYMax, color);
+        drawRect(xOffset + x, yOffset + bodyYMin,
+                candleWidth, bodyYMax-bodyYMin, color);
     }
 
     private int getChartYPos(int price)
     {
-        return map(price, chartViewMinPrice, chartViewMaxPrice, chartViewHeight, 0);
-    }
-
-    private Minecraft getMinecraft()
-    {
-        return parent.getMinecraft();
+        return map(price, chartViewMinPrice, chartViewMaxPrice, getHeight()-PADDING, PADDING);
     }
 }
