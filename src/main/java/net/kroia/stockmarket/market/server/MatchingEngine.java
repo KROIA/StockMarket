@@ -279,6 +279,19 @@ public class MatchingEngine implements ServerSaveable {
         }
         limitSellOrders.removeAll(toRemove);
     }
+    public void cancelAllOrders()
+    {
+        for(LimitOrder order : limitBuyOrders)
+        {
+            order.markAsCancelled();
+        }
+        limitBuyOrders.clear();
+        for(LimitOrder order : limitSellOrders)
+        {
+            order.markAsCancelled();
+        }
+        limitSellOrders.clear();
+    }
     /*public int cancleOrdersUntilItemVolumeReached(UUID playerOwner, int volume)
     {
         int volumeRemoved = 0;

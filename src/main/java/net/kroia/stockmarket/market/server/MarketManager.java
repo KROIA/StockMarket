@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.market.server;
 
+import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.modutilities.ServerSaveable;
 import net.kroia.stockmarket.StockMarketModSettings;
@@ -41,6 +42,7 @@ public class MarketManager implements ServerSaveable {
             bot.clearOrders();
             removeTradingBot();
         }
+        cancelAllOrders();
     }
 
     public void setTradingBot(ServerTradingBot bot)
@@ -55,6 +57,7 @@ public class MarketManager implements ServerSaveable {
             bot.getParent().removeTradingBot();
         }
         // Check if bot aleady has a item bank
+
         Bank itemBank = ServerMarket.getBotUser().getBank(itemID);
         if(itemBank == null)
         {
@@ -123,6 +126,10 @@ public class MarketManager implements ServerSaveable {
     public void cancelAllOrders(UUID playerUUID)
     {
         matchingEngine.cancelAllOrders(playerUUID);
+    }
+    public void cancelAllOrders()
+    {
+        matchingEngine.cancelAllOrders();
     }
     public ArrayList<Order> getOrders()
     {

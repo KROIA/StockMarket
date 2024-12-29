@@ -63,6 +63,15 @@ description='''${mod_description}'''
     ordering="NONE"
     side="BOTH"
 
+
+[[dependencies.${mod_id}]]
+modId="banksystem" # The mod ID of the required mod
+mandatory=true        # Indicates that this dependency is required
+versionRange="[1.0,)" # The version range of the required mod
+ordering="NONE"       # No specific load order
+side="BOTH"           # Both client and server require this mod
+
+
 # Features are specific properties of the game environment, that you may want to declare you require. This example declares
 # that your mod requires GL version 3.2 or higher. Other features will be added. They are side aware so declaring this won't
 # stop your mod loading on the server_sender for example.

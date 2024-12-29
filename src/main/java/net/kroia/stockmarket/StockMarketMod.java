@@ -1,6 +1,7 @@
 package net.kroia.stockmarket;
 
 import com.mojang.logging.LogUtils;
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.stockmarket.block.ModBlocks;
 import net.kroia.stockmarket.command.ModCommands;
 import net.kroia.stockmarket.entity.ModEntities;
@@ -9,16 +10,20 @@ import net.kroia.stockmarket.item.ModItems;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.menu.ModMenus;
 import net.kroia.stockmarket.networking.ModMessages;
+import net.kroia.stockmarket.util.DataHandler;
 import net.kroia.stockmarket.util.ServerPlayerList;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.PlayerList;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.storage.LevelResource;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
 import net.minecraftforge.common.MinecraftForge;
@@ -36,6 +41,8 @@ import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.registries.ForgeRegistries;
 import org.slf4j.Logger;
 
+import javax.xml.crypto.Data;
+import java.io.File;
 import java.util.UUID;
 
 // The value here should match an entry in the META-INF/mods.toml file
@@ -46,7 +53,6 @@ public class StockMarketMod
     public static final String MODID = "stockmarket";
     // Directly reference a slf4j logger
     public static final Logger LOGGER = LogUtils.getLogger();
-
 
 
     public enum Side {
@@ -304,6 +310,31 @@ public class StockMarketMod
         // Get the item's ResourceLocation
         ResourceLocation itemLocation = ForgeRegistries.ITEMS.getKey(itemStack.getItem());
         return itemLocation.toString();
+    }
+
+
+
+    public static void loadDataFromFiles(MinecraftServer server)
+    {
+        // First load BankSystem data
+        if(!BankSystemMod.isDataLoaded())
+        {
+            BankSystemMod.loadDataFromFiles(server);
+        }
+        File rootSaveFolder = server.getWorldPath(LevelResource.ROOT).toFile();
+        // Load data from the root save folder
+        DataHandler.setSaveFolder(rootSaveFolder);
+        DataHandler.loadAll();
+    }
+    public static void saveDataToFiles(MinecraftServer server)
+    {
+        File rootSaveFolder = server.getWorldPath(LevelResource.ROOT).toFile();
+        // Load data from the root save folder
+        DataHandler.setSaveFolder(rootSaveFolder);
+        DataHandler.saveAll();
+    }
+    public static boolean isDataLoaded() {
+        return DataHandler.isLoaded();
     }
 
 }

@@ -163,6 +163,8 @@ public class ServerVolatilityBot extends ServerTradingBot {
         Bank moneyBank = user.getMoneyBank();
         String itemID = parent.getItemID();
         Bank itemBank = user.getBank(itemID);
+        if(itemBank == null)
+            return;
 
         long currentItemBalance = itemBank.getTotalBalance();
 

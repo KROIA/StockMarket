@@ -10,44 +10,20 @@ import java.io.IOException;
 
 
 public class DataHandler {
-    private static final String FOLDER_NAME = "stockmarket";
+    private static final String FOLDER_NAME = "Finance/StockMarket";
 
     private static final String PLAYER_DATA_FILE_NAME = "Player_data.dat";
     private static final String MARKET_DATA_FILE_NAME = "Market_data.dat";
     private static final boolean COMPRESSED = false;
     private static File saveFolder;
 
-   // private static ScheduledExecutorService saveScheduler;
-    private static int saveTickCounter = 0;
+    private static boolean isLoaded = false;
 
     public DataHandler()
     {
         //MinecraftForge.EVENT_BUS.addListener(this::onServerTick);
     }
 
-    /*private void onServerTick(net.minecraftforge.event.TickEvent.ServerTickEvent event)
-    {
-        if(event.phase == net.minecraftforge.event.TickEvent.Phase.END)
-        {
-            saveTickCounter++;
-            if(saveTickCounter >= ModSettings.SAVE_TICK_INTERVAL)
-            {
-                saveTickCounter = 0;
-                saveAll();
-            }
-        }
-    }*/
-
-    public static void startTimer()
-    {
-        //saveScheduler = Executors.newSingleThreadScheduledExecutor();
-        //saveScheduler.scheduleAtFixedRate(DataHandler::saveAll, 1, 1, java.util.concurrent.TimeUnit.MINUTES);
-    }
-
-    public static void stopTimer()
-    {
-        //saveScheduler.shutdown();
-    }
 
 
     public static void setSaveFolder(File folder) {
@@ -60,6 +36,10 @@ public class DataHandler {
     }
     public static File getSaveFolder() {
         return saveFolder;
+    }
+
+    public static boolean isLoaded() {
+        return isLoaded;
     }
 
     public static boolean saveAll()
@@ -78,13 +58,16 @@ public class DataHandler {
 
     public static boolean loadAll()
     {
+        isLoaded = false;
         StockMarketMod.LOGGER.info("Loading StockMarket Mod data...");
         boolean success = true;
         success &= load_player();
         success &= load_market();
 
-        if(success)
+        if(success) {
             StockMarketMod.LOGGER.info("StockMarket Mod data loaded successfully.");
+            isLoaded = true;
+        }
         else
             StockMarketMod.LOGGER.error("Failed to load StockMarket Mod data.");
         return success;

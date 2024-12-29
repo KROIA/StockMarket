@@ -17,7 +17,7 @@ public class ClientHooks {
         if(entity instanceof StockMarketBlockEntity stockMarketBlockEntity)
         {
             DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> Minecraft.getInstance().setScreen(new TradeScreen(stockMarketBlockEntity)));
-      }
+        }
         else
         {
             StockMarketMod.LOGGER.warn("Block entity at position: "+pos+" is not of type StockMarketBlockEntity");

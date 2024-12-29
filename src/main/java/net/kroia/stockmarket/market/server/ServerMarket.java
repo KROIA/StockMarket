@@ -3,11 +3,14 @@ package net.kroia.stockmarket.market.server;
 import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.banksystem.banking.events.ServerBankCloseItemBankEvent;
+import net.kroia.banksystem.banking.events.ServerBankEvent;
 import net.kroia.modutilities.ServerSaveable;
 import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBotFactory;
+import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.MarketOrder;
 import net.kroia.stockmarket.market.server.order.Order;
@@ -20,6 +23,7 @@ import net.kroia.stockmarket.networking.packet.server_sender.update.SyncPricePac
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncTradeItemsPacket;
 import net.kroia.stockmarket.util.OrderbookVolume;
 import net.kroia.stockmarket.util.PriceHistory;
+import net.kroia.stockmarket.util.ServerEvents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.server.MinecraftServer;
@@ -44,15 +48,11 @@ public class ServerMarket implements ServerSaveable
 
     public static void init()
     {
-
-        //ServerBankManager.createUser(UUID.randomUUID(), new ArrayList<>(), true, 1000_000);
+        ServerBankManager.addEventListener(ServerMarket::handleBankSystemEvents);
         for(var item : StockMarketModSettings.Market.TRADABLE_ITEMS.entrySet())
         {
             addTradeItemIfNotExists(item.getKey(), item.getValue());
         }
-
-
-
     }
 
     public static void clear()
@@ -75,6 +75,20 @@ public class ServerMarket implements ServerSaveable
 
             for(var item : bots.entrySet())
             {
+                if(!ServerBankManager.isItemIDAllowed(item.getKey()))
+                {
+                    ServerBankManager.allowItemID(item.getKey());
+                }
+                if(!hasItem(item.getKey()))
+                {
+                    ServerTradingBotFactory.BotBuilderContainer botBuilder = item.getValue();
+                    int initialPrice = 0;
+                    if(botBuilder.settings instanceof ServerVolatilityBot.Settings volSettings)
+                    {
+                        initialPrice = volSettings.imbalancePriceRange/2;
+                    }
+                    addTradeItem(item.getKey(),initialPrice);
+                }
                 boolean hasBot = hasTradingBot(item.getKey());
                 if(hasBot)
                     continue;
@@ -132,7 +146,7 @@ public class ServerMarket implements ServerSaveable
             msgTradeItemNotFound(itemID);
             return;
         }
-        item.removeTradingBot();
+        item.cleanup();
         tradeItems.remove(itemID);
     }
     private static void addTradeItem_internal(String itemID, int startPrice)
@@ -209,6 +223,29 @@ public class ServerMarket implements ServerSaveable
             return null;
         }
         return item.getTradingBot();
+    }
+
+    public static void disableAllTradingBots()
+    {
+        for(ServerTradeItem item : tradeItems.values())
+        {
+            ServerTradingBot bot = item.getTradingBot();
+            if(bot != null)
+            {
+                bot.setEnabled(false);
+            }
+        }
+    }
+    public static void enableAllTradingBots()
+    {
+        for(ServerTradeItem item : tradeItems.values())
+        {
+            ServerTradingBot bot = item.getTradingBot();
+            if(bot != null)
+            {
+                bot.setEnabled(true);
+            }
+        }
     }
 
     public static void shiftPriceHistory()
@@ -500,5 +537,18 @@ public class ServerMarket implements ServerSaveable
             return false;
         }
         return loadSuccess;
+    }
+
+    public static void handleBankSystemEvents(ServerBankEvent event)
+    {
+        if(event instanceof ServerBankCloseItemBankEvent closeEvent)
+        {
+            ArrayList<String> removedIDs = closeEvent.getAllRemovedItemIDs();
+            for(String itemID : removedIDs)
+            {
+                removeTradingItem(itemID);
+            }
+        }
+
     }
 }

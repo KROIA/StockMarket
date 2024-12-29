@@ -26,6 +26,8 @@ public class ServerTradeItem implements ServerSaveable {
     private long lastMillis = 0;
     protected long updateTimerIntervallMS = 100;
 
+    private boolean enabled = true;
+
 
     public ServerTradeItem(String itemID, int startPrice)
     {
@@ -42,6 +44,13 @@ public class ServerTradeItem implements ServerSaveable {
         this.marketManager = new MarketManager(this, 0, priceHistory);
 
         MinecraftForge.EVENT_BUS.addListener(this::onServerTick);
+    }
+    public void cleanup()
+    {
+        MinecraftForge.EVENT_BUS.unregister(this);
+        enabled = false;
+        removeTradingBot();
+        clear();
     }
     public static ServerTradeItem loadFromTag(CompoundTag tag)
     {
@@ -211,7 +220,7 @@ public class ServerTradeItem implements ServerSaveable {
 
     @SubscribeEvent
     public void onServerTick(TickEvent.ServerTickEvent event) {
-        if(subscribers.size() == 0)
+        if(subscribers.size() == 0 || !enabled)
             return;
         if (event.phase == TickEvent.Phase.END) {
             long currentTime = System.currentTimeMillis();

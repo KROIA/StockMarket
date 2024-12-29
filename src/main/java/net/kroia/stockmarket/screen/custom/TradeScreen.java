@@ -1,6 +1,7 @@
 // TradeScreen.java
 package net.kroia.stockmarket.screen.custom;
 
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.ClientBankManager;
 import net.kroia.banksystem.networking.packet.client_sender.request.RequestBankDataPacket;
 import net.kroia.modutilities.gui.Gui;
@@ -12,12 +13,16 @@ import net.kroia.stockmarket.market.client.ClientTradeItem;
 import net.kroia.stockmarket.networking.packet.server_sender.update.entity.SyncStockMarketBlockEntityPacket;
 import net.kroia.stockmarket.networking.packet.client_sender.update.entity.UpdateStockMarketBlockEntityPacket;
 import net.kroia.stockmarket.screen.uiElements.*;
+import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
+import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
 
+@Mod.EventBusSubscriber(modid = StockMarketMod.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public class TradeScreen extends GuiScreen {
     private static final String PREFIX = "gui.";
     private static final String NAME = "trade_screen";
@@ -83,6 +88,8 @@ public class TradeScreen extends GuiScreen {
         addElement(orderbookVolumeChart);
         addElement(activeOrderListView);
         addElement(tradePanel);
+
+        MinecraftForge.EVENT_BUS.register(this);
     }
 
 
@@ -94,7 +101,7 @@ public class TradeScreen extends GuiScreen {
         ClientMarket.subscribeMarketUpdate(itemID);
         RequestBankDataPacket.sendRequest();
         // Register the event listener when the screen is initialized
-        MinecraftForge.EVENT_BUS.register(this);
+
 
 
         int padding = 10;
@@ -140,7 +147,9 @@ public class TradeScreen extends GuiScreen {
     }
 
     @SubscribeEvent
-    public void onTick(TickEvent.ClientTickEvent event) {
+    public static void onClientTick(TickEvent.ClientTickEvent event) {
+        if (Minecraft.getInstance().screen != instance || instance == null)
+            return;
         if(event.phase == TickEvent.Phase.END)
         {
             long currentTickCount = System.currentTimeMillis();
@@ -181,7 +190,7 @@ public class TradeScreen extends GuiScreen {
     private void onItemSelected(String itemId) {
         ClientMarket.unsubscribeMarketUpdate(itemID);
         this.itemID = itemId;
-        ClientMarket.subscribeMarketUpdate(itemID);
+       // ClientMarket.subscribeMarketUpdate(itemID);
         itemStack = StockMarketMod.createItemStackFromId(itemID,1);
         tradePanel.setItemStack(itemStack);
     }
