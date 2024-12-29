@@ -3,7 +3,7 @@ package net.kroia.stockmarket.block;
 import net.kroia.banksystem.block.custom.TerminalBlock;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.block.custom.StockMarketBlock;
-import net.kroia.stockmarket.item.ModItems;
+import net.kroia.stockmarket.item.StockMarketItems;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
@@ -14,7 +14,7 @@ import net.minecraftforge.registries.RegistryObject;
 
 import java.util.function.Supplier;
 
-public class ModBlocks {
+public class StockMarketBlocks {
     public static final DeferredRegister<Block> BLOCKS = DeferredRegister.create(ForgeRegistries.BLOCKS, StockMarketMod.MODID);
 
 
@@ -28,7 +28,7 @@ public class ModBlocks {
     }
     private static <T extends Block>RegistryObject<Item> registerBlockItem(String name, RegistryObject<T> block)
     {
-        return ModItems.ITEMS.register(name, () -> new BlockItem(block.get(), new Item.Properties()));
+        return StockMarketItems.ITEMS.register(name, () -> new BlockItem(block.get(), new Item.Properties()));
     }
     public static void register(IEventBus eventBus)
     {

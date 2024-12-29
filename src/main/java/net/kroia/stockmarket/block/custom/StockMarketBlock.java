@@ -30,18 +30,6 @@ public class StockMarketBlock extends TerminalBlock implements EntityBlock {
     public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
         return new StockMarketBlockEntity(pos, state);
     }
-    public void onPlace(BlockState state, Level level, BlockPos pos, BlockState oldState, boolean isMoving) {
-        super.onPlace(state, level, pos, oldState, isMoving);
-        if (!level.isClientSide) {
-            BlockEntity blockEntity = level.getBlockEntity(pos);
-            //StockMarketMod.LOGGER.info("placing block");
-            if (blockEntity instanceof StockMarketBlockEntity) {
-                //StockMarketMod.LOGGER.info("Entity is StockMarketBlock");
-                StockMarketBlockEntity stockMarketBlock = (StockMarketBlockEntity) blockEntity;
-                // Init stockMarketBlock entity if needed
-            }
-        }
-    }
 
     @Override
     public void setPlacedBy(Level world, BlockPos pos, BlockState state, @Nullable LivingEntity placer, ItemStack stack) {

@@ -7,10 +7,6 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.LongArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.banksystem.banking.BankUser;
-import net.kroia.banksystem.banking.bank.Bank;
-import net.kroia.banksystem.banking.bank.MoneyBank;
-import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
@@ -24,7 +20,7 @@ import java.util.ArrayList;
 import java.util.Map;
 import java.util.UUID;
 
-public class ModCommands {
+public class StockMarketCommands {
     // Method to register commands
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
 

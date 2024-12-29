@@ -151,9 +151,21 @@ public class ServerMarket implements ServerSaveable
     }
     private static void addTradeItem_internal(String itemID, int startPrice)
     {
+        ArrayList<String> blackList = StockMarketModSettings.Market.TRADABLE_ITEMS_BLACKLIST;
+        if(blackList.contains(itemID))
+        {
+            StockMarketMod.LOGGER.warn("[SERVER] Item "+itemID+" is blacklisted and cannot be traded");
+            return;
+        }
+        if(!ServerBankManager.allowItemID(itemID))
+        {
+            StockMarketMod.LOGGER.warn("[SERVER] Item "+itemID+" is not allowed in the banking system and therefore cannot be traded");
+            return;
+        }
+
         ServerTradeItem tradeItem = new ServerTradeItem(itemID, startPrice);
         tradeItems.put(itemID, tradeItem);
-        ServerBankManager.allowItemID(itemID);
+
 
         MinecraftServer server = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
 

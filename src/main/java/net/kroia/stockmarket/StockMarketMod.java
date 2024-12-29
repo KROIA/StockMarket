@@ -2,27 +2,25 @@ package net.kroia.stockmarket;
 
 import com.mojang.logging.LogUtils;
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.stockmarket.block.ModBlocks;
-import net.kroia.stockmarket.command.ModCommands;
-import net.kroia.stockmarket.entity.ModEntities;
+import net.kroia.stockmarket.block.StockMarketBlocks;
+import net.kroia.stockmarket.command.StockMarketCommands;
+import net.kroia.stockmarket.entity.StockMarketEntities;
 import net.kroia.stockmarket.item.StockMarketCreativeModeTab;
-import net.kroia.stockmarket.item.ModItems;
+import net.kroia.stockmarket.item.StockMarketItems;
 import net.kroia.stockmarket.market.server.ServerMarket;
-import net.kroia.stockmarket.menu.ModMenus;
+import net.kroia.stockmarket.menu.StockMarketMenus;
 import net.kroia.stockmarket.networking.ModMessages;
 import net.kroia.stockmarket.util.DataHandler;
 import net.kroia.stockmarket.util.ServerPlayerList;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.PlayerList;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.LevelResource;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
@@ -41,7 +39,6 @@ import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.registries.ForgeRegistries;
 import org.slf4j.Logger;
 
-import javax.xml.crypto.Data;
 import java.io.File;
 import java.util.UUID;
 
@@ -72,10 +69,10 @@ public class StockMarketMod
 
 
         StockMarketCreativeModeTab.register(modEventBus);
-        ModItems.register(modEventBus);
-        ModBlocks.register(modEventBus);
-        ModEntities.register(modEventBus);
-        ModMenus.register(modEventBus);
+        StockMarketItems.register(modEventBus);
+        StockMarketBlocks.register(modEventBus);
+        StockMarketEntities.register(modEventBus);
+        StockMarketMenus.register(modEventBus);
 
 
 
@@ -105,13 +102,13 @@ public class StockMarketMod
     }
 
     public static void onRegisterCommands(RegisterCommandsEvent event) {
-        ModCommands.register(event.getDispatcher());
+        StockMarketCommands.register(event.getDispatcher());
     }
 
     /*
     public static void onRegisterClientCommands(RegisterClientCommandsEvent event) {
         // Client-side command registration
-        ModCommands.register(event.getDispatcher());
+        StockMarketCommands.register(event.getDispatcher());
     }*/
 
     private void commonSetup(final FMLCommonSetupEvent event)

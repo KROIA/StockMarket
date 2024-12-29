@@ -1,8 +1,12 @@
 package net.kroia.stockmarket;
 
+import net.kroia.banksystem.BankSystemSettings;
+import net.kroia.banksystem.item.BankSystemItems;
+import net.kroia.modutilities.ItemUtilities;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBotFactory;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 
 public class StockMarketModSettings {
@@ -52,6 +56,13 @@ public class StockMarketModSettings {
             //TRADABLE_ITEMS.put("minecraft:dragon_egg", 10000);
             //TRADABLE_ITEMS.put("minecraft:enchanted_golden_apple", 1000);
             //TRADABLE_ITEMS.put("minecraft:totem_of_undying", 1000);
+        }
+
+        public static final ArrayList<String> TRADABLE_ITEMS_BLACKLIST = new ArrayList<>();
+        static
+        {
+            TRADABLE_ITEMS_BLACKLIST.addAll(BankSystemSettings.Bank.POTENTIAL_ITEM_BLACKLIST);
+            TRADABLE_ITEMS_BLACKLIST.add(ItemUtilities.getItemID(BankSystemItems.MONEY.get()));
         }
     }
 

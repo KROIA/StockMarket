@@ -2,7 +2,7 @@ package net.kroia.stockmarket.entity.custom;
 
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.block.custom.StockMarketBlock;
-import net.kroia.stockmarket.entity.ModEntities;
+import net.kroia.stockmarket.entity.StockMarketEntities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
@@ -25,7 +25,7 @@ public class StockMarketBlockEntity extends BlockEntity /*implements MenuProvide
     private int price;
 
     public StockMarketBlockEntity(BlockPos pos, BlockState state) {
-        super(ModEntities.STOCK_MARKET_BLOCK_ENTITY.get(), pos, state);
+        super(StockMarketEntities.STOCK_MARKET_BLOCK_ENTITY.get(), pos, state);
         StockMarketMod.LOGGER.info("StockMarketBlockEntity created at position " + pos);
         itemID = "minecraft:diamond";
         amount = 1;
