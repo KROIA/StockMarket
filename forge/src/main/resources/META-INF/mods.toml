@@ -33,3 +33,10 @@ mandatory = true
 versionRange = "[9.2.14,)"
 ordering = "AFTER"
 side = "BOTH"
+
+[[dependencies.stockmarket]]
+modId = "banksystem"
+mandatory = true
+versionRange = "1.3.0"
+ordering = "BEFORE"
+side = "BOTH"

@@ -15,7 +15,7 @@
     "intermediate_mappings": "net.fabricmc:intermediary",
     "entrypoints": {
       "init": [
-        "net.kroia.quilt.ExampleModQuilt"
+        "net.kroia.quilt.StockMarketQuilt"
       ]
     },
     "depends": [
@@ -37,7 +37,5 @@
       }
     ]
   },
-  "mixin": [
-    "stockmarket.mixins.json"
-  ]
+  "mixin": []
 }

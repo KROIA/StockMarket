@@ -43,6 +43,8 @@ dependencies {
 
     common(project(path: ':common', configuration: 'namedElements')) { transitive false }
     shadowBundle project(path: ':common', configuration: 'transformProductionQuilt')
+
+    //implementation name: 'banksystem-common-1.1.0-transformProductionQuilt'
 }
 
 processResources {

@@ -1,4 +1,4 @@
-package net.kroia.fabric.client;
+package net.kroia.stockmarket.fabric.client;
 
 import net.fabricmc.api.ClientModInitializer;
 

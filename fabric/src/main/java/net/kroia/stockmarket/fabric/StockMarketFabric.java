@@ -1,8 +1,8 @@
-package net.kroia.fabric;
+package net.kroia.stockmarket.fabric;
 
 import net.fabricmc.api.ModInitializer;
 
-import net.kroia.stockmarket.ExampleMod;
+import net.kroia.stockmarket.StockMarketMod;
 
 public final class StockMarketFabric implements ModInitializer {
     @Override
@@ -12,6 +12,6 @@ public final class StockMarketFabric implements ModInitializer {
         // Proceed with mild caution.
 
         // Run our common setup.
-        ExampleMod.init();
+        StockMarketMod.init();
     }
 }

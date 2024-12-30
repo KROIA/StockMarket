@@ -1,18 +1,17 @@
-package net.kroia.forge;
+package net.kroia.stockmarket.forge;
 
 import dev.architectury.platform.forge.EventBuses;
 import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 
-import net.kroia.stockmarket.ExampleMod;
+import net.kroia.stockmarket.StockMarketMod;
 
-@Mod(ExampleMod.MOD_ID)
+@Mod(StockMarketMod.MOD_ID)
 public final class StockMarketForge {
     public StockMarketForge() {
         // Submit our event bus to let Architectury API register our content on the right time.
-        EventBuses.registerModEventBus(ExampleMod.MOD_ID, FMLJavaModLoadingContext.get().getModEventBus());
+        EventBuses.registerModEventBus(StockMarketMod.MOD_ID, Mod.EventBusSubscriber.Bus.MOD.bus().get());
 
         // Run our common setup.
-        ExampleMod.init();
+        StockMarketMod.init();
     }
 }

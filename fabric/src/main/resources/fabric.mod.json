@@ -16,10 +16,10 @@
   "environment": "*",
   "entrypoints": {
     "main": [
-      "net.kroia.fabric.StockMarketFabric"
+      "net.kroia.stockmarket.fabric.StockMarketFabric"
     ],
     "client": [
-      "net.kroia.fabric.client.StockMarketFabricClient"
+      "net.kroia.stockmarket.fabric.client.StockMarketFabricClient"
     ]
   },
   "mixins": [

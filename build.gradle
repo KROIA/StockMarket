@@ -42,7 +42,8 @@ subprojects {
         //    dir "../../BankSystem/mc_${minecraft_version}_BankSystem/common/build/libs"
         //}
 
-        maven { url 'https://jitpack.io' }
+        //maven { url 'https://jitpack.io' }
+        //mavenLocal()
     }
 
     dependencies {
@@ -54,7 +55,10 @@ subprojects {
             parchment("org.parchmentmc.data:parchment-${rootProject.minecraft_version}:${rootProject.mapping_version}")
         }
 
+        //modImplementation "banksystem:1.1.0"
+        //implementation 'banksystem:common:1.1.0'
 
+        //compileOnly 'banksystem:common:1.1.0-sources'
     }
 
     java {
