@@ -1,0 +1,19 @@
+{
+  "block.stockmarket.stock_market_block": "Stock Market Terminal Block",
+  "item.stockmarket.stock_market_block": "Stock Market Block",
+  "item.stockmarket.trading_software": "Handels Software",
+  "gui.stockmarket.stock_market_block_screen": "Stock Market Block",
+  "gui.stockmarket.trade_screen.your_balance": "Dein Guthaben",
+  "gui.stockmarket.trade_screen.change_item": "Item ändern",
+  "gui.stockmarket.trade_screen.amount": "Mänge",
+  "gui.stockmarket.trade_screen.market_order": "Market Order",
+  "gui.stockmarket.trade_screen.limit_order": "Limit Order",
+  "gui.stockmarket.trade_screen.limit_price": "Preis",
+  "gui.stockmarket.trade_screen.price": "Preis",
+  "gui.stockmarket.trade_screen.buy": "Kaufen",
+  "gui.stockmarket.trade_screen.sell": "Verkaufen",
+  "gui.stockmarket.trade_screen.filled": "Gefüllt",
+  "gui.stockmarket.trade_screen.cancel": "Abbrechen",
+  "gui.stockmarket.trade_screen.direction": "Kaufen/Verkaufen",
+  "gui.stockmarket.trade_screen.back": "Zurück"
+}
