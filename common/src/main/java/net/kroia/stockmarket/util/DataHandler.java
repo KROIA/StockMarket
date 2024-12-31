@@ -49,7 +49,8 @@ public class DataHandler {
         StockMarketMod.LOGGER.info("Saving StockMarket Mod data...");
         boolean success = true;
         success &= save_player();
-        success &= save_market();
+        if(ServerMarket.isInitialized())
+            success &= save_market();
 
         if(success)
             StockMarketMod.LOGGER.info("StockMarket Mod data saved successfully.");

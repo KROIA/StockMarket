@@ -9,6 +9,7 @@ import net.kroia.banksystem.block.custom.TerminalBlock;
 import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.block.custom.StockMarketBlock;
+import net.kroia.stockmarket.item.StockMarketItems;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Block;
@@ -41,8 +42,8 @@ public class StockMarketBlocks {
     public static <T extends Block> RegistrySupplier<T> registerBlock(String name, Supplier<T> block)
     {
         //BankSystemMod.LOGGER.info("Registering Block: " + name);
-        RegistrySupplier<T> toReturn = BLOCKS.register(new ResourceLocation(BankSystemMod.MOD_ID, name), block);
-        BankSystemItems.registerBlockItem(name, toReturn);
+        RegistrySupplier<T> toReturn = BLOCKS.register(new ResourceLocation(StockMarketMod.MOD_ID, name), block);
+        StockMarketItems.registerBlockItem(name, toReturn);
         return toReturn;
     }
 }

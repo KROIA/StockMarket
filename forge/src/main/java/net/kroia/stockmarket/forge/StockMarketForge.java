@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.forge;
 
 import dev.architectury.platform.forge.EventBuses;
+import net.kroia.modutilities.UtilitiesPlatform;
 import net.minecraftforge.fml.common.Mod;
 
 import net.kroia.stockmarket.StockMarketMod;
@@ -10,6 +11,8 @@ public final class StockMarketForge {
     public StockMarketForge() {
         // Submit our event bus to let Architectury API register our content on the right time.
         EventBuses.registerModEventBus(StockMarketMod.MOD_ID, Mod.EventBusSubscriber.Bus.MOD.bus().get());
+
+        UtilitiesPlatform.setPlatform(new UtilitiesPlatformForge());
 
         // Run our common setup.
         StockMarketMod.init();

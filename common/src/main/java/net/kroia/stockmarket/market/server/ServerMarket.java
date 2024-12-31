@@ -40,12 +40,17 @@ public class ServerMarket implements ServerSaveable
     //private static final Map<String, MarketManager> marketManagers = new HashMap<>();
     //private static final Map<String, ArrayList<ServerPlayer>> playerSubscriptions = new HashMap<>();
     //private static MarketData marketData;
+    private static boolean initialized = false;
     public static long shiftPriceHistoryInterval = StockMarketModSettings.Market.SHIFT_PRICE_CANDLE_INTERVAL_MS; // in ms
 
     private static final Map<String, ServerTradeItem> tradeItems = new HashMap<>();
 
     private static UUID botUserUUID = UUID.nameUUIDFromBytes(StockMarketModSettings.MarketBot.USER_NAME.getBytes());
 
+    public static boolean isInitialized()
+    {
+        return initialized;
+    }
     public static void init()
     {
         ServerBankManager.addEventListener(ServerMarket::handleBankSystemEvents);
@@ -53,10 +58,12 @@ public class ServerMarket implements ServerSaveable
         {
             addTradeItemIfNotExists(item.getKey(), item.getValue());
         }
+        initialized = true;
     }
 
     public static void clear()
     {
+        initialized = false;
         for(ServerTradeItem item : tradeItems.values())
         {
             item.clear();
@@ -110,7 +117,12 @@ public class ServerMarket implements ServerSaveable
 
     public static BankUser getBotUser()
     {
-        return ServerBankManager.getUser(botUserUUID);
+        BankUser bot = ServerBankManager.getUser(botUserUUID);
+        if(bot == null)
+        {
+            bot = createBotUser();
+        }
+        return bot;
     }
     public static BankUser createBotUser()
     {

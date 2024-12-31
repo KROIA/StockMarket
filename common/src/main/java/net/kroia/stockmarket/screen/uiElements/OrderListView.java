@@ -46,7 +46,8 @@ public class OrderListView extends GuiElement {
 
     @Override
     protected void layoutChanged() {
-        int width = activeOrderListView.getWidth()-OrderView.padding*2-activeOrderListView.getScrollbarThickness();
+        //int width = activeOrderListView.getWidth()-OrderView.padding*2-activeOrderListView.getScrollbarThickness();
+        int width = getWidth()-OrderView.padding*2-activeOrderListView.getScrollbarThickness();
         int labelHeight = 15;
 
         int _dirWidthRatio = OrderView.dirWidthRatio * width / OrderView.summRatio;

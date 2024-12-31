@@ -5,6 +5,7 @@ import dev.architectury.registry.registries.Registrar;
 import dev.architectury.registry.registries.RegistrarManager;
 import dev.architectury.registry.registries.RegistrySupplier;
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.block.StockMarketBlocks;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
 import net.minecraft.core.registries.Registries;
@@ -16,11 +17,11 @@ import java.util.function.Supplier;
 public class StockMarketEntities {
 
     // 1.19.4
-    public static final Supplier<RegistrarManager> MANAGER = Suppliers.memoize(() -> RegistrarManager.get(BankSystemMod.MOD_ID));
+    public static final Supplier<RegistrarManager> MANAGER = Suppliers.memoize(() -> RegistrarManager.get(StockMarketMod.MOD_ID));
     public static final Registrar<BlockEntityType<?>> BLOCK_ENTITIES = MANAGER.get().get(Registries.BLOCK_ENTITY_TYPE);
 
     // 1.19.3 or below
-    //public static final Supplier<Registries> REGISTRIES = Suppliers.memoize(() -> Registries.get(BankSystemMod.MOD_ID));
+    //public static final Supplier<Registries> REGISTRIES = Suppliers.memoize(() -> Registries.get(StockMarketMod.MOD_ID));
     //public static final Registrar<Item> ITEMS = REGISTRIES.get().get(Registry.ITEM_KEY);
 
     private static boolean initialized = false;
@@ -38,7 +39,7 @@ public class StockMarketEntities {
 
     public static <T extends BlockEntityType<?>> RegistrySupplier<T> registerBlockEntity(String name, Supplier<T> item)
     {
-        //BankSystemMod.LOGGER.info("Registering block entity: " + name);
-        return BLOCK_ENTITIES.register(new ResourceLocation(BankSystemMod.MOD_ID, name), item);
+        //StockMarketMod.LOGGER.info("Registering block entity: " + name);
+        return BLOCK_ENTITIES.register(new ResourceLocation(StockMarketMod.MOD_ID, name), item);
     }
 }

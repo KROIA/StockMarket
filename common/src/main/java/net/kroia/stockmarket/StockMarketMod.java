@@ -2,10 +2,7 @@ package net.kroia.stockmarket;
 
 import com.mojang.logging.LogUtils;
 import dev.architectury.event.events.common.CommandRegistrationEvent;
-import net.kroia.banksystem.BankSystemSettings;
-import net.kroia.banksystem.command.BankSystemCommands;
-import net.kroia.banksystem.menu.BankSystemMenus;
-import net.kroia.banksystem.util.DataHandler;
+import net.kroia.stockmarket.util.DataHandler;
 import net.kroia.stockmarket.block.StockMarketBlocks;
 import net.kroia.stockmarket.command.StockMarketCommands;
 import net.kroia.stockmarket.entity.StockMarketEntities;
@@ -39,7 +36,7 @@ public final class StockMarketMod {
 
     public static void onClientSetup()
     {
-        BankSystemMenus.setupScreens();
+        StockMarketMenus.setupScreens();
 
     }
 

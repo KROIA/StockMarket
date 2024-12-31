@@ -8,6 +8,7 @@ import dev.architectury.registry.registries.RegistrySupplier;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.menu.custom.BankTerminalContainerMenu;
 import net.kroia.banksystem.screen.custom.BankTerminalScreen;
+import net.kroia.stockmarket.StockMarketMod;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.inventory.MenuType;
@@ -17,11 +18,11 @@ import java.util.function.Supplier;
 public class StockMarketMenus {
 
     // 1.19.4
-    public static final Supplier<RegistrarManager> MANAGER = Suppliers.memoize(() -> RegistrarManager.get(BankSystemMod.MOD_ID));
+    public static final Supplier<RegistrarManager> MANAGER = Suppliers.memoize(() -> RegistrarManager.get(StockMarketMod.MOD_ID));
     public static final Registrar<MenuType<?>> MENUS = MANAGER.get().get(Registries.MENU);
 
     // 1.19.3 or below
-    //public static final Supplier<Registries> REGISTRIES = Suppliers.memoize(() -> Registries.get(BankSystemMod.MOD_ID));
+    //public static final Supplier<Registries> REGISTRIES = Suppliers.memoize(() -> Registries.get(StockMarketMod.MOD_ID));
     //public static final Registrar<MenuType<?>> MENUS = REGISTRIES.get().get(Registry.MENU_KEY);
 
     private static boolean initialized = false;

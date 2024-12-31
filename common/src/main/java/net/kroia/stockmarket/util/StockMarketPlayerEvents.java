@@ -2,7 +2,7 @@ package net.kroia.stockmarket.util;
 
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.minecraft.server.level.ServerPlayer;
-public class PlayerEvents {
+public class StockMarketPlayerEvents {
 
 
     public static void onPlayerJoin(ServerPlayer player) {

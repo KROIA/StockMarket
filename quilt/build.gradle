@@ -64,3 +64,13 @@ shadowJar {
 remapJar {
     inputFile.set shadowJar.archiveFile
 }
+sourceSets {
+    main {
+        java {
+            srcDirs += file('../../../BankSystem/mc_1.20.1_BankSystem/external/utilities/src/main/java')
+        }
+        resources {
+            srcDirs += file('../../../BankSystem/mc_1.20.1_BankSystem/external/utilities/src/main/resources')
+        }
+    }
+}

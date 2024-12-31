@@ -211,7 +211,7 @@ public class TradePanel extends GuiElement {
         marketBuyButton.setBounds(x, marketOrderLabel.getBottom()+spacing, (width-spacing)/2, buttonHeight);
         marketSellButton.setBounds(marketBuyButton.getRight()+spacing, marketBuyButton.getTop(), marketBuyButton.getWidth(), marketBuyButton.getHeight());
 
-        limitOrderLabel.setBounds(x, marketBuyButton.getBottom()+spacing*4, width, labelHeight);
+        limitOrderLabel.setBounds(x, marketBuyButton.getBottom()+spacing*2, width, labelHeight);
         limitPriceLabel.setBounds(x, limitOrderLabel.getBottom()+spacing, (width-spacing)/2, labelHeight);
         limitPriceTextBox.setBounds(limitPriceLabel.getRight()+spacing, limitPriceLabel.getTop(), limitPriceLabel.getWidth(), limitPriceLabel.getHeight());
         limitBuyButton.setBounds(x, limitPriceLabel.getBottom()+spacing, (width-spacing)/2, buttonHeight);
