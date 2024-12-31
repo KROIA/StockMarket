@@ -49,7 +49,6 @@ public class ServerEvents {
 
                 // Cleanup
                 ServerMarket.clear();
-                ServerBankManager.clear();
             }
         }
     }
