@@ -1,22 +1,22 @@
 plugins {
     id 'com.github.johnrengelman.shadow'
 }
-
-loom {
-    forge {
-        mixinConfig "stockmarket.mixins.json"
-    }
-}
-
 repositories {
     maven { url 'https://maven.quiltmc.org/repository/release/' }
     flatDir {
         dir "../../../BankSystem/mc_${minecraft_version}_BankSystem/forge/build/libs"
+        dir "../../../MC_ModUtilities/mc_${minecraft_version}_MC_ModUtilities/forge/build/libs"
     }
 
     mavenLocal()
     maven { url 'https://jitpack.io' }
 
+}
+
+loom {
+    forge {
+        mixinConfig "stockmarket.mixins.json"
+    }
 }
 
 architectury {
@@ -58,6 +58,9 @@ dependencies {
 
     //compileOnly("net.kroia:banksystem-forge:1.3.1")
     modImplementation("net.kroia:banksystem-forge:1.3.1")
+    modImplementation("net.kroia:modutilities-forge:1.0.0")
+    include("net.kroia:modutilities-forge:1.0.0")
+
     //include("net.kroia:banksystem-forge:1.3.1")
 }
 

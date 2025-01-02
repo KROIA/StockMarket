@@ -1,7 +1,16 @@
 plugins {
     id 'com.github.johnrengelman.shadow'
 }
+repositories {
+    maven { url 'https://maven.quiltmc.org/repository/release/' }
+    flatDir {
+        dir "../../../MC_ModUtilities/mc_${minecraft_version}_MC_ModUtilities/quilt/build/libs"
+    }
 
+    //mavenLocal()
+    //maven { url 'https://jitpack.io' }
+
+}
 repositories {
     maven { url 'https://maven.quiltmc.org/repository/release/' }
 }
@@ -45,6 +54,9 @@ dependencies {
     shadowBundle project(path: ':common', configuration: 'transformProductionQuilt')
 
     //implementation name: 'banksystem-common-1.1.0-transformProductionQuilt'
+    modImplementation("net.kroia:modutilities-quilt:1.0.0")
+    include("net.kroia:modutilities-quilt:1.0.0")
+
 }
 
 processResources {
@@ -64,7 +76,7 @@ shadowJar {
 remapJar {
     inputFile.set shadowJar.archiveFile
 }
-sourceSets {
+/*sourceSets {
     main {
         java {
             srcDirs += file('../../../BankSystem/mc_1.20.1_BankSystem/external/utilities/src/main/java')
@@ -73,4 +85,4 @@ sourceSets {
             srcDirs += file('../../../BankSystem/mc_1.20.1_BankSystem/external/utilities/src/main/resources')
         }
     }
-}
+}*/
