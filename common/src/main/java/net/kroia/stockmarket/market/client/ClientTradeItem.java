@@ -11,6 +11,7 @@ import net.kroia.stockmarket.networking.packet.server_sender.update.SyncOrderPac
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncPricePacket;
 import net.kroia.stockmarket.util.OrderbookVolume;
 import net.kroia.stockmarket.util.PriceHistory;
+import net.kroia.stockmarket.util.StockMarketTextMessages;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -71,35 +72,36 @@ public class ClientTradeItem {
 
             String limitText = "";
             if(order instanceof LimitOrder)
-                limitText = "\n  Limit price :" + ((LimitOrder) order).getPrice();
+                limitText = "\n  "+StockMarketTextMessages.getOrderLimitPriceMessage(((LimitOrder) order).getPrice());
+            String amountMsg = "\n  "+StockMarketTextMessages.getOrderAmountMessage(Math.abs(order.getAmount()));
             switch(order.getStatus())
             {
                 case PENDING:
-                    PlayerUtilities.printToClientConsole((order.isBuy()?"Buy":"Sell") + " order has been placed"+
-                                    "\n  Amount: "+ Math.abs(order.getAmount()) +
+                    PlayerUtilities.printToClientConsole(StockMarketTextMessages.getOrderHasBeenPlacedMessage(order.isBuy()) +
+                                    amountMsg +
                                     limitText);
                     break;
                 case PROCESSED:
-                    PlayerUtilities.printToClientConsole((order.isBuy()?"Buy":"Sell") + " order has been filled"+
-                                    "\n  Amount: "+ Math.abs(order.getAmount()) +
+                    PlayerUtilities.printToClientConsole(StockMarketTextMessages.getOrderHasBeenFilledMessage(order.isBuy())+
+                                    amountMsg +
                                     limitText +
-                                    "\n  Average price: " + order.getAveragePrice());
+                                    "\n  "+StockMarketTextMessages.getOrderAveragePriceMessage(order.getAveragePrice()));
                     removeOrder(order.getOrderID());
                     break;
 
                 case CANCELLED:
-                    PlayerUtilities.printToClientConsole((order.isBuy()?"Buy":"Sell") + " order has been cancelled"+
-                                    "\n  Amount: "+ Math.abs(order.getAmount()) +
+                    PlayerUtilities.printToClientConsole(StockMarketTextMessages.getOrderHasBeenCancelledMessage(order.isBuy())+
+                                    amountMsg +
                                     limitText);
                     removeOrder(order.getOrderID());
                     break;
 
                 case INVALID:
-                    PlayerUtilities.printToClientConsole((order.isBuy()?"Buy":"Sell") + " order has been cancelled"+
-                                    "\n  Amount: "+ Math.abs(order.getAmount()) +
-                                    "\n  Filled amount: " + order.getFilledAmount() +
+                    PlayerUtilities.printToClientConsole(StockMarketTextMessages.getOrderHasBeenCancelledMessage(order.isBuy())+
+                                    amountMsg +
+                                    "\n  "+StockMarketTextMessages.getOrderFilledAmountMessage(order.getFilledAmount(), order.getItemID()) +
                                     limitText +
-                                    "\n  Invalid reason: " + order.getInvalidReason());
+                                    "\n  "+StockMarketTextMessages.getOrderInvalidReasonMessage(order.getInvalidReason()));
                     removeOrder(order.getOrderID());
                     break;
             }

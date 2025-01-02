@@ -6,6 +6,7 @@ import net.kroia.stockmarket.market.server.order.MarketOrder;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.util.OrderbookVolume;
 import net.kroia.stockmarket.util.PriceHistory;
+import net.kroia.stockmarket.util.StockMarketTextMessages;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 
@@ -153,8 +154,7 @@ public class MatchingEngine implements ServerSaveable {
         limitOrders.removeAll(toRemove);
         if(fillVolume != 0)
         {
-            marketOrder.markAsInvalid("Not enough "+(marketOrder.isBuy()?"sell":"buy")+
-                    " orders to fill the market order");
+            marketOrder.markAsInvalid(StockMarketTextMessages.getOrderInvalidReasonOrdersToFillTransactionMessage(marketOrder.isBuy()));
             return false;
         }
         return true;

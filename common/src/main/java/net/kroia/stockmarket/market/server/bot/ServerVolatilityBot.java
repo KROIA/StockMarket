@@ -11,6 +11,34 @@ import java.util.Random;
 public class ServerVolatilityBot extends ServerTradingBot {
     public static class Settings extends ServerTradingBot.Settings
     {
+        public enum Type
+        {
+            //ServerTradingBot settings
+            ENABLED,
+            MAX_ORDER_COUNT,
+            VOLUME_SCALE,
+            VOLUME_SPREAD,
+            VOLUME_RANDOMNESS,
+            UPDATE_INTERVAL,
+
+
+
+            //ServerVolatilityBot settings
+            VOLATILITY,
+            ORDER_RANDOMNESS,
+            INTEGRATED_ERROR,
+            TARGET_ITEM_BALANCE,
+            TIMER_VOLATILITY_MILLIS,
+            MIN_VOLATILITY_TIMER_MILLIS,
+            MAX_VOLATILITY_TIMER_MILLIS,
+            IMBALANCE_PRICE_RANGE,
+            IMBALANCE_PRICE_CHANGE_FACTOR,
+            IMBALANCE_PRICE_CHANGE_QUAD_FACTOR,
+            PID_P,
+            PID_D,
+            PID_I,
+            PID_I_BOUNDS
+        }
         public double volatility = 100;
         public double orderRandomness = 1;
         public double lastError = 0;
@@ -410,6 +438,9 @@ public class ServerVolatilityBot extends ServerTradingBot {
     }
     public double getintegratedError() {
         return settings.integratedError;
+    }
+    public void setintegratedError(double integratedError) {
+        settings.integratedError = integratedError;
     }
 
 

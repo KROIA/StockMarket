@@ -7,8 +7,8 @@ repositories {
         dir "../../../BankSystem/mc_${minecraft_version}_BankSystem/common/build/libs"
     }
 
-    mavenLocal()
-    maven { url 'https://jitpack.io' }
+    //mavenLocal()
+    //maven { url 'https://jitpack.io' }
 
 }
 
@@ -21,7 +21,8 @@ dependencies {
     // Architectury API. This is optional, and you can comment it out if you don't need it.
     modImplementation "dev.architectury:architectury:$rootProject.architectury_api_version"
 
-    modImplementation("net.kroia:banksystem-common:1.3.0")
+    //modImplementation("net.kroia:banksystem-common:1.3.0")
+    modImplementation("net.kroia:banksystem-common:1.3.1")
     //implementation "net.kroia:banksystem-common:1.3.0"
    // compileOnly "net.kroia:banksystem-common:1.3.0"
     //compileOnly "net.kroia:banksystem-common:1.3.0"

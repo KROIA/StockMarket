@@ -6,6 +6,7 @@ import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.order.Order;
+import net.kroia.stockmarket.util.StockMarketTextMessages;
 
 import java.util.UUID;
 
@@ -69,17 +70,13 @@ public class TransactionEnginge {
             StockMarketMod.LOGGER.error("Insufficient funds from player: " + senderUUID.toString()+
                     " Order1: " + senderOrder + " Order2: " + receiverOrder+
                     " Can't fill order");
-            senderOrder.markAsInvalid("Insufficient funds");
+            senderOrder.markAsInvalid(StockMarketTextMessages.getInsufficientFundMessage());
             String missingText = "";
             if(missingMoney > 0)
-                missingText += "\n  Missing money: $"+missingMoney;
+                missingText += "\n "+StockMarketTextMessages.getMissingMoneyMessage(missingMoney);
             if(missingItems > 0)
-                missingText += "\n  Missing items: "+missingItems;
-            PlayerUtilities.printToClientConsole(senderUUID, "Insufficient funds to consume order:\n  "+receiverOrder.toString()+
-                    "\n  price: $"+currentPrice+
-                    "\n  amount: "+fillVolume+
-                    "\n  total cost: $"+money +
-                    missingText);
+                missingText += "\n  "+StockMarketTextMessages.getMissingItemsMessage(senderOrder.getItemID(), missingItems);
+            PlayerUtilities.printToClientConsole(StockMarketTextMessages.getInsufficientFundToConsumeMessage(receiverOrder.toString(), currentPrice, fillVolume, money)+missingText);
 
             return 0;
         }

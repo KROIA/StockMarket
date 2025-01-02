@@ -13,6 +13,7 @@ import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import net.kroia.stockmarket.util.ServerPlayerList;
+import net.kroia.stockmarket.util.StockMarketTextMessages;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
@@ -102,8 +103,8 @@ public class StockMarketCommands {
                                         })
                                         .then(Commands.argument("itemID", StringArgumentType.string()).suggests((context, builder) -> {
                                                             ArrayList<String> suggestions = ServerMarket.getTradeItemIDs();
-                                                            for(String suggestion : suggestions) {
-                                                                builder.suggest("\""+suggestion+"\"");
+                                                            for (String suggestion : suggestions) {
+                                                                builder.suggest("\"" + suggestion + "\"");
                                                             }
                                                             return builder.buildFuture();
                                                         })
@@ -120,9 +121,9 @@ public class StockMarketCommands {
                                 .then(Commands.argument("username", StringArgumentType.string()).suggests((context, builder) -> {
                                                     //builder.suggest("\""+ ModSettings.MarketBot.USER_NAME +"\"");
                                                     Map<UUID, String> uuidToNameMap = ServerPlayerList.getUuidToNameMap();
-                                                    for(String name : uuidToNameMap.values()) {
+                                                    for (String name : uuidToNameMap.values()) {
 
-                                                        builder.suggest("\""+name+"\"");
+                                                        builder.suggest("\"" + name + "\"");
                                                     }
                                                     return builder.buildFuture();
                                                 })
@@ -136,8 +137,8 @@ public class StockMarketCommands {
                                                         })
                                                         .then(Commands.argument("itemID", StringArgumentType.string()).suggests((context, builder) -> {
                                                                             ArrayList<String> suggestions = ServerMarket.getTradeItemIDs();
-                                                                            for(String suggestion : suggestions) {
-                                                                                builder.suggest("\""+suggestion+"\"");
+                                                                            for (String suggestion : suggestions) {
+                                                                                builder.suggest("\"" + suggestion + "\"");
                                                                             }
                                                                             return builder.buildFuture();
                                                                         })
@@ -158,8 +159,8 @@ public class StockMarketCommands {
 
                         .then(Commands.argument("itemID", StringArgumentType.string()).suggests((context, builder) -> {
                                             ArrayList<String> suggestions = ServerMarket.getTradeItemIDs();
-                                            for(String suggestion : suggestions) {
-                                                builder.suggest("\""+suggestion+"\"");
+                                            for (String suggestion : suggestions) {
+                                                builder.suggest("\"" + suggestion + "\"");
                                             }
                                             return builder.buildFuture();
                                         })
@@ -171,41 +172,39 @@ public class StockMarketCommands {
                                                                     CommandSourceStack source = context.getSource();
                                                                     ServerPlayer player = source.getPlayerOrException();
                                                                     String itemID = ItemUtilities.getNormalizedItemID(StringArgumentType.getString(context, "itemID"));
-                                                                    if(itemID == null) {
+                                                                    if (itemID == null) {
                                                                         player.sendSystemMessage(Component.literal("Item not found"));
                                                                         return Command.SINGLE_SUCCESS;
                                                                     }
                                                                     ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
-                                                                    if(bot instanceof ServerVolatilityBot) {
+                                                                    if (bot instanceof ServerVolatilityBot) {
                                                                         ServerVolatilityBot volatilityBot = (ServerVolatilityBot) bot;
                                                                         StringBuilder msg = new StringBuilder();
-                                                                        msg.append("StockMarketBot settings for item: "+itemID+"\n");
-                                                                        msg.append("| Enabled: "+(volatilityBot.isEnabled()?"Yes":"No")+"\n");
-                                                                        msg.append("| Volatility: "+volatilityBot.getVolatility()+"\n");
-                                                                        msg.append("| Order randomness: "+volatilityBot.getOrderRandomness()+"\n");
-                                                                        msg.append("| Target Price: "+volatilityBot.getTargetPrice()+"\n");
-                                                                        msg.append("| Target Price Range: "+volatilityBot.getImbalancePriceRange()+"\n");
-                                                                        msg.append("| Price change linear fac: "+volatilityBot.getImbalancePriceChangeFactor()+"\n");
-                                                                        msg.append("| Price change quad fac: "+volatilityBot.getImbalancePriceChangeQuadFactor()+"\n");
-                                                                        msg.append("| Target Item Balance: "+volatilityBot.getTargetItemBalance()+"\n");
-                                                                        msg.append("| Max Order count: "+volatilityBot.getMaxOrderCount()+"\n");
-                                                                        msg.append("| Volume scale: "+volatilityBot.getVolumeScale()+"\n");
-                                                                        msg.append("| Volume spread: "+volatilityBot.getVolumeSpread()+"\n");
-                                                                        msg.append("| Volume randomness: "+volatilityBot.getVolumeRandomness()+"\n");
-                                                                        msg.append("| Timer: "+volatilityBot.getTimerMillis()+"ms\n");
-                                                                        msg.append("| Min Timer: "+volatilityBot.getMinTimerMillis()+"ms\n");
-                                                                        msg.append("| Max Timer: "+volatilityBot.getMaxTimerMillis()+"ms\n");
-                                                                        msg.append("| Update Interval: "+volatilityBot.getUpdateInterval()+"ms\n");
-                                                                        msg.append("| PID P: "+volatilityBot.getPidP()+"\n");
-                                                                        msg.append("| PID D: "+volatilityBot.getPidD()+"\n");
-                                                                        msg.append("| PID I: "+volatilityBot.getPidI()+"\n");
-                                                                        msg.append("| PID I Bounds: "+volatilityBot.getPidIBound()+"\n");
+                                                                        msg.append("StockMarketBot settings for item: " + itemID + "\n");
+                                                                        msg.append("| Enabled: " + (volatilityBot.isEnabled() ? "Yes" : "No") + "\n");
+                                                                        msg.append("| Volatility: " + volatilityBot.getVolatility() + "\n");
+                                                                        msg.append("| Order randomness: " + volatilityBot.getOrderRandomness() + "\n");
+                                                                        msg.append("| Target Price: " + volatilityBot.getTargetPrice() + "\n");
+                                                                        msg.append("| Target Price Range: " + volatilityBot.getImbalancePriceRange() + "\n");
+                                                                        msg.append("| Price change linear fac: " + volatilityBot.getImbalancePriceChangeFactor() + "\n");
+                                                                        msg.append("| Price change quad fac: " + volatilityBot.getImbalancePriceChangeQuadFactor() + "\n");
+                                                                        msg.append("| Target Item Balance: " + volatilityBot.getTargetItemBalance() + "\n");
+                                                                        msg.append("| Max Order count: " + volatilityBot.getMaxOrderCount() + "\n");
+                                                                        msg.append("| Volume scale: " + volatilityBot.getVolumeScale() + "\n");
+                                                                        msg.append("| Volume spread: " + volatilityBot.getVolumeSpread() + "\n");
+                                                                        msg.append("| Volume randomness: " + volatilityBot.getVolumeRandomness() + "\n");
+                                                                        msg.append("| Timer: " + volatilityBot.getTimerMillis() + "ms\n");
+                                                                        msg.append("| Min Timer: " + volatilityBot.getMinTimerMillis() + "ms\n");
+                                                                        msg.append("| Max Timer: " + volatilityBot.getMaxTimerMillis() + "ms\n");
+                                                                        msg.append("| Update Interval: " + volatilityBot.getUpdateInterval() + "ms\n");
+                                                                        msg.append("| PID P: " + volatilityBot.getPidP() + "\n");
+                                                                        msg.append("| PID D: " + volatilityBot.getPidD() + "\n");
+                                                                        msg.append("| PID I: " + volatilityBot.getPidI() + "\n");
+                                                                        msg.append("| PID I Bounds: " + volatilityBot.getPidIBound() + "\n");
 
                                                                         player.sendSystemMessage(Component.literal(msg.toString()));
-                                                                    }
-                                                                    else
-                                                                    {
-                                                                        player.sendSystemMessage(Component.literal("Bot not found"));
+                                                                    } else {
+                                                                        PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getBotNotExistMessage(itemID));
                                                                     }
                                                                     // Execute the command on the server_sender
                                                                     return Command.SINGLE_SUCCESS;
@@ -216,20 +215,8 @@ public class StockMarketCommands {
                                                                         .executes(context -> {
                                                                             CommandSourceStack source = context.getSource();
                                                                             ServerPlayer player = source.getPlayerOrException();
-                                                                            String itemID = ItemUtilities.getNormalizedItemID(StringArgumentType.getString(context, "itemID"));
-                                                                            if(itemID == null) {
-                                                                                player.sendSystemMessage(Component.literal("Item not found"));
-                                                                                return Command.SINGLE_SUCCESS;
-                                                                            }
-                                                                            ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
-                                                                            if(bot instanceof ServerVolatilityBot) {
-                                                                                ServerVolatilityBot volatilityBot = (ServerVolatilityBot) bot;
-                                                                                volatilityBot.setEnabled(true);
-                                                                                player.sendSystemMessage(Component.literal("Bot enabled"));
-                                                                            }
-                                                                            else {
-                                                                                player.sendSystemMessage(Component.literal("Bot not found"));
-                                                                            }
+                                                                            String itemID = StringArgumentType.getString(context, "itemID");
+                                                                            bot_set_setting(player, ServerVolatilityBot.Settings.Type.ENABLED, itemID, 1.0);
                                                                             // Execute the command on the server_sender
                                                                             return Command.SINGLE_SUCCESS;
                                                                         })
@@ -238,20 +225,8 @@ public class StockMarketCommands {
                                                                         .executes(context -> {
                                                                             CommandSourceStack source = context.getSource();
                                                                             ServerPlayer player = source.getPlayerOrException();
-                                                                            String itemID = ItemUtilities.getNormalizedItemID(StringArgumentType.getString(context, "itemID"));
-                                                                            if(itemID == null) {
-                                                                                player.sendSystemMessage(Component.literal("Item not found"));
-                                                                                return Command.SINGLE_SUCCESS;
-                                                                            }
-                                                                            ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
-                                                                            if(bot instanceof ServerVolatilityBot) {
-                                                                                ServerVolatilityBot volatilityBot = (ServerVolatilityBot) bot;
-                                                                                volatilityBot.setEnabled(false);
-                                                                                player.sendSystemMessage(Component.literal("Bot disabled"));
-                                                                            }else {
-                                                                                player.sendSystemMessage(Component.literal("Bot not found"));
-                                                                            }
-                                                                            // Execute the command on the server_sender
+                                                                            String itemID = StringArgumentType.getString(context, "itemID");
+                                                                            bot_set_setting(player, ServerVolatilityBot.Settings.Type.ENABLED, itemID, 0.0);
                                                                             return Command.SINGLE_SUCCESS;
                                                                         })
                                                                 )
@@ -260,20 +235,9 @@ public class StockMarketCommands {
                                                                                 .executes(context -> {
                                                                                     CommandSourceStack source = context.getSource();
                                                                                     ServerPlayer player = source.getPlayerOrException();
-                                                                                    String itemID = ItemUtilities.getNormalizedItemID(StringArgumentType.getString(context, "itemID"));
-                                                                                    if(itemID == null) {
-                                                                                        player.sendSystemMessage(Component.literal("Item not found"));
-                                                                                        return Command.SINGLE_SUCCESS;
-                                                                                    }
+                                                                                    String itemID = StringArgumentType.getString(context, "itemID");
                                                                                     int volatility = IntegerArgumentType.getInteger(context, "volatility");
-                                                                                    ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
-                                                                                    if(bot instanceof ServerVolatilityBot) {
-                                                                                        ServerVolatilityBot volatilityBot = (ServerVolatilityBot) bot;
-                                                                                        volatilityBot.setVolatility(volatility);
-                                                                                        player.sendSystemMessage(Component.literal("Volatility set to "+volatility));
-                                                                                    }else {
-                                                                                        player.sendSystemMessage(Component.literal("Bot not found"));
-                                                                                    }
+                                                                                    bot_set_setting(player, ServerVolatilityBot.Settings.Type.VOLATILITY, itemID, volatility);
                                                                                     // Execute the command on the server_sender
                                                                                     return Command.SINGLE_SUCCESS;
                                                                                 })
@@ -284,20 +248,9 @@ public class StockMarketCommands {
                                                                                 .executes(context -> {
                                                                                     CommandSourceStack source = context.getSource();
                                                                                     ServerPlayer player = source.getPlayerOrException();
-                                                                                    String itemID = ItemUtilities.getNormalizedItemID(StringArgumentType.getString(context, "itemID"));
-                                                                                    if(itemID == null) {
-                                                                                        player.sendSystemMessage(Component.literal("Item not found"));
-                                                                                        return Command.SINGLE_SUCCESS;
-                                                                                    }
+                                                                                    String itemID = StringArgumentType.getString(context, "itemID");
                                                                                     double randomness = DoubleArgumentType.getDouble(context, "randomness");
-                                                                                    ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
-                                                                                    if(bot instanceof ServerVolatilityBot) {
-                                                                                        ServerVolatilityBot volatilityBot = (ServerVolatilityBot) bot;
-                                                                                        volatilityBot.setOrderRandomness(randomness);
-                                                                                        player.sendSystemMessage(Component.literal("Order randomness set to "+randomness));
-                                                                                    }else {
-                                                                                        player.sendSystemMessage(Component.literal("Bot not found"));
-                                                                                    }
+                                                                                    bot_set_setting(player, ServerVolatilityBot.Settings.Type.ORDER_RANDOMNESS, itemID, randomness);
                                                                                     // Execute the command on the server_sender
                                                                                     return Command.SINGLE_SUCCESS;
                                                                                 })
@@ -308,19 +261,9 @@ public class StockMarketCommands {
                                                                                 .executes(context -> {
                                                                                     CommandSourceStack source = context.getSource();
                                                                                     ServerPlayer player = source.getPlayerOrException();
-                                                                                    String itemID = ItemUtilities.getNormalizedItemID(StringArgumentType.getString(context, "itemID"));
-                                                                                    if(itemID == null) {
-                                                                                        player.sendSystemMessage(Component.literal("Item not found"));
-                                                                                        return Command.SINGLE_SUCCESS;
-                                                                                    }
+                                                                                    String itemID = StringArgumentType.getString(context, "itemID");
                                                                                     double factor = DoubleArgumentType.getDouble(context, "factor");
-                                                                                    ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
-                                                                                    if(bot instanceof ServerVolatilityBot volatilityBot) {
-                                                                                        volatilityBot.setImbalancePriceChangeFactor(factor);
-                                                                                        player.sendSystemMessage(Component.literal("Imbalance-price-change-factor-linear price range set to "+factor));
-                                                                                    }else {
-                                                                                        player.sendSystemMessage(Component.literal("Bot not found"));
-                                                                                    }
+                                                                                    bot_set_setting(player, ServerVolatilityBot.Settings.Type.IMBALANCE_PRICE_CHANGE_FACTOR, itemID, factor);
                                                                                     // Execute the command on the server_sender
                                                                                     return Command.SINGLE_SUCCESS;
                                                                                 })
@@ -331,19 +274,9 @@ public class StockMarketCommands {
                                                                                 .executes(context -> {
                                                                                     CommandSourceStack source = context.getSource();
                                                                                     ServerPlayer player = source.getPlayerOrException();
-                                                                                    String itemID = ItemUtilities.getNormalizedItemID(StringArgumentType.getString(context, "itemID"));
-                                                                                    if(itemID == null) {
-                                                                                        player.sendSystemMessage(Component.literal("Item not found"));
-                                                                                        return Command.SINGLE_SUCCESS;
-                                                                                    }
+                                                                                    String itemID = StringArgumentType.getString(context, "itemID");
                                                                                     double factor = DoubleArgumentType.getDouble(context, "factor");
-                                                                                    ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
-                                                                                    if(bot instanceof ServerVolatilityBot volatilityBot) {
-                                                                                        volatilityBot.setImbalancePriceChangeQuadFactor(factor);
-                                                                                        player.sendSystemMessage(Component.literal("Imbalance-price-change-factor-quadratic price range set to "+factor));
-                                                                                    }else {
-                                                                                        player.sendSystemMessage(Component.literal("Bot not found"));
-                                                                                    }
+                                                                                    bot_set_setting(player, ServerVolatilityBot.Settings.Type.IMBALANCE_PRICE_CHANGE_QUAD_FACTOR, itemID, factor);
                                                                                     // Execute the command on the server_sender
                                                                                     return Command.SINGLE_SUCCESS;
                                                                                 })
@@ -354,20 +287,10 @@ public class StockMarketCommands {
                                                                                 .executes(context -> {
                                                                                     CommandSourceStack source = context.getSource();
                                                                                     ServerPlayer player = source.getPlayerOrException();
-                                                                                    String itemID = ItemUtilities.getNormalizedItemID(StringArgumentType.getString(context, "itemID"));
-                                                                                    if(itemID == null) {
-                                                                                        player.sendSystemMessage(Component.literal("Item not found"));
-                                                                                        return Command.SINGLE_SUCCESS;
-                                                                                    }
+                                                                                    String itemID = StringArgumentType.getString(context, "itemID");
                                                                                     int balance = IntegerArgumentType.getInteger(context, "balance");
                                                                                     ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
-                                                                                    if(bot instanceof ServerVolatilityBot) {
-                                                                                        ServerVolatilityBot volatilityBot = (ServerVolatilityBot) bot;
-                                                                                        volatilityBot.setTargetItemBalance(balance);
-                                                                                        player.sendSystemMessage(Component.literal("Target item balance set to "+balance));
-                                                                                    }else {
-                                                                                        player.sendSystemMessage(Component.literal("Bot not found"));
-                                                                                    }
+                                                                                    bot_set_setting(player, ServerVolatilityBot.Settings.Type.TARGET_ITEM_BALANCE, itemID, balance);
                                                                                     // Execute the command on the server_sender
                                                                                     return Command.SINGLE_SUCCESS;
                                                                                 })
@@ -378,19 +301,9 @@ public class StockMarketCommands {
                                                                                 .executes(context -> {
                                                                                     CommandSourceStack source = context.getSource();
                                                                                     ServerPlayer player = source.getPlayerOrException();
-                                                                                    String itemID = ItemUtilities.getNormalizedItemID(StringArgumentType.getString(context, "itemID"));
-                                                                                    if(itemID == null) {
-                                                                                        player.sendSystemMessage(Component.literal("Item not found"));
-                                                                                        return Command.SINGLE_SUCCESS;
-                                                                                    }
+                                                                                    String itemID = StringArgumentType.getString(context, "itemID");
                                                                                     int range = IntegerArgumentType.getInteger(context, "priceRange");
-                                                                                    ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
-                                                                                    if(bot instanceof ServerVolatilityBot volatilityBot) {
-                                                                                        volatilityBot.setImbalancePriceRange(range);
-                                                                                        player.sendSystemMessage(Component.literal("Target price range set to "+range));
-                                                                                    }else {
-                                                                                        player.sendSystemMessage(Component.literal("Bot not found"));
-                                                                                    }
+                                                                                    bot_set_setting(player, ServerVolatilityBot.Settings.Type.IMBALANCE_PRICE_RANGE, itemID, range);
                                                                                     // Execute the command on the server_sender
                                                                                     return Command.SINGLE_SUCCESS;
                                                                                 })
@@ -401,19 +314,9 @@ public class StockMarketCommands {
                                                                                 .executes(context -> {
                                                                                     CommandSourceStack source = context.getSource();
                                                                                     ServerPlayer player = source.getPlayerOrException();
-                                                                                    String itemID = ItemUtilities.getNormalizedItemID(StringArgumentType.getString(context, "itemID"));
-                                                                                    if(itemID == null) {
-                                                                                        player.sendSystemMessage(Component.literal("Item not found"));
-                                                                                        return Command.SINGLE_SUCCESS;
-                                                                                    }
+                                                                                    String itemID = StringArgumentType.getString(context, "itemID");
                                                                                     int amount = IntegerArgumentType.getInteger(context, "orderCount");
-                                                                                    ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
-                                                                                    if(bot instanceof ServerVolatilityBot volatilityBot) {
-                                                                                        volatilityBot.setMaxOrderCount(amount);
-                                                                                        player.sendSystemMessage(Component.literal("Max order count set to "+amount));
-                                                                                    }else {
-                                                                                        player.sendSystemMessage(Component.literal("Bot not found"));
-                                                                                    }
+                                                                                    bot_set_setting(player, ServerVolatilityBot.Settings.Type.MAX_ORDER_COUNT, itemID, amount);
                                                                                     // Execute the command on the server_sender
                                                                                     return Command.SINGLE_SUCCESS;
                                                                                 })
@@ -424,19 +327,9 @@ public class StockMarketCommands {
                                                                                 .executes(context -> {
                                                                                     CommandSourceStack source = context.getSource();
                                                                                     ServerPlayer player = source.getPlayerOrException();
-                                                                                    String itemID = ItemUtilities.getNormalizedItemID(StringArgumentType.getString(context, "itemID"));
-                                                                                    if(itemID == null) {
-                                                                                        player.sendSystemMessage(Component.literal("Item not found"));
-                                                                                        return Command.SINGLE_SUCCESS;
-                                                                                    }
+                                                                                    String itemID = StringArgumentType.getString(context, "itemID");
                                                                                     double scale = DoubleArgumentType.getDouble(context, "volumeScale");
-                                                                                    ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
-                                                                                    if(bot instanceof ServerVolatilityBot volatilityBot) {
-                                                                                        volatilityBot.setVolumeScale(scale);
-                                                                                        player.sendSystemMessage(Component.literal("Volume scale set to "+scale));
-                                                                                    }else {
-                                                                                        player.sendSystemMessage(Component.literal("Bot not found"));
-                                                                                    }
+                                                                                    bot_set_setting(player, ServerVolatilityBot.Settings.Type.VOLUME_SCALE, itemID, scale);
                                                                                     // Execute the command on the server_sender
                                                                                     return Command.SINGLE_SUCCESS;
                                                                                 })
@@ -447,19 +340,9 @@ public class StockMarketCommands {
                                                                                 .executes(context -> {
                                                                                     CommandSourceStack source = context.getSource();
                                                                                     ServerPlayer player = source.getPlayerOrException();
-                                                                                    String itemID = ItemUtilities.getNormalizedItemID(StringArgumentType.getString(context, "itemID"));
-                                                                                    if(itemID == null) {
-                                                                                        player.sendSystemMessage(Component.literal("Item not found"));
-                                                                                        return Command.SINGLE_SUCCESS;
-                                                                                    }
+                                                                                    String itemID = StringArgumentType.getString(context, "itemID");
                                                                                     double spread = DoubleArgumentType.getDouble(context, "volumeSpread");
-                                                                                    ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
-                                                                                    if(bot instanceof ServerVolatilityBot volatilityBot) {
-                                                                                        volatilityBot.setVolumeSpread(spread);
-                                                                                        player.sendSystemMessage(Component.literal("Volume spread set to "+spread));
-                                                                                    }else {
-                                                                                        player.sendSystemMessage(Component.literal("Bot not found"));
-                                                                                    }
+                                                                                    bot_set_setting(player, ServerVolatilityBot.Settings.Type.VOLUME_SPREAD, itemID, spread);
                                                                                     // Execute the command on the server_sender
                                                                                     return Command.SINGLE_SUCCESS;
                                                                                 })
@@ -470,19 +353,9 @@ public class StockMarketCommands {
                                                                                 .executes(context -> {
                                                                                     CommandSourceStack source = context.getSource();
                                                                                     ServerPlayer player = source.getPlayerOrException();
-                                                                                    String itemID = ItemUtilities.getNormalizedItemID(StringArgumentType.getString(context, "itemID"));
-                                                                                    if(itemID == null) {
-                                                                                        player.sendSystemMessage(Component.literal("Item not found"));
-                                                                                        return Command.SINGLE_SUCCESS;
-                                                                                    }
+                                                                                    String itemID = StringArgumentType.getString(context, "itemID");
                                                                                     double randomness = DoubleArgumentType.getDouble(context, "volumeRandomness");
-                                                                                    ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
-                                                                                    if(bot instanceof ServerVolatilityBot volatilityBot) {
-                                                                                        volatilityBot.setVolumeRandomness(randomness);
-                                                                                        player.sendSystemMessage(Component.literal("Volume randomness set to "+randomness));
-                                                                                    }else {
-                                                                                        player.sendSystemMessage(Component.literal("Bot not found"));
-                                                                                    }
+                                                                                    bot_set_setting(player, ServerVolatilityBot.Settings.Type.VOLUME_RANDOMNESS, itemID, randomness);
                                                                                     // Execute the command on the server_sender
                                                                                     return Command.SINGLE_SUCCESS;
                                                                                 })
@@ -493,112 +366,48 @@ public class StockMarketCommands {
                                                                                 .executes(context -> {
                                                                                     CommandSourceStack source = context.getSource();
                                                                                     ServerPlayer player = source.getPlayerOrException();
-                                                                                    String itemID = ItemUtilities.getNormalizedItemID(StringArgumentType.getString(context, "itemID"));
-                                                                                    if(itemID == null) {
-                                                                                        player.sendSystemMessage(Component.literal("Item not found"));
-                                                                                        return Command.SINGLE_SUCCESS;
-                                                                                    }
+                                                                                    String itemID = StringArgumentType.getString(context, "itemID");
                                                                                     long timer = LongArgumentType.getLong(context, "timeMS");
-                                                                                    if(timer < 0)
-                                                                                    {
-                                                                                        player.sendSystemMessage(Component.literal("Timer must be greater than 0"));
-                                                                                        return Command.SINGLE_SUCCESS;
-                                                                                    }
-                                                                                    ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
-                                                                                    if(bot instanceof ServerVolatilityBot) {
-                                                                                        ServerVolatilityBot volatilityBot = (ServerVolatilityBot) bot;
-                                                                                        volatilityBot.setTimerMillis(timer);
-                                                                                        player.sendSystemMessage(Component.literal("Timer set to "+timer+"ms"));
-                                                                                    }else {
-                                                                                        player.sendSystemMessage(Component.literal("Bot not found"));
-                                                                                    }
+                                                                                    bot_set_setting(player, ServerVolatilityBot.Settings.Type.TIMER_VOLATILITY_MILLIS, itemID, timer);
                                                                                     // Execute the command on the server_sender
                                                                                     return Command.SINGLE_SUCCESS;
                                                                                 })
                                                                         )
                                                                 )
                                                                 .then(Commands.literal("minTimer")
-                                                                        .then(Commands.argument("timeMS", LongArgumentType.longArg(0))
+                                                                        .then(Commands.argument("timeMS", LongArgumentType.longArg(1))
                                                                                 .executes(context -> {
                                                                                     CommandSourceStack source = context.getSource();
                                                                                     ServerPlayer player = source.getPlayerOrException();
-                                                                                    String itemID = ItemUtilities.getNormalizedItemID(StringArgumentType.getString(context, "itemID"));
-                                                                                    if(itemID == null) {
-                                                                                        player.sendSystemMessage(Component.literal("Item not found"));
-                                                                                        return Command.SINGLE_SUCCESS;
-                                                                                    }
+                                                                                    String itemID = StringArgumentType.getString(context, "itemID");
                                                                                     long timer = LongArgumentType.getLong(context, "timeMS");
-                                                                                    if(timer < 0)
-                                                                                    {
-                                                                                        player.sendSystemMessage(Component.literal("Timer must be greater than 0"));
-                                                                                        return Command.SINGLE_SUCCESS;
-                                                                                    }
-                                                                                    ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
-                                                                                    if(bot instanceof ServerVolatilityBot) {
-                                                                                        ServerVolatilityBot volatilityBot = (ServerVolatilityBot) bot;
-                                                                                        volatilityBot.setMinTimerMillis(timer);
-                                                                                        player.sendSystemMessage(Component.literal("Min Timer set to "+timer+"ms"));
-                                                                                    }else {
-                                                                                        player.sendSystemMessage(Component.literal("Bot not found"));
-                                                                                    }
+                                                                                    bot_set_setting(player, ServerVolatilityBot.Settings.Type.MIN_VOLATILITY_TIMER_MILLIS, itemID, timer);
                                                                                     // Execute the command on the server_sender
                                                                                     return Command.SINGLE_SUCCESS;
                                                                                 })
                                                                         )
                                                                 )
                                                                 .then(Commands.literal("maxTimer")
-                                                                        .then(Commands.argument("timeMS", LongArgumentType.longArg(0))
+                                                                        .then(Commands.argument("timeMS", LongArgumentType.longArg(1))
                                                                                 .executes(context -> {
                                                                                     CommandSourceStack source = context.getSource();
                                                                                     ServerPlayer player = source.getPlayerOrException();
-                                                                                    String itemID = ItemUtilities.getNormalizedItemID(StringArgumentType.getString(context, "itemID"));
-                                                                                    if(itemID == null) {
-                                                                                        player.sendSystemMessage(Component.literal("Item not found"));
-                                                                                        return Command.SINGLE_SUCCESS;
-                                                                                    }
+                                                                                    String itemID = StringArgumentType.getString(context, "itemID");
                                                                                     long timer = LongArgumentType.getLong(context, "timeMS");
-                                                                                    if(timer < 0)
-                                                                                    {
-                                                                                        player.sendSystemMessage(Component.literal("Timer must be greater than 0"));
-                                                                                        return Command.SINGLE_SUCCESS;
-                                                                                    }
-                                                                                    ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
-                                                                                    if(bot instanceof ServerVolatilityBot) {
-                                                                                        ServerVolatilityBot volatilityBot = (ServerVolatilityBot) bot;
-                                                                                        volatilityBot.setMaxTimerMillis(timer);
-                                                                                        player.sendSystemMessage(Component.literal("Max Timer set to "+timer+"ms"));
-                                                                                    }else {
-                                                                                        player.sendSystemMessage(Component.literal("Bot not found"));
-                                                                                    }
+                                                                                    bot_set_setting(player, ServerVolatilityBot.Settings.Type.MAX_VOLATILITY_TIMER_MILLIS, itemID, timer);
                                                                                     // Execute the command on the server_sender
                                                                                     return Command.SINGLE_SUCCESS;
                                                                                 })
                                                                         )
                                                                 )
                                                                 .then(Commands.literal("updateInterval")
-                                                                        .then(Commands.argument("timeMS", LongArgumentType.longArg(0))
+                                                                        .then(Commands.argument("timeMS", LongArgumentType.longArg(1))
                                                                                 .executes(context -> {
                                                                                     CommandSourceStack source = context.getSource();
                                                                                     ServerPlayer player = source.getPlayerOrException();
-                                                                                    String itemID = ItemUtilities.getNormalizedItemID(StringArgumentType.getString(context, "itemID"));
-                                                                                    if(itemID == null) {
-                                                                                        player.sendSystemMessage(Component.literal("Item not found"));
-                                                                                        return Command.SINGLE_SUCCESS;
-                                                                                    }
+                                                                                    String itemID = StringArgumentType.getString(context, "itemID");
                                                                                     long timer = LongArgumentType.getLong(context, "timeMS");
-                                                                                    if(timer < 0)
-                                                                                    {
-                                                                                        player.sendSystemMessage(Component.literal("Timer must be greater than 0"));
-                                                                                        return Command.SINGLE_SUCCESS;
-                                                                                    }
-                                                                                    ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
-                                                                                    if(bot instanceof ServerVolatilityBot) {
-                                                                                        ServerVolatilityBot volatilityBot = (ServerVolatilityBot) bot;
-                                                                                        volatilityBot.setUpdateInterval(timer);
-                                                                                        player.sendSystemMessage(Component.literal("Update interval set to "+timer+"ms"));
-                                                                                    }else {
-                                                                                        player.sendSystemMessage(Component.literal("Bot not found"));
-                                                                                    }
+                                                                                    bot_set_setting(player, ServerVolatilityBot.Settings.Type.UPDATE_INTERVAL, itemID, timer);
                                                                                     // Execute the command on the server_sender
                                                                                     return Command.SINGLE_SUCCESS;
                                                                                 })
@@ -609,20 +418,9 @@ public class StockMarketCommands {
                                                                                 .executes(context -> {
                                                                                     CommandSourceStack source = context.getSource();
                                                                                     ServerPlayer player = source.getPlayerOrException();
-                                                                                    String itemID = ItemUtilities.getNormalizedItemID(StringArgumentType.getString(context, "itemID"));
-                                                                                    if(itemID == null) {
-                                                                                        player.sendSystemMessage(Component.literal("Item not found"));
-                                                                                        return Command.SINGLE_SUCCESS;
-                                                                                    }
+                                                                                    String itemID = StringArgumentType.getString(context, "itemID");
                                                                                     double pidP = DoubleArgumentType.getDouble(context, "pidP");
-                                                                                    ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
-                                                                                    if(bot instanceof ServerVolatilityBot) {
-                                                                                        ServerVolatilityBot volatilityBot = (ServerVolatilityBot) bot;
-                                                                                        volatilityBot.setPidP(pidP);
-                                                                                        player.sendSystemMessage(Component.literal("PID P set to "+pidP));
-                                                                                    }else {
-                                                                                        player.sendSystemMessage(Component.literal("Bot not found"));
-                                                                                    }
+                                                                                    bot_set_setting(player, ServerVolatilityBot.Settings.Type.PID_P, itemID, pidP);
                                                                                     // Execute the command on the server_sender
                                                                                     return Command.SINGLE_SUCCESS;
                                                                                 })
@@ -633,20 +431,9 @@ public class StockMarketCommands {
                                                                                 .executes(context -> {
                                                                                     CommandSourceStack source = context.getSource();
                                                                                     ServerPlayer player = source.getPlayerOrException();
-                                                                                    String itemID = ItemUtilities.getNormalizedItemID(StringArgumentType.getString(context, "itemID"));
-                                                                                    if(itemID == null) {
-                                                                                        player.sendSystemMessage(Component.literal("Item not found"));
-                                                                                        return Command.SINGLE_SUCCESS;
-                                                                                    }
+                                                                                    String itemID = StringArgumentType.getString(context, "itemID");
                                                                                     double pidI = DoubleArgumentType.getDouble(context, "pidI");
-                                                                                    ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
-                                                                                    if(bot instanceof ServerVolatilityBot) {
-                                                                                        ServerVolatilityBot volatilityBot = (ServerVolatilityBot) bot;
-                                                                                        volatilityBot.setPidI(pidI);
-                                                                                        player.sendSystemMessage(Component.literal("PID I set to "+pidI));
-                                                                                    }else {
-                                                                                        player.sendSystemMessage(Component.literal("Bot not found"));
-                                                                                    }
+                                                                                    bot_set_setting(player, ServerVolatilityBot.Settings.Type.PID_I, itemID, pidI);
                                                                                     // Execute the command on the server_sender
                                                                                     return Command.SINGLE_SUCCESS;
                                                                                 })
@@ -657,20 +444,9 @@ public class StockMarketCommands {
                                                                                 .executes(context -> {
                                                                                     CommandSourceStack source = context.getSource();
                                                                                     ServerPlayer player = source.getPlayerOrException();
-                                                                                    String itemID = ItemUtilities.getNormalizedItemID(StringArgumentType.getString(context, "itemID"));
-                                                                                    if(itemID == null) {
-                                                                                        player.sendSystemMessage(Component.literal("Item not found"));
-                                                                                        return Command.SINGLE_SUCCESS;
-                                                                                    }
+                                                                                    String itemID = StringArgumentType.getString(context, "itemID");
                                                                                     double pidD = DoubleArgumentType.getDouble(context, "pidD");
-                                                                                    ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
-                                                                                    if(bot instanceof ServerVolatilityBot) {
-                                                                                        ServerVolatilityBot volatilityBot = (ServerVolatilityBot) bot;
-                                                                                        volatilityBot.setPidD(pidD);
-                                                                                        player.sendSystemMessage(Component.literal("PID D set to "+pidD));
-                                                                                    }else {
-                                                                                        player.sendSystemMessage(Component.literal("Bot not found"));
-                                                                                    }
+                                                                                    bot_set_setting(player, ServerVolatilityBot.Settings.Type.PID_D, itemID, pidD);
                                                                                     // Execute the command on the server_sender
                                                                                     return Command.SINGLE_SUCCESS;
                                                                                 })
@@ -681,20 +457,22 @@ public class StockMarketCommands {
                                                                                 .executes(context -> {
                                                                                     CommandSourceStack source = context.getSource();
                                                                                     ServerPlayer player = source.getPlayerOrException();
-                                                                                    String itemID = ItemUtilities.getNormalizedItemID(StringArgumentType.getString(context, "itemID"));
-                                                                                    if(itemID == null) {
-                                                                                        player.sendSystemMessage(Component.literal("Item not found"));
-                                                                                        return Command.SINGLE_SUCCESS;
-                                                                                    }
+                                                                                    String itemID = StringArgumentType.getString(context, "itemID");
                                                                                     double pidIBounds = DoubleArgumentType.getDouble(context, "pidIBounds");
-                                                                                    ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
-                                                                                    if(bot instanceof ServerVolatilityBot) {
-                                                                                        ServerVolatilityBot volatilityBot = (ServerVolatilityBot) bot;
-                                                                                        volatilityBot.setPidIBound(pidIBounds);
-                                                                                        player.sendSystemMessage(Component.literal("PID I bounds set to "+pidIBounds));
-                                                                                    }else {
-                                                                                        player.sendSystemMessage(Component.literal("Bot not found"));
-                                                                                    }
+                                                                                    bot_set_setting(player, ServerVolatilityBot.Settings.Type.PID_I_BOUNDS, itemID, pidIBounds);
+                                                                                    // Execute the command on the server_sender
+                                                                                    return Command.SINGLE_SUCCESS;
+                                                                                })
+                                                                        )
+                                                                )
+                                                                .then(Commands.literal("pidIntegratedError")
+                                                                        .then(Commands.argument("pidIntegratedError", DoubleArgumentType.doubleArg())
+                                                                                .executes(context -> {
+                                                                                    CommandSourceStack source = context.getSource();
+                                                                                    ServerPlayer player = source.getPlayerOrException();
+                                                                                    String itemID = StringArgumentType.getString(context, "itemID");
+                                                                                    double pidIBounds = DoubleArgumentType.getDouble(context, "pidIntegratedError");
+                                                                                    bot_set_setting(player, ServerVolatilityBot.Settings.Type.INTEGRATED_ERROR, itemID, pidIBounds);
                                                                                     // Execute the command on the server_sender
                                                                                     return Command.SINGLE_SUCCESS;
                                                                                 })
@@ -707,19 +485,20 @@ public class StockMarketCommands {
                                                         .executes(context -> {
                                                             CommandSourceStack source = context.getSource();
                                                             ServerPlayer player = source.getPlayerOrException();
-                                                            String itemID = ItemUtilities.getNormalizedItemID(StringArgumentType.getString(context, "itemID"));
-                                                            if(itemID == null) {
-                                                                player.sendSystemMessage(Component.literal("Item not found"));
+                                                            String orgItemID = StringArgumentType.getString(context, "itemID");
+                                                            String itemID = ItemUtilities.getNormalizedItemID(orgItemID);
+                                                            if (itemID == null) {
+                                                                PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getInvalidItemIDMessage(orgItemID));
                                                                 return Command.SINGLE_SUCCESS;
-                                                            }ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
-                                                            if(bot == null) {
+                                                            }
+                                                            ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
+                                                            if (bot == null) {
                                                                 ServerVolatilityBot volatilityBot = new ServerVolatilityBot();
                                                                 volatilityBot.setEnabled(false);
                                                                 ServerMarket.setTradingBot(itemID, volatilityBot);
-                                                                player.sendSystemMessage(Component.literal("Bot created, you can change its settings and than enable it"));
-                                                            }
-                                                            else {
-                                                                player.sendSystemMessage(Component.literal("Bot already exists"));
+                                                                PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getBotCreatedMessage(itemID));
+                                                            } else {
+                                                                PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getBotAlreadyExistMessage(itemID));
                                                             }
                                                             // Execute the command on the server_sender
                                                             return Command.SINGLE_SUCCESS;
@@ -730,17 +509,18 @@ public class StockMarketCommands {
                                                         .executes(context -> {
                                                             CommandSourceStack source = context.getSource();
                                                             ServerPlayer player = source.getPlayerOrException();
-                                                            String itemID = ItemUtilities.getNormalizedItemID(StringArgumentType.getString(context, "itemID"));
-                                                            if(itemID == null) {
-                                                                player.sendSystemMessage(Component.literal("Item not found"));
+                                                            String orgItemID = StringArgumentType.getString(context, "itemID");
+                                                            String itemID = ItemUtilities.getNormalizedItemID(orgItemID);
+                                                            if (itemID == null) {
+                                                                PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getInvalidItemIDMessage(orgItemID));
                                                                 return Command.SINGLE_SUCCESS;
-                                                            }ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
-                                                            if(bot == null) {
-                                                                player.sendSystemMessage(Component.literal("Bot doesn't exist"));
                                                             }
-                                                            else {
+                                                            ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
+                                                            if (bot == null) {
+                                                                PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getBotNotExistMessage(itemID));
+                                                            } else {
                                                                 ServerMarket.removeTradingBot(itemID);
-                                                                player.sendSystemMessage(Component.literal("Bot removed"));
+                                                                PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getBotDeletedMessage(itemID));
                                                             }
                                                             // Execute the command on the server_sender
                                                             return Command.SINGLE_SUCCESS;
@@ -751,94 +531,211 @@ public class StockMarketCommands {
                                                 .executes(context -> {
                                                     CommandSourceStack source = context.getSource();
                                                     ServerPlayer player = source.getPlayerOrException();
-                                                    String itemID = ItemUtilities.getNormalizedItemID(StringArgumentType.getString(context, "itemID"));
-                                                    if(itemID == null) {
-                                                        player.sendSystemMessage(Component.literal("Item not found"));
+                                                    String orgItemID = StringArgumentType.getString(context, "itemID");
+                                                    String itemID = ItemUtilities.getNormalizedItemID(orgItemID);
+                                                    if (itemID == null) {
+                                                        PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getInvalidItemIDMessage(orgItemID));
                                                         return Command.SINGLE_SUCCESS;
                                                     }
-                                                    if(ServerMarket.hasItem(itemID)) {
-                                                        player.sendSystemMessage(Component.literal("Marketplace already exists"));
-                                                        return Command.SINGLE_SUCCESS;
-                                                    }
-                                                    else {
-
-
+                                                    if (ServerMarket.hasItem(itemID)) {
+                                                        PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getMarketplaceAlreadyExistingMessage(itemID));
+                                                    } else {
                                                         ServerMarket.addTradeItem(itemID, 0);
                                                         // Notify all serverPlayers
-                                                        PlayerUtilities.printToClientConsole(itemID+" can now be traded on the stock market.");
-                                                        return Command.SINGLE_SUCCESS;
+                                                        PlayerUtilities.printToClientConsole(StockMarketTextMessages.getMarketplaceCreatedMessage(itemID));
                                                     }
+                                                    return Command.SINGLE_SUCCESS;
                                                 })
                                         )
                                         .then(Commands.literal("remove")
                                                 .executes(context -> {
                                                     CommandSourceStack source = context.getSource();
                                                     ServerPlayer player = source.getPlayerOrException();
-                                                    String itemID = ItemUtilities.getNormalizedItemID(StringArgumentType.getString(context, "itemID"));
-                                                    if(itemID == null) {
-                                                        player.sendSystemMessage(Component.literal("Item not found"));
+                                                    String orgItemID = StringArgumentType.getString(context, "itemID");
+                                                    String itemID = ItemUtilities.getNormalizedItemID(orgItemID);
+                                                    if (itemID == null) {
+                                                        PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getInvalidItemIDMessage(orgItemID));
                                                         return Command.SINGLE_SUCCESS;
                                                     }
-                                                    if(ServerMarket.hasItem(itemID)) {
+                                                    if (ServerMarket.hasItem(itemID)) {
                                                         ServerMarket.removeTradingItem(itemID);
-                                                        player.sendSystemMessage(Component.literal("Marketplace removed"));
-                                                        return Command.SINGLE_SUCCESS;
-                                                    }
-                                                    else {
                                                         // Notify all serverPlayers
-                                                        PlayerUtilities.printToClientConsole(itemID+" can no longer be traded on the stock market.");
-                                                        return Command.SINGLE_SUCCESS;
+                                                        PlayerUtilities.printToClientConsole(StockMarketTextMessages.getMarketplaceDeletedMessage(itemID));
+                                                    } else {
+                                                        PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getMarketplaceNotExistingMessage(itemID));
                                                     }
+                                                    return Command.SINGLE_SUCCESS;
                                                 })
                                         )
-                                        /*.then(Commands.literal("createDefault")
-                                                .then(Commands.argument("startPrice", IntegerArgumentType.integer(0))
-                                                      .then(Commands.argument("startItemCount", IntegerArgumentType.integer(0))
-                                                              .then(Commands.argument("priceRange", IntegerArgumentType.integer(0))
-                                                                .executes(context -> {
-                                                                    CommandSourceStack source = context.getSource();
-                                                                    ServerPlayer player = source.getPlayerOrException();
-                                                                    String itemID = ItemUtilities.getNormalizedItemID(StringArgumentType.getString(context, "itemID"));
-                                                                    if(itemID == null) {
-                                                                        player.sendSystemMessage(Component.literal("Item not found"));
-                                                                        return Command.SINGLE_SUCCESS;
-                                                                    }
-
-
-                                                                    createNewMarketDefault(player, itemID,
-                                                                            IntegerArgumentType.getInteger(context, "startPrice"),
-                                                                            IntegerArgumentType.getInteger(context, "startItemCount"),
-                                                                            IntegerArgumentType.getInteger(context, "priceRange"));
-
-
-
-                                                                    // Execute the command on the server_sender
-                                                                    return Command.SINGLE_SUCCESS;
-                                                                })
-                                                              )
-                                                        )
-                                                )
-                                        )*/
                                         .then(Commands.literal("currentPrice")
                                                 .executes(context -> {
                                                     CommandSourceStack source = context.getSource();
                                                     ServerPlayer player = source.getPlayerOrException();
-                                                    String itemID = ItemUtilities.getNormalizedItemID(StringArgumentType.getString(context, "itemID"));
-                                                    if(itemID == null) {
-                                                        player.sendSystemMessage(Component.literal("Item not found"));
+                                                    String rawItemID = StringArgumentType.getString(context, "itemID");
+                                                    String itemID = ItemUtilities.getNormalizedItemID(rawItemID);
+                                                    if (itemID == null) {
+                                                        PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getInvalidItemIDMessage(rawItemID));
                                                         return Command.SINGLE_SUCCESS;
                                                     }
-                                                    if(!ServerMarket.hasItem(itemID)) {
-                                                        player.sendSystemMessage(Component.literal("Marketplace doesn't exist for "+itemID));
+                                                    if (!ServerMarket.hasItem(itemID)) {
+                                                        PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getMarketplaceNotExistingMessage(itemID));
                                                         return Command.SINGLE_SUCCESS;
                                                     }
-                                                    long price = ServerMarket.getPrice(itemID);
-                                                    player.sendSystemMessage(Component.literal("Current price of "+itemID+": "+price));
+                                                    int price = ServerMarket.getPrice(itemID);
+                                                    PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getCurrentPriceOfMessage(itemID, price));
                                                     return Command.SINGLE_SUCCESS;
                                                 })
                                         )
 
                         )
         );
+    }
+
+    private static void bot_set_setting(ServerPlayer executor, ServerVolatilityBot.Settings.Type settingsType, String itemID, double value)
+    {
+        ServerVolatilityBot bot = bot_set_setting_checkParams(executor, settingsType, itemID);
+        if (bot == null)
+            return;
+        switch (settingsType) {
+            case ENABLED:
+            {
+                boolean enabled = value > 0.5 && value < 1.5;
+                bot.setEnabled(enabled);
+                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingEnabledMessage(enabled));
+                break;
+            }
+            case MAX_ORDER_COUNT:
+            {
+                bot.setMaxOrderCount((int)value);
+                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingMaxOrderCountMessage((int)value));
+                break;
+            }
+            case VOLUME_RANDOMNESS:
+            {
+                bot.setVolumeRandomness(value);
+                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingVolumeRandomnessMessage(value));
+                break;
+            }
+            case VOLUME_SCALE:
+            {
+                bot.setVolumeScale(value);
+                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingVolumeScaleMessage(value));
+                break;
+            }
+            case VOLUME_SPREAD:
+            {
+                bot.setVolumeSpread(value);
+                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingVolumeSpreadMessage(value));
+                break;
+            }
+            case UPDATE_INTERVAL:
+            {
+                bot.setUpdateInterval((long)value);
+                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingUpdateIntervalMessage((long)value));
+                break;
+            }
+            case VOLATILITY:
+            {
+                bot.setVolatility(value);
+                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingVolatilityMessage(value));
+                break;
+            }
+            case ORDER_RANDOMNESS:
+            {
+                bot.setOrderRandomness(value);
+                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingOrderRandomnessMessage(value));
+                break;
+            }
+            case INTEGRATED_ERROR:
+            {
+                bot.setintegratedError(value);
+                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingIntegratedMessage(value));
+                break;
+            }
+            case TARGET_ITEM_BALANCE:
+            {
+                bot.setTargetItemBalance((long)value);
+                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingTargetItemBalanceMessage((long)value));
+                break;
+            }
+            case TIMER_VOLATILITY_MILLIS:
+            {
+                bot.setTimerMillis((long)value);
+                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingVolatilityTimerMessage((long)value));
+                break;
+            }
+            case MIN_VOLATILITY_TIMER_MILLIS:
+            {
+                bot.setMinTimerMillis((long)value);
+                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingVolatilityMinTimerMessage((long)value));
+                break;
+            }
+            case MAX_VOLATILITY_TIMER_MILLIS:
+            {
+                bot.setMaxTimerMillis((long)value);
+                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingVolatilityMaxTimerMessage((long)value));
+                break;
+            }
+            case IMBALANCE_PRICE_RANGE:
+            {
+                bot.setImbalancePriceRange((int)value);
+                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingImbalancePriceRangeMessage((int)value));
+                break;
+            }
+            case IMBALANCE_PRICE_CHANGE_FACTOR:
+            {
+                bot.setImbalancePriceChangeFactor(value);
+                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingImbalanceChangeFactorMessage(value));
+                break;
+            }
+            case IMBALANCE_PRICE_CHANGE_QUAD_FACTOR:
+            {
+                bot.setImbalancePriceChangeQuadFactor(value);
+                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingImbalanceChangeQuadFactorMessage(value));
+                break;
+            }
+            case PID_P:
+            {
+                bot.setPidP(value);
+                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingPIDPSetMessage(value));
+                break;
+            }
+            case PID_I:
+            {
+                bot.setPidI(value);
+                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingPIDISetMessage(value));
+                break;
+            }
+            case PID_D:
+            {
+                bot.setPidD(value);
+                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingPIDDSetMessage(value));
+                break;
+            }
+            case PID_I_BOUNDS:
+            {
+                bot.setPidIBound(value);
+                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingPIDIBoundsSetMessage(value));
+                break;
+            }
+            default:
+                StockMarketMod.LOGGER.error("Unknown/Unhandled setting type: \""+settingsType+"\" für bot settings set command");
+                break;
+        }
+    }
+    private static ServerVolatilityBot bot_set_setting_checkParams(ServerPlayer executor, ServerVolatilityBot.Settings.Type settingsType, String itemID)
+    {
+        String orgItemID = itemID;
+        itemID = ItemUtilities.getNormalizedItemID(orgItemID);
+        if (itemID == null) {
+            PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getInvalidItemIDMessage(orgItemID));
+            return null;
+        }
+        ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
+        if (bot instanceof ServerVolatilityBot volatilityBot) {
+            return volatilityBot;
+        }
+        PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotNotExistMessage(itemID));
+        return null;
     }
 }

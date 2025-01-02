@@ -1,6 +1,5 @@
 package net.kroia.stockmarket;
 
-import net.kroia.banksystem.BankSystemSettings;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBotFactory;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 
@@ -11,17 +10,6 @@ public class StockMarketModSettings {
     {
         Market.init();
     }
-    public static final class Player
-    {
-        public static final long STARTING_BALANCE = 0;
-    }
-
-    public static final class Bank
-    {
-        public static final boolean NOTIFICATION_USE_SHORT_ITEM_ID = true;
-        public static final int ITEM_TRANSFER_TICK_INTERVAL = 20;
-    }
-
     public static final class UI
     {
         public static final int PRICE_HISTORY_SIZE = 100;
@@ -94,11 +82,11 @@ public class StockMarketModSettings {
             ServerTradingBotFactory.botTableBuilder(bots, "minecraft:coal", new ServerVolatilityBot(),
                     new ServerVolatilityBot.Settings(100,1000,10000,300000,50,0.1,10,pidP,pidD,pidI,pidIBound),1000);
             ServerTradingBotFactory.botTableBuilder(bots, "minecraft:oak_log", new ServerVolatilityBot(),
-                    new ServerVolatilityBot.Settings(100,1000,10000,300000,200,0.1,10,pidP,pidD,pidI,pidIBound),1000);
+                    new ServerVolatilityBot.Settings(100,1000,10000,300000,30,0.1,10,pidP,pidD,pidI,pidIBound),1000);
             ServerTradingBotFactory.botTableBuilder(bots, "minecraft:netherite_scrap", new ServerVolatilityBot(),
-                    new ServerVolatilityBot.Settings(100,1000,10000,300000,200,0.1,10,pidP,pidD,pidI,pidIBound),100);
+                    new ServerVolatilityBot.Settings(100,1000,10000,300000,2000,0.1,10,pidP,pidD,pidI,pidIBound),100);
             ServerTradingBotFactory.botTableBuilder(bots, "minecraft:emerald", new ServerVolatilityBot(),
-                    new ServerVolatilityBot.Settings(100,1000,10000,300000,50,0.1,10,pidP,pidD,pidI,pidIBound),100);
+                    new ServerVolatilityBot.Settings(100,1000,10000,300000,100,0.1,10,pidP,pidD,pidI,pidIBound),100);
 
 
             return bots;

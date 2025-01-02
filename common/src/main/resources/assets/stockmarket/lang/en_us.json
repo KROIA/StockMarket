@@ -15,5 +15,73 @@
   "gui.stockmarket.trade_screen.filled": "Filled",
   "gui.stockmarket.trade_screen.cancel": "Cancel",
   "gui.stockmarket.trade_screen.direction": "Buy/Sell",
-  "gui.stockmarket.trade_screen.back": "Back"
+  "gui.stockmarket.trade_screen.back": "Back",
+
+  "message.stockmarket.invalid_item_id": "Unknown item {item_name}",
+  "message.stockmarket.marketplace_not_existing": "Marketplace for {item_name} does not exist",
+  "message.stockmarket.marketplace_already_existing": "Marketplace for {item_name} already exists",
+  "message.stockmarket.marketplace_deleted": "{item_name} can no longer be traded on the stock market",
+  "message.stockmarket.marketplace_created": "{item_name} can now be traded on the stock market",
+  "message.stockmarket.current_price_of": "Current price of {item_name}: {current_price}",
+
+
+
+
+  "message.stockmarket.bot_created": "Bot created for item: {item_name}, you can change its settings and than enable it",
+  "message.stockmarket.bot_deleted": "Bot deleted for item: {item_name}",
+  "message.stockmarket.bot_not_exist": "No bot created for item: {item_name}",
+  "message.stockmarket.bot_already_exist": "Bot for item: {item_name} already exists",
+
+  "message.stockmarket.bot_setting_pid_p_set": "PID P set to {value}",
+  "message.stockmarket.bot_setting_pid_i_set": "PID I set to {value}",
+  "message.stockmarket.bot_setting_pid_d_set": "PID D set to {value}",
+  "message.stockmarket.bot_setting_pid_ibounds_set": "PID I bounds set to {value}",
+  "message.stockmarket.bot_setting_integrated": "PID Integral value set to {value}",
+  "message.stockmarket.bot_setting_target_item_balance": "Target item balance set to {value}",
+  "message.stockmarket.bot_setting_update_interval": "Update interval set to {value}ms",
+  "message.stockmarket.bot_setting_volatility_max_timer": "Max volatility Timer time set to {value}ms",
+  "message.stockmarket.bot_setting_volatility_min_timer": "Min volatility Timer time set to {value}ms",
+  "message.stockmarket.bot_setting_volatility_timer": "Volatility timer time set to {value}ms",
+  "message.stockmarket.bot_setting_volume_scale": "The trading volume scale is set to {value}",
+  "message.stockmarket.bot_setting_volume_randomness": "Volume randomness set to {value}",
+  "message.stockmarket.bot_setting_volume_spread": "Volume spread set to {value}",
+  "message.stockmarket.bot_setting_volatility": "Volatility set to {value}",
+  "message.stockmarket.bot_setting_order_randomness": "Order randomness set to {value}",
+  "message.stockmarket.bot_setting_imbalance_price_range": "Target price range set to {value}",
+  "message.stockmarket.bot_setting_imbalance_change_factor": "Target price change factor set to {value}",
+  "message.stockmarket.bot_setting_imbalance_change_quad_factor": "Target price quadratic change factor set to {value}",
+  "message.stockmarket.bot_setting_enabled": "Bot is set to {value}",
+  "message.stockmarket.bot_setting_enabled_value": "enabled",
+  "message.stockmarket.bot_setting_disabled_value": "disabled",
+  "message.stockmarket.bot_setting_max_order_count": "Max order count set to {value}",
+
+  "message.stockmarket.insufficient_fund": "Insufficient funds",
+  "message.stockmarket.insufficient_fund_to_consume": "Insufficient funds to consume order: {order_text}\n  price: {price} {currency} each\n  amount: {amount}\n total cost: {cost} {currency}",
+  "message.stockmarket.insufficient_fund_to_buy": "Insufficient funds to buy {amount} {item_name} for a price of {price} {currency} each",
+  "message.stockmarket.insufficient_items_to_sell": "Insufficient {item_name} to sell {amount}",
+  "message.stockmarket.missing_items": "Missing {amount} {item_name}",
+  "message.stockmarket.missing_money": "Missing {amount} {currency}",
+
+
+
+  "message.stockmarket.order_invalid": "Insufficient {item_name} to sell {amount}, Reason:\n",
+  "message.stockmarket.order_invalid_reason_orders_to_fill_transaction": "Not enough orders to fill the {buy_sell_direction} market order",
+  "message.stockmarket.buy_direction": "Buy",
+  "message.stockmarket.sell_direction": "Sell",
+  "message.stockmarket.order_amount": "Amount: {amount}",
+  "message.stockmarket.order_limit_price": "Limit price: {price} {currency}",
+  "message.stockmarket.order_average_price": "Average price: {price} {currency}",
+  "message.stockmarket.order_has_been_placed": "{buy_sell_direction} order has been placed",
+  "message.stockmarket.order_has_been_filled": "{buy_sell_direction} order has been filled",
+  "message.stockmarket.order_has_been_cancelled": "{buy_sell_direction} order has been filled",
+  "message.stockmarket.order_filled_amount": "Filled amount: {amount} {item_name}",
+  "message.stockmarket.order_invalid_reason": "Invalid reason: {reason}"
+
+
+
+
+
+
+
+
 }

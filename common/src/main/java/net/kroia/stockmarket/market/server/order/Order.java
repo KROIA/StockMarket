@@ -3,10 +3,14 @@ package net.kroia.stockmarket.market.server.order;
 import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.banksystem.command.BankSystemCommands;
+import net.kroia.banksystem.item.custom.money.MoneyItem;
+import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncOrderPacket;
 import net.kroia.stockmarket.util.ServerPlayerList;
+import net.kroia.stockmarket.util.StockMarketTextMessages;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -69,8 +73,8 @@ public abstract class Order {
         BankUser bankUser = ServerBankManager.getUser(player.getUUID());
         if(bankUser == null)
         {
-            StockMarketMod.LOGGER.warn("BankUser not found for player " + player.getName().getString());
-            PlayerUtilities.printToClientConsole(player, "User "+player.getName().getString()+" not found does not own a bank");
+            //StockMarketMod.LOGGER.warn("BankUser not found for player " + player.getName().getString());
+            PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankNotFoundMessage(player.getName().getString(),itemID));
             return false;
         }
 
@@ -87,31 +91,31 @@ public abstract class Order {
     {
         if(moneyBank == null)
         {
-            StockMarketMod.LOGGER.warn("Bank not found for player " + ServerPlayerList.getPlayerName(playerUUID));
+            //StockMarketMod.LOGGER.warn("Bank not found for player " + ServerPlayerList.getPlayerName(playerUUID));
             if(dbgPlayer != null)
-                PlayerUtilities.printToClientConsole(dbgPlayer, "User "+ServerPlayerList.getPlayerName(playerUUID)+" does not own a money bank");
+                PlayerUtilities.printToClientConsole(dbgPlayer, BankSystemTextMessages.getBankNotFoundMessage(ServerPlayerList.getPlayerName(playerUUID), MoneyItem.getName()));
             return false;
         }
         if(itemBank == null)
         {
-            StockMarketMod.LOGGER.warn("User + " + ServerPlayerList.getPlayerName(playerUUID) + " has no bank for item " + itemID);
+            //StockMarketMod.LOGGER.warn("User + " + ServerPlayerList.getPlayerName(playerUUID) + " has no bank for item " + itemID);
             if(dbgPlayer != null)
-                PlayerUtilities.printToClientConsole(dbgPlayer, "User "+ServerPlayerList.getPlayerName(playerUUID)+" does not own a bank for item "+itemID);
+                PlayerUtilities.printToClientConsole(dbgPlayer, BankSystemTextMessages.getBankNotFoundMessage(ServerPlayerList.getPlayerName(playerUUID), MoneyItem.getName()));
             return false;
         }
         if(amount > 0) {
             if (!moneyBank.lockAmount((long) price * amount)){
-                StockMarketMod.LOGGER.warn("Insufficient funds for player " + ServerPlayerList.getPlayerName(playerUUID));
+                //StockMarketMod.LOGGER.warn("Insufficient funds for player " + ServerPlayerList.getPlayerName(playerUUID));
                 if(dbgPlayer != null)
-                    PlayerUtilities.printToClientConsole(dbgPlayer, "Insufficient funds to buy "+amount+" "+itemID+" for $"+price+" each");
+                    PlayerUtilities.printToClientConsole(dbgPlayer, StockMarketTextMessages.getInsufficientFundToBuyMessage(itemID, amount, price));
                 return false;
             }
         }
         else {
             if (!itemBank.lockAmount(-amount)){
-                StockMarketMod.LOGGER.warn("Insufficient items ("+itemID+") for player " + ServerPlayerList.getPlayerName(playerUUID));
+                //StockMarketMod.LOGGER.warn("Insufficient items ("+itemID+") for player " + ServerPlayerList.getPlayerName(playerUUID));
                 if(dbgPlayer != null)
-                    PlayerUtilities.printToClientConsole(dbgPlayer, "Insufficient items to sell "+-amount+" "+itemID);
+                    PlayerUtilities.printToClientConsole(dbgPlayer, StockMarketTextMessages.getInsufficientItemsToSellMessage(itemID, amount));
                 return false;
             }
         }
@@ -228,7 +232,8 @@ public abstract class Order {
         invalidReason = reason;
         if(!isBot) {
             StockMarketMod.LOGGER.info("Order invalid: " + toString());
-            PlayerUtilities.printToClientConsole(getPlayerUUID(), "Order invalid: " + reason);
+
+            PlayerUtilities.printToClientConsole(getPlayerUUID(), StockMarketTextMessages.getOrderInvalidMessage(reason));
         }
         unlockLockedMoney();
         setStatus(Status.INVALID);
