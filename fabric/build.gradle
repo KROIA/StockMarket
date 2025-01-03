@@ -46,7 +46,7 @@ dependencies {
     shadowBundle project(path: ':common', configuration: 'transformProductionFabric')
 
     modImplementation("net.kroia:modutilities-fabric:1.0.0")
-    include("net.kroia:modutilities-fabric:1.0.0")
+    //include("net.kroia:modutilities-fabric:1.0.0")
 
 }
 

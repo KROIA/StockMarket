@@ -57,7 +57,7 @@ dependencies {
 
     //implementation name: 'banksystem-common-1.1.0-transformProductionQuilt'
     modImplementation("net.kroia:modutilities-quilt:1.0.0")
-    include("net.kroia:modutilities-quilt:1.0.0")
+   // include("net.kroia:modutilities-quilt:1.0.0")
 
 }
 

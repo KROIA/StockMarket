@@ -57,9 +57,10 @@ dependencies {
     //forgeRuntimeLibrary("net.kroia:banksystem-common:1.3.0")
 
     //compileOnly("net.kroia:banksystem-forge:1.3.1")
-    modImplementation("net.kroia:banksystem-forge:1.3.1")
+    //modCompileOnly("net.kroia:banksystem-forge:1.3.1")
     modImplementation("net.kroia:modutilities-forge:1.0.0")
-    include("net.kroia:modutilities-forge:1.0.0")
+    //forgeRuntimeLibrary("net.kroia:modutilities-forge:1.0.0")
+    //includeInternal("net.kroia:modutilities-forge:1.0.0")
 
     //include("net.kroia:banksystem-forge:1.3.1")
 }
