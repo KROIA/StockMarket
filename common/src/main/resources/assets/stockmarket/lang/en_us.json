@@ -14,7 +14,7 @@
   "gui.stockmarket.trade_screen.sell": "Sell",
   "gui.stockmarket.trade_screen.filled": "Filled",
   "gui.stockmarket.trade_screen.cancel": "Cancel",
-  "gui.stockmarket.trade_screen.direction": "Buy/Sell",
+  "gui.stockmarket.trade_screen.direction": "Type",
   "gui.stockmarket.trade_screen.back": "Back",
 
   "message.stockmarket.invalid_item_id": "Unknown item {item_name}",

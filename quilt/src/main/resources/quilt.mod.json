@@ -6,9 +6,9 @@
     "version": "${version}",
     "metadata": {
       "name": "Stock Market",
-      "description": "This is an example description! Tell everyone what your mod is about!",
+      "description": "Stock Market Mod that allows players to buy and sell goods on a virtual market.",
       "contributors": {
-        "Me!": "Author"
+        "Me!": "Alex Krieg"
       },
       "icon": "assets/stockmarket/icon.png"
     },

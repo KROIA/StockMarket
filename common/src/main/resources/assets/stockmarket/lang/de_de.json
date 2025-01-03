@@ -14,6 +14,6 @@
   "gui.stockmarket.trade_screen.sell": "Verkaufen",
   "gui.stockmarket.trade_screen.filled": "Gefüllt",
   "gui.stockmarket.trade_screen.cancel": "Abbrechen",
-  "gui.stockmarket.trade_screen.direction": "Kaufen/Verkaufen",
+  "gui.stockmarket.trade_screen.direction": "Typ",
   "gui.stockmarket.trade_screen.back": "Zurück"
 }

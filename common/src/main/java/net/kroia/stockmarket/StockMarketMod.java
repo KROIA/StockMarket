@@ -10,6 +10,7 @@ import net.kroia.stockmarket.item.StockMarketCreativeModeTab;
 import net.kroia.stockmarket.item.StockMarketItems;
 import net.kroia.stockmarket.menu.StockMarketMenus;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
+import net.kroia.stockmarket.util.StockMarketTextMessages;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
 import org.slf4j.Logger;
@@ -30,6 +31,7 @@ public final class StockMarketMod {
         StockMarketEntities.init();
         StockMarketMenus.init();
         StockMarketCreativeModeTab.init();
+        StockMarketTextMessages.init();
         StockMarketNetworking.setupClientReceiverPackets();
         StockMarketNetworking.setupServerReceiverPackets();
     }

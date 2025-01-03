@@ -1,15 +1,15 @@
 modLoader = "javafml"
 loaderVersion = "[47,)"
 #issueTrackerURL = ""
-license = "Insert License Here"
+license = "MIT"
 
 [[mods]]
 modId = "stockmarket"
 version = "${version}"
 displayName = "Stock Market"
-authors = "Me!"
+authors = "Alex Krieg"
 description = '''
-This is an example description! Tell everyone what your mod is about!
+Stock Market Mod that allows players to buy and sell goods on a virtual market.
 '''
 #logoFile = ""
 

@@ -5,6 +5,13 @@ import net.kroia.stockmarket.StockMarketMod;
 import net.minecraft.network.chat.Component;
 
 public class StockMarketTextMessages {
+    private static boolean initialized = false;
+    public static void init() {
+        if (initialized) {
+            return;
+        }
+        initialized = true;
+    }
     public static class Variables
     {
         public static final String ITEM_NAME = "{item_name}";
@@ -414,6 +421,7 @@ public class StockMarketTextMessages {
         if(!message.contains(variable))
         {
             StockMarketMod.LOGGER.error("Message: \""+message+"\" does not contain variable: \""+variable+"\" which should be replaced with: \""+replacement+"\"");
+            return message;
             //throw new IllegalArgumentException("Message: \""+message+"\" does not contain variable: \""+variable+"\" which should be replaced with: \""+replacement+"\"");
         }
         // Replace first occurrence of variable

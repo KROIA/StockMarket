@@ -14,6 +14,6 @@
   "gui.stockmarket.trade_screen.sell": "Verchaufe",
   "gui.stockmarket.trade_screen.filled": "Gfüllt",
   "gui.stockmarket.trade_screen.cancel": "Abbreche",
-  "gui.stockmarket.trade_screen.direction": "Chaufe/Verchaufe",
+  "gui.stockmarket.trade_screen.direction": "Typ",
   "gui.stockmarket.trade_screen.back": "Zrugg"
 }

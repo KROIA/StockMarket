@@ -192,6 +192,10 @@ public class ServerVolatilityBot extends ServerTradingBot {
         if(itemBank == null)
             return;
 
+        // Create Limit orders
+        clearOrders();
+        createLimitOrders(itemBank, moneyBank);
+
         long currentItemBalance = itemBank.getTotalBalance();
 
 
@@ -248,9 +252,10 @@ public class ServerVolatilityBot extends ServerTradingBot {
         int randomScale = Math.abs((int)speed)+1;
         int volume = (int)(speed)+(int)(settings.orderRandomness*(random.nextInt(randomScale)*2-randomScale));
 
-        if(volume < 0 && itemBank.getBalance() < -volume)
-            volume = (int)-itemBank.getBalance();
-        marketTrade(volume);
+        if(volume < 0 && itemBank.getBalance()/2 < -volume)
+            volume = (int)-itemBank.getBalance()/2;
+        if(currentPrice != 0 || volume > 0)
+            marketTrade(volume);
         //StockMarketMod.LOGGER.info("VolatilityBot: targetPrice: "+settings.targetPrice+" speed: "+speed+" volume: "+volume+" error: "+error+ " P: "+proportionalError+" D: "+derivativeError+" I: "+settings.integratedError);
 
         /*StockMarketMod.LOGGER.info(String.format(
@@ -264,9 +269,15 @@ public class ServerVolatilityBot extends ServerTradingBot {
                 "I:", settings.integratedError
         ));*/
 
-        // Create Limit orders
-        clearOrders();
-        currentPrice = getCurrentPrice();
+
+    }
+
+
+
+    private void createLimitOrders(Bank itemBank, Bank moneyBank)
+    {
+        int currentPrice = getCurrentPrice();
+        long currentItemBalance = itemBank.getTotalBalance();
         int priceIncerement = 1;
         double imbalanceFactor = 0;
         if(settings.targetItemBalance > 0)
@@ -282,11 +293,6 @@ public class ServerVolatilityBot extends ServerTradingBot {
         {
             int sellPrice = startSellPrice + i*priceIncerement;
             int buyPrice = startBuyPrice - i*priceIncerement;
-
-
-
-
-
             int buyVolume = (int)(getAvailableVolume(buyPrice) * (1 + imbalanceFactor))+1;
             if(buyVolume > 0 && buyPrice >= 0) {
 
@@ -297,7 +303,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
 
             if(itemBank.getBalance() > 10) {
                 int sellVolume = (int) (getAvailableVolume(sellPrice) * (1 - imbalanceFactor)) -1;
-                if (sellVolume < 0 && sellPrice >= 0) {
+                if (sellVolume < 0 && sellPrice > 0) {
                     if (itemBank.getBalance()/2 < -sellVolume)
                         sellVolume = (int) -itemBank.getBalance()/2;
 
@@ -305,8 +311,6 @@ public class ServerVolatilityBot extends ServerTradingBot {
 
                 }
             }
-
-
         }
     }
 

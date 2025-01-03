@@ -5,35 +5,56 @@ import net.fabricmc.api.ModInitializer;
 
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.util.StockMarketPlayerEvents;
 import net.kroia.stockmarket.util.StockMarketServerEvents;
 
 public final class StockMarketFabric implements ModInitializer {
     @Override
     public void onInitialize() {
-        // This code runs as soon as Minecraft is in a mod-load-ready state.
-        // However, some things (like resources) may still be uninitialized.
-        // Proceed with mild caution.
-        UtilitiesPlatform.setPlatform(new UtilitiesPlatformFabric());
-        ServerLifecycleEvents.SERVER_STARTED.register(server -> {
-            StockMarketMod.LOGGER.info("[FabricSetup] Common setup for server.");
 
-            StockMarketServerEvents.onServerStart(server);
-        });
-
-        if (FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT) {
+        // Client Events
+        if(FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT) {
             ClientLifecycleEvents.CLIENT_STARTED.register(client -> {
-                StockMarketMod.LOGGER.info("[FabricSetup] Client setup.");
+                StockMarketMod.LOGGER.info("[FabricSetup] CLIENT_STARTED");
                 StockMarketMod.onClientSetup();
             });
         }
 
 
+
+        // Server Events
+        ServerLifecycleEvents.SERVER_STARTING.register(server -> {
+            StockMarketMod.LOGGER.info("[FabricSetup] SERVER_STARTING");
+            StockMarketMod.onServerSetup();
+        });
+
+        ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+            StockMarketMod.LOGGER.info("[FabricSetup] SERVER_STARTED");
+            StockMarketServerEvents.onServerStart(server); // Handle world load (start)
+        });
+
+        // World save
+        ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
+            StockMarketMod.LOGGER.info("[FabricSetup] SERVER_STOPPING");
+            StockMarketServerEvents.onServerStop(server);
+        });
+
+
+        // Player Events
+        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
+            StockMarketPlayerEvents.onPlayerJoin(handler.getPlayer());
+        });
+
+        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
+            StockMarketPlayerEvents.onPlayerLeave(handler.getPlayer());
+        });
+
+
         // Run our common setup.
         StockMarketMod.init();
-        FabricPlayerEvents.register();
-        FabricServerEvents.register();
     }
 }

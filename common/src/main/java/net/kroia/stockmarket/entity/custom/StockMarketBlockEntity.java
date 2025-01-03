@@ -24,7 +24,7 @@ public class StockMarketBlockEntity extends BlockEntity /*implements MenuProvide
 
     public StockMarketBlockEntity(BlockPos pos, BlockState state) {
         super(StockMarketEntities.STOCK_MARKET_BLOCK_ENTITY.get(), pos, state);
-        StockMarketMod.LOGGER.info("StockMarketBlockEntity created at position " + pos);
+        //StockMarketMod.LOGGER.info("StockMarketBlockEntity created at position " + pos);
         itemID = "minecraft:diamond";
         amount = 1;
         price = 1;

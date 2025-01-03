@@ -3,24 +3,22 @@
   "id": "stockmarket",
   "version": "${version}",
   "name": "Stock Market",
-  "description": "This is an example description! Tell everyone what your mod is about!",
+  "description": "Stock Market Mod that allows players to buy and sell goods on a virtual market.",
   "authors": [
-    "Me!"
+    "Alex Krieg"
   ],
   "contact": {
     "homepage": "https://fabricmc.net/",
     "sources": "https://github.com/FabricMC/fabric-example-mod"
   },
-  "license": "CC0-1.0",
+  "license": "MIT",
   "icon": "assets/stockmarket/icon.png",
   "environment": "*",
   "entrypoints": {
     "main": [
       "net.kroia.stockmarket.fabric.StockMarketFabric"
     ],
-    "client": [
-      "net.kroia.stockmarket.fabric.client.StockMarketFabricClient"
-    ]
+    "client": []
   },
   "mixins": [
     "stockmarket.mixins.json"

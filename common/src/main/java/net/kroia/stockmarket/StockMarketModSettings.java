@@ -26,13 +26,13 @@ public class StockMarketModSettings {
             if(TRADABLE_ITEMS != null)
                 return;
             TRADABLE_ITEMS = new HashMap<>();
-            TRADABLE_ITEMS.put("minecraft:diamond", 50);
-            TRADABLE_ITEMS.put("minecraft:iron_ingot", 10);
-            TRADABLE_ITEMS.put("minecraft:gold_ingot", 25);
-            TRADABLE_ITEMS.put("minecraft:emerald", 100);
-            TRADABLE_ITEMS.put("minecraft:coal", 5);
-            TRADABLE_ITEMS.put("minecraft:oak_log", 5);
-            TRADABLE_ITEMS.put("minecraft:netherite_scrap", 5);
+            TRADABLE_ITEMS.put("minecraft:diamond", 100);
+            TRADABLE_ITEMS.put("minecraft:iron_ingot", 30);
+            TRADABLE_ITEMS.put("minecraft:gold_ingot", 50);
+            TRADABLE_ITEMS.put("minecraft:emerald", 50);
+            TRADABLE_ITEMS.put("minecraft:coal", 10);
+            TRADABLE_ITEMS.put("minecraft:oak_log", 10);
+            TRADABLE_ITEMS.put("minecraft:netherite_scrap", 500);
 
             //TRADABLE_ITEMS.put("minecraft:quartz", 5);
             //TRADABLE_ITEMS.put("minecraft:obsidian", 10);
@@ -84,7 +84,7 @@ public class StockMarketModSettings {
             ServerTradingBotFactory.botTableBuilder(bots, "minecraft:oak_log", new ServerVolatilityBot(),
                     new ServerVolatilityBot.Settings(100,1000,10000,300000,30,0.1,10,pidP,pidD,pidI,pidIBound),1000);
             ServerTradingBotFactory.botTableBuilder(bots, "minecraft:netherite_scrap", new ServerVolatilityBot(),
-                    new ServerVolatilityBot.Settings(100,1000,10000,300000,2000,0.1,10,pidP,pidD,pidI,pidIBound),100);
+                    new ServerVolatilityBot.Settings(100,1000,10000,300000,2000,0.1,10,pidP,pidD,pidI,pidIBound),500);
             ServerTradingBotFactory.botTableBuilder(bots, "minecraft:emerald", new ServerVolatilityBot(),
                     new ServerVolatilityBot.Settings(100,1000,10000,300000,100,0.1,10,pidP,pidD,pidI,pidIBound),100);
 
