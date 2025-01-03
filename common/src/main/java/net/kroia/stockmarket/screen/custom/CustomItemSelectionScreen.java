@@ -78,7 +78,7 @@ public class CustomItemSelectionScreen extends GuiScreen {
         addElement(listView);
         addElement(backButton);
 
-        updateFilter();
+        updateFilter(searchField.getText());
     }
 
     @Override
@@ -90,8 +90,7 @@ public class CustomItemSelectionScreen extends GuiScreen {
         backButton.setBounds((width - menuWidth) / 2, getHeight() - 30, menuWidth, 20);
     }
 
-    private void updateFilter() {
-        String filter = searchField.getText();
+    private void updateFilter(String filter) {;
         listView.removeChilds();
         listView.getLayout().enabled = false;
         if (filter.isEmpty()) {

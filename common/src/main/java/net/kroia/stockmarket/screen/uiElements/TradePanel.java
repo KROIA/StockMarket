@@ -81,7 +81,7 @@ public class TradePanel extends GuiElement {
         amountTextBox = new TextBox(0,0,0);
         amountTextBox.setText(""+amount);
         amountTextBox.setAllowLetters(false);
-        amountTextBox.setOnTextChanged(() -> {
+        amountTextBox.setOnTextChanged((text) -> {
             int am = amountTextBox.getInt();
             amount = Math.max(am, 0);
             amountTextBox.setText(""+amount);
@@ -104,7 +104,7 @@ public class TradePanel extends GuiElement {
         limitPriceLabel.setAlignment(Alignment.RIGHT);
         limitPriceTextBox = new TextBox(0,0,0);
         limitPriceTextBox.setText(""+limitPrice);
-        limitPriceTextBox.setOnTextChanged(() -> {
+        limitPriceTextBox.setOnTextChanged((text) -> {
             int am = limitPriceTextBox.getInt();
             if(am < 0)
                 limitPrice = 0;

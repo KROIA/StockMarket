@@ -50,10 +50,10 @@ public class OrderListView extends GuiElement {
         int width = getWidth()-OrderView.padding*2-activeOrderListView.getScrollbarThickness();
         int labelHeight = 15;
 
-        int _dirWidthRatio = OrderView.dirWidthRatio * width / OrderView.summRatio;
-        int _amountWidthRatio = OrderView.amountWidthRatio * width / OrderView.summRatio;
-        int _filledWidthRatio = OrderView.filledWidthRatio * width / OrderView.summRatio;
-        int _priceWidthRatio = OrderView.priceWidthRatio * width / OrderView.summRatio;
+        int _dirWidthRatio = OrderView.dirWidthRatio * width / OrderView.sumRatio;
+        int _amountWidthRatio = OrderView.amountWidthRatio * width / OrderView.sumRatio;
+        int _filledWidthRatio = OrderView.filledWidthRatio * width / OrderView.sumRatio;
+        int _priceWidthRatio = OrderView.priceWidthRatio * width / OrderView.sumRatio;
         //int _cancelWidthRatio = OrderView.cancelWidthRatio * width / OrderView.summRatio;
 
         int x = OrderView.padding;

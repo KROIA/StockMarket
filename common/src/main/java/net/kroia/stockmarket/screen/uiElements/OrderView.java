@@ -16,7 +16,7 @@ public class OrderView extends GuiElement {
     public static final int filledWidthRatio = 20;
     public static final int priceWidthRatio = 20;
     public static final int cancelWidthRatio = 20;
-    public static final int summRatio = dirWidthRatio + amountWidthRatio + filledWidthRatio + priceWidthRatio + cancelWidthRatio;
+    public static final int sumRatio = dirWidthRatio + amountWidthRatio + filledWidthRatio + priceWidthRatio + cancelWidthRatio;
 
     public static final Alignment alignment = Alignment.CENTER;
 
@@ -95,11 +95,11 @@ public class OrderView extends GuiElement {
 
 
 
-        int _dirWidthRatio = dirWidthRatio * width / summRatio;
-        int _amountWidthRatio = amountWidthRatio * width / summRatio;
-        int _filledWidthRatio = filledWidthRatio * width / summRatio;
-        int _priceWidthRatio = priceWidthRatio * width / summRatio;
-        int _cancelWidthRatio = cancelWidthRatio * width / summRatio;
+        int _dirWidthRatio = dirWidthRatio * width / sumRatio;
+        int _amountWidthRatio = amountWidthRatio * width / sumRatio;
+        int _filledWidthRatio = filledWidthRatio * width / sumRatio;
+        int _priceWidthRatio = priceWidthRatio * width / sumRatio;
+        int _cancelWidthRatio = cancelWidthRatio * width / sumRatio;
 
         directionLabel.setBounds(padding, 0, _dirWidthRatio, height);
         amountLabel.setBounds(directionLabel.getRight(), 0, _amountWidthRatio, height);
