@@ -8,10 +8,13 @@ import com.mojang.brigadier.arguments.LongArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.PlayerUtilities;
+import net.kroia.stockmarket.StockMarketClientHooks;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
+import net.kroia.stockmarket.networking.packet.server_sender.update.OpenScreenPacket;
+import net.kroia.stockmarket.networking.packet.server_sender.update.SyncBotSettingsPacket;
 import net.kroia.stockmarket.util.ServerPlayerList;
 import net.kroia.stockmarket.util.StockMarketTextMessages;
 import net.minecraft.commands.CommandSourceStack;
@@ -28,12 +31,13 @@ public class StockMarketCommands {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
 
 
-        // /StockMarket setPriceCandleTimeInterval <seconds>                            - Set price candle time interval
+        // /StockMarket setPriceCandleTimeInterval <seconds>                            - Set the interval for the price candles. (Each candle will represent this amount of time)
         // /StockMarket createDefaultBots                                               - Create default bots
         // /StockMarket order cancelAll                                                 - Cancel all orders
         // /StockMarket order cancelAll <itemID>                                        - Cancel all orders of an item
         // /StockMarket order <username> cancelAll                                      - Cancel all orders of a player
         // /StockMarket order <username> cancelAll <itemID>                             - Cancel all orders of a player for an item
+        // /StockMarket BotSettingsGUI                                                  - Open the settings GUI for the market bots
         // /StockMarket <itemID> bot settings get                                       - Get bot settings
         // /StockMarket <itemID> bot settings set enabled                               - Enable bot
         // /StockMarket <itemID> bot settings set disabled                              - Disable bot
@@ -51,6 +55,7 @@ public class StockMarketCommands {
         // /StockMarket <itemID> bot settings set pidP <pidP>                           - Set PID P
         // /StockMarket <itemID> bot settings set pidI <pidI>                           - Set PID I
         // /StockMarket <itemID> bot settings set pidD <pidD>                           - Set PID D
+        // /StockMarket <itemID> bot settings set pidIntegratedError <pidIntegratedError> - Set the current integrated error of the PID controller
         // /StockMarket <itemID> bot create                                             - Create bot
         // /StockMarket <itemID> bot remove                                             - Remove bot
         // /StockMarket <itemID> create                                                 - Create marketplace
@@ -156,7 +161,24 @@ public class StockMarketCommands {
 
                                 )
                         )
-
+                        .then(Commands.literal("BotSettingsGUI")
+                                .requires(source -> source.hasPermission(2))
+                                .executes(context -> {
+                                    ServerPlayer player = context.getSource().getPlayer();
+                                    if(player != null) {
+                                        ArrayList<String> suggestions = ServerMarket.getTradeItemIDs();
+                                        if(!suggestions.isEmpty()) {
+                                            String itemID = suggestions.get(0);
+                                            SyncBotSettingsPacket.sendPacket(player, itemID, ServerMarket.getBotUserUUID());
+                                            OpenScreenPacket.sendPacket(player, OpenScreenPacket.ScreenType.BOT_SETTINGS);
+                                        }
+                                        else {
+                                            PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getNoTradingItemAvailableMessage());
+                                        }
+                                    }
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                        )
                         .then(Commands.argument("itemID", StringArgumentType.string()).suggests((context, builder) -> {
                                             ArrayList<String> suggestions = ServerMarket.getTradeItemIDs();
                                             for (String suggestion : suggestions) {

@@ -2,6 +2,7 @@ package net.kroia.stockmarket;
 
 import com.mojang.logging.LogUtils;
 import dev.architectury.event.events.common.CommandRegistrationEvent;
+import net.kroia.stockmarket.market.client.ClientMarket;
 import net.kroia.stockmarket.util.DataHandler;
 import net.kroia.stockmarket.block.StockMarketBlocks;
 import net.kroia.stockmarket.command.StockMarketCommands;
@@ -34,12 +35,14 @@ public final class StockMarketMod {
         StockMarketTextMessages.init();
         StockMarketNetworking.setupClientReceiverPackets();
         StockMarketNetworking.setupServerReceiverPackets();
+
+        // On server join
+        ;
     }
 
     public static void onClientSetup()
     {
         StockMarketMenus.setupScreens();
-
     }
 
     public static void onServerSetup()

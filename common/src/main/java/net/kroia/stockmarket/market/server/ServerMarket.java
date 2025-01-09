@@ -124,6 +124,10 @@ public class ServerMarket implements ServerSaveable
         }
         return bot;
     }
+    public static UUID getBotUserUUID()
+    {
+        return botUserUUID;
+    }
     public static BankUser createBotUser()
     {
         BankUser bankUser = ServerBankManager.getUser(botUserUUID);
@@ -177,7 +181,7 @@ public class ServerMarket implements ServerSaveable
         PlayerList playerList = server.getPlayerList();
         for(ServerPlayer player : playerList.getPlayers())
         {
-            SyncTradeItemsPacket.sendResponse(player);
+            SyncTradeItemsPacket.sendPacket(player);
         }
     }
 
@@ -463,7 +467,7 @@ public class ServerMarket implements ServerSaveable
     }
     public static void handlePacket(ServerPlayer player, RequestTradeItemsPacket packet)
     {
-        SyncTradeItemsPacket.sendResponse(player);
+        SyncTradeItemsPacket.sendPacket(player);
     }
     public static void handlePacket(ServerPlayer player, RequestPricePacket packet)
     {

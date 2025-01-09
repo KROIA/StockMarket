@@ -75,13 +75,35 @@
   "message.stockmarket.order_has_been_filled": "{buy_sell_direction} order has been filled",
   "message.stockmarket.order_has_been_cancelled": "{buy_sell_direction} order has been filled",
   "message.stockmarket.order_filled_amount": "Filled amount: {amount} {item_name}",
-  "message.stockmarket.order_invalid_reason": "Invalid reason: {reason}"
+  "message.stockmarket.order_invalid_reason": "Invalid reason: {reason}",
 
 
+  "message.stockmarket.no_trading_item_available": "No trading item available",
+  "gui.stockmarket.bot_settings_screen.change_item": "Change Item",
+  "gui.stockmarket.bot_settings_screen.save_settings": "Save Settings",
+  "gui.stockmarket.bot_settings_screen.bot_create": "Create Bot",
+  "gui.stockmarket.bot_settings_screen.bot_destroy": "Destroy Bot",
+  "gui.stockmarket.bot_settings_screen.bot_bank": "Bot bank",
 
-
-
-
-
+  "gui.stockmarket.bot_settings_screen.setting_enabled": "Enabled",
+  "gui.stockmarket.bot_settings_screen.settings_max_order_count": "Max Order Count",
+  "gui.stockmarket.bot_settings_screen.settings_volume_scale": "Volume Scale",
+  "gui.stockmarket.bot_settings_screen.settings_volume_spread": "Volume Spread",
+  "gui.stockmarket.bot_settings_screen.settings_volume_randomness": "Volume Randomness",
+  "gui.stockmarket.bot_settings_screen.settings_update_interval": "Update Interval",
+  "gui.stockmarket.bot_settings_screen.settings_order_randomness": "Order Randomness",
+  "gui.stockmarket.bot_settings_screen.settings_volatility": "Volatility [%]",
+  "gui.stockmarket.bot_settings_screen.settings_volatility_timer": "Volatility Timer [ms]",
+  "gui.stockmarket.bot_settings_screen.settings_volatility_timer_min": "Volatility Timer Min [ms]",
+  "gui.stockmarket.bot_settings_screen.settings_volatility_timer_max": "Volatility Timer Max [ms]",
+  "gui.stockmarket.bot_settings_screen.settings_target_item_balance": "Target Item Balance",
+  "gui.stockmarket.bot_settings_screen.settings_imbalance_price_range": "Imbalance Price Range",
+  "gui.stockmarket.bot_settings_screen.settings_imbalance_price_change_fac_linear": "Price Change Factor Linear",
+  "gui.stockmarket.bot_settings_screen.settings_imbalance_price_change_fac_quad": "Price Change Factor Quadratic",
+  "gui.stockmarket.bot_settings_screen.settings_pid_p": "PID P",
+  "gui.stockmarket.bot_settings_screen.settings_pid_i": "PID I",
+  "gui.stockmarket.bot_settings_screen.settings_pid_d": "PID D",
+  "gui.stockmarket.bot_settings_screen.settings_pid_ibounds": "PID I Bounds",
+  "gui.stockmarket.bot_settings_screen.settings_pid_integrated_err": "PID Integrated Error"
 
 }

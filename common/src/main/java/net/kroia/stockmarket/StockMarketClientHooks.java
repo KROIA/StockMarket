@@ -3,6 +3,7 @@ package net.kroia.stockmarket;
 import net.kroia.banksystem.entity.custom.BankTerminalBlockEntity;
 import net.kroia.banksystem.screen.custom.BankSystemSettingScreen;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
+import net.kroia.stockmarket.screen.custom.BotSettingsScreen;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
@@ -16,10 +17,7 @@ public class StockMarketClientHooks {
         if(entity instanceof StockMarketBlockEntity stockMarketBlockEntity)
         {
             Minecraft.getInstance().submit(() -> {
-                Minecraft minecraft = Minecraft.getInstance();
-                TradeScreen screen = new TradeScreen(stockMarketBlockEntity);
-                //screen.init(minecraft, minecraft.getWindow().getGuiScaledWidth(), minecraft.getWindow().getGuiScaledHeight());
-                minecraft.setScreen(screen);
+                TradeScreen.openScreen(stockMarketBlockEntity);
             });
         }
         else
@@ -28,6 +26,18 @@ public class StockMarketClientHooks {
             return InteractionResult.FAIL;
         }
         return InteractionResult.SUCCESS;
+    }
+    public static void openStockMarketBlockScreen()
+    {
+        Minecraft.getInstance().submit(() -> {
+            TradeScreen.openScreen();
+        });
+    }
+    public static void openBotSettingsScreen()
+    {
+        Minecraft.getInstance().submit(() -> {
+            BotSettingsScreen.openScreen();
+        });
     }
     public static InteractionResult openBankTerminalBlockScreen(BlockEntity entity, BlockPos pos, Inventory playerInventory)
     {

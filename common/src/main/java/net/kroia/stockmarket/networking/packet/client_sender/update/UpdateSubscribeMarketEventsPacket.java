@@ -9,6 +9,7 @@ public class UpdateSubscribeMarketEventsPacket extends NetworkPacket {
     private String itemID;
     private boolean subscribe;
 
+
     public UpdateSubscribeMarketEventsPacket(String itemID, boolean subscribe) {
         super();
         this.itemID = itemID;

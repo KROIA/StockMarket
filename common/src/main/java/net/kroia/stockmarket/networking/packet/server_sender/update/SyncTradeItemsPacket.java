@@ -59,7 +59,7 @@ public class SyncTradeItemsPacket extends NetworkPacket {
         return syncPricePackets;
     }
 
-    public static void sendResponse(ServerPlayer player)
+    public static void sendPacket(ServerPlayer player)
     {
         //StockMarketMod.LOGGER.info("[SERVER] Sending SyncTradeItemsPacket");
         Map<String, ServerTradeItem> serverTradeItemMap = ServerMarket.getTradeItems();

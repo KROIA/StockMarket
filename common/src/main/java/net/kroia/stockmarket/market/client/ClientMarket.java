@@ -1,22 +1,25 @@
 package net.kroia.stockmarket.market.client;
 
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import net.kroia.stockmarket.market.server.order.Order;
+import net.kroia.stockmarket.networking.packet.client_sender.request.RequestBotSettingsPacket;
 import net.kroia.stockmarket.networking.packet.client_sender.request.RequestTradeItemsPacket;
+import net.kroia.stockmarket.networking.packet.server_sender.update.SyncBotSettingsPacket;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncOrderPacket;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncPricePacket;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncTradeItemsPacket;
+import net.kroia.stockmarket.screen.custom.BotSettingsScreen;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 
 public class ClientMarket {
 
     private static Map<String, ClientTradeItem> tradeItems = new HashMap<>();
 
+    private static SyncBotSettingsPacket syncBotSettingsPacket;
+    private static boolean syncBotSettingsPacketChanged = false;
 
     ClientMarket()
     {
@@ -28,7 +31,7 @@ public class ClientMarket {
         tradeItems.clear();
     }
 
-    public static void init()
+    public static void requestTradeItems()
     {
         RequestTradeItemsPacket.generateRequest();
     }
@@ -54,6 +57,7 @@ public class ClientMarket {
         }
         tradeItem.handlePacket(packet);
         TradeScreen.updatePlotsData();
+        BotSettingsScreen.updatePlotsData();
     }
     public static void handlePacket(SyncTradeItemsPacket packet)
     {
@@ -204,6 +208,58 @@ public class ClientMarket {
             return;
         }
         tradeItem.unsubscribe();
+    }
+
+
+    public static void handlePacket(SyncBotSettingsPacket packet)
+    {
+        syncBotSettingsPacket = packet;
+        syncBotSettingsPacketChanged = true;
+    }
+    public static boolean hasSyncBotSettingsPacketChanged()
+    {
+        if(syncBotSettingsPacketChanged)
+        {
+            syncBotSettingsPacketChanged = false;
+            return true;
+        }
+        return false;
+    }
+    public static ServerVolatilityBot.Settings getBotSettings(String itemID)
+    {
+        if(syncBotSettingsPacket != null)
+        {
+            if(syncBotSettingsPacket.getItemID().equals(itemID))
+            {
+                return syncBotSettingsPacket.getSettings();
+            }
+        }
+        RequestBotSettingsPacket.sendPacket(itemID);
+        return null;
+    }
+    public static String getBotSettingsItemID()
+    {
+        if(syncBotSettingsPacket != null)
+        {
+            return syncBotSettingsPacket.getItemID();
+        }
+        return null;
+    }
+    public static boolean botExists()
+    {
+        if(syncBotSettingsPacket != null)
+        {
+            return syncBotSettingsPacket.botExists();
+        }
+        return false;
+    }
+    public static UUID getBotUUID()
+    {
+        if(syncBotSettingsPacket != null)
+        {
+            return syncBotSettingsPacket.getBotUUID();
+        }
+        return null;
     }
 
     private static void msgTradeItemNotFound(String itemID) {
