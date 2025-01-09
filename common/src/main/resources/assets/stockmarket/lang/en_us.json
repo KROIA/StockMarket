@@ -23,6 +23,8 @@
   "message.stockmarket.marketplace_deleted": "{item_name} can no longer be traded on the stock market",
   "message.stockmarket.marketplace_created": "{item_name} can now be traded on the stock market",
   "message.stockmarket.current_price_of": "Current price of {item_name}: {current_price}",
+  "message.stockmarket.order_not_replaced": "Order can not be placed to a new price",
+  "message.stockmarket.order_replaced": "Order successfully placed to a new price",
 
 
 
@@ -50,7 +52,7 @@
   "message.stockmarket.bot_setting_imbalance_price_range": "Target price range set to {value}",
   "message.stockmarket.bot_setting_imbalance_change_factor": "Target price change factor set to {value}",
   "message.stockmarket.bot_setting_imbalance_change_quad_factor": "Target price quadratic change factor set to {value}",
-  "message.stockmarket.bot_setting_enabled": "Bot is set to {value}",
+  "message.stockmarket.bot_setting_enabled": "Bot is {value}",
   "message.stockmarket.bot_setting_enabled_value": "enabled",
   "message.stockmarket.bot_setting_disabled_value": "disabled",
   "message.stockmarket.bot_setting_max_order_count": "Max order count set to {value}",
@@ -64,7 +66,7 @@
 
 
 
-  "message.stockmarket.order_invalid": "Insufficient {item_name} to sell {amount}, Reason:\n",
+  "message.stockmarket.order_invalid": "Order is invalid, Reason:\n",
   "message.stockmarket.order_invalid_reason_orders_to_fill_transaction": "Not enough orders to fill the {buy_sell_direction} market order",
   "message.stockmarket.buy_direction": "Buy",
   "message.stockmarket.sell_direction": "Sell",
@@ -73,7 +75,7 @@
   "message.stockmarket.order_average_price": "Average price: {price} {currency}",
   "message.stockmarket.order_has_been_placed": "{buy_sell_direction} order has been placed",
   "message.stockmarket.order_has_been_filled": "{buy_sell_direction} order has been filled",
-  "message.stockmarket.order_has_been_cancelled": "{buy_sell_direction} order has been filled",
+  "message.stockmarket.order_has_been_cancelled": "{buy_sell_direction} order has been cancelled",
   "message.stockmarket.order_filled_amount": "Filled amount: {amount} {item_name}",
   "message.stockmarket.order_invalid_reason": "Invalid reason: {reason}",
 
@@ -90,7 +92,7 @@
   "gui.stockmarket.bot_settings_screen.settings_volume_scale": "Volume Scale",
   "gui.stockmarket.bot_settings_screen.settings_volume_spread": "Volume Spread",
   "gui.stockmarket.bot_settings_screen.settings_volume_randomness": "Volume Randomness",
-  "gui.stockmarket.bot_settings_screen.settings_update_interval": "Update Interval",
+  "gui.stockmarket.bot_settings_screen.settings_update_interval": "Update Interval [ms]",
   "gui.stockmarket.bot_settings_screen.settings_order_randomness": "Order Randomness",
   "gui.stockmarket.bot_settings_screen.settings_volatility": "Volatility [%]",
   "gui.stockmarket.bot_settings_screen.settings_volatility_timer": "Volatility Timer [ms]",

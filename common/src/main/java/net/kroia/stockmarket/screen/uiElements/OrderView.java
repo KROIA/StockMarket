@@ -30,7 +30,7 @@ public class OrderView extends GuiElement {
     private final int cancelHoverColor = 0xFFf2a45c; // Light Orange
     private final int cancelDownColor = 0xFFd6370b; // Dark Orange
 
-    private final Order order;
+    private Order order;
 
     public OrderView(Order order) {
         super(0,0,0,20);
@@ -57,6 +57,13 @@ public class OrderView extends GuiElement {
         addChild(priceLabel);
         addChild(cancelButton);
 
+        setOrder(order);
+    }
+
+
+    public void setOrder(Order order) {
+        this.order = order;
+
         if(order.isBuy())
         {
             directionLabel.setText(TradeScreen.BUY.getString());
@@ -75,7 +82,6 @@ public class OrderView extends GuiElement {
             priceLabel.setText("Market");
         }
     }
-
     public Order getOrder() {
         return order;
     }
@@ -110,7 +116,7 @@ public class OrderView extends GuiElement {
 
     @Override
     protected void render() {
-        filledLabel.setText(String.valueOf(order.getFilledAmount()));
+        filledLabel.setText(String.valueOf(Math.abs(order.getFilledAmount())));
     }
 
 }

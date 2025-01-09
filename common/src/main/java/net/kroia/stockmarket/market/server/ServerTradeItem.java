@@ -165,6 +165,14 @@ public class ServerTradeItem implements ServerSaveable {
             itemBank.unlockAll();
         notifySubscribers();
     }
+    public boolean changeOrderPrice(long orderID, int newPrice)
+    {
+        if(marketManager.changeOrderPrice(orderID, newPrice)) {
+            notifySubscribers();
+            return true;
+        }
+        return false;
+    }
 
     public OrderbookVolume getOrderBookVolume(int tiles, int minPrice, int maxPrice)
     {

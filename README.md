@@ -6,7 +6,7 @@ StockMarket is a Minecraft mod that brings a better way for trading to the game.
 <tr>
 <td>
 <div align="center">
-    <img src="documentation/images/tradingView.png" > 
+    <img src="documentation/images/tradingView.gif" > 
 </div>
 </td>
 </table>

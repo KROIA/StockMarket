@@ -21,6 +21,12 @@ public class LimitOrder extends Order implements ServerSaveable {
             return new LimitOrder(player.getUUID(), itemID, amount, price);
         return null;
     }
+    public static LimitOrder create(ServerPlayer player, String itemID, int amount, int price, int alreadyFilledAmount)
+    {
+        if(Order.tryReserveBankFund(player, itemID, amount-alreadyFilledAmount, price))
+            return new LimitOrder(player.getUUID(), itemID, amount, price, alreadyFilledAmount);
+        return null;
+    }
     public static LimitOrder createBotOrder(UUID playerUUID, Bank botMoneyBank, Bank botItemBank, String itemID, int amount, int price)
     {
         if(Order.tryReserveBankFund(botMoneyBank, botItemBank, playerUUID, itemID, amount, price, null))
@@ -30,6 +36,13 @@ public class LimitOrder extends Order implements ServerSaveable {
     protected LimitOrder(UUID playerUUID, String itemID, int amount, int price) {
         super(playerUUID, itemID, amount);
         this.price = price;
+
+        //StockMarketMod.LOGGER.info("LimitOrder created: " + toString());
+    }
+    protected LimitOrder(UUID playerUUID, String itemID, int amount, int price, int alreadyFilledAmount) {
+        super(playerUUID, itemID, amount);
+        this.price = price;
+        this.filledAmount = alreadyFilledAmount;
 
         //StockMarketMod.LOGGER.info("LimitOrder created: " + toString());
     }

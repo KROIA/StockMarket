@@ -417,6 +417,20 @@ public class StockMarketTextMessages {
         return NO_TRADING_ITEM_AVAILABLE.getString();
     }
 
+    private static final Component ORDER_REPLACED = Component.translatable(prefix+"order_replaced");
+    public static String getOrderReplacedMessage()
+    {
+        String msg = ORDER_REPLACED.getString();
+        return msg;
+    }
+
+    private static final Component ORDER_NOT_REPLACED = Component.translatable(prefix+"order_not_replaced");
+    public static String getOrderNotReplacedMessage()
+    {
+        String msg = ORDER_NOT_REPLACED.getString();
+        return msg;
+    }
+
 
 
     //--------------------------------------------------------------------------------------------------------

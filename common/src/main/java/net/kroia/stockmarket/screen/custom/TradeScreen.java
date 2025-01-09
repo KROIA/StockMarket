@@ -212,6 +212,7 @@ public class TradeScreen extends GuiScreen {
         instance.tradePanel.setCurrentPrice(item.getPrice());
         instance.tradePanel.setCurrentMoneyBalance(ClientBankManager.getBalance());
         instance.activeOrderListView.updateActiveOrders();
+        instance.candleStickChart.updateOrderDisplay();
     }
 
     private void onItemSelected(String itemId) {

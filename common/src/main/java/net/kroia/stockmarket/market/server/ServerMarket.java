@@ -5,6 +5,7 @@ import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.banking.events.ServerBankCloseItemBankEvent;
 import net.kroia.banksystem.banking.events.ServerBankEvent;
+import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.ServerSaveable;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.stockmarket.StockMarketMod;
@@ -15,15 +16,13 @@ import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.MarketOrder;
 import net.kroia.stockmarket.market.server.order.Order;
-import net.kroia.stockmarket.networking.packet.client_sender.request.RequestOrderCancelPacket;
-import net.kroia.stockmarket.networking.packet.client_sender.request.RequestOrderPacket;
-import net.kroia.stockmarket.networking.packet.client_sender.request.RequestPricePacket;
-import net.kroia.stockmarket.networking.packet.client_sender.request.RequestTradeItemsPacket;
+import net.kroia.stockmarket.networking.packet.client_sender.request.*;
 import net.kroia.stockmarket.networking.packet.client_sender.update.UpdateSubscribeMarketEventsPacket;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncPricePacket;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncTradeItemsPacket;
 import net.kroia.stockmarket.util.OrderbookVolume;
 import net.kroia.stockmarket.util.PriceHistory;
+import net.kroia.stockmarket.util.StockMarketTextMessages;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.server.MinecraftServer;
@@ -489,6 +488,25 @@ public class ServerMarket implements ServerSaveable
             ServerMarket.addPlayerUpdateSubscription(itemID, player);
         } else {
             ServerMarket.removePlayerUpdateSubscription(itemID, player);
+        }
+    }
+    public static void handlePacket(ServerPlayer player, RequestOrderChangePacket packet)
+    {
+        String itemID = packet.getItemID();
+        long targetOrderID = packet.getTargetOrderID();
+        int newPrice = packet.getNewPrice();
+        ServerTradeItem item = tradeItems.get(itemID);
+        if(item == null)
+        {
+            msgTradeItemNotFound(itemID);
+            return;
+        }
+        if(item.changeOrderPrice(targetOrderID, newPrice))
+        {
+            PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getOrderReplacedMessage());
+        }
+        else {
+            PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getOrderNotReplacedMessage());
         }
     }
     public static void removePlayerUpdateSubscription(ServerPlayer player)

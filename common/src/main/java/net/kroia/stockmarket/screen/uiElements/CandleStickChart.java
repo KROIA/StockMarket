@@ -1,8 +1,14 @@
 package net.kroia.stockmarket.screen.uiElements;
 
 import net.kroia.modutilities.gui.elements.base.GuiElement;
+import net.kroia.stockmarket.market.client.ClientMarket;
+import net.kroia.stockmarket.market.server.order.LimitOrder;
+import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
 import net.kroia.stockmarket.util.PriceHistory;
+
+import java.util.ArrayList;
+import java.util.HashMap;
 
 public class CandleStickChart extends GuiElement {
 
@@ -17,6 +23,12 @@ public class CandleStickChart extends GuiElement {
     private int chartViewMinPrice;
     private int chartViewMaxPrice;
     private PriceHistory priceHistory = null;
+    int chartWidth = 0;
+    int maxLabelWidth = 0;
+    int labelXPos = 5;
+
+
+    private HashMap<Long,LimitOrderInChartDisplay> limitOrderDisplays = new HashMap<>();
 
     private static final int PADDING = 10;
 
@@ -31,6 +43,11 @@ public class CandleStickChart extends GuiElement {
     {
         this.chartViewMinPrice = minPrice;
         this.chartViewMaxPrice = maxPrice;
+
+        for(LimitOrderInChartDisplay display : limitOrderDisplays.values())
+        {
+            display.setY(getChartYPos(display.getOrder().getPrice()));
+        }
     }
 
     public int getChartViewMinPrice()
@@ -48,16 +65,16 @@ public class CandleStickChart extends GuiElement {
     }
 
     @Override
-    protected void render() {
+    protected void renderBackground()
+    {
+        super.renderBackground();
         if(priceHistory == null)
             return;
-
-
-        int labelWidth = 0;
-        int maxLabelWidth = 0;
         int yAxisLabelIncrement = 10;
-        int labelXPos = 5;
-        int chartWidth = 0;
+        int labelWidth = 0;
+
+
+
         if(chartViewMaxPrice - chartViewMinPrice > 10)
         {
             yAxisLabelIncrement = (chartViewMaxPrice - chartViewMinPrice)/10;
@@ -76,7 +93,6 @@ public class CandleStickChart extends GuiElement {
             drawRect(labelXPos+maxLabelWidth+5,  y, chartWidth, 1, 0xFF808080);
 
         }
-
 
         int candleWidth = 0;
         if(priceHistory != null)
@@ -99,10 +115,18 @@ public class CandleStickChart extends GuiElement {
                 break;
         }
     }
+    @Override
+    protected void render() {
+
+    }
 
     @Override
     protected void layoutChanged() {
-
+        for(LimitOrderInChartDisplay display : limitOrderDisplays.values())
+        {
+            display.setWidth(getWidth()/2-5);
+            display.setPosition(getWidth()-display.getWidth(), getChartYPos(display.getOrder().getPrice()));
+        }
     }
 
 
@@ -148,8 +172,59 @@ public class CandleStickChart extends GuiElement {
                 candleWidth, bodyYMax-bodyYMin, color);
     }
 
+
+    public void updateOrderDisplay()
+    {
+        ArrayList<Order> orders = ClientMarket.getOrders(TradeScreen.getItemID());
+        HashMap<Long,Integer> stillActiveOrderIds = new HashMap<>();
+        ArrayList<Long> forRemoval = new ArrayList<>();
+
+        for(int j=0; j<orders.size(); ++j)
+        {
+            long orderID = orders.get(j).getOrderID();
+            stillActiveOrderIds.put(orderID, 1);
+        }
+
+        for(LimitOrderInChartDisplay display : limitOrderDisplays.values())
+        {
+            if(!stillActiveOrderIds.containsKey(display.getOrder().getOrderID()))
+            {
+                forRemoval.add(display.getOrder().getOrderID());
+            }
+            else
+            {
+                stillActiveOrderIds.put(display.getOrder().getOrderID(), 2);
+            }
+        }
+        for(Long orderID : forRemoval)
+        {
+            removeChild(limitOrderDisplays.get(orderID));
+            limitOrderDisplays.remove(orderID);
+        }
+        for(int j=0; j<orders.size(); ++j)
+        {
+            Order order = orders.get(j);
+            if(order instanceof LimitOrder limitOrder)
+            {
+                long orderID = limitOrder.getOrderID();
+                if(stillActiveOrderIds.get(orderID) == 1)
+                {
+                    LimitOrderInChartDisplay orderView = new LimitOrderInChartDisplay(this::getPriceFromYPos, limitOrder);
+                    orderView.setWidth(getWidth()/2-5);
+                    orderView.setPosition(getWidth()-orderView.getWidth(), getChartYPos(limitOrder.getPrice()));
+                    limitOrderDisplays.put(orderID, orderView);
+                    addChild(orderView);
+                }
+            }
+        }
+    }
+
     private int getChartYPos(int price)
     {
         return map(price, chartViewMinPrice, chartViewMaxPrice, getHeight()-PADDING, PADDING);
+    }
+    private int getPriceFromYPos(int y)
+    {
+        return map(y, getHeight()-PADDING, PADDING, chartViewMinPrice, chartViewMaxPrice);
     }
 }

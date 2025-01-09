@@ -35,9 +35,7 @@ public class StockMarketClientHooks {
     }
     public static void openBotSettingsScreen()
     {
-        Minecraft.getInstance().submit(() -> {
-            BotSettingsScreen.openScreen();
-        });
+        Minecraft.getInstance().submit(BotSettingsScreen::openScreen);
     }
     public static InteractionResult openBankTerminalBlockScreen(BlockEntity entity, BlockPos pos, Inventory playerInventory)
     {

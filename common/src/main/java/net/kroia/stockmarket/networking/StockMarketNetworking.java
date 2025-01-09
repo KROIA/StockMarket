@@ -46,6 +46,7 @@ public class StockMarketNetworking {
         CHANNEL.register(UpdateStockMarketBlockEntityPacket.class, UpdateStockMarketBlockEntityPacket::toBytes, UpdateStockMarketBlockEntityPacket::new, UpdateStockMarketBlockEntityPacket::receive);
         CHANNEL.register(RequestBotSettingsPacket.class, RequestBotSettingsPacket::toBytes, RequestBotSettingsPacket::new, RequestBotSettingsPacket::receive);
         CHANNEL.register(UpdateBotSettingsPacket.class, UpdateBotSettingsPacket::toBytes, UpdateBotSettingsPacket::new, UpdateBotSettingsPacket::receive);
+        CHANNEL.register(RequestOrderChangePacket.class, RequestOrderChangePacket::toBytes, RequestOrderChangePacket::new, RequestOrderChangePacket::receive);
 
 
     }

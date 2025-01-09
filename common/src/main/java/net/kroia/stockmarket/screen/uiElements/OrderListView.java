@@ -93,6 +93,18 @@ public class OrderListView extends GuiElement {
                     viewContentChanged = true;
                     i--;
                 }
+                else {
+
+                    for(int j=0; j<orders.size(); ++j)
+                    {
+                        if(orders.get(j).getOrderID() == order.getOrderID())
+                        {
+                            Order newOrder = orders.get(j);
+                            view.setOrder(newOrder);
+                            break;
+                        }
+                    }
+                }
                 stillActiveOrderIds.put(order.getOrderID(), 2);
             }
         }

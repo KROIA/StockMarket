@@ -130,6 +130,11 @@ public class MarketManager implements ServerSaveable {
     {
         matchingEngine.cancelAllOrders();
     }
+
+    public boolean changeOrderPrice(long orderID, int newPrice)
+    {
+        return matchingEngine.changeOrderPrice(orderID, newPrice);
+    }
     public ArrayList<Order> getOrders()
     {
         return matchingEngine.getOrders();

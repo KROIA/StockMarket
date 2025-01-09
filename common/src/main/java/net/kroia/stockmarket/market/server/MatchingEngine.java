@@ -1,5 +1,8 @@
 package net.kroia.stockmarket.market.server;
 
+import net.kroia.banksystem.banking.ServerBankManager;
+import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.ServerSaveable;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.MarketOrder;
@@ -9,6 +12,8 @@ import net.kroia.stockmarket.util.PriceHistory;
 import net.kroia.stockmarket.util.StockMarketTextMessages;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.player.Player;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -294,6 +299,51 @@ public class MatchingEngine implements ServerSaveable {
             order.markAsCancelled();
         }
         limitSellOrders.clear();
+    }
+
+    public boolean changeOrderPrice(long orderID, int newPrice)
+    {
+        if(newPrice < 0)
+            newPrice = 0;
+        LimitOrder targetOrder = null;
+        for(LimitOrder order : limitBuyOrders)
+        {
+            if(order.getOrderID() == orderID)
+            {
+                targetOrder = order;
+                break;
+            }
+        }
+        if(targetOrder == null) {
+            for (LimitOrder order : limitSellOrders) {
+                if (order.getOrderID() == orderID) {
+                    targetOrder = order;
+                    break;
+                }
+            }
+        }
+        if(targetOrder == null)
+            return false;
+        int toFillAmount = targetOrder.getAmount()-targetOrder.getFilledAmount();
+        Bank moneyBank = ServerBankManager.getUser(targetOrder.getPlayerUUID()).getMoneyBank();
+        int toFreeAmount = toFillAmount * targetOrder.getPrice();
+        ServerPlayer player = PlayerUtilities.getOnlinePlayer(targetOrder.getPlayerUUID());
+        if(moneyBank.getBalance()-toFreeAmount >= 0 && player != null)
+        {
+            cancelOrder(orderID);
+            LimitOrder newOrder = LimitOrder.create(player, targetOrder.getItemID(), targetOrder.getAmount(), newPrice, targetOrder.getFilledAmount());
+            if(newOrder != null) {
+                addOrder(newOrder);
+                return true;
+            }
+            else {
+                LimitOrder oldOrder = LimitOrder.create(player, targetOrder.getItemID(), targetOrder.getAmount(), targetOrder.getPrice(), targetOrder.getFilledAmount());
+                if(oldOrder != null)
+                    addOrder(oldOrder);
+                return false;
+            }
+        }
+        return false;
     }
     /*public int cancleOrdersUntilItemVolumeReached(UUID playerOwner, int volume)
     {

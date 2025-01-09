@@ -4,6 +4,7 @@ import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.networking.packet.client_sender.request.RequestBotSettingsPacket;
+import net.kroia.stockmarket.networking.packet.client_sender.request.RequestOrderChangePacket;
 import net.kroia.stockmarket.networking.packet.client_sender.request.RequestTradeItemsPacket;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncBotSettingsPacket;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncOrderPacket;
@@ -140,6 +141,10 @@ public class ClientMarket {
             return false;
         }
         return tradeItem.createOrder(quantity);
+    }
+    public static void changeOrderPrice(String itemID, long orderID, int newPrice)
+    {
+        RequestOrderChangePacket.sendRequest(itemID, orderID, newPrice);
     }
 
     public static Order getOrder(String itemID, long orderID)
