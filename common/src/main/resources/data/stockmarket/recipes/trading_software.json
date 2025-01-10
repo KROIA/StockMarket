@@ -14,7 +14,7 @@
   ],
   "result": {
     "count": 1,
-    "item": "stockmarket:trading_software"
+    "id": "stockmarket:trading_software"
   },
   "show_notification": true
 }
