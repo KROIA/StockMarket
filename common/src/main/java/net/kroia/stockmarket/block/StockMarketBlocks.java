@@ -42,7 +42,7 @@ public class StockMarketBlocks {
     public static <T extends Block> RegistrySupplier<T> registerBlock(String name, Supplier<T> block)
     {
         //BankSystemMod.LOGGER.info("Registering Block: " + name);
-        RegistrySupplier<T> toReturn = BLOCKS.register(new ResourceLocation(StockMarketMod.MOD_ID, name), block);
+        RegistrySupplier<T> toReturn = BLOCKS.register(ResourceLocation.fromNamespaceAndPath(StockMarketMod.MOD_ID, name), block);
         StockMarketItems.registerBlockItem(name, toReturn);
         return toReturn;
     }

@@ -40,6 +40,6 @@ public class StockMarketEntities {
     public static <T extends BlockEntityType<?>> RegistrySupplier<T> registerBlockEntity(String name, Supplier<T> item)
     {
         //StockMarketMod.LOGGER.info("Registering block entity: " + name);
-        return BLOCK_ENTITIES.register(new ResourceLocation(StockMarketMod.MOD_ID, name), item);
+        return BLOCK_ENTITIES.register(ResourceLocation.fromNamespaceAndPath(StockMarketMod.MOD_ID, name), item);
     }
 }
