@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.screen.uiElements;
 
+import net.kroia.banksystem.banking.bank.MoneyBank;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
@@ -74,7 +75,7 @@ public class OrderView extends GuiElement {
             directionLabel.setText(TradeScreen.SELL.getString());
             setBackgroundColor(TradeScreen.colorRed);
         }
-        amountLabel.setText(String.valueOf(Math.abs(order.getAmount())));
+        amountLabel.setText(MoneyBank.getNormalizedAmount(Math.abs(order.getAmount())));
         if(order instanceof LimitOrder limitOrder) {
             priceLabel.setText(String.valueOf(limitOrder.getPrice()));
         }
@@ -116,7 +117,7 @@ public class OrderView extends GuiElement {
 
     @Override
     protected void render() {
-        filledLabel.setText(String.valueOf(Math.abs(order.getFilledAmount())));
+        filledLabel.setText(MoneyBank.getNormalizedAmount(Math.abs(order.getFilledAmount())));
     }
 
 }
