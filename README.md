@@ -6,7 +6,7 @@ StockMarket is a Minecraft mod that brings a better way for trading to the game.
 <tr>
 <td>
 <div align="center">
-    <img src="documentation/images/tradingView.png" > 
+    <img src="documentation/images/tradingView.gif" > 
 </div>
 </td>
 </table>
@@ -35,6 +35,64 @@ StockMarket is a Minecraft mod that brings a better way for trading to the game.
 - Implementation of a [matching engine](#matching-engine) inspired by the real market.
 - Configurable [bot](#stock-market-bot) which provides the market with liquidity and volatility 
 
+## Dependencies
+- [Bank System Mod](https://github.com/KROIA/BankSystem)
+- [Architectury](https://www.curseforge.com/minecraft/mc-mods/architectury-api)
+- [Quilted Fabric API](https://www.curseforge.com/minecraft/mc-mods/qsl) (Only needed for Quilt)
+- [Mod Utilities](https://www.curseforge.com/minecraft/mc-mods/modutilities) (Only needed for Quilt)
+- [Fabric API](https://www.curseforge.com/minecraft/mc-mods/fabric-api) (Only needed for Fabric)
+
+---
+## Downloads
+<!--
+[CurseForge](https://www.curseforge.com/minecraft/mc-mods/stockmarket)
+
+
+| Version | Download |
+|---------|----------|
+|1.3.0    | [![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21.1-green)](https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6002691)<br>[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.6-blue)](https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6002684)<br>[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.4-blue)](https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6002682)<br>[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.3-blue)](https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6002681)<br>[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.2-blue)](https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6002679)<br>[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.1-blue)](https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6002676)<br>[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.4-blue)](https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6004639)<br>[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.3-blue)](https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6004641)<br>[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.2-blue)](https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6004643) |
+
+-->
+[CurseForge](https://www.curseforge.com/minecraft/mc-mods/stockmarket)
+| Minecraft | Fabric | Forge | Quilt | Neoforge |
+|-----------|--------|-------|-------|----------|
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21.1-green)    |  |  |  |  |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21-green)      |  |  |  |  |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.6-green)    |  |  |  |  |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.4-green)    |  |  |  |  |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.2-green)    |  |  |  |  |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.1-green)    | [![Version](https://img.shields.io/badge/v1.2.0-green)][1.2.0-fabric-1.20.1] | [![Version](https://img.shields.io/badge/v1.2.0-green)][1.2.0-forge-1.20.1] | [![Version](https://img.shields.io/badge/v1.2.0-green)][1.2.0-quilt-1.20.1] |                                                                                |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.4-green)    |  |  |  |  |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.3-green)    |  |  |  |  |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.2-green)    |  |  |  |  |
+
+<!--	Links to curseforge:	-->
+[1.2.0-fabric-1.19.2]:-
+[1.2.0-fabric-1.19.3]:-
+[1.2.0-fabric-1.19.4]:-
+[1.2.0-fabric-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6070945
+[1.2.0-fabric-1.20.2]:-
+[1.2.0-fabric-1.20.4]:-
+[1.2.0-fabric-1.20.6]:-
+[1.2.0-fabric-1.21]:-
+[1.2.0-fabric-1.21.1]:-
+
+[1.2.0-forge-1.19.2]:-
+[1.2.0-forge-1.19.3]:-
+[1.2.0-forge-1.19.4]:-
+[1.2.0-forge-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6070939
+[1.2.0-forge-1.20.2]:-
+[1.2.0-forge-1.20.4]:-
+					 
+[1.2.0-quilt-1.19.2]:-
+[1.2.0-quilt-1.19.3]:-
+[1.2.0-quilt-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6070944
+[1.2.0-quilt-1.20.2]:-
+[1.2.0-quilt-1.20.4]:-
+
+[1.2.0-neoforge-1.20.6]:-
+[1.2.0-neoforge-1.21]:-
+[1.2.0-neoforge-1.21.1]:-
 
 
 ---
@@ -42,55 +100,7 @@ StockMarket is a Minecraft mod that brings a better way for trading to the game.
 <table>
 <tr>
 <td>
-<b>Metal Case Block</b><br>
-Casing for the Terminal block.<br>
-8 Iron ingots
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/metalCaseBlock.png" width="300"> 
-</div>
-</td>
-</tr>
-
-
-<tr>
-<td>
-<b>Terminal Block</b><br>
-Unprogrammed terminal.<br>
-Can be programmed using a software item.<br>
-4 Iron nuggets<br>
-1 Metal Case Block<br>
-1 Display<br>
-1 Circuit Board<br>
-2 Redstone
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/terminalBlock.png" width="300"> 
-</div>
-</td>
-</tr>
-
-
-<tr>
-<td>
-<b>Banking Terminal Block</b><br>
-Used to get access to the bank account.<br>
-Interaction using right click.<br>
-Right click on a <b>Terminal Block</b> using a <b>Banking Software</b> to create this block.
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/bankingTerminalBlock.png" width="100"> 
-</div>
-</td>
-</tr>
-
-
-<tr>
-<td>
-<b>Banking Terminal Block</b><br>
+<b>Stock Market Block</b><br>
 Used to get access to the stock market.<br>
 Interaction using right click.<br>
 Right click on a <b>Terminal Block</b> using a <b>Trading Software</b> to create this block.
@@ -106,69 +116,6 @@ Right click on a <b>Terminal Block</b> using a <b>Trading Software</b> to create
 ---
 ## Items
 <table>
-<tr>
-<td>
-<b>Circuit Board</b><br>
-Electronics for other Items.<br>
-1 Nether Quartz<br>
-3 Copper Ingots<br>
-3 Paper<br>
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/circuitBoard.png" width="300"> 
-</div>
-</td>
-</tr>
-
-
-<tr>
-<td>
-<b>Display</b><br>
-Display for the <b>Terminal Block</b><br>
-6 Glass Planes<br>
-2 Iron Ingots<br>
-1 Ciruit Board
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/display.png" width="300"> 
-</div>
-</td>
-</tr>
-
-
-<tr>
-<td>
-<b>Empty Software</b><br>
-Used to create a specific software<br>
-4 Iron nuggets<br>
-2 Ink Sacs<br>
-3 Paper
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/emptySoftware.png" width="300"> 
-</div>
-</td>
-</tr>
-
-
-<tr>
-<td>
-<b>Banking Software</b><br>
-Used to programm the <b>Terminal Block</b> to be a <b>Bank Terminal Block</b><br>
-1 Empty Software<br>
-1 Gold Ingot<br>
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/bankingSoftware.png" width="300"> 
-</div>
-</td>
-</tr>
-
-
 <tr>
 <td>
 <b>Trading Software</b><br>
@@ -225,13 +172,7 @@ A limit order requires an **amount** and **price** at which the trade gets execu
 #### Selling Items
 To sell items the item must be available on the market. This is managed by the server admin.<br>
 Assuming the item can be traded on the market, you first have to deposit the item to your bank account. This can be done using the **Bank Terminal Block**.<br>
-Open that block using right click. A window will appear.<br>
-Place your item stacks in the blocks inventory and press the button **Send items to market**.<br>
-This will transfer the items to your bank account.<br>
-<div align="center">
-    <img src="documentation/images/bankingView.png" > 
-</div>
-<br>
+See [Bank System Mod](https://github.com/KROIA/BankSystem) to learn how.
 
 Now open the **Stock Market Terminal Block** using right click.<br>
 This opens the trading window.<br>
@@ -255,20 +196,11 @@ A server admin can also provide you money...<br>
 Assuming you have money, open the **Stock Market Terminal Block**<br>
 Select the item you want to trade by pressing the button on the top right with the Label "Price: XX".<br>
 Type the amount you want to buy, type a limit price if you want to execute a limit order.<br>
-Clock on the **buy** button.<br>
+Click on the **buy** button.<br>
 A market-order gets executed directly but a limit order may take some time until it gets filled by the market.<br>
 
-Once you have received the items, you can go to the **Bank Terminal Block**.<br>
-On the left side you can see your items on the bank account.<br>
-Type the amount you want to receive back in to the text field and click **Receive items from market**.<br>
-The items will be transfered to the Bank Terminal Block.<br>
+Once you have received the items, you can go to the **Bank Terminal Block** receive the bought items.<br>
 
-
-
-<div align="center">
-    <img src="documentation/images/bankingView.png" > 
-</div>
-<br>
 
 ---
 ### For Admins / Single Player
@@ -345,21 +277,7 @@ Each player receives its bank account with 0 balance.
 ## Commands
 | Command | Description | Admin only |
 |---------|-------------|------------|
-| /money                           											| Show balance                                  |  |
-| /money add [amount]              											| Add money to self                             | :heavy_check_mark: |
-| /money add [user] [amount]       											| Add money to another player                   | :heavy_check_mark: |
-| /money set [amount]              											| Set money to self                             | :heavy_check_mark: |
-| /money set [user] [amount]       											| Set money to another player                   | :heavy_check_mark: |
-| /money remove [amount]           											| Remove money from self                        | :heavy_check_mark: |
-| /money remove [user] [amount]    											| Remove money from another player              | :heavy_check_mark: |
-| /money send [user] [amount]      											| Send money to another player                  |  |
-| /money circulation               											| Show money circulation of all players + bot   |  |
-| /bank                                                						| Show bank balance (money and items)      		|  |
-| /bank [username] show                                						| Show bank balance of another player      		| :heavy_check_mark: |
-| /bank [username] create [itemID] [amount]            						| Create a bank for another player         		| :heavy_check_mark: |
-| /bank [username] setBalance [itemID] [amount]        						| Set balance of a bank for another player 		| :heavy_check_mark: |
-| /bank [username] delete [itemID]                     						| Delete a bank for another player         		| :heavy_check_mark: |
-| /StockMarket setPriceCandleTimeInterval [seconds]                         | Set price candle time interval                | :heavy_check_mark: |
+| /StockMarket setPriceCandleTimeInterval [seconds]                         | Set the interval for the price candles. (Each candle will represent this amount of time) | :heavy_check_mark: |
 | /StockMarket createDefaultBots                                            | Create default bots                           | :heavy_check_mark: |
 | /StockMarket order cancelAll                                              | Cancel all orders                             |  |
 | /StockMarket order cancelAll [itemID]                                     | Cancel all orders of an item                  |  |
@@ -373,7 +291,8 @@ Each player receives its bank account with 0 balance.
 | /StockMarket [itemID] bot settings set imbalancePriceChangeFactorLinear [factor]  | Linear scale how much a price changes when the item stock moves away from the target item stock.        		| :heavy_check_mark: |
 | /StockMarket [itemID] bot settings set imbalancePriceChangeFactorQuadratic [factor]  | Quadratic scale how much a price changes when the item stock moves away from the target item stock. (only active when current balance [ desired balance) | :heavy_check_mark: |
 | /StockMarket [itemID] bot settings set imbalancePriceRange [priceRange]   | Set imbalance price range                		| :heavy_check_mark: |
-| /StockMarket [itemID] bot settings set targetPriceRange [balance]         | Set the amount the bot trys to hold in its bank | :heavy_check_mark: |
+| /StockMarket [itemID] bot settings set targetItemBalance [balance]        | Set the amount the bot trys to hold in its bank | :heavy_check_mark: |
+| /StockMarket [itemID] bot settings set targetPriceRange [priceRange]      | Defines a price X. The bot will try to move the price up to X if its stock is faar below its targetItemBalance. For example: If the bot try's to hold 1000 Iron ingots, the price range is set to 100 and the bots current balance is 1000 Iron Ingots. The bot will move the price to 500 which is half of the TargetPriceRange. | :heavy_check_mark: |
 | /StockMarket [itemID] bot settings set maxOrderCount [orderCount]         | Set max order count a bot can create          | :heavy_check_mark: |
 | /StockMarket [itemID] bot settings set volumeScale [volumeScale]          | Set volume scale factor to scale the liquidity in the orders | :heavy_check_mark: |
 | /StockMarket [itemID] bot settings set volumeSpread [volumeSpread]        | Set the price range the bot places some orders | :heavy_check_mark: |
@@ -386,11 +305,13 @@ Each player receives its bank account with 0 balance.
 | /StockMarket [itemID] bot settings set pidI [pidI]                        | Set PID I                                		| :heavy_check_mark: |
 | /StockMarket [itemID] bot settings set pidD [pidD]                        | Set PID D                                		| :heavy_check_mark: |
 | /StockMarket [itemID] bot settings set pidIBounds [bounds]                | Set PID I bounds, abs(I) will be [ pidIBounds | :heavy_check_mark: |
+| /StockMarket [itemID] bot settings set pidIntegratedError [pidIntegratedError] | Set the current integrated error of the PID controller | :heavy_check_mark: |
 | /StockMarket [itemID] bot create                                          | Create bot                               		| :heavy_check_mark: |
 | /StockMarket [itemID] bot remove                                          | Remove bot                               		| :heavy_check_mark: |
 | /StockMarket [itemID] create                                              | Create marketplace                       		| :heavy_check_mark: |
 | /StockMarket [itemID] remove                                              | Remove marketplace                            | :heavy_check_mark: |
 | /StockMarket [itemID] currentPrice                                        | Get current price                        		| :heavy_check_mark: |
+
 
 
 
@@ -451,8 +372,6 @@ To create a random price chart that also stays in its realistic bounds, multiple
     The PID-Controller will make sure to generate the right amount of orders until the 
     target price is reached.
 
-
-:construction:
 
 ---
 
