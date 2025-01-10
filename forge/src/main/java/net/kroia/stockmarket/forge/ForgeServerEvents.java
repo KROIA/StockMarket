@@ -16,7 +16,7 @@ public class ForgeServerEvents {
             ModUtilitiesMod.LOGGER.info("[ForgeSetup] SERVER_STARTING");
             StockMarketServerEvents.onServerStart(server);
         });
-        LifecycleEvent.SERVER_STARTING.register(server -> {
+        LifecycleEvent.SERVER_STOPPING.register(server -> {
             ModUtilitiesMod.LOGGER.info("[ForgeSetup] SERVER_STOPPED");
             StockMarketServerEvents.onServerStop(server);
         });
