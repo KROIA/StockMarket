@@ -11,7 +11,7 @@ import java.io.IOException;
 
 
 
-public class DataHandler {
+public class StockMarketDataHandler {
     private static final String FOLDER_NAME = "Finance/StockMarket";
 
     private static final String PLAYER_DATA_FILE_NAME = "Player_data.dat";
@@ -21,9 +21,17 @@ public class DataHandler {
 
     private static boolean isLoaded = false;
 
-    public DataHandler()
+    private static long tickCounter = 0;
+    public static long saveTickInterval = 6000; // 5 minutes
+
+    public static void tickUpdate()
     {
-        //MinecraftForge.EVENT_BUS.addListener(this::onServerTick);
+        tickCounter++;
+        if(tickCounter >= saveTickInterval)
+        {
+            tickCounter = 0;
+            saveAll();
+        }
     }
 
 

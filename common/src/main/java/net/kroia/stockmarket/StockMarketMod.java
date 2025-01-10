@@ -2,8 +2,8 @@ package net.kroia.stockmarket;
 
 import com.mojang.logging.LogUtils;
 import dev.architectury.event.events.common.CommandRegistrationEvent;
-import net.kroia.stockmarket.market.client.ClientMarket;
-import net.kroia.stockmarket.util.DataHandler;
+import dev.architectury.event.events.common.TickEvent;
+import net.kroia.stockmarket.util.StockMarketDataHandler;
 import net.kroia.stockmarket.block.StockMarketBlocks;
 import net.kroia.stockmarket.command.StockMarketCommands;
 import net.kroia.stockmarket.entity.StockMarketEntities;
@@ -36,8 +36,9 @@ public final class StockMarketMod {
         StockMarketNetworking.setupClientReceiverPackets();
         StockMarketNetworking.setupServerReceiverPackets();
 
-        // On server join
-        ;
+        TickEvent.ServerLevelTick.SERVER_POST.register((serverLevel) -> {
+            StockMarketDataHandler.tickUpdate();
+        });
     }
 
     public static void onClientSetup()
@@ -54,18 +55,18 @@ public final class StockMarketMod {
     {
         File rootSaveFolder = server.getWorldPath(LevelResource.ROOT).toFile();
         // Load data from the root save folder
-        DataHandler.setSaveFolder(rootSaveFolder);
-        DataHandler.loadAll();
+        StockMarketDataHandler.setSaveFolder(rootSaveFolder);
+        StockMarketDataHandler.loadAll();
     }
     public static void saveDataToFiles(MinecraftServer server)
     {
         File rootSaveFolder = server.getWorldPath(LevelResource.ROOT).toFile();
         // Load data from the root save folder
-        DataHandler.setSaveFolder(rootSaveFolder);
-        DataHandler.saveAll();
+        StockMarketDataHandler.setSaveFolder(rootSaveFolder);
+        StockMarketDataHandler.saveAll();
     }
     public static boolean isDataLoaded() {
-        return DataHandler.isLoaded();
+        return StockMarketDataHandler.isLoaded();
     }
 
 }
