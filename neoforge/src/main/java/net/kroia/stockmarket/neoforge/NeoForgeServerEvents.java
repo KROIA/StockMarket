@@ -17,7 +17,7 @@ public class NeoForgeServerEvents {
             ModUtilitiesMod.LOGGER.info("[NeoForgeSetup] SERVER_STARTING");
             StockMarketServerEvents.onServerStart(server);
         });
-        LifecycleEvent.SERVER_STARTING.register(server -> {
+        LifecycleEvent.SERVER_STOPPING.register(server -> {
             ModUtilitiesMod.LOGGER.info("[NeoForgeSetup] SERVER_STOPPED");
             StockMarketServerEvents.onServerStop(server);
         });
