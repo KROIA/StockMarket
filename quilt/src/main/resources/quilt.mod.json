@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "quilt_loader": {
+    "group": "${group}",
+    "id": "stockmarket",
+    "version": "${version}",
+    "metadata": {
+      "name": "Stock Market",
+      "description": "Stock Market Mod that allows players to buy and sell goods on a virtual market.",
+      "contributors": {
+        "Me!": "Alex Krieg"
+      },
+      "icon": "assets/stockmarket/icon.png"
+    },
+    "intermediate_mappings": "net.fabricmc:intermediary",
+    "entrypoints": {
+      "init": [
+        "net.kroia.quilt.StockMarketQuilt"
+      ]
+    },
+    "depends": [
+      {
+        "id": "quilt_loader",
+        "version": "*"
+      },
+      {
+        "id": "quilt_base",
+        "version": "*"
+      },
+      {
+        "id": "minecraft",
+        "version": ">=1.19.3"
+      },
+      {
+        "id": "architectury",
+        "version": ">=7.1.86"
+      },
+      {
+        "id": "banksystem",
+        "version": ">=1.3.1"
+      }
+    ]
+  },
+  "mixin": []
+}

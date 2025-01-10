@@ -1,0 +1,32 @@
+architectury {
+    common rootProject.enabled_platforms.split(',')
+}
+repositories {
+    maven { url 'https://maven.quiltmc.org/repository/release/' }
+    flatDir {
+        dir "../../../BankSystem/mc_${minecraft_version}_BankSystem/common/build/libs"
+        dir "../../../MC_ModUtilities/mc_${minecraft_version}_MC_ModUtilities/common/build/libs"
+    }
+
+    //mavenLocal()
+    //maven { url 'https://jitpack.io' }
+
+}
+
+dependencies {
+    // We depend on Fabric Loader here to use the Fabric @Environment annotations,
+    // which get remapped to the correct annotations on each platform.
+    // Do NOT use other classes from Fabric Loader.
+    modImplementation "net.fabricmc:fabric-loader:$rootProject.fabric_loader_version"
+
+    // Architectury API. This is optional, and you can comment it out if you don't need it.
+    modImplementation "dev.architectury:architectury:$rootProject.architectury_api_version"
+
+    //modImplementation("net.kroia:banksystem-common:1.3.0")
+    modCompileOnly("net.kroia:banksystem-common:1.3.1")
+    modCompileOnly("net.kroia:modutilities-common:1.0.0")
+
+    //implementation "net.kroia:banksystem-common:1.3.0"
+   // compileOnly "net.kroia:banksystem-common:1.3.0"
+    //compileOnly "net.kroia:banksystem-common:1.3.0"
+}
