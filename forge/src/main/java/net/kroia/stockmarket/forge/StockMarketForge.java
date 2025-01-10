@@ -12,6 +12,7 @@ public final class StockMarketForge {
         // Submit our event bus to let Architectury API register our content on the right time.
         EventBuses.registerModEventBus(StockMarketMod.MOD_ID, Mod.EventBusSubscriber.Bus.MOD.bus().get());
 
+        ForgeServerEvents.init();
         // Run our common setup.
         StockMarketMod.init();
     }
