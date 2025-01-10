@@ -171,7 +171,7 @@ public class MatchingEngine implements ServerSaveable {
     private boolean processLimitOrder(LimitOrder limitOrder)
     {
         // Process the limit order
-        int fillVolume = Math.abs(limitOrder.getAmount());
+        int fillVolume = Math.abs(limitOrder.getAmount()-limitOrder.getFilledAmount());
         PriorityQueue<LimitOrder> limitOrders = limitOrder.isBuy() ? limitSellOrders : limitBuyOrders;
         ArrayList<LimitOrder> toRemove = new ArrayList<>();
 
