@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.screen.uiElements;
 
+import net.kroia.banksystem.banking.bank.MoneyBank;
 import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.ItemView;
@@ -148,11 +149,11 @@ public class TradePanel extends GuiElement {
     }
     public void setCurrentItemBalance(long balance)
     {
-        currentItemBalanceLabel.setText(""+balance);
+        currentItemBalanceLabel.setText(MoneyBank.getNormalizedAmount(balance));
     }
     public void setCurrentMoneyBalance(long balance)
     {
-        currentMoneyBalanceLabel.setText(""+balance);
+        currentMoneyBalanceLabel.setText(MoneyBank.getNormalizedAmount(balance));
     }
     public void setCurrentPrice(int price)
     {
