@@ -34,6 +34,8 @@ public abstract class Order {
 
     protected String invalidReason = "";
 
+    protected long lockedMoney = 0;
+
     protected boolean isBot = false;
 
     public enum Status {
@@ -138,6 +140,7 @@ public abstract class Order {
         playerUUID = buf.readUUID();
         amount = buf.readInt();
         filledAmount = buf.readInt();
+        lockedMoney = buf.readLong();
         transferedMoney = buf.readLong();
         //averagePrice = buf.readInt();
         status = Status.valueOf(buf.readUtf());
@@ -152,6 +155,7 @@ public abstract class Order {
         playerUUID = other.playerUUID;
         amount = other.amount;
         filledAmount = other.filledAmount;
+        lockedMoney = other.lockedMoney;
         transferedMoney = other.transferedMoney;
         //averagePrice = other.averagePrice;
         status = other.status;
@@ -165,6 +169,11 @@ public abstract class Order {
     public boolean isBot() {
         return isBot;
     }
+
+    public long getLockedMoney() {
+        return lockedMoney;
+    }
+
 
     public static long uniqueOrderID()
     {
@@ -188,6 +197,7 @@ public abstract class Order {
                 playerUUID.compareTo(other.playerUUID)==0 &&
                 amount == other.amount &&
                 filledAmount == other.filledAmount &&
+                lockedMoney == other.lockedMoney &&
                 transferedMoney == other.transferedMoney &&
                // averagePrice == other.averagePrice &&
                 status == other.status;
@@ -207,6 +217,7 @@ public abstract class Order {
     }
     public void addTransferedMoney(long money) {
         transferedMoney += money;
+
     }
 
     public int getAmount() {
@@ -226,6 +237,7 @@ public abstract class Order {
     public void markAsProcessed() {
         if(!isBot)
             StockMarketMod.LOGGER.info("Order processed: " + toString());
+        unlockLockedMoney();
         setStatus(Status.PROCESSED);
     }
     public void markAsInvalid(String reason) {
@@ -269,7 +281,7 @@ public abstract class Order {
         if(this instanceof LimitOrder limitOrder)
         {
             if(limitOrder.isBuy())
-                moneyBank.unlockAmount((long) limitOrder.getPrice() * Math.abs(limitOrder.getAmount()-limitOrder.getFilledAmount()));
+                moneyBank.unlockAmount(Math.max(0,limitOrder.getLockedMoney() - Math.abs(limitOrder.getTransferedMoney())));
             else
                 itemBank.unlockAmount(Math.abs(limitOrder.getAmount()-limitOrder.getFilledAmount()));
 
@@ -333,6 +345,7 @@ public abstract class Order {
 
     public void addFilledAmount(int amount) {
         filledAmount += amount;
+
     }
     public int getFilledAmount() {
         return filledAmount;
@@ -347,6 +360,7 @@ public abstract class Order {
         buf.writeUUID(playerUUID);
         buf.writeInt(amount);
         buf.writeInt(filledAmount);
+        buf.writeLong(lockedMoney);
         buf.writeLong(transferedMoney);
         //buf.writeInt(averagePrice);
         buf.writeUtf(status.toString());

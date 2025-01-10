@@ -9,16 +9,14 @@ import net.minecraft.server.level.ServerPlayer;
 import java.util.UUID;
 
 public class MarketOrder extends Order {
-    private long lockedMoney = 0;
+
 
     public static MarketOrder create(ServerPlayer player, String itemID, int amount)
     {
         int currentPrice = ServerMarket.getPrice(itemID);
         if(Order.tryReserveBankFund(player, itemID, amount, currentPrice)) {
-            MarketOrder order = new MarketOrder(player.getUUID(), itemID, amount);
-            if(amount > 0)
-                order.lockedMoney = Math.abs(amount) * currentPrice;
-            return order;
+
+            return new MarketOrder(player.getUUID(), itemID, amount, currentPrice);
         }
         return null;
     }
@@ -26,20 +24,21 @@ public class MarketOrder extends Order {
     {
         int currentPrice = ServerMarket.getPrice(itemID);
         if(Order.tryReserveBankFund(botMoneyBank, botItemBank, playerUUID, itemID, amount, currentPrice, null)){
-            MarketOrder order = new MarketOrder(playerUUID, itemID, amount, true);
-            if(amount > 0)
-                order.lockedMoney = Math.abs(amount) * currentPrice;
-            return order;
+            return new MarketOrder(playerUUID, itemID, amount, currentPrice,true);
         }
         return null;
     }
-    protected MarketOrder(UUID playerUUID, String itemID, int amount) {
+    protected MarketOrder(UUID playerUUID, String itemID, int amount, int currentPrice) {
         super(playerUUID, itemID, amount);
+        if(amount > 0)
+            this.lockedMoney = (long) Math.abs(amount) * currentPrice;
 
         //StockMarketMod.LOGGER.info("MarketOrder created: " + toString());
     }
-    protected MarketOrder(UUID playerUUID, String itemID, int amount, boolean isBot) {
+    protected MarketOrder(UUID playerUUID, String itemID, int amount, int currentPrice, boolean isBot) {
         super(playerUUID, itemID, amount, isBot);
+        if(amount > 0)
+            this.lockedMoney = (long) Math.abs(amount) * currentPrice;
 
         //StockMarketMod.LOGGER.info("MarketOrder created: " + toString());
     }
@@ -50,9 +49,6 @@ public class MarketOrder extends Order {
     }
 
 
-    public long getLockedMoney() {
-        return lockedMoney;
-    }
 
 
     @Override

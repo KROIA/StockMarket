@@ -4,6 +4,7 @@ import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.ServerSaveable;
+import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.MarketOrder;
 import net.kroia.stockmarket.market.server.order.Order;
@@ -151,7 +152,8 @@ public class MatchingEngine implements ServerSaveable {
                 if(fillVolume<0)
                 {
                     limitOrders.removeAll(toRemove);
-                    throw new IllegalStateException("Market order overfilled");
+                    //throw new IllegalStateException("Market order overfilled");
+                    StockMarketMod.LOGGER.error("Market order overfilled: "+marketOrder);
                 }
                 break;
             }
@@ -194,7 +196,7 @@ public class MatchingEngine implements ServerSaveable {
             if(fillWith == null)
                 continue;
 
-            int filledVolume = TransactionEnginge.fill(limitOrder, fillWith, limitOrder.getPrice());
+            int filledVolume = TransactionEnginge.fill(limitOrder, fillWith, fillWith.getPrice());
             if(filledVolume != 0)
             {
                 setPrice(fillWith.getPrice());
@@ -208,7 +210,8 @@ public class MatchingEngine implements ServerSaveable {
                 if(fillVolume<0)
                 {
                     limitOrders.removeAll(toRemove);
-                    throw new IllegalStateException("Limit order overfilled");
+                    //throw new IllegalStateException("Limit order overfilled");
+                    StockMarketMod.LOGGER.error("Limit order overfilled: "+limitOrder);
                 }
                 break;
             }

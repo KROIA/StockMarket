@@ -36,6 +36,8 @@ public class LimitOrder extends Order implements ServerSaveable {
     protected LimitOrder(UUID playerUUID, String itemID, int amount, int price) {
         super(playerUUID, itemID, amount);
         this.price = price;
+        if(amount > 0)
+            this.lockedMoney = (long) amount * price;
 
         //StockMarketMod.LOGGER.info("LimitOrder created: " + toString());
     }
@@ -43,12 +45,17 @@ public class LimitOrder extends Order implements ServerSaveable {
         super(playerUUID, itemID, amount);
         this.price = price;
         this.filledAmount = alreadyFilledAmount;
+        if(amount > 0)
+            this.lockedMoney = (long) Math.abs(amount-alreadyFilledAmount) * price;
 
         //StockMarketMod.LOGGER.info("LimitOrder created: " + toString());
     }
     protected LimitOrder(UUID playerUUID, String itemID, int amount, int price, boolean isBot) {
         super(playerUUID, itemID, amount, isBot);
         this.price = price;
+        if(amount > 0)
+            this.lockedMoney = (long) amount * price;
+
 
         //StockMarketMod.LOGGER.info("LimitOrder created: " + toString());
     }
@@ -88,7 +95,7 @@ public class LimitOrder extends Order implements ServerSaveable {
     @Override
     public String toString() {
         String playerName = ServerPlayerList.getPlayerName(playerUUID);
-        if(playerName.isEmpty())
+        if(playerName == null || playerName.isEmpty())
             playerName = playerUUID.toString();
 
         return "LimitOrder{\n  Owner: " + playerName +

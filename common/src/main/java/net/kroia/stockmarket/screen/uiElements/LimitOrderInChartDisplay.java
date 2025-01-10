@@ -116,7 +116,7 @@ public class LimitOrderInChartDisplay extends GuiElement {
     private void onButtonRising()
     {
         isDragging = false;
-        int newPrice = yPosToPriceFunc.apply(getY());
+        int newPrice = yPosToPriceFunc.apply(getY()+getHeight()/2);
         ClientMarket.changeOrderPrice(order.getItemID(), order.getOrderID(), newPrice);
     }
 
