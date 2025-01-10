@@ -66,7 +66,7 @@ public class MarketOrder extends Order {
     @Override
     public String toString() {
         String playerName = ServerPlayerList.getPlayerName(playerUUID);
-        if(playerName.isEmpty())
+        if(playerName == null || playerName.isEmpty())
             playerName = playerUUID.toString();
         return "MarketOrder{\n  Owner: " + playerName +
                 "\n  OrderID: " + orderID +
