@@ -45,9 +45,7 @@ dependencies {
     common(project(path: ':common', configuration: 'namedElements')) { transitive false }
     shadowBundle project(path: ':common', configuration: 'transformProductionFabric')
 
-    modImplementation("net.kroia:modutilities-fabric:1.0.0")
-    //include("net.kroia:modutilities-fabric:1.0.0")
-
+    modImplementation("net.kroia:modutilities-fabric:$rootProject.modutilities_version")
 }
 
 processResources {
@@ -65,14 +63,4 @@ shadowJar {
 
 remapJar {
     inputFile.set shadowJar.archiveFile
-}
-sourceSets {
-    main {
-        java {
-            srcDirs += file('../../../BankSystem/mc_1.20.1_BankSystem/external/utilities/src/main/java')
-        }
-        resources {
-            srcDirs += file('../../../BankSystem/mc_1.20.1_BankSystem/external/utilities/src/main/resources')
-        }
-    }
 }
