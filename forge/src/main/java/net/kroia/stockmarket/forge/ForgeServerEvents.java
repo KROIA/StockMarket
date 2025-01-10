@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.forge;
 
+import dev.architectury.event.events.common.LifecycleEvent;
+import net.kroia.modutilities.ModUtilitiesMod;
 import net.kroia.stockmarket.util.StockMarketServerEvents;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraftforge.event.level.LevelEvent;
@@ -8,22 +10,16 @@ import net.minecraftforge.fml.common.Mod;
 
 @Mod.EventBusSubscriber
 public class ForgeServerEvents {
-    @SubscribeEvent
-    public static void onServerStart(LevelEvent.Load event) {
-        if (event.getLevel() instanceof ServerLevel serverLevel) {
-            // Check if the world is the overworld
-            if (serverLevel.dimension().equals(ServerLevel.OVERWORLD))
-                StockMarketServerEvents.onServerStart(serverLevel.getServer());
-
-        }
-    }
-
-    @SubscribeEvent
-    public static void onServerStop(LevelEvent.Unload event) {
-        if (event.getLevel() instanceof ServerLevel serverLevel) {
-            if (serverLevel.dimension().equals(ServerLevel.OVERWORLD))
-                StockMarketServerEvents.onServerStop(serverLevel.getServer());
-        }
+    public static void init()
+    {
+        LifecycleEvent.SERVER_STARTED.register(server -> {
+            ModUtilitiesMod.LOGGER.info("[ForgeSetup] SERVER_STARTING");
+            StockMarketServerEvents.onServerStart(server);
+        });
+        LifecycleEvent.SERVER_STARTING.register(server -> {
+            ModUtilitiesMod.LOGGER.info("[ForgeSetup] SERVER_STOPPED");
+            StockMarketServerEvents.onServerStop(server);
+        });
     }
 
     @SubscribeEvent
