@@ -55,10 +55,7 @@ dependencies {
     common(project(path: ':common', configuration: 'namedElements')) { transitive false }
     shadowBundle project(path: ':common', configuration: 'transformProductionQuilt')
 
-    //implementation name: 'banksystem-common-1.1.0-transformProductionQuilt'
-    modImplementation("net.kroia:modutilities-quilt:1.0.0")
-   // include("net.kroia:modutilities-quilt:1.0.0")
-
+    modImplementation("net.kroia:modutilities-quilt:$rootProject.modutilities_version")
 }
 
 processResources {
@@ -78,13 +75,3 @@ shadowJar {
 remapJar {
     inputFile.set shadowJar.archiveFile
 }
-/*sourceSets {
-    main {
-        java {
-            srcDirs += file('../../../BankSystem/mc_1.20.1_BankSystem/external/utilities/src/main/java')
-        }
-        resources {
-            srcDirs += file('../../../BankSystem/mc_1.20.1_BankSystem/external/utilities/src/main/resources')
-        }
-    }
-}*/

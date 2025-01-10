@@ -22,11 +22,6 @@ dependencies {
     // Architectury API. This is optional, and you can comment it out if you don't need it.
     modImplementation "dev.architectury:architectury:$rootProject.architectury_api_version"
 
-    //modImplementation("net.kroia:banksystem-common:1.3.0")
-    modCompileOnly("net.kroia:banksystem-common:1.3.1")
-    modCompileOnly("net.kroia:modutilities-common:1.0.0")
-
-    //implementation "net.kroia:banksystem-common:1.3.0"
-   // compileOnly "net.kroia:banksystem-common:1.3.0"
-    //compileOnly "net.kroia:banksystem-common:1.3.0"
+    modCompileOnly("net.kroia:banksystem-common:$rootProject.banksystem_version")
+    modCompileOnly("net.kroia:modutilities-common:$rootProject.modutilities_version")
 }
