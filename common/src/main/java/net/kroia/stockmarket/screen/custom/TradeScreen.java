@@ -191,9 +191,8 @@ public class TradeScreen extends GuiScreen {
 
     public static void onAvailableTradeItemsChanged() {
         // check if screen is visible
-        if (instance.minecraft.screen == instance) {
-
-        }
+        //if (instance.minecraft.screen == instance) {
+        //}
     }
 
     public static void updatePlotsData() {
