@@ -268,6 +268,8 @@ Each player receives its bank account with 0 balance.
     <summary> 
       <b>Creating a custom bot</b>
     </summary>
+    <b>There is now a GUI that lets you create and manage the bots. No complicate command line usage is needed any more.<br>
+    Go to the next expandable section "Change bot settings" to learn about that</b><br><br>
     To create a bot from scratch make sure the market, for which you want to create the bot, already exists. <br>
     Type the following command, replace the item ID with your markets item ID.<br>
     <code>/StockMarket "minecraft:copper_ingot" bot create</code><br>
@@ -309,6 +311,10 @@ Each player receives its bank account with 0 balance.
     - <b>Save Settings</b> to save the current settings which are listed below.<br>
     - <b>Destroy Bot/Create Bot</b> to delete or create a bot for that item.<br>
     - <b>Bot Bank</b> to access the bank account of the bot to set its balance.<br>
+    <div style="border-left: 7px solid #f39c12; background-color: #fcf8e3; padding: 20px; margin: 10px 0;">
+      <p><strong>⚠️ Warning:</strong> Do not set the item balance to 0 since this will break the bot.</br>
+       The bot must always have some items and money, otherwise it can't place orders.</p>
+    </div>
     ⚠️ Be aware, when changing settings to other values, depending on the scale it can lead to large market change.<br>
     I reccoment to try it on a single player to get a feeling for it. There are so many differend possibilities the bot can react to it.<br>
     🚧A detaild explanation for each setting will come soon.
