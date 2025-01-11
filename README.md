@@ -252,6 +252,17 @@ Each player receives its bank account with 0 balance.
     You may need to type the <b>"</b> in order to type a string that contains <b>:</b>.<br>
     <code>/StockMarket "minecraft:copper_ingot" create</code>
 </details>
+<details close> 
+    <summary> 
+      <b>Remove a market</b>
+    </summary>
+    Replace the <b>[itemID]</b> with the minecraft item ID for which you want to remove the market.<br>
+    Check out the website <a href="https://minecraftitemids.com/">https://minecraftitemids.com/</a> to find the item ID you need.<br>
+    <code>/StockMarket [itemID] remove</code><br>
+    You may need to type the <b>"</b> in order to type a string that contains <b>:</b>.<br>
+    <code>/StockMarket "minecraft:copper_ingot" remove</code><br>
+    Open positions from players will be automaticly closed.<br>
+</details>
 
 <details close> 
     <summary> 
@@ -291,8 +302,19 @@ Each player receives its bank account with 0 balance.
     <summary> 
       <b>Change bot settings</b>
     </summary>
-    <span class="icon">🚧</span>
-    Work in progress
+    <!-- <span class="icon">🚧</span> -->
+    Just type the command <code>/StockMarket BotSettingsGUI</code><br>
+    This opens a gui that lets you change all settings from a bot.<br>
+    - <b>Change Item</b> to select a market.<br>
+    - <b>Save Settings</b> to save the current settings which are listed below.<br>
+    - <b>Destroy Bot/Create Bot</b> to delete or create a bot for that item.<br>
+    - <b>Bot Bank</b> to access the bank account of the bot to set its balance.<br>
+    ⚠️ Be aware, when changing settings to other values, depending on the scale it can lead to large market change.<br>
+    I reccoment to try it on a single player to get a feeling for it. There are so many differend possibilities the bot can react to it.<br>
+    🚧A detaild explanation for each setting will come soon.
+    <div align="center">
+        <img src="documentation/images/BotSettingsGUI.png"> 
+    </div>
 </details>
 
 
