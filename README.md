@@ -335,6 +335,8 @@ Each player receives its bank account with 0 balance.
 | /StockMarket order [username] cancelAll                                   | Cancel all orders of a player                 | :heavy_check_mark: |
 | /StockMarket order [username] cancelAll [itemID]                          | Cancel all orders of a player for an item     | :heavy_check_mark: |
 | /StockMarket BotSettingsGUI                                               | Open the settings GUI for the market bots     | :heavy_check_mark: |
+| /StockMarket save                                                         | Save the Stockmarket data                     | :heavy_check_mark: |
+| /StockMarket load                                                         | Load the Stockamrket data                     | :heavy_check_mark: |
 | /StockMarket [itemID] bot settings get                                    | Get bot settings                         		| :heavy_check_mark: |
 | /StockMarket [itemID] bot settings set enabled                            | Enable bot                               		| :heavy_check_mark: |
 | /StockMarket [itemID] bot settings set disabled                           | Disable bot                              		| :heavy_check_mark: |
@@ -363,6 +365,7 @@ Each player receives its bank account with 0 balance.
 | /StockMarket [itemID] create                                              | Create marketplace                       		| :heavy_check_mark: |
 | /StockMarket [itemID] remove                                              | Remove marketplace                            | :heavy_check_mark: |
 | /StockMarket [itemID] currentPrice                                        | Get current price                        		| :heavy_check_mark: |
+
 
 
 

@@ -25,8 +25,10 @@
   "message.stockmarket.current_price_of": "Current price of {item_name}: {current_price}",
   "message.stockmarket.order_not_replaced": "Order can not be placed to a new price",
   "message.stockmarket.order_replaced": "Order successfully placed to a new price",
-
-
+  "message.stockmarket.stockmarket_data_saved": "Stockmarket data saved",
+  "message.stockmarket.stockmarket_data_save_failed": "Failed to save stockmarket data",
+  "message.stockmarket.stockmarket_data_load_failed": "Failed to load stockmarket data",
+  "message.stockmarket.stockmarket_data_loaded": "Stockmarket data loaded",
 
 
   "message.stockmarket.bot_created": "Bot created for item: {item_name}, you can change its settings and than enable it",
