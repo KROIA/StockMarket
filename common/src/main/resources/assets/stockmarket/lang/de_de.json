@@ -27,6 +27,10 @@
   "message.stockmarket.current_price_of": "Aktueller Preis für {item_name}: {current_price}",
   "message.stockmarket.order_not_replaced": "Bestellung kann nicht zu dem neuen Preis platziert werden",
   "message.stockmarket.order_replaced": "Bestellung erfolgreich zu einem neuen Preis platziert",
+  "message.stockmarket.stockmarket_data_saved": "Stockmarket Daten gespeichert",
+  "message.stockmarket.stockmarket_data_save_failed": "Konnte Stockmarket Daten nicht speichern",
+  "message.stockmarket.stockmarket_data_load_failed": "Konnte Stockmarket Daten nicht laden",
+  "message.stockmarket.stockmarket_data_loaded": "Stockmarket Daten geladen",
 
 
 

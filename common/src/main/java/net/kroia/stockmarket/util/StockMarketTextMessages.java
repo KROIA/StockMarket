@@ -433,6 +433,32 @@ public class StockMarketTextMessages {
 
 
 
+    private static final Component STOCKMARKET_DATA_SAVED = Component.translatable(prefix+"stockmarket_data_saved");
+    public static String getStockMarketDataSavedMessage()
+    {
+        return STOCKMARKET_DATA_SAVED.getString();
+    }
+
+    private static final Component STOCKMARKET_DATA_SAVE_FAILED = Component.translatable(prefix+"stockmarket_data_save_failed");
+    public static String getStockMarketDataSaveFailedMessage()
+    {
+        return STOCKMARKET_DATA_SAVE_FAILED.getString();
+    }
+
+    private static final Component STOCKMARKET_DATA_LOAD_FAILED = Component.translatable(prefix+"stockmarket_data_load_failed");
+    public static String getStockMarketDataLoadFailedMessage()
+    {
+        return STOCKMARKET_DATA_LOAD_FAILED.getString();
+    }
+
+    private static final Component STOCKMARKET_DATA_LOADED = Component.translatable(prefix+"stockmarket_data_loaded");
+    public static String getStockMarketDataLoadedMessage()
+    {
+        return STOCKMARKET_DATA_LOADED.getString();
+    }
+
+
+
     //--------------------------------------------------------------------------------------------------------
     // Helper methods
     //--------------------------------------------------------------------------------------------------------

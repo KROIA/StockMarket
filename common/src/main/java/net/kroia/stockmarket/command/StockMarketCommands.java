@@ -6,6 +6,8 @@ import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.LongArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import net.kroia.banksystem.util.BankSystemDataHandler;
+import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.stockmarket.StockMarketClientHooks;
@@ -16,6 +18,7 @@ import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import net.kroia.stockmarket.networking.packet.server_sender.update.OpenScreenPacket;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncBotSettingsPacket;
 import net.kroia.stockmarket.util.ServerPlayerList;
+import net.kroia.stockmarket.util.StockMarketDataHandler;
 import net.kroia.stockmarket.util.StockMarketTextMessages;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -61,6 +64,8 @@ public class StockMarketCommands {
         // /StockMarket <itemID> create                                                 - Create marketplace
         // /StockMarket <itemID> remove                                                 - Remove marketplace
         // /StockMarket <itemID> currentPrice                                           - Get current price
+        // /StockMarket save                                                            - Save market data
+        // /StockMarket load                                                            - Load market data
 
         dispatcher.register(
                 Commands.literal("StockMarket")
@@ -609,6 +614,34 @@ public class StockMarketCommands {
                                                 })
                                         )
 
+                        )
+                        .then(Commands.literal("save")
+                                .requires(source -> source.hasPermission(2))
+                                .executes(context -> {
+                                    CommandSourceStack source = context.getSource();
+                                    ServerPlayer player = source.getPlayerOrException();
+
+                                    if(StockMarketDataHandler.saveAll())
+                                        PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getStockMarketDataSavedMessage());
+                                    else
+                                        PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getStockMarketDataSaveFailedMessage());
+
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                        )
+                        .then(Commands.literal("load")
+                                .requires(source -> source.hasPermission(2))
+                                .executes(context -> {
+                                    CommandSourceStack source = context.getSource();
+                                    ServerPlayer player = source.getPlayerOrException();
+
+                                    if(StockMarketDataHandler.loadAll())
+                                        PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getStockMarketDataLoadedMessage());
+                                    else
+                                        PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getStockMarketDataLoadFailedMessage());
+
+                                    return Command.SINGLE_SUCCESS;
+                                })
                         )
         );
     }

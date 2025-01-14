@@ -27,6 +27,10 @@
   "message.stockmarket.current_price_of": "Aktuellä Pris für {item_name}: {current_price}",
   "message.stockmarket.order_not_replaced": "Pstellig cha nöd zum neue Pris platziert wärdä",
   "message.stockmarket.order_replaced": "Pstellig erfolgriich zum neue Pris platziert",
+  "message.stockmarket.stockmarket_data_saved": "Stockmarket Date gspeicheret",
+  "message.stockmarket.stockmarket_data_save_failed": "Stockmarket Daten hend nöd chönne gspeicheret wärde",
+  "message.stockmarket.stockmarket_data_load_failed": "Stockmarket Daten hend nöd chönne glade wärde",
+  "message.stockmarket.stockmarket_data_loaded": "Stockmarket Date glade",
 
 
 
