@@ -60,7 +60,7 @@ StockMarket is a Minecraft mod that brings a better way for trading to the game.
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.6-green)    | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-fabric-1.20.6] <br>                                                                             |                                                                                                                                                             |                                                                                                                                                             | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-neoforge-1.20.6]  |
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.4-green)    | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-fabric-1.20.4] <br>                                                                             | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-forge-1.20.4] <br>                                                                            | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-quilt-1.20.4] <br>                                                                            |                                                                                                                                                                   |
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.2-green)    | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-fabric-1.20.2] <br>                                                                             | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-forge-1.20.2] <br>                                                                            | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-quilt-1.20.2] <br>                                                                            |                                                                                                                                                                   |
-| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.1-green)    | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-fabric-1.20.1] <br> [![Version](https://img.shields.io/badge/v1.2.0-blue)][1.2.0-fabric-1.20.1] | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-forge-1.20.1] <br> [![Version](https://img.shields.io/badge/v1.2.0-blue)][1.2.0-forge-1.20.1] | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-quilt-1.20.1] <br> [![Version](https://img.shields.io/badge/v1.2.0-blue)][1.2.0-quilt-1.20.1] |                                                                                                                                                                   |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.1-green)    | [![Version](https://img.shields.io/badge/v1.2.2-green)][1.2.2-fabric-1.20.1] <br> [![Version](https://img.shields.io/badge/v1.2.0-blue)][1.2.0-fabric-1.20.1] | [![Version](https://img.shields.io/badge/v1.2.2-green)][1.2.2-forge-1.20.1] <br> [![Version](https://img.shields.io/badge/v1.2.0-blue)][1.2.0-forge-1.20.1] | [![Version](https://img.shields.io/badge/v1.2.2-green)][1.2.2-quilt-1.20.1] <br> [![Version](https://img.shields.io/badge/v1.2.0-blue)][1.2.0-quilt-1.20.1] |                                                                                                                                                                   |
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.4-green)    | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-fabric-1.19.4] <br>                                                                             | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-forge-1.19.4] <br>                                                                            |                                                                             <br>                                                                            |                                                                                                                                                                   |
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.3-green)    | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-fabric-1.19.3] <br>                                                                             | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-forge-1.19.3] <br>                                                                            | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-quilt-1.19.3] <br>                                                                            |                                                                                                                                                                   |
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.2-green)    | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-fabric-1.19.2] <br>                                                                             | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-forge-1.19.2] <br>                                                                            | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-quilt-1.19.2] <br>                                                                            |                                                                                                                                                                   |
@@ -76,13 +76,13 @@ StockMarket is a Minecraft mod that brings a better way for trading to the game.
 [1.2.0-quilt-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6070944
 
 
-<!--	V1.2.1	-->
+<!--	V1.2.1 & 1.2.2	-->
 [1.2.1-fabric-1.21.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075091
 [1.2.1-fabric-1.21]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075085
 [1.2.1-fabric-1.20.6]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075078
 [1.2.1-fabric-1.20.4]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075073
 [1.2.1-fabric-1.20.2]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075063
-[1.2.1-fabric-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075058
+[1.2.2-fabric-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6085206
 [1.2.1-fabric-1.19.4]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075055
 [1.2.1-fabric-1.19.3]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075051
 [1.2.1-fabric-1.19.2]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075019
@@ -90,14 +90,14 @@ StockMarket is a Minecraft mod that brings a better way for trading to the game.
 
 [1.2.1-forge-1.20.4]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075076
 [1.2.1-forge-1.20.2]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075065
-[1.2.1-forge-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075059
+[1.2.2-forge-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6085187
 [1.2.1-forge-1.19.4]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075056
 [1.2.1-forge-1.19.3]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075052
 [1.2.1-forge-1.19.2]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075021
 					 
 [1.2.1-quilt-1.20.4]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075077
 [1.2.1-quilt-1.20.2]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075072
-[1.2.1-quilt-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075062
+[1.2.2-quilt-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6085204
 [1.2.1-quilt-1.19.3]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075053
 [1.2.1-quilt-1.19.2]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075045
 
