@@ -100,6 +100,15 @@ public class MarketManager implements ServerSaveable {
         return tradingBot;
     }
 
+    public void setMarketOpen(boolean open)
+    {
+        matchingEngine.setMarketOpen(open);
+    }
+    public boolean isMarketOpen()
+    {
+        return matchingEngine.isMarketOpen();
+    }
+
     public void setPriceHistory(PriceHistory priceHistory) {
         this.priceHistory = priceHistory;
     }

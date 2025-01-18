@@ -12,14 +12,16 @@
   "gui.stockmarket.trade_screen.price": "Price",
   "gui.stockmarket.trade_screen.buy": "Buy",
   "gui.stockmarket.trade_screen.sell": "Sell",
+  "gui.stockmarket.trade_screen.market_closed": "Market Closed",
   "gui.stockmarket.trade_screen.filled": "Filled",
   "gui.stockmarket.trade_screen.cancel": "Cancel",
   "gui.stockmarket.trade_screen.direction": "Type",
-  "gui.stockmarket.trade_screen.back": "Back",
 
   "message.stockmarket.invalid_item_id": "Unknown item {item_name}",
   "message.stockmarket.marketplace_not_existing": "Marketplace for {item_name} does not exist",
   "message.stockmarket.marketplace_already_existing": "Marketplace for {item_name} already exists",
+  "message.stockmarket.marketplace_is_now_closed": "Marketplace for {item_name} is now closed",
+  "message.stockmarket.marketplace_is_now_open": "Marketplace for {item_name} is now open for trading",
   "message.stockmarket.marketplace_deleted": "{item_name} can no longer be traded on the stock market",
   "message.stockmarket.marketplace_created": "{item_name} can now be traded on the stock market",
   "message.stockmarket.current_price_of": "Current price of {item_name}: {current_price}",
@@ -29,7 +31,6 @@
   "message.stockmarket.stockmarket_data_save_failed": "Failed to save stockmarket data",
   "message.stockmarket.stockmarket_data_load_failed": "Failed to load stockmarket data",
   "message.stockmarket.stockmarket_data_loaded": "Stockmarket data loaded",
-
 
   "message.stockmarket.bot_created": "Bot created for item: {item_name}, you can change its settings and than enable it",
   "message.stockmarket.bot_deleted": "Bot deleted for item: {item_name}",
@@ -66,8 +67,6 @@
   "message.stockmarket.missing_items": "Missing {amount} {item_name}",
   "message.stockmarket.missing_money": "Missing {amount} {currency}",
 
-
-
   "message.stockmarket.order_invalid": "Order is invalid, Reason:\n",
   "message.stockmarket.order_invalid_reason_orders_to_fill_transaction": "Not enough orders to fill the {buy_sell_direction} market order",
   "message.stockmarket.buy_direction": "Buy",
@@ -80,7 +79,7 @@
   "message.stockmarket.order_has_been_cancelled": "{buy_sell_direction} order has been cancelled",
   "message.stockmarket.order_filled_amount": "Filled amount: {amount} {item_name}",
   "message.stockmarket.order_invalid_reason": "Invalid reason: {reason}",
-
+  "message.stockmarket.order_invalid_reason_market_closed": "Market is closed",
 
   "message.stockmarket.no_trading_item_available": "No trading item available",
   "gui.stockmarket.bot_settings_screen.change_item": "Change Item",
@@ -88,6 +87,7 @@
   "gui.stockmarket.bot_settings_screen.bot_create": "Create Bot",
   "gui.stockmarket.bot_settings_screen.bot_destroy": "Destroy Bot",
   "gui.stockmarket.bot_settings_screen.bot_bank": "Bot bank",
+  "gui.stockmarket.bot_settings_screen.market_open": "Market Open",
 
   "gui.stockmarket.bot_settings_screen.setting_enabled": "Enabled",
   "gui.stockmarket.bot_settings_screen.settings_max_order_count": "Max Order Count",
@@ -109,5 +109,4 @@
   "gui.stockmarket.bot_settings_screen.settings_pid_d": "PID D",
   "gui.stockmarket.bot_settings_screen.settings_pid_ibounds": "PID I Bounds",
   "gui.stockmarket.bot_settings_screen.settings_pid_integrated_err": "PID Integrated Error"
-
 }

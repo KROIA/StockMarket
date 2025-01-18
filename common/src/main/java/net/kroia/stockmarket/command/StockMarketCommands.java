@@ -63,6 +63,8 @@ public class StockMarketCommands {
         // /StockMarket <itemID> bot remove                                             - Remove bot
         // /StockMarket <itemID> create                                                 - Create marketplace
         // /StockMarket <itemID> remove                                                 - Remove marketplace
+        // /StockMarket <itemID> open                                                   - Open the marketplace for trading
+        // /StockMarket <itemID> close                                                  - Close the marketplace for trading
         // /StockMarket <itemID> currentPrice                                           - Get current price
         // /StockMarket save                                                            - Save market data
         // /StockMarket load                                                            - Load market data
@@ -590,6 +592,46 @@ public class StockMarketCommands {
                                                         PlayerUtilities.printToClientConsole(StockMarketTextMessages.getMarketplaceDeletedMessage(itemID));
                                                     } else {
                                                         PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getMarketplaceNotExistingMessage(itemID));
+                                                    }
+                                                    return Command.SINGLE_SUCCESS;
+                                                })
+                                        )
+                                        .then(Commands.literal("open")
+                                                .executes(context -> {
+                                                    CommandSourceStack source = context.getSource();
+                                                    ServerPlayer player = source.getPlayerOrException();
+                                                    String orgItemID = StringArgumentType.getString(context, "itemID");
+                                                    String itemID = ItemUtilities.getNormalizedItemID(orgItemID);
+                                                    if (itemID == null) {
+                                                        PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getInvalidItemIDMessage(orgItemID));
+                                                        return Command.SINGLE_SUCCESS;
+                                                    }
+                                                    if (!ServerMarket.hasItem(itemID)) {
+                                                        PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getMarketplaceNotExistingMessage(itemID));
+                                                    } else {
+                                                        ServerMarket.setMarketOpen(itemID, true);
+                                                        // Notify all serverPlayers
+                                                        PlayerUtilities.printToClientConsole(StockMarketTextMessages.getMarketplaceIsNowOpenMessage(itemID));
+                                                    }
+                                                    return Command.SINGLE_SUCCESS;
+                                                })
+                                        )
+                                        .then(Commands.literal("close")
+                                                .executes(context -> {
+                                                    CommandSourceStack source = context.getSource();
+                                                    ServerPlayer player = source.getPlayerOrException();
+                                                    String orgItemID = StringArgumentType.getString(context, "itemID");
+                                                    String itemID = ItemUtilities.getNormalizedItemID(orgItemID);
+                                                    if (itemID == null) {
+                                                        PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getInvalidItemIDMessage(orgItemID));
+                                                        return Command.SINGLE_SUCCESS;
+                                                    }
+                                                    if (!ServerMarket.hasItem(itemID)) {
+                                                        PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getMarketplaceNotExistingMessage(itemID));
+                                                    } else {
+                                                        ServerMarket.setMarketOpen(itemID, false);
+                                                        // Notify all serverPlayers
+                                                        PlayerUtilities.printToClientConsole(StockMarketTextMessages.getMarketplaceIsNowClosedMessage(itemID));
                                                     }
                                                     return Command.SINGLE_SUCCESS;
                                                 })

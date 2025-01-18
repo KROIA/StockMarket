@@ -28,6 +28,8 @@ public class MatchingEngine implements ServerSaveable {
     private int price;
     private int tradeVolume;
 
+    private boolean marketOpen = true;
+
     // Create a sorted queue for buy and sell orders, sorted by price.
     private final PriorityQueue<LimitOrder> limitBuyOrders = new PriorityQueue<>((o1, o2) -> Double.compare(o2.getPrice(), o1.getPrice()));
     private final PriorityQueue<LimitOrder> limitSellOrders = new PriorityQueue<>(Comparator.comparingDouble(LimitOrder::getPrice));
@@ -59,6 +61,11 @@ public class MatchingEngine implements ServerSaveable {
     {
         if(order == null)
             return;
+        if(!marketOpen && !order.isBot())
+        {
+            order.markAsInvalid(StockMarketTextMessages.getOrderInvalidReasonMarketClosedMessage());
+            return;
+        }
         if(order.getAmount() == 0)
         {
             order.markAsProcessed();
@@ -239,6 +246,12 @@ public class MatchingEngine implements ServerSaveable {
     public int getTradeVolume() {
         return tradeVolume;
     }
+    public boolean isMarketOpen() {
+        return marketOpen;
+    }
+    public void setMarketOpen(boolean marketOpen) {
+        this.marketOpen = marketOpen;
+    }
     public int resetTradeVolume() {
         int volume = tradeVolume;
         tradeVolume = 0;
@@ -348,35 +361,7 @@ public class MatchingEngine implements ServerSaveable {
         }
         return false;
     }
-    /*public int cancleOrdersUntilItemVolumeReached(UUID playerOwner, int volume)
-    {
-        int volumeRemoved = 0;
-        ArrayList<LimitOrder> toRemove = new ArrayList<>();
-        for(LimitOrder order : limitBuyOrders)
-        {
-            if(order.getPlayerUUID().equals(playerOwner))
-            {
-                volumeRemoved += order.getAmount();
-                toRemove.add(order);
-                if(volumeRemoved >= volume)
-                    break;
-            }
-        }
-        limitBuyOrders.removeAll(toRemove);
-        toRemove.clear();
-        for(LimitOrder order : limitSellOrders)
-        {
-            if(order.getPlayerUUID().equals(playerOwner))
-            {
-                volumeRemoved += order.getAmount();
-                toRemove.add(order);
-                if(volumeRemoved >= volume)
-                    break;
-            }
-        }
-        limitSellOrders.removeAll(toRemove);
-        return volumeRemoved;
-    }*/
+
     public boolean removeOrder_internal(LimitOrder toRemove)
     {
         return limitBuyOrders.remove(toRemove) || limitSellOrders.remove(toRemove);
@@ -492,6 +477,7 @@ public class MatchingEngine implements ServerSaveable {
         tag.putInt("trade_volume", tradeVolume);
         tag.put("buy_orders", buyOrdersList);
         tag.put("sell_orders", sellOrdersList);
+        tag.putBoolean("market_open", marketOpen);
         return success;
     }
 
@@ -509,6 +495,10 @@ public class MatchingEngine implements ServerSaveable {
         tradeVolume = tag.getInt("trade_volume");
         ListTag buyOrdersList = tag.getList("buy_orders", 10);
         ListTag sellOrdersList = tag.getList("sell_orders", 10);
+        if(tag.contains("market_open"))
+            marketOpen = tag.getBoolean("market_open");
+        else
+            marketOpen = true;
         for(int i = 0; i < buyOrdersList.size(); i++)
         {
             CompoundTag orderTag = buyOrdersList.getCompound(i);

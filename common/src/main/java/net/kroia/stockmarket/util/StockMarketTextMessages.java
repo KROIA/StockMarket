@@ -51,6 +51,22 @@ public class StockMarketTextMessages {
         return msg;
     }
 
+    private static final Component MARKETPLACE_IS_NOW_CLOSED = Component.translatable(prefix+"marketplace_is_now_closed");
+    public static String getMarketplaceIsNowClosedMessage(String itemName)
+    {
+        String msg = MARKETPLACE_IS_NOW_CLOSED.getString();
+        msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
+        return msg;
+    }
+
+    private static final Component MARKETPLACE_IS_NOW_OPEN = Component.translatable(prefix+"marketplace_is_now_open");
+    public static String getMarketplaceIsNowOpenMessage(String itemName)
+    {
+        String msg = MARKETPLACE_IS_NOW_OPEN.getString();
+        msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
+        return msg;
+    }
+
 
 
     private static final Component MARKETPLACE_DELETED = Component.translatable(prefix+"marketplace_deleted");
@@ -340,6 +356,14 @@ public class StockMarketTextMessages {
         String msg = ORDER_INVALID_REASON_ORDERS_TO_FILL_TRANSACTION.getString();
         String dirStr = isBuy ? BUY_DIRECTION.getString() : SELL_DIRECTION.getString();
         msg = replaceVariable(msg, Variables.DIRECTION, dirStr);
+        return msg;
+    }
+
+
+    private static final Component ORDER_INVALID_REASON_MARKET_CLOSED = Component.translatable(prefix+"order_invalid_reason_market_closed");
+    public static String getOrderInvalidReasonMarketClosedMessage()
+    {
+        String msg = ORDER_INVALID_REASON_MARKET_CLOSED.getString();
         return msg;
     }
 

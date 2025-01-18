@@ -25,6 +25,7 @@ public class ClientTradeItem {
     private OrderbookVolume orderBookVolume;
     private int visualMinPrice = 0;
     private int visualMaxPrice = 0;
+    private boolean isMarketOpen = false;
 
     // Orders that belong to this user
     private final Map<Long, Order> orders = new HashMap<>();
@@ -42,6 +43,7 @@ public class ClientTradeItem {
         orderBookVolume = packet.getOrderBookVolume();
         visualMinPrice = packet.getMinPrice();
         visualMaxPrice = packet.getMaxPrice();
+        isMarketOpen = packet.isMarketOpen();
         ArrayList<Order> orders = packet.getOrders();
         this.orders.clear();
         for(Order order : orders)
@@ -141,6 +143,10 @@ public class ClientTradeItem {
     public int getVisualMaxPrice()
     {
         return visualMaxPrice;
+    }
+    public boolean isMarketOpen()
+    {
+        return isMarketOpen;
     }
 
     public boolean createOrder(int quantity, int price)

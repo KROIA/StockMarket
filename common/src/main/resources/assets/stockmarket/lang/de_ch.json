@@ -12,16 +12,16 @@
   "gui.stockmarket.trade_screen.price": "Priss",
   "gui.stockmarket.trade_screen.buy": "Chaufe",
   "gui.stockmarket.trade_screen.sell": "Verchaufe",
+  "gui.stockmarket.trade_screen.market_closed": "Markt gschlossä",
   "gui.stockmarket.trade_screen.filled": "Gfüllt",
   "gui.stockmarket.trade_screen.cancel": "Abbreche",
   "gui.stockmarket.trade_screen.direction": "Typ",
-  "gui.stockmarket.trade_screen.back": "Zrugg",
-
-
 
   "message.stockmarket.invalid_item_id": "Unbekannts Item: {item_name}",
   "message.stockmarket.marketplace_not_existing": "Es git kein Markt zum {item_name} handle",
   "message.stockmarket.marketplace_already_existing": "Markt für {item_name} isch bereits vorhande",
+  "message.stockmarket.marketplace_is_now_closed": "Markt für {item_name} isch jetzt gschlossä",
+  "message.stockmarket.marketplace_is_now_open": "Markt für {item_name} isch jetzt göffnet zum handle",
   "message.stockmarket.marketplace_deleted": "{item_name} cha nüme ghandelt wärde",
   "message.stockmarket.marketplace_created": "{item_name} cha jetzt ghandelt wärde",
   "message.stockmarket.current_price_of": "Aktuellä Pris für {item_name}: {current_price}",
@@ -31,9 +31,6 @@
   "message.stockmarket.stockmarket_data_save_failed": "Stockmarket Daten hend nöd chönne gspeicheret wärde",
   "message.stockmarket.stockmarket_data_load_failed": "Stockmarket Daten hend nöd chönne glade wärde",
   "message.stockmarket.stockmarket_data_loaded": "Stockmarket Date glade",
-
-
-
 
   "message.stockmarket.bot_created": "Bot erstellt für Item: {item_name}, du chasch sini Istellige ändere und denn aktivierä",
   "message.stockmarket.bot_deleted": "Bot glöscht für Item: {item_name}",
@@ -70,8 +67,6 @@
   "message.stockmarket.missing_items": "Es fäläd {amount} {item_name}",
   "message.stockmarket.missing_money": "Es fäläd {amount} {currency}",
 
-
-
   "message.stockmarket.order_invalid": "Transaktion isch ungültig, Grund:\n",
   "message.stockmarket.order_invalid_reason_orders_to_fill_transaction": "Es git nöd gnueg Agebot zum d {buy_sell_direction} Pstellig z füllä",
   "message.stockmarket.buy_direction": "Kauf",
@@ -84,7 +79,7 @@
   "message.stockmarket.order_has_been_cancelled": "{buy_sell_direction} Pstellig isch abbrochä wordä",
   "message.stockmarket.order_filled_amount": "Gfüllti Mängi: {amount} {item_name}",
   "message.stockmarket.order_invalid_reason": "Ungültigkeits Grund: {reason}",
-
+  "message.stockmarket.order_invalid_reason_market_closed": "Markt isch gschlossä",
 
   "message.stockmarket.no_trading_item_available": "Kei handelbars Item verfüegbar",
   "gui.stockmarket.bot_settings_screen.change_item": "Item ändere",
@@ -92,6 +87,7 @@
   "gui.stockmarket.bot_settings_screen.bot_create": "Bot erstelle",
   "gui.stockmarket.bot_settings_screen.bot_destroy": "Bot lösche",
   "gui.stockmarket.bot_settings_screen.bot_bank": "Bot Bank",
+  "gui.stockmarket.bot_settings_screen.market_open": "Markt offe",
 
   "gui.stockmarket.bot_settings_screen.setting_enabled": "Aktiviert",
   "gui.stockmarket.bot_settings_screen.settings_max_order_count": "Maximali Kauf/Verkaufs Agebot",

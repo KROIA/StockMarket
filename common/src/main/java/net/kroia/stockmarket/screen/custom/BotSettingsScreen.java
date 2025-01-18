@@ -9,8 +9,10 @@ import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.GuiScreen;
 import net.kroia.modutilities.gui.elements.Button;
+import net.kroia.modutilities.gui.elements.CheckBox;
 import net.kroia.modutilities.gui.elements.ItemView;
 import net.kroia.modutilities.gui.elements.VerticalListView;
+import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.gui.elements.base.ListView;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.kroia.modutilities.gui.screens.ItemSelectionScreen;
@@ -44,6 +46,7 @@ public class BotSettingsScreen extends GuiScreen {
     public static final Component BOT_CREATE = Component.translatable(PREFIX+"bot_create");
     public static final Component BOT_DESTROY = Component.translatable(PREFIX+"bot_destroy");
     public static final Component BOT_BANK = Component.translatable(PREFIX+"bot_bank");
+    public static final Component MARKET_OPEN = Component.translatable(PREFIX+"market_open");
 
 
 
@@ -60,6 +63,7 @@ public class BotSettingsScreen extends GuiScreen {
     private final Button saveButton;
     private final Button createDestroyBotButton;
     private final Button manageBankButton;
+    private final CheckBox marketOpenCheckBox;
     private int normalButtonColor, unsavedChangesButtonColor;
     private final ItemView currentItemView;
     private final ListView setingsListView;
@@ -92,6 +96,9 @@ public class BotSettingsScreen extends GuiScreen {
         layout.spacing = 0;
         setingsListView.setLayout(layout);
 
+        marketOpenCheckBox = new CheckBox(MARKET_OPEN.getString(), this::onMarketOpenCheckBoxChanged);
+        marketOpenCheckBox.setTextAlignment(GuiElement.Alignment.CENTER);
+
         botSettingsWidget = new BotSettingsWidget(settings, this::onSettingsChanged);
         setingsListView.addChild(botSettingsWidget);
 
@@ -106,6 +113,7 @@ public class BotSettingsScreen extends GuiScreen {
         addElement(manageBankButton);
         addElement(currentItemView);
         addElement(setingsListView);
+        addElement(marketOpenCheckBox);
 
         TickEvent.PLAYER_POST.register(BotSettingsScreen::onClientTick);
     }
@@ -131,9 +139,11 @@ public class BotSettingsScreen extends GuiScreen {
         currentItemView.setSize(20, 20);
         selectItemButton.setBounds(orderbookVolumeChart.getRight()+spacing, padding, width/4-currentItemView.getWidth()-spacing, currentItemView.getHeight());
         currentItemView.setPosition(selectItemButton.getRight()+spacing, padding);
-        saveButton.setBounds(selectItemButton.getLeft(), selectItemButton.getBottom()+spacing, selectItemButton.getWidth(), selectItemButton.getHeight());
-        createDestroyBotButton.setBounds(saveButton.getLeft(), saveButton.getBottom()+spacing, saveButton.getWidth(), saveButton.getHeight());
+        saveButton.setBounds(selectItemButton.getLeft(), selectItemButton.getBottom()+spacing, selectItemButton.getWidth()+currentItemView.getWidth(), selectItemButton.getHeight());
+        marketOpenCheckBox.setBounds(saveButton.getLeft(), saveButton.getBottom()+spacing, saveButton.getWidth(), saveButton.getHeight());
+        createDestroyBotButton.setBounds(marketOpenCheckBox.getLeft(), marketOpenCheckBox.getBottom()+spacing, marketOpenCheckBox.getWidth(), marketOpenCheckBox.getHeight());
         manageBankButton.setBounds(createDestroyBotButton.getLeft(), createDestroyBotButton.getBottom()+spacing, createDestroyBotButton.getWidth(), createDestroyBotButton.getHeight());
+
 
         setingsListView.setBounds(x, candleStickChart.getBottom()+spacing, width, height-candleStickChart.getBottom()-spacing+padding);
     }
@@ -161,6 +171,7 @@ public class BotSettingsScreen extends GuiScreen {
         instance.candleStickChart.setPriceHistory(item.getPriceHistory());
         instance.orderbookVolumeChart.setOrderBookVolume(item.getOrderBookVolume());
 
+
     }
 
     public void setBotSettings(ServerVolatilityBot.Settings settings)
@@ -168,6 +179,8 @@ public class BotSettingsScreen extends GuiScreen {
         botSettingsWidget.setSettings(settings);
         saveButton.setOutlineColor(normalButtonColor);
         botExists = ClientMarket.botExists();
+        ClientTradeItem item = ClientMarket.getTradeItem(instance.itemID);
+        marketOpenCheckBox.setChecked(item.isMarketOpen());
         if(botExists)
         {
             createDestroyBotButton.setLabel(BOT_DESTROY.getString());
@@ -230,18 +243,20 @@ public class BotSettingsScreen extends GuiScreen {
     }
     private void onSaveSettings()
     {
-        UpdateBotSettingsPacket.sendPacket(itemID, botSettingsWidget.getSettings(), false, false);
+        boolean marketOpen = marketOpenCheckBox.isChecked();
+        UpdateBotSettingsPacket.sendPacket(itemID, botSettingsWidget.getSettings(), false, false, marketOpen);
         saveButton.setOutlineColor(normalButtonColor);
     }
     private void onCreateDestroyBot()
     {
+        boolean marketOpen = marketOpenCheckBox.isChecked();
         if(botExists)
         {
-            UpdateBotSettingsPacket.sendPacket(itemID, botSettingsWidget.getSettings(), true, false);
+            UpdateBotSettingsPacket.sendPacket(itemID, botSettingsWidget.getSettings(), true, false, marketOpen);
         }
         else
         {
-            UpdateBotSettingsPacket.sendPacket(itemID, botSettingsWidget.getSettings(), false, true);
+            UpdateBotSettingsPacket.sendPacket(itemID, botSettingsWidget.getSettings(), false, true, marketOpen);
         }
         saveButton.setOutlineColor(normalButtonColor);
         if(itemID != null && !itemID.isEmpty()) {
@@ -255,5 +270,12 @@ public class BotSettingsScreen extends GuiScreen {
         if(botUUID == null)
             return;
         BankAccountManagementScreen.openScreen(ClientMarket.getBotUUID(), this);
+    }
+    private void onMarketOpenCheckBoxChanged()
+    {
+        onSettingsChanged();
+        //boolean marketOpen = marketOpenCheckBox.isChecked();
+        //UpdateBotSettingsPacket.sendPacket(itemID, botSettingsWidget.getSettings(), false, false, marketOpen);
+        //saveButton.setOutlineColor(normalButtonColor);
     }
 }

@@ -18,6 +18,7 @@ public class UpdateBotSettingsPacket extends NetworkPacket {
 
     private boolean destroyBot;
     private boolean createBot;
+    private boolean marketOpen;
 
 
     private UpdateBotSettingsPacket() {
@@ -28,13 +29,14 @@ public class UpdateBotSettingsPacket extends NetworkPacket {
         super(buf);
     }
 
-    public static void sendPacket(String itemID, ServerVolatilityBot.Settings settings, boolean destroyBot, boolean createBot)
+    public static void sendPacket(String itemID, ServerVolatilityBot.Settings settings, boolean destroyBot, boolean createBot, boolean marketOpen)
     {
         UpdateBotSettingsPacket packet = new UpdateBotSettingsPacket();
         packet.itemID = itemID;
         packet.settings = settings;
         packet.destroyBot = destroyBot;
         packet.createBot = createBot;
+        packet.marketOpen = marketOpen;
         StockMarketNetworking.sendToServer(packet);
     }
 
@@ -43,6 +45,7 @@ public class UpdateBotSettingsPacket extends NetworkPacket {
         buf.writeUtf(itemID);
         buf.writeBoolean(destroyBot);
         buf.writeBoolean(createBot);
+        buf.writeBoolean(marketOpen);
         CompoundTag tag = new CompoundTag();
         settings.save(tag);
         buf.writeNbt(tag);
@@ -53,6 +56,7 @@ public class UpdateBotSettingsPacket extends NetworkPacket {
         itemID = buf.readUtf();
         destroyBot = buf.readBoolean();
         createBot = buf.readBoolean();
+        marketOpen = buf.readBoolean();
         settings = new ServerVolatilityBot.Settings();
         settings.load(buf.readNbt());
 
@@ -78,6 +82,7 @@ public class UpdateBotSettingsPacket extends NetworkPacket {
                     volatilityBot.setSettings(settings);
                 }
             }
+            ServerMarket.setMarketOpen(itemID, marketOpen);
         }
     }
 }

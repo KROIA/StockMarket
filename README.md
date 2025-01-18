@@ -60,7 +60,7 @@ StockMarket is a Minecraft mod that brings a better way for trading to the game.
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.6-green)    | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-fabric-1.20.6] <br>                                                                             |                                                                                                                                                             |                                                                                                                                                             | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-neoforge-1.20.6]  |
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.4-green)    | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-fabric-1.20.4] <br>                                                                             | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-forge-1.20.4] <br>                                                                            | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-quilt-1.20.4] <br>                                                                            |                                                                                                                                                                   |
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.2-green)    | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-fabric-1.20.2] <br>                                                                             | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-forge-1.20.2] <br>                                                                            | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-quilt-1.20.2] <br>                                                                            |                                                                                                                                                                   |
-| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.1-green)    | [![Version](https://img.shields.io/badge/v1.2.2-green)][1.2.2-fabric-1.20.1] <br> [![Version](https://img.shields.io/badge/v1.2.0-blue)][1.2.0-fabric-1.20.1] | [![Version](https://img.shields.io/badge/v1.2.2-green)][1.2.2-forge-1.20.1] <br> [![Version](https://img.shields.io/badge/v1.2.0-blue)][1.2.0-forge-1.20.1] | [![Version](https://img.shields.io/badge/v1.2.2-green)][1.2.2-quilt-1.20.1] <br> [![Version](https://img.shields.io/badge/v1.2.0-blue)][1.2.0-quilt-1.20.1] |                                                                                                                                                                   |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.1-green)    | [![Version](https://img.shields.io/badge/v1.2.3-green)][1.2.3-fabric-1.20.1] <br> [![Version](https://img.shields.io/badge/v1.2.0-blue)][1.2.0-fabric-1.20.1] | [![Version](https://img.shields.io/badge/v1.2.3-green)][1.2.3-forge-1.20.1] <br> [![Version](https://img.shields.io/badge/v1.2.0-blue)][1.2.0-forge-1.20.1] | [![Version](https://img.shields.io/badge/v1.2.3-green)][1.2.3-quilt-1.20.1] <br> [![Version](https://img.shields.io/badge/v1.2.0-blue)][1.2.0-quilt-1.20.1] |                                                                                                                                                                   |
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.4-green)    | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-fabric-1.19.4] <br>                                                                             | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-forge-1.19.4] <br>                                                                            |                                                                             <br>                                                                            |                                                                                                                                                                   |
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.3-green)    | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-fabric-1.19.3] <br>                                                                             | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-forge-1.19.3] <br>                                                                            | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-quilt-1.19.3] <br>                                                                            |                                                                                                                                                                   |
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.2-green)    | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-fabric-1.19.2] <br>                                                                             | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-forge-1.19.2] <br>                                                                            | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-quilt-1.19.2] <br>                                                                            |                                                                                                                                                                   |
@@ -76,13 +76,13 @@ StockMarket is a Minecraft mod that brings a better way for trading to the game.
 [1.2.0-quilt-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6070944
 
 
-<!--	V1.2.1 & 1.2.2	-->
+<!--	V1.2.1 & 1.2.3	-->
 [1.2.1-fabric-1.21.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075091
 [1.2.1-fabric-1.21]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075085
 [1.2.1-fabric-1.20.6]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075078
 [1.2.1-fabric-1.20.4]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075073
 [1.2.1-fabric-1.20.2]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075063
-[1.2.2-fabric-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6085206
+[1.2.3-fabric-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6100770
 [1.2.1-fabric-1.19.4]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075055
 [1.2.1-fabric-1.19.3]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075051
 [1.2.1-fabric-1.19.2]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075019
@@ -90,14 +90,14 @@ StockMarket is a Minecraft mod that brings a better way for trading to the game.
 
 [1.2.1-forge-1.20.4]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075076
 [1.2.1-forge-1.20.2]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075065
-[1.2.2-forge-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6085187
+[1.2.3-forge-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6100775
 [1.2.1-forge-1.19.4]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075056
 [1.2.1-forge-1.19.3]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075052
 [1.2.1-forge-1.19.2]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075021
 					 
 [1.2.1-quilt-1.20.4]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075077
 [1.2.1-quilt-1.20.2]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075072
-[1.2.2-quilt-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6085204
+[1.2.3-quilt-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6100774
 [1.2.1-quilt-1.19.3]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075053
 [1.2.1-quilt-1.19.2]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075045
 
@@ -358,12 +358,14 @@ Each player receives its bank account with 0 balance.
 | /StockMarket [itemID] bot settings set pidP [pidP]                        | Set PID P                                		| :heavy_check_mark: |
 | /StockMarket [itemID] bot settings set pidI [pidI]                        | Set PID I                                		| :heavy_check_mark: |
 | /StockMarket [itemID] bot settings set pidD [pidD]                        | Set PID D                                		| :heavy_check_mark: |
-| /StockMarket [itemID] bot settings set pidIBounds [bounds]                | Set PID I bounds, abs(I) will be [ pidIBounds | :heavy_check_mark: |
+| /StockMarket [itemID] bot settings set pidIBounds [bounds]                | Set PID I bounds, abs(I) will be [pidIBounds] | :heavy_check_mark: |
 | /StockMarket [itemID] bot settings set pidIntegratedError [pidIntegratedError] | Set the current integrated error of the PID controller | :heavy_check_mark: |
 | /StockMarket [itemID] bot create                                          | Create bot                               		| :heavy_check_mark: |
 | /StockMarket [itemID] bot remove                                          | Remove bot                               		| :heavy_check_mark: |
 | /StockMarket [itemID] create                                              | Create marketplace                       		| :heavy_check_mark: |
 | /StockMarket [itemID] remove                                              | Remove marketplace                            | :heavy_check_mark: |
+| /StockMarket [itemID] open                                                | Open the marketplace for trading              | :heavy_check_mark: |
+| /StockMarket [itemID] close                                               | Close the marketplace for trading             | :heavy_check_mark: |
 | /StockMarket [itemID] currentPrice                                        | Get current price                        		| :heavy_check_mark: |
 
 

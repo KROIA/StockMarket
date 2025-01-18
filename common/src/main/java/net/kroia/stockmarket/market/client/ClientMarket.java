@@ -266,6 +266,10 @@ public class ClientMarket {
         }
         return null;
     }
+    public static SyncBotSettingsPacket getSyncBotSettingsPacket()
+    {
+        return syncBotSettingsPacket;
+    }
 
     private static void msgTradeItemNotFound(String itemID) {
         StockMarketMod.LOGGER.warn("[CLIENT] Trade item not found: " + itemID);
