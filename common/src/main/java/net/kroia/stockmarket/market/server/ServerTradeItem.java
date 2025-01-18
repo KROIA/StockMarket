@@ -132,6 +132,15 @@ public class ServerTradeItem implements ServerSaveable {
         marketManager.getOrders(playerUUID, orders);
     }
 
+    public void setMarketOpen(boolean open)
+    {
+        marketManager.setMarketOpen(open);
+    }
+    public boolean isMarketOpen()
+    {
+        return marketManager.isMarketOpen();
+    }
+
     public void shiftPriceHistory()
     {
         marketManager.shiftPriceHistory();

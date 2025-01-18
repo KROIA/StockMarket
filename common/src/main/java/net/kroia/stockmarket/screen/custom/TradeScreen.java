@@ -41,17 +41,17 @@ public class TradeScreen extends GuiScreen {
     public static final Component PRICE_LABEL = Component.translatable(PREFIX+StockMarketMod.MOD_ID + "."+NAME+".price");
     public static final Component BUY = Component.translatable(PREFIX+StockMarketMod.MOD_ID + "."+NAME+".buy");
     public static final Component SELL = Component.translatable(PREFIX+StockMarketMod.MOD_ID + "."+NAME+".sell");
+    public static final Component MARKET_CLOSED = Component.translatable(PREFIX+StockMarketMod.MOD_ID + "."+NAME+".market_closed");
     public static final Component CANCEL = Component.translatable(PREFIX+ StockMarketMod.MOD_ID + "."+NAME+".cancel");
     public static final Component DIRECTION_LABEL = Component.translatable(PREFIX+ StockMarketMod.MOD_ID + "."+NAME+".direction");
     public static final Component FILLED_LABEL = Component.translatable(PREFIX+ StockMarketMod.MOD_ID + "."+NAME+".filled");
-    public static final Component BACK_BUTTON = Component.translatable(PREFIX+ StockMarketMod.MOD_ID + "."+NAME+".back");
-
 
     public static final int colorGreen = 0x7F00FF00;
     public static final int colorRed = 0x7FFF0000;
 
     private String itemID;
     private ItemStack itemStack;
+    private boolean marketWasOpen = false;
 
     static long lastTickCount = 0;
     private StockMarketBlockEntity blockEntity;
@@ -64,7 +64,6 @@ public class TradeScreen extends GuiScreen {
     private final OrderListView activeOrderListView;
 
     private final TradePanel tradePanel;
-
     private static TradeScreen instance;
 
     public TradeScreen(StockMarketBlockEntity blockEntity) {
@@ -92,6 +91,7 @@ public class TradeScreen extends GuiScreen {
 
         tradePanel.setAmount(currentAmount);
         tradePanel.setLimitPrice(currentPrice);
+        tradePanel.setMarketOpen(marketWasOpen);
 
         // Add Gui Elements
         addElement(candleStickChart);
@@ -212,6 +212,11 @@ public class TradeScreen extends GuiScreen {
         instance.tradePanel.setCurrentMoneyBalance(ClientBankManager.getBalance());
         instance.activeOrderListView.updateActiveOrders();
         instance.candleStickChart.updateOrderDisplay();
+        if(instance.marketWasOpen != item.isMarketOpen())
+        {
+            instance.marketWasOpen = item.isMarketOpen();
+            instance.tradePanel.setMarketOpen(item.isMarketOpen());
+        }
     }
 
     private void onItemSelected(String itemId) {

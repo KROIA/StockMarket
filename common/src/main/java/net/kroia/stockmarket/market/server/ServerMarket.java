@@ -263,6 +263,27 @@ public class ServerMarket implements ServerSaveable
         }
     }
 
+    public static void setMarketOpen(String itemID, boolean open)
+    {
+        ServerTradeItem item = tradeItems.get(itemID);
+        if(item == null)
+        {
+            msgTradeItemNotFound(itemID);
+            return;
+        }
+        item.setMarketOpen(open);
+    }
+    public static boolean isMarketOpen(String itemID)
+    {
+        ServerTradeItem item = tradeItems.get(itemID);
+        if(item == null)
+        {
+            msgTradeItemNotFound(itemID);
+            return false;
+        }
+        return item.isMarketOpen();
+    }
+
     public static void shiftPriceHistory()
     {
         //StockMarketMod.LOGGER.info("Shifting price history");

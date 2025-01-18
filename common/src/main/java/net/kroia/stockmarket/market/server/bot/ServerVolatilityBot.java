@@ -250,7 +250,8 @@ public class ServerVolatilityBot extends ServerTradingBot {
         double speed = proportionalError + derivativeError + settings.integratedError;
 
         int randomScale = Math.abs((int)speed)+1;
-        int volume = (int)(speed)+(int)(settings.orderRandomness*(random.nextInt(randomScale)*2-randomScale));
+        int randomVolume = random.nextInt((int)(-settings.orderRandomness),(int)(settings.orderRandomness)+1);
+        int volume = (int)(Math.round(speed)) + randomVolume;
 
         if(volume < 0 && itemBank.getBalance()/2 < -volume)
             volume = (int)-itemBank.getBalance()/2;
