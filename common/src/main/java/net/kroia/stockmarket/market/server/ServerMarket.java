@@ -143,12 +143,22 @@ public class ServerMarket implements ServerSaveable
             StockMarketMod.LOGGER.warn("[SERVER] Trade item already exists: " + itemID);
             return;
         }
+        if(StockMarketModSettings.Market.NOT_TRADABLE_ITEMS.contains(itemID))
+        {
+            StockMarketMod.LOGGER.warn("[SERVER] Item "+itemID+" is now allowed for trading");
+            return;
+        }
         addTradeItem_internal(itemID, startPrice);
     }
     public static void addTradeItemIfNotExists(String itemID, int startPrice)
     {
         if(tradeItems.containsKey(itemID))
         {
+            return;
+        }
+        if(StockMarketModSettings.Market.NOT_TRADABLE_ITEMS.contains(itemID))
+        {
+            StockMarketMod.LOGGER.warn("[SERVER] Item "+itemID+" is now allowed for trading");
             return;
         }
         addTradeItem_internal(itemID, startPrice);
@@ -166,9 +176,13 @@ public class ServerMarket implements ServerSaveable
     }
     private static void addTradeItem_internal(String itemID, int startPrice)
     {
+        if(!ServerBankManager.allowItemID(itemID))
+        {
+            StockMarketMod.LOGGER.warn("[SERVER] Item "+itemID+" can't be allowd for trading because it is not allowed in the bank system");
+            return;
+        }
         ServerTradeItem tradeItem = new ServerTradeItem(itemID, startPrice);
         tradeItems.put(itemID, tradeItem);
-        ServerBankManager.allowItemID(itemID);
 
         MinecraftServer server = UtilitiesPlatform.getServer();
 

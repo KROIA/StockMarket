@@ -41,6 +41,7 @@ public class StockMarketCommands {
         // /StockMarket order <username> cancelAll                                      - Cancel all orders of a player
         // /StockMarket order <username> cancelAll <itemID>                             - Cancel all orders of a player for an item
         // /StockMarket BotSettingsGUI                                                  - Open the settings GUI for the market bots
+        // /StockMarket ManagementGUI                                                   - Open the management GUI to create and remove trading items
         // /StockMarket <itemID> bot settings get                                       - Get bot settings
         // /StockMarket <itemID> bot settings set enabled                               - Enable bot
         // /StockMarket <itemID> bot settings set disabled                              - Disable bot
@@ -182,6 +183,25 @@ public class StockMarketCommands {
                                         else {
                                             PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getNoTradingItemAvailableMessage());
                                         }
+                                    }
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                        )
+                        .then(Commands.literal("ManagementGUI")
+                                .requires(source -> source.hasPermission(2))
+                                .executes(context -> {
+                                    ServerPlayer player = context.getSource().getPlayer();
+                                    if(player != null) {
+                                        OpenScreenPacket.sendPacket(player, OpenScreenPacket.ScreenType.STOCKMARKET_MANAGEMENT);
+                                        /*
+                                        ArrayList<String> suggestions = ServerMarket.getTradeItemIDs();
+                                        if(!suggestions.isEmpty()) {
+                                            //String itemID = suggestions.get(0);
+                                            //SyncBotSettingsPacket.sendPacket(player, itemID, ServerMarket.getBotUserUUID());
+                                            }
+                                        else {
+                                            PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getNoTradingItemAvailableMessage());
+                                        }*/
                                     }
                                     return Command.SINGLE_SUCCESS;
                                 })

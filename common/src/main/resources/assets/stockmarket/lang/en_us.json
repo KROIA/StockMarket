@@ -108,5 +108,13 @@
   "gui.stockmarket.bot_settings_screen.settings_pid_i": "PID I",
   "gui.stockmarket.bot_settings_screen.settings_pid_d": "PID D",
   "gui.stockmarket.bot_settings_screen.settings_pid_ibounds": "PID I Bounds",
-  "gui.stockmarket.bot_settings_screen.settings_pid_integrated_err": "PID Integrated Error"
+  "gui.stockmarket.bot_settings_screen.settings_pid_integrated_err": "PID Integrated Error",
+
+  "gui.stockmarket.management_screen.title": "Stock Market Management",
+  "gui.stockmarket.management_screen.trading_items": "Trading Items",
+  "gui.stockmarket.management_screen.new_trading_item": "New Trading Item",
+  "gui.stockmarket.management_screen.remove_trading_item": "Remove Trading Item",
+  "gui.stockmarket.management_screen.ask_remove_title": "Remove Trading Item",
+  "gui.stockmarket.management_screen.ask_remove_message": "Are you sure you want to remove the selected item from the stockmarket?\nAll open Orders will be closed and the market bot will be deleted.",
+  "gui.stockmarket.management_screen.bot_settings": "Bot Settings"
 }

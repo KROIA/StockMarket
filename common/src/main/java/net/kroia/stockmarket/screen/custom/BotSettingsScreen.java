@@ -29,6 +29,7 @@ import net.kroia.stockmarket.screen.uiElements.BotSettingsWidget;
 import net.kroia.stockmarket.screen.uiElements.CandleStickChart;
 import net.kroia.stockmarket.screen.uiElements.OrderbookVolumeChart;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
 
@@ -71,8 +72,11 @@ public class BotSettingsScreen extends GuiScreen {
 
     private boolean settingsReceived = false;
     private boolean botExists = false;
-    public BotSettingsScreen() {
+
+    private final Screen parentScreen;
+    public BotSettingsScreen(Screen parent) {
         super(TITLE);
+        parentScreen = parent;
         itemID = "";
         instance = this;
         settings = new ServerVolatilityBot.Settings();
@@ -120,9 +124,14 @@ public class BotSettingsScreen extends GuiScreen {
 
     public static void openScreen()
     {
-        BotSettingsScreen screen = new BotSettingsScreen();
+        openScreen(null);
+    }
+    public static void openScreen(Screen parent)
+    {
+        BotSettingsScreen screen = new BotSettingsScreen(parent);
         Minecraft.getInstance().setScreen(screen);
     }
+
 
 
     @Override
@@ -156,6 +165,8 @@ public class BotSettingsScreen extends GuiScreen {
         // Unregister the event listener when the screen is closed
         TickEvent.PLAYER_POST.unregister(BotSettingsScreen::onClientTick);
         ClientMarket.unsubscribeMarketUpdate(itemID);
+        if(parentScreen != null)
+            Minecraft.getInstance().setScreen(parentScreen);
     }
 
     public static void updatePlotsData() {
