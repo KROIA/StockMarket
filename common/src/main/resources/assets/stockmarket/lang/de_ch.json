@@ -22,6 +22,7 @@
   "message.stockmarket.marketplace_already_existing": "Markt für {item_name} isch bereits vorhande",
   "message.stockmarket.marketplace_is_now_closed": "Markt für {item_name} isch jetzt gschlossä",
   "message.stockmarket.marketplace_is_now_open": "Markt für {item_name} isch jetzt göffnet zum handle",
+  "message.stockmarket.marketplace_is_not_allowed": "Markt für {item_name} isch nöd erlaubt",
   "message.stockmarket.marketplace_deleted": "{item_name} cha nüme ghandelt wärde",
   "message.stockmarket.marketplace_created": "{item_name} cha jetzt ghandelt wärde",
   "message.stockmarket.current_price_of": "Aktuellä Pris für {item_name}: {current_price}",

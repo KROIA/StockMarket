@@ -136,32 +136,32 @@ public class ServerMarket implements ServerSaveable
         return bankUser;
     }
 
-    public static void addTradeItem(String itemID, int startPrice)
+    public static boolean addTradeItem(String itemID, int startPrice)
     {
         if(tradeItems.containsKey(itemID))
         {
             StockMarketMod.LOGGER.warn("[SERVER] Trade item already exists: " + itemID);
-            return;
+            return true;
         }
         if(StockMarketModSettings.Market.NOT_TRADABLE_ITEMS.contains(itemID))
         {
-            StockMarketMod.LOGGER.warn("[SERVER] Item "+itemID+" is now allowed for trading");
-            return;
+            StockMarketMod.LOGGER.warn("[SERVER] Item "+itemID+" is not allowed for trading");
+            return false;
         }
-        addTradeItem_internal(itemID, startPrice);
+        return addTradeItem_internal(itemID, startPrice);
     }
-    public static void addTradeItemIfNotExists(String itemID, int startPrice)
+    public static boolean addTradeItemIfNotExists(String itemID, int startPrice)
     {
         if(tradeItems.containsKey(itemID))
         {
-            return;
+            return true;
         }
         if(StockMarketModSettings.Market.NOT_TRADABLE_ITEMS.contains(itemID))
         {
-            StockMarketMod.LOGGER.warn("[SERVER] Item "+itemID+" is now allowed for trading");
-            return;
+            StockMarketMod.LOGGER.warn("[SERVER] Item "+itemID+" is not allowed for trading");
+            return false;
         }
-        addTradeItem_internal(itemID, startPrice);
+        return addTradeItem_internal(itemID, startPrice);
     }
     public static void removeTradingItem(String itemID)
     {
@@ -174,12 +174,12 @@ public class ServerMarket implements ServerSaveable
         item.cleanup();
         tradeItems.remove(itemID);
     }
-    private static void addTradeItem_internal(String itemID, int startPrice)
+    private static boolean addTradeItem_internal(String itemID, int startPrice)
     {
         if(!ServerBankManager.allowItemID(itemID))
         {
-            StockMarketMod.LOGGER.warn("[SERVER] Item "+itemID+" can't be allowd for trading because it is not allowed in the bank system");
-            return;
+            StockMarketMod.LOGGER.warn("[SERVER] Item "+itemID+" can't be allowed for trading because it is not allowed in the bank system");
+            return false;
         }
         ServerTradeItem tradeItem = new ServerTradeItem(itemID, startPrice);
         tradeItems.put(itemID, tradeItem);
@@ -196,6 +196,7 @@ public class ServerMarket implements ServerSaveable
         {
             SyncTradeItemsPacket.sendPacket(player);
         }
+        return true;
     }
 
     public static ArrayList<String> getTradeItemIDs()

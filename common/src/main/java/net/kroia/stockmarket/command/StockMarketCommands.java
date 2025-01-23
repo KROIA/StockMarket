@@ -589,9 +589,15 @@ public class StockMarketCommands {
                                                     if (ServerMarket.hasItem(itemID)) {
                                                         PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getMarketplaceAlreadyExistingMessage(itemID));
                                                     } else {
-                                                        ServerMarket.addTradeItem(itemID, 0);
-                                                        // Notify all serverPlayers
-                                                        PlayerUtilities.printToClientConsole(StockMarketTextMessages.getMarketplaceCreatedMessage(itemID));
+                                                        if(ServerMarket.addTradeItem(itemID, 0))
+                                                        {
+                                                            // Notify all serverPlayers
+                                                            PlayerUtilities.printToClientConsole(StockMarketTextMessages.getMarketplaceCreatedMessage(itemID));
+                                                        }
+                                                        else
+                                                        {
+                                                            PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getMarketplaceIsNotAllowedMessage(itemID));
+                                                        }
                                                     }
                                                     return Command.SINGLE_SUCCESS;
                                                 })

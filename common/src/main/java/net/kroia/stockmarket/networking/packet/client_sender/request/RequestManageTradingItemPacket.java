@@ -1,9 +1,11 @@
 package net.kroia.stockmarket.networking.packet.client_sender.request;
 
+import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.networking.NetworkPacket;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncTradeItemsPacket;
+import net.kroia.stockmarket.util.StockMarketTextMessages;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -67,10 +69,26 @@ public class RequestManageTradingItemPacket extends NetworkPacket {
         switch(mode)
         {
             case ADD_NEW_ITEM:
-                ServerMarket.addTradeItemIfNotExists(itemID, startPrice);
+                if (ServerMarket.hasItem(itemID)) {
+                    PlayerUtilities.printToClientConsole(sender, StockMarketTextMessages.getMarketplaceAlreadyExistingMessage(itemID));
+                }
+                else {
+                    if (ServerMarket.addTradeItemIfNotExists(itemID, startPrice)) {
+                        // Notify all serverPlayers
+                        PlayerUtilities.printToClientConsole(StockMarketTextMessages.getMarketplaceCreatedMessage(itemID));
+                    } else {
+                        PlayerUtilities.printToClientConsole(sender, StockMarketTextMessages.getMarketplaceIsNotAllowedMessage(itemID));
+                    }
+                }
                 break;
             case REMOVE_ITEM:
-                ServerMarket.removeTradingItem(itemID);
+                if (ServerMarket.hasItem(itemID)) {
+                    ServerMarket.removeTradingItem(itemID);
+                    // Notify all serverPlayers
+                    PlayerUtilities.printToClientConsole(StockMarketTextMessages.getMarketplaceDeletedMessage(itemID));
+                } else {
+                    PlayerUtilities.printToClientConsole(sender, StockMarketTextMessages.getMarketplaceNotExistingMessage(itemID));
+                }
                 break;
         }
         SyncTradeItemsPacket.sendPacket(sender);

@@ -69,6 +69,8 @@ public class StockMarketTextMessages {
 
 
 
+
+
     private static final Component MARKETPLACE_DELETED = Component.translatable(prefix+"marketplace_deleted");
     public static String getMarketplaceDeletedMessage(String itemName)
     {
@@ -84,6 +86,15 @@ public class StockMarketTextMessages {
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
         return msg;
     }
+
+    private static final Component MARKETPLACE_IS_NOT_ALLOWED = Component.translatable(prefix+"marketplace_is_not_allowed");
+    public static String getMarketplaceIsNotAllowedMessage(String itemName)
+    {
+        String msg = MARKETPLACE_IS_NOT_ALLOWED.getString();
+        msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
+        return msg;
+    }
+
 
 
     private static final Component CURRENT_PRICE_OF = Component.translatable(prefix+"current_price_of");
