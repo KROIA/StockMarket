@@ -1,9 +1,7 @@
 package net.kroia.stockmarket.screen.uiElements;
 
 import com.mojang.datafixers.util.Pair;
-import net.kroia.modutilities.gui.elements.CheckBox;
-import net.kroia.modutilities.gui.elements.Label;
-import net.kroia.modutilities.gui.elements.TextBox;
+import net.kroia.modutilities.gui.elements.*;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
@@ -50,11 +48,11 @@ public class BotSettingsWidget extends GuiElement {
     final Pair<Label, TextBox> volumeScale;
     final Pair<Label, TextBox> volumeSpread;
     final Pair<Label, TextBox> volumeRandomness;
-    final Pair<Label, TextBox> updateInterval;
+    final Pair<Label, HorizontalSlider> updateInterval;
 
 
     final Pair<Label, TextBox> orderRandomnes;
-    final Pair<Label, TextBox> volatility;
+    final Pair<Label, HorizontalSlider> volatility;
     final Pair<Label, TextBox> volatilityTimer;
     final Pair<Label, TextBox> volatilityTimerMin;
     final Pair<Label, TextBox> volatilityTimerMax;
@@ -81,13 +79,15 @@ public class BotSettingsWidget extends GuiElement {
 
         enabled = new Pair<>(new Label(SETTING_ENABLED.getString()), new CheckBox("", this::onEnableCheckBoxChanged));
         enabled.getSecond().setTextAlignment(GuiElement.Alignment.RIGHT);
+        updateInterval = new Pair<>(new Label(SETTINGS_UPDATE_INTERVAL.getString()), new HorizontalSlider());
+        updateInterval.getSecond().setTooltipSupplier(this::getMarketSpeedTooltip);
         maxOrderCount = new Pair<>(new Label(SETTING_MAX_ORDER_COUNT.getString()), new TextBox());
         volumeScale = new Pair<>(new Label(SETTINGS_VOLUME_SCALE.getString()), new TextBox());
         volumeSpread = new Pair<>(new Label(SETTINGS_VOLUME_SPREAD.getString()), new TextBox());
         volumeRandomness = new Pair<>(new Label(SETTINGS_VOLUME_RANDOMNESS.getString()), new TextBox());
-        updateInterval = new Pair<>(new Label(SETTINGS_UPDATE_INTERVAL.getString()), new TextBox());
         orderRandomnes = new Pair<>(new Label(SETTINGS_ORDER_RANDOMNESS.getString()), new TextBox());
-        volatility = new Pair<>(new Label(SETTINGS_VOLATILITY.getString()), new TextBox());
+        volatility = new Pair<>(new Label(SETTINGS_VOLATILITY.getString()), new HorizontalSlider());
+        volatility.getSecond().setTooltipSupplier(()->String.format("%.2f", volatility.getSecond().getSliderValue()*100)+"%");
         volatilityTimer = new Pair<>(new Label(SETTINGS_VOLATILITY_TIMER.getString()), new TextBox());
         volatilityTimerMin = new Pair<>(new Label(SETTINGS_VOLATILITY_TIMER_MIN.getString()), new TextBox());
         volatilityTimerMax = new Pair<>(new Label(SETTINGS_VOLATILITY_TIMER_MAX.getString()), new TextBox());
@@ -104,17 +104,17 @@ public class BotSettingsWidget extends GuiElement {
 
         elements = new ArrayList<>();
         addElement(enabled);
+        addElement(updateInterval);
         addElement(maxOrderCount);
+        addElement(targetItemBalance);
         addElement(volumeScale);
         addElement(volumeSpread);
         addElement(volumeRandomness);
-        addElement(updateInterval);
         addElement(orderRandomnes);
         addElement(volatility);
         addElement(volatilityTimer);
         addElement(volatilityTimerMin);
         addElement(volatilityTimerMax);
-        addElement(targetItemBalance);
         addElement(imbalancePriceRange);
         addElement(imbalancePriceChangeFactorLinear);
         addElement(imbalancePriceChangeFactorQuadratic);
@@ -131,6 +131,10 @@ public class BotSettingsWidget extends GuiElement {
             {
                 textBox.setAllowLetters(false);
                 textBox.setOnTextChanged(this::onTextChanged);
+            }
+            else if(element instanceof Slider slider)
+            {
+                slider.setOnValueChanged(this::onSliderChanged);
             }
         }
 
@@ -157,9 +161,9 @@ public class BotSettingsWidget extends GuiElement {
         volumeScale.getSecond().setText(Double.toString(settings.volumeScale));
         volumeSpread.getSecond().setText(Double.toString(settings.volumeSpread));
         volumeRandomness.getSecond().setText(Double.toString(settings.volumeRandomness));
-        updateInterval.getSecond().setText(Long.toString(settings.updateTimerIntervallMS));
+        updateInterval.getSecond().setSliderValue(1-(double)(settings.updateTimerIntervallMS-100)/9900.0);
         orderRandomnes.getSecond().setText(Double.toString(settings.orderRandomness));
-        volatility.getSecond().setText(Double.toString(settings.volatility));
+        volatility.getSecond().setSliderValue(settings.volatility/100.0);
         volatilityTimer.getSecond().setText(Long.toString(settings.timerMillis));
         volatilityTimerMin.getSecond().setText(Long.toString(settings.minTimerMillis));
         volatilityTimerMax.getSecond().setText(Long.toString(settings.maxTimerMillis));
@@ -228,6 +232,11 @@ public class BotSettingsWidget extends GuiElement {
         //validateUserInput();
         onSettingsChanged.run();
     }
+    private void onSliderChanged(double value)
+    {
+        //validateUserInput();
+        onSettingsChanged.run();
+    }
 
     private void validateUserInput()
     {
@@ -236,9 +245,9 @@ public class BotSettingsWidget extends GuiElement {
         settings.volumeScale = getValidated(volumeScale.getSecond().getDouble(), 0.0, Double.MAX_VALUE);
         settings.volumeSpread = getValidated(volumeSpread.getSecond().getDouble(), 0.0, Double.MAX_VALUE);
         settings.volumeRandomness = getValidated(volumeRandomness.getSecond().getDouble(), 0.0, Double.MAX_VALUE);
-        settings.updateTimerIntervallMS = getValidated(updateInterval.getSecond().getLong(), 1, Long.MAX_VALUE);
+        settings.updateTimerIntervallMS = getValidated((long)((1-updateInterval.getSecond().getSliderValue())*9900)+100, 100, 10000);
         settings.orderRandomness = getValidated(orderRandomnes.getSecond().getDouble(), 0.0, Double.MAX_VALUE);
-        settings.volatility = getValidated(volatility.getSecond().getDouble(), 0.0, 100.0);
+        settings.volatility = getValidated(volatility.getSecond().getSliderValue()*100, 0.0, 100.0);
         settings.timerMillis = getValidated(volatilityTimer.getSecond().getLong(), 1, Long.MAX_VALUE);
         settings.minTimerMillis = getValidated(volatilityTimerMin.getSecond().getLong(), 1, Long.MAX_VALUE);
         settings.maxTimerMillis = getValidated(volatilityTimerMax.getSecond().getLong(), 1, Long.MAX_VALUE);
@@ -266,5 +275,33 @@ public class BotSettingsWidget extends GuiElement {
     private double getValidated(double value, double min, double max)
     {
         return Math.max(min, Math.min(max, value));
+    }
+
+
+    public String getMarketSpeedTooltip()
+    {
+        double speed = updateInterval.getSecond().getSliderValue();
+        long ms = getMarketSpeedMS();
+        if(speed < 0.2) {
+            return "Slow "+ms+"ms";
+        }
+        else if(speed < 0.4) {
+            return "Medium "+ms+"ms";
+        }
+        else if(speed < 0.6) {
+            return "Fast "+ms+"ms";
+        }
+        else if(speed < 0.8) {
+            return "Very Fast "+ms+"ms";
+        }
+        else {
+            return "Steroids "+ms+"ms";
+        }
+    }
+    public long getMarketSpeedMS()
+    {
+        double speed = updateInterval.getSecond().getSliderValue();
+        // map from 100 to 10000
+        return (long)((1-speed)*9900+100);
     }
 }

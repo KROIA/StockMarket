@@ -76,7 +76,7 @@ public class StockMarketModSettings {
             double pidP = 0.1;
             double pidI = 0.001;
             double pidD = -0.01;
-            double pidIBound = 10;
+            double pidIBound = 1;
 
             ServerTradingBotFactory.botTableBuilder(bots, "minecraft:diamond", new ServerVolatilityBot(),
                     new ServerVolatilityBot.Settings(100,1000,10000,300000,1000,0.1,10,pidP,pidD,pidI,pidIBound),1000);

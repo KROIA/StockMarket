@@ -156,6 +156,13 @@ public class ServerVolatilityBot extends ServerTradingBot {
 
             return success;
         }
+
+        public void load(Settings other)
+        {
+            CompoundTag tag = new CompoundTag();
+            other.save(tag);
+            load(tag);
+        }
     }
     private MeanRevertingRandomWalk randomWalk;
     private static Random random = new Random();
