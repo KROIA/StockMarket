@@ -266,21 +266,24 @@ public class BotSettingsScreen extends GuiScreen {
     {
         long itemBalance = 0;
         long moneyBalance = 0;
-        boolean setBalance = false;
+        boolean setItemBalance = false;
+        boolean setMoneyBalance = false;
         boolean createBot = false;
         if(botSetupScreen != null)
         {
             itemBalance = botSetupScreen.getBotItemBalance();
             moneyBalance = botSetupScreen.getBotMoneyBalance();
-            setBalance = true;
+            setItemBalance = botSetupScreen.getAutoChangeItemBalance();
+            setMoneyBalance = botSetupScreen.getAutoChangeMoneyBalance();
             botSetupScreen = null;
             if(!botExists)
                 createBot = true;
         }
         boolean marketOpen = marketOpenCheckBox.isChecked();
-        if(setBalance)
+        if(setItemBalance || setMoneyBalance)
         {
-            UpdateBotSettingsPacket.sendPacket(itemID, botSettingsWidget.getSettings(), false, createBot, marketOpen, itemBalance, moneyBalance);
+            UpdateBotSettingsPacket.sendPacket(itemID, botSettingsWidget.getSettings(), false, createBot, marketOpen,
+                    setItemBalance, itemBalance, setMoneyBalance, moneyBalance);
         }
         else
             UpdateBotSettingsPacket.sendPacket(itemID, botSettingsWidget.getSettings(), false, createBot, marketOpen);
@@ -324,7 +327,7 @@ public class BotSettingsScreen extends GuiScreen {
     {
         //BotSetupScreen.openScreen();
 
-        botSetupScreen = new BotSetupScreen(this::onBotSetupApply, settings);
+        botSetupScreen = new BotSetupScreen(this::onBotSetupApply, this::onBotSetupCancel, settings);
         Minecraft.getInstance().setScreen(botSetupScreen);
     }
 
@@ -334,5 +337,10 @@ public class BotSettingsScreen extends GuiScreen {
         Minecraft.getInstance().setScreen(this);
         setBotSettings(settings);
         saveButton.setOutlineColor(unsavedChangesButtonColor);
+    }
+    private void onBotSetupCancel()
+    {
+        botSetupScreen = null;
+        Minecraft.getInstance().setScreen(this);
     }
 }

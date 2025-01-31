@@ -120,6 +120,11 @@
   "gui.stockmarket.management_screen.ask_remove_message": "Are you sure you want to remove the selected item from the stockmarket?\nAll open Orders will be closed and the market bot will be deleted.",
   "gui.stockmarket.management_screen.bot_settings": "Bot Settings",
 
+  "gui.stockmarket.bot_settings_setup_screen.cancel": "Cancel",
+  "gui.stockmarket.bot_settings_setup_screen.back": "Back",
+  "gui.stockmarket.bot_settings_setup_screen.next": "Next",
+  "gui.stockmarket.bot_settings_setup_screen.apply": "Apply",
+
   "gui.stockmarket.bot_settings_setup_screen_rarity.question": "What is the rarity of the item?\nHow often does it appear in the game?",
   "gui.stockmarket.bot_settings_setup_screen_rarity.low": "More common",
   "gui.stockmarket.bot_settings_setup_screen_rarity.high": "More rare",
@@ -132,6 +137,11 @@
 
   "gui.stockmarket.bot_settings_setup_screen_market_speed.question": "How fast should the bot trade the item?\nSet the Interval in milliseconds.\nFor faster trading, choose a lower value.\nFor slower trading, choose a higher value.\nA faster market may impact the server performance.\nMinimum: 1000ms\nMaximum: 10000ms",
   "gui.stockmarket.bot_settings_setup_screen_market_speed.low": "Slow",
-  "gui.stockmarket.bot_settings_setup_screen_market_speed.high": "Fast"
+  "gui.stockmarket.bot_settings_setup_screen_market_speed.high": "Fast",
+
+  "gui.stockmarket.bot_settings_setup_screen_change_bot_stocks.auto_change_money_balance": "Change the money balance of the bot automatically.\nThis is done in order to have enough liquidity\nto make buy orders.",
+  "gui.stockmarket.bot_settings_setup_screen_change_bot_stocks.auto_change_item_balance": "Change the item balance of the bot automatically.\nThis is done in order to have enough item supply\nto make sell orders."
+
+
 
 }

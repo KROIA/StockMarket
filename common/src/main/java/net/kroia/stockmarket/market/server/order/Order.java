@@ -106,7 +106,7 @@ public abstract class Order {
             return false;
         }
         if(amount > 0) {
-            if (!moneyBank.lockAmount((long) price * amount)){
+            if (moneyBank.lockAmount((long) price * amount) != Bank.Status.SUCCESS) {
                 //StockMarketMod.LOGGER.warn("Insufficient funds for player " + ServerPlayerList.getPlayerName(playerUUID));
                 if(dbgPlayer != null)
                     PlayerUtilities.printToClientConsole(dbgPlayer, StockMarketTextMessages.getInsufficientFundToBuyMessage(itemID, amount, price));
@@ -114,7 +114,7 @@ public abstract class Order {
             }
         }
         else {
-            if (!itemBank.lockAmount(-amount)){
+            if (itemBank.lockAmount(-amount) != Bank.Status.SUCCESS){
                 //StockMarketMod.LOGGER.warn("Insufficient items ("+itemID+") for player " + ServerPlayerList.getPlayerName(playerUUID));
                 if(dbgPlayer != null)
                     PlayerUtilities.printToClientConsole(dbgPlayer, StockMarketTextMessages.getInsufficientItemsToSellMessage(itemID, amount));

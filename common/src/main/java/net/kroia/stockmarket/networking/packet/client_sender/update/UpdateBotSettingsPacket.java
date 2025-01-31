@@ -51,7 +51,7 @@ public class UpdateBotSettingsPacket extends NetworkPacket {
         StockMarketNetworking.sendToServer(packet);
     }
     public static void sendPacket(String itemID, ServerVolatilityBot.Settings settings, boolean destroyBot, boolean createBot, boolean marketOpen,
-                                  long itemBalance, long moneyBalance)
+                                  boolean setItemBalance, long itemBalance, boolean setMoneyBalance, long moneyBalance)
     {
         UpdateBotSettingsPacket packet = new UpdateBotSettingsPacket();
         packet.itemID = itemID;
@@ -59,8 +59,8 @@ public class UpdateBotSettingsPacket extends NetworkPacket {
         packet.destroyBot = destroyBot;
         packet.createBot = createBot;
         packet.marketOpen = marketOpen;
-        packet.setBotItemBalance = true;
-        packet.setBotMoneyBalance = true;
+        packet.setBotItemBalance = setItemBalance;
+        packet.setBotMoneyBalance = setMoneyBalance;
         packet.itemBalance = itemBalance;
         packet.moneyBalance = moneyBalance;
         StockMarketNetworking.sendToServer(packet);

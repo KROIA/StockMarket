@@ -45,7 +45,7 @@ public class BotSetup_marketSpeed extends BotSetupGuiElement{
         addChild(slider);
 
 
-        slider.setSliderValue(0.5);
+        slider.setSliderValue(0.9);
     }
 
 

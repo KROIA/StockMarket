@@ -17,6 +17,10 @@ public class BotSetupScreen extends GuiScreen {
     public static final String PREFIX = "gui."+ StockMarketMod.MOD_ID+"."+NAME+".";
 
     private static final Component TITLE = Component.translatable(PREFIX+"title");
+    private static final Component CANCEL = Component.translatable(PREFIX+"cancel");
+    private static final Component BACK = Component.translatable(PREFIX+"back");
+    private static final Component NEXT = Component.translatable(PREFIX+"next");
+    private static final Component APPLY = Component.translatable(PREFIX+"apply");
 
     private final ArrayList<BotSetupGuiElement> pages = new ArrayList<>();
     private int currentPage = 0;
@@ -25,7 +29,11 @@ public class BotSetupScreen extends GuiScreen {
     private final Button nextButton;
 
     private final Runnable onApply;
+    private final Runnable onCancel;
     private final ServerVolatilityBot.Settings settings;
+
+    private boolean autoChangeMoneyBalance;
+    private boolean autoChangeItemBalance;
     private long botItemBalance;
     private long botMoneyBalance;
 
@@ -34,16 +42,18 @@ public class BotSetupScreen extends GuiScreen {
     private final BotSetup_estimatedPrice estimatedPricePage;
     private final BotSetup_volatility volatilityPage;
     private final BotSetup_marketSpeed marketSpeedPage;
+    private final BotSetup_changeBotStocks changeBotStocksPage;
 
 
-    public BotSetupScreen(Runnable onApply, ServerVolatilityBot.Settings settings) {
+    public BotSetupScreen(Runnable onApply, Runnable onCancel, ServerVolatilityBot.Settings settings) {
         super(TITLE);
         this.onApply = onApply;
+        this.onCancel = onCancel;
         this.settings = settings;
 
 
-        backButton = new Button("Back", this::onBackButtonClicked);
-        nextButton = new Button("Next", this::onNextButtonClicked);
+        backButton = new Button(CANCEL.getString(), this::onBackButtonClicked);
+        nextButton = new Button(NEXT.getString(), this::onNextButtonClicked);
 
 
         // Question pages
@@ -51,6 +61,7 @@ public class BotSetupScreen extends GuiScreen {
         pages.add(estimatedPricePage = new BotSetup_estimatedPrice(settings));
         pages.add(volatilityPage = new BotSetup_volatility(settings));
         pages.add(marketSpeedPage = new BotSetup_marketSpeed(settings));
+        pages.add(changeBotStocksPage = new BotSetup_changeBotStocks(settings));
 
         rarityPage.setTooltipSupplyer(this::getRarityTooltip);
         marketSpeedPage.setTooltipSupplyer(this::getMarketSpeedTooltip);
@@ -61,7 +72,7 @@ public class BotSetupScreen extends GuiScreen {
         addElement(nextButton);
 
 
-        backButton.setEnabled(false);
+        //backButton.setEnabled(false);
 
         for (BotSetupGuiElement current : pages) {
             addElement(current);
@@ -93,10 +104,16 @@ public class BotSetupScreen extends GuiScreen {
             pages.get(currentPage).setEnabled(false);
             currentPage--;
             pages.get(currentPage).setEnabled(true);
-            if(currentPage == 0)
-                backButton.setEnabled(false);
-            else if(currentPage == pages.size()-2)
-                nextButton.setLabel("Next");
+            if(currentPage == pages.size()-2)
+                nextButton.setLabel(NEXT.getString());
+            else if(currentPage == 0)
+            {
+                backButton.setLabel(CANCEL.getString());
+            }
+        }
+        else {
+            if(onCancel != null)
+                onCancel.run();
         }
     }
     private void onNextButtonClicked() {
@@ -109,9 +126,10 @@ public class BotSetupScreen extends GuiScreen {
             pages.get(currentPage).setEnabled(false);
             currentPage++;
             pages.get(currentPage).setEnabled(true);
-            backButton.setEnabled(true);
+            backButton.setLabel(BACK.getString());
+            //backButton.setEnabled(true);
             if(currentPage == pages.size()-1)
-                nextButton.setLabel("Apply");
+                nextButton.setLabel(APPLY.getString());
         }
     }
 
@@ -120,6 +138,12 @@ public class BotSetupScreen extends GuiScreen {
     }
     public long getBotMoneyBalance() {
         return botMoneyBalance;
+    }
+    public boolean getAutoChangeMoneyBalance() {
+        return autoChangeMoneyBalance;
+    }
+    public boolean getAutoChangeItemBalance() {
+        return autoChangeItemBalance;
     }
     private void onApplyButtonClicked() {
         // Apply changes
@@ -132,6 +156,8 @@ public class BotSetupScreen extends GuiScreen {
 
         botItemBalance = (long)(((1-rarity) * (1-rarity)) * 100000)+5000;
         botMoneyBalance = botItemBalance * price * 1000;
+        autoChangeItemBalance = changeBotStocksPage.getAutoChangeItemBalance();
+        autoChangeMoneyBalance = changeBotStocksPage.getAutoChangeMoneyBalance();
 
         settings.volatility = volatility*100;
         settings.imbalancePriceRange = price * 2;
@@ -147,7 +173,7 @@ public class BotSetupScreen extends GuiScreen {
         settings.imbalancePriceChangeFactor = volatility*0.1;
         settings.volumeRandomness = volatility*2;
         settings.volumeScale = (1-rarity) * 100;
-        settings.orderRandomness = volatility * (1-rarity) * 10;
+        settings.orderRandomness = volatility * (1-rarity) * 10+1;
 
 
         if(onApply != null)

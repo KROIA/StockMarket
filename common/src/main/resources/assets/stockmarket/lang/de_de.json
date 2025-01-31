@@ -126,11 +126,21 @@
 
   "gui.stockmarket.bot_settings_setup_screen_estimatedValue.question": "Was ist der geschätzte Wert des Items?\nWie viel ist es wert?\nDieser Wert wird als startpreis für den Markt verwendet.",
 
+  "gui.stockmarket.bot_settings_setup_screen.cancel": "Abbrechen",
+  "gui.stockmarket.bot_settings_setup_screen.back": "Zurück",
+  "gui.stockmarket.bot_settings_setup_screen.next": "Weiter",
+  "gui.stockmarket.bot_settings_setup_screen.apply": "Übernehmen",
+
   "gui.stockmarket.bot_settings_setup_screen_volatility.question": "Wie stark soll der Preis des Items schwanken\nFür einen stabilen Markt, wähle einen niedrigen Wert.\nFür einen volatilen Markt, wähle einen hohen Wert.",
   "gui.stockmarket.bot_settings_setup_screen_volatility.low": "Niedrige Volatilität",
   "gui.stockmarket.bot_settings_setup_screen_volatility.high": "Hohe Volatilität",
 
   "gui.stockmarket.bot_settings_setup_screen_market_speed.question": "Wie schnell soll der bot das Item handeln?\nSetze den Interval in Millisekunden\nFür schnelleres handelä, wähle einen kleinen Wert.\nFür langsams handlä, nim en grosse Wert\nSchnells handle cha d Server-Performance beiträchtige\nMinimum: 1000ms\nMaximum: 10000ms",
   "gui.stockmarket.bot_settings_setup_screen_market_speed.low": "Schnäggätempo",
-  "gui.stockmarket.bot_settings_setup_screen_market_speed.high": "Wie de Blitz"
+  "gui.stockmarket.bot_settings_setup_screen_market_speed.high": "Wie de Blitz",
+
+  "gui.stockmarket.bot_settings_setup_screen_change_bot_stocks.auto_change_money_balance": "Ändere den Geldbetrag auf der Bank des Bots automatisch.\nDas wird gemacht um genügend Liquidität zu haben,\num Items kaufen zu können",
+  "gui.stockmarket.bot_settings_setup_screen_change_bot_stocks.auto_change_item_balance": "Ändere die Anzahl Items auf der Bank des Bots automatisch.\nDas wird gemacht um genügend Items zu haben,\num items verkaufen zu können"
+
+
 }
