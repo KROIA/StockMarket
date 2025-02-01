@@ -493,6 +493,23 @@ public class StockMarketTextMessages {
     }
 
 
+    private static final Component DEFAULT_BOT_CREATED = Component.translatable(prefix+"default_bot_created");
+    public static String getDefaultBotCreatedMessage(String itemID)
+    {
+        String msg = DEFAULT_BOT_CREATED.getString();
+        msg = replaceVariable(msg, Variables.ITEM_NAME, itemID);
+        return msg;
+    }
+
+    private static final Component CAN_NOT_CREATE_DEFAULT_BOT = Component.translatable(prefix+"can_not_create_default_bot");
+    public static String getCanNotCreateDefaultBotMessage(String itemID)
+    {
+        String msg = CAN_NOT_CREATE_DEFAULT_BOT.getString();
+        msg = replaceVariable(msg, Variables.ITEM_NAME, itemID);
+        return msg;
+    }
+
+
 
     //--------------------------------------------------------------------------------------------------------
     // Helper methods

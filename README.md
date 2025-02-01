@@ -330,6 +330,7 @@ Each player receives its bank account with 0 balance.
 |---------|-------------|------------|
 | /StockMarket setPriceCandleTimeInterval [seconds]                         | Set the interval for the price candles. (Each candle will represent this amount of time) | :heavy_check_mark: |
 | /StockMarket createDefaultBots                                            | Create default bots                           | :heavy_check_mark: |
+| /StockMarket createDefaultBot [itemID]                                    | Create a default bot for that item if presets are available | :heavy_check_mark: |
 | /StockMarket order cancelAll                                              | Cancel all orders                             |  |
 | /StockMarket order cancelAll [itemID]                                     | Cancel all orders of an item                  |  |
 | /StockMarket order [username] cancelAll                                   | Cancel all orders of a player                 | :heavy_check_mark: |

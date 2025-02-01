@@ -152,29 +152,13 @@ public class BotSetupScreen extends GuiScreen {
         }*/
         int price = estimatedPricePage.getEstimatedPrice();
         double rarity = rarityPage.getRarity();
-        double volatility = volatilityPage.getVolatility();
+        double volatility = volatilityPage.getVolatility();;
 
-        botItemBalance = (long)(((1-rarity) * (1-rarity)) * 100000)+5000;
-        botMoneyBalance = botItemBalance * price * 1000;
         autoChangeItemBalance = changeBotStocksPage.getAutoChangeItemBalance();
         autoChangeMoneyBalance = changeBotStocksPage.getAutoChangeMoneyBalance();
-
-        settings.volatility = volatility*100;
-        settings.imbalancePriceRange = price * 2;
-        settings.targetItemBalance = botItemBalance;
-        settings.updateTimerIntervallMS = getMarketSpeedMS();
-
-        if(volatility > 0.25)
-        {
-            settings.imbalancePriceChangeQuadFactor = (volatility-0.25) * 8;
-        }else {
-            settings.imbalancePriceChangeQuadFactor = 0;
-        }
-        settings.imbalancePriceChangeFactor = volatility*0.1;
-        settings.volumeRandomness = volatility*2;
-        settings.volumeScale = (1-rarity) * 100;
-        settings.orderRandomness = volatility * (1-rarity) * 10+1;
-
+        settings.setFromData(price, rarity, volatility, getMarketSpeedMS());
+        botItemBalance = settings.targetItemBalance;
+        botMoneyBalance = botItemBalance * price * 1000;
 
         if(onApply != null)
             onApply.run();

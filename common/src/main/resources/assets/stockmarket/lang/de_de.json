@@ -32,6 +32,9 @@
   "message.stockmarket.stockmarket_data_save_failed": "Konnte Stockmarket Daten nicht speichern",
   "message.stockmarket.stockmarket_data_load_failed": "Konnte Stockmarket Daten nicht laden",
   "message.stockmarket.stockmarket_data_loaded": "Stockmarket Daten geladen",
+  "message.stockmarket.default_bot_created": "Standard Bot für Item: {item_name} erstellt",
+  "message.stockmarket.can_not_create_default_bot": "Standard Bot für Item: {item_name} kann nicht erstellt werden",
+
 
   "message.stockmarket.bot_created": "Bot erstellt für Item: {item_name}, du kannst seine Einstellungen ändern und ihn dann aktivieren",
   "message.stockmarket.bot_deleted": "Bot gelöscht für Item: {item_name}",

@@ -3,6 +3,7 @@ package net.kroia.stockmarket.util;
 import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -14,6 +15,7 @@ public class StockMarketServerEvents {
         BankSystemMod.loadDataFromFiles(server);
         ServerMarket.createBotUser();
         StockMarketMod.loadDataFromFiles(server);
+        StockMarketModSettings.MarketBot.getBotBuilder(); // Create the default bot settings files if they don't exist
         ServerMarket.init();
 
         TickEvent.SERVER_POST.register(StockMarketServerEvents::onServerTick);

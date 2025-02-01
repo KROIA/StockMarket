@@ -32,6 +32,8 @@
   "message.stockmarket.stockmarket_data_save_failed": "Stockmarket Daten hend nöd chönne gspeicheret wärde",
   "message.stockmarket.stockmarket_data_load_failed": "Stockmarket Daten hend nöd chönne glade wärde",
   "message.stockmarket.stockmarket_data_loaded": "Stockmarket Date glade",
+  "message.stockmarket.default_bot_created": "Standard Bot für Item: {item_name} erstellt",
+  "message.stockmarket.can_not_create_default_bot": "Standard Bot für Item: {item_name} cha nöd erstellt wärdä",
 
   "message.stockmarket.bot_created": "Bot erstellt für Item: {item_name}, du chasch sini Istellige ändere und denn aktivierä",
   "message.stockmarket.bot_deleted": "Bot glöscht für Item: {item_name}",

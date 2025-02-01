@@ -88,6 +88,15 @@ public class ServerVolatilityBot extends ServerTradingBot {
             this.pid_i = pid_i;
             this.pid_iBound = pid_iBound;
         }
+        public Settings(int price, double rarity, double volatility, long udateTimerIntervallMS)
+        {
+            this();
+            this.pid_p = 0.1;
+            this.pid_d = 0.001;
+            this.pid_i = -0.01;
+            this.pid_iBound = 1;
+            setFromData(price, rarity, volatility, udateTimerIntervallMS);
+        }
         @Override
         public boolean save(CompoundTag tag) {
             boolean success = super.save(tag);
@@ -162,6 +171,24 @@ public class ServerVolatilityBot extends ServerTradingBot {
             CompoundTag tag = new CompoundTag();
             other.save(tag);
             load(tag);
+        }
+        public void setFromData(int price, double rarity, double volatility, long udateTimerIntervallMS)
+        {
+            this.targetItemBalance = (long)(((1-rarity) * (1-rarity)) * 100000)+5000;
+            this.volatility = volatility*100;
+            this.imbalancePriceRange = price * 2;
+            this.updateTimerIntervallMS = udateTimerIntervallMS;
+
+            if(volatility > 0.25)
+            {
+                this.imbalancePriceChangeQuadFactor = (volatility-0.25) * 8;
+            }else {
+                this.imbalancePriceChangeQuadFactor = 0;
+            }
+            this.imbalancePriceChangeFactor = volatility*0.1;
+            this.volumeRandomness = volatility*2;
+            this.volumeScale = (1-rarity) * 100;
+            this.orderRandomness = volatility * (1-rarity) * 10+1;
         }
     }
     private MeanRevertingRandomWalk randomWalk;
@@ -293,11 +320,11 @@ public class ServerVolatilityBot extends ServerTradingBot {
             imbalanceFactor = Math.tanh((settings.targetItemBalance - currentItemBalance)/(double)settings.targetItemBalance/4)*0.5;
         }
         int startBuyPrice = currentPrice;
-        int startSellPrice = currentPrice;
+        int startSellPrice = currentPrice+1;
         if(currentPrice == 0)
-            startBuyPrice = 1;
+            startSellPrice = currentPrice+1;
 
-        for(int i=1; i<=this.settings.maxOrderCount/2; i++)
+        for(int i=0; i<this.settings.maxOrderCount/2; i++)
         {
             int sellPrice = startSellPrice + i*priceIncerement;
             int buyPrice = startBuyPrice - i*priceIncerement;

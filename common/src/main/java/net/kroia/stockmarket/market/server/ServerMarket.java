@@ -29,10 +29,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.PlayerList;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 public class ServerMarket implements ServerSaveable
 {
@@ -73,7 +70,18 @@ public class ServerMarket implements ServerSaveable
 
     public static void createDefaultBots()
     {
-        if(StockMarketModSettings.MarketBot.ENABLED)
+        if(!StockMarketModSettings.MarketBot.ENABLED)
+            return;
+
+        Set<String> itemIDS = StockMarketModSettings.MarketBot.getBotBuilder().keySet();
+
+        for(String itemID : itemIDS)
+        {
+            createDefaultBot(itemID);
+        }
+
+
+        /*if(StockMarketModSettings.MarketBot.ENABLED)
         {
             BankUser botUser = getBotUser();
             StockMarketMod.LOGGER.info("[SERVER] Creating trading bots");
@@ -111,8 +119,48 @@ public class ServerMarket implements ServerSaveable
                 setTradingBot(item.getKey(), container.bot);
             }
             bots.clear();
-        }
+        }*/
     }
+    public static boolean createDefaultBot(String itemID)
+    {
+        if(!StockMarketModSettings.MarketBot.ENABLED)
+            return false;
+        BankUser botUser = getBotUser();
+        if(!ServerBankManager.isItemIDAllowed(itemID))
+        {
+            ServerBankManager.allowItemID(itemID);
+        }
+        ServerTradingBotFactory.BotBuilderContainer botBuilder = StockMarketModSettings.MarketBot.getBotBuilder(itemID);
+        if(botBuilder == null)
+        {
+            StockMarketMod.LOGGER.error("[SERVER] No default bot settings available for item: "+itemID);
+            return false;
+        }
+        if(!hasItem(itemID))
+        {
+            int initialPrice = botBuilder.defaultSettings.imbalancePriceRange/2;
+            addTradeItem(itemID,initialPrice);
+        }
+        ServerTradingBot bot = getTradingBot(itemID);
+        if(bot == null)
+        {
+            StockMarketMod.LOGGER.info("[SERVER] Creating trading bot for item "+itemID);
+            bot = new ServerVolatilityBot();
+            setTradingBot(itemID, bot);
+        }
+        Bank itemBank = botUser.getBank(itemID);
+        if(itemBank == null)
+        {
+            itemBank = botUser.createItemBank(itemID, botBuilder.defaultSettings.targetItemBalance);
+        }
+        if(itemBank.getTotalBalance() < botBuilder.defaultSettings.targetItemBalance)
+        {
+            itemBank.setBalance(botBuilder.defaultSettings.targetItemBalance-itemBank.getLockedBalance());
+        }
+        botBuilder.defaultSettings.loadDefaultSettings((ServerVolatilityBot.Settings)bot.getSettings());
+        return true;
+    }
+
 
     public static BankUser getBotUser()
     {

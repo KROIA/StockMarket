@@ -12,6 +12,7 @@ import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.stockmarket.StockMarketClientHooks;
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
@@ -27,6 +28,7 @@ import net.minecraft.server.level.ServerPlayer;
 
 import java.util.ArrayList;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 public class StockMarketCommands {
@@ -36,6 +38,7 @@ public class StockMarketCommands {
 
         // /StockMarket setPriceCandleTimeInterval <seconds>                            - Set the interval for the price candles. (Each candle will represent this amount of time)
         // /StockMarket createDefaultBots                                               - Create default bots
+        // /StockMarket createDefaultBot <itemID>                                       - Create a default bot for that item if presets are available
         // /StockMarket order cancelAll                                                 - Cancel all orders
         // /StockMarket order cancelAll <itemID>                                        - Cancel all orders of an item
         // /StockMarket order <username> cancelAll                                      - Cancel all orders of a player
@@ -104,6 +107,31 @@ public class StockMarketCommands {
 
                                     return Command.SINGLE_SUCCESS;
                                 })
+                        )
+                        .then(Commands.literal("createDefaultBot")
+                                .requires(source -> source.hasPermission(2))
+                                .then(Commands.argument("itemID", StringArgumentType.string()).suggests((context, builder) -> {
+                                                    Set<String> suggestions = StockMarketModSettings.MarketBot.getBotBuilder().keySet();
+                                                    for (String suggestion : suggestions) {
+                                                        builder.suggest("\"" + suggestion + "\"");
+                                                    }
+                                                    return builder.buildFuture();
+                                                })
+                                                .executes(context -> {
+                                                    CommandSourceStack source = context.getSource();
+                                                    ServerPlayer player = source.getPlayerOrException();
+                                                    String itemID = StringArgumentType.getString(context, "itemID");
+                                                    if(ServerMarket.createDefaultBot(itemID))
+                                                    {
+                                                        PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getDefaultBotCreatedMessage(itemID));
+                                                    }
+                                                    else
+                                                    {
+                                                        PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getCanNotCreateDefaultBotMessage(itemID));
+                                                    }
+                                                    return Command.SINGLE_SUCCESS;
+                                                })
+                                )
                         )
                         .then(Commands.literal("order")
                                 .then(Commands.literal("cancelAll")
