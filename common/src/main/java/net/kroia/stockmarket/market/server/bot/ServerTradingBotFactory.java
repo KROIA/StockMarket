@@ -25,7 +25,7 @@ public class ServerTradingBotFactory {
         public double pid_p = 0.1;
         public double pid_d = 0.1;
         public double pid_i = 0.0001;
-        public double pid_iBound = 10;
+        public double pid_iBound = 1;
 
         public DefaultBotSettings(int price, double rarity, double volatility, long udateTimerIntervallMS)
         {
@@ -70,6 +70,91 @@ public class ServerTradingBotFactory {
             settings.pid_d = pid_d;
             settings.pid_i = pid_i;
             settings.pid_iBound = pid_iBound;
+        }
+        public DefaultBotSettings setMaxOrderCount(int maxOrderCount)
+        {
+            this.maxOrderCount = maxOrderCount;
+            return this;
+        }
+        public DefaultBotSettings setVolumeScale(double volumeScale)
+        {
+            this.volumeScale = volumeScale;
+            return this;
+        }
+        public DefaultBotSettings setVolumeSpread(double volumeSpread)
+        {
+            this.volumeSpread = volumeSpread;
+            return this;
+        }
+        public DefaultBotSettings setVolumeRandomness(double volumeRandomness)
+        {
+            this.volumeRandomness = volumeRandomness;
+            return this;
+        }
+        public DefaultBotSettings setUpdateTimerIntervallMS(long updateTimerIntervallMS)
+        {
+            this.updateTimerIntervallMS = updateTimerIntervallMS;
+            return this;
+        }
+        public DefaultBotSettings setVolatility(double volatility)
+        {
+            this.volatility = volatility;
+            return this;
+        }
+        public DefaultBotSettings setOrderRandomness(double orderRandomness)
+        {
+            this.orderRandomness = orderRandomness;
+            return this;
+        }
+        public DefaultBotSettings setTargetItemBalance(long targetItemBalance)
+        {
+            this.targetItemBalance = targetItemBalance;
+            return this;
+        }
+        public DefaultBotSettings setMinTimerMillis(long minTimerMillis)
+        {
+            this.minTimerMillis = minTimerMillis;
+            return this;
+        }
+        public DefaultBotSettings setMaxTimerMillis(long maxTimerMillis)
+        {
+            this.maxTimerMillis = maxTimerMillis;
+            return this;
+        }
+        public DefaultBotSettings setImbalancePriceRange(int imbalancePriceRange)
+        {
+            this.imbalancePriceRange = imbalancePriceRange;
+            return this;
+        }
+        public DefaultBotSettings setImbalancePriceChangeFactor(double imbalancePriceChangeFactor)
+        {
+            this.imbalancePriceChangeFactor = imbalancePriceChangeFactor;
+            return this;
+        }
+        public DefaultBotSettings setImbalancePriceChangeQuadFactor(double imbalancePriceChangeQuadFactor)
+        {
+            this.imbalancePriceChangeQuadFactor = imbalancePriceChangeQuadFactor;
+            return this;
+        }
+        public DefaultBotSettings setPid_p(double pid_p)
+        {
+            this.pid_p = pid_p;
+            return this;
+        }
+        public DefaultBotSettings setPid_d(double pid_d)
+        {
+            this.pid_d = pid_d;
+            return this;
+        }
+        public DefaultBotSettings setPid_i(double pid_i)
+        {
+            this.pid_i = pid_i;
+            return this;
+        }
+        public DefaultBotSettings setPid_iBound(double pid_iBound)
+        {
+            this.pid_iBound = pid_iBound;
+            return this;
         }
     }
 

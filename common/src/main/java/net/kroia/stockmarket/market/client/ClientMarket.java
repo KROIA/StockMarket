@@ -36,6 +36,10 @@ public class ClientMarket {
     public static void clear()
     {
         tradeItems.clear();
+        syncBotSettingsPacket = null;
+        syncTradeItemsPacket = null;
+        syncTradeItemsChanged = false;
+        syncBotSettingsPacketChanged = false;
     }
 
     public static void requestTradeItems()
@@ -269,8 +273,12 @@ public class ClientMarket {
                 return syncBotSettingsPacket.getSettings();
             }
         }
-        RequestBotSettingsPacket.sendPacket(itemID);
+        requestBotSettings(itemID);
         return null;
+    }
+    public static void requestBotSettings(String itemID)
+    {
+        RequestBotSettingsPacket.sendPacket(itemID);
     }
     public static String getBotSettingsItemID()
     {

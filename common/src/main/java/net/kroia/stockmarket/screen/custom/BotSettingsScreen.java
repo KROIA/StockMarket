@@ -129,6 +129,8 @@ public class BotSettingsScreen extends GuiScreen {
     }
     public static void openScreen(Screen parent)
     {
+        //if(itemID != null && !itemID.isEmpty())
+        //    ClientMarket.requestBotSettings(itemID); // Trigger request for bot settings
         BotSettingsScreen screen = new BotSettingsScreen(parent);
         Minecraft.getInstance().setScreen(screen);
     }
@@ -164,6 +166,7 @@ public class BotSettingsScreen extends GuiScreen {
     public void onClose() {
         super.onClose();
         instance = null;
+        itemID = "";
         // Unregister the event listener when the screen is closed
         TickEvent.PLAYER_POST.unregister(BotSettingsScreen::onClientTick);
         ClientMarket.unsubscribeMarketUpdate(itemID);
@@ -216,20 +219,17 @@ public class BotSettingsScreen extends GuiScreen {
             if(itemID != null && !itemID.isEmpty() && !instance.settingsReceived)
                 RequestBotSettingsPacket.sendPacket(itemID);
         }
-        if(ClientMarket.hasSyncBotSettingsPacketChanged())
+        if(ClientMarket.hasSyncBotSettingsPacketChanged() && !instance.settingsReceived)
         {
-            if(!instance.settingsReceived)
+            instance.settingsReceived = true;
+            if(itemID.isEmpty())
             {
-                instance.settingsReceived = true;
-                if(itemID.isEmpty())
-                {
-                    itemID = ClientMarket.getBotSettingsItemID();
-                    if(itemID == null)
-                        return;
-                    instance.onItemSelected(itemID);
-                }
-                instance.setBotSettings(ClientMarket.getBotSettings(itemID));
+                itemID = ClientMarket.getBotSettingsItemID();
+                if(itemID == null)
+                    return;
+                instance.onItemSelected(itemID);
             }
+            instance.setBotSettings(ClientMarket.getBotSettings(itemID));
         }
     }
 

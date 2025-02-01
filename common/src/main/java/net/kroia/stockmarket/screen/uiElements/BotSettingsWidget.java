@@ -120,8 +120,9 @@ public class BotSettingsWidget extends GuiElement {
         addElement(pidP);
         addElement(pidI);
         addElement(pidD);
-        addElement(pidIBounds);
         addElement(pidIntegratedError);
+        addElement(pidIBounds);
+
 
         for(Pair<Label, GuiElement> pair : elements)
         {

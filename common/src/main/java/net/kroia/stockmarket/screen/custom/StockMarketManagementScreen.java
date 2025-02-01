@@ -85,7 +85,11 @@ public class StockMarketManagementScreen extends GuiScreen {
 
         currentTradingItemView = new ItemView();
 
-        botSettingsButton = new Button(BOT_SETTINGS.getString(), () ->{BotSettingsScreen.openScreen(this);});
+        botSettingsButton = new Button(BOT_SETTINGS.getString(), () ->
+        {
+            BotSettingsScreen.openScreen(this);
+            ClientMarket.requestBotSettings(currentTradingItemID); // Trigger request for bot settings
+        });
 
 
         addElement(tradableItemsView);
@@ -149,7 +153,7 @@ public class StockMarketManagementScreen extends GuiScreen {
         else
         {
             currentTradingItemView.setItemStack(ItemUtilities.createItemStackFromId(currentTradingItemID));
-            ClientMarket.getBotSettings(currentTradingItemID);
+            ClientMarket.requestBotSettings(currentTradingItemID);
             botSettingsButton.setEnabled(true);
         }
 

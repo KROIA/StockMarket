@@ -57,7 +57,7 @@ public class StockMarketModSettings {
         public static final int MAX_ORDERS = 200;
 
         public static final double VOLUME_SCALE = 10;
-        public static final double VOLUME_SPREAD = 10;
+        public static final double VOLUME_SPREAD = MAX_ORDERS/2.0;
         public static final double VOLUME_RANDOMNESS = 2;
         public static final long UPDATE_TIMER_INTERVAL_MS = 500;
 
@@ -68,11 +68,11 @@ public class StockMarketModSettings {
 
             double priceScale = 1;
             long updateMS = 500;
-            double volatility = 0.3;
+            double volatility = 0.2;
             botBuilder = new HashMap<>();
 
             Map<String, ServerTradingBotFactory.DefaultBotSettings> allSettigns = StockMarketDataHandler.loadDefaultBotSettings();
-            if(allSettigns.size() == 0)
+            if(allSettigns.isEmpty())
             {
                 // Create defaults:
                 Map<String, ServerTradingBotFactory.DefaultBotSettings> ores = new HashMap<>();
@@ -131,7 +131,7 @@ public class StockMarketModSettings {
                 misc.put("minecraft:ender_pearl", new ServerTradingBotFactory.DefaultBotSettings((int)(50*priceScale),0.01,volatility,updateMS));
                 misc.put("minecraft:blaze_rod", new ServerTradingBotFactory.DefaultBotSettings((int)(20*priceScale),0.01,volatility,updateMS));
                 misc.put("minecraft:ghast_tear", new ServerTradingBotFactory.DefaultBotSettings((int)(100*priceScale),0.01,volatility,updateMS));
-                misc.put("minecraft:elytra", new ServerTradingBotFactory.DefaultBotSettings((int)(5000*priceScale),0.01,volatility,updateMS));
+                misc.put("minecraft:elytra", new ServerTradingBotFactory.DefaultBotSettings((int)(5000*priceScale),0.01,volatility,updateMS).setVolumeSpread(100).setPid_iBound(10));
                 StockMarketDataHandler.saveDefaultBotSettings(misc, "Misc.json");
 
                 allSettigns = StockMarketDataHandler.loadDefaultBotSettings();

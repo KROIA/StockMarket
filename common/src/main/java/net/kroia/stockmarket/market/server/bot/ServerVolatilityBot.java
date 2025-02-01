@@ -92,8 +92,8 @@ public class ServerVolatilityBot extends ServerTradingBot {
         {
             this();
             this.pid_p = 0.1;
-            this.pid_d = 0.001;
-            this.pid_i = -0.01;
+            this.pid_d = -0.01;
+            this.pid_i = 0.001;
             this.pid_iBound = 1;
             setFromData(price, rarity, volatility, udateTimerIntervallMS);
         }
@@ -188,7 +188,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
             this.imbalancePriceChangeFactor = volatility*0.1;
             this.volumeRandomness = volatility*2;
             this.volumeScale = (1-rarity) * 100;
-            this.orderRandomness = volatility * (1-rarity) * 10+1;
+            this.orderRandomness = volatility * (1-rarity) * 5+1;
         }
     }
     private MeanRevertingRandomWalk randomWalk;
