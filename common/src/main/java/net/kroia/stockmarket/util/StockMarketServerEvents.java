@@ -48,45 +48,4 @@ public class StockMarketServerEvents {
             ServerMarket.shiftPriceHistory();
         }
     }
-
-/*
-    @SubscribeEvent
-    public static void onServerStart(LevelEvent.Load event) {
-        if (event.getLevel() instanceof ServerLevel serverLevel) {
-            MinecraftServer server = serverLevel.getServer();
-            ResourceKey<Level> levelKey = serverLevel.dimension();
-
-            // Only load data for the main overworld level
-            if (levelKey.equals(ServerLevel.OVERWORLD)) {
-                BankSystemMod.loadDataFromFiles(server);
-            }
-        }
-    }
-
-    @SubscribeEvent
-    public static void onServerStop(LevelEvent.Unload event) {
-        if (event.getLevel() instanceof ServerLevel serverLevel) {
-            MinecraftServer server = serverLevel.getServer();
-            ResourceKey<Level> levelKey = serverLevel.dimension();
-
-            // Only save data for the main overworld level
-            if (levelKey.equals(ServerLevel.OVERWORLD)) {
-
-                // Save data to the root save folder
-                BankSystemMod.saveDataToFiles(server);
-
-                // Cleanup
-                ServerBankManager.clear();
-            }
-        }
-    }
-
-    @SubscribeEvent
-    public static void onWorldSave(LevelEvent.Save event) {
-        if (event.getLevel() instanceof ServerLevel serverLevel) {
-            MinecraftServer server = serverLevel.getServer();
-            BankSystemMod.saveDataToFiles(server);
-        }
-    }*/
-
 }

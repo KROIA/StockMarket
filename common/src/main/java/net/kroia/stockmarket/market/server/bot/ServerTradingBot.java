@@ -126,12 +126,6 @@ public class ServerTradingBot implements ServerSaveable {
     {
         return this.parent;
     }
-    /*public ServerTradingBot(MarketManager parent, MatchingEngine matchingEngine) {
-       // this.parent = parent;
-        this.matchingEngine = matchingEngine;
-
-        MinecraftForge.EVENT_BUS.addListener(this::onServerTick);
-    }*/
 
     protected void update()
     {

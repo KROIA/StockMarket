@@ -105,45 +105,17 @@ public class ServerTradingBotFactory {
         throw new RuntimeException("Unknown bot class: " + className);
     }
 
-
-    // Template
-    /*public static <T extends ServerTradingBot> T instantiateBot(Class<T> clazz, T.Settings settings) {
-        if (settings == null) {
-            return null;
-        }
-
-        try {
-            // Create a new instance of T using its default constructor
-            T bot = clazz.getDeclaredConstructor().newInstance();
-            bot.setSettings(settings);
-            return bot;
-        } catch (Exception e) {
-            e.printStackTrace();
-            throw new RuntimeException("Failed to instantiate bot of type " + clazz.getName(), e);
-        }
-    }
-*/
-
     public static class BotBuilderContainer
     {
         public String itemID;
-        //public ServerTradingBot bot;
         public DefaultBotSettings defaultSettings;
     }
     public static void botTableBuilder(
             HashMap<String, BotBuilderContainer> table,
             String itemID,
-            //ServerTradingBot instance,
             DefaultBotSettings settings)
     {
-        //T bot = instantiateBot(clazz, settings);
-       /* if(instance == null)
-            return;
-        instance.setSettings(settings);
-        if(instance.getSettings() != settings)
-            return;*/
         BotBuilderContainer container = new BotBuilderContainer();
-        //container.bot = instance;
         container.defaultSettings = settings;
         container.itemID = itemID;
         table.put(itemID, container);

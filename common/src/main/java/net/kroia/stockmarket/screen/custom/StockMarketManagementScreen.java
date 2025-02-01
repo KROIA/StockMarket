@@ -1,7 +1,6 @@
 package net.kroia.stockmarket.screen.custom;
 
-import dev.architectury.event.events.common.TickEvent;
-import net.kroia.banksystem.BankSystemMod;
+
 import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.banking.ClientBankManager;
 import net.kroia.banksystem.networking.packet.client_sender.request.RequestPotentialBankItemIDsPacket;
@@ -21,7 +20,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
-import java.util.Collection;
+
 
 public class StockMarketManagementScreen extends GuiScreen {
 
@@ -167,6 +166,5 @@ public class StockMarketManagementScreen extends GuiScreen {
         {
             updateTradingItems();
         }
-
     }
 }

@@ -34,27 +34,12 @@ public class MatchingEngine implements ServerSaveable {
     private final PriorityQueue<LimitOrder> limitSellOrders = new PriorityQueue<>(Comparator.comparingDouble(LimitOrder::getPrice));
 
     private PriceHistory priceHistory;
-   // private ServerTradingBot tradingBot;
     public MatchingEngine(int initialPrice, PriceHistory priceHistory)
     {
         this.priceHistory = priceHistory;
         this.price = initialPrice;
         tradeVolume = 0;
-       // this.tradingBot = tradingBot;
     }
-    /*public MatchingEngine(int initialPrice) {
-        this.price = initialPrice;
-        tradeVolume = 0;
-        tradingBot = null;
-    }*/
-
-  /*  public void setTradingBot(ServerTradingBot tradingBot)
-    {
-        this.tradingBot = tradingBot;
-    }*/
-
-
-
 
     public void addOrder(Order order)
     {
@@ -77,7 +62,6 @@ public class MatchingEngine implements ServerSaveable {
     {
         if (order instanceof LimitOrder limitOrder)
         {
-            //limitOrder.setAveragePrice(limitOrder.getPrice());
             if(!processLimitOrder(limitOrder))
             {
                 if (limitOrder.isBuy())
@@ -94,7 +78,6 @@ public class MatchingEngine implements ServerSaveable {
             }
         } else if (order instanceof MarketOrder marketOrder) {
             processMarketOrder(marketOrder);
-            //marketOrder.notifyPlayer();
         } else {
             throw new IllegalArgumentException("Invalid order type");
         }
@@ -158,7 +141,6 @@ public class MatchingEngine implements ServerSaveable {
                 if(fillVolume<0)
                 {
                     limitOrders.removeAll(toRemove);
-                    //throw new IllegalStateException("Market order overfilled");
                     StockMarketMod.LOGGER.error("Market order overfilled: "+marketOrder);
                 }
                 break;
@@ -216,7 +198,6 @@ public class MatchingEngine implements ServerSaveable {
                 if(fillVolume<0)
                 {
                     limitOrders.removeAll(toRemove);
-                    //throw new IllegalStateException("Limit order overfilled");
                     StockMarketMod.LOGGER.error("Limit order overfilled: "+limitOrder);
                 }
                 break;

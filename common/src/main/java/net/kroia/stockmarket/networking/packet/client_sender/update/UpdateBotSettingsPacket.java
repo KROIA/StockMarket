@@ -4,7 +4,6 @@ import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.banking.bank.MoneyBank;
-import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.modutilities.networking.NetworkPacket;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
@@ -13,8 +12,6 @@ import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
-
-import java.util.UUID;
 
 public class UpdateBotSettingsPacket extends NetworkPacket {
 

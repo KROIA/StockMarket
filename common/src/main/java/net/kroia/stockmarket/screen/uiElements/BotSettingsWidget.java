@@ -3,7 +3,6 @@ package net.kroia.stockmarket.screen.uiElements;
 import com.mojang.datafixers.util.Pair;
 import net.kroia.modutilities.gui.elements.*;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
-import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import net.kroia.stockmarket.screen.custom.BotSettingsScreen;
 import net.minecraft.network.chat.Component;

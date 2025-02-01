@@ -4,7 +4,6 @@ import com.google.common.base.Suppliers;
 import dev.architectury.registry.registries.Registrar;
 import dev.architectury.registry.registries.RegistrarManager;
 import dev.architectury.registry.registries.RegistrySupplier;
-import net.kroia.banksystem.BankSystemMod;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.block.StockMarketBlocks;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;

@@ -6,7 +6,6 @@ import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import net.kroia.stockmarket.screen.uiElements.botsetup.*;
-import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
@@ -147,9 +146,6 @@ public class BotSetupScreen extends GuiScreen {
     }
     private void onApplyButtonClicked() {
         // Apply changes
-        /*for(BotSetupGuiElement page : pages) {
-            page.applyChanges();
-        }*/
         int price = estimatedPricePage.getEstimatedPrice();
         double rarity = rarityPage.getRarity();
         double volatility = volatilityPage.getVolatility();;

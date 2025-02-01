@@ -291,20 +291,6 @@ public class ServerVolatilityBot extends ServerTradingBot {
             volume = (int)-itemBank.getBalance()/2;
         if(currentPrice != 0 || volume > 0)
             marketTrade(volume);
-        //StockMarketMod.LOGGER.info("VolatilityBot: targetPrice: "+settings.targetPrice+" speed: "+speed+" volume: "+volume+" error: "+error+ " P: "+proportionalError+" D: "+derivativeError+" I: "+settings.integratedError);
-
-        /*StockMarketMod.LOGGER.info(String.format(
-                "VolatilityBot: %-12s %-12s %-8s %+.3f %-8s %+3.0f %-10s %+3.0f %-5s %+.3f %-3s %+.3f %-3s %+.3f",
-                "targetPrice:", settings.targetPrice,
-                "speed:", speed,
-                "volume:", (double)volume,
-                "error:", error,
-                "P:", proportionalError,
-                "D:", derivativeError,
-                "I:", settings.integratedError
-        ));*/
-
-
     }
 
 
@@ -348,29 +334,6 @@ public class ServerVolatilityBot extends ServerTradingBot {
             }
         }
     }
-
-
-    /**
-     * Creates a disribution that can be mapped to buy and sell orders
-     * The distribution is normalized around x=0.
-     *   x < 0: buy order volume
-     *   x > 0: sell order volume
-     */
-   /* @Override
-    public int getVolumeDistribution(int x)
-    {
-        double fX = (double)Math.abs(x);
-        double exp = Math.exp(-fX*1.f/this.settings.volumeSpread);
-        double random = Math.random()*this.settings.volumeRandomness;
-
-        double volume = (super.settings.volumeScale*random) * (1 - exp) * exp;
-
-        if(x < 0)
-            return (int)-volume;
-        return (int)volume;
-
-        //return -x*;
-    }*/
 
 
     @Override
@@ -481,10 +444,4 @@ public class ServerVolatilityBot extends ServerTradingBot {
     public void setintegratedError(double integratedError) {
         settings.integratedError = integratedError;
     }
-
-
-
-
-
-
 }

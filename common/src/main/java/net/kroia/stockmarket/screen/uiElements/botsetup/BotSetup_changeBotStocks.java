@@ -1,9 +1,6 @@
 package net.kroia.stockmarket.screen.uiElements.botsetup;
 
 import net.kroia.modutilities.gui.elements.CheckBox;
-import net.kroia.modutilities.gui.elements.Label;
-import net.kroia.modutilities.gui.elements.TextBox;
-import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import net.minecraft.network.chat.Component;

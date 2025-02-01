@@ -137,17 +137,11 @@ public class CandleStickChart extends GuiElement {
     public void renderCandle(int x,int candleWidth, int xOffset, int yOffset,
                                     int open, int close, int high, int low)
     {
-        // int wickHighY = (int) (chartViewHeight - ((high - chartViewMinPrice) / (float) (chartViewMaxPrice - chartViewMinPrice)) * chartViewHeight);
-        // int wickLowY = (int) (chartViewHeight - ((low - chartViewMinPrice) / (float) (chartViewMaxPrice - chartViewMinPrice)) * chartViewHeight);
-
-
         int color = open > close ? colorDown : colorUp;
 
         // Draw wick
         int wickYMin = getChartYPos(low);
         int wickYMax = getChartYPos(high);
-
-
 
         // Draw body
         int bodyYMin = getChartYPos(Math.min(open, close));

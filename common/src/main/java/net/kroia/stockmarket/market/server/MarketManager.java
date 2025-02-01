@@ -23,11 +23,9 @@ public class MarketManager implements ServerSaveable {
     private ServerTradingBot tradingBot;
 
     private PriceHistory priceHistory;
-    //private ServerTradeItem tradeItem;
 
     public MarketManager(ServerTradeItem tradeItem, int initialPrice, PriceHistory history)
     {
-        //this.tradeItem = tradeItem;
         this.itemID = tradeItem.getItemID();
         matchingEngine = new MatchingEngine(initialPrice, history);
         priceHistory = history;
@@ -120,11 +118,6 @@ public class MarketManager implements ServerSaveable {
     {
         StockMarketMod.LOGGER.info("Adding order: " + order.toString());
         matchingEngine.addOrder(order);
-/*
-        int price = matchingEngine.getPrice();
-        lowPrice = Math.min(lowPrice, price);
-        highPrice = Math.max(highPrice, price);
-        priceHistory.setCurrentPrice(price);*/
     }
     public boolean cancelOrder(long orderID)
     {
@@ -158,22 +151,6 @@ public class MarketManager implements ServerSaveable {
     {
         return itemID;
     }
-
-    /*@SubscribeEvent
-    public void onServerTick(TickEvent.ServerTickEvent event) {
-        if (event.phase == TickEvent.Phase.END) {
-            long currentTime = System.currentTimeMillis();
-
-            if(currentTime - lastTimeFast > timerFastMS) {
-                lastTimeFast = currentTime;
-                onFastTimerFinished();
-            }
-            if(currentTime - lastTimeSlow > timerSlowMS) {
-                lastTimeSlow = currentTime;
-                onSlowTimerFinished();
-            }
-        }
-    }*/
 
 
     public void shiftPriceHistory()
@@ -211,8 +188,6 @@ public class MarketManager implements ServerSaveable {
     public boolean save(CompoundTag tag) {
         boolean success = true;
         tag.putString("itemID", itemID);
-        //tag.putInt("lowPrice", lowPrice);
-        //tag.putInt("highPrice", highPrice);
 
         CompoundTag matchingEngineTag = new CompoundTag();
         success &= matchingEngine.save(matchingEngineTag);
@@ -224,7 +199,6 @@ public class MarketManager implements ServerSaveable {
             success &= tradingBot.save(botTag);
             tag.put("tradingBot", botTag);
         }
-
 
         return success;
     }

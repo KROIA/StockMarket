@@ -34,30 +34,16 @@ public class StockMarketModSettings {
         public static void init()
         {
             TRADABLE_ITEMS = new HashMap<>();
-            TRADABLE_ITEMS.put("minecraft:diamond", 100);
-            TRADABLE_ITEMS.put("minecraft:iron_ingot", 30);
-            TRADABLE_ITEMS.put("minecraft:gold_ingot", 50);
-            TRADABLE_ITEMS.put("minecraft:emerald", 50);
-            TRADABLE_ITEMS.put("minecraft:coal", 10);
+            TRADABLE_ITEMS.put("minecraft:diamond", 160);
+            TRADABLE_ITEMS.put("minecraft:iron_ingot", 15);
+            TRADABLE_ITEMS.put("minecraft:gold_ingot", 40);
+            TRADABLE_ITEMS.put("minecraft:emerald", 100);
+            TRADABLE_ITEMS.put("minecraft:coal", 8);
             TRADABLE_ITEMS.put("minecraft:oak_log", 10);
             TRADABLE_ITEMS.put("minecraft:netherite_scrap", 500);
 
             NOT_TRADABLE_ITEMS = new ArrayList<>();
             NOT_TRADABLE_ITEMS.add(BankSystemMod.MOD_ID+":"+MoneyItem.NAME);
-
-            //TRADABLE_ITEMS.put("minecraft:quartz", 5);
-            //TRADABLE_ITEMS.put("minecraft:obsidian", 10);
-            //TRADABLE_ITEMS.put("minecraft:glowstone", 10);
-            //TRADABLE_ITEMS.put("minecraft:blaze_rod", 20);
-            //TRADABLE_ITEMS.put("minecraft:ender_pearl", 50);
-            //TRADABLE_ITEMS.put("minecraft:ghast_tear", 100);
-            //TRADABLE_ITEMS.put("minecraft:shulker_shell", 200);
-            //TRADABLE_ITEMS.put("minecraft:netherite_ingot", 500);
-            //TRADABLE_ITEMS.put("minecraft:ancient_debris", 1000);
-            //TRADABLE_ITEMS.put("minecraft:elytra", 5000);
-            //TRADABLE_ITEMS.put("minecraft:dragon_egg", 10000);
-            //TRADABLE_ITEMS.put("minecraft:enchanted_golden_apple", 1000);
-            //TRADABLE_ITEMS.put("minecraft:totem_of_undying", 1000);
         }
     }
 

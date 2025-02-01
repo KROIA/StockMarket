@@ -1,7 +1,5 @@
 package net.kroia.stockmarket;
 
-import net.kroia.banksystem.entity.custom.BankTerminalBlockEntity;
-import net.kroia.banksystem.screen.custom.BankSystemSettingScreen;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
 import net.kroia.stockmarket.screen.custom.BotSettingsScreen;
 import net.kroia.stockmarket.screen.custom.StockMarketManagementScreen;
@@ -9,7 +7,6 @@ import net.kroia.stockmarket.screen.custom.TradeScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionResult;
-import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.level.block.entity.BlockEntity;
 
 public class StockMarketClientHooks {

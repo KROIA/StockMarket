@@ -1,9 +1,6 @@
 package net.kroia.stockmarket.screen.custom;
 
 import dev.architectury.event.events.common.TickEvent;
-import net.kroia.banksystem.BankSystemClientHooks;
-import net.kroia.banksystem.banking.ClientBankManager;
-import net.kroia.banksystem.networking.packet.client_sender.request.RequestBankDataPacket;
 import net.kroia.banksystem.screen.custom.BankAccountManagementScreen;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.gui.Gui;
@@ -17,25 +14,21 @@ import net.kroia.modutilities.gui.elements.base.ListView;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.kroia.modutilities.gui.screens.ItemSelectionScreen;
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
 import net.kroia.stockmarket.market.client.ClientMarket;
 import net.kroia.stockmarket.market.client.ClientTradeItem;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import net.kroia.stockmarket.networking.packet.client_sender.request.RequestBotSettingsPacket;
 import net.kroia.stockmarket.networking.packet.client_sender.request.RequestTradeItemsPacket;
 import net.kroia.stockmarket.networking.packet.client_sender.update.UpdateBotSettingsPacket;
-import net.kroia.stockmarket.networking.packet.client_sender.update.entity.UpdateStockMarketBlockEntityPacket;
 import net.kroia.stockmarket.screen.custom.botsetup.BotSetupScreen;
 import net.kroia.stockmarket.screen.uiElements.BotSettingsWidget;
 import net.kroia.stockmarket.screen.uiElements.CandleStickChart;
 import net.kroia.stockmarket.screen.uiElements.OrderbookVolumeChart;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
 
-import java.util.Objects;
 import java.util.UUID;
 
 public class BotSettingsScreen extends GuiScreen {
@@ -317,23 +310,17 @@ public class BotSettingsScreen extends GuiScreen {
     private void onMarketOpenCheckBoxChanged()
     {
         onSettingsChanged();
-        //boolean marketOpen = marketOpenCheckBox.isChecked();
-        //UpdateBotSettingsPacket.sendPacket(itemID, botSettingsWidget.getSettings(), false, false, marketOpen);
-        //saveButton.setOutlineColor(normalButtonColor);
     }
 
 
     private void onOpenSetupScreen()
     {
-        //BotSetupScreen.openScreen();
-
         botSetupScreen = new BotSetupScreen(this::onBotSetupApply, this::onBotSetupCancel, settings);
         Minecraft.getInstance().setScreen(botSetupScreen);
     }
 
     private void onBotSetupApply()
     {
-        //botSetupScreen = null;
         Minecraft.getInstance().setScreen(this);
         setBotSettings(settings);
         saveButton.setOutlineColor(unsavedChangesButtonColor);

@@ -4,7 +4,6 @@ package net.kroia.stockmarket.screen.custom;
 import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.banking.ClientBankManager;
 import net.kroia.banksystem.networking.packet.client_sender.request.RequestBankDataPacket;
-import net.kroia.banksystem.screen.custom.BankAccountManagementScreen;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.GuiScreen;
@@ -23,8 +22,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
-
-import java.util.UUID;
 
 
 public class TradeScreen extends GuiScreen {
@@ -255,12 +252,6 @@ public class TradeScreen extends GuiScreen {
     }
 
     private void onSelectItemButtonPressed() {
-        /*this.minecraft.setScreen(new CustomItemSelectionScreen(
-                this,
-                ClientMarket.getAvailableTradeItemIdList(),
-                this::onItemSelected,
-                ITEM_SELECTION_SCREEN_TITLE
-        ));*/
         ItemSelectionScreen screen = new ItemSelectionScreen(
                 this,
                 ClientMarket.getAvailableTradeItemIdList(),

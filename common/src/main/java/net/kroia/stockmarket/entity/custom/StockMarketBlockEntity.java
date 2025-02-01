@@ -11,7 +11,6 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 
-// StockMarketBlockEntity.java
 public class StockMarketBlockEntity extends BlockEntity /*implements MenuProvider */{
 
 

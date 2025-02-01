@@ -32,15 +32,11 @@ public class MarketOrder extends Order {
         super(playerUUID, itemID, amount);
         if(amount > 0)
             this.lockedMoney = (long) Math.abs(amount) * currentPrice;
-
-        //StockMarketMod.LOGGER.info("MarketOrder created: " + toString());
     }
     protected MarketOrder(UUID playerUUID, String itemID, int amount, int currentPrice, boolean isBot) {
         super(playerUUID, itemID, amount, isBot);
         if(amount > 0)
             this.lockedMoney = (long) Math.abs(amount) * currentPrice;
-
-        //StockMarketMod.LOGGER.info("MarketOrder created: " + toString());
     }
 
     public MarketOrder(FriendlyByteBuf buf)
@@ -56,7 +52,6 @@ public class MarketOrder extends Order {
     {
         if(other instanceof MarketOrder)
         {
-            MarketOrder otherMarketOrder = (MarketOrder) other;
             return super.isEqual(other);
         }
         return false;
@@ -89,9 +84,9 @@ public class MarketOrder extends Order {
     @Override
     public void copyFrom(Order other) {
         super.copyFrom(other);
-        if(other instanceof MarketOrder)
+        /*if(other instanceof MarketOrder)
         {
             MarketOrder otherMarketOrder = (MarketOrder) other;
-        }
+        }*/
     }
 }

@@ -62,7 +62,6 @@ public class TransactionEngine {
         Order senderOrder = fillAmount > 0 ? o1 : o2;
         Order receiverOrder = fillAmount > 0 ? o2 : o1;
 
-        //if(!senderBank.transferFromLockedPrefered(money, receiverBank))
         Bank.Status status = Bank.exchangeFromLockedPrefered(senderMoneyBank, receiverMoneyBank, money,    senderItemBank, receiverItemBank, fillVolume);
         if(status != Bank.Status.SUCCESS)
         {

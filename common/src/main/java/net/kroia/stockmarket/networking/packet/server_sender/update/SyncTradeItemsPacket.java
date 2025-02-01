@@ -25,13 +25,6 @@ public class SyncTradeItemsPacket extends NetworkPacket {
 
     public SyncTradeItemsPacket(FriendlyByteBuf buf) {
         super(buf);
-
-        /*int size = buf.readInt();
-        if(size == 0)
-            return;
-        for (int i = 0; i < size; i++) {
-            this.syncPricePackets.add(new SyncPricePacket(buf));
-        }*/
     }
 
 
