@@ -14,7 +14,7 @@ import java.util.UUID;
  * The transaction engine is responsible for processing orders
  * It manages the exchange of item and money between the orders
  */
-public class TransactionEnginge {
+public class TransactionEngine {
 
 
     public static int fill(Order o1, Order o2, int currentPrice)

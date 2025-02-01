@@ -14,7 +14,6 @@ import net.kroia.stockmarket.util.StockMarketTextMessages;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.player.Player;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -144,7 +143,7 @@ public class MatchingEngine implements ServerSaveable {
         int fillVolume = Math.abs(marketOrder.getAmount());
         for(LimitOrder limitOrder : limitOrders)
         {
-            int filledVolume = TransactionEnginge.fill(marketOrder, limitOrder, limitOrder.getPrice());
+            int filledVolume = TransactionEngine.fill(marketOrder, limitOrder, limitOrder.getPrice());
 
             if(filledVolume != 0) {
                 setPrice(limitOrder.getPrice());
@@ -203,7 +202,7 @@ public class MatchingEngine implements ServerSaveable {
             if(fillWith == null)
                 continue;
 
-            int filledVolume = TransactionEnginge.fill(limitOrder, fillWith, fillWith.getPrice());
+            int filledVolume = TransactionEngine.fill(limitOrder, fillWith, fillWith.getPrice());
             if(filledVolume != 0)
             {
                 setPrice(fillWith.getPrice());
