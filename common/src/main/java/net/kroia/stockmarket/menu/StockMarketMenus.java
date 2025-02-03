@@ -1,16 +1,10 @@
 package net.kroia.stockmarket.menu;
 
 import com.google.common.base.Suppliers;
-import dev.architectury.registry.menu.MenuRegistry;
 import dev.architectury.registry.registries.Registrar;
 import dev.architectury.registry.registries.RegistrarManager;
-import dev.architectury.registry.registries.RegistrySupplier;
-import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.menu.custom.BankTerminalContainerMenu;
-import net.kroia.banksystem.screen.custom.BankTerminalScreen;
 import net.kroia.stockmarket.StockMarketMod;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.inventory.MenuType;
 
 import java.util.function.Supplier;

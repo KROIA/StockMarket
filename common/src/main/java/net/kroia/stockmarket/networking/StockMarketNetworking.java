@@ -39,6 +39,7 @@ public class StockMarketNetworking {
     public static MessageType REQUEST_BOT_SETTINGS = registerC2S(getClassName(RequestBotSettingsPacket.class.getName()), RequestBotSettingsPacket::new);
     public static MessageType UPDATE_BOT_SETTINGS = registerC2S(getClassName(UpdateBotSettingsPacket.class.getName()), UpdateBotSettingsPacket::new);
     public static MessageType REQUEST_ORDER_CHANGE = registerC2S(getClassName(RequestOrderChangePacket.class.getName()), RequestOrderChangePacket::new);
+    public static MessageType REQUEST_MANAGE_TRADING_ITEM = registerC2S(getClassName(RequestManageTradingItemPacket.class.getName()), RequestManageTradingItemPacket::new);
 
 
     public static void init() {

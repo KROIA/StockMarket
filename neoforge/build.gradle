@@ -54,8 +54,8 @@ dependencies {
     common(project(path: ':common', configuration: 'namedElements')) { transitive false }
     shadowBundle project(path: ':common', configuration: 'transformProductionNeoForge')
 
-    modImplementation("net.kroia:modutilities-neoforge:1.0.0")
-    include("net.kroia:modutilities-neoforge:1.0.0")
+    modImplementation("net.kroia:modutilities-neoforge:$rootProject.modutilities_version")
+    include("net.kroia:modutilities-neoforge:$rootProject.modutilities_version")
 }
 
 processResources {
