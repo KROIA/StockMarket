@@ -3,6 +3,7 @@ package net.kroia.stockmarket.util;
 import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -14,6 +15,7 @@ public class StockMarketServerEvents {
         BankSystemMod.loadDataFromFiles(server);
         ServerMarket.createBotUser();
         StockMarketMod.loadDataFromFiles(server);
+        StockMarketModSettings.MarketBot.getBotBuilder(); // Create the default bot settings files if they don't exist
         ServerMarket.init();
 
         TickEvent.SERVER_POST.register(StockMarketServerEvents::onServerTick);
@@ -46,45 +48,4 @@ public class StockMarketServerEvents {
             ServerMarket.shiftPriceHistory();
         }
     }
-
-/*
-    @SubscribeEvent
-    public static void onServerStart(LevelEvent.Load event) {
-        if (event.getLevel() instanceof ServerLevel serverLevel) {
-            MinecraftServer server = serverLevel.getServer();
-            ResourceKey<Level> levelKey = serverLevel.dimension();
-
-            // Only load data for the main overworld level
-            if (levelKey.equals(ServerLevel.OVERWORLD)) {
-                BankSystemMod.loadDataFromFiles(server);
-            }
-        }
-    }
-
-    @SubscribeEvent
-    public static void onServerStop(LevelEvent.Unload event) {
-        if (event.getLevel() instanceof ServerLevel serverLevel) {
-            MinecraftServer server = serverLevel.getServer();
-            ResourceKey<Level> levelKey = serverLevel.dimension();
-
-            // Only save data for the main overworld level
-            if (levelKey.equals(ServerLevel.OVERWORLD)) {
-
-                // Save data to the root save folder
-                BankSystemMod.saveDataToFiles(server);
-
-                // Cleanup
-                ServerBankManager.clear();
-            }
-        }
-    }
-
-    @SubscribeEvent
-    public static void onWorldSave(LevelEvent.Save event) {
-        if (event.getLevel() instanceof ServerLevel serverLevel) {
-            MinecraftServer server = serverLevel.getServer();
-            BankSystemMod.saveDataToFiles(server);
-        }
-    }*/
-
 }

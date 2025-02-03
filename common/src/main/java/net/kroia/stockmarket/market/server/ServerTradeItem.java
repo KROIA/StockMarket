@@ -132,6 +132,15 @@ public class ServerTradeItem implements ServerSaveable {
         marketManager.getOrders(playerUUID, orders);
     }
 
+    public void setMarketOpen(boolean open)
+    {
+        marketManager.setMarketOpen(open);
+    }
+    public boolean isMarketOpen()
+    {
+        return marketManager.isMarketOpen();
+    }
+
     public void shiftPriceHistory()
     {
         marketManager.shiftPriceHistory();
@@ -226,7 +235,7 @@ public class ServerTradeItem implements ServerSaveable {
     }
 
     public void onServerTick(MinecraftServer server) {
-        if(subscribers.size() == 0 || !enabled)
+        if(subscribers.isEmpty() || !enabled)
             return;
 
         long currentTime = System.currentTimeMillis();

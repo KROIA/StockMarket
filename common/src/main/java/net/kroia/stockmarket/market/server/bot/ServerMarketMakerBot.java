@@ -93,16 +93,6 @@ public class ServerMarketMakerBot extends ServerTradingBot {
                 action_bearish();
                 break;
         }
-        /*
-        int orderVolume = (int)(randomWalk.nextValue()+1);
-        if(orderVolume == 0)
-            return;
-        Bank moneyBank = ServerBankManager.getBotUser().getMoneyBank();
-        Bank itemBank = ServerBankManager.getBotUser().getBank(getItemID());
-
-
-        MarketOrder order = MarketOrder.createBotOrder(getUUID(),moneyBank,itemBank, getItemID(), orderVolume);
-        getMatchingEngine().addOrder(order);*/
     }
 
     private void action_book_swipe_up()
@@ -118,8 +108,6 @@ public class ServerMarketMakerBot extends ServerTradingBot {
         if(orderVolume == 0)
             return;
         Bank moneyBank = ServerMarket.getBotUser().getMoneyBank();
-        Bank itemBank = ServerMarket.getBotUser().getBank(getItemID());
-
         int maxVolume = (int)(moneyBank.getBalance()/upperPrice);
 
         orderVolume = Math.min(orderVolume, maxVolume);
@@ -142,7 +130,6 @@ public class ServerMarketMakerBot extends ServerTradingBot {
         int orderVolume = engine.getVolume(lowerPrice, currentPrice)/4;
         if(orderVolume == 0)
             return;
-        Bank moneyBank = ServerMarket.getBotUser().getMoneyBank();
         Bank itemBank = ServerMarket.getBotUser().getBank(getItemID());
 
         int maxVolume = (int)(itemBank.getBalance());
@@ -158,9 +145,6 @@ public class ServerMarketMakerBot extends ServerTradingBot {
         int orderVolume = (int)(randomWalk.nextValue()+1)*3;
         if(orderVolume == 0)
             return;
-        MatchingEngine engine = getMatchingEngine();
-        Bank moneyBank = ServerMarket.getBotUser().getMoneyBank();
-        Bank itemBank = ServerMarket.getBotUser().getBank(getItemID());
 
         if(marketTrade(orderVolume))
             print("Bullish: "+orderVolume);

@@ -34,13 +34,6 @@ public class SyncTradeItemsPacket extends NetworkPacketS2C {
 
     public SyncTradeItemsPacket(RegistryFriendlyByteBuf buf) {
         super(buf);
-
-        /*int size = buf.readInt();
-        if(size == 0)
-            return;
-        for (int i = 0; i < size; i++) {
-            this.syncPricePackets.add(new SyncPricePacket(buf));
-        }*/
     }
 
 

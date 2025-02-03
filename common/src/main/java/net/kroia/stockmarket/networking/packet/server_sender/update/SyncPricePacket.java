@@ -11,7 +11,6 @@ import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.kroia.stockmarket.util.OrderbookVolume;
 import net.kroia.stockmarket.util.PriceHistory;
-import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -26,11 +25,13 @@ public class SyncPricePacket extends NetworkPacketS2C {
 
     private ArrayList<Order> orders;
 
+    private boolean isMarketOpen;
 
     @Override
     public MessageType getType() {
         return StockMarketNetworking.SYNC_PRICE;
     }
+
 
     public SyncPricePacket() {
         super();
@@ -46,6 +47,7 @@ public class SyncPricePacket extends NetworkPacketS2C {
         this.minPrice = minPrice;
         this.maxPrice = maxPrice;
         this.orders = orders;
+        this.isMarketOpen = isMarketOpen;
     }
 
     public SyncPricePacket(RegistryFriendlyByteBuf buf) {
@@ -59,6 +61,7 @@ public class SyncPricePacket extends NetworkPacketS2C {
     public SyncPricePacket(String itemID, UUID playerUUID)
     {
         commonSetup(itemID);
+        this.isMarketOpen = ServerMarket.isMarketOpen(itemID);
         this.orders = ServerMarket.getOrders(itemID, playerUUID);
     }
     private void commonSetup(String itemID)
@@ -129,6 +132,9 @@ public class SyncPricePacket extends NetworkPacketS2C {
     public ArrayList<Order> getOrders() {
         return orders;
     }
+    public boolean isMarketOpen() {
+        return isMarketOpen;
+    }
 
     @Override
     public void toBytes(RegistryFriendlyByteBuf buf) {
@@ -136,6 +142,7 @@ public class SyncPricePacket extends NetworkPacketS2C {
         orderBookVolume.toBytes(buf);
         buf.writeInt(minPrice);
         buf.writeInt(maxPrice);
+        buf.writeBoolean(isMarketOpen);
 
         buf.writeInt(orders.size());
         orders.forEach(order -> {
@@ -149,6 +156,7 @@ public class SyncPricePacket extends NetworkPacketS2C {
         orderBookVolume = new OrderbookVolume(buf);
         minPrice = buf.readInt();
         maxPrice = buf.readInt();
+        isMarketOpen = buf.readBoolean();
 
         int size = buf.readInt();
         orders = new ArrayList<>();
