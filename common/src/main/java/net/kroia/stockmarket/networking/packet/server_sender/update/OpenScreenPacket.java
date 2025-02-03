@@ -10,7 +10,8 @@ public class OpenScreenPacket extends NetworkPacket {
 
     public enum ScreenType
     {
-        BOT_SETTINGS
+        BOT_SETTINGS,
+        STOCKMARKET_MANAGEMENT
     }
 
     ScreenType screenType;
@@ -45,6 +46,9 @@ public class OpenScreenPacket extends NetworkPacket {
         {
             case BOT_SETTINGS:
                 StockMarketClientHooks.openBotSettingsScreen();
+                break;
+            case STOCKMARKET_MANAGEMENT:
+                StockMarketClientHooks.openStockMarketManagementScreen();
                 break;
         }
     }

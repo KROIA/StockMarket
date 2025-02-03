@@ -51,6 +51,24 @@ public class StockMarketTextMessages {
         return msg;
     }
 
+    private static final Component MARKETPLACE_IS_NOW_CLOSED = Component.translatable(prefix+"marketplace_is_now_closed");
+    public static String getMarketplaceIsNowClosedMessage(String itemName)
+    {
+        String msg = MARKETPLACE_IS_NOW_CLOSED.getString();
+        msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
+        return msg;
+    }
+
+    private static final Component MARKETPLACE_IS_NOW_OPEN = Component.translatable(prefix+"marketplace_is_now_open");
+    public static String getMarketplaceIsNowOpenMessage(String itemName)
+    {
+        String msg = MARKETPLACE_IS_NOW_OPEN.getString();
+        msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
+        return msg;
+    }
+
+
+
 
 
     private static final Component MARKETPLACE_DELETED = Component.translatable(prefix+"marketplace_deleted");
@@ -68,6 +86,15 @@ public class StockMarketTextMessages {
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
         return msg;
     }
+
+    private static final Component MARKETPLACE_IS_NOT_ALLOWED = Component.translatable(prefix+"marketplace_is_not_allowed");
+    public static String getMarketplaceIsNotAllowedMessage(String itemName)
+    {
+        String msg = MARKETPLACE_IS_NOT_ALLOWED.getString();
+        msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
+        return msg;
+    }
+
 
 
     private static final Component CURRENT_PRICE_OF = Component.translatable(prefix+"current_price_of");
@@ -343,6 +370,14 @@ public class StockMarketTextMessages {
         return msg;
     }
 
+
+    private static final Component ORDER_INVALID_REASON_MARKET_CLOSED = Component.translatable(prefix+"order_invalid_reason_market_closed");
+    public static String getOrderInvalidReasonMarketClosedMessage()
+    {
+        String msg = ORDER_INVALID_REASON_MARKET_CLOSED.getString();
+        return msg;
+    }
+
     private static final Component ORDER_AMOUNT = Component.translatable(prefix+"order_amount");
     public static String getOrderAmountMessage(long amount)
     {
@@ -428,6 +463,49 @@ public class StockMarketTextMessages {
     public static String getOrderNotReplacedMessage()
     {
         String msg = ORDER_NOT_REPLACED.getString();
+        return msg;
+    }
+
+
+
+    private static final Component STOCKMARKET_DATA_SAVED = Component.translatable(prefix+"stockmarket_data_saved");
+    public static String getStockMarketDataSavedMessage()
+    {
+        return STOCKMARKET_DATA_SAVED.getString();
+    }
+
+    private static final Component STOCKMARKET_DATA_SAVE_FAILED = Component.translatable(prefix+"stockmarket_data_save_failed");
+    public static String getStockMarketDataSaveFailedMessage()
+    {
+        return STOCKMARKET_DATA_SAVE_FAILED.getString();
+    }
+
+    private static final Component STOCKMARKET_DATA_LOAD_FAILED = Component.translatable(prefix+"stockmarket_data_load_failed");
+    public static String getStockMarketDataLoadFailedMessage()
+    {
+        return STOCKMARKET_DATA_LOAD_FAILED.getString();
+    }
+
+    private static final Component STOCKMARKET_DATA_LOADED = Component.translatable(prefix+"stockmarket_data_loaded");
+    public static String getStockMarketDataLoadedMessage()
+    {
+        return STOCKMARKET_DATA_LOADED.getString();
+    }
+
+
+    private static final Component DEFAULT_BOT_CREATED = Component.translatable(prefix+"default_bot_created");
+    public static String getDefaultBotCreatedMessage(String itemID)
+    {
+        String msg = DEFAULT_BOT_CREATED.getString();
+        msg = replaceVariable(msg, Variables.ITEM_NAME, itemID);
+        return msg;
+    }
+
+    private static final Component CAN_NOT_CREATE_DEFAULT_BOT = Component.translatable(prefix+"can_not_create_default_bot");
+    public static String getCanNotCreateDefaultBotMessage(String itemID)
+    {
+        String msg = CAN_NOT_CREATE_DEFAULT_BOT.getString();
+        msg = replaceVariable(msg, Variables.ITEM_NAME, itemID);
         return msg;
     }
 

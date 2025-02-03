@@ -46,7 +46,6 @@ public class OrderListView extends GuiElement {
 
     @Override
     protected void layoutChanged() {
-        //int width = activeOrderListView.getWidth()-OrderView.padding*2-activeOrderListView.getScrollbarThickness();
         int width = getWidth()-OrderView.padding*2-activeOrderListView.getScrollbarThickness();
         int labelHeight = 15;
 
@@ -54,7 +53,6 @@ public class OrderListView extends GuiElement {
         int _amountWidthRatio = OrderView.amountWidthRatio * width / OrderView.sumRatio;
         int _filledWidthRatio = OrderView.filledWidthRatio * width / OrderView.sumRatio;
         int _priceWidthRatio = OrderView.priceWidthRatio * width / OrderView.sumRatio;
-        //int _cancelWidthRatio = OrderView.cancelWidthRatio * width / OrderView.summRatio;
 
         int x = OrderView.padding;
         int y = OrderView.padding;
@@ -77,12 +75,10 @@ public class OrderListView extends GuiElement {
         HashMap<Long,Integer> stillActiveOrderIds = new HashMap<>();
         ArrayList<GuiElement> elements = activeOrderListView.getChilds();
 
-        for(int j=0; j<orders.size(); ++j)
-        {
-            long orderID = orders.get(j).getOrderID();
+        for (Order item : orders) {
+            long orderID = item.getOrderID();
             stillActiveOrderIds.put(orderID, 1);
         }
-        boolean viewContentChanged = false;
         for (int i = 0; i < elements.size(); ++i) {
             if (elements.get(i) instanceof OrderView view) {
                 Order order = view.getOrder();
@@ -90,17 +86,12 @@ public class OrderListView extends GuiElement {
                 {
                     activeOrderListView.removeChild(view);
                     elements = activeOrderListView.getChilds();
-                    viewContentChanged = true;
                     i--;
                 }
                 else {
-
-                    for(int j=0; j<orders.size(); ++j)
-                    {
-                        if(orders.get(j).getOrderID() == order.getOrderID())
-                        {
-                            Order newOrder = orders.get(j);
-                            view.setOrder(newOrder);
+                    for (Order value : orders) {
+                        if (value.getOrderID() == order.getOrderID()) {
+                            view.setOrder(value);
                             break;
                         }
                     }
@@ -108,14 +99,11 @@ public class OrderListView extends GuiElement {
                 stillActiveOrderIds.put(order.getOrderID(), 2);
             }
         }
-        for(int j=0; j<orders.size(); ++j)
-        {
-            long orderID = orders.get(j).getOrderID();
-            if(stillActiveOrderIds.get(orderID) == 1)
-            {
-                OrderView orderView = new OrderView(orders.get(j));
+        for (Order order : orders) {
+            long orderID = order.getOrderID();
+            if (stillActiveOrderIds.get(orderID) == 1) {
+                OrderView orderView = new OrderView(order);
                 activeOrderListView.addChild(orderView);
-                viewContentChanged = true;
             }
         }
     }

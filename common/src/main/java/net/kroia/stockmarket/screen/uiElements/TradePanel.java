@@ -12,12 +12,6 @@ import net.minecraft.world.item.ItemStack;
 import static net.kroia.stockmarket.screen.custom.TradeScreen.*;
 
 public class TradePanel extends GuiElement {
-
-
-
-
-
-
     private final int buyButtonNormalColor = 0xFF008800;
     private final int buyButtonHoverColor = 0xFF00BB00;
     private final int buyButtonPressedColor = 0xFF00FF00;
@@ -51,6 +45,7 @@ public class TradePanel extends GuiElement {
     private final Button limitBuyButton;
     private final Button limitSellButton;
 
+    private final Label marketClosedLabel;
 
     private int amount = 0;
     private int limitPrice = 0;
@@ -123,6 +118,9 @@ public class TradePanel extends GuiElement {
         limitSellButton.setIdleColor(sellButtonNormalColor);
         limitSellButton.setPressedColor(sellButtonPressedColor);
 
+        marketClosedLabel = new Label(MARKET_CLOSED.getString());
+        marketClosedLabel.setAlignment(Alignment.CENTER);
+
         addChild(yourItemBalanceLabel);
         addChild(currentItemView);
         addChild(currentItemBalanceLabel);
@@ -141,6 +139,8 @@ public class TradePanel extends GuiElement {
         addChild(limitPriceTextBox);
         addChild(limitBuyButton);
         addChild(limitSellButton);
+
+        addChild(marketClosedLabel);
     }
 
     public void setItemStack(ItemStack item)
@@ -204,6 +204,8 @@ public class TradePanel extends GuiElement {
         currentPriceLabel.setBounds(currentPriceTextLabel.getRight()+spacing, currentPriceTextLabel.getTop(), currentPriceTextLabel.getWidth(), currentPriceTextLabel.getHeight());
 
 
+        marketClosedLabel.setBounds(x, currentPriceLabel.getBottom()+spacing*6, width, labelHeight);
+
 
         amountLabel.setBounds(x, currentPriceLabel.getBottom()+spacing*6, (width-spacing)/2, labelHeight);
         amountTextBox.setBounds(amountLabel.getRight()+spacing, amountLabel.getTop(), amountLabel.getWidth(), amountLabel.getHeight());
@@ -217,11 +219,50 @@ public class TradePanel extends GuiElement {
         limitPriceTextBox.setBounds(limitPriceLabel.getRight()+spacing, limitPriceLabel.getTop(), limitPriceLabel.getWidth(), limitPriceLabel.getHeight());
         limitBuyButton.setBounds(x, limitPriceLabel.getBottom()+spacing, (width-spacing)/2, buttonHeight);
         limitSellButton.setBounds(limitBuyButton.getRight()+spacing, limitBuyButton.getTop(), limitBuyButton.getWidth(), limitBuyButton.getHeight());
+
     }
     @Override
     protected void render() {
 
     }
 
+    public void onMarketClosed()
+    {
+        amountLabel.setEnabled(false);
+        amountTextBox.setEnabled(false);
+        limitOrderLabel.setEnabled(false);
+        marketOrderLabel.setEnabled(false);
+        limitPriceLabel.setEnabled(false);
+        limitPriceTextBox.setEnabled(false);
+        marketBuyButton.setEnabled(false);
+        marketSellButton.setEnabled(false);
+        limitBuyButton.setEnabled(false);
+        limitSellButton.setEnabled(false);
+
+        marketClosedLabel.setEnabled(true);
+    }
+    public void onMarketOpened()
+    {
+        amountLabel.setEnabled(true);
+        amountTextBox.setEnabled(true);
+        limitOrderLabel.setEnabled(true);
+        limitPriceLabel.setEnabled(true);
+        limitPriceTextBox.setEnabled(true);
+        marketOrderLabel.setEnabled(true);
+        marketBuyButton.setEnabled(true);
+        marketSellButton.setEnabled(true);
+        limitBuyButton.setEnabled(true);
+        limitSellButton.setEnabled(true);
+
+        marketClosedLabel.setEnabled(false);
+    }
+
+    public void setMarketOpen(boolean open)
+    {
+        if(open)
+            onMarketOpened();
+        else
+            onMarketClosed();
+    }
 
 }

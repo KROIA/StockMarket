@@ -16,6 +16,10 @@ public class CandleStickChart extends GuiElement {
     {
         return start2 + (int)((float)((stop2 - start2) * ((value - start1)) / (float)(stop1 - start1)));
     }
+    private static float mapF(float value, float start1, float stop1, float start2, float stop2)
+    {
+        return start2 + (float)((stop2 - start2) * ((value - start1)) / (float)(stop1 - start1));
+    }
 
     private final int colorUp = TradeScreen.colorGreen;
     private final int colorDown = TradeScreen.colorRed;
@@ -70,7 +74,7 @@ public class CandleStickChart extends GuiElement {
         super.renderBackground();
         if(priceHistory == null)
             return;
-        int yAxisLabelIncrement = 10;
+        int yAxisLabelIncrement = 1;
         int labelWidth = 0;
 
 
@@ -80,7 +84,7 @@ public class CandleStickChart extends GuiElement {
             yAxisLabelIncrement = (chartViewMaxPrice - chartViewMinPrice)/10;
         }
         // Draw yAxis
-        for(int i=chartViewMaxPrice; i>chartViewMinPrice; i-=yAxisLabelIncrement)
+        for(int i=chartViewMaxPrice; i>=chartViewMinPrice; i-=yAxisLabelIncrement)
         {
             int y = getChartYPos(i);
 
@@ -133,17 +137,11 @@ public class CandleStickChart extends GuiElement {
     public void renderCandle(int x,int candleWidth, int xOffset, int yOffset,
                                     int open, int close, int high, int low)
     {
-        // int wickHighY = (int) (chartViewHeight - ((high - chartViewMinPrice) / (float) (chartViewMaxPrice - chartViewMinPrice)) * chartViewHeight);
-        // int wickLowY = (int) (chartViewHeight - ((low - chartViewMinPrice) / (float) (chartViewMaxPrice - chartViewMinPrice)) * chartViewHeight);
-
-
         int color = open > close ? colorDown : colorUp;
 
         // Draw wick
         int wickYMin = getChartYPos(low);
         int wickYMax = getChartYPos(high);
-
-
 
         // Draw body
         int bodyYMin = getChartYPos(Math.min(open, close));
@@ -225,6 +223,6 @@ public class CandleStickChart extends GuiElement {
     }
     private int getPriceFromYPos(int y)
     {
-        return map(y, getHeight()-PADDING, PADDING, chartViewMinPrice, chartViewMaxPrice);
+        return Math.round(mapF(y, getHeight()-PADDING, PADDING, chartViewMinPrice, chartViewMaxPrice));
     }
 }
