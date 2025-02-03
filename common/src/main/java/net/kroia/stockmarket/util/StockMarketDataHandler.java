@@ -165,7 +165,7 @@ public class StockMarketDataHandler {
                     .filter(_path -> _path.toString().endsWith(".json")) // Keep only .json files
                     .collect(Collectors.toList()); // Convert to List
         } catch (IOException e) {
-            e.printStackTrace();
+            //e.printStackTrace();
             return List.of(); // Return empty list on error
         }
     }
