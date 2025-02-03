@@ -1,17 +1,31 @@
 package net.kroia.stockmarket.util;
 
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonSyntaxException;
+import com.google.gson.reflect.TypeToken;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.ServerMarket;
+import net.kroia.stockmarket.market.server.bot.ServerTradingBotFactory;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtIo;
 
 import java.io.File;
 import java.io.IOException;
-
+import java.lang.reflect.Type;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 
 public class StockMarketDataHandler {
+
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final String FOLDER_NAME = "Finance/StockMarket";
 
     private static final String PLAYER_DATA_FILE_NAME = "Player_data.dat";
@@ -122,6 +136,40 @@ public class StockMarketDataHandler {
         return market.load(marketData);
     }
 
+    public static Map<String, ServerTradingBotFactory.DefaultBotSettings> loadDefaultBotSettings()
+    {
+        List<Path> jsonFiles = getJsonFiles(Path.of(getSaveFolder().getPath()+"/DefaultBotSettings"));
+        Map<String, ServerTradingBotFactory.DefaultBotSettings> settings = new HashMap<>();
+        Type mapType = new TypeToken<Map<String, ServerTradingBotFactory.DefaultBotSettings>>() {}.getType();
+        for(Path file : jsonFiles)
+        {
+            try {
+                Map<String, ServerTradingBotFactory.DefaultBotSettings> tmpMap = loadFromJson("/DefaultBotSettings/"+file.getFileName().toString(), mapType);
+                if(tmpMap != null)
+                    settings.putAll(tmpMap);
+            } catch (JsonSyntaxException e) {
+                e.printStackTrace();
+            }
+        }
+        return settings;
+    }
+    public static boolean saveDefaultBotSettings(Map<String, ServerTradingBotFactory.DefaultBotSettings> settingsMap, String fileName)
+    {
+        return saveAsJson(settingsMap, "DefaultBotSettings/"+fileName);
+    }
+
+    public static List<Path> getJsonFiles(Path path) {
+        try {
+            return Files.list(path) // List files
+                    .filter(Files::isRegularFile)       // Keep only regular files
+                    .filter(_path -> _path.toString().endsWith(".json")) // Keep only .json files
+                    .collect(Collectors.toList()); // Convert to List
+        } catch (IOException e) {
+            //e.printStackTrace();
+            return List.of(); // Return empty list on error
+        }
+    }
+
 
 
     private static CompoundTag readDataCompound(String fileName)
@@ -168,5 +216,29 @@ public class StockMarketDataHandler {
             return false;
         }
         return true;
+    }
+
+    public static boolean saveAsJson(Object o, String fileName)
+    {
+        String json = GSON.toJson(o);
+        try {
+            Path path = Paths.get(getSaveFolder()+"/"+fileName);
+            Files.createDirectories(path.getParent());
+            Files.writeString(Paths.get(getSaveFolder()+"/"+fileName), json);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+        return true;
+    }
+    public static <T> T loadFromJson(String fileName, Type typeOfT) throws JsonSyntaxException {
+        try {
+            // Read JSON content
+            String json = Files.readString(Paths.get(getSaveFolder()+"/"+fileName));
+            return (T) GSON.fromJson(json, typeOfT);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
     }
 }
