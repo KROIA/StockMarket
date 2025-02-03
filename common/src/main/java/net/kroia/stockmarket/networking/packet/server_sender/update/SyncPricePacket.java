@@ -11,7 +11,6 @@ import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.kroia.stockmarket.util.OrderbookVolume;
 import net.kroia.stockmarket.util.PriceHistory;
-import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
