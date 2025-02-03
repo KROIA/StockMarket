@@ -24,18 +24,21 @@ public class SyncPricePacket extends NetworkPacket {
 
     private ArrayList<Order> orders;
 
+    private boolean isMarketOpen;
+
 
     public SyncPricePacket() {
         super();
 
     }
-    public SyncPricePacket(PriceHistory priceHistory, OrderbookVolume orderBookVolume, int minPrice, int maxPrice, ArrayList<Order> orders) {
+    public SyncPricePacket(PriceHistory priceHistory, OrderbookVolume orderBookVolume, int minPrice, int maxPrice, ArrayList<Order> orders, boolean isMarketOpen) {
         super();
         this.priceHistory = priceHistory;
         this.orderBookVolume = orderBookVolume;
         this.minPrice = minPrice;
         this.maxPrice = maxPrice;
         this.orders = orders;
+        this.isMarketOpen = isMarketOpen;
     }
 
     public SyncPricePacket(FriendlyByteBuf buf) {
@@ -49,6 +52,7 @@ public class SyncPricePacket extends NetworkPacket {
     public SyncPricePacket(String itemID, UUID playerUUID)
     {
         commonSetup(itemID);
+        this.isMarketOpen = ServerMarket.isMarketOpen(itemID);
         this.orders = ServerMarket.getOrders(itemID, playerUUID);
     }
     private void commonSetup(String itemID)
@@ -119,6 +123,9 @@ public class SyncPricePacket extends NetworkPacket {
     public ArrayList<Order> getOrders() {
         return orders;
     }
+    public boolean isMarketOpen() {
+        return isMarketOpen;
+    }
 
     @Override
     public void toBytes(FriendlyByteBuf buf) {
@@ -126,6 +133,7 @@ public class SyncPricePacket extends NetworkPacket {
         orderBookVolume.toBytes(buf);
         buf.writeInt(minPrice);
         buf.writeInt(maxPrice);
+        buf.writeBoolean(isMarketOpen);
 
         buf.writeInt(orders.size());
         orders.forEach(order -> {
@@ -139,6 +147,7 @@ public class SyncPricePacket extends NetworkPacket {
         orderBookVolume = new OrderbookVolume(buf);
         minPrice = buf.readInt();
         maxPrice = buf.readInt();
+        isMarketOpen = buf.readBoolean();
 
         int size = buf.readInt();
         orders = new ArrayList<>();

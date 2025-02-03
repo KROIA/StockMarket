@@ -38,8 +38,6 @@ public class LimitOrder extends Order implements ServerSaveable {
         this.price = price;
         if(amount > 0)
             this.lockedMoney = (long) amount * price;
-
-        //StockMarketMod.LOGGER.info("LimitOrder created: " + toString());
     }
     protected LimitOrder(UUID playerUUID, String itemID, int amount, int price, int alreadyFilledAmount) {
         super(playerUUID, itemID, amount);
@@ -47,17 +45,12 @@ public class LimitOrder extends Order implements ServerSaveable {
         this.filledAmount = alreadyFilledAmount;
         if(amount > 0)
             this.lockedMoney = (long) Math.abs(amount-alreadyFilledAmount) * price;
-
-        //StockMarketMod.LOGGER.info("LimitOrder created: " + toString());
     }
     protected LimitOrder(UUID playerUUID, String itemID, int amount, int price, boolean isBot) {
         super(playerUUID, itemID, amount, isBot);
         this.price = price;
         if(amount > 0)
             this.lockedMoney = (long) amount * price;
-
-
-        //StockMarketMod.LOGGER.info("LimitOrder created: " + toString());
     }
     private LimitOrder()
     {
@@ -138,7 +131,6 @@ public class LimitOrder extends Order implements ServerSaveable {
         tag.putInt("amount", amount);
         tag.putInt("filledAmount", filledAmount);
         tag.putLong("transferedMoney", transferedMoney);
-        //tag.putInt("averagePrice", averagePrice);
         tag.putString("status", status.toString());
         tag.putString("invalidReason", invalidReason);
         tag.putBoolean("isBot", isBot);
@@ -156,7 +148,6 @@ public class LimitOrder extends Order implements ServerSaveable {
                 !tag.contains("amount") ||
                 !tag.contains("filledAmount") ||
                 !tag.contains("transferedMoney") ||
-                //!tag.contains("averagePrice") ||
                 !tag.contains("status") ||
                 !tag.contains("invalidReason") ||
                 !tag.contains("isBot"))
@@ -168,7 +159,6 @@ public class LimitOrder extends Order implements ServerSaveable {
         amount = tag.getInt("amount");
         filledAmount = tag.getInt("filledAmount");
         transferedMoney = tag.getLong("transferedMoney");
-        //averagePrice = tag.getInt("averagePrice");
         status = Status.valueOf(tag.getString("status"));
         invalidReason = tag.getString("invalidReason");
         isBot = tag.getBoolean("isBot");

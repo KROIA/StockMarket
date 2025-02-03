@@ -39,22 +39,4 @@ public class MeanRevertingRandomWalk {
 
         return currentValue;
     }
-
-/*
-
-    public static void main(String[] args) throws FileNotFoundException, UnsupportedEncodingException {
-        // Example usage
-        MeanRevertingRandomWalk randomWalk = new MeanRevertingRandomWalk(0.1, 0.05);
-
-        // Open file to store the data
-        PrintWriter file = new PrintWriter("random_walk.csv", "UTF-8");
-
-        // Generate and print 100 random walk values
-        for (int i = 0; i < 10000; i++) {
-            // plot to file
-            double value = randomWalk.nextValue();
-            file.println(i + ";" + value);
-        }
-        file.close();
-    }*/
 }

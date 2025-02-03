@@ -1,7 +1,6 @@
 package net.kroia.stockmarket.market.client;
 
 import net.kroia.modutilities.PlayerUtilities;
-import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.networking.packet.client_sender.request.RequestOrderCancelPacket;
@@ -25,6 +24,7 @@ public class ClientTradeItem {
     private OrderbookVolume orderBookVolume;
     private int visualMinPrice = 0;
     private int visualMaxPrice = 0;
+    private boolean isMarketOpen = false;
 
     // Orders that belong to this user
     private final Map<Long, Order> orders = new HashMap<>();
@@ -42,6 +42,7 @@ public class ClientTradeItem {
         orderBookVolume = packet.getOrderBookVolume();
         visualMinPrice = packet.getMinPrice();
         visualMaxPrice = packet.getMaxPrice();
+        isMarketOpen = packet.isMarketOpen();
         ArrayList<Order> orders = packet.getOrders();
         this.orders.clear();
         for(Order order : orders)
@@ -53,7 +54,6 @@ public class ClientTradeItem {
     {
         Order order = packet.getOrder();
         Order oldOrder = orders.get(order.getOrderID());
-        //orders.put(order.getOrderID(), order);
         boolean hasChanged = true;
         if(oldOrder != null)
         {
@@ -66,10 +66,6 @@ public class ClientTradeItem {
 
         if(hasChanged)
         {
-
-            // Print to user console
-            //StockMarketMod.printToClientConsole("Order: " + order.getOrderID() + " has been updated: "+order.toString());
-
             String limitText = "";
             if(order instanceof LimitOrder)
                 limitText = "\n  "+StockMarketTextMessages.getOrderLimitPriceMessage(((LimitOrder) order).getPrice());
@@ -141,6 +137,10 @@ public class ClientTradeItem {
     public int getVisualMaxPrice()
     {
         return visualMaxPrice;
+    }
+    public boolean isMarketOpen()
+    {
+        return isMarketOpen;
     }
 
     public boolean createOrder(int quantity, int price)

@@ -48,7 +48,7 @@ public final class StockMarketMod {
 
     public static void onServerSetup()
     {
-        //BankSystemNetworking.setupServerReceiverPackets();
+
     }
 
     public static void loadDataFromFiles(MinecraftServer server)

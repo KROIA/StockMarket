@@ -3,7 +3,6 @@ package net.kroia.stockmarket.market.server.order;
 import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
-import net.kroia.banksystem.command.BankSystemCommands;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.modutilities.PlayerUtilities;
@@ -25,11 +24,8 @@ public abstract class Order {
     protected long orderID;
     protected String itemID;
     protected UUID playerUUID;
-    //private final String itemID;
     protected int amount;
     protected int filledAmount = 0;
-
-    //protected int averagePrice = 0;
     protected long transferedMoney = 0;
 
     protected String invalidReason = "";
@@ -55,14 +51,12 @@ public abstract class Order {
         this.itemID = itemID;
         this.orderID = uniqueOrderID();
         this.playerUUID = playerUUID;
-        //this.itemID = itemID;
         this.amount = amount;
     }
     protected Order(UUID playerUUID, String itemID, int amount, boolean isBot) {
         this.itemID = itemID;
         this.orderID = uniqueOrderID();
         this.playerUUID = playerUUID;
-        //this.itemID = itemID;
         this.amount = amount;
         this.isBot = isBot;
     }
@@ -75,7 +69,6 @@ public abstract class Order {
         BankUser bankUser = ServerBankManager.getUser(player.getUUID());
         if(bankUser == null)
         {
-            //StockMarketMod.LOGGER.warn("BankUser not found for player " + player.getName().getString());
             PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankNotFoundMessage(player.getName().getString(),itemID));
             return false;
         }
@@ -93,29 +86,25 @@ public abstract class Order {
     {
         if(moneyBank == null)
         {
-            //StockMarketMod.LOGGER.warn("Bank not found for player " + ServerPlayerList.getPlayerName(playerUUID));
             if(dbgPlayer != null)
                 PlayerUtilities.printToClientConsole(dbgPlayer, BankSystemTextMessages.getBankNotFoundMessage(ServerPlayerList.getPlayerName(playerUUID), MoneyItem.getName()));
             return false;
         }
         if(itemBank == null)
         {
-            //StockMarketMod.LOGGER.warn("User + " + ServerPlayerList.getPlayerName(playerUUID) + " has no bank for item " + itemID);
             if(dbgPlayer != null)
                 PlayerUtilities.printToClientConsole(dbgPlayer, BankSystemTextMessages.getBankNotFoundMessage(ServerPlayerList.getPlayerName(playerUUID), MoneyItem.getName()));
             return false;
         }
         if(amount > 0) {
-            if (!moneyBank.lockAmount((long) price * amount)){
-                //StockMarketMod.LOGGER.warn("Insufficient funds for player " + ServerPlayerList.getPlayerName(playerUUID));
+            if (moneyBank.lockAmount((long) price * amount) != Bank.Status.SUCCESS) {
                 if(dbgPlayer != null)
                     PlayerUtilities.printToClientConsole(dbgPlayer, StockMarketTextMessages.getInsufficientFundToBuyMessage(itemID, amount, price));
                 return false;
             }
         }
         else {
-            if (!itemBank.lockAmount(-amount)){
-                //StockMarketMod.LOGGER.warn("Insufficient items ("+itemID+") for player " + ServerPlayerList.getPlayerName(playerUUID));
+            if (itemBank.lockAmount(-amount) != Bank.Status.SUCCESS){
                 if(dbgPlayer != null)
                     PlayerUtilities.printToClientConsole(dbgPlayer, StockMarketTextMessages.getInsufficientItemsToSellMessage(itemID, amount));
                 return false;
@@ -142,7 +131,6 @@ public abstract class Order {
         filledAmount = buf.readInt();
         lockedMoney = buf.readLong();
         transferedMoney = buf.readLong();
-        //averagePrice = buf.readInt();
         status = Status.valueOf(buf.readUtf());
         invalidReason = buf.readUtf();
         isBot = buf.readBoolean();
@@ -157,7 +145,6 @@ public abstract class Order {
         filledAmount = other.filledAmount;
         lockedMoney = other.lockedMoney;
         transferedMoney = other.transferedMoney;
-        //averagePrice = other.averagePrice;
         status = other.status;
         invalidReason = other.invalidReason;
         isBot = other.isBot;
@@ -199,7 +186,6 @@ public abstract class Order {
                 filledAmount == other.filledAmount &&
                 lockedMoney == other.lockedMoney &&
                 transferedMoney == other.transferedMoney &&
-               // averagePrice == other.averagePrice &&
                 status == other.status;
     }
 
@@ -302,24 +288,15 @@ public abstract class Order {
         if(status == this.status)
             return;
         this.status = status;
-        if(/*StockMarketMod.isServer() && */!isBot)
-        {
-            SyncOrderPacket.sendResponse(this);
-        }
+        if(isBot)
+            return;
+        SyncOrderPacket.sendResponse(this);
     }
 
     public void notifyPlayer() {
         if(isBot)
             return;
         SyncOrderPacket.sendResponse(this);
-       /* if(StockMarketMod.isServer())
-        {
-
-        }
-        else
-        {
-            StockMarketMod.LOGGER.error("notifyPlayer() called on client");
-        }*/
     }
 
     public Status getStatus() {
@@ -329,15 +306,6 @@ public abstract class Order {
     public int getAveragePrice() {
         return this.filledAmount == 0 ? 0 : (int)(Math.round(Math.abs((double)this.transferedMoney / this.filledAmount)));
     }
-    /*public void setAveragePrice(int averagePrice) {
-        this.averagePrice = averagePrice;
-    }
-    public void changeAveragePrice(int filledAmount, int fillPrice) {
-        if(filledAmount == 0)
-            return;
-        int fillVolume = Math.abs(filledAmount);
-        averagePrice = (fillVolume * averagePrice + Math.abs(filledAmount) * fillPrice) / fillVolume;
-    }*/
 
     public boolean isFilled() {
         return Math.abs(filledAmount) >= Math.abs(amount);
@@ -351,7 +319,6 @@ public abstract class Order {
         return filledAmount;
     }
 
-    // pure virtual function
     public abstract String toString();
 
     public void toBytes(FriendlyByteBuf buf) {
@@ -362,7 +329,6 @@ public abstract class Order {
         buf.writeInt(filledAmount);
         buf.writeLong(lockedMoney);
         buf.writeLong(transferedMoney);
-        //buf.writeInt(averagePrice);
         buf.writeUtf(status.toString());
         buf.writeUtf(invalidReason);
         buf.writeBoolean(isBot);
