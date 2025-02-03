@@ -4,7 +4,6 @@ import com.google.common.base.Suppliers;
 import dev.architectury.registry.registries.Registrar;
 import dev.architectury.registry.registries.RegistrarManager;
 import dev.architectury.registry.registries.RegistrySupplier;
-import net.kroia.banksystem.BankSystemMod;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.block.StockMarketBlocks;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
@@ -39,7 +38,6 @@ public class StockMarketEntities {
 
     public static <T extends BlockEntityType<?>> RegistrySupplier<T> registerBlockEntity(String name, Supplier<T> item)
     {
-        //StockMarketMod.LOGGER.info("Registering block entity: " + name);
         return BLOCK_ENTITIES.register(ResourceLocation.fromNamespaceAndPath(StockMarketMod.MOD_ID, name), item);
     }
 }

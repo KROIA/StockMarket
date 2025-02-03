@@ -14,7 +14,7 @@ import java.util.UUID;
  * The transaction engine is responsible for processing orders
  * It manages the exchange of item and money between the orders
  */
-public class TransactionEnginge {
+public class TransactionEngine {
 
 
     public static int fill(Order o1, Order o2, int currentPrice)
@@ -62,23 +62,37 @@ public class TransactionEnginge {
         Order senderOrder = fillAmount > 0 ? o1 : o2;
         Order receiverOrder = fillAmount > 0 ? o2 : o1;
 
-        //if(!senderBank.transferFromLockedPrefered(money, receiverBank))
-        if(!Bank.exchangeFromLockedPrefered(senderMoneyBank, receiverMoneyBank, money,    senderItemBank, receiverItemBank, fillVolume))
+        Bank.Status status = Bank.exchangeFromLockedPrefered(senderMoneyBank, receiverMoneyBank, money,    senderItemBank, receiverItemBank, fillVolume);
+        if(status != Bank.Status.SUCCESS)
         {
-            long missingMoney = (money - senderMoneyBank.getBalance()-senderMoneyBank.getLockedBalance());
-            long missingItems = (fillVolume - senderItemBank.getBalance()-senderItemBank.getLockedBalance());
-            StockMarketMod.LOGGER.error("Insufficient funds from player: " + senderUUID.toString()+
-                    " Order1: " + senderOrder + " Order2: " + receiverOrder+
-                    " Can't fill order");
-            senderOrder.markAsInvalid(StockMarketTextMessages.getInsufficientFundMessage());
-            String missingText = "";
-            if(missingMoney > 0)
-                missingText += "\n "+StockMarketTextMessages.getMissingMoneyMessage(missingMoney);
-            if(missingItems > 0)
-                missingText += "\n  "+StockMarketTextMessages.getMissingItemsMessage(senderOrder.getItemID(), missingItems);
-            PlayerUtilities.printToClientConsole(StockMarketTextMessages.getInsufficientFundToConsumeMessage(receiverOrder.toString(), currentPrice, fillVolume, money)+missingText);
+            switch(status) {
+                case FAILED_OVERFLOW:
+                {
+                    StockMarketMod.LOGGER.error("Overflow while filling order from player: " + senderUUID.toString() +
+                            " Order1: " + senderOrder + " Order2: " + receiverOrder +
+                            " Can't fill order");
+                    PlayerUtilities.printToClientConsole(senderMoneyBank.getPlayerUUID(), status.toString());
+                    PlayerUtilities.printToClientConsole(receiverItemBank.getPlayerUUID(), status.toString());
+                    return 0;
+                }
+                case FAILED_NOT_ENOUGH_FUNDS: {
+                    long missingMoney = (money - senderMoneyBank.getBalance() - senderMoneyBank.getLockedBalance());
+                    long missingItems = (fillVolume - senderItemBank.getBalance() - senderItemBank.getLockedBalance());
+                    StockMarketMod.LOGGER.error("Insufficient funds from player: " + senderUUID.toString() +
+                            " Order1: " + senderOrder + " Order2: " + receiverOrder +
+                            " Can't fill order");
+                    senderOrder.markAsInvalid(StockMarketTextMessages.getInsufficientFundMessage());
+                    String missingText = "";
+                    if (missingMoney > 0)
+                        missingText += "\n " + StockMarketTextMessages.getMissingMoneyMessage(missingMoney);
+                    if (missingItems > 0)
+                        missingText += "\n  " + StockMarketTextMessages.getMissingItemsMessage(senderOrder.getItemID(), missingItems);
 
-            return 0;
+                    PlayerUtilities.printToClientConsole(senderMoneyBank.getPlayerUUID(), StockMarketTextMessages.getInsufficientFundToConsumeMessage(receiverOrder.toString(), currentPrice, fillVolume, money) + missingText);
+
+                    return 0;
+                }
+            }
         }
         else {
             senderOrder.addFilledAmount(fillVolume);
