@@ -4,9 +4,7 @@ import com.google.common.base.Suppliers;
 import dev.architectury.registry.registries.Registrar;
 import dev.architectury.registry.registries.RegistrarManager;
 import dev.architectury.registry.registries.RegistrySupplier;
-import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.block.custom.TerminalBlock;
-import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.block.custom.StockMarketBlock;
 import net.kroia.stockmarket.item.StockMarketItems;
@@ -41,7 +39,6 @@ public class StockMarketBlocks {
 
     public static <T extends Block> RegistrySupplier<T> registerBlock(String name, Supplier<T> block)
     {
-        //BankSystemMod.LOGGER.info("Registering Block: " + name);
         RegistrySupplier<T> toReturn = BLOCKS.register(new ResourceLocation(StockMarketMod.MOD_ID, name), block);
         StockMarketItems.registerBlockItem(name, toReturn);
         return toReturn;

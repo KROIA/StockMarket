@@ -56,11 +56,6 @@ public class LimitOrderInChartDisplay extends GuiElement {
     protected void render() {
         int xPos = moveButton.getRight();
         drawRect(xPos, getHeight()/2, getWidth()-xPos, 1, color);
-
-        /*if(isDragging)
-        {
-            drawText()
-        }*/
     }
 
     @Override

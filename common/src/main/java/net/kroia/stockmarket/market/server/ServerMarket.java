@@ -29,16 +29,10 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.PlayerList;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 public class ServerMarket implements ServerSaveable
 {
-    //private static final Map<String, MarketManager> marketManagers = new HashMap<>();
-    //private static final Map<String, ArrayList<ServerPlayer>> playerSubscriptions = new HashMap<>();
-    //private static MarketData marketData;
     private static boolean initialized = false;
     public static long shiftPriceHistoryInterval = StockMarketModSettings.Market.SHIFT_PRICE_CANDLE_INTERVAL_MS; // in ms
 
@@ -73,46 +67,56 @@ public class ServerMarket implements ServerSaveable
 
     public static void createDefaultBots()
     {
-        if(StockMarketModSettings.MarketBot.ENABLED)
-        {
-            BankUser botUser = getBotUser();
-            StockMarketMod.LOGGER.info("[SERVER] Creating trading bots");
-            HashMap<String, ServerTradingBotFactory.BotBuilderContainer> bots = StockMarketModSettings.MarketBot.createBots();
+        if(!StockMarketModSettings.MarketBot.ENABLED)
+            return;
 
-            for(var item : bots.entrySet())
-            {
-                if(!ServerBankManager.isItemIDAllowed(item.getKey()))
-                {
-                    ServerBankManager.allowItemID(item.getKey());
-                }
-                if(!hasItem(item.getKey()))
-                {
-                    ServerTradingBotFactory.BotBuilderContainer botBuilder = item.getValue();
-                    int initialPrice = 0;
-                    if(botBuilder.settings instanceof ServerVolatilityBot.Settings volSettings)
-                    {
-                        initialPrice = volSettings.imbalancePriceRange/2;
-                    }
-                    addTradeItem(item.getKey(),initialPrice);
-                }
-                boolean hasBot = hasTradingBot(item.getKey());
-                if(hasBot)
-                    continue;
-                ServerTradingBotFactory.BotBuilderContainer container = item.getValue();
-                Bank itemBank = botUser.getBank(container.itemID);
-                if(itemBank == null)
-                {
-                    itemBank = botUser.createItemBank(container.itemID, container.initialItemStock);
-                }
-                if(itemBank.getTotalBalance() < container.initialItemStock)
-                {
-                    itemBank.setBalance(container.initialItemStock-itemBank.getLockedBalance());
-                }
-                setTradingBot(item.getKey(), container.bot);
-            }
-            bots.clear();
+        Set<String> itemIDS = StockMarketModSettings.MarketBot.getBotBuilder().keySet();
+
+        for(String itemID : itemIDS)
+        {
+            createDefaultBot(itemID);
         }
     }
+    public static boolean createDefaultBot(String itemID)
+    {
+        if(!StockMarketModSettings.MarketBot.ENABLED)
+            return false;
+        BankUser botUser = getBotUser();
+        if(!ServerBankManager.isItemIDAllowed(itemID))
+        {
+            ServerBankManager.allowItemID(itemID);
+        }
+        ServerTradingBotFactory.BotBuilderContainer botBuilder = StockMarketModSettings.MarketBot.getBotBuilder(itemID);
+        if(botBuilder == null)
+        {
+            StockMarketMod.LOGGER.error("[SERVER] No default bot settings available for item: "+itemID);
+            return false;
+        }
+        if(!hasItem(itemID))
+        {
+            int initialPrice = botBuilder.defaultSettings.imbalancePriceRange/2;
+            addTradeItem(itemID,initialPrice);
+        }
+        ServerTradingBot bot = getTradingBot(itemID);
+        if(bot == null)
+        {
+            StockMarketMod.LOGGER.info("[SERVER] Creating trading bot for item "+itemID);
+            bot = new ServerVolatilityBot();
+            setTradingBot(itemID, bot);
+        }
+        Bank itemBank = botUser.getBank(itemID);
+        if(itemBank == null)
+        {
+            itemBank = botUser.createItemBank(itemID, botBuilder.defaultSettings.targetItemBalance);
+        }
+        if(itemBank.getTotalBalance() < botBuilder.defaultSettings.targetItemBalance)
+        {
+            itemBank.setBalance(botBuilder.defaultSettings.targetItemBalance-itemBank.getLockedBalance());
+        }
+        botBuilder.defaultSettings.loadDefaultSettings((ServerVolatilityBot.Settings)bot.getSettings());
+        return true;
+    }
+
 
     public static BankUser getBotUser()
     {
@@ -136,22 +140,32 @@ public class ServerMarket implements ServerSaveable
         return bankUser;
     }
 
-    public static void addTradeItem(String itemID, int startPrice)
+    public static boolean addTradeItem(String itemID, int startPrice)
     {
         if(tradeItems.containsKey(itemID))
         {
             StockMarketMod.LOGGER.warn("[SERVER] Trade item already exists: " + itemID);
-            return;
+            return true;
         }
-        addTradeItem_internal(itemID, startPrice);
+        if(StockMarketModSettings.Market.NOT_TRADABLE_ITEMS.contains(itemID))
+        {
+            StockMarketMod.LOGGER.warn("[SERVER] Item "+itemID+" is not allowed for trading");
+            return false;
+        }
+        return addTradeItem_internal(itemID, startPrice);
     }
-    public static void addTradeItemIfNotExists(String itemID, int startPrice)
+    public static boolean addTradeItemIfNotExists(String itemID, int startPrice)
     {
         if(tradeItems.containsKey(itemID))
         {
-            return;
+            return true;
         }
-        addTradeItem_internal(itemID, startPrice);
+        if(StockMarketModSettings.Market.NOT_TRADABLE_ITEMS.contains(itemID))
+        {
+            StockMarketMod.LOGGER.warn("[SERVER] Item "+itemID+" is not allowed for trading");
+            return false;
+        }
+        return addTradeItem_internal(itemID, startPrice);
     }
     public static void removeTradingItem(String itemID)
     {
@@ -164,8 +178,13 @@ public class ServerMarket implements ServerSaveable
         item.cleanup();
         tradeItems.remove(itemID);
     }
-    private static void addTradeItem_internal(String itemID, int startPrice)
+    private static boolean addTradeItem_internal(String itemID, int startPrice)
     {
+        if(!ServerBankManager.allowItemID(itemID))
+        {
+            StockMarketMod.LOGGER.warn("[SERVER] Item "+itemID+" can't be allowed for trading because it is not allowed in the bank system");
+            return false;
+        }
         ServerTradeItem tradeItem = new ServerTradeItem(itemID, startPrice);
         tradeItems.put(itemID, tradeItem);
         ServerBankManager.allowItemID(itemID);
@@ -182,6 +201,7 @@ public class ServerMarket implements ServerSaveable
         {
             SyncTradeItemsPacket.sendPacket(player);
         }
+        return true;
     }
 
     public static ArrayList<String> getTradeItemIDs()
@@ -263,24 +283,34 @@ public class ServerMarket implements ServerSaveable
         }
     }
 
+    public static void setMarketOpen(String itemID, boolean open)
+    {
+        ServerTradeItem item = tradeItems.get(itemID);
+        if(item == null)
+        {
+            msgTradeItemNotFound(itemID);
+            return;
+        }
+        item.setMarketOpen(open);
+    }
+    public static boolean isMarketOpen(String itemID)
+    {
+        ServerTradeItem item = tradeItems.get(itemID);
+        if(item == null)
+        {
+            msgTradeItemNotFound(itemID);
+            return false;
+        }
+        return item.isMarketOpen();
+    }
+
     public static void shiftPriceHistory()
     {
-        //StockMarketMod.LOGGER.info("Shifting price history");
         for(ServerTradeItem marketManager : tradeItems.values())
         {
             marketManager.shiftPriceHistory();
         }
-        //notifySubscriber();
     }
-    /*public static Map<String, MarketManager> getMarketManagers()
-    {
-        return marketManagers;
-    }
-    public static MarketManager getMarketManager(String itemID)
-    {
-        return marketManagers.get(itemID);
-    }*/
-
     public static void addOrder(Order order)
     {
         if(order == null)
@@ -375,11 +405,6 @@ public class ServerMarket implements ServerSaveable
         }
         return item.getPrice();
     }
-
-    /*public static void setPriceHistory(PriceHistory history)
-    {
-        marketData.setPriceHistory(history);
-    }*/
     public static PriceHistory getPriceHistory(String itemID)
     {
         ServerTradeItem item = tradeItems.get(itemID);
@@ -433,12 +458,6 @@ public class ServerMarket implements ServerSaveable
         int price = packet.getPrice();
         StockMarketMod.LOGGER.info("[SERVER] Receiving RequestOrderPacket for item "+packet.getItemID()+" from the player "+playerName);
 
-        /*if(playerBank == null)
-        {
-            StockMarketMod.LOGGER.error("[SERVER] Player "+playerName+" does not have a banking account");
-            return;
-        }*/
-
         if(amount < 0)
         {
             // Selling
@@ -455,12 +474,10 @@ public class ServerMarket implements ServerSaveable
             case limit:
                 LimitOrder limitOrder = LimitOrder.create(player, itemID, amount, price);
                 ServerMarket.addOrder(limitOrder);
-                //StockMarketMod.LOGGER.info("[SERVER] Player "+context.getSender().getName().getString()+" is selling "+this.amount+" of "+this.itemID+" with a limit order");
                 break;
             case market:
                 MarketOrder marketOrder = MarketOrder.create(player, itemID, amount);
                 ServerMarket.addOrder(marketOrder);
-                //StockMarketMod.LOGGER.info("[SERVER] Player "+context.getSender().getName().getString()+" is selling "+this.amount+" of "+this.itemID+" with a market order");
                 break;
         }
     }
@@ -516,15 +533,6 @@ public class ServerMarket implements ServerSaveable
             item.removeSubscriber(player);
         }
     }
-
-   /* public static void updateBot()
-    {
-        for(ServerTradeItem item : tradeItems.values())
-        {
-            item.updateBot();
-        }
-    }*/
-
     @Override
     public boolean save(CompoundTag tag) {
         boolean success = true;

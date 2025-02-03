@@ -60,7 +60,7 @@ StockMarket is a Minecraft mod that brings a better way for trading to the game.
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.6-green)    | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-fabric-1.20.6] <br>                                                                             |                                                                                                                                                             |                                                                                                                                                             | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-neoforge-1.20.6]  |
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.4-green)    | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-fabric-1.20.4] <br>                                                                             | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-forge-1.20.4] <br>                                                                            | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-quilt-1.20.4] <br>                                                                            |                                                                                                                                                                   |
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.2-green)    | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-fabric-1.20.2] <br>                                                                             | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-forge-1.20.2] <br>                                                                            | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-quilt-1.20.2] <br>                                                                            |                                                                                                                                                                   |
-| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.1-green)    | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-fabric-1.20.1] <br> [![Version](https://img.shields.io/badge/v1.2.0-blue)][1.2.0-fabric-1.20.1] | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-forge-1.20.1] <br> [![Version](https://img.shields.io/badge/v1.2.0-blue)][1.2.0-forge-1.20.1] | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-quilt-1.20.1] <br> [![Version](https://img.shields.io/badge/v1.2.0-blue)][1.2.0-quilt-1.20.1] |                                                                                                                                                                   |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.1-green)    | [![Version](https://img.shields.io/badge/v1.2.3-green)][1.2.3-fabric-1.20.1] <br> [![Version](https://img.shields.io/badge/v1.2.0-blue)][1.2.0-fabric-1.20.1] | [![Version](https://img.shields.io/badge/v1.2.3-green)][1.2.3-forge-1.20.1] <br> [![Version](https://img.shields.io/badge/v1.2.0-blue)][1.2.0-forge-1.20.1] | [![Version](https://img.shields.io/badge/v1.2.3-green)][1.2.3-quilt-1.20.1] <br> [![Version](https://img.shields.io/badge/v1.2.0-blue)][1.2.0-quilt-1.20.1] |                                                                                                                                                                   |
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.4-green)    | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-fabric-1.19.4] <br>                                                                             | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-forge-1.19.4] <br>                                                                            |                                                                             <br>                                                                            |                                                                                                                                                                   |
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.3-green)    | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-fabric-1.19.3] <br>                                                                             | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-forge-1.19.3] <br>                                                                            | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-quilt-1.19.3] <br>                                                                            |                                                                                                                                                                   |
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.2-green)    | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-fabric-1.19.2] <br>                                                                             | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-forge-1.19.2] <br>                                                                            | [![Version](https://img.shields.io/badge/v1.2.1-green)][1.2.1-quilt-1.19.2] <br>                                                                            |                                                                                                                                                                   |
@@ -76,13 +76,13 @@ StockMarket is a Minecraft mod that brings a better way for trading to the game.
 [1.2.0-quilt-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6070944
 
 
-<!--	V1.2.1	-->
+<!--	V1.2.1 & 1.2.3	-->
 [1.2.1-fabric-1.21.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075091
 [1.2.1-fabric-1.21]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075085
 [1.2.1-fabric-1.20.6]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075078
 [1.2.1-fabric-1.20.4]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075073
 [1.2.1-fabric-1.20.2]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075063
-[1.2.1-fabric-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075058
+[1.2.3-fabric-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6100770
 [1.2.1-fabric-1.19.4]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075055
 [1.2.1-fabric-1.19.3]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075051
 [1.2.1-fabric-1.19.2]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075019
@@ -90,14 +90,14 @@ StockMarket is a Minecraft mod that brings a better way for trading to the game.
 
 [1.2.1-forge-1.20.4]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075076
 [1.2.1-forge-1.20.2]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075065
-[1.2.1-forge-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075059
+[1.2.3-forge-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6100775
 [1.2.1-forge-1.19.4]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075056
 [1.2.1-forge-1.19.3]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075052
 [1.2.1-forge-1.19.2]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075021
 					 
 [1.2.1-quilt-1.20.4]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075077
 [1.2.1-quilt-1.20.2]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075072
-[1.2.1-quilt-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075062
+[1.2.3-quilt-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6100774
 [1.2.1-quilt-1.19.3]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075053
 [1.2.1-quilt-1.19.2]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6075045
 
@@ -252,11 +252,24 @@ Each player receives its bank account with 0 balance.
     You may need to type the <b>"</b> in order to type a string that contains <b>:</b>.<br>
     <code>/StockMarket "minecraft:copper_ingot" create</code>
 </details>
+<details close> 
+    <summary> 
+      <b>Remove a market</b>
+    </summary>
+    Replace the <b>[itemID]</b> with the minecraft item ID for which you want to remove the market.<br>
+    Check out the website <a href="https://minecraftitemids.com/">https://minecraftitemids.com/</a> to find the item ID you need.<br>
+    <code>/StockMarket [itemID] remove</code><br>
+    You may need to type the <b>"</b> in order to type a string that contains <b>:</b>.<br>
+    <code>/StockMarket "minecraft:copper_ingot" remove</code><br>
+    Open positions from players will be automaticly closed.<br>
+</details>
 
 <details close> 
     <summary> 
       <b>Creating a custom bot</b>
     </summary>
+    <b>There is now a GUI that lets you create and manage the bots. No complicate command line usage is needed any more.<br>
+    Go to the next expandable section "Change bot settings" to learn about that</b><br><br>
     To create a bot from scratch make sure the market, for which you want to create the bot, already exists. <br>
     Type the following command, replace the item ID with your markets item ID.<br>
     <code>/StockMarket "minecraft:copper_ingot" bot create</code><br>
@@ -291,8 +304,23 @@ Each player receives its bank account with 0 balance.
     <summary> 
       <b>Change bot settings</b>
     </summary>
-    <span class="icon">🚧</span>
-    Work in progress
+    <!-- <span class="icon">🚧</span> -->
+    Just type the command <code>/StockMarket BotSettingsGUI</code><br>
+    This opens a gui that lets you change all settings from a bot.<br>
+    - <b>Change Item</b> to select a market.<br>
+    - <b>Save Settings</b> to save the current settings which are listed below.<br>
+    - <b>Destroy Bot/Create Bot</b> to delete or create a bot for that item.<br>
+    - <b>Bot Bank</b> to access the bank account of the bot to set its balance.<br>
+    <div style="border-left: 7px solid #f39c12; background-color: #fcf8e3; padding: 20px; margin: 10px 0;">
+      <p><strong>⚠️ Warning:</strong> Do not set the item balance to 0 since this will break the bot.</br>
+       The bot must always have some items and money, otherwise it can't place orders.</p>
+    </div>
+    ⚠️ Be aware, when changing settings to other values, depending on the scale it can lead to large market change.<br>
+    I reccoment to try it on a single player to get a feeling for it. There are so many differend possibilities the bot can react to it.<br>
+    🚧A detaild explanation for each setting will come soon.
+    <div align="center">
+        <img src="documentation/images/BotSettingsGUI.png"> 
+    </div>
 </details>
 
 
@@ -302,10 +330,15 @@ Each player receives its bank account with 0 balance.
 |---------|-------------|------------|
 | /StockMarket setPriceCandleTimeInterval [seconds]                         | Set the interval for the price candles. (Each candle will represent this amount of time) | :heavy_check_mark: |
 | /StockMarket createDefaultBots                                            | Create default bots                           | :heavy_check_mark: |
+| /StockMarket createDefaultBot [itemID]                                    | Create a default bot for that item if presets are available | :heavy_check_mark: |
 | /StockMarket order cancelAll                                              | Cancel all orders                             |  |
 | /StockMarket order cancelAll [itemID]                                     | Cancel all orders of an item                  |  |
 | /StockMarket order [username] cancelAll                                   | Cancel all orders of a player                 | :heavy_check_mark: |
 | /StockMarket order [username] cancelAll [itemID]                          | Cancel all orders of a player for an item     | :heavy_check_mark: |
+| /StockMarket BotSettingsGUI                                               | Open the settings GUI for the market bots     | :heavy_check_mark: |
+| /StockMarket ManagementGUI                                                | Open the management GUI to create and remove trading items | :heavy_check_mark: |
+| /StockMarket save                                                         | Save the Stockmarket data                     | :heavy_check_mark: |
+| /StockMarket load                                                         | Load the Stockamrket data                     | :heavy_check_mark: |
 | /StockMarket [itemID] bot settings get                                    | Get bot settings                         		| :heavy_check_mark: |
 | /StockMarket [itemID] bot settings set enabled                            | Enable bot                               		| :heavy_check_mark: |
 | /StockMarket [itemID] bot settings set disabled                           | Disable bot                              		| :heavy_check_mark: |
@@ -327,13 +360,16 @@ Each player receives its bank account with 0 balance.
 | /StockMarket [itemID] bot settings set pidP [pidP]                        | Set PID P                                		| :heavy_check_mark: |
 | /StockMarket [itemID] bot settings set pidI [pidI]                        | Set PID I                                		| :heavy_check_mark: |
 | /StockMarket [itemID] bot settings set pidD [pidD]                        | Set PID D                                		| :heavy_check_mark: |
-| /StockMarket [itemID] bot settings set pidIBounds [bounds]                | Set PID I bounds, abs(I) will be [ pidIBounds | :heavy_check_mark: |
+| /StockMarket [itemID] bot settings set pidIBounds [bounds]                | Set PID I bounds, abs(I) will be [pidIBounds] | :heavy_check_mark: |
 | /StockMarket [itemID] bot settings set pidIntegratedError [pidIntegratedError] | Set the current integrated error of the PID controller | :heavy_check_mark: |
 | /StockMarket [itemID] bot create                                          | Create bot                               		| :heavy_check_mark: |
 | /StockMarket [itemID] bot remove                                          | Remove bot                               		| :heavy_check_mark: |
 | /StockMarket [itemID] create                                              | Create marketplace                       		| :heavy_check_mark: |
 | /StockMarket [itemID] remove                                              | Remove marketplace                            | :heavy_check_mark: |
+| /StockMarket [itemID] open                                                | Open the marketplace for trading              | :heavy_check_mark: |
+| /StockMarket [itemID] close                                               | Close the marketplace for trading             | :heavy_check_mark: |
 | /StockMarket [itemID] currentPrice                                        | Get current price                        		| :heavy_check_mark: |
+
 
 
 

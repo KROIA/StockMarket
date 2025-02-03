@@ -8,14 +8,15 @@ import com.mojang.brigadier.arguments.LongArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.PlayerUtilities;
-import net.kroia.stockmarket.StockMarketClientHooks;
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import net.kroia.stockmarket.networking.packet.server_sender.update.OpenScreenPacket;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncBotSettingsPacket;
 import net.kroia.stockmarket.util.ServerPlayerList;
+import net.kroia.stockmarket.util.StockMarketDataHandler;
 import net.kroia.stockmarket.util.StockMarketTextMessages;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -24,6 +25,7 @@ import net.minecraft.server.level.ServerPlayer;
 
 import java.util.ArrayList;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 public class StockMarketCommands {
@@ -33,11 +35,13 @@ public class StockMarketCommands {
 
         // /StockMarket setPriceCandleTimeInterval <seconds>                            - Set the interval for the price candles. (Each candle will represent this amount of time)
         // /StockMarket createDefaultBots                                               - Create default bots
+        // /StockMarket createDefaultBot <itemID>                                       - Create a default bot for that item if presets are available
         // /StockMarket order cancelAll                                                 - Cancel all orders
         // /StockMarket order cancelAll <itemID>                                        - Cancel all orders of an item
         // /StockMarket order <username> cancelAll                                      - Cancel all orders of a player
         // /StockMarket order <username> cancelAll <itemID>                             - Cancel all orders of a player for an item
         // /StockMarket BotSettingsGUI                                                  - Open the settings GUI for the market bots
+        // /StockMarket ManagementGUI                                                   - Open the management GUI to create and remove trading items
         // /StockMarket <itemID> bot settings get                                       - Get bot settings
         // /StockMarket <itemID> bot settings set enabled                               - Enable bot
         // /StockMarket <itemID> bot settings set disabled                              - Disable bot
@@ -60,7 +64,11 @@ public class StockMarketCommands {
         // /StockMarket <itemID> bot remove                                             - Remove bot
         // /StockMarket <itemID> create                                                 - Create marketplace
         // /StockMarket <itemID> remove                                                 - Remove marketplace
+        // /StockMarket <itemID> open                                                   - Open the marketplace for trading
+        // /StockMarket <itemID> close                                                  - Close the marketplace for trading
         // /StockMarket <itemID> currentPrice                                           - Get current price
+        // /StockMarket save                                                            - Save market data
+        // /StockMarket load                                                            - Load market data
 
         dispatcher.register(
                 Commands.literal("StockMarket")
@@ -96,6 +104,31 @@ public class StockMarketCommands {
 
                                     return Command.SINGLE_SUCCESS;
                                 })
+                        )
+                        .then(Commands.literal("createDefaultBot")
+                                .requires(source -> source.hasPermission(2))
+                                .then(Commands.argument("itemID", StringArgumentType.string()).suggests((context, builder) -> {
+                                                    Set<String> suggestions = StockMarketModSettings.MarketBot.getBotBuilder().keySet();
+                                                    for (String suggestion : suggestions) {
+                                                        builder.suggest("\"" + suggestion + "\"");
+                                                    }
+                                                    return builder.buildFuture();
+                                                })
+                                                .executes(context -> {
+                                                    CommandSourceStack source = context.getSource();
+                                                    ServerPlayer player = source.getPlayerOrException();
+                                                    String itemID = StringArgumentType.getString(context, "itemID");
+                                                    if(ServerMarket.createDefaultBot(itemID))
+                                                    {
+                                                        PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getDefaultBotCreatedMessage(itemID));
+                                                    }
+                                                    else
+                                                    {
+                                                        PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getCanNotCreateDefaultBotMessage(itemID));
+                                                    }
+                                                    return Command.SINGLE_SUCCESS;
+                                                })
+                                )
                         )
                         .then(Commands.literal("order")
                                 .then(Commands.literal("cancelAll")
@@ -175,6 +208,25 @@ public class StockMarketCommands {
                                         else {
                                             PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getNoTradingItemAvailableMessage());
                                         }
+                                    }
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                        )
+                        .then(Commands.literal("ManagementGUI")
+                                .requires(source -> source.hasPermission(2))
+                                .executes(context -> {
+                                    ServerPlayer player = context.getSource().getPlayer();
+                                    if(player != null) {
+                                        OpenScreenPacket.sendPacket(player, OpenScreenPacket.ScreenType.STOCKMARKET_MANAGEMENT);
+                                        /*
+                                        ArrayList<String> suggestions = ServerMarket.getTradeItemIDs();
+                                        if(!suggestions.isEmpty()) {
+                                            //String itemID = suggestions.get(0);
+                                            //SyncBotSettingsPacket.sendPacket(player, itemID, ServerMarket.getBotUserUUID());
+                                            }
+                                        else {
+                                            PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getNoTradingItemAvailableMessage());
+                                        }*/
                                     }
                                     return Command.SINGLE_SUCCESS;
                                 })
@@ -562,9 +614,15 @@ public class StockMarketCommands {
                                                     if (ServerMarket.hasItem(itemID)) {
                                                         PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getMarketplaceAlreadyExistingMessage(itemID));
                                                     } else {
-                                                        ServerMarket.addTradeItem(itemID, 0);
-                                                        // Notify all serverPlayers
-                                                        PlayerUtilities.printToClientConsole(StockMarketTextMessages.getMarketplaceCreatedMessage(itemID));
+                                                        if(ServerMarket.addTradeItem(itemID, 0))
+                                                        {
+                                                            // Notify all serverPlayers
+                                                            PlayerUtilities.printToClientConsole(StockMarketTextMessages.getMarketplaceCreatedMessage(itemID));
+                                                        }
+                                                        else
+                                                        {
+                                                            PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getMarketplaceIsNotAllowedMessage(itemID));
+                                                        }
                                                     }
                                                     return Command.SINGLE_SUCCESS;
                                                 })
@@ -589,6 +647,46 @@ public class StockMarketCommands {
                                                     return Command.SINGLE_SUCCESS;
                                                 })
                                         )
+                                        .then(Commands.literal("open")
+                                                .executes(context -> {
+                                                    CommandSourceStack source = context.getSource();
+                                                    ServerPlayer player = source.getPlayerOrException();
+                                                    String orgItemID = StringArgumentType.getString(context, "itemID");
+                                                    String itemID = ItemUtilities.getNormalizedItemID(orgItemID);
+                                                    if (itemID == null) {
+                                                        PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getInvalidItemIDMessage(orgItemID));
+                                                        return Command.SINGLE_SUCCESS;
+                                                    }
+                                                    if (!ServerMarket.hasItem(itemID)) {
+                                                        PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getMarketplaceNotExistingMessage(itemID));
+                                                    } else {
+                                                        ServerMarket.setMarketOpen(itemID, true);
+                                                        // Notify all serverPlayers
+                                                        PlayerUtilities.printToClientConsole(StockMarketTextMessages.getMarketplaceIsNowOpenMessage(itemID));
+                                                    }
+                                                    return Command.SINGLE_SUCCESS;
+                                                })
+                                        )
+                                        .then(Commands.literal("close")
+                                                .executes(context -> {
+                                                    CommandSourceStack source = context.getSource();
+                                                    ServerPlayer player = source.getPlayerOrException();
+                                                    String orgItemID = StringArgumentType.getString(context, "itemID");
+                                                    String itemID = ItemUtilities.getNormalizedItemID(orgItemID);
+                                                    if (itemID == null) {
+                                                        PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getInvalidItemIDMessage(orgItemID));
+                                                        return Command.SINGLE_SUCCESS;
+                                                    }
+                                                    if (!ServerMarket.hasItem(itemID)) {
+                                                        PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getMarketplaceNotExistingMessage(itemID));
+                                                    } else {
+                                                        ServerMarket.setMarketOpen(itemID, false);
+                                                        // Notify all serverPlayers
+                                                        PlayerUtilities.printToClientConsole(StockMarketTextMessages.getMarketplaceIsNowClosedMessage(itemID));
+                                                    }
+                                                    return Command.SINGLE_SUCCESS;
+                                                })
+                                        )
                                         .then(Commands.literal("currentPrice")
                                                 .executes(context -> {
                                                     CommandSourceStack source = context.getSource();
@@ -609,6 +707,34 @@ public class StockMarketCommands {
                                                 })
                                         )
 
+                        )
+                        .then(Commands.literal("save")
+                                .requires(source -> source.hasPermission(2))
+                                .executes(context -> {
+                                    CommandSourceStack source = context.getSource();
+                                    ServerPlayer player = source.getPlayerOrException();
+
+                                    if(StockMarketDataHandler.saveAll())
+                                        PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getStockMarketDataSavedMessage());
+                                    else
+                                        PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getStockMarketDataSaveFailedMessage());
+
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                        )
+                        .then(Commands.literal("load")
+                                .requires(source -> source.hasPermission(2))
+                                .executes(context -> {
+                                    CommandSourceStack source = context.getSource();
+                                    ServerPlayer player = source.getPlayerOrException();
+
+                                    if(StockMarketDataHandler.loadAll())
+                                        PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getStockMarketDataLoadedMessage());
+                                    else
+                                        PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getStockMarketDataLoadFailedMessage());
+
+                                    return Command.SINGLE_SUCCESS;
+                                })
                         )
         );
     }
