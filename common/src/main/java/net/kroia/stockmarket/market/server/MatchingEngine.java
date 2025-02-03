@@ -14,7 +14,6 @@ import net.kroia.stockmarket.util.StockMarketTextMessages;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.player.Player;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -28,37 +27,29 @@ public class MatchingEngine implements ServerSaveable {
     private int price;
     private int tradeVolume;
 
+    private boolean marketOpen = true;
+
     // Create a sorted queue for buy and sell orders, sorted by price.
     private final PriorityQueue<LimitOrder> limitBuyOrders = new PriorityQueue<>((o1, o2) -> Double.compare(o2.getPrice(), o1.getPrice()));
     private final PriorityQueue<LimitOrder> limitSellOrders = new PriorityQueue<>(Comparator.comparingDouble(LimitOrder::getPrice));
 
     private PriceHistory priceHistory;
-   // private ServerTradingBot tradingBot;
     public MatchingEngine(int initialPrice, PriceHistory priceHistory)
     {
         this.priceHistory = priceHistory;
         this.price = initialPrice;
         tradeVolume = 0;
-       // this.tradingBot = tradingBot;
     }
-    /*public MatchingEngine(int initialPrice) {
-        this.price = initialPrice;
-        tradeVolume = 0;
-        tradingBot = null;
-    }*/
-
-  /*  public void setTradingBot(ServerTradingBot tradingBot)
-    {
-        this.tradingBot = tradingBot;
-    }*/
-
-
-
 
     public void addOrder(Order order)
     {
         if(order == null)
             return;
+        if(!marketOpen && !order.isBot())
+        {
+            order.markAsInvalid(StockMarketTextMessages.getOrderInvalidReasonMarketClosedMessage());
+            return;
+        }
         if(order.getAmount() == 0)
         {
             order.markAsProcessed();
@@ -71,7 +62,6 @@ public class MatchingEngine implements ServerSaveable {
     {
         if (order instanceof LimitOrder limitOrder)
         {
-            //limitOrder.setAveragePrice(limitOrder.getPrice());
             if(!processLimitOrder(limitOrder))
             {
                 if (limitOrder.isBuy())
@@ -88,7 +78,6 @@ public class MatchingEngine implements ServerSaveable {
             }
         } else if (order instanceof MarketOrder marketOrder) {
             processMarketOrder(marketOrder);
-            //marketOrder.notifyPlayer();
         } else {
             throw new IllegalArgumentException("Invalid order type");
         }
@@ -137,7 +126,7 @@ public class MatchingEngine implements ServerSaveable {
         int fillVolume = Math.abs(marketOrder.getAmount());
         for(LimitOrder limitOrder : limitOrders)
         {
-            int filledVolume = TransactionEnginge.fill(marketOrder, limitOrder, limitOrder.getPrice());
+            int filledVolume = TransactionEngine.fill(marketOrder, limitOrder, limitOrder.getPrice());
 
             if(filledVolume != 0) {
                 setPrice(limitOrder.getPrice());
@@ -152,7 +141,6 @@ public class MatchingEngine implements ServerSaveable {
                 if(fillVolume<0)
                 {
                     limitOrders.removeAll(toRemove);
-                    //throw new IllegalStateException("Market order overfilled");
                     StockMarketMod.LOGGER.error("Market order overfilled: "+marketOrder);
                 }
                 break;
@@ -196,7 +184,7 @@ public class MatchingEngine implements ServerSaveable {
             if(fillWith == null)
                 continue;
 
-            int filledVolume = TransactionEnginge.fill(limitOrder, fillWith, fillWith.getPrice());
+            int filledVolume = TransactionEngine.fill(limitOrder, fillWith, fillWith.getPrice());
             if(filledVolume != 0)
             {
                 setPrice(fillWith.getPrice());
@@ -210,7 +198,6 @@ public class MatchingEngine implements ServerSaveable {
                 if(fillVolume<0)
                 {
                     limitOrders.removeAll(toRemove);
-                    //throw new IllegalStateException("Limit order overfilled");
                     StockMarketMod.LOGGER.error("Limit order overfilled: "+limitOrder);
                 }
                 break;
@@ -238,6 +225,12 @@ public class MatchingEngine implements ServerSaveable {
     }
     public int getTradeVolume() {
         return tradeVolume;
+    }
+    public boolean isMarketOpen() {
+        return marketOpen;
+    }
+    public void setMarketOpen(boolean marketOpen) {
+        this.marketOpen = marketOpen;
     }
     public int resetTradeVolume() {
         int volume = tradeVolume;
@@ -348,35 +341,7 @@ public class MatchingEngine implements ServerSaveable {
         }
         return false;
     }
-    /*public int cancleOrdersUntilItemVolumeReached(UUID playerOwner, int volume)
-    {
-        int volumeRemoved = 0;
-        ArrayList<LimitOrder> toRemove = new ArrayList<>();
-        for(LimitOrder order : limitBuyOrders)
-        {
-            if(order.getPlayerUUID().equals(playerOwner))
-            {
-                volumeRemoved += order.getAmount();
-                toRemove.add(order);
-                if(volumeRemoved >= volume)
-                    break;
-            }
-        }
-        limitBuyOrders.removeAll(toRemove);
-        toRemove.clear();
-        for(LimitOrder order : limitSellOrders)
-        {
-            if(order.getPlayerUUID().equals(playerOwner))
-            {
-                volumeRemoved += order.getAmount();
-                toRemove.add(order);
-                if(volumeRemoved >= volume)
-                    break;
-            }
-        }
-        limitSellOrders.removeAll(toRemove);
-        return volumeRemoved;
-    }*/
+
     public boolean removeOrder_internal(LimitOrder toRemove)
     {
         return limitBuyOrders.remove(toRemove) || limitSellOrders.remove(toRemove);
@@ -492,6 +457,7 @@ public class MatchingEngine implements ServerSaveable {
         tag.putInt("trade_volume", tradeVolume);
         tag.put("buy_orders", buyOrdersList);
         tag.put("sell_orders", sellOrdersList);
+        tag.putBoolean("market_open", marketOpen);
         return success;
     }
 
@@ -509,6 +475,10 @@ public class MatchingEngine implements ServerSaveable {
         tradeVolume = tag.getInt("trade_volume");
         ListTag buyOrdersList = tag.getList("buy_orders", 10);
         ListTag sellOrdersList = tag.getList("sell_orders", 10);
+        if(tag.contains("market_open"))
+            marketOpen = tag.getBoolean("market_open");
+        else
+            marketOpen = true;
         for(int i = 0; i < buyOrdersList.size(); i++)
         {
             CompoundTag orderTag = buyOrdersList.getCompound(i);

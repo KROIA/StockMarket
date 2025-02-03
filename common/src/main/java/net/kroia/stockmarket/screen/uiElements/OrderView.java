@@ -94,13 +94,8 @@ public class OrderView extends GuiElement {
 
     @Override
     protected void layoutChanged() {
-
-
         int width = getWidth()-padding*2;
         int height = getHeight();
-
-
-
 
         int _dirWidthRatio = dirWidthRatio * width / sumRatio;
         int _amountWidthRatio = amountWidthRatio * width / sumRatio;

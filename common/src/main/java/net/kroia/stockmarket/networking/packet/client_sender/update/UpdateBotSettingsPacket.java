@@ -1,5 +1,9 @@
 package net.kroia.stockmarket.networking.packet.client_sender.update;
 
+import net.kroia.banksystem.banking.BankUser;
+import net.kroia.banksystem.banking.ServerBankManager;
+import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.banksystem.banking.bank.MoneyBank;
 import net.kroia.modutilities.networking.NetworkPacket;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
@@ -9,8 +13,6 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
-import java.util.UUID;
-
 public class UpdateBotSettingsPacket extends NetworkPacket {
 
     String itemID;
@@ -18,6 +20,11 @@ public class UpdateBotSettingsPacket extends NetworkPacket {
 
     private boolean destroyBot;
     private boolean createBot;
+    private boolean marketOpen;
+    private boolean setBotItemBalance;
+    private boolean setBotMoneyBalance;
+    private long itemBalance;
+    private long moneyBalance;
 
 
     private UpdateBotSettingsPacket() {
@@ -28,13 +35,31 @@ public class UpdateBotSettingsPacket extends NetworkPacket {
         super(buf);
     }
 
-    public static void sendPacket(String itemID, ServerVolatilityBot.Settings settings, boolean destroyBot, boolean createBot)
+    public static void sendPacket(String itemID, ServerVolatilityBot.Settings settings, boolean destroyBot, boolean createBot, boolean marketOpen)
     {
         UpdateBotSettingsPacket packet = new UpdateBotSettingsPacket();
         packet.itemID = itemID;
         packet.settings = settings;
         packet.destroyBot = destroyBot;
         packet.createBot = createBot;
+        packet.marketOpen = marketOpen;
+        packet.setBotItemBalance = false;
+        packet.setBotMoneyBalance = false;
+        StockMarketNetworking.sendToServer(packet);
+    }
+    public static void sendPacket(String itemID, ServerVolatilityBot.Settings settings, boolean destroyBot, boolean createBot, boolean marketOpen,
+                                  boolean setItemBalance, long itemBalance, boolean setMoneyBalance, long moneyBalance)
+    {
+        UpdateBotSettingsPacket packet = new UpdateBotSettingsPacket();
+        packet.itemID = itemID;
+        packet.settings = settings;
+        packet.destroyBot = destroyBot;
+        packet.createBot = createBot;
+        packet.marketOpen = marketOpen;
+        packet.setBotItemBalance = setItemBalance;
+        packet.setBotMoneyBalance = setMoneyBalance;
+        packet.itemBalance = itemBalance;
+        packet.moneyBalance = moneyBalance;
         StockMarketNetworking.sendToServer(packet);
     }
 
@@ -43,6 +68,11 @@ public class UpdateBotSettingsPacket extends NetworkPacket {
         buf.writeUtf(itemID);
         buf.writeBoolean(destroyBot);
         buf.writeBoolean(createBot);
+        buf.writeBoolean(marketOpen);
+        buf.writeBoolean(setBotItemBalance);
+        buf.writeBoolean(setBotMoneyBalance);
+        buf.writeLong(itemBalance);
+        buf.writeLong(moneyBalance);
         CompoundTag tag = new CompoundTag();
         settings.save(tag);
         buf.writeNbt(tag);
@@ -53,6 +83,11 @@ public class UpdateBotSettingsPacket extends NetworkPacket {
         itemID = buf.readUtf();
         destroyBot = buf.readBoolean();
         createBot = buf.readBoolean();
+        marketOpen = buf.readBoolean();
+        setBotItemBalance = buf.readBoolean();
+        setBotMoneyBalance = buf.readBoolean();
+        itemBalance = buf.readLong();
+        moneyBalance = buf.readLong();
         settings = new ServerVolatilityBot.Settings();
         settings.load(buf.readNbt());
 
@@ -76,6 +111,30 @@ public class UpdateBotSettingsPacket extends NetworkPacket {
             else {
                 if (bot instanceof ServerVolatilityBot volatilityBot) {
                     volatilityBot.setSettings(settings);
+                }
+            }
+            ServerMarket.setMarketOpen(itemID, marketOpen);
+            BankUser botBankUser = ServerBankManager.getUser(ServerMarket.getBotUserUUID());
+            if(setBotItemBalance)
+            {
+                Bank botBank = botBankUser.getBank(itemID);
+                if(botBank != null)
+                {
+                    botBank.setBalance(itemBalance);
+                }
+                else {
+                    botBank = botBankUser.createItemBank(itemID, itemBalance);
+                }
+            }
+            if(setBotMoneyBalance)
+            {
+                Bank botBank = botBankUser.getBank(MoneyBank.ITEM_ID);
+                if(botBank != null)
+                {
+                    botBank.deposit(moneyBalance);
+                }
+                else {
+                    botBank = botBankUser.createItemBank(MoneyBank.ITEM_ID, moneyBalance);
                 }
             }
         }
