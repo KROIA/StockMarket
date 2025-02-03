@@ -70,9 +70,6 @@ public class BotSetupScreen extends GuiScreen {
         addElement(backButton);
         addElement(nextButton);
 
-
-        //backButton.setEnabled(false);
-
         for (BotSetupGuiElement current : pages) {
             addElement(current);
             current.setEnabled(false);
@@ -126,7 +123,6 @@ public class BotSetupScreen extends GuiScreen {
             currentPage++;
             pages.get(currentPage).setEnabled(true);
             backButton.setLabel(BACK.getString());
-            //backButton.setEnabled(true);
             if(currentPage == pages.size()-1)
                 nextButton.setLabel(APPLY.getString());
         }

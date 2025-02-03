@@ -54,7 +54,6 @@ public class ClientTradeItem {
     {
         Order order = packet.getOrder();
         Order oldOrder = orders.get(order.getOrderID());
-        //orders.put(order.getOrderID(), order);
         boolean hasChanged = true;
         if(oldOrder != null)
         {
@@ -67,10 +66,6 @@ public class ClientTradeItem {
 
         if(hasChanged)
         {
-
-            // Print to user console
-            //StockMarketMod.printToClientConsole("Order: " + order.getOrderID() + " has been updated: "+order.toString());
-
             String limitText = "";
             if(order instanceof LimitOrder)
                 limitText = "\n  "+StockMarketTextMessages.getOrderLimitPriceMessage(((LimitOrder) order).getPrice());

@@ -121,9 +121,6 @@ public class TradeScreen extends GuiScreen {
         tradePanel.setItemStack(itemStack);
         ClientMarket.subscribeMarketUpdate(itemID);
         RequestBankDataPacket.sendRequest();
-        // Register the event listener when the screen is initialized
-
-
 
         int padding = 10;
         int spacing = 4;
@@ -187,9 +184,6 @@ public class TradeScreen extends GuiScreen {
     }
 
     public static void onAvailableTradeItemsChanged() {
-        // check if screen is visible
-        //if (instance.minecraft.screen == instance) {
-        //}
     }
 
     public static void updatePlotsData() {

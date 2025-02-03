@@ -129,8 +129,6 @@ public class BotSettingsScreen extends GuiScreen {
     }
     public static void openScreen(Screen parent)
     {
-        //if(itemID != null && !itemID.isEmpty())
-        //    ClientMarket.requestBotSettings(itemID); // Trigger request for bot settings
         BotSettingsScreen screen = new BotSettingsScreen(parent);
         Minecraft.getInstance().setScreen(screen);
     }

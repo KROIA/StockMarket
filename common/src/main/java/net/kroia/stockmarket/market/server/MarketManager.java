@@ -76,7 +76,6 @@ public class MarketManager implements ServerSaveable {
         bot.setParent(this);
         bot.setMatchingEngine(matchingEngine);
         tradingBot = bot;
-        //bot.setEnabled(true);
     }
     public void removeTradingBot()
     {

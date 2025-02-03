@@ -24,7 +24,6 @@ public abstract class Order {
     protected long orderID;
     protected String itemID;
     protected UUID playerUUID;
-    //private final String itemID;
     protected int amount;
     protected int filledAmount = 0;
     protected long transferedMoney = 0;
@@ -52,14 +51,12 @@ public abstract class Order {
         this.itemID = itemID;
         this.orderID = uniqueOrderID();
         this.playerUUID = playerUUID;
-        //this.itemID = itemID;
         this.amount = amount;
     }
     protected Order(UUID playerUUID, String itemID, int amount, boolean isBot) {
         this.itemID = itemID;
         this.orderID = uniqueOrderID();
         this.playerUUID = playerUUID;
-        //this.itemID = itemID;
         this.amount = amount;
         this.isBot = isBot;
     }
@@ -291,10 +288,9 @@ public abstract class Order {
         if(status == this.status)
             return;
         this.status = status;
-        if(/*StockMarketMod.isServer() && */!isBot)
-        {
-            SyncOrderPacket.sendResponse(this);
-        }
+        if(isBot)
+            return;
+        SyncOrderPacket.sendResponse(this);
     }
 
     public void notifyPlayer() {

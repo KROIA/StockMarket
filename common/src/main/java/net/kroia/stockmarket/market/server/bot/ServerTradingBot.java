@@ -65,26 +65,12 @@ public class ServerTradingBot implements ServerSaveable {
             return true;
         }
     }
-
-
-    //protected MarketManager parent;
     protected Settings settings;
     private MatchingEngine matchingEngine;
     MarketManager parent;
 
-
-    //protected final int maxOrderCount = ModSettings.MarketBot.MAX_ORDERS;
-
-    //protected double volumeScale = ModSettings.MarketBot.VOLUME_SCALE;
-    //protected double volumeSpread = ModSettings.MarketBot.VOLUME_SPREAD;
-
     protected ArrayList<LimitOrder> buyOrders = new ArrayList<>();
     protected ArrayList<LimitOrder> sellOrders = new ArrayList<>();
-
-
-    //protected long updateTimerIntervallMS = ModSettings.MarketBot.UPDATE_TIMER_INTERVAL_MS;
-
-    //protected boolean enabled = true;
     private long[] tmp_load_buyOrderIDs = null;
     private long[] tmp_load_sellOrderIDs = null;
 
@@ -93,11 +79,9 @@ public class ServerTradingBot implements ServerSaveable {
 
     public ServerTradingBot() {
         settings = new Settings();
-       // MinecraftForge.EVENT_BUS.addListener(this::onServerTick);
     }
     protected ServerTradingBot(Settings settings) {
         this.settings = settings;
-        //MinecraftForge.EVENT_BUS.addListener(this::onServerTick);
     }
 
     public void setSettings(Settings settings)
@@ -257,7 +241,6 @@ public class ServerTradingBot implements ServerSaveable {
         Bank moneyBank = user.getMoneyBank();
         String itemID = parent.getItemID();
         Bank itemBank = user.getBank(itemID);
-        UUID botUUID = getUUID();
 
         int priceIncerement = 1;
         int currentPrice = matchingEngine.getPrice();
@@ -492,14 +475,11 @@ public class ServerTradingBot implements ServerSaveable {
     public void onServerTick(MinecraftServer server) {
         if(!this.settings.enabled || matchingEngine == null || parent == null)
             return;
-        //if (event.phase == TickEvent.Phase.END)
-        {
-            long currentTime = System.currentTimeMillis();
+        long currentTime = System.currentTimeMillis();
 
-            if(currentTime - lastMillis > this.settings.updateTimerIntervallMS) {
-                lastMillis = currentTime;
-                update();
-            }
+        if(currentTime - lastMillis > this.settings.updateTimerIntervallMS) {
+            lastMillis = currentTime;
+            update();
         }
     }
 }

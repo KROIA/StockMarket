@@ -60,7 +60,6 @@ public class StockMarketManagementScreen extends GuiScreen {
 
         newTradingItemButton = new Button(NEW_TRADING_ITEM_BUTTON.getString());
         newTradingItemButton.setOnFallingEdge(() -> {
-            //ArrayList<String> items = ClientBankManager.getAllowedItemIDs();
             ArrayList<String> items = ClientBankManager.getPotentialBankItemIDs();
             items.removeAll(BankSystemModSettings.Bank.POTENTIAL_ITEM_BLACKLIST);
             items.removeAll(StockMarketModSettings.Market.NOT_TRADABLE_ITEMS);

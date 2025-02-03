@@ -84,9 +84,5 @@ public class MarketOrder extends Order {
     @Override
     public void copyFrom(Order other) {
         super.copyFrom(other);
-        /*if(other instanceof MarketOrder)
-        {
-            MarketOrder otherMarketOrder = (MarketOrder) other;
-        }*/
     }
 }
