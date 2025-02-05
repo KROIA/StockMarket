@@ -22,6 +22,7 @@
   "message.stockmarket.marketplace_already_existing": "Marketplace for {item_name} already exists",
   "message.stockmarket.marketplace_is_now_closed": "Marketplace for {item_name} is now closed",
   "message.stockmarket.marketplace_is_now_open": "Marketplace for {item_name} is now open for trading",
+  "message.stockmarket.marketplace_is_not_allowed": "Marketplace for {item_name} is not allowed",
   "message.stockmarket.marketplace_deleted": "{item_name} can no longer be traded on the stock market",
   "message.stockmarket.marketplace_created": "{item_name} can now be traded on the stock market",
   "message.stockmarket.current_price_of": "Current price of {item_name}: {current_price}",
@@ -31,6 +32,8 @@
   "message.stockmarket.stockmarket_data_save_failed": "Failed to save stockmarket data",
   "message.stockmarket.stockmarket_data_load_failed": "Failed to load stockmarket data",
   "message.stockmarket.stockmarket_data_loaded": "Stockmarket data loaded",
+  "message.stockmarket.default_bot_created": "Default bot created for item: {item_name}",
+  "message.stockmarket.can_not_create_default_bot": "Can not create default bot for item: {item_name}",
 
   "message.stockmarket.bot_created": "Bot created for item: {item_name}, you can change its settings and than enable it",
   "message.stockmarket.bot_deleted": "Bot deleted for item: {item_name}",
@@ -88,6 +91,7 @@
   "gui.stockmarket.bot_settings_screen.bot_destroy": "Destroy Bot",
   "gui.stockmarket.bot_settings_screen.bot_bank": "Bot bank",
   "gui.stockmarket.bot_settings_screen.market_open": "Market Open",
+  "gui.stockmarket.bot_settings_screen.open_bot_setup": "Bot Setup",
 
   "gui.stockmarket.bot_settings_screen.setting_enabled": "Enabled",
   "gui.stockmarket.bot_settings_screen.settings_max_order_count": "Max Order Count",
@@ -108,5 +112,38 @@
   "gui.stockmarket.bot_settings_screen.settings_pid_i": "PID I",
   "gui.stockmarket.bot_settings_screen.settings_pid_d": "PID D",
   "gui.stockmarket.bot_settings_screen.settings_pid_ibounds": "PID I Bounds",
-  "gui.stockmarket.bot_settings_screen.settings_pid_integrated_err": "PID Integrated Error"
+  "gui.stockmarket.bot_settings_screen.settings_pid_integrated_err": "PID Integrated Error",
+
+  "gui.stockmarket.management_screen.title": "Stock Market Management",
+  "gui.stockmarket.management_screen.trading_items": "Trading Items",
+  "gui.stockmarket.management_screen.new_trading_item": "New Trading Item",
+  "gui.stockmarket.management_screen.remove_trading_item": "Remove Trading Item",
+  "gui.stockmarket.management_screen.ask_remove_title": "Remove Trading Item",
+  "gui.stockmarket.management_screen.ask_remove_message": "Are you sure you want to remove the selected item from the stockmarket?\nAll open Orders will be closed and the market bot will be deleted.",
+  "gui.stockmarket.management_screen.bot_settings": "Bot Settings",
+
+  "gui.stockmarket.bot_settings_setup_screen.cancel": "Cancel",
+  "gui.stockmarket.bot_settings_setup_screen.back": "Back",
+  "gui.stockmarket.bot_settings_setup_screen.next": "Next",
+  "gui.stockmarket.bot_settings_setup_screen.apply": "Apply",
+
+  "gui.stockmarket.bot_settings_setup_screen_rarity.question": "What is the rarity of the item?\nHow often does it appear in the game?",
+  "gui.stockmarket.bot_settings_setup_screen_rarity.low": "More common",
+  "gui.stockmarket.bot_settings_setup_screen_rarity.high": "More rare",
+
+  "gui.stockmarket.bot_settings_setup_screen_estimatedValue.question": "What is the estimated value of the item?\nHow much is it worth?\nThis value is used to calculate the initial price of the item.",
+
+  "gui.stockmarket.bot_settings_setup_screen_volatility.question": "How volatile is the item?\nHow much does the price change?\nFor more stable markets, choose a lower value.\nFor highly speculative markets, choose a higher value.",
+  "gui.stockmarket.bot_settings_setup_screen_volatility.low": "Lower volatility",
+  "gui.stockmarket.bot_settings_setup_screen_volatility.high": "Higher volatility",
+
+  "gui.stockmarket.bot_settings_setup_screen_market_speed.question": "How fast should the bot trade the item?\nSet the Interval in milliseconds.\nFor faster trading, choose a lower value.\nFor slower trading, choose a higher value.\nA faster market may impact the server performance.\nMinimum: 1000ms\nMaximum: 10000ms",
+  "gui.stockmarket.bot_settings_setup_screen_market_speed.low": "Slow",
+  "gui.stockmarket.bot_settings_setup_screen_market_speed.high": "Fast",
+
+  "gui.stockmarket.bot_settings_setup_screen_change_bot_stocks.auto_change_money_balance": "Change the money balance of the bot automatically.\nThis is done in order to have enough liquidity\nto make buy orders.",
+  "gui.stockmarket.bot_settings_setup_screen_change_bot_stocks.auto_change_item_balance": "Change the item balance of the bot automatically.\nThis is done in order to have enough item supply\nto make sell orders."
+
+
+
 }

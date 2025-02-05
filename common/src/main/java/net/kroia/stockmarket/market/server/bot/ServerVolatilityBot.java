@@ -88,6 +88,15 @@ public class ServerVolatilityBot extends ServerTradingBot {
             this.pid_i = pid_i;
             this.pid_iBound = pid_iBound;
         }
+        public Settings(int price, double rarity, double volatility, long udateTimerIntervallMS)
+        {
+            this();
+            this.pid_p = 0.1;
+            this.pid_d = -0.01;
+            this.pid_i = 0.001;
+            this.pid_iBound = 1;
+            setFromData(price, rarity, volatility, udateTimerIntervallMS);
+        }
         @Override
         public boolean save(CompoundTag tag) {
             boolean success = super.save(tag);
@@ -155,6 +164,31 @@ public class ServerVolatilityBot extends ServerTradingBot {
             pid_iBound = tag.getDouble("pid_iBound");
 
             return success;
+        }
+
+        public void load(Settings other)
+        {
+            CompoundTag tag = new CompoundTag();
+            other.save(tag);
+            load(tag);
+        }
+        public void setFromData(int price, double rarity, double volatility, long udateTimerIntervallMS)
+        {
+            this.targetItemBalance = (long)(((1-rarity) * (1-rarity)) * 100000)+5000;
+            this.volatility = volatility*100;
+            this.imbalancePriceRange = price * 2;
+            this.updateTimerIntervallMS = udateTimerIntervallMS;
+
+            if(volatility > 0.25)
+            {
+                this.imbalancePriceChangeQuadFactor = (volatility-0.25) * 8;
+            }else {
+                this.imbalancePriceChangeQuadFactor = 0;
+            }
+            this.imbalancePriceChangeFactor = volatility*0.1;
+            this.volumeRandomness = volatility*2;
+            this.volumeScale = (1-rarity) * 100;
+            this.orderRandomness = volatility * (1-rarity) * 5+1;
         }
     }
     private MeanRevertingRandomWalk randomWalk;
@@ -257,20 +291,6 @@ public class ServerVolatilityBot extends ServerTradingBot {
             volume = (int)-itemBank.getBalance()/2;
         if(currentPrice != 0 || volume > 0)
             marketTrade(volume);
-        //StockMarketMod.LOGGER.info("VolatilityBot: targetPrice: "+settings.targetPrice+" speed: "+speed+" volume: "+volume+" error: "+error+ " P: "+proportionalError+" D: "+derivativeError+" I: "+settings.integratedError);
-
-        /*StockMarketMod.LOGGER.info(String.format(
-                "VolatilityBot: %-12s %-12s %-8s %+.3f %-8s %+3.0f %-10s %+3.0f %-5s %+.3f %-3s %+.3f %-3s %+.3f",
-                "targetPrice:", settings.targetPrice,
-                "speed:", speed,
-                "volume:", (double)volume,
-                "error:", error,
-                "P:", proportionalError,
-                "D:", derivativeError,
-                "I:", settings.integratedError
-        ));*/
-
-
     }
 
 
@@ -286,11 +306,11 @@ public class ServerVolatilityBot extends ServerTradingBot {
             imbalanceFactor = Math.tanh((settings.targetItemBalance - currentItemBalance)/(double)settings.targetItemBalance/4)*0.5;
         }
         int startBuyPrice = currentPrice;
-        int startSellPrice = currentPrice;
+        int startSellPrice = currentPrice+1;
         if(currentPrice == 0)
-            startBuyPrice = 1;
+            startSellPrice = currentPrice+1;
 
-        for(int i=1; i<=this.settings.maxOrderCount/2; i++)
+        for(int i=0; i<this.settings.maxOrderCount/2; i++)
         {
             int sellPrice = startSellPrice + i*priceIncerement;
             int buyPrice = startBuyPrice - i*priceIncerement;
@@ -314,29 +334,6 @@ public class ServerVolatilityBot extends ServerTradingBot {
             }
         }
     }
-
-
-    /**
-     * Creates a disribution that can be mapped to buy and sell orders
-     * The distribution is normalized around x=0.
-     *   x < 0: buy order volume
-     *   x > 0: sell order volume
-     */
-   /* @Override
-    public int getVolumeDistribution(int x)
-    {
-        double fX = (double)Math.abs(x);
-        double exp = Math.exp(-fX*1.f/this.settings.volumeSpread);
-        double random = Math.random()*this.settings.volumeRandomness;
-
-        double volume = (super.settings.volumeScale*random) * (1 - exp) * exp;
-
-        if(x < 0)
-            return (int)-volume;
-        return (int)volume;
-
-        //return -x*;
-    }*/
 
 
     @Override
@@ -447,10 +444,4 @@ public class ServerVolatilityBot extends ServerTradingBot {
     public void setintegratedError(double integratedError) {
         settings.integratedError = integratedError;
     }
-
-
-
-
-
-
 }

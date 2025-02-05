@@ -7,18 +7,11 @@ import net.kroia.modutilities.gui.elements.ItemView;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.TextBox;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
-import net.kroia.stockmarket.screen.custom.TradeScreen;
 import net.minecraft.world.item.ItemStack;
 
 import static net.kroia.stockmarket.screen.custom.TradeScreen.*;
 
 public class TradePanel extends GuiElement {
-
-
-
-
-
-
     private final int buyButtonNormalColor = 0xFF008800;
     private final int buyButtonHoverColor = 0xFF00BB00;
     private final int buyButtonPressedColor = 0xFF00FF00;

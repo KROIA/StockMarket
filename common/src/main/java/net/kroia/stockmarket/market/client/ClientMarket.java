@@ -3,6 +3,7 @@ package net.kroia.stockmarket.market.client;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import net.kroia.stockmarket.market.server.order.Order;
+import net.kroia.stockmarket.networking.packet.client_sender.request.RequestManageTradingItemPacket;
 import net.kroia.stockmarket.networking.packet.client_sender.request.RequestBotSettingsPacket;
 import net.kroia.stockmarket.networking.packet.client_sender.request.RequestOrderChangePacket;
 import net.kroia.stockmarket.networking.packet.client_sender.request.RequestTradeItemsPacket;
@@ -20,7 +21,12 @@ public class ClientMarket {
     private static Map<String, ClientTradeItem> tradeItems = new HashMap<>();
 
     private static SyncBotSettingsPacket syncBotSettingsPacket;
+    private static SyncTradeItemsPacket syncTradeItemsPacket;
+    private static boolean syncTradeItemsChanged;
+
     private static boolean syncBotSettingsPacketChanged = false;
+
+
 
     ClientMarket()
     {
@@ -30,13 +36,24 @@ public class ClientMarket {
     public static void clear()
     {
         tradeItems.clear();
+        syncBotSettingsPacket = null;
+        syncTradeItemsPacket = null;
+        syncTradeItemsChanged = false;
+        syncBotSettingsPacketChanged = false;
     }
 
     public static void requestTradeItems()
     {
         RequestTradeItemsPacket.generateRequest();
     }
-
+    public static void requestAllowNewTradingItem(String itemID, int startPrice)
+    {
+        RequestManageTradingItemPacket.sendRequestAllowNewTradingItem(itemID, startPrice);
+    }
+    public static void requestRemoveTradingItem(String itemID)
+    {
+        RequestManageTradingItemPacket.sendRequestRemoveTradingItem(itemID);
+    }
     public static int getPrice(String itemID)
     {
         ClientTradeItem tradeItem = tradeItems.get(itemID);
@@ -46,6 +63,20 @@ public class ClientMarket {
             return 0;
         }
         return tradeItem.getPrice();
+    }
+
+    public static SyncTradeItemsPacket getSyncTradeItemsPacket()
+    {
+        return syncTradeItemsPacket;
+    }
+    public static boolean hasSyncTradeItemsChanged()
+    {
+        if(syncTradeItemsChanged)
+        {
+            syncTradeItemsChanged = false;
+            return true;
+        }
+        return false;
     }
 
     public static void handlePacket(SyncPricePacket packet)
@@ -62,6 +93,9 @@ public class ClientMarket {
     }
     public static void handlePacket(SyncTradeItemsPacket packet)
     {
+        syncTradeItemsPacket = packet;
+        syncTradeItemsChanged = true;
+
         Map<String, ClientTradeItem> tradeItems = new HashMap<>();
         ArrayList<SyncPricePacket> syncPricePackets = packet.getUpdatePricePackets();
         StockMarketMod.LOGGER.info("Received " + syncPricePackets.size() + " trade items");
@@ -239,8 +273,12 @@ public class ClientMarket {
                 return syncBotSettingsPacket.getSettings();
             }
         }
-        RequestBotSettingsPacket.sendPacket(itemID);
+        requestBotSettings(itemID);
         return null;
+    }
+    public static void requestBotSettings(String itemID)
+    {
+        RequestBotSettingsPacket.sendPacket(itemID);
     }
     public static String getBotSettingsItemID()
     {

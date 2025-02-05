@@ -22,6 +22,7 @@
   "message.stockmarket.marketplace_already_existing": "Markt für {item_name} isch bereits vorhande",
   "message.stockmarket.marketplace_is_now_closed": "Markt für {item_name} isch jetzt gschlossä",
   "message.stockmarket.marketplace_is_now_open": "Markt für {item_name} isch jetzt göffnet zum handle",
+  "message.stockmarket.marketplace_is_not_allowed": "Markt für {item_name} isch nöd erlaubt",
   "message.stockmarket.marketplace_deleted": "{item_name} cha nüme ghandelt wärde",
   "message.stockmarket.marketplace_created": "{item_name} cha jetzt ghandelt wärde",
   "message.stockmarket.current_price_of": "Aktuellä Pris für {item_name}: {current_price}",
@@ -31,6 +32,8 @@
   "message.stockmarket.stockmarket_data_save_failed": "Stockmarket Daten hend nöd chönne gspeicheret wärde",
   "message.stockmarket.stockmarket_data_load_failed": "Stockmarket Daten hend nöd chönne glade wärde",
   "message.stockmarket.stockmarket_data_loaded": "Stockmarket Date glade",
+  "message.stockmarket.default_bot_created": "Standard Bot für Item: {item_name} erstellt",
+  "message.stockmarket.can_not_create_default_bot": "Standard Bot für Item: {item_name} cha nöd erstellt wärdä",
 
   "message.stockmarket.bot_created": "Bot erstellt für Item: {item_name}, du chasch sini Istellige ändere und denn aktivierä",
   "message.stockmarket.bot_deleted": "Bot glöscht für Item: {item_name}",
@@ -88,6 +91,7 @@
   "gui.stockmarket.bot_settings_screen.bot_destroy": "Bot lösche",
   "gui.stockmarket.bot_settings_screen.bot_bank": "Bot Bank",
   "gui.stockmarket.bot_settings_screen.market_open": "Markt offe",
+  "gui.stockmarket.bot_settings_screen.open_bot_setup": "Bot Irichte",
 
   "gui.stockmarket.bot_settings_screen.setting_enabled": "Aktiviert",
   "gui.stockmarket.bot_settings_screen.settings_max_order_count": "Maximali Kauf/Verkaufs Agebot",
@@ -108,5 +112,36 @@
   "gui.stockmarket.bot_settings_screen.settings_pid_i": "PID I",
   "gui.stockmarket.bot_settings_screen.settings_pid_d": "PID D",
   "gui.stockmarket.bot_settings_screen.settings_pid_ibounds": "PID I Gränzä",
-  "gui.stockmarket.bot_settings_screen.settings_pid_integrated_err": "PID Integrierti Fähler"
+  "gui.stockmarket.bot_settings_screen.settings_pid_integrated_err": "PID Integrierti Fähler",
+
+  "gui.stockmarket.management_screen.title": "Stock Market Management",
+  "gui.stockmarket.management_screen.trading_items": "Handels Items",
+  "gui.stockmarket.management_screen.new_trading_item": "Neus Handels Item",
+  "gui.stockmarket.management_screen.remove_trading_item": "Handels Item entfärnä",
+  "gui.stockmarket.management_screen.ask_remove_title": "Handels Item entfärnä",
+  "gui.stockmarket.management_screen.ask_remove_message": "Bisch sicher, dass du s Handelsitem lösche wötsch?\nAlli offene Pstellige werded denn storniert.",
+  "gui.stockmarket.management_screen.bot_settings": "Bot Istellige",
+
+  "gui.stockmarket.bot_settings_setup_screen_rarity.question": "Wie sältä isch da Item?\nWie oft chunts im Spiel vor?\n",
+  "gui.stockmarket.bot_settings_setup_screen_rarity.low": "Eher hüfig",
+  "gui.stockmarket.bot_settings_setup_screen_rarity.high": "Eher sältä",
+
+  "gui.stockmarket.bot_settings_setup_screen_estimatedValue.question": "Wie schätzisch de Wert vom Item?\nWie viel isches öpe wert?\nDe Wert wird als Startpris für de Markt verwendet.",
+
+  "gui.stockmarket.bot_settings_setup_screen.cancel": "Abbrächä",
+  "gui.stockmarket.bot_settings_setup_screen.back": "Zrugg",
+  "gui.stockmarket.bot_settings_setup_screen.next": "Witer",
+  "gui.stockmarket.bot_settings_setup_screen.apply": "Überneh",
+
+  "gui.stockmarket.bot_settings_setup_screen_volatility.question": "Wie starch söll de Pris schanke?\nFür en stabile Markt, wähl en tüferi volatilität.\nFür en volatilä Markt, wähl en höcheri volatilität",
+  "gui.stockmarket.bot_settings_setup_screen_volatility.low": "Tüfi Volatilität",
+  "gui.stockmarket.bot_settings_setup_screen_volatility.high": "Höchi Volatilität",
+
+  "gui.stockmarket.bot_settings_setup_screen_market_speed.question": "Wie schnell söll de Bot das Item handle?\nSetz de Interval in Millisekunde\nFür schnells handlä, nim en chlinere Wärt.\nFür langsames handeln. wähle einen grossen Wert\nSchnelles handeln kann die Server-Performance beeinträchtigen\nMinimum: 1000ms\nMaximum: 10000ms",
+  "gui.stockmarket.bot_settings_setup_screen_market_speed.low": "Langsam",
+  "gui.stockmarket.bot_settings_setup_screen_market_speed.high": "Schnell",
+
+  "gui.stockmarket.bot_settings_setup_screen_change_bot_stocks.auto_change_money_balance": "Ändere de Geldbetrag uf de Bank vom Bot automatisch.\nDas wird gmacht zum gnueg geld z ha\ndamit Items kauft werde chönd",
+  "gui.stockmarket.bot_settings_setup_screen_change_bot_stocks.auto_change_item_balance": "Ändere d Anzahl Items uf de Bank vom Bot automatisch.\nDas wird gmacht zum gnueg Items z ha\ndamit Items verkauft werde chönd"
+
 }

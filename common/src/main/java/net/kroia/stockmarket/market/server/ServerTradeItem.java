@@ -235,7 +235,7 @@ public class ServerTradeItem implements ServerSaveable {
     }
 
     public void onServerTick(MinecraftServer server) {
-        if(subscribers.size() == 0 || !enabled)
+        if(subscribers.isEmpty() || !enabled)
             return;
 
         long currentTime = System.currentTimeMillis();

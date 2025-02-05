@@ -11,11 +11,7 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 
-// StockMarketBlockEntity.java
 public class StockMarketBlockEntity extends BlockEntity /*implements MenuProvider */{
-
-
-    //private ArrayList<CandleStickChart.CandleData> chartData;
 
     // Current Item that the chart is displaying
     private String itemID;
@@ -24,7 +20,6 @@ public class StockMarketBlockEntity extends BlockEntity /*implements MenuProvide
 
     public StockMarketBlockEntity(BlockPos pos, BlockState state) {
         super(StockMarketEntities.STOCK_MARKET_BLOCK_ENTITY.get(), pos, state);
-        //StockMarketMod.LOGGER.info("StockMarketBlockEntity created at position " + pos);
         itemID = "minecraft:diamond";
         amount = 1;
         price = 1;
@@ -32,8 +27,6 @@ public class StockMarketBlockEntity extends BlockEntity /*implements MenuProvide
 
     public void setItemID(String itemID) {
         this.itemID = itemID;
-        // save entity changes
-        //setChanged();
     }
 
     public String getItemID() {
@@ -51,12 +44,10 @@ public class StockMarketBlockEntity extends BlockEntity /*implements MenuProvide
     public void setAmount(int amount)
     {
         this.amount = amount;
-        //setChanged();
     }
     public void setPrice(int price)
     {
         this.price = price;
-        //setChanged();
     }
 
     public Direction getFacing() {
@@ -72,18 +63,6 @@ public class StockMarketBlockEntity extends BlockEntity /*implements MenuProvide
     public void onBlockPlacedBy(BlockState state, LivingEntity placer) {
         // Custom logic when block is placed
     }
-
-
-/*
-    @Override
-    public Component getDisplayName() {
-        return Component.translatable("container.chart");
-    }
-
-    @Override
-    public AbstractContainerMenu createMenu(int id, Inventory playerInventory, Player player) {
-        return new ChartMenu(id, playerInventory, this, ContainerLevelAccess.NULL);
-    }*/
 
     @Override
     protected void saveAdditional( CompoundTag tag)
@@ -102,24 +81,6 @@ public class StockMarketBlockEntity extends BlockEntity /*implements MenuProvide
         return ClientboundBlockEntityDataPacket.create(this);
     }
 
-/*
-    @Override
-    public @Nullable CompoundTag getUpdateTag()
-    {
-        CompoundTag tag = super.getUpdateTag();
-        saveAdditional(tag);
-        return tag;
-    }
-
-    @Override
-    public void handleUpdateTag(CompoundTag tag) {
-        super.handleUpdateTag(tag);
-        // Deserialize your data
-        CompoundTag dataTag = tag.getCompound(StockMarketMod.MODID);
-        itemID = dataTag.getString("itemID");
-        amount = dataTag.getInt("amount");
-        price = dataTag.getInt("price");
-    }*/
 
     @Override
     public void load(CompoundTag tag) {
@@ -129,6 +90,4 @@ public class StockMarketBlockEntity extends BlockEntity /*implements MenuProvide
         amount = dataTag.getInt("amount");
         price = dataTag.getInt("price");
     }
-
-
 }
