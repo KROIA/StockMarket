@@ -29,7 +29,7 @@ public class CandleStickChart extends GuiElement {
     private PriceHistory priceHistory = null;
     int chartWidth = 0;
     int maxLabelWidth = 0;
-    int labelXPos = 5;
+    //int labelXPos = 5;
 
 
     private HashMap<Long,LimitOrderInChartDisplay> limitOrderDisplays = new HashMap<>();
@@ -78,26 +78,6 @@ public class CandleStickChart extends GuiElement {
         int labelWidth = 0;
 
 
-
-        if(chartViewMaxPrice - chartViewMinPrice > 10)
-        {
-            yAxisLabelIncrement = (chartViewMaxPrice - chartViewMinPrice)/10;
-        }
-        // Draw yAxis
-        for(int i=chartViewMaxPrice; i>=chartViewMinPrice; i-=yAxisLabelIncrement)
-        {
-            int y = getChartYPos(i);
-
-            // Draw text label
-            String label = String.valueOf(i);
-            labelWidth = getFont().width(label);
-            maxLabelWidth = Math.max(maxLabelWidth, labelWidth);
-            drawText(label, labelXPos, y - 4, 0xFFFFFFFF);
-            chartWidth = getWidth()-maxLabelWidth-PADDING-labelXPos-5;
-            drawRect(labelXPos+maxLabelWidth+5,  y, chartWidth, 1, 0xFF808080);
-
-        }
-
         int candleWidth = 0;
         if(priceHistory != null)
         {
@@ -106,16 +86,39 @@ public class CandleStickChart extends GuiElement {
             if(candleWidth < 3)
                 candleWidth = 3;
         }
-        int x = getWidth()-PADDING-maxLabelWidth-candleWidth;
+        maxLabelWidth = getFont().width(String.valueOf(chartViewMaxPrice)) + 5;
+        int labelXPos = getWidth() - maxLabelWidth;
+
+
+
+        if(chartViewMaxPrice - chartViewMinPrice > 10)
+        {
+            yAxisLabelIncrement = (chartViewMaxPrice - chartViewMinPrice)/10;
+        }
+
+        int x = labelXPos-5;
+        // Draw yAxis
+        for(int i=chartViewMaxPrice; i>=chartViewMinPrice; i-=yAxisLabelIncrement)
+        {
+            int y = getChartYPos(i);
+            String label = String.valueOf(i);
+            drawText(label, labelXPos, y - 4, 0xFFFFFFFF);
+            chartWidth = getWidth()-maxLabelWidth-labelXPos-5;
+            drawRect(1,  y, x, 1, 0xFF808080);
+        }
+
+
+
         for(int i=priceHistory.size()-1; i>=0; i--)
         {
+            x -= candleWidth;
             int low = priceHistory.getLowPrice(i);
             int high = priceHistory.getHighPrice(i);
             int close = priceHistory.getClosePrice(i);
             int open = priceHistory.getOpenPrice(i);
-            renderCandle(x, candleWidth, maxLabelWidth, 0, open, close, high, low);
-            x -= candleWidth;
-            if(x < labelXPos+5)
+            renderCandle(x, candleWidth, 0, 0, open, close, high, low);
+
+            if(x <= candleWidth)
                 break;
         }
     }
