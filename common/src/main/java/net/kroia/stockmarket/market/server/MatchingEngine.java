@@ -324,7 +324,7 @@ public class MatchingEngine implements ServerSaveable {
         Bank moneyBank = ServerBankManager.getUser(targetOrder.getPlayerUUID()).getMoneyBank();
         int toFreeAmount = toFillAmount * targetOrder.getPrice();
         ServerPlayer player = PlayerUtilities.getOnlinePlayer(targetOrder.getPlayerUUID());
-        if(moneyBank.getBalance()-toFreeAmount >= 0 && player != null)
+        if(moneyBank.getTotalBalance()-toFreeAmount >= 0 && player != null)
         {
             cancelOrder(orderID);
             LimitOrder newOrder = LimitOrder.create(player, targetOrder.getItemID(), targetOrder.getAmount(), newPrice, targetOrder.getFilledAmount());
