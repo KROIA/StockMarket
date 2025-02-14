@@ -71,6 +71,7 @@ public class StockMarketModSettings {
                 // Create defaults:
                 Map<String, ServerTradingBotFactory.DefaultBotSettings> ores = new HashMap<>();
                 ores.put("minecraft:coal", new ServerTradingBotFactory.DefaultBotSettings((int)(8*priceScale),0.05,volatility,updateMS));
+                ores.put("minecraft:copper_ingot", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.1,volatility,updateMS));
                 ores.put("minecraft:iron_ingot", new ServerTradingBotFactory.DefaultBotSettings((int)(15*priceScale),0.1,volatility,updateMS));
                 ores.put("minecraft:gold_ingot", new ServerTradingBotFactory.DefaultBotSettings((int)(40*priceScale),0.3,volatility,updateMS));
                 ores.put("minecraft:diamond", new ServerTradingBotFactory.DefaultBotSettings((int)(160*priceScale),0.4,volatility,updateMS));
@@ -91,6 +92,7 @@ public class StockMarketModSettings {
                 buildingBlocks.put("minecraft:acacia_log", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.01,0.1,updateMS));
                 buildingBlocks.put("minecraft:dark_oak_log", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.01,0.1,updateMS));
                 buildingBlocks.put("minecraft:sand", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01,0.1,updateMS));
+                buildingBlocks.put("minecraft:dirt", new ServerTradingBotFactory.DefaultBotSettings((int)(3*priceScale),0.01,0.05,updateMS));
                 buildingBlocks.put("minecraft:gravel", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01,0.1,updateMS));
                 buildingBlocks.put("minecraft:clay_ball", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01,0.1,updateMS));
                 buildingBlocks.put("minecraft:stone", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01,0.1,updateMS));
