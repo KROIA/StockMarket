@@ -280,7 +280,7 @@ public abstract class Order {
                     moneyBank.unlockAmount(amount);
             }
             else
-                itemBank.unlockAmount(Math.abs(marketOrder.getAmount())-marketOrder.getFilledAmount());
+                itemBank.unlockAmount(Math.abs(marketOrder.getAmount()-marketOrder.getFilledAmount()));
         }
     }
 
