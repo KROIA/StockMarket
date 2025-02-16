@@ -128,10 +128,14 @@ public class MatchingEngine implements ServerSaveable {
         {
             int filledVolume = TransactionEngine.fill(marketOrder, limitOrder, limitOrder.getPrice());
 
+            if(limitOrder.isFilled())
+                toRemove.add(limitOrder);
+
+            if(marketOrder.getStatus() == Order.Status.INVALID || marketOrder.getStatus() == Order.Status.CANCELLED)
+                break;
+
             if(filledVolume != 0) {
                 setPrice(limitOrder.getPrice());
-                if(limitOrder.isFilled())
-                    toRemove.add(limitOrder);
             }
 
             fillVolume -= filledVolume;
