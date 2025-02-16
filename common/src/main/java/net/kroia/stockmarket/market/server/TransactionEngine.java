@@ -31,7 +31,7 @@ public class TransactionEngine {
         if(fillAmount1 < 0)
             fillAmount = -fillVolume;
 
-        long money = fillVolume * currentPrice;
+        long money = (long)fillVolume * (long)currentPrice;
 
         UUID playerUUID1 = o1.getPlayerUUID();
         UUID playerUUID2 = o2.getPlayerUUID();
