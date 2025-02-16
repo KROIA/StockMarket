@@ -128,7 +128,7 @@ public class MatchingEngine implements ServerSaveable {
         {
             int filledVolume = TransactionEngine.fill(marketOrder, limitOrder, limitOrder.getPrice());
 
-            if(limitOrder.isFilled())
+            if(limitOrder.isFilled() || limitOrder.getStatus() == Order.Status.CANCELLED || limitOrder.getStatus() == Order.Status.INVALID)
                 toRemove.add(limitOrder);
 
             if(marketOrder.getStatus() == Order.Status.INVALID || marketOrder.getStatus() == Order.Status.CANCELLED)
@@ -189,11 +189,11 @@ public class MatchingEngine implements ServerSaveable {
                 continue;
 
             int filledVolume = TransactionEngine.fill(limitOrder, fillWith, fillWith.getPrice());
+            if(fillWith.isFilled() || fillWith.getStatus() == Order.Status.CANCELLED || fillWith.getStatus() == Order.Status.INVALID)
+                toRemove.add(fillWith);
             if(filledVolume != 0)
             {
                 setPrice(fillWith.getPrice());
-                if(fillWith.isFilled())
-                    toRemove.add(fillWith);
             }
             fillVolume -= filledVolume;
 
@@ -324,11 +324,25 @@ public class MatchingEngine implements ServerSaveable {
         }
         if(targetOrder == null)
             return false;
+
+
+
         int toFillAmount = targetOrder.getAmount()-targetOrder.getFilledAmount();
-        Bank moneyBank = ServerBankManager.getUser(targetOrder.getPlayerUUID()).getMoneyBank();
-        int toFreeAmount = toFillAmount * targetOrder.getPrice();
         ServerPlayer player = PlayerUtilities.getOnlinePlayer(targetOrder.getPlayerUUID());
-        if(moneyBank.getTotalBalance()-toFreeAmount >= 0 && player != null)
+        boolean canBeMoved = false;
+        if(targetOrder.isBuy())
+        {
+            int toFreeAmount = toFillAmount * targetOrder.getPrice();
+            Bank moneyBank = ServerBankManager.getUser(targetOrder.getPlayerUUID()).getMoneyBank();
+            canBeMoved = moneyBank.getTotalBalance()-toFreeAmount >= 0;
+        }
+        else
+        {
+            Bank itemBank = ServerBankManager.getUser(targetOrder.getPlayerUUID()).getBank(targetOrder.getItemID());
+            canBeMoved = itemBank.getTotalBalance()-toFillAmount >= 0;
+        }
+
+        if(canBeMoved && player != null)
         {
             cancelOrder(orderID);
             LimitOrder newOrder = LimitOrder.create(player, targetOrder.getItemID(), targetOrder.getAmount(), newPrice, targetOrder.getFilledAmount());
