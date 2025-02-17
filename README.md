@@ -55,48 +55,47 @@ StockMarket is a Minecraft mod that brings a better way for trading to the game.
 [CurseForge](https://www.curseforge.com/minecraft/mc-mods/stockmarket)
 | Minecraft | Fabric | Forge | Quilt | Neoforge |
 |-----------|--------|-------|-------|----------|
-| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21.1-green)    | [![Version](https://img.shields.io/badge/v1.3.0-green)][1.3.0-fabric-1.21.1] <br> |                                                                                  |                                                                                   | [![Version](https://img.shields.io/badge/v1.3.0-green)][1.3.0-neoforge-1.21.1]  |
-| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21-green)      | [![Version](https://img.shields.io/badge/v1.3.0-green)][1.3.0-fabric-1.21]   <br> |                                                                                  |                                                                                   | [![Version](https://img.shields.io/badge/v1.3.0-green)][1.3.0-neoforge-1.21]    |
-| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.6-green)    | [![Version](https://img.shields.io/badge/v1.3.0-green)][1.3.0-fabric-1.20.6] <br> |                                                                                  |                                                                                   | [![Version](https://img.shields.io/badge/v1.3.0-green)][1.3.0-neoforge-1.20.6]  |
-| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.4-green)    | [![Version](https://img.shields.io/badge/v1.3.0-green)][1.3.0-fabric-1.20.4] <br> | [![Version](https://img.shields.io/badge/v1.3.0-green)][1.3.0-forge-1.20.4] <br> | [![Version](https://img.shields.io/badge/v1.3.0-green)][1.3.0-quilt-1.20.4] <br>  |                                                                                 |
-| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.2-green)    | [![Version](https://img.shields.io/badge/v1.3.0-green)][1.3.0-fabric-1.20.2] <br> | [![Version](https://img.shields.io/badge/v1.3.0-green)][1.3.0-forge-1.20.2] <br> | [![Version](https://img.shields.io/badge/v1.3.0-green)][1.3.0-quilt-1.20.2] <br>  |                                                                                 |
-| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.1-green)    | [![Version](https://img.shields.io/badge/v1.3.0-green)][1.3.0-fabric-1.20.1] <br> | [![Version](https://img.shields.io/badge/v1.3.0-green)][1.3.0-forge-1.20.1] <br> | [![Version](https://img.shields.io/badge/v1.3.0-green)][1.3.0-quilt-1.20.1] <br>  |                                                                                 |
-| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.4-green)    | [![Version](https://img.shields.io/badge/v1.3.0-green)][1.3.0-fabric-1.19.4] <br> | [![Version](https://img.shields.io/badge/v1.3.0-green)][1.3.0-forge-1.19.4] <br> |                                                                             <br>  |                                                                                 |
-| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.3-green)    | [![Version](https://img.shields.io/badge/v1.3.0-green)][1.3.0-fabric-1.19.3] <br> | [![Version](https://img.shields.io/badge/v1.3.0-green)][1.3.0-forge-1.19.3] <br> | [![Version](https://img.shields.io/badge/v1.3.0-green)][1.3.0-quilt-1.19.3] <br>  |                                                                                 |
-| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.2-green)    | [![Version](https://img.shields.io/badge/v1.3.0-green)][1.3.0-fabric-1.19.2] <br> | [![Version](https://img.shields.io/badge/v1.3.0-green)][1.3.0-forge-1.19.2] <br> | [![Version](https://img.shields.io/badge/v1.3.0-green)][1.3.0-quilt-1.19.2] <br>  |                                                                                 |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21.1-green)    | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-fabric-1.21.1] <br> |                                                                                  |                                                                                   | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-neoforge-1.21.1]  |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21-green)      | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-fabric-1.21]   <br> |                                                                                  |                                                                                   | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-neoforge-1.21]    |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.6-green)    | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-fabric-1.20.6] <br> |                                                                                  |                                                                                   | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-neoforge-1.20.6]  |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.4-green)    | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-fabric-1.20.4] <br> | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-forge-1.20.4] <br> | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-quilt-1.20.4] <br>  |                                                                                 |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.2-green)    | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-fabric-1.20.2] <br> | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-forge-1.20.2] <br> | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-quilt-1.20.2] <br>  |                                                                                 |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.1-green)    | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-fabric-1.20.1] <br> | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-forge-1.20.1] <br> | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-quilt-1.20.1] <br>  |                                                                                 |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.4-green)    | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-fabric-1.19.4] <br> | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-forge-1.19.4] <br> |                                                                             <br>  |                                                                                 |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.3-green)    | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-fabric-1.19.3] <br> | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-forge-1.19.3] <br> | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-quilt-1.19.3] <br>  |                                                                                 |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.2-green)    | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-fabric-1.19.2] <br> | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-forge-1.19.2] <br> | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-quilt-1.19.2] <br>  |                                                                                 |
 
 
 
 
 
 <!--	Links to curseforge:	-->
-[1.3.0-fabric-1.21.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6158542
-[1.3.0-fabric-1.21]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6158534
-[1.3.0-fabric-1.20.6]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6158521
-[1.3.0-fabric-1.20.4]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6158515
-[1.3.0-fabric-1.20.2]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6158508
-[1.3.0-fabric-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6100770
-[1.3.0-fabric-1.19.4]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6158505
-[1.3.0-fabric-1.19.3]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6158494
-[1.3.0-fabric-1.19.2]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6158485
+[1.3.1-fabric-1.21.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200719
+[1.3.1-fabric-1.21]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200713
+[1.3.1-fabric-1.20.6]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200704
+[1.3.1-fabric-1.20.4]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200697
+[1.3.1-fabric-1.20.2]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200673
+[1.3.1-fabric-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200639
+[1.3.1-fabric-1.19.4]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200635
+[1.3.1-fabric-1.19.3]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200628
+[1.3.1-fabric-1.19.2]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200617
 
-
-[1.3.0-forge-1.20.4]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6158516
-[1.3.0-forge-1.20.2]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6158511
-[1.3.0-forge-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6158506
-[1.3.0-forge-1.19.4]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6158503
-[1.3.0-forge-1.19.3]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6158497
-[1.3.0-forge-1.19.2]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6158487
+[1.3.1-forge-1.20.4]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200698
+[1.3.1-forge-1.20.2]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200684
+[1.3.1-forge-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200647
+[1.3.1-forge-1.19.4]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200638
+[1.3.1-forge-1.19.3]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200631
+[1.3.1-forge-1.19.2]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200620
 					 
-[1.3.0-quilt-1.20.4]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6158517
-[1.3.0-quilt-1.20.2]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6158512
-[1.3.0-quilt-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6158507
-[1.3.0-quilt-1.19.3]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6158499
-[1.3.0-quilt-1.19.2]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6158491
+[1.3.1-quilt-1.20.4]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200701
+[1.3.1-quilt-1.20.2]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200692
+[1.3.1-quilt-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200659
+[1.3.1-quilt-1.19.3]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200632
+[1.3.1-quilt-1.19.2]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200622
 
-[1.3.0-neoforge-1.21.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6158549
-[1.3.0-neoforge-1.21]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6158536
-[1.3.0-neoforge-1.20.6]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6158529
+[1.3.1-neoforge-1.21.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200720
+[1.3.1-neoforge-1.21]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200717
+[1.3.1-neoforge-1.20.6]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200707
 
 
 
