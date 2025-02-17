@@ -31,7 +31,7 @@ public class TransactionEngine {
         if(fillAmount1 < 0)
             fillAmount = -fillVolume;
 
-        long money = fillVolume * currentPrice;
+        long money = (long)fillVolume * (long)currentPrice;
 
         UUID playerUUID1 = o1.getPlayerUUID();
         UUID playerUUID2 = o2.getPlayerUUID();
@@ -61,6 +61,17 @@ public class TransactionEngine {
         Bank receiverItemBank = fillAmount > 0 ? itemBank1 : itemBank2;
         Order senderOrder = fillAmount > 0 ? o1 : o2;
         Order receiverOrder = fillAmount > 0 ? o2 : o1;
+
+        // Overflow check
+        if(receiverMoneyBank.getTotalBalance() + money < receiverMoneyBank.getTotalBalance() ||
+           receiverItemBank.getTotalBalance() + fillVolume < receiverItemBank.getTotalBalance())
+        {
+            StockMarketMod.LOGGER.error("Overflow while filling order from player: " + senderUUID.toString() +
+                    " Order1: " + senderOrder + " Order2: " + receiverOrder +
+                    " Can't fill order");
+            receiverOrder.markAsInvalid("Would lead to an variable overflow");
+            return 0;
+        }
 
         Bank.Status status = Bank.exchangeFromLockedPrefered(senderMoneyBank, receiverMoneyBank, money,    senderItemBank, receiverItemBank, fillVolume);
         if(status != Bank.Status.SUCCESS)
