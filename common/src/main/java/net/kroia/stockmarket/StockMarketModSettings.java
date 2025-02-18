@@ -27,13 +27,13 @@ public class StockMarketModSettings {
         public static void init()
         {
             TRADABLE_ITEMS = new HashMap<>();
-            TRADABLE_ITEMS.put("minecraft:diamond", 160);
-            TRADABLE_ITEMS.put("minecraft:iron_ingot", 15);
-            TRADABLE_ITEMS.put("minecraft:gold_ingot", 40);
-            TRADABLE_ITEMS.put("minecraft:emerald", 100);
-            TRADABLE_ITEMS.put("minecraft:coal", 8);
-            TRADABLE_ITEMS.put("minecraft:oak_log", 10);
-            TRADABLE_ITEMS.put("minecraft:netherite_scrap", 500);
+            //TRADABLE_ITEMS.put("minecraft:diamond", 160);
+            //TRADABLE_ITEMS.put("minecraft:iron_ingot", 15);
+            //TRADABLE_ITEMS.put("minecraft:gold_ingot", 40);
+            //TRADABLE_ITEMS.put("minecraft:emerald", 100);
+            //TRADABLE_ITEMS.put("minecraft:coal", 8);
+            //TRADABLE_ITEMS.put("minecraft:oak_log", 10);
+            //TRADABLE_ITEMS.put("minecraft:netherite_scrap", 500);
 
             NOT_TRADABLE_ITEMS = new ArrayList<>();
             NOT_TRADABLE_ITEMS.add(BankSystemMod.MOD_ID+":"+MoneyItem.NAME);

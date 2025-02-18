@@ -127,6 +127,11 @@ public class TransactionEngine {
     {
         if(ghostAmount == 0 || o1.getAmount()-o1.getFilledAmount() == 0)
             return 0;
+        if(ghostAmount > 0 && o1.isBuy() || ghostAmount < 0 && !o1.isBuy())
+        {
+            // same sign -> both buy or both sell
+            return 0;
+        }
 
         int fillAmount1 = o1.getAmount() - o1.getFilledAmount();
         int fillVolume = Math.min(Math.abs(fillAmount1), Math.abs(ghostAmount));

@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.market.server;
 
 import net.kroia.modutilities.ServerSaveable;
+import net.kroia.stockmarket.util.DynamicIndexedArray;
 import net.minecraft.nbt.CompoundTag;
 
 import java.util.Arrays;
@@ -62,15 +63,25 @@ public class GhostOrderBook implements ServerSaveable {
     };
     private final float[] volumeDistributionArray = new float[volumePriceArray.length];
 */
-    private final float[] volumeDistributionArray = new float[10000];
+    //private final float[] volumeDistributionArray = new float[100];
+    int currentMarketPrice = 0;
+    private final DynamicIndexedArray virtualOrderVolumeDistribution;
     public GhostOrderBook() {
-       // Arrays.fill(volumeDistributionArray, 0);
+        //Arrays.fill(volumeDistributionArray, 0);
+        virtualOrderVolumeDistribution = new DynamicIndexedArray(100, this::getTargetAmount);
     }
 
     public void cleanup() {
     }
 
     public void updateVolume(double deltaT, int currentPrice) {
+        for(int i=0; i<virtualOrderVolumeDistribution.getSize(); i++)
+        {
+            int virtualIndex = virtualOrderVolumeDistribution.getVirtualIndex(i);
+            float targetAmount = getTargetAmount(virtualIndex);
+            if(Math.abs(virtualOrderVolumeDistribution.get(virtualIndex))<Math.abs(targetAmount))
+                virtualOrderVolumeDistribution.add(virtualIndex, targetAmount*(float)deltaT);
+        }
         /*for(int i=0; i<volumeDistributionArray.length; i++)
         {
             float targetAmount = getTargetAmount(volumePriceArray[i], currentPrice);
@@ -78,7 +89,7 @@ public class GhostOrderBook implements ServerSaveable {
                 volumeDistributionArray[i] += targetAmount*(float)deltaT;
         }*/
 
-        for(int i=currentPrice-100; i<currentPrice+100; i++)
+        /*for(int i=currentPrice-100; i<currentPrice+100; i++)
         {
             if(i < 0 || i >= volumeDistributionArray.length)
                 continue;
@@ -89,6 +100,20 @@ public class GhostOrderBook implements ServerSaveable {
                 volumeDistributionArray[i] = 0;
             else if(i>currentPrice && volumeDistributionArray[i]>0)
                 volumeDistributionArray[i] = 0;
+        }*/
+    }
+
+    public void setCurrentMarketPrice(int currentMarketPrice) {
+        this.currentMarketPrice = currentMarketPrice;
+        int currentIndexOffset = virtualOrderVolumeDistribution.getIndexOffset();
+        int sizeForth = virtualOrderVolumeDistribution.getSize()/4;
+        if(currentMarketPrice > currentIndexOffset + sizeForth*3)
+        {
+            virtualOrderVolumeDistribution.setOffset(currentMarketPrice-virtualOrderVolumeDistribution.getSize()/2);
+        }
+        else if(currentMarketPrice < currentIndexOffset + sizeForth)
+        {
+            virtualOrderVolumeDistribution.setOffset(currentMarketPrice-virtualOrderVolumeDistribution.getSize()/2);
         }
     }
 
@@ -104,17 +129,21 @@ public class GhostOrderBook implements ServerSaveable {
     /**
      * Get the amount of items to buy or sell based on the price difference
      * @param price on which the amount should be based
-     * @param currentPrice the current price of the item
      * @return the amount of items to buy or sell. Negative values indicate selling
      */
-    public int getAmount(int price, int currentPrice)
+    public int getAmount(int price)
     {
-        if(price < 0 || price >= volumeDistributionArray.length)
+        if(virtualOrderVolumeDistribution.isInRange(price))
+        {
+            return (int)virtualOrderVolumeDistribution.get(price);
+        }
+        return 0;
+        /*if(price < 0 || price >= volumeDistributionArray.length)
             return price > currentPrice ? -1 : 1;
         int amount = (int)volumeDistributionArray[price];
         if(amount == 0)
             return price > currentPrice ? -1 : 1;
-        return amount;
+        return amount;*/
 
 
 /*
@@ -151,7 +180,18 @@ public class GhostOrderBook implements ServerSaveable {
     }
     public void removeAmount(int price, int amount)
     {
-        if(price < 0 || price >= volumeDistributionArray.length)
+        if(virtualOrderVolumeDistribution.isInRange(price))
+        {
+            if(virtualOrderVolumeDistribution.get(price) > 0)
+            {
+                virtualOrderVolumeDistribution.add(price, -Math.abs(amount));
+            }
+            else if(virtualOrderVolumeDistribution.get(price) < 0)
+            {
+                virtualOrderVolumeDistribution.add(price, Math.abs(amount));
+            }
+        }
+        /*if(price < 0 || price >= volumeDistributionArray.length)
             return;
         if(volumeDistributionArray[price] > 0)
         {
@@ -164,7 +204,7 @@ public class GhostOrderBook implements ServerSaveable {
             volumeDistributionArray[price] += amount;
             if(volumeDistributionArray[price] > 0)
                 volumeDistributionArray[price] = 0;
-        }
+        }*/
         /*
         int i = 0;
         while(i < volumePriceArray.length && volumePriceArray[i] < price)
@@ -185,10 +225,10 @@ public class GhostOrderBook implements ServerSaveable {
 
     }
 
-    private float getTargetAmount(int price, int currentPrice)
+    private float getTargetAmount(int price)
     {
         // Calculate close price volume distribution
-        float currentPriceFloat = (float)currentPrice;
+        float currentPriceFloat = (float)currentMarketPrice;
         float relativePrice = (currentPriceFloat - (float)price)/(currentPriceFloat+1);
         float width = 1f;
 

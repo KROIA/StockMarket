@@ -38,8 +38,8 @@ public class MatchingEngine implements ServerSaveable {
     public MatchingEngine(int initialPrice, PriceHistory priceHistory)
     {
         this.priceHistory = priceHistory;
-        this.price = initialPrice;
         tradeVolume = 0;
+        setPrice(initialPrice);
     }
 
 
@@ -137,8 +137,17 @@ public class MatchingEngine implements ServerSaveable {
         for(LimitOrder limitOrder : limitOrders)
         {
             int filledVolume = 0;
+
+            long loopTimeout = 10000;
+
             while(limitOrder.getPrice() != newPrice) {
-                int ghostVolume = ghostOrderBook.getAmount(newPrice, startPrice);
+                loopTimeout--;
+                if(loopTimeout<=0)
+                {
+                    StockMarketMod.LOGGER.error("Market order processing loop timeout: "+marketOrder);
+                    break;
+                }
+                int ghostVolume = ghostOrderBook.getAmount(newPrice);
                 int transferedVolume = TransactionEngine.ghostFill(marketOrder, ghostVolume, newPrice);
                 filledVolume += transferedVolume;
                 if(transferedVolume > 0) {
@@ -183,10 +192,17 @@ public class MatchingEngine implements ServerSaveable {
                 break;
             }
         }
+        long loopTimeout = 10000;
         while(fillVolume > 0)
         {
+            loopTimeout--;
+            if(loopTimeout<=0)
+            {
+                StockMarketMod.LOGGER.error("Market order processing loop timeout: "+marketOrder);
+                break;
+            }
             // Fill the remaining volume with ghost orders
-            int ghostVolume = ghostOrderBook.getAmount(newPrice, startPrice);
+            int ghostVolume = ghostOrderBook.getAmount(newPrice);
             int transferedVolume = TransactionEngine.ghostFill(marketOrder, ghostVolume, newPrice);
             fillVolume -= transferedVolume;
             if(transferedVolume > 0) {
@@ -276,6 +292,7 @@ public class MatchingEngine implements ServerSaveable {
     private void setPrice(int price)
     {
         this.price = price;
+        ghostOrderBook.setCurrentMarketPrice(price);
         priceHistory.setCurrentPrice(price);
     }
 
@@ -470,7 +487,7 @@ public class MatchingEngine implements ServerSaveable {
         {
             int index = (int)((float)(i - minPrice) / priceStep);
             if(index >= 0 && index < tiles)
-                volume[index] += ghostOrderBook.getAmount(i, price);
+                volume[index] += ghostOrderBook.getAmount(i);
         }
 
         orderbookVolume.setVolume(volume);
@@ -553,6 +570,7 @@ public class MatchingEngine implements ServerSaveable {
             return false;
         boolean success = true;
         price = tag.getInt("price");
+        ghostOrderBook.setCurrentMarketPrice(price);
         tradeVolume = tag.getInt("trade_volume");
         ListTag buyOrdersList = tag.getList("buy_orders", 10);
         ListTag sellOrdersList = tag.getList("sell_orders", 10);
