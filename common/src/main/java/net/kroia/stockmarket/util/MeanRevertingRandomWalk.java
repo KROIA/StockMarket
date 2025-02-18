@@ -1,9 +1,12 @@
 package net.kroia.stockmarket.util;
 
 
+import net.kroia.modutilities.ServerSaveable;
+import net.minecraft.nbt.CompoundTag;
+
 import java.util.Random;
 
-public class MeanRevertingRandomWalk {
+public class MeanRevertingRandomWalk implements ServerSaveable {
     private double currentValue;
     private final double stepSize;
     private final double meanReversionStrength;
@@ -38,5 +41,24 @@ public class MeanRevertingRandomWalk {
         currentValue += step + reversion;
 
         return currentValue;
+    }
+
+    public double getCurrentValue() {
+        return currentValue;
+    }
+
+    @Override
+    public boolean save(CompoundTag tag) {
+        tag.putDouble("currentValue", currentValue);
+        return true;
+    }
+
+    @Override
+    public boolean load(CompoundTag tag) {
+        if(tag.contains("currentValue"))
+            currentValue = tag.getDouble("currentValue");
+        else
+            currentValue = 0.0;
+        return true;
     }
 }

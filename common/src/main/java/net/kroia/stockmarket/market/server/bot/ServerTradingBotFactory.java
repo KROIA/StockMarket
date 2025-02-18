@@ -23,7 +23,7 @@ public class ServerTradingBotFactory {
         public double imbalancePriceChangeFactor = 0.1;
         public double imbalancePriceChangeQuadFactor = 10;
         public double pid_p = 0.1;
-        public double pid_d = 0.1;
+        public double pid_d = -0.1;
         public double pid_i = 0.0001;
         public double pid_iBound = 1;
 

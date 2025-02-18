@@ -79,30 +79,42 @@ public class DynamicIndexedArray{
         if(offset > 0)
         {
             // Move the array to the left
-            for(int i = 0; i < array.length - offset; i++)
-            {
-                array[i] = array[i + offset];
-            }
-            // Fill the rest with default values
-            for(int i = array.length - offset; i < array.length; i++)
-            {
-                array[i] = defaultValueProvider.apply(i + indexOffset);
-            }
+            int upperBound = array.length - offset;
             indexOffset += offset;
+            if(upperBound>0) {
+                for (int i = 0; i < upperBound; i++) {
+                    array[i] = array[i + offset];
+                }
+
+                // Fill the rest with default values
+                for (int i = upperBound; i < array.length; i++) {
+                    array[i] = defaultValueProvider.apply(i + indexOffset);
+                }
+            }
+            else {
+                for (int i = 0; i < array.length; i++) {
+                    array[i] = defaultValueProvider.apply(i + indexOffset);
+                }
+            }
         }
         else if(offset < 0)
         {
-            // Move the array to the right
-            for(int i = array.length - 1; i >= -offset; i--)
-            {
-                array[i] = array[i + offset];
-            }
-            // Fill the rest with default values
-            for(int i = 0; i < -offset; i++)
-            {
-                array[i] = defaultValueProvider.apply(i + indexOffset);
-            }
             indexOffset += offset;
+            if(offset > -array.length) {
+                // Move the array to the right
+                for (int i = array.length - 1; i >= -offset; i--) {
+                    array[i] = array[i + offset];
+                }
+                // Fill the rest with default values
+                for (int i = 0; i < -offset; i++) {
+                    array[i] = defaultValueProvider.apply(i + indexOffset);
+                }
+            }
+            else {
+                for (int i = 0; i < array.length; i++) {
+                    array[i] = defaultValueProvider.apply(i + indexOffset);
+                }
+            }
         }
     }
     public void setOffset(int offset)

@@ -79,8 +79,15 @@ public class GhostOrderBook implements ServerSaveable {
         {
             int virtualIndex = virtualOrderVolumeDistribution.getVirtualIndex(i);
             float targetAmount = getTargetAmount(virtualIndex);
-            if(Math.abs(virtualOrderVolumeDistribution.get(virtualIndex))<Math.abs(targetAmount))
-                virtualOrderVolumeDistribution.add(virtualIndex, targetAmount*(float)deltaT);
+            float currentVal = Math.abs(virtualOrderVolumeDistribution.get(virtualIndex));
+            if(currentVal<Math.abs(targetAmount)) {
+                float scale = 0.01f;
+                if(currentVal < Math.abs(targetAmount)*0.1f)
+                {
+                    scale = 0.5f;
+                }
+                virtualOrderVolumeDistribution.add(virtualIndex, targetAmount * (float) deltaT * scale);
+            }
         }
         /*for(int i=0; i<volumeDistributionArray.length; i++)
         {
@@ -137,7 +144,7 @@ public class GhostOrderBook implements ServerSaveable {
         {
             return (int)virtualOrderVolumeDistribution.get(price);
         }
-        return 0;
+        return (int)getTargetAmount(price);
         /*if(price < 0 || price >= volumeDistributionArray.length)
             return price > currentPrice ? -1 : 1;
         int amount = (int)volumeDistributionArray[price];
@@ -227,6 +234,8 @@ public class GhostOrderBook implements ServerSaveable {
 
     private float getTargetAmount(int price)
     {
+        if(price < 0)
+            return 0;
         // Calculate close price volume distribution
         float currentPriceFloat = (float)currentMarketPrice;
         float relativePrice = (currentPriceFloat - (float)price)/(currentPriceFloat+1);
@@ -239,13 +248,19 @@ public class GhostOrderBook implements ServerSaveable {
 
 
 
-        float volumeScale = 10f;
+        float volumeScale = 100f;
 
 
         if(relativePrice > 0)
             amount += 0.1f;
         else if(relativePrice <= 0)
             amount += -0.1f;
+        if(price == 0)
+            amount += 0.2f;
+
+        float lowPriceAccumulator = 1/(1+(float)price);
+        if(relativePrice > 0)
+            amount += lowPriceAccumulator*5;
 
         //if(relativePrice < 20 && relativePrice > -20)
         //    amount += relativePrice * (float)Math.exp(-Math.abs(relativePrice*0.05f));

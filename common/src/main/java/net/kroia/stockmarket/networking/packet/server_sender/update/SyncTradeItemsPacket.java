@@ -39,10 +39,10 @@ public class SyncTradeItemsPacket extends NetworkPacket {
     @Override
     public void fromBytes(FriendlyByteBuf buf) {
         int size = buf.readInt();
-        if(size == 0)
-            return;
         if(syncPricePackets == null)
             syncPricePackets = new ArrayList<>();
+        if(size == 0)
+            return;
         for (int i = 0; i < size; i++) {
             this.syncPricePackets.add(new SyncPricePacket(buf));
         }

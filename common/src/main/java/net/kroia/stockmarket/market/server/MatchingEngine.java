@@ -145,6 +145,7 @@ public class MatchingEngine implements ServerSaveable {
                 if(loopTimeout<=0)
                 {
                     StockMarketMod.LOGGER.error("Market order processing loop timeout: "+marketOrder);
+                    marketOrder.markAsInvalid("Market order processing loop timeout");
                     break;
                 }
                 int ghostVolume = ghostOrderBook.getAmount(newPrice);
@@ -199,12 +200,14 @@ public class MatchingEngine implements ServerSaveable {
             if(loopTimeout<=0)
             {
                 StockMarketMod.LOGGER.error("Market order processing loop timeout: "+marketOrder);
+                marketOrder.markAsInvalid("Market order processing loop timeout");
                 break;
             }
             // Fill the remaining volume with ghost orders
             int ghostVolume = ghostOrderBook.getAmount(newPrice);
             int transferedVolume = TransactionEngine.ghostFill(marketOrder, ghostVolume, newPrice);
             fillVolume -= transferedVolume;
+
             if(transferedVolume > 0) {
                 if(marketOrder.isBuy())
                     ghostOrderBook.removeAmount(newPrice, transferedVolume);
@@ -235,38 +238,78 @@ public class MatchingEngine implements ServerSaveable {
     {
         // Process the limit order
         int fillVolume = Math.abs(limitOrder.getAmount()-limitOrder.getFilledAmount());
+        //int filledVolume = 0;
         PriorityQueue<LimitOrder> limitOrders = limitOrder.isBuy() ? limitSellOrders : limitBuyOrders;
         ArrayList<LimitOrder> toRemove = new ArrayList<>();
-
+        int startPrice = getPrice();
+        int newPrice = startPrice;
+        int deltaPrice = limitOrder.isBuy() ? 1 : -1;
         for(LimitOrder otherOrder : limitOrders)
         {
             LimitOrder fillWith = null;
-            if(otherOrder.getPrice() == limitOrder.getPrice())
+
+
+            long loopTimeout = 10000;
+            while(fillVolume > 0 &&
+                    limitOrder.isBuy() && limitOrder.getPrice() > getPrice() ||
+                    limitOrder.isSell() && limitOrder.getPrice() < getPrice()) {
+
+                if(getPrice() == otherOrder.getPrice())
+                {
+                    fillWith = otherOrder;
+                    break;
+                }
+
+                loopTimeout--;
+                if(loopTimeout<=0)
+                {
+                    StockMarketMod.LOGGER.error("Limit order processing loop timeout: "+limitOrder);
+                    limitOrder.markAsInvalid("Limit order processing loop timeout");
+                    break;
+                }
+                int ghostVolume = ghostOrderBook.getAmount(newPrice);
+                int transferedVolume = TransactionEngine.ghostFill(limitOrder, ghostVolume, newPrice);
+                //filledVolume += transferedVolume;
+                fillVolume -= transferedVolume;
+                if(transferedVolume > 0) {
+                    if(limitOrder.isBuy())
+                        ghostOrderBook.removeAmount(newPrice, transferedVolume);
+                    else if(limitOrder.isSell())
+                        ghostOrderBook.removeAmount(newPrice, -transferedVolume);
+                    setPrice(newPrice);
+                }
+                if(limitOrder.isFilled())
+                {
+                    break;
+                }
+                newPrice += deltaPrice;
+                if(newPrice < 0) {
+                    newPrice = 0;
+                    break;
+                }
+            }
+            if(limitOrder.getPrice() == otherOrder.getPrice())
             {
                 fillWith = otherOrder;
-            }
-            else
-            {
-                if(limitOrder.isBuy() && limitOrder.getPrice() > otherOrder.getPrice())
-                {
+            }else {
+                if (limitOrder.isBuy() && limitOrder.getPrice() > otherOrder.getPrice()) {
                     fillWith = otherOrder;
-                }
-                else if(limitOrder.isSell() && limitOrder.getPrice() < otherOrder.getPrice())
-                {
+                } else if (limitOrder.isSell() && limitOrder.getPrice() < otherOrder.getPrice()) {
                     fillWith = otherOrder;
                 }
             }
+
             if(fillWith == null)
                 continue;
 
-            int filledVolume = TransactionEngine.fill(limitOrder, fillWith, fillWith.getPrice());
+            int transferedVolume = TransactionEngine.fill(limitOrder, fillWith, fillWith.getPrice());
             if(fillWith.isFilled() || fillWith.getStatus() == Order.Status.CANCELLED || fillWith.getStatus() == Order.Status.INVALID)
                 toRemove.add(fillWith);
-            if(filledVolume != 0)
+            if(transferedVolume != 0)
             {
                 setPrice(fillWith.getPrice());
             }
-            fillVolume -= filledVolume;
+            fillVolume -= transferedVolume;
 
             if(fillVolume <= 0)
             {
@@ -278,6 +321,43 @@ public class MatchingEngine implements ServerSaveable {
                 break;
             }
         }
+
+
+
+        long loopTimeout = 10000;
+        while(  fillVolume > 0 &&
+                (limitOrder.isBuy() && limitOrder.getPrice() > getPrice() ||
+                limitOrder.isSell() && limitOrder.getPrice() < getPrice())) {
+            loopTimeout--;
+            if(loopTimeout<=0)
+            {
+                StockMarketMod.LOGGER.error("Limit order processing loop timeout: "+limitOrder);
+                limitOrder.markAsInvalid("Limit order processing loop timeout");
+                break;
+            }
+            int ghostVolume = ghostOrderBook.getAmount(newPrice);
+            int transferedVolume = TransactionEngine.ghostFill(limitOrder, ghostVolume, newPrice);
+            fillVolume -= transferedVolume;
+            if(transferedVolume > 0) {
+                if(limitOrder.isBuy())
+                    ghostOrderBook.removeAmount(newPrice, transferedVolume);
+                else if(limitOrder.isSell())
+                    ghostOrderBook.removeAmount(newPrice, -transferedVolume);
+                setPrice(newPrice);
+            }
+            if(limitOrder.isFilled())
+            {
+                break;
+            }
+            newPrice += deltaPrice;
+            if(newPrice < 0) {
+                newPrice = 0;
+                break;
+            }
+        }
+
+
+
         limitOrders.removeAll(toRemove);
         return fillVolume == 0;
     }

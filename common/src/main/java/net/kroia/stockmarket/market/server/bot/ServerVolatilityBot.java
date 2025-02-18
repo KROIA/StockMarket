@@ -6,6 +6,7 @@ import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.util.MeanRevertingRandomWalk;
 import net.minecraft.nbt.CompoundTag;
 
+import java.io.FileWriter;
 import java.util.Random;
 
 public class ServerVolatilityBot extends ServerTradingBot {
@@ -119,6 +120,9 @@ public class ServerVolatilityBot extends ServerTradingBot {
             tag.putDouble("pid_iBound", pid_iBound);
 
 
+
+
+
             return success;
         }
 
@@ -191,23 +195,26 @@ public class ServerVolatilityBot extends ServerTradingBot {
             this.orderRandomness = volatility * (1-rarity) * 5+1;
         }
     }
-    private MeanRevertingRandomWalk randomWalk;
+    private MeanRevertingRandomWalk randomWalk1;
+    private MeanRevertingRandomWalk randomWalk2;
     private static Random random = new Random();
     //private double speed = 0;
     public long lastMillis = 0;
     public long lastTimerMillis = 0;
+    public long timerCounter = 0;
 
     Settings settings;
 
     public ServerVolatilityBot() {
         super();
         setSettings(new Settings());
-        randomWalk = new MeanRevertingRandomWalk(0.1, 0.05);
+        randomWalk1 = new MeanRevertingRandomWalk(0.1, 0.05);
+        randomWalk2 = new MeanRevertingRandomWalk(0.1, 0.05);
 
         lastMillis = System.currentTimeMillis();
 
 
-
+        //debugPlotRandomWalk();
     }
 
     @Override
@@ -227,8 +234,8 @@ public class ServerVolatilityBot extends ServerTradingBot {
             return;
 
         // Create Limit orders
-        clearOrders();
-        createLimitOrders(itemBank, moneyBank);
+        //clearOrders();
+        //createLimitOrders(itemBank, moneyBank);
 
         long currentItemBalance = itemBank.getTotalBalance();
 
@@ -238,8 +245,14 @@ public class ServerVolatilityBot extends ServerTradingBot {
         {
             lastTimerMillis = currentMillis;
             settings.timerMillis = settings.minTimerMillis + random.nextLong(settings.maxTimerMillis-settings.minTimerMillis);
-            double randomWalkValue = randomWalk.nextValue();
+            double randomWalkValue = randomWalk1.nextValue() + randomWalk2.getCurrentValue() * 5;
             settings.randomWalkDifferencePercentage = settings.volatility * randomWalkValue/100;
+            timerCounter++;
+            if(timerCounter >= 10)
+            {
+                timerCounter = 0;
+                randomWalk2.nextValue();
+            }
         }
 
         if(settings.targetItemBalance <= 1)
@@ -443,5 +456,54 @@ public class ServerVolatilityBot extends ServerTradingBot {
     }
     public void setintegratedError(double integratedError) {
         settings.integratedError = integratedError;
+    }
+
+
+    @Override
+    public boolean save(CompoundTag tag) {
+        boolean success = super.save(tag);
+        CompoundTag meanRevertingRandomWalkTag = new CompoundTag();
+        randomWalk1.save(meanRevertingRandomWalkTag);
+        tag.put("randomWalk1", meanRevertingRandomWalkTag);
+        CompoundTag meanRevertingRandomWalk2Tag = new CompoundTag();
+        randomWalk2.save(meanRevertingRandomWalk2Tag);
+        tag.put("randomWalk2", meanRevertingRandomWalk2Tag);
+
+
+        return success;
+    }
+    @Override
+    public boolean load(CompoundTag tag) {
+        boolean success = super.load(tag);
+
+        if(tag.contains("randomWalk1"))
+        {
+            CompoundTag meanRevertingRandomWalkTag = tag.getCompound("randomWalk1");
+            randomWalk1.load(meanRevertingRandomWalkTag);
+        }
+        if(tag.contains("randomWalk2"))
+        {
+            CompoundTag meanRevertingRandomWalk2Tag = tag.getCompound("randomWalk2");
+            randomWalk2.load(meanRevertingRandomWalk2Tag);
+        }
+
+        return success;
+    }
+
+
+    private void debugPlotRandomWalk()
+    {
+        try (FileWriter writer = new FileWriter("randomWalk.csv")) {
+            writer.write("Index,randomWalk1,randomWalk2\n"); // CSV header
+            for(int i=0; i<10000; i++)
+            {
+                writer.write(i + ";" + randomWalk1.nextValue() + ";"+ randomWalk2.getCurrentValue() + "\n");
+                if(i%10 == 0)
+                    randomWalk2.nextValue();
+            }
+            writer.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 }
