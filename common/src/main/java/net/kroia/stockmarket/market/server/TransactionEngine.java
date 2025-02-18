@@ -123,4 +123,120 @@ public class TransactionEngine {
         }
         return fillVolume;
     }
+    public static int ghostFill(Order o1, int ghostAmount, int currentPrice)
+    {
+        if(ghostAmount == 0 || o1.getAmount()-o1.getFilledAmount() == 0)
+            return 0;
+
+        int fillAmount1 = o1.getAmount() - o1.getFilledAmount();
+        int fillVolume = Math.min(Math.abs(fillAmount1), Math.abs(ghostAmount));
+        long money = (long)fillVolume * (long)currentPrice;
+        long transferedMoney = 0;
+        int fillAmount = fillVolume;
+        if(fillAmount1 < 0)
+            fillAmount = -fillVolume;
+
+        UUID playerUUID1 = o1.getPlayerUUID();
+        BankUser user1 = ServerBankManager.getUser(playerUUID1);
+        Bank moneyBank1 = user1.getMoneyBank();
+        Bank itemBank1 = user1.getBank(o1.getItemID());
+
+        long moneyToTransfer = (long)fillVolume * (long)currentPrice;
+        if(o1.isBuy())
+        {
+            if(moneyBank1.getBalance()+(o1.getLockedMoney() + o1.getTransferedMoney()) < moneyToTransfer)
+            {
+                fillVolume = Math.min(fillVolume, (int)(moneyBank1.getBalance()+(o1.getLockedMoney() + o1.getTransferedMoney()) / currentPrice));
+                moneyToTransfer = (long)fillVolume * (long)currentPrice;
+            }
+
+            if(moneyToTransfer > 0) {
+                Bank.Status status = moneyBank1.withdrawLockedPrefered(moneyToTransfer);
+                if (status != Bank.Status.SUCCESS) {
+                    StockMarketMod.LOGGER.error("Failed to withdraw money for ghost fill: " + o1 + " Status: " + status);
+                    o1.markAsInvalid("");
+                    return 0;
+                }
+                status = itemBank1.deposit(fillVolume);
+                if (status != Bank.Status.SUCCESS) {
+                    StockMarketMod.LOGGER.error("Failed to deposit item for ghost fill: " + o1 + " Status: " + status);
+                    moneyBank1.deposit(moneyToTransfer);
+                    o1.markAsInvalid("");
+                    return 0;
+                }
+                o1.addFilledAmount(fillVolume);
+                o1.addTransferedMoney(-money);
+
+                /*if (o1.getTransferedMoney() < o1.getLockedMoney()) {
+                    long toTransfer = Math.min(moneyToTransfer, o1.getLockedMoney() - o1.getTransferedMoney());
+                    Bank.Status status = moneyBank1.withdrawLockedPrefered(toTransfer);
+                    if (status != Bank.Status.SUCCESS) {
+                        StockMarketMod.LOGGER.error("Failed to withdraw money for ghost fill: " + o1 + " Status: " + status);
+                        return 0;
+                    } else {
+                        status = itemBank1.deposit(fillVolume);
+                        if (status != Bank.Status.SUCCESS) {
+                            StockMarketMod.LOGGER.error("Failed to deposit item for ghost fill: " + o1 + " Status: " + status);
+                            moneyBank1.deposit(moneyToTransfer);
+                            return 0;
+                        }
+                        transferedMoney += toTransfer;
+                    }
+                }
+
+                if(transferedMoney < moneyToTransfer)
+                {
+                    Bank.Status status = moneyBank1.withdraw(moneyToTransfer - transferedMoney);
+                    if (status != Bank.Status.SUCCESS) {
+                        StockMarketMod.LOGGER.error("Failed to withdraw money for ghost fill: " + o1 + " Status: " + status);
+                        return 0;
+                    }
+                    else
+                        transferedMoney += moneyToTransfer - transferedMoney;
+                }
+
+
+                long lockedMoneyToTransfer = Math.min(o1.getLockedMoney() + o1.getTransferedMoney(), moneyToTransfer);
+                Bank.Status status = moneyBank1.withdrawLockedPrefered(lockedMoneyToTransfer);
+                if (status != Bank.Status.SUCCESS) {
+                    StockMarketMod.LOGGER.error("Failed to withdraw money for ghost fill: " + o1 + " Status: " + status);
+                    return 0;
+                }
+                status = moneyBank1.withdrawLockedPrefered(lockedMoneyToTransfer);
+                if (status != Bank.Status.SUCCESS) {
+                    StockMarketMod.LOGGER.error("Failed to withdraw money for ghost fill: " + o1 + " Status: " + status);
+                    return 0;
+                }*/
+
+
+            }
+        }
+        else
+        {
+            Bank.Status status = itemBank1.withdrawLockedPrefered(fillVolume);
+            if(status != Bank.Status.SUCCESS)
+            {
+                StockMarketMod.LOGGER.error("Failed to withdraw item for ghost fill: " + o1 + " Status: " + status);
+                o1.markAsInvalid("");
+                return 0;
+            }
+
+            status = moneyBank1.deposit(moneyToTransfer);
+            if(status != Bank.Status.SUCCESS)
+            {
+                StockMarketMod.LOGGER.error("Failed to deposit money for ghost fill: " + o1 + " Status: " + status);
+                itemBank1.deposit(fillVolume);
+                itemBank1.lockAmount(fillVolume);
+                o1.markAsInvalid("Would lead to an variable overflow");
+                return 0;
+            }
+            o1.addFilledAmount(-fillVolume);
+            o1.addTransferedMoney(money);
+        }
+        if(o1.isFilled())
+            o1.markAsProcessed();
+        else if(o1.getStatus() == Order.Status.PENDING)
+            o1.setStatus(Order.Status.PARTIAL);
+        return fillVolume;
+    }
 }

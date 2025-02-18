@@ -33,12 +33,19 @@ public class MatchingEngine implements ServerSaveable {
     private final PriorityQueue<LimitOrder> limitBuyOrders = new PriorityQueue<>((o1, o2) -> Double.compare(o2.getPrice(), o1.getPrice()));
     private final PriorityQueue<LimitOrder> limitSellOrders = new PriorityQueue<>(Comparator.comparingDouble(LimitOrder::getPrice));
 
+    private final GhostOrderBook ghostOrderBook = new GhostOrderBook();
     private PriceHistory priceHistory;
     public MatchingEngine(int initialPrice, PriceHistory priceHistory)
     {
         this.priceHistory = priceHistory;
         this.price = initialPrice;
         tradeVolume = 0;
+    }
+
+
+    public void update(double deltaT)
+    {
+        ghostOrderBook.updateVolume(deltaT, getPrice());
     }
 
     public void addOrder(Order order)
@@ -124,9 +131,35 @@ public class MatchingEngine implements ServerSaveable {
         ArrayList<LimitOrder> toRemove = new ArrayList<>();
 
         int fillVolume = Math.abs(marketOrder.getAmount());
+        int startPrice = getPrice();
+        int newPrice = startPrice;
+        int deltaPrice = marketOrder.isBuy() ? 1 : -1;
         for(LimitOrder limitOrder : limitOrders)
         {
-            int filledVolume = TransactionEngine.fill(marketOrder, limitOrder, limitOrder.getPrice());
+            int filledVolume = 0;
+            while(limitOrder.getPrice() != newPrice) {
+                int ghostVolume = ghostOrderBook.getAmount(newPrice, startPrice);
+                int transferedVolume = TransactionEngine.ghostFill(marketOrder, ghostVolume, newPrice);
+                filledVolume += transferedVolume;
+                if(transferedVolume > 0) {
+                    if(marketOrder.isBuy())
+                        ghostOrderBook.removeAmount(newPrice, transferedVolume);
+                    else if(marketOrder.isSell())
+                        ghostOrderBook.removeAmount(newPrice, -transferedVolume);
+                    setPrice(newPrice);
+                }
+                if(marketOrder.isFilled())
+                {
+                    return true;
+                }
+                newPrice += deltaPrice;
+                if(newPrice < 0) {
+                    newPrice = 0;
+                    break;
+                }
+            }
+
+            filledVolume += TransactionEngine.fill(marketOrder, limitOrder, limitOrder.getPrice());
 
             if(limitOrder.isFilled() || limitOrder.getStatus() == Order.Status.CANCELLED || limitOrder.getStatus() == Order.Status.INVALID)
                 toRemove.add(limitOrder);
@@ -135,7 +168,7 @@ public class MatchingEngine implements ServerSaveable {
                 break;
 
             if(filledVolume != 0) {
-                setPrice(limitOrder.getPrice());
+                newPrice = limitOrder.getPrice();
             }
 
             fillVolume -= filledVolume;
@@ -150,7 +183,29 @@ public class MatchingEngine implements ServerSaveable {
                 break;
             }
         }
+        while(fillVolume > 0)
+        {
+            // Fill the remaining volume with ghost orders
+            int ghostVolume = ghostOrderBook.getAmount(newPrice, startPrice);
+            int transferedVolume = TransactionEngine.ghostFill(marketOrder, ghostVolume, newPrice);
+            fillVolume -= transferedVolume;
+            if(transferedVolume > 0) {
+                if(marketOrder.isBuy())
+                    ghostOrderBook.removeAmount(newPrice, transferedVolume);
+                else if(marketOrder.isSell())
+                    ghostOrderBook.removeAmount(newPrice, -transferedVolume);
+                setPrice(newPrice);
+            }
+            if(marketOrder.isFilled() || marketOrder.getStatus() == Order.Status.INVALID || marketOrder.getStatus() == Order.Status.CANCELLED)
+                break;
+            newPrice += deltaPrice;
+            if(newPrice < 0) {
+                newPrice = 0;
+                break;
+            }
+        }
         limitOrders.removeAll(toRemove);
+
         if(fillVolume != 0)
         {
             marketOrder.markAsInvalid(StockMarketTextMessages.getOrderInvalidReasonOrdersToFillTransactionMessage(marketOrder.isBuy()));
@@ -410,6 +465,14 @@ public class MatchingEngine implements ServerSaveable {
             if(index >= 0 && index < tiles)
                 volume[index] += order.getAmount()-order.getFilledAmount();
         }
+
+        for(int i=minPrice; i<maxPrice; i++)
+        {
+            int index = (int)((float)(i - minPrice) / priceStep);
+            if(index >= 0 && index < tiles)
+                volume[index] += ghostOrderBook.getAmount(i, price);
+        }
+
         orderbookVolume.setVolume(volume);
         return orderbookVolume;
     }

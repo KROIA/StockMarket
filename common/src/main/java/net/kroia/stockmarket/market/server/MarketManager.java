@@ -31,6 +31,11 @@ public class MarketManager implements ServerSaveable {
         priceHistory = history;
     }
 
+    public void update(double deltaT)
+    {
+        matchingEngine.update(deltaT);
+    }
+
     public void clear()
     {
         if(tradingBot != null)

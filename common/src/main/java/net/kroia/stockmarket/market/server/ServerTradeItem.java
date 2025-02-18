@@ -22,7 +22,7 @@ public class ServerTradeItem implements ServerSaveable {
     private final ArrayList<ServerPlayer> subscribers = new ArrayList<>();
     private final MarketManager marketManager;
 
-    private long lastMillis = 0;
+    private long lastMillis = System.currentTimeMillis();
     protected long updateTimerIntervallMS = 100;
 
     private boolean enabled = true;
@@ -43,6 +43,11 @@ public class ServerTradeItem implements ServerSaveable {
         this.marketManager = new MarketManager(this, 0, priceHistory);
 
         TickEvent.SERVER_POST.register(this::onServerTick);
+    }
+
+    public void update(double deltaT)
+    {
+        this.marketManager.update(deltaT);
     }
     public void cleanup()
     {
@@ -235,13 +240,16 @@ public class ServerTradeItem implements ServerSaveable {
     }
 
     public void onServerTick(MinecraftServer server) {
-        if(subscribers.isEmpty() || !enabled)
+        if(!enabled)
             return;
 
         long currentTime = System.currentTimeMillis();
         if(currentTime - lastMillis > updateTimerIntervallMS) {
+            double deltaTime = (double)(currentTime - lastMillis) / 1000.0;
             lastMillis = currentTime;
-            notifySubscribers();
+            update(Math.min(deltaTime,1));
+            if(!subscribers.isEmpty())
+                notifySubscribers();
         }
     }
 }
