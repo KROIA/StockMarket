@@ -97,14 +97,14 @@ public class ServerTradingBot implements ServerSaveable {
     public void setParent(MarketManager parent)
     {
         this.parent = parent;
-        if(this.parent != null)
+       /* if(this.parent != null)
         {
             TickEvent.SERVER_POST.register(this::onServerTick);
         }
         else
         {
             TickEvent.SERVER_POST.unregister(this::onServerTick);
-        }
+        }*/
     }
     public MarketManager getParent()
     {

@@ -57,6 +57,11 @@ public class StockMarketNetworking {
         CHANNEL.sendToServer(packet);
     }
     public static void sendToClient(ServerPlayer receiver, INetworkPacket packet) {
-        CHANNEL.sendToPlayer(receiver, packet);
+        try {
+            CHANNEL.sendToPlayer(receiver, packet);
+        } catch (Exception e) {
+            StockMarketMod.LOGGER.error("Failed to send packet to player: " + receiver.getName().getString());
+            e.printStackTrace();
+        }
     }
 }

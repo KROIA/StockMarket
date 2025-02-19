@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.market.server;
 
+import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
@@ -38,6 +39,15 @@ public class ServerMarket implements ServerSaveable
 
     private static final Map<String, ServerTradeItem> tradeItems = new HashMap<>();
 
+    // For better performance when there are many trade items
+    // The items are processed in chunks
+    // Downside: The update rate is not every tick but every n't ticks depending on how many chunks there are
+    private static final int tradeItemsChunkSize = 100;
+    private static final ArrayList<ArrayList<ServerTradeItem>> tradeItemsChunks = new ArrayList<>(); // For processing trade items in chunks
+    private static int tradeItemUpdateCallCounter = 0;
+
+
+
     private static UUID botUserUUID = UUID.nameUUIDFromBytes(StockMarketModSettings.MarketBot.USER_NAME.getBytes());
 
     public static boolean isInitialized()
@@ -52,16 +62,19 @@ public class ServerMarket implements ServerSaveable
             addTradeItemIfNotExists(item.getKey(), item.getValue());
         }
         initialized = true;
+        TickEvent.SERVER_POST.register(ServerMarket::onServerTick);
     }
 
     public static void clear()
     {
+        TickEvent.SERVER_POST.unregister(ServerMarket::onServerTick);
         initialized = false;
         for(ServerTradeItem item : tradeItems.values())
         {
             item.clear();
         }
         tradeItems.clear();
+        tradeItemsChunks.clear();
         shiftPriceHistoryInterval = StockMarketModSettings.Market.SHIFT_PRICE_CANDLE_INTERVAL_MS;
     }
 
@@ -177,6 +190,7 @@ public class ServerMarket implements ServerSaveable
         }
         item.cleanup();
         tradeItems.remove(itemID);
+        rebuildTradeItemsChunks();
     }
     private static boolean addTradeItem_internal(String itemID, int startPrice)
     {
@@ -187,6 +201,7 @@ public class ServerMarket implements ServerSaveable
         }
         ServerTradeItem tradeItem = new ServerTradeItem(itemID, startPrice);
         tradeItems.put(itemID, tradeItem);
+        rebuildTradeItemsChunks();
 
         MinecraftServer server = UtilitiesPlatform.getServer();
 
@@ -535,6 +550,7 @@ public class ServerMarket implements ServerSaveable
     @Override
     public boolean save(CompoundTag tag) {
         boolean success = true;
+        long startMillis = System.currentTimeMillis();
         tag.putLong("shiftPriceHistoryInterval", shiftPriceHistoryInterval);
 
         ListTag tradeItems = new ListTag();
@@ -545,6 +561,8 @@ public class ServerMarket implements ServerSaveable
             tradeItems.add(tradeItemTag);
         }
         tag.put("tradeItems", tradeItems);
+        long endMillis = System.currentTimeMillis();
+        StockMarketMod.LOGGER.info("[SERVER] Saving ServerMarket took "+(endMillis-startMillis)+"ms");
 
         return success;
     }
@@ -572,6 +590,7 @@ public class ServerMarket implements ServerSaveable
             }
             ServerMarket.tradeItems.clear();
             ServerMarket.tradeItems.putAll(tradeItemsMap);
+            ServerMarket.rebuildTradeItemsChunks();
         } catch (Exception e) {
             StockMarketMod.LOGGER.error("[SERVER] Error loading ServerMarket from NBT");
             e.printStackTrace();
@@ -590,6 +609,53 @@ public class ServerMarket implements ServerSaveable
                 removeTradingItem(itemID);
             }
         }
+    }
 
+    public static void onServerTick(MinecraftServer server)
+    {
+        if(!initialized)
+            return;
+
+
+        long currentTime = System.currentTimeMillis();
+
+        // For better performance when there are many trade items
+        // The items are processed in chunks
+        // Downside: The update rate is not every tick but every n't ticks depending on how many chunks there are
+        ArrayList<ServerTradeItem> chunk = tradeItemsChunks.get(tradeItemUpdateCallCounter);
+        tradeItemUpdateCallCounter = (tradeItemUpdateCallCounter + 1) % tradeItemsChunks.size();
+        for(ServerTradeItem item : chunk)
+        {
+            item.onServerTick(server);
+        }
+
+
+        long currentTime2 = System.currentTimeMillis();
+        StockMarketMod.LOGGER.info("Market update time: " + (currentTime2-currentTime)+"ms");
+    }
+
+    private static void rebuildTradeItemsChunks()
+    {
+        tradeItemsChunks.clear();
+
+        int chunks = tradeItems.size() / tradeItemsChunkSize;
+        if(tradeItems.size() % tradeItemsChunkSize != 0)
+            chunks++;
+        for(int i = 0; i < chunks; i++)
+        {
+            ArrayList<ServerTradeItem> chunk = new ArrayList<>();
+            int start = i * tradeItemsChunkSize;
+            int end = Math.min(start + tradeItemsChunkSize, tradeItems.size());
+            int index = 0;
+            for(ServerTradeItem item : tradeItems.values())
+            {
+                if(index >= start && index < end)
+                {
+                    chunk.add(item);
+                }
+                index++;
+            }
+            tradeItemsChunks.add(chunk);
+        }
     }
 }

@@ -20,6 +20,7 @@ import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 
@@ -44,7 +45,7 @@ public class StockMarketDataHandler {
         if(tickCounter >= saveTickInterval)
         {
             tickCounter = 0;
-            saveAll();
+            saveAllAsync();
         }
     }
 
@@ -80,6 +81,18 @@ public class StockMarketDataHandler {
             StockMarketMod.LOGGER.error("Failed to save StockMarket Mod data.");
         return success;
     }
+    public static CompletableFuture<Boolean> saveAllAsync()
+    {
+        StockMarketMod.LOGGER.info("Saving StockMarket Mod data...");
+
+        CompletableFuture<Boolean> fut1 = save_playerAsync();
+        CompletableFuture<Boolean> fut2;
+        if(ServerMarket.isInitialized())
+            fut2 = save_marketAsync();
+        else
+            fut2 = CompletableFuture.completedFuture(false);
+        return fut1.thenCombine(fut2, (a, b) -> a && b);
+    }
 
     public static boolean loadAll()
     {
@@ -104,6 +117,16 @@ public class StockMarketDataHandler {
         ServerPlayerList.saveToTag(data);
         return saveDataCompound(PLAYER_DATA_FILE_NAME, data);
     }
+    public static CompletableFuture<Boolean> save_playerAsync()
+    {
+        CompoundTag data = new CompoundTag();
+        ServerPlayerList.saveToTag(data);
+        // Save player data async because it can take much time when there are many players
+        CompletableFuture<Boolean> future = CompletableFuture.supplyAsync(() -> {
+            return saveDataCompound(PLAYER_DATA_FILE_NAME, data);
+        });
+        return future;
+    }
     public static boolean load_player()
     {
         CompoundTag data = readDataCompound(PLAYER_DATA_FILE_NAME);
@@ -120,8 +143,29 @@ public class StockMarketDataHandler {
         CompoundTag marketData = new CompoundTag();
         success = market.save(marketData);
         data.put("market", marketData);
-        saveDataCompound(MARKET_DATA_FILE_NAME, data);
+
+        if(success)
+            success = saveDataCompound(MARKET_DATA_FILE_NAME, data);
         return success;
+    }
+    public static CompletableFuture<Boolean> save_marketAsync()
+    {
+        CompoundTag data = new CompoundTag();
+        ServerMarket market = new ServerMarket();
+        CompoundTag marketData = new CompoundTag();
+
+        CompletableFuture<Boolean> future;
+        if(market.save(marketData)) {
+            data.put("market", marketData);
+
+            // Save market data async because it can take much time when there are many trading items
+            future = CompletableFuture.supplyAsync(() -> {
+                return saveDataCompound(MARKET_DATA_FILE_NAME, data);
+            });
+        }
+        else
+            future = CompletableFuture.completedFuture(false);
+        return future;
     }
     public static boolean load_market()
     {
@@ -199,6 +243,8 @@ public class StockMarketDataHandler {
         return null;
     }
     public static boolean saveDataCompound(String fileName, CompoundTag data) {
+        long startMillis = System.currentTimeMillis();
+        boolean success = true;
         File file = new File(saveFolder, fileName);
         try {
             if (COMPRESSED)
@@ -208,18 +254,21 @@ public class StockMarketDataHandler {
         } catch (IOException e) {
             StockMarketMod.LOGGER.error("Failed to save data to file: " + fileName);
             e.printStackTrace();
-            return false;
+            success = false;
         } catch(Exception e)
         {
             StockMarketMod.LOGGER.error("Failed to save data to file: " + fileName);
             e.printStackTrace();
-            return false;
+            success = false;
         }
-        return true;
+        long endMillis = System.currentTimeMillis();
+        StockMarketMod.LOGGER.info("Saving data to file: " + fileName + " took " + (endMillis - startMillis) + "ms");
+        return success;
     }
 
     public static boolean saveAsJson(Object o, String fileName)
     {
+
         String json = GSON.toJson(o);
         try {
             Path path = Paths.get(getSaveFolder()+"/"+fileName);

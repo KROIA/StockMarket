@@ -6,6 +6,7 @@ import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.LongArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.stockmarket.StockMarketMod;
@@ -100,6 +101,29 @@ public class StockMarketCommands {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
                                     ServerMarket.createDefaultBots();
+                                    player.sendSystemMessage(Component.literal("Default bots created"));
+
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                        )
+                        .then(Commands.literal("createDefaultBots_allItems")
+                                .requires(source -> source.hasPermission(2))
+                                .executes(context -> {
+                                    CommandSourceStack source = context.getSource();
+                                    ServerPlayer player = source.getPlayerOrException();
+                                    ArrayList<String> items = ServerBankManager.getPotentialBankItemIDs();
+
+                                    try {
+                                        for(String itemID : items)
+                                        {
+                                            ServerVolatilityBot bot = new ServerVolatilityBot();
+                                            if(ServerMarket.addTradeItemIfNotExists(itemID, 100))
+                                                ServerMarket.setTradingBot(itemID, bot);
+                                        }
+                                    } catch (Exception e) {
+                                        e.printStackTrace();
+                                    }
+
                                     player.sendSystemMessage(Component.literal("Default bots created"));
 
                                     return Command.SINGLE_SUCCESS;
@@ -714,10 +738,13 @@ public class StockMarketCommands {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
 
-                                    if(StockMarketDataHandler.saveAll())
-                                        PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getStockMarketDataSavedMessage());
-                                    else
-                                        PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getStockMarketDataSaveFailedMessage());
+                                    StockMarketDataHandler.saveAllAsync().thenAccept(success -> {
+                                        if(success)
+                                            PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getStockMarketDataSavedMessage());
+                                        else
+                                            PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getStockMarketDataSaveFailedMessage());
+                                    });
+
 
                                     return Command.SINGLE_SUCCESS;
                                 })

@@ -183,8 +183,8 @@ public class TradeScreen extends GuiScreen {
         }
     }
 
-    public static void onAvailableTradeItemsChanged() {
-    }
+    //public static void onAvailableTradeItemsChanged() {
+    //}
 
     public static void updatePlotsData() {
         if(instance == null)

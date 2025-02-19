@@ -4,6 +4,7 @@ import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.modutilities.ServerSaveable;
+import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncPricePacket;
@@ -34,7 +35,7 @@ public class ServerTradeItem implements ServerSaveable {
         this.priceHistory = new PriceHistory(itemID, startPrice);
         this.marketManager = new MarketManager(this, startPrice, priceHistory);
 
-        TickEvent.SERVER_POST.register(this::onServerTick);
+        //TickEvent.SERVER_POST.register(this::onServerTick);
     }
 
     private ServerTradeItem()
@@ -42,16 +43,16 @@ public class ServerTradeItem implements ServerSaveable {
         this.priceHistory = new PriceHistory("", 0);
         this.marketManager = new MarketManager(this, 0, priceHistory);
 
-        TickEvent.SERVER_POST.register(this::onServerTick);
+        //TickEvent.SERVER_POST.register(this::onServerTick);
     }
 
-    public void update(double deltaT)
+    /*public void update(MinecraftServer server, double deltaT)
     {
         this.marketManager.update(deltaT);
-    }
+    }*/
     public void cleanup()
     {
-        TickEvent.SERVER_POST.unregister(this::onServerTick);
+        //TickEvent.SERVER_POST.unregister(this::onServerTick);
         enabled = false;
         removeTradingBot();
         clear();
@@ -85,7 +86,7 @@ public class ServerTradeItem implements ServerSaveable {
     {
         return marketManager.getTradingBot();
     }
-
+/*
     public void setUpdateInterval(long intervalMillis)
     {
         updateTimerIntervallMS = intervalMillis;
@@ -94,7 +95,7 @@ public class ServerTradeItem implements ServerSaveable {
     {
         return updateTimerIntervallMS;
     }
-
+*/
     public String getItemID()
     {
         return itemID;
@@ -209,14 +210,18 @@ public class ServerTradeItem implements ServerSaveable {
     @Override
     public boolean save(CompoundTag tag) {
         boolean success = true;
+        //long startMillis = System.currentTimeMillis();
         tag.putString("itemID", itemID);
         CompoundTag matchingEngineTag = new CompoundTag();
         success &= marketManager.save(matchingEngineTag);
         tag.put("matchingEngine", matchingEngineTag);
-
+        //long matchingEngineMillis = System.currentTimeMillis();
         CompoundTag priceHistoryTag = new CompoundTag();
         success &= priceHistory.save(priceHistoryTag);
         tag.put("priceHistory", priceHistoryTag);
+
+        //long endMillis = System.currentTimeMillis();
+        //StockMarketMod.LOGGER.info("[SERVER] Saving ServerMarket item: "+itemID + " " +(endMillis-startMillis)+"ms matching engine part: "+(matchingEngineMillis-startMillis)+"ms price history part: "+(endMillis-matchingEngineMillis)+"ms");
         return success;
     }
 
@@ -243,11 +248,11 @@ public class ServerTradeItem implements ServerSaveable {
         if(!enabled)
             return;
 
+        this.marketManager.onServerTick(server);
+
         long currentTime = System.currentTimeMillis();
         if(currentTime - lastMillis > updateTimerIntervallMS) {
-            double deltaTime = (double)(currentTime - lastMillis) / 1000.0;
             lastMillis = currentTime;
-            update(Math.min(deltaTime,1));
             if(!subscribers.isEmpty())
                 notifySubscribers();
         }

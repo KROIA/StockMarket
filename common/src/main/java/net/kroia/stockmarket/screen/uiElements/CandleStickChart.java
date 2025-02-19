@@ -108,10 +108,13 @@ public class CandleStickChart extends GuiElement {
         }
 
 
-
+        long maxVolume = priceHistory.getMaxVolume();
         for(int i=priceHistory.size()-1; i>=0; i--)
         {
             x -= candleWidth;
+            long volume = priceHistory.getVolume(i);
+            drawRect(x, getHeight()-1, candleWidth, (int)-map(volume, 0, maxVolume, 0, getHeight()/11+PADDING-2), 0xFF91a9b8);
+
             int low = priceHistory.getLowPrice(i);
             int high = priceHistory.getHighPrice(i);
             int close = priceHistory.getClosePrice(i);
@@ -222,10 +225,10 @@ public class CandleStickChart extends GuiElement {
 
     private int getChartYPos(int price)
     {
-        return map(price, chartViewMinPrice, chartViewMaxPrice, getHeight()-PADDING, PADDING);
+        return map(price, chartViewMinPrice, chartViewMaxPrice, getHeight()-PADDING - getHeight()/10, PADDING);
     }
     private int getPriceFromYPos(int y)
     {
-        return Math.round(mapF(y, getHeight()-PADDING, PADDING, chartViewMinPrice, chartViewMaxPrice));
+        return Math.round(mapF(y, getHeight()-PADDING-getHeight()/10.f, PADDING, chartViewMinPrice, chartViewMaxPrice));
     }
 }

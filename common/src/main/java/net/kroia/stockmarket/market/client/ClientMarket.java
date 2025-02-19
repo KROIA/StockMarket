@@ -96,35 +96,33 @@ public class ClientMarket {
         syncTradeItemsPacket = packet;
         syncTradeItemsChanged = true;
 
-        Map<String, ClientTradeItem> tradeItems = new HashMap<>();
-        ArrayList<SyncPricePacket> syncPricePackets = packet.getUpdatePricePackets();
-        StockMarketMod.LOGGER.info("Received " + syncPricePackets.size() + " trade items");
-        for(SyncPricePacket syncPricePacket : syncPricePackets)
+        if(packet.getCommand() == SyncTradeItemsPacket.Command.CLEAR_ALL)
         {
-            ClientTradeItem orgInstance = ClientMarket.tradeItems.get(syncPricePacket.getPriceHistory().getItemID());
-            ClientTradeItem tradeItem;
-            if(orgInstance != null)
-            {
-                tradeItems.put(syncPricePacket.getPriceHistory().getItemID(), orgInstance);
-                orgInstance.handlePacket(syncPricePacket);
-                tradeItem = orgInstance;
-                continue;
-            }
-            else {
-                tradeItem = new ClientTradeItem(syncPricePacket.getPriceHistory().getItemID());
-                tradeItem.handlePacket(syncPricePacket);
-                tradeItems.put(tradeItem.getItemID(), tradeItem);
-            }
-
-            StockMarketMod.LOGGER.info("Trade item: {}", tradeItem.getItemID());
-            if(Objects.equals(syncPricePacket.getPriceHistory().getItemID(), TradeScreen.getItemID()))
-            {
-                TradeScreen.updatePlotsData();
-            }
+            tradeItems.clear();
+            return;
         }
-        ClientMarket.tradeItems = tradeItems;
-        TradeScreen.onAvailableTradeItemsChanged();
 
+        SyncPricePacket syncPricePacket = packet.getSyncPricePacket();
+        ClientTradeItem orgInstance = ClientMarket.tradeItems.get(syncPricePacket.getPriceHistory().getItemID());
+        ClientTradeItem tradeItem;
+        if(orgInstance != null)
+        {
+            tradeItems.put(syncPricePacket.getPriceHistory().getItemID(), orgInstance);
+            orgInstance.handlePacket(syncPricePacket);
+            tradeItem = orgInstance;
+            return;
+        }
+        else {
+            tradeItem = new ClientTradeItem(syncPricePacket.getPriceHistory().getItemID());
+            tradeItem.handlePacket(syncPricePacket);
+            tradeItems.put(tradeItem.getItemID(), tradeItem);
+        }
+
+        StockMarketMod.LOGGER.info("Trade item: {}", tradeItem.getItemID());
+        if(Objects.equals(syncPricePacket.getPriceHistory().getItemID(), TradeScreen.getItemID()))
+        {
+            TradeScreen.updatePlotsData();
+        }
     }
 
     public static void handlePacket(SyncOrderPacket packet)

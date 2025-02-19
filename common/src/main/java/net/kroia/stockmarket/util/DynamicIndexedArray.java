@@ -22,6 +22,11 @@ public class DynamicIndexedArray{
     {
         return array.length;
     }
+
+    public float[] getArray() {
+        return array;
+    }
+
     public int getIndexOffset()
     {
         return indexOffset;

@@ -12,6 +12,7 @@ import net.kroia.stockmarket.util.OrderbookVolume;
 import net.kroia.stockmarket.util.PriceHistory;
 import net.kroia.stockmarket.util.Timestamp;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.server.MinecraftServer;
 
 import java.util.ArrayList;
 import java.util.UUID;
@@ -31,9 +32,11 @@ public class MarketManager implements ServerSaveable {
         priceHistory = history;
     }
 
-    public void update(double deltaT)
+    public void onServerTick(MinecraftServer server)
     {
-        matchingEngine.update(deltaT);
+        if(tradingBot != null)
+            tradingBot.onServerTick(server);
+        matchingEngine.onServerTick(server);
     }
 
     public void clear()

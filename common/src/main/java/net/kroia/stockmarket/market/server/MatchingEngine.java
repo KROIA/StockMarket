@@ -13,6 +13,7 @@ import net.kroia.stockmarket.util.PriceHistory;
 import net.kroia.stockmarket.util.StockMarketTextMessages;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.ArrayList;
@@ -43,9 +44,9 @@ public class MatchingEngine implements ServerSaveable {
     }
 
 
-    public void update(double deltaT)
+    public void onServerTick(MinecraftServer server)
     {
-        ghostOrderBook.updateVolume(deltaT, getPrice());
+        ghostOrderBook.updateVolume(getPrice());
     }
 
     public void addOrder(Order order)
@@ -157,6 +158,7 @@ public class MatchingEngine implements ServerSaveable {
                     else if(marketOrder.isSell())
                         ghostOrderBook.removeAmount(newPrice, -transferedVolume);
                     setPrice(newPrice);
+                    priceHistory.addVolume(Math.abs(transferedVolume));
                 }
                 if(marketOrder.isFilled())
                 {
@@ -169,7 +171,8 @@ public class MatchingEngine implements ServerSaveable {
                 }
             }
 
-            filledVolume += TransactionEngine.fill(marketOrder, limitOrder, limitOrder.getPrice());
+            int transferedVolume = TransactionEngine.fill(marketOrder, limitOrder, limitOrder.getPrice());
+            filledVolume += transferedVolume;
 
             if(limitOrder.isFilled() || limitOrder.getStatus() == Order.Status.CANCELLED || limitOrder.getStatus() == Order.Status.INVALID)
                 toRemove.add(limitOrder);
@@ -179,6 +182,7 @@ public class MatchingEngine implements ServerSaveable {
 
             if(filledVolume != 0) {
                 newPrice = limitOrder.getPrice();
+                priceHistory.addVolume(Math.abs(transferedVolume));
             }
 
             fillVolume -= filledVolume;
@@ -213,6 +217,7 @@ public class MatchingEngine implements ServerSaveable {
                     ghostOrderBook.removeAmount(newPrice, transferedVolume);
                 else if(marketOrder.isSell())
                     ghostOrderBook.removeAmount(newPrice, -transferedVolume);
+                priceHistory.addVolume(Math.abs(transferedVolume));
                 setPrice(newPrice);
             }
             if(marketOrder.isFilled() || marketOrder.getStatus() == Order.Status.INVALID || marketOrder.getStatus() == Order.Status.CANCELLED)
@@ -276,6 +281,7 @@ public class MatchingEngine implements ServerSaveable {
                         ghostOrderBook.removeAmount(newPrice, transferedVolume);
                     else if(limitOrder.isSell())
                         ghostOrderBook.removeAmount(newPrice, -transferedVolume);
+                    priceHistory.addVolume(Math.abs(transferedVolume));
                     setPrice(newPrice);
                 }
                 if(limitOrder.isFilled())
@@ -308,6 +314,7 @@ public class MatchingEngine implements ServerSaveable {
             if(transferedVolume != 0)
             {
                 setPrice(fillWith.getPrice());
+                priceHistory.addVolume(Math.abs(transferedVolume));
             }
             fillVolume -= transferedVolume;
 
@@ -343,6 +350,7 @@ public class MatchingEngine implements ServerSaveable {
                     ghostOrderBook.removeAmount(newPrice, transferedVolume);
                 else if(limitOrder.isSell())
                     ghostOrderBook.removeAmount(newPrice, -transferedVolume);
+                priceHistory.addVolume(Math.abs(transferedVolume));
                 setPrice(newPrice);
             }
             if(limitOrder.isFilled())
@@ -636,6 +644,10 @@ public class MatchingEngine implements ServerSaveable {
         tag.put("buy_orders", buyOrdersList);
         tag.put("sell_orders", sellOrdersList);
         tag.putBoolean("market_open", marketOpen);
+
+        CompoundTag ghostOrderBookTag = new CompoundTag();
+        success &= ghostOrderBook.save(ghostOrderBookTag);
+        tag.put("ghost_order_book", ghostOrderBookTag);
         return success;
     }
 
@@ -676,6 +688,12 @@ public class MatchingEngine implements ServerSaveable {
                 success = false;
             else
                 limitSellOrders.add(order);
+        }
+
+        if(tag.contains("ghost_order_book"))
+        {
+            CompoundTag ghostOrderBookTag = tag.getCompound("ghost_order_book");
+            success &= ghostOrderBook.load(ghostOrderBookTag);
         }
         return success;
     }
