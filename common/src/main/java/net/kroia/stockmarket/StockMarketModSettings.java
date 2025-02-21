@@ -2,6 +2,7 @@ package net.kroia.stockmarket;
 
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBotFactory;
 import net.kroia.stockmarket.util.StockMarketDataHandler;
 import java.util.ArrayList;
@@ -21,8 +22,8 @@ public class StockMarketModSettings {
     public static final class Market
     {
         public static final long SHIFT_PRICE_CANDLE_INTERVAL_MS = 60000;
-        public static HashMap<String, Integer> TRADABLE_ITEMS;
-        public static ArrayList<String> NOT_TRADABLE_ITEMS;
+        public static HashMap<ItemID, Integer> TRADABLE_ITEMS;
+        //public static ArrayList<ItemID> NOT_TRADABLE_ITEMS;
 
         public static void init()
         {
@@ -35,8 +36,15 @@ public class StockMarketModSettings {
             //TRADABLE_ITEMS.put("minecraft:oak_log", 10);
             //TRADABLE_ITEMS.put("minecraft:netherite_scrap", 500);
 
-            NOT_TRADABLE_ITEMS = new ArrayList<>();
-            NOT_TRADABLE_ITEMS.add(BankSystemMod.MOD_ID+":"+MoneyItem.NAME);
+            //NOT_TRADABLE_ITEMS = new ArrayList<>();
+            //NOT_TRADABLE_ITEMS.add(BankSystemMod.MOD_ID+":"+MoneyItem.NAME);
+        }
+
+        public static ArrayList<ItemID> getNotTradableItems()
+        {
+            ArrayList<ItemID> items = new ArrayList<>();
+            items.add(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem.NAME));
+            return items;
         }
     }
 

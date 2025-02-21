@@ -3,6 +3,7 @@ package net.kroia.stockmarket.market.server;
 import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ServerSaveable;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
@@ -18,7 +19,7 @@ import java.util.ArrayList;
 import java.util.UUID;
 
 public class ServerTradeItem implements ServerSaveable {
-    private String itemID;
+    private ItemID itemID;
     private final PriceHistory priceHistory;
     private final ArrayList<ServerPlayer> subscribers = new ArrayList<>();
     private final MarketManager marketManager;
@@ -29,7 +30,7 @@ public class ServerTradeItem implements ServerSaveable {
     private boolean enabled = true;
 
 
-    public ServerTradeItem(String itemID, int startPrice)
+    public ServerTradeItem(ItemID itemID, int startPrice)
     {
         this.itemID = itemID;
         this.priceHistory = new PriceHistory(itemID, startPrice);
@@ -40,8 +41,9 @@ public class ServerTradeItem implements ServerSaveable {
 
     private ServerTradeItem()
     {
-        this.priceHistory = new PriceHistory("", 0);
+        this.priceHistory = new PriceHistory(null, 0);
         this.marketManager = new MarketManager(this, 0, priceHistory);
+
 
         //TickEvent.SERVER_POST.register(this::onServerTick);
     }
@@ -96,7 +98,7 @@ public class ServerTradeItem implements ServerSaveable {
         return updateTimerIntervallMS;
     }
 */
-    public String getItemID()
+    public ItemID getItemID()
     {
         return itemID;
     }
@@ -211,7 +213,9 @@ public class ServerTradeItem implements ServerSaveable {
     public boolean save(CompoundTag tag) {
         boolean success = true;
         //long startMillis = System.currentTimeMillis();
-        tag.putString("itemID", itemID);
+        CompoundTag itemTag = new CompoundTag();
+        success &= itemID.save(itemTag);
+        tag.put("itemID", itemTag);
         CompoundTag matchingEngineTag = new CompoundTag();
         success &= marketManager.save(matchingEngineTag);
         tag.put("matchingEngine", matchingEngineTag);
@@ -233,15 +237,28 @@ public class ServerTradeItem implements ServerSaveable {
                 !tag.contains("matchingEngine") ||
                 !tag.contains("priceHistory"))
             return false;
+        boolean success = true;
 
-        itemID = tag.getString("itemID");
+        String oldItemID = tag.getString("itemID");
+        if(oldItemID.compareTo("")==0)
+        {
+            if(itemID == null)
+            {
+                itemID = new ItemID(tag.getCompound("itemID"));
+            }
+            else
+                success = itemID.load(tag.getCompound("itemID"));
+        }
+        else {
+            itemID = new ItemID(oldItemID);
+        }
         marketManager.load(tag.getCompound("matchingEngine"));
 
         priceHistory.load(tag.getCompound("priceHistory"));
         marketManager.setItemID(itemID);
         priceHistory.setItemID(itemID);
 
-        return !itemID.isEmpty();
+        return success;
     }
 
     public void onServerTick(MinecraftServer server) {

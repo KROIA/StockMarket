@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.market.server.bot;
 
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.StockMarketModSettings;
 import net.minecraft.nbt.CompoundTag;
 

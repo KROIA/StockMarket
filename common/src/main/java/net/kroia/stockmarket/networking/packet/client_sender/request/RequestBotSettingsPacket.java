@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.networking.packet.client_sender.request;
 
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.networking.NetworkPacket;
 import net.kroia.stockmarket.market.server.ServerMarket;
@@ -10,7 +11,7 @@ import net.minecraft.server.level.ServerPlayer;
 
 public class RequestBotSettingsPacket extends NetworkPacket {
 
-    String itemID;
+    ItemID itemID;
 
     private RequestBotSettingsPacket() {
         super();
@@ -20,7 +21,7 @@ public class RequestBotSettingsPacket extends NetworkPacket {
         super(buf);
     }
 
-    public static void sendPacket(String itemID)
+    public static void sendPacket(ItemID itemID)
     {
         RequestBotSettingsPacket packet = new RequestBotSettingsPacket();
         packet.itemID = itemID;
@@ -29,21 +30,17 @@ public class RequestBotSettingsPacket extends NetworkPacket {
 
     @Override
     public void toBytes(FriendlyByteBuf buf) {
-        buf.writeUtf(itemID);
+        buf.writeItem(itemID.getStack());
     }
 
     @Override
     public void fromBytes(FriendlyByteBuf buf) {
-        itemID = buf.readUtf();
+        itemID = new ItemID(buf.readItem());
     }
 
     @Override
     protected void handleOnServer(ServerPlayer sender) {
         if(sender.hasPermissions(2)) {
-            String id = ItemUtilities.getNormalizedItemID(itemID);
-            if(id == null)
-                return;
-
             SyncBotSettingsPacket.sendPacket(sender, itemID, ServerMarket.getBotUserUUID());
         }
     }

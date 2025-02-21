@@ -84,6 +84,8 @@
   "message.stockmarket.order_filled_amount": "Gefüllte Mänge: {amount} {item_name}",
   "message.stockmarket.order_invalid_reason": "Ungültigkeits Grund: {reason}",
   "message.stockmarket.order_invalid_reason_market_closed": "Markt ist geschlossen",
+  "message.stockmarket.need_creative_mode_for_this_screen": "Du musst im Kreativmodus sein um auf diesen Bildschirm zuzugreifen",
+
 
   "message.stockmarket.no_trading_item_available": "Kein Handels Item verfügbar",
   "gui.stockmarket.bot_settings_screen.change_item": "Item ändern",

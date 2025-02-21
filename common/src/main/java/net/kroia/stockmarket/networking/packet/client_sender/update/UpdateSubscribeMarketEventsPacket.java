@@ -1,16 +1,17 @@
 package net.kroia.stockmarket.networking.packet.client_sender.update;
 
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.NetworkPacket;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 public class UpdateSubscribeMarketEventsPacket extends NetworkPacket {
-    private String itemID;
+    private ItemID itemID;
     private boolean subscribe;
 
 
-    public UpdateSubscribeMarketEventsPacket(String itemID, boolean subscribe) {
+    public UpdateSubscribeMarketEventsPacket(ItemID itemID, boolean subscribe) {
         super();
         this.itemID = itemID;
         this.subscribe = subscribe;
@@ -25,22 +26,22 @@ public class UpdateSubscribeMarketEventsPacket extends NetworkPacket {
     @Override
     public void toBytes(FriendlyByteBuf buf)
     {
-        buf.writeUtf(itemID);
+        buf.writeItem(itemID.getStack());
         buf.writeBoolean(subscribe);
     }
 
     @Override
     public void fromBytes(FriendlyByteBuf buf)
     {
-        this.itemID = buf.readUtf();
+        this.itemID = new ItemID(buf.readItem());
         this.subscribe = buf.readBoolean();
     }
 
-    public static void generateRequest(String itemID, boolean subscribe) {
+    public static void generateRequest(ItemID itemID, boolean subscribe) {
         StockMarketNetworking.sendToServer(new UpdateSubscribeMarketEventsPacket(itemID, subscribe));
     }
 
-    public String getItemID() {
+    public ItemID getItemID() {
         return itemID;
     }
     public boolean doesSubscribe() {

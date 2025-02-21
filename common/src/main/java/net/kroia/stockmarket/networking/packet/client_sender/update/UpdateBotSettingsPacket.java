@@ -4,6 +4,7 @@ import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.banking.bank.MoneyBank;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.NetworkPacket;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
@@ -15,7 +16,7 @@ import net.minecraft.server.level.ServerPlayer;
 
 public class UpdateBotSettingsPacket extends NetworkPacket {
 
-    String itemID;
+    ItemID itemID;
     ServerVolatilityBot.Settings settings;
 
     private boolean destroyBot;
@@ -35,7 +36,7 @@ public class UpdateBotSettingsPacket extends NetworkPacket {
         super(buf);
     }
 
-    public static void sendPacket(String itemID, ServerVolatilityBot.Settings settings, boolean destroyBot, boolean createBot, boolean marketOpen)
+    public static void sendPacket(ItemID itemID, ServerVolatilityBot.Settings settings, boolean destroyBot, boolean createBot, boolean marketOpen)
     {
         UpdateBotSettingsPacket packet = new UpdateBotSettingsPacket();
         packet.itemID = itemID;
@@ -47,7 +48,7 @@ public class UpdateBotSettingsPacket extends NetworkPacket {
         packet.setBotMoneyBalance = false;
         StockMarketNetworking.sendToServer(packet);
     }
-    public static void sendPacket(String itemID, ServerVolatilityBot.Settings settings, boolean destroyBot, boolean createBot, boolean marketOpen,
+    public static void sendPacket(ItemID itemID, ServerVolatilityBot.Settings settings, boolean destroyBot, boolean createBot, boolean marketOpen,
                                   boolean setItemBalance, long itemBalance, boolean setMoneyBalance, long moneyBalance)
     {
         UpdateBotSettingsPacket packet = new UpdateBotSettingsPacket();
@@ -65,7 +66,7 @@ public class UpdateBotSettingsPacket extends NetworkPacket {
 
     @Override
     public void toBytes(FriendlyByteBuf buf) {
-        buf.writeUtf(itemID);
+        buf.writeItem(itemID.getStack());
         buf.writeBoolean(destroyBot);
         buf.writeBoolean(createBot);
         buf.writeBoolean(marketOpen);
@@ -80,7 +81,7 @@ public class UpdateBotSettingsPacket extends NetworkPacket {
 
     @Override
     public void fromBytes(FriendlyByteBuf buf) {
-        itemID = buf.readUtf();
+        itemID = new ItemID(buf.readItem());
         destroyBot = buf.readBoolean();
         createBot = buf.readBoolean();
         marketOpen = buf.readBoolean();

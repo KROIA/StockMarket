@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.entity.custom;
 
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.block.custom.StockMarketBlock;
 import net.kroia.stockmarket.entity.StockMarketEntities;
@@ -14,22 +15,22 @@ import net.minecraft.world.level.block.state.BlockState;
 public class StockMarketBlockEntity extends BlockEntity /*implements MenuProvider */{
 
     // Current Item that the chart is displaying
-    private String itemID;
+    private ItemID itemID;
     private int amount;
     private int price;
 
     public StockMarketBlockEntity(BlockPos pos, BlockState state) {
         super(StockMarketEntities.STOCK_MARKET_BLOCK_ENTITY.get(), pos, state);
-        itemID = "minecraft:diamond";
+        itemID = new ItemID("minecraft:diamond");
         amount = 1;
         price = 1;
     }
 
-    public void setItemID(String itemID) {
+    public void setItemID(ItemID itemID) {
         this.itemID = itemID;
     }
 
-    public String getItemID() {
+    public ItemID getItemID() {
         return itemID;
     }
 
@@ -70,7 +71,9 @@ public class StockMarketBlockEntity extends BlockEntity /*implements MenuProvide
         super.saveAdditional(tag);
 
         CompoundTag dataTag = new CompoundTag();
-        dataTag.putString("itemID", itemID);
+        CompoundTag itemTag = new CompoundTag();
+        itemID.save(itemTag);
+        dataTag.put("itemID", itemTag);
         dataTag.putInt("amount", amount);
         dataTag.putInt("price", price);
         tag.put(StockMarketMod.MOD_ID, dataTag);
@@ -86,7 +89,17 @@ public class StockMarketBlockEntity extends BlockEntity /*implements MenuProvide
     public void load(CompoundTag tag) {
         super.load(tag);
         CompoundTag dataTag = tag.getCompound(StockMarketMod.MOD_ID);
-        itemID = dataTag.getString("itemID");
+        String oldItemID = dataTag.getString("itemID");
+
+        // Compatibility with old itemID format
+        if(oldItemID.compareTo("") == 0)
+        {
+            itemID = new ItemID(dataTag.getCompound("itemID"));
+        }
+        else
+        {
+            itemID = new ItemID(oldItemID);
+        }
         amount = dataTag.getInt("amount");
         price = dataTag.getInt("price");
     }

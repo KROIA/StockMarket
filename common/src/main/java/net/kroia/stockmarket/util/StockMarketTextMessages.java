@@ -509,6 +509,11 @@ public class StockMarketTextMessages {
         return msg;
     }
 
+    private static final Component NEED_CREATIVE_MODE_FOR_THIS_SCREEN = Component.translatable(prefix+"need_creative_mode_for_this_screen");
+    public static String getNeedCreativeModeForThisScreenMessage()
+    {
+        return NEED_CREATIVE_MODE_FOR_THIS_SCREEN.getString();
+    }
 
 
     //--------------------------------------------------------------------------------------------------------

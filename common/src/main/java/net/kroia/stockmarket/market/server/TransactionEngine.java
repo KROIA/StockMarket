@@ -97,7 +97,7 @@ public class TransactionEngine {
                     if (missingMoney > 0)
                         missingText += "\n " + StockMarketTextMessages.getMissingMoneyMessage(missingMoney);
                     if (missingItems > 0)
-                        missingText += "\n  " + StockMarketTextMessages.getMissingItemsMessage(senderOrder.getItemID(), missingItems);
+                        missingText += "\n  " + StockMarketTextMessages.getMissingItemsMessage(senderOrder.getItemID().getName(), missingItems);
 
                     PlayerUtilities.printToClientConsole(senderMoneyBank.getPlayerUUID(), StockMarketTextMessages.getInsufficientFundToConsumeMessage(receiverOrder.toString(), currentPrice, fillVolume, money) + missingText);
 

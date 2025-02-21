@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.market.client;
 
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.Order;
@@ -19,7 +20,7 @@ import java.util.Map;
 public class ClientTradeItem {
 
 
-    private final String itemID;
+    private final ItemID itemID;
     private PriceHistory priceHistory;
     private OrderbookVolume orderBookVolume;
     private int visualMinPrice = 0;
@@ -30,7 +31,7 @@ public class ClientTradeItem {
     private final Map<Long, Order> orders = new HashMap<>();
 
 
-    public ClientTradeItem(String itemID)
+    public ClientTradeItem(ItemID itemID)
     {
         this.itemID = itemID;
         this.priceHistory = new PriceHistory(itemID, 0);
@@ -95,7 +96,7 @@ public class ClientTradeItem {
                 case INVALID:
                     PlayerUtilities.printToClientConsole(StockMarketTextMessages.getOrderHasBeenCancelledMessage(order.isBuy())+
                                     amountMsg +
-                                    "\n  "+StockMarketTextMessages.getOrderFilledAmountMessage(order.getFilledAmount(), order.getItemID()) +
+                                    "\n  "+StockMarketTextMessages.getOrderFilledAmountMessage(order.getFilledAmount(), order.getItemID().getName()) +
                                     limitText +
                                     "\n  "+StockMarketTextMessages.getOrderInvalidReasonMessage(order.getInvalidReason()));
                     removeOrder(order.getOrderID());
@@ -115,7 +116,7 @@ public class ClientTradeItem {
     }
 
 
-    public String getItemID()
+    public ItemID getItemID()
     {
         return itemID;
     }

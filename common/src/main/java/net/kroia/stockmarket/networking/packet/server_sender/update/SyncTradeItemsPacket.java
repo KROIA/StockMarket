@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.networking.packet.server_sender.update;
 
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.NetworkPacket;
 import net.kroia.stockmarket.market.client.ClientMarket;
 import net.kroia.stockmarket.market.server.ServerMarket;
@@ -15,14 +16,17 @@ public class SyncTradeItemsPacket extends NetworkPacket {
     public enum Command
     {
         ADD,
-        CLEAR_ALL
+        STILL_AVAILABLE
     }
     //private ArrayList<SyncPricePacket> syncPricePackets;
     private SyncPricePacket syncPricePacket;
     private Command command;
-    public SyncTradeItemsPacket() {
+    private ArrayList<ItemID> stillAvailableItems;
+    public SyncTradeItemsPacket(ArrayList<ItemID> stillAvailableItems) {
         super();
-        this.command = Command.CLEAR_ALL;
+        this.command = Command.STILL_AVAILABLE;
+        this.stillAvailableItems = stillAvailableItems;
+
         //syncPricePackets = new ArrayList<>();
     }
     /*public SyncTradeItemsPacket(ArrayList<SyncPricePacket> syncPricePackets) {
@@ -48,6 +52,13 @@ public class SyncTradeItemsPacket extends NetworkPacket {
         {
             syncPricePacket.toBytes(buf);
         }
+        if(command == Command.STILL_AVAILABLE)
+        {
+            buf.writeInt(stillAvailableItems.size());
+            for (ItemID itemID : stillAvailableItems) {
+                buf.writeItem(itemID.getStack());
+            }
+        }
        /* buf.writeInt(syncPricePackets.size());
         for (SyncPricePacket syncPricePacket : syncPricePackets) {
              syncPricePacket.toBytes(buf);
@@ -61,6 +72,14 @@ public class SyncTradeItemsPacket extends NetworkPacket {
         if(command == Command.ADD)
         {
             syncPricePacket = new SyncPricePacket(buf);
+        }
+        if(command == Command.STILL_AVAILABLE)
+        {
+            int size = buf.readInt();
+            stillAvailableItems = new ArrayList<>();
+            for (int i = 0; i < size; i++) {
+                stillAvailableItems.add(new ItemID(buf.readItem()));
+            }
         }
 
         /*int size = buf.readInt();
@@ -80,6 +99,9 @@ public class SyncTradeItemsPacket extends NetworkPacket {
     public SyncPricePacket getSyncPricePacket() {
         return syncPricePacket;
     }
+    public ArrayList<ItemID> getStillAvailableItems() {
+        return stillAvailableItems;
+    }
     public Command getCommand() {
         return command;
     }
@@ -87,11 +109,16 @@ public class SyncTradeItemsPacket extends NetworkPacket {
     public static void sendPacket(ServerPlayer player)
     {
         //StockMarketMod.LOGGER.info("[SERVER] Sending SyncTradeItemsPacket");
-        Map<String, ServerTradeItem> serverTradeItemMap = ServerMarket.getTradeItems();
+        Map<ItemID, ServerTradeItem> serverTradeItemMap = ServerMarket.getTradeItems();
         ArrayList<SyncPricePacket> syncPricePackets = new ArrayList<>();
+        ArrayList<ItemID> stillAvailableItems = new ArrayList<>();
+        for(var entry : serverTradeItemMap.entrySet())
+        {
+            stillAvailableItems.add(entry.getKey());
+        }
 
-        SyncTradeItemsPacket packet = new SyncTradeItemsPacket();
-        packet.command = Command.CLEAR_ALL;
+        SyncTradeItemsPacket packet = new SyncTradeItemsPacket(stillAvailableItems);
+        packet.command = Command.STILL_AVAILABLE;
         StockMarketNetworking.sendToClient(player, packet);
         for(var entry : serverTradeItemMap.entrySet())
         {

@@ -83,6 +83,8 @@
   "message.stockmarket.order_filled_amount": "Filled amount: {amount} {item_name}",
   "message.stockmarket.order_invalid_reason": "Invalid reason: {reason}",
   "message.stockmarket.order_invalid_reason_market_closed": "Market is closed",
+  "message.stockmarket.need_creative_mode_for_this_screen": "You need to be in creative mode to access this screen",
+
 
   "message.stockmarket.no_trading_item_available": "No trading item available",
   "gui.stockmarket.bot_settings_screen.change_item": "Change Item",

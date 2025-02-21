@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.networking.packet.server_sender.update;
 
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.NetworkPacket;
 import net.kroia.stockmarket.market.client.ClientMarket;
 import net.kroia.stockmarket.market.server.ServerMarket;
@@ -14,7 +15,7 @@ import java.util.UUID;
 
 public class SyncBotSettingsPacket extends NetworkPacket {
 
-    String itemID;
+    ItemID itemID;
     ServerVolatilityBot.Settings settings;
     boolean botExists;
     private UUID botUUID;
@@ -27,7 +28,7 @@ public class SyncBotSettingsPacket extends NetworkPacket {
         super(buf);
     }
 
-    public static void sendPacket(ServerPlayer receiver, String itemID, UUID botUUID)
+    public static void sendPacket(ServerPlayer receiver, ItemID itemID, UUID botUUID)
     {
         ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
         ServerVolatilityBot.Settings settings = new ServerVolatilityBot.Settings();
@@ -48,7 +49,7 @@ public class SyncBotSettingsPacket extends NetworkPacket {
 
     @Override
     public void toBytes(FriendlyByteBuf buf) {
-        buf.writeUtf(itemID);
+        buf.writeItem(itemID.getStack());
         buf.writeBoolean(botExists);
         buf.writeUUID(botUUID);
         CompoundTag tag = new CompoundTag();
@@ -58,7 +59,7 @@ public class SyncBotSettingsPacket extends NetworkPacket {
 
     @Override
     public void fromBytes(FriendlyByteBuf buf) {
-        itemID = buf.readUtf();
+        itemID = new ItemID(buf.readItem());
         botExists = buf.readBoolean();
         botUUID = buf.readUUID();
         CompoundTag tag = buf.readNbt();
@@ -69,7 +70,7 @@ public class SyncBotSettingsPacket extends NetworkPacket {
     public ServerVolatilityBot.Settings getSettings() {
         return settings;
     }
-    public String getItemID() {
+    public ItemID getItemID() {
         return itemID;
     }
     public UUID getBotUUID() {

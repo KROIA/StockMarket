@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.networking.packet.server_sender.update;
 
 
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.NetworkPacket;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModSettings;
@@ -44,18 +45,18 @@ public class SyncPricePacket extends NetworkPacket {
     public SyncPricePacket(FriendlyByteBuf buf) {
         super(buf);
     }
-    public SyncPricePacket(String itemID)
+    public SyncPricePacket(ItemID itemID)
     {
         commonSetup(itemID);
         this.orders = ServerMarket.getOrders(itemID);
     }
-    public SyncPricePacket(String itemID, UUID playerUUID)
+    public SyncPricePacket(ItemID itemID, UUID playerUUID)
     {
         commonSetup(itemID);
         this.isMarketOpen = ServerMarket.isMarketOpen(itemID);
         this.orders = ServerMarket.getOrders(itemID, playerUUID);
     }
-    private void commonSetup(String itemID)
+    private void commonSetup(ItemID itemID)
     {
         if(!ServerMarket.hasItem(itemID))
         {
@@ -102,7 +103,7 @@ public class SyncPricePacket extends NetworkPacket {
         this.maxPrice = maxPrice;
     }
 
-    public static void sendPacket(String itemID, ServerPlayer player)
+    public static void sendPacket(ItemID itemID, ServerPlayer player)
     {
         SyncPricePacket packet = new SyncPricePacket(itemID, player.getUUID());
         StockMarketNetworking.sendToClient(player, packet);

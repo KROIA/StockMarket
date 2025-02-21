@@ -2,6 +2,7 @@ package net.kroia.stockmarket.market.server.bot;
 
 import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.util.MeanRevertingRandomWalk;
 import net.minecraft.nbt.CompoundTag;
@@ -228,7 +229,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
     public void createOrders() {
         BankUser user = ServerMarket.getBotUser();
         Bank moneyBank = user.getMoneyBank();
-        String itemID = parent.getItemID();
+        ItemID itemID = parent.getItemID();
         Bank itemBank = user.getBank(itemID);
         if(itemBank == null)
             return;

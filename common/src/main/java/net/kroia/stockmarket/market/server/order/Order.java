@@ -5,6 +5,7 @@ import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.BankSystemTextMessages;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncOrderPacket;
@@ -22,7 +23,7 @@ public abstract class Order {
     private static long lastOrderID = 0;
 
     protected long orderID;
-    protected String itemID;
+    protected ItemID itemID;
     protected UUID playerUUID;
     protected int amount;
     protected int filledAmount = 0;
@@ -47,13 +48,13 @@ public abstract class Order {
     }
     protected Status status = Status.PENDING;
 
-    protected Order(UUID playerUUID, String itemID, int amount) {
+    protected Order(UUID playerUUID, ItemID itemID, int amount) {
         this.itemID = itemID;
         this.orderID = uniqueOrderID();
         this.playerUUID = playerUUID;
         this.amount = amount;
     }
-    protected Order(UUID playerUUID, String itemID, int amount, boolean isBot) {
+    protected Order(UUID playerUUID, ItemID itemID, int amount, boolean isBot) {
         this.itemID = itemID;
         this.orderID = uniqueOrderID();
         this.playerUUID = playerUUID;
@@ -64,12 +65,12 @@ public abstract class Order {
     {
 
     }
-    protected static boolean tryReserveBankFund(ServerPlayer player, String itemID, int amount, int price)
+    protected static boolean tryReserveBankFund(ServerPlayer player, ItemID itemID, int amount, int price)
     {
         BankUser bankUser = ServerBankManager.getUser(player.getUUID());
         if(bankUser == null)
         {
-            PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankNotFoundMessage(player.getName().getString(),itemID));
+            PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankNotFoundMessage(player.getName().getString(),itemID.getName()));
             return false;
         }
 
@@ -82,7 +83,7 @@ public abstract class Order {
 
         return tryReserveBankFund(moneyBank, itemBank, player.getUUID(), itemID, amount, price, player);
     }
-    protected static boolean tryReserveBankFund(Bank moneyBank, Bank itemBank, UUID playerUUID, String itemID, int amount, int price, ServerPlayer dbgPlayer)
+    protected static boolean tryReserveBankFund(Bank moneyBank, Bank itemBank, UUID playerUUID, ItemID itemID, int amount, int price, ServerPlayer dbgPlayer)
     {
         if(moneyBank == null)
         {
@@ -99,14 +100,14 @@ public abstract class Order {
         if(amount > 0) {
             if (moneyBank.lockAmount((long) price * amount) != Bank.Status.SUCCESS) {
                 if(dbgPlayer != null)
-                    PlayerUtilities.printToClientConsole(dbgPlayer, StockMarketTextMessages.getInsufficientFundToBuyMessage(itemID, amount, price));
+                    PlayerUtilities.printToClientConsole(dbgPlayer, StockMarketTextMessages.getInsufficientFundToBuyMessage(itemID.getName(), amount, price));
                 return false;
             }
         }
         else {
             if (itemBank.lockAmount(-amount) != Bank.Status.SUCCESS){
                 if(dbgPlayer != null)
-                    PlayerUtilities.printToClientConsole(dbgPlayer, StockMarketTextMessages.getInsufficientItemsToSellMessage(itemID, amount));
+                    PlayerUtilities.printToClientConsole(dbgPlayer, StockMarketTextMessages.getInsufficientItemsToSellMessage(itemID.getName(), amount));
                 return false;
             }
         }
@@ -125,7 +126,7 @@ public abstract class Order {
     protected Order(FriendlyByteBuf buf)
     {
         orderID = buf.readLong();
-        itemID = buf.readUtf();
+        itemID = new ItemID(buf.readItem());
         playerUUID = buf.readUUID();
         amount = buf.readInt();
         filledAmount = buf.readInt();
@@ -180,7 +181,7 @@ public abstract class Order {
     boolean isEqual(Order other)
     {
         return  orderID == other.orderID &&
-                itemID.compareTo(other.itemID)==0 &&
+                itemID.equals(other.itemID) &&
                 playerUUID.compareTo(other.playerUUID)==0 &&
                 amount == other.amount &&
                 filledAmount == other.filledAmount &&
@@ -195,7 +196,7 @@ public abstract class Order {
     public long getOrderID() {
         return orderID;
     }
-    public String getItemID() {
+    public ItemID getItemID() {
         return itemID;
     }
     public long getTransferedMoney() {
@@ -323,7 +324,7 @@ public abstract class Order {
 
     public void toBytes(FriendlyByteBuf buf) {
         buf.writeLong(orderID);
-        buf.writeUtf(itemID);
+        buf.writeItem(itemID.getStack());
         buf.writeUUID(playerUUID);
         buf.writeInt(amount);
         buf.writeInt(filledAmount);

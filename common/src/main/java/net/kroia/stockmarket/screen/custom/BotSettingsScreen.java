@@ -2,6 +2,7 @@ package net.kroia.stockmarket.screen.custom;
 
 import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.screen.custom.BankAccountManagementScreen;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.GuiScreen;
@@ -28,7 +29,10 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 
+import java.lang.reflect.Array;
+import java.util.ArrayList;
 import java.util.UUID;
 
 public class BotSettingsScreen extends GuiScreen {
@@ -49,7 +53,7 @@ public class BotSettingsScreen extends GuiScreen {
 
     private final ServerVolatilityBot.Settings settings;
 
-    private static String itemID;
+    private static ItemID itemID;
     private static BotSettingsScreen instance;
     private static long lastTickCount = 0;
 
@@ -76,7 +80,6 @@ public class BotSettingsScreen extends GuiScreen {
     public BotSettingsScreen(Screen parent) {
         super(TITLE);
         parentScreen = parent;
-        itemID = "";
         instance = this;
         settings = new ServerVolatilityBot.Settings();
         RequestTradeItemsPacket.generateRequest();
@@ -164,10 +167,11 @@ public class BotSettingsScreen extends GuiScreen {
     public void onClose() {
         super.onClose();
         instance = null;
-        itemID = "";
+        ClientMarket.unsubscribeMarketUpdate(itemID);
+        itemID = null;
         // Unregister the event listener when the screen is closed
         TickEvent.PLAYER_POST.unregister(BotSettingsScreen::onClientTick);
-        ClientMarket.unsubscribeMarketUpdate(itemID);
+
         if(parentScreen != null)
             Minecraft.getInstance().setScreen(parentScreen);
     }
@@ -194,7 +198,7 @@ public class BotSettingsScreen extends GuiScreen {
         botSettingsWidget.setSettings(this.settings);
         saveButton.setOutlineColor(normalButtonColor);
         botExists = ClientMarket.botExists();
-        ClientTradeItem item = ClientMarket.getTradeItem(instance.itemID);
+        ClientTradeItem item = ClientMarket.getTradeItem(itemID);
         marketOpenCheckBox.setChecked(item.isMarketOpen());
         if(botExists)
         {
@@ -214,37 +218,42 @@ public class BotSettingsScreen extends GuiScreen {
         if(currentTickCount - lastTickCount > 1000)
         {
             lastTickCount = currentTickCount;
-            if(itemID != null && !itemID.isEmpty() && !instance.settingsReceived)
+            if(itemID != null && itemID.isValid() && !instance.settingsReceived)
                 RequestBotSettingsPacket.sendPacket(itemID);
         }
         if(ClientMarket.hasSyncBotSettingsPacketChanged() && !instance.settingsReceived)
         {
             instance.settingsReceived = true;
-            if(itemID.isEmpty())
+            if(itemID == null)
             {
                 itemID = ClientMarket.getBotSettingsItemID();
                 if(itemID == null)
                     return;
-                instance.onItemSelected(itemID);
+                instance.onItemSelected(itemID.getStack());
             }
             instance.setBotSettings(ClientMarket.getBotSettings(itemID));
         }
     }
 
-    private void onItemSelected(String itemId) {
+    private void onItemSelected(ItemStack istemStack) {
         ClientMarket.unsubscribeMarketUpdate(itemID);
-        itemID = itemId;
+        itemID = new ItemID(istemStack);
         settingsReceived = false;
         botSettingsWidget.clear();
         RequestBotSettingsPacket.sendPacket(itemID);
         ClientMarket.subscribeMarketUpdate(itemID);
-        currentItemView.setItemStack(ItemUtilities.createItemStackFromId(itemID));
+        currentItemView.setItemStack(itemID.getStack());
     }
 
     private void onSelectItemButtonPressed() {
+        ArrayList<ItemStack> itemStacks = new ArrayList<>();
+        for(ItemID itemID : ClientMarket.getAvailableTradeItemIdList())
+        {
+            itemStacks.add(itemID.getStack());
+        }
         ItemSelectionScreen screen = new ItemSelectionScreen(
                 this,
-                ClientMarket.getAvailableTradeItemIdList(),
+                itemStacks,
                 this::onItemSelected);
         screen.sortItems();
         this.minecraft.setScreen(screen);
@@ -292,7 +301,7 @@ public class BotSettingsScreen extends GuiScreen {
             UpdateBotSettingsPacket.sendPacket(itemID, botSettingsWidget.getSettings(), false, true, marketOpen);
         }
         saveButton.setOutlineColor(normalButtonColor);
-        if(itemID != null && !itemID.isEmpty()) {
+        if(itemID != null && itemID.isValid()) {
             settingsReceived = false;
             RequestBotSettingsPacket.sendPacket(itemID);
         }

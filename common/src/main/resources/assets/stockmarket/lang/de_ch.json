@@ -83,6 +83,7 @@
   "message.stockmarket.order_filled_amount": "Gfüllti Mängi: {amount} {item_name}",
   "message.stockmarket.order_invalid_reason": "Ungültigkeits Grund: {reason}",
   "message.stockmarket.order_invalid_reason_market_closed": "Markt isch gschlossä",
+  "message.stockmarket.need_creative_mode_for_this_screen": "Du muesch im Kreativmodus si zum uf dä Bildschirm z'zugreife",
 
   "message.stockmarket.no_trading_item_available": "Kei handelbars Item verfüegbar",
   "gui.stockmarket.bot_settings_screen.change_item": "Item ändere",

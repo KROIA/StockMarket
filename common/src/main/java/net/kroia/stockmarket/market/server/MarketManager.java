@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.market.server;
 
 import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ServerSaveable;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModSettings;
@@ -18,7 +19,7 @@ import java.util.ArrayList;
 import java.util.UUID;
 
 public class MarketManager implements ServerSaveable {
-    private String itemID;
+    private ItemID itemID;
 
     private MatchingEngine matchingEngine;
     private ServerTradingBot tradingBot;
@@ -117,7 +118,7 @@ public class MarketManager implements ServerSaveable {
     public void setPriceHistory(PriceHistory priceHistory) {
         this.priceHistory = priceHistory;
     }
-    public void setItemID(String itemID) {
+    public void setItemID(ItemID itemID) {
         this.itemID = itemID;
     }
 
@@ -154,7 +155,7 @@ public class MarketManager implements ServerSaveable {
         matchingEngine.getOrders(playerUUID, orders);
     }
 
-    public String getItemID()
+    public ItemID getItemID()
     {
         return itemID;
     }
@@ -194,7 +195,9 @@ public class MarketManager implements ServerSaveable {
     @Override
     public boolean save(CompoundTag tag) {
         boolean success = true;
-        tag.putString("itemID", itemID);
+        CompoundTag itemTag = new CompoundTag();
+        success &= itemID.save(itemTag);
+        tag.put("itemID", itemTag);
 
         CompoundTag matchingEngineTag = new CompoundTag();
         success &= matchingEngine.save(matchingEngineTag);
@@ -218,7 +221,20 @@ public class MarketManager implements ServerSaveable {
                 !tag.contains("matchingEngine"))
             return false;
         boolean success = true;
-        itemID = tag.getString("itemID");
+
+        String oldItemID = tag.getString("itemID");
+        if(oldItemID.compareTo("")==0)
+        {
+            if(itemID == null)
+            {
+                itemID = new ItemID(tag.getCompound("itemID"));
+            }
+            else
+                success &= itemID.load(tag.getCompound("itemID"));
+        }
+        else {
+            itemID = new ItemID(oldItemID);
+        }
 
         CompoundTag matchingEngineTag = tag.getCompound("matchingEngine");
         success &= matchingEngine.load(matchingEngineTag);
@@ -231,6 +247,6 @@ public class MarketManager implements ServerSaveable {
                 setTradingBot(bot);
         }
 
-        return !itemID.isEmpty() && success;
+        return success;
     }
 }

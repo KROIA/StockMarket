@@ -4,6 +4,7 @@ package net.kroia.stockmarket.screen.custom;
 import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.banking.ClientBankManager;
 import net.kroia.banksystem.networking.packet.client_sender.request.RequestBankDataPacket;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.GuiScreen;
@@ -22,6 +23,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+
+import java.util.ArrayList;
 
 
 public class TradeScreen extends GuiScreen {
@@ -46,7 +49,7 @@ public class TradeScreen extends GuiScreen {
     public static final int colorGreen = 0x7F00FF00;
     public static final int colorRed = 0x7FFF0000;
 
-    private String itemID;
+    private ItemID itemID;
     private ItemStack itemStack;
     private boolean marketWasOpen = false;
 
@@ -69,7 +72,7 @@ public class TradeScreen extends GuiScreen {
 
 
     }
-    public TradeScreen(String currentItemID, int currentAmount, int currentPrice) {
+    public TradeScreen(ItemID currentItemID, int currentAmount, int currentPrice) {
         super(TITLE);
         blockEntity = null;
         instance = this;
@@ -99,7 +102,7 @@ public class TradeScreen extends GuiScreen {
         TickEvent.PLAYER_POST.register(TradeScreen::onClientTick);
     }
     public TradeScreen() {
-        this("minecraft:diamond", 0, 0);
+        this(new ItemID("minecraft:diamond"), 0, 0);
     }
 
     public static void openScreen(StockMarketBlockEntity blockEntity)
@@ -117,7 +120,7 @@ public class TradeScreen extends GuiScreen {
     @Override
     protected void updateLayout(Gui gui) {
         ClientMarket.requestTradeItems();
-        itemStack = ItemUtilities.createItemStackFromId(itemID,1);
+        itemStack = itemID.getStack();
         tradePanel.setItemStack(itemStack);
         ClientMarket.subscribeMarketUpdate(itemID);
         RequestBankDataPacket.sendRequest();
@@ -156,7 +159,7 @@ public class TradeScreen extends GuiScreen {
 
         if (instance != null) {
             instance.itemID = packet.getItemID();
-            instance.itemStack = ItemUtilities.createItemStackFromId(instance.itemID,1);
+            instance.itemStack = instance.itemID.getStack();
             instance.tradePanel.setItemStack(instance.itemStack);
             instance.tradePanel.setAmount(packet.getAmount());
             instance.tradePanel.setLimitPrice(packet.getPrice());
@@ -164,10 +167,10 @@ public class TradeScreen extends GuiScreen {
         }
     }
 
-    public static String getItemID() {
+    public static ItemID getItemID() {
         if(instance != null)
             return instance.itemID;
-        return "";
+        return null;
     }
 
 
@@ -210,11 +213,9 @@ public class TradeScreen extends GuiScreen {
         }
     }
 
-    private void onItemSelected(String itemId) {
+    private void onItemSelected(ItemStack itemStack) {
         ClientMarket.unsubscribeMarketUpdate(itemID);
-        this.itemID = itemId;
-       // ClientMarket.subscribeMarketUpdate(itemID);
-        itemStack = ItemUtilities.createItemStackFromId(itemID,1);
+        this.itemID = new ItemID(itemStack);
         tradePanel.setItemStack(itemStack);
     }
 
@@ -246,9 +247,14 @@ public class TradeScreen extends GuiScreen {
     }
 
     private void onSelectItemButtonPressed() {
+        ArrayList<ItemStack> itemStacks = new ArrayList<>();
+        for(ItemID itemID : ClientMarket.getAvailableTradeItemIdList())
+        {
+            itemStacks.add(itemID.getStack());
+        }
         ItemSelectionScreen screen = new ItemSelectionScreen(
                 this,
-                ClientMarket.getAvailableTradeItemIdList(),
+                itemStacks,
                 this::onItemSelected);
         screen.sortItems();
         this.minecraft.setScreen(screen);

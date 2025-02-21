@@ -2,6 +2,7 @@ package net.kroia.stockmarket.market.server.bot;
 
 import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ServerSaveable;
 import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.market.server.MarketManager;
@@ -210,7 +211,7 @@ public class ServerTradingBot implements ServerSaveable {
     {
         return ServerMarket.getBotUser().getPlayerUUID();
     }
-    public String getItemID()
+    public ItemID getItemID()
     {
         return parent.getItemID();
     }
@@ -239,7 +240,7 @@ public class ServerTradingBot implements ServerSaveable {
     {
         BankUser user = ServerMarket.getBotUser();
         Bank moneyBank = user.getMoneyBank();
-        String itemID = parent.getItemID();
+        ItemID itemID = parent.getItemID();
         Bank itemBank = user.getBank(itemID);
 
         int priceIncerement = 1;
@@ -293,7 +294,7 @@ public class ServerTradingBot implements ServerSaveable {
             return false;
         BankUser user = ServerMarket.getBotUser();
         Bank moneyBank = user.getMoneyBank();
-        String itemID = parent.getItemID();
+        ItemID itemID = parent.getItemID();
         Bank itemBank = user.getBank(itemID);
         UUID botUUID = getUUID();
         LimitOrder buyOrder = LimitOrder.createBotOrder(botUUID, moneyBank, itemBank, itemID, volume, price);
@@ -311,7 +312,7 @@ public class ServerTradingBot implements ServerSaveable {
             return false;
         BankUser user = ServerMarket.getBotUser();
         Bank moneyBank = user.getMoneyBank();
-        String itemID = parent.getItemID();
+        ItemID itemID = parent.getItemID();
         Bank itemBank = user.getBank(itemID);
         UUID botUUID = getUUID();
         LimitOrder sellOrder = LimitOrder.createBotOrder(botUUID, moneyBank, itemBank, itemID, -volume, price);
@@ -329,7 +330,7 @@ public class ServerTradingBot implements ServerSaveable {
             return false;
         BankUser user = ServerMarket.getBotUser();
         Bank moneyBank = user.getMoneyBank();
-        String itemID = parent.getItemID();
+        ItemID itemID = parent.getItemID();
         Bank itemBank = user.getBank(itemID);
         UUID botUUID = getUUID();
         LimitOrder order = LimitOrder.createBotOrder(botUUID, moneyBank, itemBank, itemID, volume, price);
@@ -350,7 +351,7 @@ public class ServerTradingBot implements ServerSaveable {
             return false;
         BankUser user = ServerMarket.getBotUser();
         Bank moneyBank = user.getMoneyBank();
-        String itemID = parent.getItemID();
+        ItemID itemID = parent.getItemID();
         Bank itemBank = user.getBank(itemID);
         UUID botUUID = getUUID();
         MarketOrder buyOrder = MarketOrder.createBotOrder(botUUID, moneyBank, itemBank, itemID, volume);
@@ -367,7 +368,7 @@ public class ServerTradingBot implements ServerSaveable {
             return false;
         BankUser user = ServerMarket.getBotUser();
         Bank moneyBank = user.getMoneyBank();
-        String itemID = parent.getItemID();
+        ItemID itemID = parent.getItemID();
         Bank itemBank = user.getBank(itemID);
         UUID botUUID = getUUID();
         MarketOrder sellOrder = MarketOrder.createBotOrder(botUUID, moneyBank, itemBank, itemID, volume);
@@ -384,7 +385,7 @@ public class ServerTradingBot implements ServerSaveable {
             return false;
         BankUser user = ServerMarket.getBotUser();
         Bank moneyBank = user.getMoneyBank();
-        String itemID = parent.getItemID();
+        ItemID itemID = parent.getItemID();
         Bank itemBank = user.getBank(itemID);
         UUID botUUID = getUUID();
         MarketOrder order = MarketOrder.createBotOrder(botUUID, moneyBank, itemBank, itemID, volume);

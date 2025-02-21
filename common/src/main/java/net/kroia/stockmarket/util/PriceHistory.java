@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.util;
 
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ServerSaveable;
 import net.kroia.stockmarket.StockMarketModSettings;
 import net.minecraft.nbt.CompoundTag;
@@ -16,9 +17,9 @@ public class PriceHistory implements ServerSaveable {
     private int oldestClosePrice = 0;
     private Timestamp[] timeStamps = new Timestamp[maxHistorySize];
 
-    private String itemID;
+    private ItemID itemID;
 
-    public PriceHistory(String itemID) {
+    public PriceHistory(ItemID itemID) {
         this.itemID = itemID;
         for(int i = 0; i < maxHistorySize; i++)
         {
@@ -26,7 +27,7 @@ public class PriceHistory implements ServerSaveable {
         }
         clear();
     }
-    public PriceHistory(String itemID, int initialPrice) {
+    public PriceHistory(ItemID itemID, int initialPrice) {
         this.itemID = itemID;
         oldestClosePrice = initialPrice;
         for (int i = 0; i < maxHistorySize; i++) {
@@ -37,7 +38,7 @@ public class PriceHistory implements ServerSaveable {
             timeStamps[i] = new Timestamp();
         }
     }
-    public void setItemID(String itemID) {
+    public void setItemID(ItemID itemID) {
         this.itemID = itemID;
     }
 
@@ -57,7 +58,7 @@ public class PriceHistory implements ServerSaveable {
         return lowPrice.length;
     }
 
-    public String getItemID()
+    public ItemID getItemID()
     {
         return itemID;
     }
@@ -178,7 +179,7 @@ public class PriceHistory implements ServerSaveable {
 
     // Interface to send the timestamp over the network
     public PriceHistory(FriendlyByteBuf buf) {
-        itemID = buf.readUtf();
+        itemID = new ItemID(buf.readItem());
         oldestClosePrice = buf.readInt();
         for (int i = 0; i < maxHistorySize; i++) {
             lowPrice[i] = buf.readInt();
@@ -190,7 +191,7 @@ public class PriceHistory implements ServerSaveable {
     }
 
     public void toBytes(FriendlyByteBuf buf) {
-        buf.writeUtf(itemID);
+        buf.writeItem(itemID.getStack());
         buf.writeInt(oldestClosePrice);
         for (int i = 0; i < maxHistorySize; i++) {
             buf.writeInt(lowPrice[i]);
