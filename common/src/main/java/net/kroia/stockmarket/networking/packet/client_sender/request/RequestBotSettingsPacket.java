@@ -41,7 +41,7 @@ public class RequestBotSettingsPacket extends NetworkPacket {
     @Override
     protected void handleOnServer(ServerPlayer sender) {
         if(sender.hasPermissions(2)) {
-            SyncBotSettingsPacket.sendPacket(sender, itemID, ServerMarket.getBotUserUUID());
+            SyncBotSettingsPacket.sendPacket(sender, itemID/*, ServerMarket.getBotUserUUID()*/);
         }
     }
 }

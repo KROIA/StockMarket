@@ -8,7 +8,6 @@ public class StockMarketPlayerEvents {
 
     public static void onPlayerJoin(ServerPlayer player) {
         ServerPlayerList.addPlayer(player);
-        SyncTradeItemsPacket.sendPacket(player);
     }
 
     public static void onPlayerLeave(ServerPlayer player) {

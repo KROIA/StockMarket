@@ -13,7 +13,6 @@ public class StockMarketServerEvents {
 
     public static void onServerStart(MinecraftServer server) {
         BankSystemMod.loadDataFromFiles(server);
-        ServerMarket.createBotUser();
         StockMarketMod.loadDataFromFiles(server);
         StockMarketModSettings.MarketBot.getBotBuilder(); // Create the default bot settings files if they don't exist
         ServerMarket.init();

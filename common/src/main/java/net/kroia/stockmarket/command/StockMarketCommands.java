@@ -229,7 +229,7 @@ public class StockMarketCommands {
                                         ArrayList<ItemID> suggestions = ServerMarket.getTradeItemIDs();
                                         if(!suggestions.isEmpty()) {
                                             ItemID itemID = suggestions.get(0);
-                                            SyncBotSettingsPacket.sendPacket(player, itemID, ServerMarket.getBotUserUUID());
+                                            SyncBotSettingsPacket.sendPacket(player, itemID);
                                             OpenScreenPacket.sendPacket(player, OpenScreenPacket.ScreenType.BOT_SETTINGS);
                                         }
                                         else {

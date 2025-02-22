@@ -155,16 +155,6 @@ public class ClientMarket {
     {
         return tradeItems.get(itemID);
     }
-    /*public static PriceHistory getPriceHistory(String itemID)
-    {
-        ClientTradeItem tradeItem = tradeItems.get(itemID);
-        if(tradeItem == null)
-        {
-            StockMarketMod.LOGGER.warn("Trade item not found: " + itemID);
-            return null;
-        }
-        return tradeItem.getPriceHistory();
-    }*/
 
     public static boolean createOrder(ItemID itemID, int quantity, int price)
     {
@@ -305,14 +295,6 @@ public class ClientMarket {
             return syncBotSettingsPacket.botExists();
         }
         return false;
-    }
-    public static UUID getBotUUID()
-    {
-        if(syncBotSettingsPacket != null)
-        {
-            return syncBotSettingsPacket.getBotUUID();
-        }
-        return null;
     }
     public static SyncBotSettingsPacket getSyncBotSettingsPacket()
     {

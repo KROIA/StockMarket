@@ -127,7 +127,7 @@ public abstract class Order {
     {
         orderID = buf.readLong();
         itemID = new ItemID(buf.readItem());
-        playerUUID = buf.readUUID();
+
         amount = buf.readInt();
         filledAmount = buf.readInt();
         lockedMoney = buf.readLong();
@@ -135,6 +135,8 @@ public abstract class Order {
         status = Status.valueOf(buf.readUtf());
         invalidReason = buf.readUtf();
         isBot = buf.readBoolean();
+        if(!isBot)
+            playerUUID = buf.readUUID();
     }
 
     public void copyFrom(Order other)
@@ -245,6 +247,8 @@ public abstract class Order {
     }
     private void unlockLockedMoney()
     {
+        if(isBot)
+            return;
         BankUser user = ServerBankManager.getUser(playerUUID);
         if(user == null)
         {
@@ -325,7 +329,6 @@ public abstract class Order {
     public void toBytes(FriendlyByteBuf buf) {
         buf.writeLong(orderID);
         buf.writeItem(itemID.getStack());
-        buf.writeUUID(playerUUID);
         buf.writeInt(amount);
         buf.writeInt(filledAmount);
         buf.writeLong(lockedMoney);
@@ -333,6 +336,8 @@ public abstract class Order {
         buf.writeUtf(status.toString());
         buf.writeUtf(invalidReason);
         buf.writeBoolean(isBot);
+        if(!isBot)
+            buf.writeUUID(playerUUID);
     }
 
 }

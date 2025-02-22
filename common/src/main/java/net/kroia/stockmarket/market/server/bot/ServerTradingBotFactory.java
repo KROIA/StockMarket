@@ -181,12 +181,12 @@ public class ServerTradingBotFactory {
             if(bot.load(tag))
                 return bot;
         }
-        else if(className.compareTo(ServerMarketMakerBot.class.getSimpleName()) == 0)
-        {
-            ServerMarketMakerBot bot = new ServerMarketMakerBot();
-            if(bot.load(tag))
-                return bot;
-        }
+        //else if(className.compareTo(ServerMarketMakerBot.class.getSimpleName()) == 0)
+        //{
+        //    ServerMarketMakerBot bot = new ServerMarketMakerBot();
+        //    if(bot.load(tag))
+        //        return bot;
+        //}
 
         throw new RuntimeException("Unknown bot class: " + className);
     }

@@ -34,11 +34,13 @@ public class MatchingEngine implements ServerSaveable {
     private final PriorityQueue<LimitOrder> limitBuyOrders = new PriorityQueue<>((o1, o2) -> Double.compare(o2.getPrice(), o1.getPrice()));
     private final PriorityQueue<LimitOrder> limitSellOrders = new PriorityQueue<>(Comparator.comparingDouble(LimitOrder::getPrice));
 
-    private final GhostOrderBook ghostOrderBook = new GhostOrderBook();
+    private final GhostOrderBook ghostOrderBook;
+    private long realVolumeImbalance = 0;
     private PriceHistory priceHistory;
     public MatchingEngine(int initialPrice, PriceHistory priceHistory)
     {
         this.priceHistory = priceHistory;
+        this.ghostOrderBook = new GhostOrderBook(initialPrice);
         tradeVolume = 0;
         setPrice(initialPrice);
     }
@@ -47,6 +49,10 @@ public class MatchingEngine implements ServerSaveable {
     public void onServerTick(MinecraftServer server)
     {
         ghostOrderBook.updateVolume(getPrice());
+    }
+    public GhostOrderBook getGhostOrderBook()
+    {
+        return ghostOrderBook;
     }
 
     public void addOrder(Order order)
@@ -153,10 +159,20 @@ public class MatchingEngine implements ServerSaveable {
                 int transferedVolume = TransactionEngine.ghostFill(marketOrder, ghostVolume, newPrice);
                 filledVolume += transferedVolume;
                 if(transferedVolume > 0) {
-                    if(marketOrder.isBuy())
+                    if(marketOrder.isBuy()) {
                         ghostOrderBook.removeAmount(newPrice, transferedVolume);
-                    else if(marketOrder.isSell())
+                        if(!marketOrder.isBot())
+                        {
+                            realVolumeImbalance -= transferedVolume;
+                        }
+                    }
+                    else if(marketOrder.isSell()) {
                         ghostOrderBook.removeAmount(newPrice, -transferedVolume);
+                        if(!marketOrder.isBot())
+                        {
+                            realVolumeImbalance += transferedVolume;
+                        }
+                    }
                     setPrice(newPrice);
                     priceHistory.addVolume(Math.abs(transferedVolume));
                 }
@@ -183,6 +199,13 @@ public class MatchingEngine implements ServerSaveable {
             if(filledVolume != 0) {
                 newPrice = limitOrder.getPrice();
                 priceHistory.addVolume(Math.abs(transferedVolume));
+                if(marketOrder.isBot() && !limitOrder.isBot())
+                {
+                    realVolumeImbalance += limitOrder.isBuy()?-transferedVolume:transferedVolume;
+                }else if(!marketOrder.isBot() && limitOrder.isBot())
+                {
+                    realVolumeImbalance += marketOrder.isBuy()?-transferedVolume:transferedVolume;
+                }
             }
 
             fillVolume -= filledVolume;
@@ -213,10 +236,20 @@ public class MatchingEngine implements ServerSaveable {
             fillVolume -= transferedVolume;
 
             if(transferedVolume > 0) {
-                if(marketOrder.isBuy())
+                if(marketOrder.isBuy()) {
                     ghostOrderBook.removeAmount(newPrice, transferedVolume);
-                else if(marketOrder.isSell())
+                    if(!marketOrder.isBot())
+                    {
+                        realVolumeImbalance -= transferedVolume;
+                    }
+                }
+                else if(marketOrder.isSell()) {
                     ghostOrderBook.removeAmount(newPrice, -transferedVolume);
+                    if(!marketOrder.isBot())
+                    {
+                        realVolumeImbalance += transferedVolume;
+                    }
+                }
                 priceHistory.addVolume(Math.abs(transferedVolume));
                 setPrice(newPrice);
             }
@@ -277,10 +310,20 @@ public class MatchingEngine implements ServerSaveable {
                 //filledVolume += transferedVolume;
                 fillVolume -= transferedVolume;
                 if(transferedVolume > 0) {
-                    if(limitOrder.isBuy())
+                    if(limitOrder.isBuy()) {
                         ghostOrderBook.removeAmount(newPrice, transferedVolume);
-                    else if(limitOrder.isSell())
+                        if(!limitOrder.isBot())
+                        {
+                            realVolumeImbalance -= transferedVolume;
+                        }
+                    }
+                    else if(limitOrder.isSell()) {
                         ghostOrderBook.removeAmount(newPrice, -transferedVolume);
+                        if(!limitOrder.isBot())
+                        {
+                            realVolumeImbalance += transferedVolume;
+                        }
+                    }
                     priceHistory.addVolume(Math.abs(transferedVolume));
                     setPrice(newPrice);
                 }
@@ -315,6 +358,13 @@ public class MatchingEngine implements ServerSaveable {
             {
                 setPrice(fillWith.getPrice());
                 priceHistory.addVolume(Math.abs(transferedVolume));
+                if(limitOrder.isBot() && !fillWith.isBot())
+                {
+                    realVolumeImbalance += fillWith.isBuy()?-transferedVolume:transferedVolume;
+                }else if(!limitOrder.isBot() && fillWith.isBot())
+                {
+                    realVolumeImbalance += limitOrder.isBuy()?-transferedVolume:transferedVolume;
+                }
             }
             fillVolume -= transferedVolume;
 
@@ -346,10 +396,20 @@ public class MatchingEngine implements ServerSaveable {
             int transferedVolume = TransactionEngine.ghostFill(limitOrder, ghostVolume, newPrice);
             fillVolume -= transferedVolume;
             if(transferedVolume > 0) {
-                if(limitOrder.isBuy())
+                if(limitOrder.isBuy()) {
                     ghostOrderBook.removeAmount(newPrice, transferedVolume);
-                else if(limitOrder.isSell())
+                    if(!limitOrder.isBot())
+                    {
+                        realVolumeImbalance -= transferedVolume;
+                    }
+                }
+                else if(limitOrder.isSell()) {
                     ghostOrderBook.removeAmount(newPrice, -transferedVolume);
+                    if(!limitOrder.isBot())
+                    {
+                        realVolumeImbalance += transferedVolume;
+                    }
+                }
                 priceHistory.addVolume(Math.abs(transferedVolume));
                 setPrice(newPrice);
             }
@@ -537,6 +597,9 @@ public class MatchingEngine implements ServerSaveable {
         return limitBuyOrders.removeAll(orders);
     }
 
+    public long getRealVolumeImbalance() {
+        return realVolumeImbalance;
+    }
 
     public String toString()
     {
@@ -644,6 +707,7 @@ public class MatchingEngine implements ServerSaveable {
         tag.put("buy_orders", buyOrdersList);
         tag.put("sell_orders", sellOrdersList);
         tag.putBoolean("market_open", marketOpen);
+        tag.putLong("real_volume_imbalance", realVolumeImbalance);
 
         CompoundTag ghostOrderBookTag = new CompoundTag();
         success &= ghostOrderBook.save(ghostOrderBookTag);
@@ -670,6 +734,10 @@ public class MatchingEngine implements ServerSaveable {
             marketOpen = tag.getBoolean("market_open");
         else
             marketOpen = true;
+        if(tag.contains("real_volume_imbalance"))
+            realVolumeImbalance = tag.getLong("real_volume_imbalance");
+        else
+            realVolumeImbalance = 0;
         for(int i = 0; i < buyOrdersList.size(); i++)
         {
             CompoundTag orderTag = buyOrdersList.getCompound(i);

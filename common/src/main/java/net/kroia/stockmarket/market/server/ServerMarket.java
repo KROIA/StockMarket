@@ -49,7 +49,7 @@ public class ServerMarket implements ServerSaveable
 
 
 
-    private static UUID botUserUUID = UUID.nameUUIDFromBytes(StockMarketModSettings.MarketBot.USER_NAME.getBytes());
+    //private static UUID botUserUUID = UUID.nameUUIDFromBytes(StockMarketModSettings.MarketBot.USER_NAME.getBytes());
 
     public static boolean isInitialized()
     {
@@ -95,7 +95,7 @@ public class ServerMarket implements ServerSaveable
     {
         if(!StockMarketModSettings.MarketBot.ENABLED)
             return false;
-        BankUser botUser = getBotUser();
+        //BankUser botUser = getBotUser();
         if(!ServerBankManager.isItemIDAllowed(itemID))
         {
             ServerBankManager.allowItemID(itemID);
@@ -118,40 +118,8 @@ public class ServerMarket implements ServerSaveable
             bot = new ServerVolatilityBot();
             setTradingBot(itemID, bot);
         }
-        Bank itemBank = botUser.getBank(itemID);
-        if(itemBank == null)
-        {
-            itemBank = botUser.createItemBank(itemID, botBuilder.defaultSettings.targetItemBalance);
-        }
-        if(itemBank.getTotalBalance() < botBuilder.defaultSettings.targetItemBalance)
-        {
-            itemBank.setBalance(botBuilder.defaultSettings.targetItemBalance-itemBank.getLockedBalance());
-        }
         botBuilder.defaultSettings.loadDefaultSettings((ServerVolatilityBot.Settings)bot.getSettings());
         return true;
-    }
-
-
-    public static BankUser getBotUser()
-    {
-        BankUser bot = ServerBankManager.getUser(botUserUUID);
-        if(bot == null)
-        {
-            bot = createBotUser();
-        }
-        return bot;
-    }
-    public static UUID getBotUserUUID()
-    {
-        return botUserUUID;
-    }
-    public static BankUser createBotUser()
-    {
-        BankUser bankUser = ServerBankManager.getUser(botUserUUID);
-        if(bankUser != null)
-            return bankUser;
-        bankUser = ServerBankManager.createUser(botUserUUID, StockMarketModSettings.MarketBot.USER_NAME, new ArrayList<>(), true, StockMarketModSettings.MarketBot.STARTING_BALANCE);
-        return bankUser;
     }
 
     public static boolean addTradeItem(ItemID itemID, int startPrice)
@@ -214,7 +182,8 @@ public class ServerMarket implements ServerSaveable
         PlayerList playerList = server.getPlayerList();
         for(ServerPlayer player : playerList.getPlayers())
         {
-            SyncTradeItemsPacket.sendPacket(player);
+            SyncPricePacket.sendPacket(itemID, player);
+            //SyncTradeItemsPacket.sendPacket(player);
         }
         return true;
     }
@@ -632,7 +601,8 @@ public class ServerMarket implements ServerSaveable
 
 
         long currentTime2 = System.currentTimeMillis();
-        StockMarketMod.LOGGER.info("Market update time: " + (currentTime2-currentTime)+"ms");
+        if(currentTime2-currentTime > 5)
+            StockMarketMod.LOGGER.info("Market update time: " + (currentTime2-currentTime)+"ms");
     }
 
     private static void rebuildTradeItemsChunks()

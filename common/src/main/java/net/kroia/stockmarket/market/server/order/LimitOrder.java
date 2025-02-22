@@ -28,11 +28,9 @@ public class LimitOrder extends Order implements ServerSaveable {
             return new LimitOrder(player.getUUID(), itemID, amount, price, alreadyFilledAmount);
         return null;
     }
-    public static LimitOrder createBotOrder(UUID playerUUID, Bank botMoneyBank, Bank botItemBank, ItemID itemID, int amount, int price)
+    public static LimitOrder createBotOrder(ItemID itemID, int amount, int price)
     {
-        if(Order.tryReserveBankFund(botMoneyBank, botItemBank, playerUUID, itemID, amount, price, null))
-            return new LimitOrder(playerUUID, itemID, amount, price, true);
-        return null;
+        return new LimitOrder(null, itemID, amount, price, true);
     }
     protected LimitOrder(UUID playerUUID, ItemID itemID, int amount, int price) {
         super(playerUUID, itemID, amount);

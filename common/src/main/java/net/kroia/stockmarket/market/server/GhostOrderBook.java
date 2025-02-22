@@ -8,12 +8,15 @@ import net.minecraft.nbt.CompoundTag;
 public class GhostOrderBook implements ServerSaveable {
     private int currentMarketPrice = 0;
     private final DynamicIndexedArray virtualOrderVolumeDistribution;
-    private long lastMillis = System.currentTimeMillis();
+    private long lastMillis;
     private float volumeScale = 100f;
     private float newVolumeDeltaScale1 = 0.1f;
     private float newVolumeDeltaScale2 = 0.5f;
-    public GhostOrderBook() {
+    public GhostOrderBook(int initialPrice) {
         virtualOrderVolumeDistribution = new DynamicIndexedArray(1000, this::getTargetAmount);
+        lastMillis = System.currentTimeMillis()-1000;
+        setCurrentMarketPrice(initialPrice);
+        updateVolume(initialPrice);
     }
 
     public void cleanup() {
@@ -30,10 +33,10 @@ public class GhostOrderBook implements ServerSaveable {
             if(virtualIndex < 0)
                 continue;
             float targetAmount = getTargetAmount(virtualIndex);
-            float currentVal = Math.abs(virtualOrderVolumeDistribution.get(virtualIndex));
-            if(currentVal<Math.abs(targetAmount)) {
+            float currentVal = virtualOrderVolumeDistribution.get(virtualIndex);
+            if((currentVal<targetAmount&&targetAmount>0) || (currentVal>targetAmount&&targetAmount<0)) {
                 float scale = newVolumeDeltaScale1;
-                if(currentVal < Math.abs(targetAmount)*0.1f)
+                if(Math.abs(currentVal) < Math.abs(targetAmount)*0.1f)
                 {
                     scale = newVolumeDeltaScale2;
                 }

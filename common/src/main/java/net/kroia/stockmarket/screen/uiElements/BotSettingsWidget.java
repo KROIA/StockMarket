@@ -251,7 +251,7 @@ public class BotSettingsWidget extends GuiElement {
         settings.timerMillis = getValidated(volatilityTimer.getSecond().getLong(), 1, Long.MAX_VALUE);
         settings.minTimerMillis = getValidated(volatilityTimerMin.getSecond().getLong(), 1, Long.MAX_VALUE);
         settings.maxTimerMillis = getValidated(volatilityTimerMax.getSecond().getLong(), 1, Long.MAX_VALUE);
-        settings.targetItemBalance = getValidated(targetItemBalance.getSecond().getLong(), 1, Long.MAX_VALUE);
+        settings.targetItemBalance = getValidated(targetItemBalance.getSecond().getLong(), Long.MIN_VALUE, Long.MAX_VALUE);
         settings.imbalancePriceRange = getValidated(imbalancePriceRange.getSecond().getInt(), 1, Integer.MAX_VALUE);
         settings.imbalancePriceChangeFactor = getValidated(imbalancePriceChangeFactorLinear.getSecond().getDouble(), 0.0, Double.MAX_VALUE);
         settings.imbalancePriceChangeQuadFactor = getValidated(imbalancePriceChangeFactorQuadratic.getSecond().getDouble(), 0.0, Double.MAX_VALUE);

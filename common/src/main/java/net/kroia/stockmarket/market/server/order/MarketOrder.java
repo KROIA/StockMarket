@@ -21,13 +21,10 @@ public class MarketOrder extends Order {
         }
         return null;
     }
-    public static MarketOrder createBotOrder(UUID playerUUID, Bank botMoneyBank, Bank botItemBank, ItemID itemID, int amount)
+    public static MarketOrder createBotOrder(ItemID itemID, int amount)
     {
         int currentPrice = ServerMarket.getPrice(itemID);
-        if(Order.tryReserveBankFund(botMoneyBank, botItemBank, playerUUID, itemID, amount, currentPrice, null)){
-            return new MarketOrder(playerUUID, itemID, amount, currentPrice,true);
-        }
-        return null;
+        return new MarketOrder(null, itemID, amount, currentPrice,true);
     }
     protected MarketOrder(UUID playerUUID, ItemID itemID, int amount, int currentPrice) {
         super(playerUUID, itemID, amount);
@@ -61,7 +58,11 @@ public class MarketOrder extends Order {
 
     @Override
     public String toString() {
-        String playerName = ServerPlayerList.getPlayerName(playerUUID);
+        String playerName;
+        if(playerUUID == null)
+            playerName = "Bot";
+        else
+            playerName = ServerPlayerList.getPlayerName(playerUUID);
         if(playerName == null || playerName.isEmpty())
             playerName = playerUUID.toString();
         return "MarketOrder{\n  Owner: " + playerName +

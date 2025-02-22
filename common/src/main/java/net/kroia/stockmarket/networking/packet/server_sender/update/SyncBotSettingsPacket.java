@@ -18,7 +18,7 @@ public class SyncBotSettingsPacket extends NetworkPacket {
     ItemID itemID;
     ServerVolatilityBot.Settings settings;
     boolean botExists;
-    private UUID botUUID;
+   // private UUID botUUID;
 
     public SyncBotSettingsPacket() {
         super();
@@ -28,7 +28,7 @@ public class SyncBotSettingsPacket extends NetworkPacket {
         super(buf);
     }
 
-    public static void sendPacket(ServerPlayer receiver, ItemID itemID, UUID botUUID)
+    public static void sendPacket(ServerPlayer receiver, ItemID itemID/*, UUID botUUID*/)
     {
         ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
         ServerVolatilityBot.Settings settings = new ServerVolatilityBot.Settings();
@@ -42,7 +42,7 @@ public class SyncBotSettingsPacket extends NetworkPacket {
         }
         packet.itemID = itemID;
         packet.settings = settings;
-        packet.botUUID = botUUID;
+        //packet.botUUID = botUUID;
 
         StockMarketNetworking.sendToClient(receiver, packet);
     }
@@ -51,7 +51,7 @@ public class SyncBotSettingsPacket extends NetworkPacket {
     public void toBytes(FriendlyByteBuf buf) {
         buf.writeItem(itemID.getStack());
         buf.writeBoolean(botExists);
-        buf.writeUUID(botUUID);
+        //buf.writeUUID(botUUID);
         CompoundTag tag = new CompoundTag();
         settings.save(tag);
         buf.writeNbt(tag);
@@ -61,7 +61,7 @@ public class SyncBotSettingsPacket extends NetworkPacket {
     public void fromBytes(FriendlyByteBuf buf) {
         itemID = new ItemID(buf.readItem());
         botExists = buf.readBoolean();
-        botUUID = buf.readUUID();
+        //botUUID = buf.readUUID();
         CompoundTag tag = buf.readNbt();
         settings = new ServerVolatilityBot.Settings();
         settings.load(tag);
@@ -73,9 +73,9 @@ public class SyncBotSettingsPacket extends NetworkPacket {
     public ItemID getItemID() {
         return itemID;
     }
-    public UUID getBotUUID() {
+    /*public UUID getBotUUID() {
         return botUUID;
-    }
+    }*/
     public boolean botExists() {
         return botExists;
     }

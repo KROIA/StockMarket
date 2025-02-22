@@ -179,7 +179,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
         }
         public void setFromData(int price, double rarity, double volatility, long udateTimerIntervallMS)
         {
-            this.targetItemBalance = (long)(((1-rarity) * (1-rarity)) * 100000)+5000;
+            //this.targetItemBalance = (long)(((1-rarity) * (1-rarity)) * 100000)+5000;
             this.volatility = volatility*100;
             this.imbalancePriceRange = price * 2;
             this.updateTimerIntervallMS = udateTimerIntervallMS;
@@ -227,18 +227,19 @@ public class ServerVolatilityBot extends ServerTradingBot {
 
     @Override
     public void createOrders() {
-        BankUser user = ServerMarket.getBotUser();
-        Bank moneyBank = user.getMoneyBank();
+        //BankUser user = ServerMarket.getBotUser();
+        //Bank moneyBank = user.getMoneyBank();
         ItemID itemID = parent.getItemID();
-        Bank itemBank = user.getBank(itemID);
-        if(itemBank == null)
-            return;
+        //Bank itemBank = user.getBank(itemID);
+        //if(itemBank == null)
+        //    return;
 
         // Create Limit orders
         //clearOrders();
         //createLimitOrders(itemBank, moneyBank);
 
-        long currentItemBalance = itemBank.getTotalBalance();
+        //long currentItemBalance = itemBank.getTotalBalance();
+        long currentItemBalance = getMatchingEngine().getRealVolumeImbalance();
 
 
         long currentMillis = System.currentTimeMillis();
@@ -256,14 +257,15 @@ public class ServerVolatilityBot extends ServerTradingBot {
             }
         }
 
-        if(settings.targetItemBalance <= 1)
+        /*if(settings.targetItemBalance <= 1)
         {
             settings.targetPrice = 1;
         }
-        else {
+        else
+        {*/
             int averageTargetPrice =  (settings.imbalancePriceRange/2);
 
-            double normalizedDifference = (settings.targetItemBalance - currentItemBalance)/(double)settings.targetItemBalance;
+            double normalizedDifference = (settings.targetItemBalance - currentItemBalance);///(double)settings.targetItemBalance;
             // Linear part
             double imbalancePriceOffset = (normalizedDifference * settings.imbalancePriceChangeFactor);
             if(normalizedDifference > 0)
@@ -278,7 +280,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
 
             if(settings.targetPrice < 0)
                 settings.targetPrice = 0;
-        }
+        //}
 
 
         long deltaTMillis = currentMillis - lastMillis;
@@ -301,8 +303,8 @@ public class ServerVolatilityBot extends ServerTradingBot {
         int randomVolume = random.nextInt((int)(-settings.orderRandomness),(int)(settings.orderRandomness)+1);
         int volume = (int)(Math.round(speed)) + randomVolume;
 
-        if(volume < 0 && itemBank.getBalance()/2 < -volume)
-            volume = (int)-itemBank.getBalance()/2;
+        //if(volume < 0 && itemBank.getBalance()/2 < -volume)
+        //    volume = (int)-itemBank.getBalance()/2;
         if(currentPrice != 0 || volume > 0)
             marketTrade(volume);
     }

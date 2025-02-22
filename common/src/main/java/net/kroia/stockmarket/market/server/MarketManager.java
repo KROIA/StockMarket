@@ -62,26 +62,11 @@ public class MarketManager implements ServerSaveable {
         {
             bot.getParent().removeTradingBot();
         }
-        // Check if bot aleady has a item bank
-
-        Bank itemBank = ServerMarket.getBotUser().getBank(itemID);
-        if(itemBank == null)
+        if(bot instanceof ServerVolatilityBot volatilityBot)
         {
-            itemBank = ServerMarket.getBotUser().createItemBank(itemID, 0);
+            ServerVolatilityBot.Settings settings = (ServerVolatilityBot.Settings) volatilityBot.getSettings();
         }
-        else {
-            if(bot instanceof ServerVolatilityBot volatilityBot)
-            {
-                ServerVolatilityBot.Settings settings = (ServerVolatilityBot.Settings) volatilityBot.getSettings();
-                if(settings != null)
-                {
-                    if(settings.targetItemBalance == 0)
-                    {
-                        settings.targetItemBalance = itemBank.getBalance()/2;
-                    }
-                }
-            }
-        }
+
         bot.setParent(this);
         bot.setMatchingEngine(matchingEngine);
         tradingBot = bot;
