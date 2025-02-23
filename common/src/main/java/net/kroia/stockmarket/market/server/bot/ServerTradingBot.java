@@ -352,6 +352,13 @@ public class ServerTradingBot implements ServerSaveable {
         return false;
     }
 
+    protected int getVolume(int price)
+    {
+        if(matchingEngine == null)
+            return 0;
+        return matchingEngine.getVolume(price);
+    }
+
     @Override
     public boolean save(CompoundTag tag) {
         CompoundTag settingsTag = new CompoundTag();

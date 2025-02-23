@@ -223,11 +223,11 @@ public class CandleStickChart extends GuiElement {
         }
     }
 
-    private int getChartYPos(int price)
+    public int getChartYPos(int price)
     {
         return map(price, chartViewMinPrice, chartViewMaxPrice, getHeight()-PADDING - getHeight()/10, PADDING);
     }
-    private int getPriceFromYPos(int y)
+    public int getPriceFromYPos(int y)
     {
         return Math.round(mapF(y, getHeight()-PADDING-getHeight()/10.f, PADDING, chartViewMinPrice, chartViewMaxPrice));
     }

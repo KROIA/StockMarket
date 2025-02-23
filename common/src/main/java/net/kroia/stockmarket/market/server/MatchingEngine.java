@@ -664,6 +664,7 @@ public class MatchingEngine implements ServerSaveable {
                     volume += order.getAmount()-order.getFilledAmount();
             }
         }
+        volume += ghostOrderBook.getAmount(price);
         return volume;
     }
     public int getVolume(int minPrice, int maxPrice)
@@ -678,6 +679,10 @@ public class MatchingEngine implements ServerSaveable {
         {
             if(order.getPrice() >= minPrice && order.getPrice() <= maxPrice)
                 volume += order.getAmount()-order.getFilledAmount();
+        }
+        for(int i=minPrice; i<=maxPrice; i++)
+        {
+            volume += ghostOrderBook.getAmount(i);
         }
         return volume;
     }

@@ -26,7 +26,7 @@ public class GhostOrderBook implements ServerSaveable {
 
     public void updateVolume(int currentPrice) {
         long currentMillis = System.currentTimeMillis();
-        double deltaT = (currentMillis - lastMillis) / 1000.0;
+        double deltaT = Math.min((currentMillis - lastMillis) / 1000.0, 1000.0);
         lastMillis = currentMillis;
 
         for(int i=0; i<virtualOrderVolumeDistribution.getSize(); i++)
@@ -80,18 +80,24 @@ public class GhostOrderBook implements ServerSaveable {
     }
     public void setVolumeAccumulationRate(float volumeAccumulationRate) {
         this.volumeAccumulationRate = volumeAccumulationRate;
+        if(volumeAccumulationRate <= 0)
+            this.volumeAccumulationRate = 0.00001f;
     }
     public float getVolumeAccumulationRate() {
         return volumeAccumulationRate;
     }
     public void setVolumeFastAccumulationRate(float volumeFastAccumulationRate) {
         this.volumeFastAccumulationRate = volumeFastAccumulationRate;
+        if(volumeFastAccumulationRate <= 0)
+            this.volumeFastAccumulationRate = 0.00001f;
     }
     public float getVolumeFastAccumulationRate() {
         return volumeFastAccumulationRate;
     }
     public void setVolumeDecumulationRate(float volumeDecumulationRate) {
         this.volumeDecumulationRate = volumeDecumulationRate;
+        if(volumeDecumulationRate <= 0)
+            this.volumeDecumulationRate = 0.00001f;
     }
     public float getVolumeDecumulationRate() {
         return volumeDecumulationRate;
@@ -104,6 +110,13 @@ public class GhostOrderBook implements ServerSaveable {
         volumeAccumulationRate = tag.getFloat("volumeAccumulationRate");
         volumeFastAccumulationRate = tag.getFloat("volumeFastAccumulationRate");
         volumeDecumulationRate = tag.getFloat("volumeDecumulationRate");
+
+        if(volumeAccumulationRate <= 0)
+            this.volumeAccumulationRate = 0.00001f;
+        if(volumeFastAccumulationRate <= 0)
+            this.volumeFastAccumulationRate = 0.00001f;
+        if(volumeDecumulationRate <= 0)
+            this.volumeDecumulationRate = 0.00001f;
 
         int size = tag.getInt("arraySize");
         int[] intArray = tag.getIntArray("volumeArray");

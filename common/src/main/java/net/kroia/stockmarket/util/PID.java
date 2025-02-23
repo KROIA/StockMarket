@@ -95,7 +95,7 @@ public class PID implements ServerSaveable {
             i = -iBound;
 
         output = kp*error + ki*i + kd*(error - lastError)/dt;
-        lastError = error;
+        lastError = (error*0.5f + lastError*0.5f);
         return output;
     }
     public float getOutput() {

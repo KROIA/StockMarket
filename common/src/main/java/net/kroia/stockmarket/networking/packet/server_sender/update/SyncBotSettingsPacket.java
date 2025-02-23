@@ -28,7 +28,7 @@ public class SyncBotSettingsPacket extends NetworkPacket {
         super(buf);
     }
 
-    public static void sendPacket(ServerPlayer receiver, ItemID itemID/*, UUID botUUID*/)
+    public static void sendPacket(ServerPlayer receiver, ItemID itemID)
     {
         ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
         ServerVolatilityBot.Settings settings = new ServerVolatilityBot.Settings();

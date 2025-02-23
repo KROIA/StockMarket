@@ -8,10 +8,7 @@ import net.kroia.stockmarket.networking.packet.client_sender.request.RequestMana
 import net.kroia.stockmarket.networking.packet.client_sender.request.RequestBotSettingsPacket;
 import net.kroia.stockmarket.networking.packet.client_sender.request.RequestOrderChangePacket;
 import net.kroia.stockmarket.networking.packet.client_sender.request.RequestTradeItemsPacket;
-import net.kroia.stockmarket.networking.packet.server_sender.update.SyncBotSettingsPacket;
-import net.kroia.stockmarket.networking.packet.server_sender.update.SyncOrderPacket;
-import net.kroia.stockmarket.networking.packet.server_sender.update.SyncPricePacket;
-import net.kroia.stockmarket.networking.packet.server_sender.update.SyncTradeItemsPacket;
+import net.kroia.stockmarket.networking.packet.server_sender.update.*;
 import net.kroia.stockmarket.screen.custom.BotSettingsScreen;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
 
@@ -22,10 +19,12 @@ public class ClientMarket {
     private static final Map<ItemID, ClientTradeItem> tradeItems = new HashMap<>();
 
     private static SyncBotSettingsPacket syncBotSettingsPacket;
+    private static SyncBotTargetPricePacket syncBotTargetPricePacket;
     //private static SyncTradeItemsPacket syncTradeItemsPacket;
     private static boolean syncTradeItemsChanged;
 
     private static boolean syncBotSettingsPacketChanged = false;
+    private static boolean syncBotTargetPricePacketChanged = false;
 
 
 
@@ -40,6 +39,8 @@ public class ClientMarket {
         syncBotSettingsPacket = null;
         syncTradeItemsChanged = false;
         syncBotSettingsPacketChanged = false;
+        syncBotTargetPricePacketChanged = false;
+        syncBotTargetPricePacket = null;
     }
 
     public static void requestTradeItems()
@@ -264,6 +265,30 @@ public class ClientMarket {
         }
         return false;
     }
+    public static void handlePacket(SyncBotTargetPricePacket packet)
+    {
+        syncBotTargetPricePacket = packet;
+        syncBotTargetPricePacketChanged = true;
+    }
+
+    public static boolean hasSyncBotTargetPricePacketChanged()
+    {
+        if(syncBotTargetPricePacketChanged)
+        {
+            syncBotTargetPricePacketChanged = false;
+            return true;
+        }
+        return false;
+    }
+    public static int getBotTargetPrice()
+    {
+        if(syncBotTargetPricePacket != null)
+        {
+            return syncBotTargetPricePacket.getTargetPrice();
+        }
+        return 0;
+    }
+
     public static ServerVolatilityBot.Settings getBotSettings(ItemID itemID)
     {
         if(syncBotSettingsPacket != null)

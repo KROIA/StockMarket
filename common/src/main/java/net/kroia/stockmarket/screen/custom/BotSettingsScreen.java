@@ -19,6 +19,7 @@ import net.kroia.stockmarket.market.client.ClientMarket;
 import net.kroia.stockmarket.market.client.ClientTradeItem;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import net.kroia.stockmarket.networking.packet.client_sender.request.RequestBotSettingsPacket;
+import net.kroia.stockmarket.networking.packet.client_sender.request.RequestBotTargetPricePacket;
 import net.kroia.stockmarket.networking.packet.client_sender.request.RequestTradeItemsPacket;
 import net.kroia.stockmarket.networking.packet.client_sender.update.UpdateBotSettingsPacket;
 import net.kroia.stockmarket.screen.custom.botsetup.BotSetupScreen;
@@ -36,6 +37,28 @@ import java.util.ArrayList;
 import java.util.UUID;
 
 public class BotSettingsScreen extends GuiScreen {
+    private class BotTargetPriceDisplay extends GuiElement{
+
+        private CandleStickChart chart;
+        public BotTargetPriceDisplay(CandleStickChart cahrt) {
+            super();
+            this.chart = cahrt;
+            enableBackground = false;
+        }
+        @Override
+        protected void render() {
+            int y = chart.getChartYPos(settings.targetPrice);
+            drawRect(1, y, getWidth()-2, 1, 0xFF0000FF);
+        }
+
+        @Override
+        protected void layoutChanged() {
+            GuiElement parent = getParent();
+            if(parent == null)
+                return;
+            setBounds(0,0,parent.getWidth(),parent.getHeight());
+        }
+    }
 
     private static final String NAME = "bot_settings_screen";
     public static final String PREFIX = "gui."+ StockMarketMod.MOD_ID+"."+NAME+".";
@@ -59,6 +82,7 @@ public class BotSettingsScreen extends GuiScreen {
 
     // Gui Elements
     private final CandleStickChart candleStickChart;
+    private final BotTargetPriceDisplay botTargetPriceDisplay;
     private final OrderbookVolumeChart orderbookVolumeChart;
     private final Button selectItemButton;
     private final Button saveButton;
@@ -86,6 +110,8 @@ public class BotSettingsScreen extends GuiScreen {
 
         // Create Gui Elements
         this.candleStickChart = new CandleStickChart();
+        this.botTargetPriceDisplay = new BotTargetPriceDisplay(candleStickChart);
+        candleStickChart.addChild(botTargetPriceDisplay);
         this.orderbookVolumeChart = new OrderbookVolumeChart();
         selectItemButton = new Button(CHANGE_ITEM_BUTTON.getString(), this::onSelectItemButtonPressed);
         saveButton = new Button(SAVE_BUTTON.getString(), this::onSaveSettings);
@@ -218,8 +244,15 @@ public class BotSettingsScreen extends GuiScreen {
         if(currentTickCount - lastTickCount > 1000)
         {
             lastTickCount = currentTickCount;
-            if(itemID != null && itemID.isValid() && !instance.settingsReceived)
-                RequestBotSettingsPacket.sendPacket(itemID);
+            if(itemID != null && itemID.isValid())
+            {
+                if(!instance.settingsReceived)
+                {
+                    RequestBotSettingsPacket.sendPacket(itemID);
+                }
+                RequestBotTargetPricePacket.sendPacket(itemID);
+            }
+
         }
         if(ClientMarket.hasSyncBotSettingsPacketChanged() && !instance.settingsReceived)
         {
@@ -232,6 +265,10 @@ public class BotSettingsScreen extends GuiScreen {
                 instance.onItemSelected(itemID.getStack());
             }
             instance.setBotSettings(ClientMarket.getBotSettings(itemID));
+        }
+        if(ClientMarket.hasSyncBotTargetPricePacketChanged())
+        {
+            instance.settings.targetPrice = ClientMarket.getBotTargetPrice();
         }
     }
 

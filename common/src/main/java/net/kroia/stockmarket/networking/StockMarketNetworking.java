@@ -31,6 +31,7 @@ public class StockMarketNetworking {
         CHANNEL.register(SyncOrderPacket.class, SyncOrderPacket::toBytes, SyncOrderPacket::new, SyncOrderPacket::receive);
         CHANNEL.register(OpenScreenPacket.class, OpenScreenPacket::toBytes, OpenScreenPacket::new, OpenScreenPacket::receive);
         CHANNEL.register(SyncBotSettingsPacket.class, SyncBotSettingsPacket::toBytes, SyncBotSettingsPacket::new, SyncBotSettingsPacket::receive);
+        CHANNEL.register(SyncBotTargetPricePacket.class, SyncBotTargetPricePacket::toBytes, SyncBotTargetPricePacket::new, SyncBotTargetPricePacket::receive);
 
     }
     public static void setupServerReceiverPackets()
@@ -48,6 +49,7 @@ public class StockMarketNetworking {
         CHANNEL.register(UpdateBotSettingsPacket.class, UpdateBotSettingsPacket::toBytes, UpdateBotSettingsPacket::new, UpdateBotSettingsPacket::receive);
         CHANNEL.register(RequestOrderChangePacket.class, RequestOrderChangePacket::toBytes, RequestOrderChangePacket::new, RequestOrderChangePacket::receive);
         CHANNEL.register(RequestManageTradingItemPacket.class, RequestManageTradingItemPacket::toBytes, RequestManageTradingItemPacket::new, RequestManageTradingItemPacket::receive);
+        CHANNEL.register(RequestBotTargetPricePacket.class, RequestBotTargetPricePacket::toBytes, RequestBotTargetPricePacket::new, RequestBotTargetPricePacket::receive);
 
 
     }
