@@ -107,6 +107,10 @@ public class ServerTradeItem implements ServerSaveable {
     {
         return priceHistory;
     }
+    public void resetPriceChart()
+    {
+        priceHistory.clear(marketManager.getCurrentPrice());
+    }
 
     public void addSubscriber(ServerPlayer player)
     {

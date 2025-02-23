@@ -44,11 +44,15 @@ public class PriceHistory implements ServerSaveable {
 
     public void clear()
     {
-        oldestClosePrice = 0;
+        clear(0);
+    }
+    public void clear(int defaultValue)
+    {
+        oldestClosePrice = defaultValue;
         for (int i = 0; i < maxHistorySize; i++) {
-            lowPrice[i] = 0;
-            highPrice[i] = 0;
-            closePrice[i] = 0;
+            lowPrice[i] = defaultValue;
+            highPrice[i] = defaultValue;
+            closePrice[i] = defaultValue;
             volume[i] = 0;
         }
     }

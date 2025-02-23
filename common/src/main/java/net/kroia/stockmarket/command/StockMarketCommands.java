@@ -259,6 +259,16 @@ public class StockMarketCommands {
                                     return Command.SINGLE_SUCCESS;
                                 })
                         )
+                        .then(Commands.literal("resetAllPriceCharts")
+                                .requires(source -> source.hasPermission(2))
+                                .executes(context -> {
+                                    ServerPlayer player = context.getSource().getPlayer();
+                                    if(player != null) {
+                                        ServerMarket.resetPriceChart();
+                                    }
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                        )
                         .then(Commands.argument("itemID", StringArgumentType.string()).suggests((context, builder) -> {
                                             ArrayList<ItemID> suggestions = ServerMarket.getTradeItemIDs();
                                             for (ItemID suggestion : suggestions) {
@@ -268,7 +278,7 @@ public class StockMarketCommands {
                                         })
                                         .requires(source -> source.hasPermission(2))
                                         .then(Commands.literal("bot")
-                                                .then(Commands.literal("settings")
+                                                /*.then(Commands.literal("settings")
                                                         .then(Commands.literal("get")
                                                                 .executes(context -> {
                                                                     CommandSourceStack source = context.getSource();
@@ -584,7 +594,7 @@ public class StockMarketCommands {
                                                                 )
                                                         )
 
-                                                )
+                                                )*/
                                                 .then(Commands.literal("create")
                                                         .executes(context -> {
                                                             CommandSourceStack source = context.getSource();
@@ -744,6 +754,26 @@ public class StockMarketCommands {
                                                     return Command.SINGLE_SUCCESS;
                                                 })
                                         )
+                                        .then(Commands.literal("resetPriceChart")
+                                                .executes(context -> {
+                                                    CommandSourceStack source = context.getSource();
+                                                    ServerPlayer player = source.getPlayerOrException();
+                                                    String rawItemID = StringArgumentType.getString(context, "itemID");
+                                                    String itemIDStr = ItemUtilities.getNormalizedItemID(rawItemID);
+                                                    if (itemIDStr == null) {
+                                                        PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getInvalidItemIDMessage(rawItemID));
+                                                        return Command.SINGLE_SUCCESS;
+                                                    }
+                                                    ItemID itemID = new ItemID(itemIDStr);
+                                                    if (!ServerMarket.hasItem(itemID)) {
+                                                        PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getMarketplaceNotExistingMessage(itemIDStr));
+                                                        return Command.SINGLE_SUCCESS;
+                                                    }
+                                                    ServerMarket.resetPriceChart(itemID);
+                                                    //PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getCurrentPriceOfMessage(itemIDStr, price));
+                                                    return Command.SINGLE_SUCCESS;
+                                                })
+                                        )
 
                         )
                         .then(Commands.literal("save")
@@ -779,7 +809,7 @@ public class StockMarketCommands {
                         )
         );
     }
-
+/*
     private static void bot_set_setting(ServerPlayer executor, ServerVolatilityBot.Settings.Type settingsType, String itemID, double value)
     {
         ServerVolatilityBot bot = bot_set_setting_checkParams(executor, settingsType, itemID);
@@ -928,5 +958,5 @@ public class StockMarketCommands {
         }
         PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotNotExistMessage(itemIDStr));
         return null;
-    }
+    }*/
 }

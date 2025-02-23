@@ -140,9 +140,5 @@
 
   "gui.stockmarket.bot_settings_setup_screen_market_speed.question": "Wie schnell söll de Bot das Item handle?\nSetz de Interval in Millisekunde\nFür schnells handlä, nim en chlinere Wärt.\nFür langsames handeln. wähle einen grossen Wert\nSchnelles handeln kann die Server-Performance beeinträchtigen\nMinimum: 1000ms\nMaximum: 10000ms",
   "gui.stockmarket.bot_settings_setup_screen_market_speed.low": "Langsam",
-  "gui.stockmarket.bot_settings_setup_screen_market_speed.high": "Schnell",
-
-  "gui.stockmarket.bot_settings_setup_screen_change_bot_stocks.auto_change_money_balance": "Ändere de Geldbetrag uf de Bank vom Bot automatisch.\nDas wird gmacht zum gnueg geld z ha\ndamit Items kauft werde chönd",
-  "gui.stockmarket.bot_settings_setup_screen_change_bot_stocks.auto_change_item_balance": "Ändere d Anzahl Items uf de Bank vom Bot automatisch.\nDas wird gmacht zum gnueg Items z ha\ndamit Items verkauft werde chönd"
-
+  "gui.stockmarket.bot_settings_setup_screen_market_speed.high": "Schnell"
 }

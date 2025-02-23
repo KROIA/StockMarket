@@ -1,23 +1,19 @@
 package net.kroia.stockmarket.market.server.bot;
 
-import net.kroia.banksystem.banking.BankUser;
-import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ServerSaveable;
 import net.kroia.stockmarket.StockMarketModSettings;
+import net.kroia.stockmarket.market.server.GhostOrderBook;
 import net.kroia.stockmarket.market.server.MarketManager;
 import net.kroia.stockmarket.market.server.MatchingEngine;
-import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.MarketOrder;
 import net.minecraft.nbt.CompoundTag;
-import dev.architectury.event.events.common.TickEvent;
 import net.minecraft.server.MinecraftServer;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.PriorityQueue;
-import java.util.UUID;
 
 /**
  * The ServerTradingBot simulates buy and sell orders to provide liquidity to the market.
@@ -29,19 +25,23 @@ public class ServerTradingBot implements ServerSaveable {
     public static class Settings implements ServerSaveable
     {
         public boolean enabled = true;
-        public int maxOrderCount = StockMarketModSettings.MarketBot.MAX_ORDERS;
-        public double volumeScale = StockMarketModSettings.MarketBot.VOLUME_SCALE;
-        public double volumeSpread = StockMarketModSettings.MarketBot.VOLUME_SPREAD;
-        public double volumeRandomness = StockMarketModSettings.MarketBot.VOLUME_RANDOMNESS;
         public long updateTimerIntervallMS = StockMarketModSettings.MarketBot.UPDATE_TIMER_INTERVAL_MS;
+        public int defaultPrice;
+        public float orderBookVolumeScale = 100f;
+        public float nearMarketVolumeStrength = 2f;
+        public float volumeAccumulationRate = 0.01f;
+        public float volumeFastAccumulationRate = 0.5f;
+        public float volumeDecumulationRate = 0.005f;
 
         @Override
         public boolean save(CompoundTag tag) {
             tag.putBoolean("enabled", enabled);
-            tag.putInt("maxOrderCount", maxOrderCount);
-            tag.putDouble("volumeScale", volumeScale);
-            tag.putDouble("volumeSpread", volumeSpread);
-            tag.putDouble("volumeRandomness", volumeRandomness);
+            tag.putInt("defaultPrice", defaultPrice);
+            tag.putFloat("orderBookVolumeScale", orderBookVolumeScale);
+            tag.putFloat("nearMarketVolumeStrength", nearMarketVolumeStrength);
+            tag.putFloat("volumeAccumulationRate", volumeAccumulationRate);
+            tag.putFloat("volumeFastAccumulationRate", volumeFastAccumulationRate);
+            tag.putFloat("volumeDecumulationRate", volumeDecumulationRate);
             tag.putLong("updateTimerIntervallMS", updateTimerIntervallMS);
             return false;
         }
@@ -50,20 +50,27 @@ public class ServerTradingBot implements ServerSaveable {
         public boolean load(CompoundTag tag) {
             if(tag == null)
                 return false;
-            if(!tag.contains("enabled") ||
-                !tag.contains("maxOrderCount") ||
-                !tag.contains("volumeScale") ||
-                !tag.contains("volumeSpread") ||
-                !tag.contains("volumeRandomness") ||
-                !tag.contains("updateTimerIntervallMS"))
-                 return false;
             enabled = tag.getBoolean("enabled");
-            maxOrderCount = tag.getInt("maxOrderCount");
-            volumeScale = tag.getDouble("volumeScale");
-            volumeSpread = tag.getDouble("volumeSpread");
-            volumeRandomness = tag.getDouble("volumeRandomness");
+            defaultPrice = tag.getInt("defaultPrice");
+            orderBookVolumeScale = tag.getFloat("orderBookVolumeScale");
+            nearMarketVolumeStrength = tag.getFloat("nearMarketVolumeStrength");
+            volumeAccumulationRate = tag.getFloat("volumeAccumulationRate");
+            volumeFastAccumulationRate = tag.getFloat("volumeFastAccumulationRate");
+            volumeDecumulationRate = tag.getFloat("volumeDecumulationRate");
             updateTimerIntervallMS = tag.getLong("updateTimerIntervallMS");
             return true;
+        }
+
+        public void copyFrom(Settings settings)
+        {
+            this.enabled = settings.enabled;
+            this.defaultPrice = settings.defaultPrice;
+            this.orderBookVolumeScale = settings.orderBookVolumeScale;
+            this.nearMarketVolumeStrength = settings.nearMarketVolumeStrength;
+            this.volumeAccumulationRate = settings.volumeAccumulationRate;
+            this.volumeFastAccumulationRate = settings.volumeFastAccumulationRate;
+            this.volumeDecumulationRate = settings.volumeDecumulationRate;
+            this.updateTimerIntervallMS = settings.updateTimerIntervallMS;
         }
     }
     protected Settings settings;
@@ -88,9 +95,33 @@ public class ServerTradingBot implements ServerSaveable {
     public void setSettings(Settings settings)
     {
         this.settings = settings;
+        if(settings == null)
+            return;
+        if(matchingEngine != null)
+        {
+            GhostOrderBook orderBook = matchingEngine.getGhostOrderBook();
+            if(orderBook != null)
+            {
+                orderBook.setVolumeScale(settings.orderBookVolumeScale);
+                orderBook.setNearMarketVolumeStrength(settings.nearMarketVolumeStrength);
+                orderBook.setVolumeAccumulationRate(settings.volumeAccumulationRate);
+                orderBook.setVolumeFastAccumulationRate(settings.volumeFastAccumulationRate);
+                orderBook.setVolumeDecumulationRate(settings.volumeDecumulationRate);
+            }
+        }
     }
     public Settings getSettings()
     {
+        if(matchingEngine != null && settings != null) {
+            GhostOrderBook orderBook = matchingEngine.getGhostOrderBook();
+            if (orderBook != null) {
+                settings.orderBookVolumeScale = orderBook.getVolumeScale();
+                settings.nearMarketVolumeStrength = orderBook.getNearMarketVolumeStrength();
+                settings.volumeAccumulationRate = orderBook.getVolumeAccumulationRate();
+                settings.volumeFastAccumulationRate = orderBook.getVolumeFastAccumulationRate();
+                settings.volumeDecumulationRate = orderBook.getVolumeDecumulationRate();
+            }
+        }
         return this.settings;
     }
 
@@ -153,7 +184,7 @@ public class ServerTradingBot implements ServerSaveable {
             tmp_load_sellOrderIDs = null;
         }
     }
-
+/*
     public void setMaxOrderCount(int maxOrderCount)
     {
         this.settings.maxOrderCount = maxOrderCount;
@@ -180,7 +211,7 @@ public class ServerTradingBot implements ServerSaveable {
     }
     public double getVolumeRandomness() {
         return this.settings.volumeRandomness;
-    }
+    }*/
 
     public void setUpdateInterval(long intervalMillis)
     {
@@ -319,34 +350,6 @@ public class ServerTradingBot implements ServerSaveable {
             return true;
         }
         return false;
-    }
-
-
-    protected int getAvailableVolume(int price)
-    {
-        if(price < 0)
-            return 0;
-        int currentPrice = matchingEngine.getPrice();
-        return getVolumeDistribution(currentPrice - price);
-    }
-
-    /**
-     * Creates a disribution that can be mapped to buy and sell orders
-     * The distribution is normalized around x=0.
-     *   x < 0: buy order volume
-     *   x > 0: sell order volume
-     */
-    protected int getVolumeDistribution(int x)
-    {
-        double fX = (double)Math.abs(x);
-        double exp = Math.exp(-fX*1.f/this.settings.volumeSpread);
-        double random = Math.random()*this.settings.volumeRandomness;
-
-        double volume = (this.settings.volumeScale*(random+1)) * (1 - exp) * exp;
-
-        if(x < 0)
-            return (int)-volume;
-        return (int)volume;
     }
 
     @Override

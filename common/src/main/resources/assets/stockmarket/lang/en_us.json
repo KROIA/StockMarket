@@ -141,10 +141,8 @@
 
   "gui.stockmarket.bot_settings_setup_screen_market_speed.question": "How fast should the bot trade the item?\nSet the Interval in milliseconds.\nFor faster trading, choose a lower value.\nFor slower trading, choose a higher value.\nA faster market may impact the server performance.\nMinimum: 1000ms\nMaximum: 10000ms",
   "gui.stockmarket.bot_settings_setup_screen_market_speed.low": "Slow",
-  "gui.stockmarket.bot_settings_setup_screen_market_speed.high": "Fast",
+  "gui.stockmarket.bot_settings_setup_screen_market_speed.high": "Fast"
 
-  "gui.stockmarket.bot_settings_setup_screen_change_bot_stocks.auto_change_money_balance": "Change the money balance of the bot automatically.\nThis is done in order to have enough liquidity\nto make buy orders.",
-  "gui.stockmarket.bot_settings_setup_screen_change_bot_stocks.auto_change_item_balance": "Change the item balance of the bot automatically.\nThis is done in order to have enough item supply\nto make sell orders."
 
 
 

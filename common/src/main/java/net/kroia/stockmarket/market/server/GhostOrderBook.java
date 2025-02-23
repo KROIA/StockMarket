@@ -10,8 +10,10 @@ public class GhostOrderBook implements ServerSaveable {
     private final DynamicIndexedArray virtualOrderVolumeDistribution;
     private long lastMillis;
     private float volumeScale = 100f;
-    private float newVolumeDeltaScale1 = 0.1f;
-    private float newVolumeDeltaScale2 = 0.5f;
+    private float nearMarketVolumeStrength = 2f;
+    private float volumeAccumulationRate = 0.1f;
+    private float volumeFastAccumulationRate = 0.5f;
+    private float volumeDecumulationRate = 0.01f;
     public GhostOrderBook(int initialPrice) {
         virtualOrderVolumeDistribution = new DynamicIndexedArray(1000, this::getTargetAmount);
         lastMillis = System.currentTimeMillis()-1000;
@@ -34,11 +36,15 @@ public class GhostOrderBook implements ServerSaveable {
                 continue;
             float targetAmount = getTargetAmount(virtualIndex);
             float currentVal = virtualOrderVolumeDistribution.get(virtualIndex);
-            if((currentVal<targetAmount&&targetAmount>0) || (currentVal>targetAmount&&targetAmount<0)) {
-                float scale = newVolumeDeltaScale1;
+            if((currentVal<targetAmount) || (currentVal>targetAmount)) {
+                float scale = volumeAccumulationRate;
                 if(Math.abs(currentVal) < Math.abs(targetAmount)*0.1f)
                 {
-                    scale = newVolumeDeltaScale2;
+                    scale = volumeFastAccumulationRate;
+                }
+                else if(Math.abs(currentVal) > Math.abs(targetAmount))
+                {
+                    scale = -volumeDecumulationRate;
                 }
                 virtualOrderVolumeDistribution.add(virtualIndex, targetAmount * (float) deltaT * scale);
             }
@@ -66,22 +72,39 @@ public class GhostOrderBook implements ServerSaveable {
         return volumeScale;
     }
 
-    public void setNewVolumeDeltaScale(float newVolumeDeltaScale1, float newVolumeDeltaScale2) {
-        this.newVolumeDeltaScale1 = newVolumeDeltaScale1;
-        this.newVolumeDeltaScale2 = newVolumeDeltaScale2;
+    public void setNearMarketVolumeStrength(float nearMarketVolumeStrength) {
+        this.nearMarketVolumeStrength = nearMarketVolumeStrength;
     }
-    public float getNewVolumeDeltaScale1() {
-        return newVolumeDeltaScale1;
+    public float getNearMarketVolumeStrength() {
+        return nearMarketVolumeStrength;
     }
-    public float getNewVolumeDeltaScale2() {
-        return newVolumeDeltaScale2;
+    public void setVolumeAccumulationRate(float volumeAccumulationRate) {
+        this.volumeAccumulationRate = volumeAccumulationRate;
+    }
+    public float getVolumeAccumulationRate() {
+        return volumeAccumulationRate;
+    }
+    public void setVolumeFastAccumulationRate(float volumeFastAccumulationRate) {
+        this.volumeFastAccumulationRate = volumeFastAccumulationRate;
+    }
+    public float getVolumeFastAccumulationRate() {
+        return volumeFastAccumulationRate;
+    }
+    public void setVolumeDecumulationRate(float volumeDecumulationRate) {
+        this.volumeDecumulationRate = volumeDecumulationRate;
+    }
+    public float getVolumeDecumulationRate() {
+        return volumeDecumulationRate;
     }
 
     @Override
     public boolean load(CompoundTag tag) {
         volumeScale = tag.getFloat("volumeScale");
-        newVolumeDeltaScale1 = tag.getFloat("newVolumeDeltaScale1");
-        newVolumeDeltaScale2 = tag.getFloat("newVolumeDeltaScale2");
+        nearMarketVolumeStrength = tag.getFloat("nearMarketVolumeStrength");
+        volumeAccumulationRate = tag.getFloat("volumeAccumulationRate");
+        volumeFastAccumulationRate = tag.getFloat("volumeFastAccumulationRate");
+        volumeDecumulationRate = tag.getFloat("volumeDecumulationRate");
+
         int size = tag.getInt("arraySize");
         int[] intArray = tag.getIntArray("volumeArray");
         float[] array = new float[size];
@@ -107,8 +130,10 @@ public class GhostOrderBook implements ServerSaveable {
             intArray[i] = Float.floatToIntBits(array[i]);
         }
         tag.putFloat("volumeScale", volumeScale);
-        tag.putFloat("newVolumeDeltaScale1", newVolumeDeltaScale1);
-        tag.putFloat("newVolumeDeltaScale2", newVolumeDeltaScale2);
+        tag.putFloat("nearMarketVolumeStrength", nearMarketVolumeStrength);
+        tag.putFloat("volumeAccumulationRate", volumeAccumulationRate);
+        tag.putFloat("volumeFastAccumulationRate", volumeFastAccumulationRate);
+        tag.putFloat("volumeDecumulationRate", volumeDecumulationRate);
         tag.putInt("arraySize", size);
         tag.putInt("currentIndexOffset", virtualOrderVolumeDistribution.getIndexOffset());
         tag.putIntArray("volumeArray", intArray);
@@ -149,12 +174,18 @@ public class GhostOrderBook implements ServerSaveable {
             return 0;
         // Calculate close price volume distribution
         float currentPriceFloat = (float)currentMarketPrice;
-        float relativePrice = (currentPriceFloat - (float)price)/(currentPriceFloat+1);
+        //float relativePrice = (currentPriceFloat - (float)price)/(currentPriceFloat+1);
+        float relativePrice = (currentPriceFloat - (float)price);
         float width = 1f;
 
+        final float constant1 = (float)(2.0/Math.E);
+
         float amount = 0;
-        if(relativePrice < 20 && relativePrice > -20)
-            amount += (float)Math.E * width * relativePrice * (float)Math.exp(-Math.abs(relativePrice*width));
+        if(relativePrice < 20 && relativePrice > -20) {
+            //amount += (float) Math.E * width * relativePrice * (float) Math.exp(-Math.abs(relativePrice * width));
+            float sqrt = (float) Math.sqrt(Math.abs(relativePrice)) * Math.signum(relativePrice);
+            amount += (float) constant1 * nearMarketVolumeStrength * sqrt * (float) Math.exp(-Math.abs(relativePrice*relativePrice*0.05));
+        }
 
 
         if(relativePrice > 0)

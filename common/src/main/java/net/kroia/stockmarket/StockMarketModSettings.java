@@ -67,74 +67,84 @@ public class StockMarketModSettings {
         {
             botBuilder = new HashMap<>();
 
-            double priceScale = 1;
+            float priceScale = 1f;
             long updateMS = 500;
-            double volatility = 0.2;
+            float volatility = 0.2f;
             botBuilder = new HashMap<>();
 
             Map<String, ServerTradingBotFactory.DefaultBotSettings> allSettigns = StockMarketDataHandler.loadDefaultBotSettings();
-            if(allSettigns.isEmpty())
+            boolean relcreatePresets = false;
+            for(Map.Entry<String, ServerTradingBotFactory.DefaultBotSettings> entry : allSettigns.entrySet())
+            {
+                if(entry.getValue().getSettings() == null)
+                {
+                    relcreatePresets = true;
+                    allSettigns.clear();
+                    break;
+                }
+            }
+            if(allSettigns.isEmpty() || relcreatePresets)
             {
                 // Create defaults:
                 Map<String, ServerTradingBotFactory.DefaultBotSettings> ores = new HashMap<>();
-                ores.put("minecraft:coal", new ServerTradingBotFactory.DefaultBotSettings((int)(8*priceScale),0.05,volatility,updateMS));
-                ores.put("minecraft:copper_ingot", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.1,volatility,updateMS));
-                ores.put("minecraft:iron_ingot", new ServerTradingBotFactory.DefaultBotSettings((int)(15*priceScale),0.1,volatility,updateMS));
-                ores.put("minecraft:gold_ingot", new ServerTradingBotFactory.DefaultBotSettings((int)(40*priceScale),0.3,volatility,updateMS));
-                ores.put("minecraft:diamond", new ServerTradingBotFactory.DefaultBotSettings((int)(160*priceScale),0.4,volatility,updateMS));
-                ores.put("minecraft:lapis_lazuli", new ServerTradingBotFactory.DefaultBotSettings((int)(8*priceScale),0.25,volatility,updateMS));
-                ores.put("minecraft:emerald", new ServerTradingBotFactory.DefaultBotSettings((int)(100*priceScale),0.75,volatility,updateMS));
-                ores.put("minecraft:quartz", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.2,volatility,updateMS));
-                ores.put("minecraft:redstone", new ServerTradingBotFactory.DefaultBotSettings((int)(4*priceScale),0.2,volatility,updateMS));
-                ores.put("minecraft:glowstone_dust", new ServerTradingBotFactory.DefaultBotSettings((int)(4*priceScale),0.3,volatility,updateMS));
-                ores.put("minecraft:netherite_scrap", new ServerTradingBotFactory.DefaultBotSettings((int)(500*priceScale),0.9,volatility,updateMS));
+                ores.put("minecraft:coal", new ServerTradingBotFactory.DefaultBotSettings((int)(8*priceScale),0.05f,volatility,updateMS));
+                ores.put("minecraft:copper_ingot", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.1f,volatility,updateMS));
+                ores.put("minecraft:iron_ingot", new ServerTradingBotFactory.DefaultBotSettings((int)(15*priceScale),0.1f,volatility,updateMS));
+                ores.put("minecraft:gold_ingot", new ServerTradingBotFactory.DefaultBotSettings((int)(40*priceScale),0.3f,volatility,updateMS));
+                ores.put("minecraft:diamond", new ServerTradingBotFactory.DefaultBotSettings((int)(160*priceScale),0.4f,volatility,updateMS));
+                ores.put("minecraft:lapis_lazuli", new ServerTradingBotFactory.DefaultBotSettings((int)(8*priceScale),0.25f,volatility,updateMS));
+                ores.put("minecraft:emerald", new ServerTradingBotFactory.DefaultBotSettings((int)(100*priceScale),0.75f,volatility,updateMS));
+                ores.put("minecraft:quartz", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.2f,volatility,updateMS));
+                ores.put("minecraft:redstone", new ServerTradingBotFactory.DefaultBotSettings((int)(4*priceScale),0.2f,volatility,updateMS));
+                ores.put("minecraft:glowstone_dust", new ServerTradingBotFactory.DefaultBotSettings((int)(4*priceScale),0.3f,volatility,updateMS));
+                ores.put("minecraft:netherite_scrap", new ServerTradingBotFactory.DefaultBotSettings((int)(500*priceScale),0.9f,volatility,updateMS));
                 StockMarketDataHandler.saveDefaultBotSettings(ores, "Ores.json");
 
                 // Building blocks
                 Map<String, ServerTradingBotFactory.DefaultBotSettings> buildingBlocks = new HashMap<>();
-                buildingBlocks.put("minecraft:oak_log", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.01,0.1,updateMS));
-                buildingBlocks.put("minecraft:spruce_log", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.01,0.1,updateMS));
-                buildingBlocks.put("minecraft:birch_log", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.01,0.1,updateMS));
-                buildingBlocks.put("minecraft:jungle_log", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.01,0.1,updateMS));
-                buildingBlocks.put("minecraft:acacia_log", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.01,0.1,updateMS));
-                buildingBlocks.put("minecraft:dark_oak_log", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.01,0.1,updateMS));
-                buildingBlocks.put("minecraft:sand", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01,0.1,updateMS));
-                buildingBlocks.put("minecraft:dirt", new ServerTradingBotFactory.DefaultBotSettings((int)(3*priceScale),0.01,0.05,updateMS));
-                buildingBlocks.put("minecraft:gravel", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01,0.1,updateMS));
-                buildingBlocks.put("minecraft:clay_ball", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01,0.1,updateMS));
-                buildingBlocks.put("minecraft:stone", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01,0.1,updateMS));
-                buildingBlocks.put("minecraft:obsidian", new ServerTradingBotFactory.DefaultBotSettings((int)(20*priceScale),0.01,0.1,updateMS));
-                buildingBlocks.put("minecraft:glass", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01,0.1,updateMS));
+                buildingBlocks.put("minecraft:oak_log", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.01f,0.1f,updateMS));
+                buildingBlocks.put("minecraft:spruce_log", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.01f,0.1f,updateMS));
+                buildingBlocks.put("minecraft:birch_log", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.01f,0.1f,updateMS));
+                buildingBlocks.put("minecraft:jungle_log", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.01f,0.1f,updateMS));
+                buildingBlocks.put("minecraft:acacia_log", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.01f,0.1f,updateMS));
+                buildingBlocks.put("minecraft:dark_oak_log", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.01f,0.1f,updateMS));
+                buildingBlocks.put("minecraft:sand", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01f,0.1f,updateMS));
+                buildingBlocks.put("minecraft:dirt", new ServerTradingBotFactory.DefaultBotSettings((int)(3*priceScale),0.01f,0.05f,updateMS));
+                buildingBlocks.put("minecraft:gravel", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01f,0.1f,updateMS));
+                buildingBlocks.put("minecraft:clay_ball", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01f,0.1f,updateMS));
+                buildingBlocks.put("minecraft:stone", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01f,0.1f,updateMS));
+                buildingBlocks.put("minecraft:obsidian", new ServerTradingBotFactory.DefaultBotSettings((int)(20*priceScale),0.01f,0.1f,updateMS));
+                buildingBlocks.put("minecraft:glass", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01f,0.1f,updateMS));
                 StockMarketDataHandler.saveDefaultBotSettings(buildingBlocks, "BuildingBlocks.json");
 
                 // Foods
                 Map<String, ServerTradingBotFactory.DefaultBotSettings> food = new HashMap<>();
-                food.put("minecraft:apple", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01,volatility,updateMS));
-                food.put("minecraft:cooked_beef", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.01,volatility,updateMS));
-                food.put("minecraft:cooked_porkchop", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.01,volatility,updateMS));
-                food.put("minecraft:cooked_chicken", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.01,volatility,updateMS));
-                food.put("minecraft:cooked_mutton", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.01,volatility,updateMS));
-                food.put("minecraft:cooked_rabbit", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.01,volatility,updateMS));
-                food.put("minecraft:bread", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01,volatility,updateMS));
-                food.put("minecraft:carrot", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01,volatility,updateMS));
-                food.put("minecraft:potato", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01,volatility,updateMS));
-                food.put("minecraft:beetroot", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01,volatility,updateMS));
-                food.put("minecraft:melon_slice", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01,volatility,updateMS));
-                food.put("minecraft:pumpkin_pie", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.01,volatility,updateMS));
-                food.put("minecraft:cookie", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01,volatility,updateMS));
-                food.put("minecraft:sweet_berries", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01,volatility,updateMS));
-                food.put("minecraft:cake", new ServerTradingBotFactory.DefaultBotSettings((int)(20*priceScale),0.01,volatility,updateMS));
-                food.put("minecraft:chorus_fruit", new ServerTradingBotFactory.DefaultBotSettings((int)(20*priceScale),0.01,volatility,updateMS));
+                food.put("minecraft:apple", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01f,volatility,updateMS));
+                food.put("minecraft:cooked_beef", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.01f,volatility,updateMS));
+                food.put("minecraft:cooked_porkchop", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.01f,volatility,updateMS));
+                food.put("minecraft:cooked_chicken", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.01f,volatility,updateMS));
+                food.put("minecraft:cooked_mutton", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.01f,volatility,updateMS));
+                food.put("minecraft:cooked_rabbit", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.01f,volatility,updateMS));
+                food.put("minecraft:bread", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01f,volatility,updateMS));
+                food.put("minecraft:carrot", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01f,volatility,updateMS));
+                food.put("minecraft:potato", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01f,volatility,updateMS));
+                food.put("minecraft:beetroot", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01f,volatility,updateMS));
+                food.put("minecraft:melon_slice", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01f,volatility,updateMS));
+                food.put("minecraft:pumpkin_pie", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.01f,volatility,updateMS));
+                food.put("minecraft:cookie", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01f,volatility,updateMS));
+                food.put("minecraft:sweet_berries", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01f,volatility,updateMS));
+                food.put("minecraft:cake", new ServerTradingBotFactory.DefaultBotSettings((int)(20*priceScale),0.01f,volatility,updateMS));
+                food.put("minecraft:chorus_fruit", new ServerTradingBotFactory.DefaultBotSettings((int)(20*priceScale),0.01f,volatility,updateMS));
                 StockMarketDataHandler.saveDefaultBotSettings(food, "Food.json");
 
                 // misc
                 Map<String, ServerTradingBotFactory.DefaultBotSettings> misc = new HashMap<>();
-                misc.put("minecraft:bone", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01,volatility,updateMS));
-                misc.put("minecraft:gunpowder", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01,volatility,updateMS));
-                misc.put("minecraft:ender_pearl", new ServerTradingBotFactory.DefaultBotSettings((int)(50*priceScale),0.01,volatility,updateMS));
-                misc.put("minecraft:blaze_rod", new ServerTradingBotFactory.DefaultBotSettings((int)(20*priceScale),0.01,volatility,updateMS));
-                misc.put("minecraft:ghast_tear", new ServerTradingBotFactory.DefaultBotSettings((int)(100*priceScale),0.01,volatility,updateMS));
-                misc.put("minecraft:elytra", new ServerTradingBotFactory.DefaultBotSettings((int)(5000*priceScale),0.01,volatility,updateMS).setVolumeSpread(100).setPid_iBound(10));
+                misc.put("minecraft:bone", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01f,volatility,updateMS));
+                misc.put("minecraft:gunpowder", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01f,volatility,updateMS));
+                misc.put("minecraft:ender_pearl", new ServerTradingBotFactory.DefaultBotSettings((int)(50*priceScale),0.01f,volatility,updateMS));
+                misc.put("minecraft:blaze_rod", new ServerTradingBotFactory.DefaultBotSettings((int)(20*priceScale),0.01f,volatility,updateMS));
+                misc.put("minecraft:ghast_tear", new ServerTradingBotFactory.DefaultBotSettings((int)(100*priceScale),0.01f,volatility,updateMS));
+                misc.put("minecraft:elytra", new ServerTradingBotFactory.DefaultBotSettings((int)(5000*priceScale),0.01f,volatility,updateMS));
                 StockMarketDataHandler.saveDefaultBotSettings(misc, "Misc.json");
 
                 allSettigns = StockMarketDataHandler.loadDefaultBotSettings();

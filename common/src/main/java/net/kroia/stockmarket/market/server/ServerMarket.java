@@ -108,7 +108,7 @@ public class ServerMarket implements ServerSaveable
         }
         if(!hasItem(itemID))
         {
-            int initialPrice = botBuilder.defaultSettings.imbalancePriceRange/2;
+            int initialPrice = botBuilder.defaultSettings.getSettings().defaultPrice;
             addTradeItem(itemID,initialPrice);
         }
         ServerTradingBot bot = getTradingBot(itemID);
@@ -118,7 +118,9 @@ public class ServerMarket implements ServerSaveable
             bot = new ServerVolatilityBot();
             setTradingBot(itemID, bot);
         }
-        botBuilder.defaultSettings.loadDefaultSettings((ServerVolatilityBot.Settings)bot.getSettings());
+        ServerVolatilityBot.Settings settings = (ServerVolatilityBot.Settings)bot.getSettings();
+        botBuilder.defaultSettings.loadDefaultSettings(settings);
+        bot.setSettings(settings);
         return true;
     }
 
@@ -398,6 +400,23 @@ public class ServerMarket implements ServerSaveable
             return null;
         }
         return item.getPriceHistory();
+    }
+    public static void resetPriceChart(ItemID itemID)
+    {
+        ServerTradeItem item = tradeItems.get(itemID);
+        if(item == null)
+        {
+            msgTradeItemNotFound(itemID);
+            return;
+        }
+        item.resetPriceChart();
+    }
+    public static void resetPriceChart()
+    {
+        for(ServerTradeItem item : tradeItems.values())
+        {
+            item.resetPriceChart();
+        }
     }
 
     public static void addPlayerUpdateSubscription(ItemID itemID, ServerPlayer player)

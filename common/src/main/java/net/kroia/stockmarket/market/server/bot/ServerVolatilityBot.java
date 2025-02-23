@@ -5,6 +5,7 @@ import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.util.MeanRevertingRandomWalk;
+import net.kroia.stockmarket.util.PID;
 import net.minecraft.nbt.CompoundTag;
 
 import java.io.FileWriter;
@@ -13,114 +14,42 @@ import java.util.Random;
 public class ServerVolatilityBot extends ServerTradingBot {
     public static class Settings extends ServerTradingBot.Settings
     {
-        public enum Type
-        {
-            //ServerTradingBot settings
-            ENABLED,
-            MAX_ORDER_COUNT,
-            VOLUME_SCALE,
-            VOLUME_SPREAD,
-            VOLUME_RANDOMNESS,
-            UPDATE_INTERVAL,
+
+        public float volumeScale = 2f;
+
+        public boolean enableTargetPrice = true;
+        public float targetPriceStearingFactor = 0.1f;
 
 
+        public boolean enableVolumeTracking = true;
+        public float volumeStearingFactor = 0.1f;
 
-            //ServerVolatilityBot settings
-            VOLATILITY,
-            ORDER_RANDOMNESS,
-            INTEGRATED_ERROR,
-            TARGET_ITEM_BALANCE,
-            TIMER_VOLATILITY_MILLIS,
-            MIN_VOLATILITY_TIMER_MILLIS,
-            MAX_VOLATILITY_TIMER_MILLIS,
-            IMBALANCE_PRICE_RANGE,
-            IMBALANCE_PRICE_CHANGE_FACTOR,
-            IMBALANCE_PRICE_CHANGE_QUAD_FACTOR,
-            PID_P,
-            PID_D,
-            PID_I,
-            PID_I_BOUNDS
-        }
-        public double volatility = 100;
-        public double orderRandomness = 1;
-        public double lastError = 0;
-        public double integratedError = 0;
-        public double randomWalkDifferencePercentage = 0;
-        public int targetPrice = 0;
-        public long targetItemBalance = 0;
-        public long timerMillis = 10000;
-        public long minTimerMillis = 10000;
-        public long maxTimerMillis = 120000;
-        public int imbalancePriceRange = 100;
-        public double imbalancePriceChangeFactor = 0.1;
-        public double imbalancePriceChangeQuadFactor = 10;
 
-        public double pid_p = 0.1;
-        public double pid_d = 0.1;
-        public double pid_i = 0.0001;
-        public double pid_iBound = 10;
+        public boolean enableRandomWalk = true;
+        public float volatility; // 0-100 or higher
 
         public Settings()
         {
             super();
-            //this.updateTimerIntervallMS = 100;
+
         }
-        public Settings(double volatility,
-                        long targetItemBalance,
-                        long minTimerMillis,
-                        long maxTimerMillis,
-                        int imbalancePriceRange,
-                        double imbalancePriceChangeFactor,
-                        double imbalancePriceChangeQuadFactor,
-                        double pid_p,
-                        double pid_d,
-                        double pid_i,
-                        double pid_iBound)
+
+        public Settings(int price, float rarity, float volatility, long udateTimerIntervallMS, boolean enableTargetPrice, boolean enableVolumeTracking, boolean enableRandomWalk)
         {
             this();
-            this.volatility = volatility;
-            this.targetItemBalance = targetItemBalance;
-            this.minTimerMillis = minTimerMillis;
-            this.maxTimerMillis = maxTimerMillis;
-            this.imbalancePriceRange = imbalancePriceRange;
-            this.imbalancePriceChangeFactor = imbalancePriceChangeFactor;
-            this.imbalancePriceChangeQuadFactor = imbalancePriceChangeQuadFactor;
-            this.pid_p = pid_p;
-            this.pid_d = pid_d;
-            this.pid_i = pid_i;
-            this.pid_iBound = pid_iBound;
-        }
-        public Settings(int price, double rarity, double volatility, long udateTimerIntervallMS)
-        {
-            this();
-            this.pid_p = 0.1;
-            this.pid_d = -0.01;
-            this.pid_i = 0.001;
-            this.pid_iBound = 1;
-            setFromData(price, rarity, volatility, udateTimerIntervallMS);
+            setFromData(price, rarity, volatility, udateTimerIntervallMS, enableTargetPrice, enableVolumeTracking, enableRandomWalk);
         }
         @Override
         public boolean save(CompoundTag tag) {
             boolean success = super.save(tag);
-            tag.putDouble("volatility", volatility);
-            tag.putDouble("orderRandomness", orderRandomness);
-            tag.putDouble("lastError", lastError);
-            tag.putDouble("integratedError", integratedError);
-            tag.putDouble("randomWalkDifferencePercentage", randomWalkDifferencePercentage);
-            tag.putInt("targetPrice", targetPrice);
-            tag.putLong("targetItemBalance", targetItemBalance);
-            tag.putLong("timerMillis", timerMillis);
-            tag.putLong("minTimerMillis", minTimerMillis);
-            tag.putLong("maxTimerMillis", maxTimerMillis);
-            tag.putInt("imbalancePriceRange", imbalancePriceRange);
-            tag.putDouble("imbalancePriceChangeFactor", imbalancePriceChangeFactor);
-            tag.putDouble("imbalancePriceChangeQuadFactor", imbalancePriceChangeQuadFactor);
-            tag.putDouble("pid_p", pid_p);
-            tag.putDouble("pid_d", pid_d);
-            tag.putDouble("pid_i", pid_i);
-            tag.putDouble("pid_iBound", pid_iBound);
 
-
+            tag.putFloat("volumeScale", volumeScale);
+            tag.putBoolean("enableTargetPrice", enableTargetPrice);
+            tag.putFloat("targetPriceStearingFactor", targetPriceStearingFactor);
+            tag.putBoolean("enableVolumeTracking", enableVolumeTracking);
+            tag.putFloat("volumeStearingFactor", volumeStearingFactor);
+            tag.putBoolean("enableRandomWalk", enableRandomWalk);
+            tag.putFloat("volatility", volatility);
 
 
 
@@ -132,90 +61,81 @@ public class ServerVolatilityBot extends ServerTradingBot {
             if(tag == null)
                 return false;
             boolean success = super.load(tag);
-            if(!tag.contains("volatility") ||
-               !tag.contains("orderRandomness") ||
-               !tag.contains("lastError") ||
-               !tag.contains("integratedError") ||
-               !tag.contains("randomWalkDifferencePercentage") ||
-               !tag.contains("targetPrice") ||
-               !tag.contains("targetItemBalance") ||
-               !tag.contains("timerMillis") ||
-               !tag.contains("minTimerMillis") ||
-               !tag.contains("maxTimerMillis")||
-               !tag.contains("imbalancePriceRange") ||
-               !tag.contains("imbalancePriceChangeFactor") ||
-               !tag.contains("imbalancePriceChangeQuadFactor") ||
-               !tag.contains("pid_p") ||
-               !tag.contains("pid_d") ||
-               !tag.contains("pid_i") ||
-               !tag.contains("pid_iBound"))
-                return false;
-            volatility = tag.getDouble("volatility");
-            orderRandomness = tag.getDouble("orderRandomness");
-            lastError = tag.getDouble("lastError");
-            integratedError = tag.getDouble("integratedError");
-            randomWalkDifferencePercentage = tag.getDouble("randomWalkTargetPrice");
-            targetPrice = tag.getInt("targetPrice");
-            targetItemBalance = tag.getLong("targetItemBalance");
-            timerMillis = tag.getLong("timerMillis");
-            minTimerMillis = tag.getLong("minTimerMillis");
-            maxTimerMillis = tag.getLong("maxTimerMillis");
-            imbalancePriceRange = tag.getInt("imbalancePriceRange");
-            imbalancePriceChangeFactor = tag.getDouble("imbalancePriceChangeFactor");
-            imbalancePriceChangeQuadFactor = tag.getDouble("imbalancePriceChangeQuadFactor");
-            pid_p = tag.getDouble("pid_p");
-            pid_d = tag.getDouble("pid_d");
-            pid_i = tag.getDouble("pid_i");
-            pid_iBound = tag.getDouble("pid_iBound");
+
+            if(tag.contains("volumeScale"))
+                volumeScale = tag.getFloat("volumeScale");
+            if(tag.contains("enableTargetPrice"))
+                enableTargetPrice = tag.getBoolean("enableTargetPrice");
+            if(tag.contains("targetPriceStearingFactor"))
+                targetPriceStearingFactor = tag.getFloat("targetPriceStearingFactor");
+            if(tag.contains("enableVolumeTracking"))
+                enableVolumeTracking = tag.getBoolean("enableVolumeTracking");
+            if(tag.contains("volumeStearingFactor"))
+                volumeStearingFactor = tag.getFloat("volumeStearingFactor");
+            if(tag.contains("enableRandomWalk"))
+                enableRandomWalk = tag.getBoolean("enableRandomWalk");
+            if(tag.contains("volatility"))
+                volatility = tag.getFloat("volatility");
+
 
             return success;
         }
 
-        public void load(Settings other)
+        @Override
+        public void copyFrom(ServerTradingBot.Settings other)
         {
-            CompoundTag tag = new CompoundTag();
-            other.save(tag);
-            load(tag);
+            if(other != null && other instanceof ServerVolatilityBot.Settings)
+            {
+                super.copyFrom(other);
+                ServerVolatilityBot.Settings st = (ServerVolatilityBot.Settings)other;
+                this.enableRandomWalk = st.enableRandomWalk;
+                this.enableTargetPrice = st.enableTargetPrice;
+                this.enableVolumeTracking = st.enableVolumeTracking;
+                this.targetPriceStearingFactor = st.targetPriceStearingFactor;
+                this.volumeStearingFactor = st.volumeStearingFactor;
+                this.volatility = st.volatility;
+
+
+            }
         }
-        public void setFromData(int price, double rarity, double volatility, long udateTimerIntervallMS)
+        public void setFromData(int price, float rarity, float volatility, long udateTimerIntervallMS,
+                                boolean enableTargetPrice, boolean enableVolumeTracking, boolean enableRandomWalk)
         {
             //this.targetItemBalance = (long)(((1-rarity) * (1-rarity)) * 100000)+5000;
-            this.volatility = volatility*100;
-            this.imbalancePriceRange = price * 2;
+            this.defaultPrice = price;
             this.updateTimerIntervallMS = udateTimerIntervallMS;
 
-            if(volatility > 0.25)
-            {
-                this.imbalancePriceChangeQuadFactor = (volatility-0.25) * 8;
-            }else {
-                this.imbalancePriceChangeQuadFactor = 0;
-            }
-            this.imbalancePriceChangeFactor = volatility*0.1;
-            this.volumeRandomness = volatility*2;
-            this.volumeScale = (1-rarity) * 100;
-            this.orderRandomness = volatility * (1-rarity) * 5+1;
+            this.enableTargetPrice = enableTargetPrice;
+            this.targetPriceStearingFactor = Math.max(rarity,0.00001f);
+
+            this.enableVolumeTracking = enableVolumeTracking;
+            this.volumeStearingFactor = Math.max((1-rarity)*0.0001f,0.0000001f);
+
+            this.enableRandomWalk = enableRandomWalk;
+            this.volatility = Math.abs(volatility);
+
+            this.orderBookVolumeScale = 100f/(0.01f+Math.abs(rarity));
+            this.volumeScale = this.orderBookVolumeScale * this.volatility*10;
         }
     }
     private MeanRevertingRandomWalk randomWalk1;
     private MeanRevertingRandomWalk randomWalk2;
+    private MeanRevertingRandomWalk randomWalk3;
     private static Random random = new Random();
     //private double speed = 0;
-    public long lastMillis = 0;
-    public long lastTimerMillis = 0;
-    public long timerCounter = 0;
+    //public long lastMillis = 0;
+    private long lastTimerMillis = 0;
+    private long targetTimerMillis = 1000;
+    private long timerCounter = 0;
+    private final PID pid = new PID(0.1f, 0.1f, 0.1f, 10);
 
     Settings settings;
-
     public ServerVolatilityBot() {
         super();
         setSettings(new Settings());
         randomWalk1 = new MeanRevertingRandomWalk(0.1, 0.05);
         randomWalk2 = new MeanRevertingRandomWalk(0.1, 0.05);
-
-        lastMillis = System.currentTimeMillis();
-
-
-        //debugPlotRandomWalk();
+        randomWalk3 = new MeanRevertingRandomWalk(0.1, 0.05);
     }
 
     @Override
@@ -227,22 +147,61 @@ public class ServerVolatilityBot extends ServerTradingBot {
 
     @Override
     public void createOrders() {
-        //BankUser user = ServerMarket.getBotUser();
-        //Bank moneyBank = user.getMoneyBank();
-        ItemID itemID = parent.getItemID();
-        //Bank itemBank = user.getBank(itemID);
-        //if(itemBank == null)
-        //    return;
-
-        // Create Limit orders
-        //clearOrders();
-        //createLimitOrders(itemBank, moneyBank);
-
-        //long currentItemBalance = itemBank.getTotalBalance();
         long currentItemBalance = getMatchingEngine().getRealVolumeImbalance();
 
 
-        long currentMillis = System.currentTimeMillis();
+        int marketOrderAmount = 0;
+        int targetPrice = settings.defaultPrice;
+        float volumeScale = settings.volumeScale;
+        if(settings.enableVolumeTracking)
+        {
+            if(currentItemBalance > 0)
+            {
+                targetPrice -= (int)(currentItemBalance*settings.volumeStearingFactor);
+            }
+            else if(currentItemBalance < 0)
+            {
+                targetPrice += (int)(currentItemBalance*settings.volumeStearingFactor);
+            }
+        }
+
+        if(settings.enableRandomWalk)
+        {
+            long currentMillis = System.currentTimeMillis();
+            if(currentMillis - lastTimerMillis > targetTimerMillis)
+            {
+                lastTimerMillis = currentMillis;
+                targetTimerMillis = 100 + random.nextLong(1000);
+                randomWalk1.nextValue();
+                timerCounter++;
+                if(timerCounter >= 10)
+                {
+                    timerCounter = 0;
+                    randomWalk2.nextValue();
+                }
+            }
+            targetPrice += (int)((randomWalk1.getCurrentValue() + randomWalk2.getCurrentValue())*settings.volatility*100);
+
+            marketOrderAmount += (int)(randomWalk3.nextValue()*volumeScale);
+        }
+
+        if(settings.enableTargetPrice)
+        {
+            if(targetPrice < 0)
+                targetPrice = 0;
+
+            int currentPrice = getCurrentPrice();
+            float output = pid.update(targetPrice - currentPrice);
+            int normalized = (int)(Math.min(Math.max(-10, output),10)*volumeScale);
+            marketOrderAmount += normalized;
+        }
+
+        marketTrade(marketOrderAmount);
+
+
+
+
+        /*long currentMillis = System.currentTimeMillis();
         if(currentMillis - lastTimerMillis > settings.timerMillis)
         {
             lastTimerMillis = currentMillis;
@@ -257,30 +216,24 @@ public class ServerVolatilityBot extends ServerTradingBot {
             }
         }
 
-        /*if(settings.targetItemBalance <= 1)
+        int averageTargetPrice =  (settings.imbalancePriceRange/2);
+
+        double normalizedDifference = (settings.targetItemBalance - currentItemBalance);///(double)settings.targetItemBalance;
+        // Linear part
+        double imbalancePriceOffset = (normalizedDifference * settings.imbalancePriceChangeFactor);
+        if(normalizedDifference > 0)
         {
-            settings.targetPrice = 1;
+            // Quadratic part only active for positive differences
+            double quadraticPart = normalizedDifference*normalizedDifference  * settings.imbalancePriceChangeQuadFactor;
+            imbalancePriceOffset += quadraticPart;
         }
-        else
-        {*/
-            int averageTargetPrice =  (settings.imbalancePriceRange/2);
 
-            double normalizedDifference = (settings.targetItemBalance - currentItemBalance);///(double)settings.targetItemBalance;
-            // Linear part
-            double imbalancePriceOffset = (normalizedDifference * settings.imbalancePriceChangeFactor);
-            if(normalizedDifference > 0)
-            {
-                // Quadratic part only active for positive differences
-                double quadraticPart = normalizedDifference*normalizedDifference  * settings.imbalancePriceChangeQuadFactor;
-                imbalancePriceOffset += quadraticPart;
-            }
+        int targetPrice = averageTargetPrice + (int)(imbalancePriceOffset * settings.imbalancePriceRange);
+        settings.targetPrice = (int) ((settings.randomWalkDifferencePercentage + 1) * targetPrice);
 
-            int targetPrice = averageTargetPrice + (int)(imbalancePriceOffset * settings.imbalancePriceRange);
-            settings.targetPrice = (int) ((settings.randomWalkDifferencePercentage + 1) * targetPrice);
+        if(settings.targetPrice < 0)
+            settings.targetPrice = 0;
 
-            if(settings.targetPrice < 0)
-                settings.targetPrice = 0;
-        //}
 
 
         long deltaTMillis = currentMillis - lastMillis;
@@ -303,52 +256,15 @@ public class ServerVolatilityBot extends ServerTradingBot {
         int randomVolume = random.nextInt((int)(-settings.orderRandomness),(int)(settings.orderRandomness)+1);
         int volume = (int)(Math.round(speed)) + randomVolume;
 
-        //if(volume < 0 && itemBank.getBalance()/2 < -volume)
-        //    volume = (int)-itemBank.getBalance()/2;
         if(currentPrice != 0 || volume > 0)
-            marketTrade(volume);
+            marketTrade(volume);*/
     }
 
 
 
     private void createLimitOrders(Bank itemBank, Bank moneyBank)
     {
-        int currentPrice = getCurrentPrice();
-        long currentItemBalance = itemBank.getTotalBalance();
-        int priceIncerement = 1;
-        double imbalanceFactor = 0;
-        if(settings.targetItemBalance > 0)
-        {
-            imbalanceFactor = Math.tanh((settings.targetItemBalance - currentItemBalance)/(double)settings.targetItemBalance/4)*0.5;
-        }
-        int startBuyPrice = currentPrice;
-        int startSellPrice = currentPrice+1;
-        if(currentPrice == 0)
-            startSellPrice = currentPrice+1;
 
-        for(int i=0; i<this.settings.maxOrderCount/2; i++)
-        {
-            int sellPrice = startSellPrice + i*priceIncerement;
-            int buyPrice = startBuyPrice - i*priceIncerement;
-            int buyVolume = (int)(getAvailableVolume(buyPrice) * (1 + imbalanceFactor))+1;
-            if(buyVolume > 0 && buyPrice >= 0) {
-
-                if(moneyBank.getBalance()>(buyVolume*2)*buyPrice) {
-                    limitTrade(buyVolume, buyPrice);
-                }
-            }
-
-            if(itemBank.getBalance() > 10) {
-                int sellVolume = (int) (getAvailableVolume(sellPrice) * (1 - imbalanceFactor)) -1;
-                if (sellVolume < 0 && sellPrice > 0) {
-                    if (itemBank.getBalance()/2 < -sellVolume)
-                        sellVolume = (int) -itemBank.getBalance()/2;
-
-                    sellLimit(-sellVolume, sellPrice);
-
-                }
-            }
-        }
     }
 
 
@@ -357,6 +273,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
         if(settings instanceof Settings) {
             super.setSettings(settings);
             this.settings = (Settings)settings;
+            pid.setKP(this.settings.targetPriceStearingFactor);
         }
         else
             throw new IllegalArgumentException("Settings must be of type ServerVolatilityBot.Settings");
@@ -367,7 +284,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
         return (value - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
     }
 
-    public void setVolatility(double volatility) {
+    /*public void setVolatility(double volatility) {
         settings.volatility = volatility;
     }
     public double getVolatility() {
@@ -460,7 +377,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
     public void setintegratedError(double integratedError) {
         settings.integratedError = integratedError;
     }
-
+    */
 
     @Override
     public boolean save(CompoundTag tag) {

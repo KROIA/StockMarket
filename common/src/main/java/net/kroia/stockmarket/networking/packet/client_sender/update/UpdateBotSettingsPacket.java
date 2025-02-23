@@ -22,10 +22,6 @@ public class UpdateBotSettingsPacket extends NetworkPacket {
     private boolean destroyBot;
     private boolean createBot;
     private boolean marketOpen;
-    //private boolean setBotItemBalance;
-    //private boolean setBotMoneyBalance;
-    //private long itemBalance;
-    //private long moneyBalance;
 
 
     private UpdateBotSettingsPacket() {
@@ -44,36 +40,15 @@ public class UpdateBotSettingsPacket extends NetworkPacket {
         packet.destroyBot = destroyBot;
         packet.createBot = createBot;
         packet.marketOpen = marketOpen;
-        // packet.setBotItemBalance = false;
-        // packet.setBotMoneyBalance = false;
         StockMarketNetworking.sendToServer(packet);
     }
-    /*public static void sendPacket(ItemID itemID, ServerVolatilityBot.Settings settings, boolean destroyBot, boolean createBot, boolean marketOpen,
-                                  boolean setItemBalance, long itemBalance, boolean setMoneyBalance, long moneyBalance)
-    {
-        UpdateBotSettingsPacket packet = new UpdateBotSettingsPacket();
-        packet.itemID = itemID;
-        packet.settings = settings;
-        packet.destroyBot = destroyBot;
-        packet.createBot = createBot;
-        packet.marketOpen = marketOpen;
-        //packet.setBotItemBalance = setItemBalance;
-        //packet.setBotMoneyBalance = setMoneyBalance;
-        //packet.itemBalance = itemBalance;
-        //packet.moneyBalance = moneyBalance;
-        StockMarketNetworking.sendToServer(packet);
-    }
-*/
+
     @Override
     public void toBytes(FriendlyByteBuf buf) {
         buf.writeItem(itemID.getStack());
         buf.writeBoolean(destroyBot);
         buf.writeBoolean(createBot);
         buf.writeBoolean(marketOpen);
-        //buf.writeBoolean(setBotItemBalance);
-        //buf.writeBoolean(setBotMoneyBalance);
-        //buf.writeLong(itemBalance);
-        //buf.writeLong(moneyBalance);
         CompoundTag tag = new CompoundTag();
         settings.save(tag);
         buf.writeNbt(tag);
@@ -85,10 +60,6 @@ public class UpdateBotSettingsPacket extends NetworkPacket {
         destroyBot = buf.readBoolean();
         createBot = buf.readBoolean();
         marketOpen = buf.readBoolean();
-        //setBotItemBalance = buf.readBoolean();
-        //setBotMoneyBalance = buf.readBoolean();
-        //itemBalance = buf.readLong();
-        //moneyBalance = buf.readLong();
         settings = new ServerVolatilityBot.Settings();
         settings.load(buf.readNbt());
 
@@ -115,29 +86,6 @@ public class UpdateBotSettingsPacket extends NetworkPacket {
                 }
             }
             ServerMarket.setMarketOpen(itemID, marketOpen);
-            /*BankUser botBankUser = ServerBankManager.getUser(ServerMarket.getBotUserUUID());
-            if(setBotItemBalance)
-            {
-                Bank botBank = botBankUser.getBank(itemID);
-                if(botBank != null)
-                {
-                    botBank.setBalance(itemBalance);
-                }
-                else {
-                    botBank = botBankUser.createItemBank(itemID, itemBalance);
-                }
-            }
-            if(setBotMoneyBalance)
-            {
-                Bank botBank = botBankUser.getBank(MoneyBank.ITEM_ID);
-                if(botBank != null)
-                {
-                    botBank.deposit(moneyBalance);
-                }
-                else {
-                    botBank = botBankUser.createItemBank(MoneyBank.ITEM_ID, moneyBalance);
-                }
-            }*/
         }
     }
 }

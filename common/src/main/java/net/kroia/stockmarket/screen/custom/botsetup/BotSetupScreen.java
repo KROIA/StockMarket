@@ -33,16 +33,13 @@ public class BotSetupScreen extends GuiScreen {
 
     private boolean autoChangeMoneyBalance;
     private boolean autoChangeItemBalance;
-    private long botItemBalance;
-    private long botMoneyBalance;
 
     // Question pages
     private final BotSetup_rarity rarityPage;
     private final BotSetup_estimatedPrice estimatedPricePage;
     private final BotSetup_volatility volatilityPage;
     private final BotSetup_marketSpeed marketSpeedPage;
-    private final BotSetup_changeBotStocks changeBotStocksPage;
-
+    private final BotSetup_enabledFeatures enabledFeaturesPage;
 
     public BotSetupScreen(Runnable onApply, Runnable onCancel, ServerVolatilityBot.Settings settings) {
         super(TITLE);
@@ -60,11 +57,12 @@ public class BotSetupScreen extends GuiScreen {
         pages.add(estimatedPricePage = new BotSetup_estimatedPrice(settings));
         pages.add(volatilityPage = new BotSetup_volatility(settings));
         pages.add(marketSpeedPage = new BotSetup_marketSpeed(settings));
-        pages.add(changeBotStocksPage = new BotSetup_changeBotStocks(settings));
+        pages.add(enabledFeaturesPage = new BotSetup_enabledFeatures(settings));
 
         rarityPage.setTooltipSupplyer(this::getRarityTooltip);
         marketSpeedPage.setTooltipSupplyer(this::getMarketSpeedTooltip);
         volatilityPage.setTooltipSupplyer(this::getVolatilityTooltip);
+
 
 
         addElement(backButton);
@@ -127,13 +125,6 @@ public class BotSetupScreen extends GuiScreen {
                 nextButton.setLabel(APPLY.getString());
         }
     }
-
-    public long getBotItemBalance() {
-        return botItemBalance;
-    }
-    public long getBotMoneyBalance() {
-        return botMoneyBalance;
-    }
     public boolean getAutoChangeMoneyBalance() {
         return autoChangeMoneyBalance;
     }
@@ -143,15 +134,13 @@ public class BotSetupScreen extends GuiScreen {
     private void onApplyButtonClicked() {
         // Apply changes
         int price = estimatedPricePage.getEstimatedPrice();
-        double rarity = rarityPage.getRarity();
-        double volatility = volatilityPage.getVolatility();;
+        float rarity = rarityPage.getRarity();
+        float volatility = volatilityPage.getVolatility();
 
-        autoChangeItemBalance = changeBotStocksPage.getAutoChangeItemBalance();
-        autoChangeMoneyBalance = changeBotStocksPage.getAutoChangeMoneyBalance();
-        settings.setFromData(price, rarity, volatility, getMarketSpeedMS());
-        botItemBalance = settings.targetItemBalance;
-        botMoneyBalance = botItemBalance * price * 1000;
-
+        settings.setFromData(price, rarity, volatility, getMarketSpeedMS(),
+                enabledFeaturesPage.isTargetPriceEnabled(),
+                enabledFeaturesPage.isVolumeTrackingEnabled(),
+                enabledFeaturesPage.isRandomWalkEnabled());
         if(onApply != null)
             onApply.run();
     }

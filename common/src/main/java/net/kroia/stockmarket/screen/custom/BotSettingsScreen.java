@@ -194,7 +194,7 @@ public class BotSettingsScreen extends GuiScreen {
 
     public void setBotSettings(ServerVolatilityBot.Settings settings)
     {
-        this.settings.load(settings);
+        this.settings.copyFrom(settings);
         botSettingsWidget.setSettings(this.settings);
         saveButton.setOutlineColor(normalButtonColor);
         botExists = ClientMarket.botExists();
@@ -264,29 +264,15 @@ public class BotSettingsScreen extends GuiScreen {
     }
     private void onSaveSettings()
     {
-        long itemBalance = 0;
-        long moneyBalance = 0;
-        boolean setItemBalance = false;
-        boolean setMoneyBalance = false;
         boolean createBot = false;
         if(botSetupScreen != null)
         {
-            itemBalance = botSetupScreen.getBotItemBalance();
-            moneyBalance = botSetupScreen.getBotMoneyBalance();
-            setItemBalance = botSetupScreen.getAutoChangeItemBalance();
-            setMoneyBalance = botSetupScreen.getAutoChangeMoneyBalance();
             botSetupScreen = null;
             if(!botExists)
                 createBot = true;
         }
         boolean marketOpen = marketOpenCheckBox.isChecked();
-        if(setItemBalance || setMoneyBalance)
-        {
-            UpdateBotSettingsPacket.sendPacket(itemID, botSettingsWidget.getSettings(), false, createBot, marketOpen/*,
-                    setItemBalance, itemBalance, setMoneyBalance, moneyBalance*/);
-        }
-        else
-            UpdateBotSettingsPacket.sendPacket(itemID, botSettingsWidget.getSettings(), false, createBot, marketOpen);
+        UpdateBotSettingsPacket.sendPacket(itemID, botSettingsWidget.getSettings(), false, createBot, marketOpen);
         saveButton.setOutlineColor(normalButtonColor);
     }
     private void onCreateDestroyBot()
