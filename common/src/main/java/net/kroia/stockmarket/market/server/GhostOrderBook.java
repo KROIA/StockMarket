@@ -10,7 +10,7 @@ public class GhostOrderBook implements ServerSaveable {
     private final DynamicIndexedArray virtualOrderVolumeDistribution;
     private long lastMillis;
     private float volumeScale = 100f;
-    private float nearMarketVolumeStrength = 2f;
+    private float nearMarketVolumeScale = 2f;
     private float volumeAccumulationRate = 0.1f;
     private float volumeFastAccumulationRate = 0.5f;
     private float volumeDecumulationRate = 0.01f;
@@ -72,11 +72,11 @@ public class GhostOrderBook implements ServerSaveable {
         return volumeScale;
     }
 
-    public void setNearMarketVolumeStrength(float nearMarketVolumeStrength) {
-        this.nearMarketVolumeStrength = nearMarketVolumeStrength;
+    public void setNearMarketVolumeScale(float nearMarketVolumeScale) {
+        this.nearMarketVolumeScale = nearMarketVolumeScale;
     }
-    public float getNearMarketVolumeStrength() {
-        return nearMarketVolumeStrength;
+    public float getNearMarketVolumeScale() {
+        return nearMarketVolumeScale;
     }
     public void setVolumeAccumulationRate(float volumeAccumulationRate) {
         this.volumeAccumulationRate = volumeAccumulationRate;
@@ -106,7 +106,7 @@ public class GhostOrderBook implements ServerSaveable {
     @Override
     public boolean load(CompoundTag tag) {
         volumeScale = tag.getFloat("volumeScale");
-        nearMarketVolumeStrength = tag.getFloat("nearMarketVolumeStrength");
+        nearMarketVolumeScale = tag.getFloat("nearMarketVolumeStrength");
         volumeAccumulationRate = tag.getFloat("volumeAccumulationRate");
         volumeFastAccumulationRate = tag.getFloat("volumeFastAccumulationRate");
         volumeDecumulationRate = tag.getFloat("volumeDecumulationRate");
@@ -143,7 +143,7 @@ public class GhostOrderBook implements ServerSaveable {
             intArray[i] = Float.floatToIntBits(array[i]);
         }
         tag.putFloat("volumeScale", volumeScale);
-        tag.putFloat("nearMarketVolumeStrength", nearMarketVolumeStrength);
+        tag.putFloat("nearMarketVolumeStrength", nearMarketVolumeScale);
         tag.putFloat("volumeAccumulationRate", volumeAccumulationRate);
         tag.putFloat("volumeFastAccumulationRate", volumeFastAccumulationRate);
         tag.putFloat("volumeDecumulationRate", volumeDecumulationRate);
@@ -197,7 +197,7 @@ public class GhostOrderBook implements ServerSaveable {
         if(relativePrice < 20 && relativePrice > -20) {
             //amount += (float) Math.E * width * relativePrice * (float) Math.exp(-Math.abs(relativePrice * width));
             float sqrt = (float) Math.sqrt(Math.abs(relativePrice)) * Math.signum(relativePrice);
-            amount += (float) constant1 * nearMarketVolumeStrength * sqrt * (float) Math.exp(-Math.abs(relativePrice*relativePrice*0.05));
+            amount += (float) constant1 * nearMarketVolumeScale * sqrt * (float) Math.exp(-Math.abs(relativePrice*relativePrice*0.05));
         }
 
 

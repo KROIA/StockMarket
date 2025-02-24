@@ -12,7 +12,8 @@ public class PID implements ServerSaveable {
     private float lastError;
     private float iBound;
 
-    private float output;
+    private float output = 0;
+    private float lastOutput = 0;
 
     private long lastMillis;
     public PID(float kp, float ki, float kd, float iBound)
@@ -88,13 +89,14 @@ public class PID implements ServerSaveable {
         long millis = System.currentTimeMillis();
         float dt = (millis - lastMillis)/1000.0f;
         lastMillis = millis;
-        i += error*dt;
+        i += error*dt * ki;
         if(i > iBound)
             i = iBound;
         else if(i < -iBound)
             i = -iBound;
 
-        output = kp*error + ki*i + kd*(error - lastError)/dt;
+        output = 0.5f*lastOutput + 0.5f*(kp*error + i + kd*(error - lastError)/dt);
+        lastOutput = output;
         lastError = (error*0.5f + lastError*0.5f);
         return output;
     }

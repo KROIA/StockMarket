@@ -103,7 +103,7 @@ public class ServerTradingBot implements ServerSaveable {
             if(orderBook != null)
             {
                 orderBook.setVolumeScale(settings.orderBookVolumeScale);
-                orderBook.setNearMarketVolumeStrength(settings.nearMarketVolumeStrength);
+                orderBook.setNearMarketVolumeScale(settings.nearMarketVolumeStrength);
                 orderBook.setVolumeAccumulationRate(settings.volumeAccumulationRate);
                 orderBook.setVolumeFastAccumulationRate(settings.volumeFastAccumulationRate);
                 orderBook.setVolumeDecumulationRate(settings.volumeDecumulationRate);
@@ -116,7 +116,7 @@ public class ServerTradingBot implements ServerSaveable {
             GhostOrderBook orderBook = matchingEngine.getGhostOrderBook();
             if (orderBook != null) {
                 settings.orderBookVolumeScale = orderBook.getVolumeScale();
-                settings.nearMarketVolumeStrength = orderBook.getNearMarketVolumeStrength();
+                settings.nearMarketVolumeStrength = orderBook.getNearMarketVolumeScale();
                 settings.volumeAccumulationRate = orderBook.getVolumeAccumulationRate();
                 settings.volumeFastAccumulationRate = orderBook.getVolumeFastAccumulationRate();
                 settings.volumeDecumulationRate = orderBook.getVolumeDecumulationRate();

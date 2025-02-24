@@ -1,9 +1,6 @@
 package net.kroia.stockmarket.market.server.bot;
 
-import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.bank.Bank;
-import net.kroia.banksystem.util.ItemID;
-import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.util.MeanRevertingRandomWalk;
 import net.kroia.stockmarket.util.PID;
 import net.minecraft.nbt.CompoundTag;
@@ -18,13 +15,13 @@ public class ServerVolatilityBot extends ServerTradingBot {
         public float volumeScale = 2f;
 
         public boolean enableTargetPrice = true;
-        public float targetPriceStearingFactor = 0.1f;
+        public float targetPriceSteeringFactor = 0.1f;
 
         public int targetPrice = 0; //Just for visualisation on the bot settings menu
 
 
         public boolean enableVolumeTracking = true;
-        public float volumeStearingFactor = 0.1f;
+        public float volumeSteeringFactor = 0.1f;
 
 
         public boolean enableRandomWalk = true;
@@ -47,9 +44,9 @@ public class ServerVolatilityBot extends ServerTradingBot {
 
             tag.putFloat("volumeScale", volumeScale);
             tag.putBoolean("enableTargetPrice", enableTargetPrice);
-            tag.putFloat("targetPriceStearingFactor", targetPriceStearingFactor);
+            tag.putFloat("targetPriceSteeringFactor", targetPriceSteeringFactor);
             tag.putBoolean("enableVolumeTracking", enableVolumeTracking);
-            tag.putFloat("volumeStearingFactor", volumeStearingFactor);
+            tag.putFloat("volumeSteeringFactor", volumeSteeringFactor);
             tag.putBoolean("enableRandomWalk", enableRandomWalk);
             tag.putFloat("volatility", volatility);
             tag.putFloat("targetPrice", targetPrice);
@@ -69,12 +66,12 @@ public class ServerVolatilityBot extends ServerTradingBot {
                 volumeScale = tag.getFloat("volumeScale");
             if(tag.contains("enableTargetPrice"))
                 enableTargetPrice = tag.getBoolean("enableTargetPrice");
-            if(tag.contains("targetPriceStearingFactor"))
-                targetPriceStearingFactor = tag.getFloat("targetPriceStearingFactor");
+            if(tag.contains("targetPriceSteeringFactor"))
+                targetPriceSteeringFactor = tag.getFloat("targetPriceSteeringFactor");
             if(tag.contains("enableVolumeTracking"))
                 enableVolumeTracking = tag.getBoolean("enableVolumeTracking");
-            if(tag.contains("volumeStearingFactor"))
-                volumeStearingFactor = tag.getFloat("volumeStearingFactor");
+            if(tag.contains("volumeSteeringFactor"))
+                volumeSteeringFactor = tag.getFloat("volumeSteeringFactor");
             if(tag.contains("enableRandomWalk"))
                 enableRandomWalk = tag.getBoolean("enableRandomWalk");
             if(tag.contains("volatility"))
@@ -97,8 +94,8 @@ public class ServerVolatilityBot extends ServerTradingBot {
                 this.enableRandomWalk = st.enableRandomWalk;
                 this.enableTargetPrice = st.enableTargetPrice;
                 this.enableVolumeTracking = st.enableVolumeTracking;
-                this.targetPriceStearingFactor = st.targetPriceStearingFactor;
-                this.volumeStearingFactor = st.volumeStearingFactor;
+                this.targetPriceSteeringFactor = st.targetPriceSteeringFactor;
+                this.volumeSteeringFactor = st.volumeSteeringFactor;
                 this.volatility = st.volatility;
                 this.targetPrice = st.targetPrice;
 
@@ -112,10 +109,10 @@ public class ServerVolatilityBot extends ServerTradingBot {
             this.updateTimerIntervallMS = udateTimerIntervallMS;
 
             this.enableTargetPrice = enableTargetPrice;
-            this.targetPriceStearingFactor = Math.max(rarity,0.00001f);
+            this.targetPriceSteeringFactor = Math.max(rarity*0.1f,0.00001f);
 
             this.enableVolumeTracking = enableVolumeTracking;
-            this.volumeStearingFactor = Math.max((1-rarity)*0.0001f,0.0000001f);
+            this.volumeSteeringFactor = Math.max(0.0000001f/(1.2f-rarity),0.0000001f);
 
             this.enableRandomWalk = enableRandomWalk;
             this.volatility = Math.abs(volatility);
@@ -133,7 +130,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
     private long lastTimerMillis = 0;
     private long targetTimerMillis = 1000;
     private long timerCounter = 0;
-    private final PID pid = new PID(0.1f, 0.01f, 0.1f, 10);
+    private final PID pid = new PID(0.1f, 0.01f, 0.1f, 1);
 
     Settings settings;
     public ServerVolatilityBot() {
@@ -161,14 +158,19 @@ public class ServerVolatilityBot extends ServerTradingBot {
         float volumeScale = settings.volumeScale;
         if(settings.enableVolumeTracking)
         {
-            if(currentItemBalance > 0)
+
+            // plot((((-x+abs(-x))/2)^2+(-x+abs(-x))/2+exp((-x-abs(-x))/2)))
+            float x = (float)currentItemBalance * settings.volumeSteeringFactor;
+            float scale;
+            if(currentItemBalance < 0)
             {
-                targetPrice -= (int)(currentItemBalance*settings.volumeStearingFactor);
+                scale = (x*x-x)+1;
             }
-            else if(currentItemBalance < 0)
+            else
             {
-                targetPrice += (int)(currentItemBalance*settings.volumeStearingFactor);
+                scale = (float)Math.exp(-x);
             }
+            targetPrice = Math.max((int)(targetPrice * scale), 0);
         }
 
         if(settings.enableRandomWalk)
@@ -186,7 +188,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
                     randomWalk2.nextValue();
                 }
             }
-            targetPrice += (int)((randomWalk1.getCurrentValue() + randomWalk2.getCurrentValue())*settings.volatility*100);
+            targetPrice += (int)((randomWalk1.getCurrentValue() + randomWalk2.getCurrentValue())*settings.volatility*settings.defaultPrice);
 
             marketOrderAmount += (int)(randomWalk3.nextValue()*volumeScale);
         }
@@ -292,7 +294,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
         if(settings instanceof Settings) {
             super.setSettings(settings);
             this.settings = (Settings)settings;
-            pid.setKP(this.settings.targetPriceStearingFactor);
+            pid.setKP(this.settings.targetPriceSteeringFactor);
         }
         else
             throw new IllegalArgumentException("Settings must be of type ServerVolatilityBot.Settings");

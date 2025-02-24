@@ -55,6 +55,7 @@ public class BotSetupScreen extends GuiScreen {
         // Question pages
         pages.add(rarityPage = new BotSetup_rarity(settings));
         pages.add(estimatedPricePage = new BotSetup_estimatedPrice(settings));
+        estimatedPricePage.setEstimatedPrice(settings.defaultPrice);
         pages.add(volatilityPage = new BotSetup_volatility(settings));
         pages.add(marketSpeedPage = new BotSetup_marketSpeed(settings));
         pages.add(enabledFeaturesPage = new BotSetup_enabledFeatures(settings));

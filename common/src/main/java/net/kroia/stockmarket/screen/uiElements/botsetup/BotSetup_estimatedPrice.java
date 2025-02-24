@@ -53,4 +53,7 @@ public class BotSetup_estimatedPrice extends BotSetupGuiElement {
     public int getEstimatedPrice() {
         return textBox.getInt();
     }
+    public void setEstimatedPrice(int estimatedPrice) {
+        textBox.setText(estimatedPrice);
+    }
 }

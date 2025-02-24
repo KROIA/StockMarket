@@ -17,18 +17,17 @@ public class BotSettingsWidget extends GuiElement {
     public static final Component SETTINGS_UPDATE_INTERVAL = Component.translatable(PREFIX+"settings_update_interval");
     public static final Component SETTINGS_DEFAULT_PRICE = Component.translatable(PREFIX+"settings_default_price");
     public static final Component SETTINGS_ORDER_BOOK_VOLUME_SCALE = Component.translatable(PREFIX+"settings_order_book_volume_scale");
-    public static final Component SETTINGS_VOLUME_SCALE = Component.translatable(PREFIX+"settings_volume_scale");
-    public static final Component SETTINGS_NEAR_MARKET_VOLUME_STRENGTH = Component.translatable(PREFIX+"settings_near_market_volume_strength");
+    public static final Component SETTINGS_NEAR_MARKET_VOLUME_SCALE = Component.translatable(PREFIX+"settings_near_market_volume_scale");
     public static final Component SETTINGS_VOLUME_ACCUMULATION_RATE = Component.translatable(PREFIX+"settings_volume_accumulation_rate");
     public static final Component SETTINGS_VOLUME_FAST_ACCUMULATION_RATE = Component.translatable(PREFIX+"settings_volume_fast_accumulation_rate");
     public static final Component SETTINGS_VOLUME_DECUMULATION_RATE = Component.translatable(PREFIX+"settings_volume_decumulation_rate");
+    public static final Component SETTINGS_VOLUME_SCALE = Component.translatable(PREFIX+"settings_volume_scale");
+
     public static final Component SETTINGS_ENABLE_TARGET_PRICE = Component.translatable(PREFIX+"settings_enable_target_price");
-    public static final Component SETTINGS_TARGET_PRICE_STEARING_FACTOR = Component.translatable(PREFIX+"settings_target_price_stearing_factor");
+    public static final Component SETTINGS_TARGET_PRICE_STEERING_FACTOR = Component.translatable(PREFIX+"settings_target_price_steering_factor");
     public static final Component SETTINGS_ENABLE_VOLUME_TRACKING = Component.translatable(PREFIX+"settings_enable_volume_tracking");
-    public static final Component SETTINGS_VOLUME_STEARING_FACTOR = Component.translatable(PREFIX+"settings_volume_stearing_factor");
+    public static final Component SETTINGS_VOLUME_STEERING_FACTOR = Component.translatable(PREFIX+"settings_volume_steering_factor");
     public static final Component SETTINGS_ENABLE_RANDOM_WALK = Component.translatable(PREFIX+"settings_enable_random_walk");
-
-
     public static final Component SETTINGS_VOLATILITY = Component.translatable(PREFIX+"settings_volatility");
 
 
@@ -67,7 +66,7 @@ public class BotSettingsWidget extends GuiElement {
 
     // Ghost orderbook settings
     final Pair<Label, TextBox> orderBookVolumeScale;
-    final Pair<Label, TextBox> nearMarketVolumeStrength;
+    final Pair<Label, TextBox> nearMarketVolumeScale;
     final Pair<Label, TextBox> volumeAccumulationRate;
     final Pair<Label, TextBox> volumeFastAccumulationRate;
     final Pair<Label, TextBox> volumeDecumulationRate;
@@ -76,11 +75,11 @@ public class BotSettingsWidget extends GuiElement {
     // Bot Feratures
     final Pair<Label, TextBox> volumeScale;
     final Pair<Label, CheckBox> enableTargetPrice;
-    final Pair<Label, TextBox> targetPriceStearingFactor;
+    final Pair<Label, TextBox> targetPriceSteeringFactor;
 
 
     final Pair<Label, CheckBox> enableVolumeTracking;
-    final Pair<Label, TextBox> volumeStearingFactor;
+    final Pair<Label, TextBox> volumeSteeringFactor;
 
     final Pair<Label, CheckBox> enableRandomWalk;
     final Pair<Label, HorizontalSlider> volatility;
@@ -127,17 +126,17 @@ public class BotSettingsWidget extends GuiElement {
 
         defaultPrice = new Pair<>(new Label(SETTINGS_DEFAULT_PRICE.getString()), new TextBox());
         orderBookVolumeScale = new Pair<>(new Label(SETTINGS_ORDER_BOOK_VOLUME_SCALE.getString()), new TextBox());
-        nearMarketVolumeStrength = new Pair<>(new Label(SETTINGS_NEAR_MARKET_VOLUME_STRENGTH.getString()), new TextBox());
+        nearMarketVolumeScale = new Pair<>(new Label(SETTINGS_NEAR_MARKET_VOLUME_SCALE.getString()), new TextBox());
         volumeAccumulationRate = new Pair<>(new Label(SETTINGS_VOLUME_ACCUMULATION_RATE.getString()), new TextBox());
         volumeFastAccumulationRate = new Pair<>(new Label(SETTINGS_VOLUME_FAST_ACCUMULATION_RATE.getString()), new TextBox());
         volumeDecumulationRate = new Pair<>(new Label(SETTINGS_VOLUME_DECUMULATION_RATE.getString()), new TextBox());
 
         volumeScale = new Pair<>(new Label(SETTINGS_VOLUME_SCALE.getString()), new TextBox());
         enableTargetPrice = new Pair<>(new Label(SETTINGS_ENABLE_TARGET_PRICE.getString()), new CheckBox("", onSettingsChanged));
-        targetPriceStearingFactor = new Pair<>(new Label(SETTINGS_TARGET_PRICE_STEARING_FACTOR.getString()), new TextBox());
+        targetPriceSteeringFactor = new Pair<>(new Label(SETTINGS_TARGET_PRICE_STEERING_FACTOR.getString()), new TextBox());
 
         enableVolumeTracking = new Pair<>(new Label(SETTINGS_ENABLE_VOLUME_TRACKING.getString()), new CheckBox("", onSettingsChanged));
-        volumeStearingFactor = new Pair<>(new Label(SETTINGS_VOLUME_STEARING_FACTOR.getString()), new TextBox());
+        volumeSteeringFactor = new Pair<>(new Label(SETTINGS_VOLUME_STEERING_FACTOR.getString()), new TextBox());
 
         enableRandomWalk = new Pair<>(new Label(SETTINGS_ENABLE_RANDOM_WALK.getString()), new CheckBox("", onSettingsChanged));
         volatility = new Pair<>(new Label(SETTINGS_VOLATILITY.getString()), new HorizontalSlider());
@@ -168,17 +167,17 @@ public class BotSettingsWidget extends GuiElement {
         addElement(updateInterval);
         addElement(defaultPrice);
         addElement(orderBookVolumeScale);
-        addElement(nearMarketVolumeStrength);
+        addElement(nearMarketVolumeScale);
         addElement(volumeAccumulationRate);
         addElement(volumeFastAccumulationRate);
         addElement(volumeDecumulationRate);
 
         addElement(volumeScale);
         addElement(enableTargetPrice);
-        addElement(targetPriceStearingFactor);
+        addElement(targetPriceSteeringFactor);
 
         addElement(enableVolumeTracking);
-        addElement(volumeStearingFactor);
+        addElement(volumeSteeringFactor);
 
         addElement(enableRandomWalk);
         addElement(volatility);
@@ -239,17 +238,17 @@ public class BotSettingsWidget extends GuiElement {
         updateInterval.getSecond().setSliderValue(1-(double)(settings.updateTimerIntervallMS-100)/9900.0);
         defaultPrice.getSecond().setText(Integer.toString(settings.defaultPrice));
         orderBookVolumeScale.getSecond().setText(Float.toString(settings.orderBookVolumeScale));
-        nearMarketVolumeStrength.getSecond().setText(Float.toString(settings.nearMarketVolumeStrength));
+        nearMarketVolumeScale.getSecond().setText(Float.toString(settings.nearMarketVolumeStrength));
         volumeAccumulationRate.getSecond().setText(Float.toString(settings.volumeAccumulationRate));
         volumeFastAccumulationRate.getSecond().setText(Float.toString(settings.volumeFastAccumulationRate));
         volumeDecumulationRate.getSecond().setText(Float.toString(settings.volumeDecumulationRate));
 
         volumeScale.getSecond().setText(Float.toString(settings.volumeScale));
         enableTargetPrice.getSecond().setChecked(settings.enableTargetPrice);
-        targetPriceStearingFactor.getSecond().setText(Float.toString(settings.targetPriceStearingFactor));
+        targetPriceSteeringFactor.getSecond().setText(Float.toString(settings.targetPriceSteeringFactor));
 
         enableVolumeTracking.getSecond().setChecked(settings.enableVolumeTracking);
-        volumeStearingFactor.getSecond().setText(Float.toString(settings.volumeStearingFactor));
+        volumeSteeringFactor.getSecond().setText(Float.toString(settings.volumeSteeringFactor));
 
         enableRandomWalk.getSecond().setChecked(settings.enableRandomWalk);
         volatility.getSecond().setSliderValue(settings.volatility);
@@ -328,13 +327,13 @@ public class BotSettingsWidget extends GuiElement {
     private void onEnableTargetPriceCheckBoxChanged()
     {
         boolean isEnabled = enableTargetPrice.getSecond().isChecked();
-        targetPriceStearingFactor.getSecond().setEnabled(isEnabled);
+        targetPriceSteeringFactor.getSecond().setEnabled(isEnabled);
         onSettingsChanged.run();
     }
     private void onEnableVolumeTrackingCheckBoxChanged()
     {
         boolean isEnabled = enableVolumeTracking.getSecond().isChecked();
-        volumeStearingFactor.getSecond().setEnabled(isEnabled);
+        volumeSteeringFactor.getSecond().setEnabled(isEnabled);
         onSettingsChanged.run();
     }
     private void onEnableRandomWalkCheckBoxChanged()
@@ -360,17 +359,17 @@ public class BotSettingsWidget extends GuiElement {
         settings.updateTimerIntervallMS = getValidated((long)((1-updateInterval.getSecond().getSliderValue())*9900)+100, 100, 10000);
         settings.defaultPrice = getValidated((int)defaultPrice.getSecond().getDouble(), 0, Integer.MAX_VALUE);
         settings.orderBookVolumeScale = getValidated((float) orderBookVolumeScale.getSecond().getDouble(), 0.0f, Float.MAX_VALUE);
-        settings.nearMarketVolumeStrength = getValidated((float)nearMarketVolumeStrength.getSecond().getDouble(), 0.0f, Float.MAX_VALUE);
+        settings.nearMarketVolumeStrength = getValidated((float) nearMarketVolumeScale.getSecond().getDouble(), 0.0f, Float.MAX_VALUE);
         settings.volumeAccumulationRate = getValidated((float)volumeAccumulationRate.getSecond().getDouble(), 0.0f, Float.MAX_VALUE);
         settings.volumeFastAccumulationRate = getValidated((float)volumeFastAccumulationRate.getSecond().getDouble(), 0.0f, Float.MAX_VALUE);
         settings.volumeDecumulationRate = getValidated((float)volumeDecumulationRate.getSecond().getDouble(), 0.0f, Float.MAX_VALUE);
 
         settings.volumeScale = getValidated((float)volumeScale.getSecond().getDouble(), 0.0f, Float.MAX_VALUE);
         settings.enableTargetPrice = enableTargetPrice.getSecond().isChecked();
-        settings.targetPriceStearingFactor = getValidated((float)targetPriceStearingFactor.getSecond().getDouble(), 0.0f, Float.MAX_VALUE);
+        settings.targetPriceSteeringFactor = getValidated((float) targetPriceSteeringFactor.getSecond().getDouble(), 0.0f, Float.MAX_VALUE);
 
         settings.enableVolumeTracking = enableVolumeTracking.getSecond().isChecked();
-        settings.volumeStearingFactor = getValidated((float)volumeStearingFactor.getSecond().getDouble(), 0.0f, Float.MAX_VALUE);
+        settings.volumeSteeringFactor = getValidated((float)volumeSteeringFactor.getSecond().getDouble(), 0.0f, Float.MAX_VALUE);
 
         settings.enableRandomWalk = enableRandomWalk.getSecond().isChecked();
         settings.volatility = getValidated((float)volatility.getSecond().getSliderValue(), 0.0f, 1.0f);
