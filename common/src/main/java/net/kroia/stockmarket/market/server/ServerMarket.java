@@ -575,6 +575,8 @@ public class ServerMarket implements ServerSaveable
                     loadSuccess = false;
                     continue;
                 }
+                if(!tradeItem.getItemID().isValid())
+                    continue;
                 tradeItemsMap.put(tradeItem.getItemID(), tradeItem);
             }
             ServerMarket.tradeItems.clear();
@@ -592,11 +594,11 @@ public class ServerMarket implements ServerSaveable
     {
         if(event instanceof ServerBankCloseItemBankEvent closeEvent)
         {
-            ArrayList<ItemID> removedIDs = closeEvent.getAllRemovedItemIDs();
+            /*ArrayList<ItemID> removedIDs = closeEvent.getAllRemovedItemIDs();
             for(ItemID itemID : removedIDs)
             {
                 removeTradingItem(itemID);
-            }
+            }*/
         }
     }
 

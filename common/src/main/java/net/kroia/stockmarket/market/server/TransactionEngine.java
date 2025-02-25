@@ -215,7 +215,10 @@ public class TransactionEngine {
 
         if(o1.isBot())
         {
-            o1.addFilledAmount(fillVolume);
+            if(o1.isBuy())
+                o1.addFilledAmount(fillVolume);
+            else
+                o1.addFilledAmount(-fillVolume);
             return fillVolume;
         }
 

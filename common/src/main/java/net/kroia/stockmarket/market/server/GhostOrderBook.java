@@ -5,6 +5,10 @@ import net.kroia.stockmarket.util.DynamicIndexedArray;
 import net.minecraft.nbt.CompoundTag;
 
 
+/**
+ * This class represents a ghost order book that is used to simulate the order book of a stock market.
+ * Players can buy or sell into the ghost orders.
+ */
 public class GhostOrderBook implements ServerSaveable {
     private int currentMarketPrice = 0;
     private final DynamicIndexedArray virtualOrderVolumeDistribution;
@@ -22,6 +26,7 @@ public class GhostOrderBook implements ServerSaveable {
     }
 
     public void cleanup() {
+        virtualOrderVolumeDistribution.clear();
     }
 
     public void updateVolume(int currentPrice) {
@@ -131,7 +136,7 @@ public class GhostOrderBook implements ServerSaveable {
             virtualOrderVolumeDistribution.set(virtualOrderVolumeDistribution.getVirtualIndex(i), array[i]);
         }
 
-        return false;
+        return true;
     }
     @Override
     public boolean save(CompoundTag tag) {

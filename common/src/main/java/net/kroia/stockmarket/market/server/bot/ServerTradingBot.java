@@ -16,7 +16,7 @@ import java.util.HashMap;
 import java.util.PriorityQueue;
 
 /**
- * The ServerTradingBot simulates buy and sell orders to provide liquidity to the market.
+ * The ServerTradingBot simulates buy and sell orders to generate a movement in the market if no players are trading
  *
  *
  */
@@ -27,18 +27,18 @@ public class ServerTradingBot implements ServerSaveable {
         public boolean enabled = true;
         public long updateTimerIntervallMS = StockMarketModSettings.MarketBot.UPDATE_TIMER_INTERVAL_MS;
         public int defaultPrice;
-        public float orderBookVolumeScale = 100f;
-        public float nearMarketVolumeStrength = 2f;
-        public float volumeAccumulationRate = 0.01f;
-        public float volumeFastAccumulationRate = 0.5f;
-        public float volumeDecumulationRate = 0.005f;
+        public float orderBookVolumeScale = StockMarketModSettings.MarketBot.ORDER_BOOK_VOLUME_SCALE;
+        public float nearMarketVolumeScale = StockMarketModSettings.MarketBot.NEAR_MARKET_VOLUME_SCALE;
+        public float volumeAccumulationRate = StockMarketModSettings.MarketBot.VOLUME_ACCUMULATION_RATE;
+        public float volumeFastAccumulationRate = StockMarketModSettings.MarketBot.VOLUME_FAST_ACCUMULATION_RATE;
+        public float volumeDecumulationRate = StockMarketModSettings.MarketBot.VOLUME_DECUMULATION_RATE;
 
         @Override
         public boolean save(CompoundTag tag) {
             tag.putBoolean("enabled", enabled);
             tag.putInt("defaultPrice", defaultPrice);
             tag.putFloat("orderBookVolumeScale", orderBookVolumeScale);
-            tag.putFloat("nearMarketVolumeStrength", nearMarketVolumeStrength);
+            tag.putFloat("nearMarketVolumeScale", nearMarketVolumeScale);
             tag.putFloat("volumeAccumulationRate", volumeAccumulationRate);
             tag.putFloat("volumeFastAccumulationRate", volumeFastAccumulationRate);
             tag.putFloat("volumeDecumulationRate", volumeDecumulationRate);
@@ -50,10 +50,20 @@ public class ServerTradingBot implements ServerSaveable {
         public boolean load(CompoundTag tag) {
             if(tag == null)
                 return false;
+            if(!tag.contains("enabled") ||
+                    !tag.contains("defaultPrice") ||
+                    !tag.contains("orderBookVolumeScale") ||
+                    !tag.contains("nearMarketVolumeScale") ||
+                    !tag.contains("volumeAccumulationRate") ||
+                    !tag.contains("volumeFastAccumulationRate") ||
+                    !tag.contains("volumeDecumulationRate") ||
+                    !tag.contains("updateTimerIntervallMS"))
+                return false;
+
             enabled = tag.getBoolean("enabled");
             defaultPrice = tag.getInt("defaultPrice");
             orderBookVolumeScale = tag.getFloat("orderBookVolumeScale");
-            nearMarketVolumeStrength = tag.getFloat("nearMarketVolumeStrength");
+            nearMarketVolumeScale = tag.getFloat("nearMarketVolumeScale");
             volumeAccumulationRate = tag.getFloat("volumeAccumulationRate");
             volumeFastAccumulationRate = tag.getFloat("volumeFastAccumulationRate");
             volumeDecumulationRate = tag.getFloat("volumeDecumulationRate");
@@ -66,7 +76,7 @@ public class ServerTradingBot implements ServerSaveable {
             this.enabled = settings.enabled;
             this.defaultPrice = settings.defaultPrice;
             this.orderBookVolumeScale = settings.orderBookVolumeScale;
-            this.nearMarketVolumeStrength = settings.nearMarketVolumeStrength;
+            this.nearMarketVolumeScale = settings.nearMarketVolumeScale;
             this.volumeAccumulationRate = settings.volumeAccumulationRate;
             this.volumeFastAccumulationRate = settings.volumeFastAccumulationRate;
             this.volumeDecumulationRate = settings.volumeDecumulationRate;
@@ -103,7 +113,7 @@ public class ServerTradingBot implements ServerSaveable {
             if(orderBook != null)
             {
                 orderBook.setVolumeScale(settings.orderBookVolumeScale);
-                orderBook.setNearMarketVolumeScale(settings.nearMarketVolumeStrength);
+                orderBook.setNearMarketVolumeScale(settings.nearMarketVolumeScale);
                 orderBook.setVolumeAccumulationRate(settings.volumeAccumulationRate);
                 orderBook.setVolumeFastAccumulationRate(settings.volumeFastAccumulationRate);
                 orderBook.setVolumeDecumulationRate(settings.volumeDecumulationRate);
@@ -116,7 +126,7 @@ public class ServerTradingBot implements ServerSaveable {
             GhostOrderBook orderBook = matchingEngine.getGhostOrderBook();
             if (orderBook != null) {
                 settings.orderBookVolumeScale = orderBook.getVolumeScale();
-                settings.nearMarketVolumeStrength = orderBook.getNearMarketVolumeScale();
+                settings.nearMarketVolumeScale = orderBook.getNearMarketVolumeScale();
                 settings.volumeAccumulationRate = orderBook.getVolumeAccumulationRate();
                 settings.volumeFastAccumulationRate = orderBook.getVolumeFastAccumulationRate();
                 settings.volumeDecumulationRate = orderBook.getVolumeDecumulationRate();
@@ -184,35 +194,6 @@ public class ServerTradingBot implements ServerSaveable {
             tmp_load_sellOrderIDs = null;
         }
     }
-/*
-    public void setMaxOrderCount(int maxOrderCount)
-    {
-        this.settings.maxOrderCount = maxOrderCount;
-    }
-    public int getMaxOrderCount()
-    {
-        return this.settings.maxOrderCount;
-    }
-
-    public void setVolumeScale(double volumeScale) {
-        this.settings.volumeScale = volumeScale;
-    }
-    public double getVolumeScale() {
-        return this.settings.volumeScale;
-    }
-    public void setVolumeSpread(double volumeSpread) {
-        this.settings.volumeSpread = volumeSpread;
-    }
-    public double getVolumeSpread() {
-        return this.settings.volumeSpread;
-    }
-    public void setVolumeRandomness(double volumeRandomness) {
-        this.settings.volumeRandomness = volumeRandomness;
-    }
-    public double getVolumeRandomness() {
-        return this.settings.volumeRandomness;
-    }*/
-
     public void setUpdateInterval(long intervalMillis)
     {
         this.settings.updateTimerIntervallMS = intervalMillis;
@@ -299,13 +280,9 @@ public class ServerTradingBot implements ServerSaveable {
             return false;
         ItemID itemID = parent.getItemID();
         LimitOrder sellOrder = LimitOrder.createBotOrder(itemID, -volume, price);
-        if(sellOrder != null)
-        {
-            matchingEngine.addOrder(sellOrder);
-            sellOrders.add(sellOrder);
-            return true;
-        }
-        return false;
+        matchingEngine.addOrder(sellOrder);
+        sellOrders.add(sellOrder);
+        return true;
     }
     protected boolean limitTrade(int volume, int price)
     {
@@ -344,12 +321,8 @@ public class ServerTradingBot implements ServerSaveable {
             return false;
         ItemID itemID = parent.getItemID();
         MarketOrder order = MarketOrder.createBotOrder(itemID, volume);
-        if(order != null)
-        {
-            matchingEngine.addOrder(order);
-            return true;
-        }
-        return false;
+        matchingEngine.addOrder(order);
+        return true;
     }
 
     protected int getVolume(int price)
@@ -387,12 +360,13 @@ public class ServerTradingBot implements ServerSaveable {
     @Override
     public boolean load(CompoundTag tag) {
 
+        boolean success = true;
         if(tag == null)
             return false;
         if(!tag.contains("settings"))
             return false;
         CompoundTag settingsTag = tag.getCompound("settings");
-        settings.load(settingsTag);
+        success &= settings.load(settingsTag);
 
         if(tag.contains("buyOrderIDs"))
             tmp_load_buyOrderIDs = tag.getLongArray("buyOrderIDs");
@@ -402,7 +376,7 @@ public class ServerTradingBot implements ServerSaveable {
 
 
         setSettings(settings);
-        return true;
+        return success;
     }
 
     public void onServerTick(MinecraftServer server) {

@@ -31,31 +31,6 @@ public class BotSettingsWidget extends GuiElement {
     public static final Component SETTINGS_VOLATILITY = Component.translatable(PREFIX+"settings_volatility");
 
 
-    //public static final Component SETTING_ENABLED = Component.translatable(PREFIX+"setting_enabled");
-    //public static final Component SETTING_MAX_ORDER_COUNT = Component.translatable(PREFIX+"settings_max_order_count");
-    //public static final Component SETTINGS_VOLUME_SCALE = Component.translatable(PREFIX+"settings_volume_scale");
-    //public static final Component SETTINGS_VOLUME_SPREAD = Component.translatable(PREFIX+"settings_volume_spread");
-    //public static final Component SETTINGS_VOLUME_RANDOMNESS = Component.translatable(PREFIX+"settings_volume_randomness");
-
-    //public static final Component SETTINGS_ORDER_RANDOMNESS = Component.translatable(PREFIX+"settings_order_randomness");
-    //public static final Component SETTINGS_VOLATILITY = Component.translatable(PREFIX+"settings_volatility");
-    //public static final Component SETTINGS_VOLATILITY_TIMER = Component.translatable(PREFIX+"settings_volatility_timer");
-    //public static final Component SETTINGS_VOLATILITY_TIMER_MIN = Component.translatable(PREFIX+"settings_volatility_timer_min");
-    //public static final Component SETTINGS_VOLATILITY_TIMER_MAX = Component.translatable(PREFIX+"settings_volatility_timer_max");
-    //public static final Component SETTINGS_TARGET_ITEM_BALANCE = Component.translatable(PREFIX+"settings_target_item_balance");
-    //public static final Component SETTINGS_IMBALANCE_PRICE_RANGE = Component.translatable(PREFIX+"settings_imbalance_price_range");
-    //public static final Component SETTINGS_IMBALANCE_PRICE_CHANGE_FAC_LINEAR = Component.translatable(PREFIX+"settings_imbalance_price_change_fac_linear");
-    //public static final Component SETTINGS_IMBALANCE_PRICE_CHANGE_FAC_QUAD = Component.translatable(PREFIX+"settings_imbalance_price_change_fac_quad");
-    //public static final Component SETTINGS_PID_P = Component.translatable(PREFIX+"settings_pid_p");
-    //public static final Component SETTINGS_PID_I = Component.translatable(PREFIX+"settings_pid_i");
-    //public static final Component SETTINGS_PID_D = Component.translatable(PREFIX+"settings_pid_d");
-    //public static final Component SETTINGS_PID_IBOUNDS = Component.translatable(PREFIX+"settings_pid_ibounds");
-    //public static final Component SETTINGS_PID_INTEGRATED_ERR = Component.translatable(PREFIX+"settings_pid_integrated_err");
-
-
-
-
-
     ServerVolatilityBot.Settings settings;
     final Runnable onSettingsChanged;
 
@@ -84,30 +59,6 @@ public class BotSettingsWidget extends GuiElement {
     final Pair<Label, CheckBox> enableRandomWalk;
     final Pair<Label, HorizontalSlider> volatility;
 
-
-
-
-    //final Pair<Label, TextBox> maxOrderCount;
-    //final Pair<Label, TextBox> volumeScale;
-    //final Pair<Label, TextBox> volumeSpread;
-    //final Pair<Label, TextBox> volumeRandomness;
-
-
-
-    //final Pair<Label, TextBox> orderRandomnes;
-    //final Pair<Label, TextBox> volatilityTimer;
-    //final Pair<Label, TextBox> volatilityTimerMin;
-    //final Pair<Label, TextBox> volatilityTimerMax;
-    //final Pair<Label, TextBox> targetItemBalance;
-    //final Pair<Label, TextBox> imbalancePriceRange;
-    //final Pair<Label, TextBox> imbalancePriceChangeFactorLinear;
-    //final Pair<Label, TextBox> imbalancePriceChangeFactorQuadratic;
-
-    //final Pair<Label, TextBox> pidP;
-    //final Pair<Label, TextBox> pidI;
-    //final Pair<Label, TextBox> pidD;
-    //final Pair<Label, TextBox> pidIBounds;
-    //final Pair<Label, TextBox> pidIntegratedError;
 
     int maxLabelWidth = 0;
     final ArrayList<Pair<Label, GuiElement>> elements;
@@ -142,25 +93,6 @@ public class BotSettingsWidget extends GuiElement {
         volatility = new Pair<>(new Label(SETTINGS_VOLATILITY.getString()), new HorizontalSlider());
         volatility.getSecond().setTooltipSupplier(()->String.format("%.2f", volatility.getSecond().getSliderValue()*100)+"%");
 
-        //maxOrderCount = new Pair<>(new Label(SETTING_MAX_ORDER_COUNT.getString()), new TextBox());
-        //volumeScale = new Pair<>(new Label(SETTINGS_VOLUME_SCALE.getString()), new TextBox());
-        //volumeSpread = new Pair<>(new Label(SETTINGS_VOLUME_SPREAD.getString()), new TextBox());
-        //volumeRandomness = new Pair<>(new Label(SETTINGS_VOLUME_RANDOMNESS.getString()), new TextBox());
-        //orderRandomnes = new Pair<>(new Label(SETTINGS_ORDER_RANDOMNESS.getString()), new TextBox());
-
-        //volatilityTimer = new Pair<>(new Label(SETTINGS_VOLATILITY_TIMER.getString()), new TextBox());
-        //volatilityTimerMin = new Pair<>(new Label(SETTINGS_VOLATILITY_TIMER_MIN.getString()), new TextBox());
-        //volatilityTimerMax = new Pair<>(new Label(SETTINGS_VOLATILITY_TIMER_MAX.getString()), new TextBox());
-        //targetItemBalance = new Pair<>(new Label(SETTINGS_TARGET_ITEM_BALANCE.getString()), new TextBox());
-        //imbalancePriceRange = new Pair<>(new Label(SETTINGS_IMBALANCE_PRICE_RANGE.getString()), new TextBox());
-        //imbalancePriceChangeFactorLinear = new Pair<>(new Label(SETTINGS_IMBALANCE_PRICE_CHANGE_FAC_LINEAR.getString()), new TextBox());
-        //imbalancePriceChangeFactorQuadratic = new Pair<>(new Label(SETTINGS_IMBALANCE_PRICE_CHANGE_FAC_QUAD.getString()), new TextBox());
-//
-        //pidP = new Pair<>(new Label(SETTINGS_PID_P.getString()), new TextBox());
-        //pidI = new Pair<>(new Label(SETTINGS_PID_I.getString()), new TextBox());
-        //pidD = new Pair<>(new Label(SETTINGS_PID_D.getString()), new TextBox());
-        //pidIBounds = new Pair<>(new Label(SETTINGS_PID_IBOUNDS.getString()), new TextBox());
-        //pidIntegratedError = new Pair<>(new Label(SETTINGS_PID_INTEGRATED_ERR.getString()), new TextBox());
 
         elements = new ArrayList<>();
         addElement(enabled);
@@ -181,26 +113,6 @@ public class BotSettingsWidget extends GuiElement {
 
         addElement(enableRandomWalk);
         addElement(volatility);
-        //addElement(maxOrderCount);
-        //addElement(maxOrderCount);
-        //addElement(targetItemBalance);
-        //addElement(volumeScale);
-        //addElement(volumeSpread);
-        //addElement(volumeRandomness);
-        //addElement(orderRandomnes);
-
-        //addElement(volatilityTimer);
-        //addElement(volatilityTimerMin);
-        //addElement(volatilityTimerMax);
-        //addElement(imbalancePriceRange);
-        //addElement(imbalancePriceChangeFactorLinear);
-        //addElement(imbalancePriceChangeFactorQuadratic);
-        //addElement(pidP);
-        //addElement(pidI);
-        //addElement(pidD);
-        //addElement(pidIntegratedError);
-        //addElement(pidIBounds);
-
 
         for(Pair<Label, GuiElement> pair : elements)
         {
@@ -238,7 +150,7 @@ public class BotSettingsWidget extends GuiElement {
         updateInterval.getSecond().setSliderValue(1-(double)(settings.updateTimerIntervallMS-100)/9900.0);
         defaultPrice.getSecond().setText(Integer.toString(settings.defaultPrice));
         orderBookVolumeScale.getSecond().setText(Float.toString(settings.orderBookVolumeScale));
-        nearMarketVolumeScale.getSecond().setText(Float.toString(settings.nearMarketVolumeStrength));
+        nearMarketVolumeScale.getSecond().setText(Float.toString(settings.nearMarketVolumeScale));
         volumeAccumulationRate.getSecond().setText(Float.toString(settings.volumeAccumulationRate));
         volumeFastAccumulationRate.getSecond().setText(Float.toString(settings.volumeFastAccumulationRate));
         volumeDecumulationRate.getSecond().setText(Float.toString(settings.volumeDecumulationRate));
@@ -252,26 +164,6 @@ public class BotSettingsWidget extends GuiElement {
 
         enableRandomWalk.getSecond().setChecked(settings.enableRandomWalk);
         volatility.getSecond().setSliderValue(settings.volatility);
-
-        //maxOrderCount.getSecond().setText(Integer.toString(settings.maxOrderCount));
-        //volumeScale.getSecond().setText(Double.toString(settings.volumeScale));
-        //volumeSpread.getSecond().setText(Double.toString(settings.volumeSpread));
-        //volumeRandomness.getSecond().setText(Double.toString(settings.volumeRandomness));
-
-        //orderRandomnes.getSecond().setText(Double.toString(settings.orderRandomness));
-
-        //volatilityTimer.getSecond().setText(Long.toString(settings.timerMillis));
-        //volatilityTimerMin.getSecond().setText(Long.toString(settings.minTimerMillis));
-        //volatilityTimerMax.getSecond().setText(Long.toString(settings.maxTimerMillis));
-        //targetItemBalance.getSecond().setText(Long.toString(settings.targetItemBalance));
-        //imbalancePriceRange.getSecond().setText(Integer.toString(settings.imbalancePriceRange));
-        //imbalancePriceChangeFactorLinear.getSecond().setText(Double.toString(settings.imbalancePriceChangeFactor));
-        //imbalancePriceChangeFactorQuadratic.getSecond().setText(Double.toString(settings.imbalancePriceChangeQuadFactor));
-        //pidP.getSecond().setText(Double.toString(settings.pid_p));
-        //pidI.getSecond().setText(Double.toString(settings.pid_i));
-        //pidD.getSecond().setText(Double.toString(settings.pid_d));
-        //pidIBounds.getSecond().setText(Double.toString(settings.pid_iBound));
-        //pidIntegratedError.getSecond().setText(Double.toString(settings.integratedError));
     }
     public ServerVolatilityBot.Settings getSettings()
     {
@@ -359,7 +251,7 @@ public class BotSettingsWidget extends GuiElement {
         settings.updateTimerIntervallMS = getValidated((long)((1-updateInterval.getSecond().getSliderValue())*9900)+100, 100, 10000);
         settings.defaultPrice = getValidated((int)defaultPrice.getSecond().getDouble(), 0, Integer.MAX_VALUE);
         settings.orderBookVolumeScale = getValidated((float) orderBookVolumeScale.getSecond().getDouble(), 0.0f, Float.MAX_VALUE);
-        settings.nearMarketVolumeStrength = getValidated((float) nearMarketVolumeScale.getSecond().getDouble(), 0.0f, Float.MAX_VALUE);
+        settings.nearMarketVolumeScale = getValidated((float) nearMarketVolumeScale.getSecond().getDouble(), 0.0f, Float.MAX_VALUE);
         settings.volumeAccumulationRate = getValidated((float)volumeAccumulationRate.getSecond().getDouble(), 0.0f, Float.MAX_VALUE);
         settings.volumeFastAccumulationRate = getValidated((float)volumeFastAccumulationRate.getSecond().getDouble(), 0.0f, Float.MAX_VALUE);
         settings.volumeDecumulationRate = getValidated((float)volumeDecumulationRate.getSecond().getDouble(), 0.0f, Float.MAX_VALUE);
@@ -373,27 +265,6 @@ public class BotSettingsWidget extends GuiElement {
 
         settings.enableRandomWalk = enableRandomWalk.getSecond().isChecked();
         settings.volatility = getValidated((float)volatility.getSecond().getSliderValue(), 0.0f, 1.0f);
-
-        //settings.maxOrderCount = getValidated(maxOrderCount.getSecond().getInt(), 1, Integer.MAX_VALUE);
-        //settings.volumeScale = getValidated(volumeScale.getSecond().getDouble(), 0.0, Double.MAX_VALUE);
-        //settings.volumeSpread = getValidated(volumeSpread.getSecond().getDouble(), 0.0, Double.MAX_VALUE);
-        //settings.volumeRandomness = getValidated(volumeRandomness.getSecond().getDouble(), 0.0, Double.MAX_VALUE);
-
-        //settings.orderRandomness = getValidated(orderRandomnes.getSecond().getDouble(), 0.0, Double.MAX_VALUE);
-
-        //settings.timerMillis = getValidated(volatilityTimer.getSecond().getLong(), 1, Long.MAX_VALUE);
-        //settings.minTimerMillis = getValidated(volatilityTimerMin.getSecond().getLong(), 1, Long.MAX_VALUE);
-        //settings.maxTimerMillis = getValidated(volatilityTimerMax.getSecond().getLong(), 1, Long.MAX_VALUE);
-        //settings.targetItemBalance = getValidated(targetItemBalance.getSecond().getLong(), Long.MIN_VALUE, Long.MAX_VALUE);
-        //settings.imbalancePriceRange = getValidated(imbalancePriceRange.getSecond().getInt(), 1, Integer.MAX_VALUE);
-        //settings.imbalancePriceChangeFactor = getValidated(imbalancePriceChangeFactorLinear.getSecond().getDouble(), 0.0, Double.MAX_VALUE);
-        //settings.imbalancePriceChangeQuadFactor = getValidated(imbalancePriceChangeFactorQuadratic.getSecond().getDouble(), 0.0, Double.MAX_VALUE);
-        //settings.pid_p = getValidated(pidP.getSecond().getDouble(), -Double.MAX_VALUE, Double.MAX_VALUE);
-        //settings.pid_i = getValidated(pidI.getSecond().getDouble(), -Double.MAX_VALUE, Double.MAX_VALUE);
-        //settings.pid_d = getValidated(pidD.getSecond().getDouble(), -Double.MAX_VALUE, Double.MAX_VALUE);
-        //settings.pid_iBound = getValidated(pidIBounds.getSecond().getDouble(), -Double.MAX_VALUE, Double.MAX_VALUE);
-        //settings.integratedError = getValidated(pidIntegratedError.getSecond().getDouble(), -Double.MAX_VALUE, Double.MAX_VALUE);
-
         setSettings(settings);
     }
 

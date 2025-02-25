@@ -768,6 +768,11 @@ public class MatchingEngine implements ServerSaveable {
             CompoundTag ghostOrderBookTag = tag.getCompound("ghost_order_book");
             success &= ghostOrderBook.load(ghostOrderBookTag);
         }
+        else
+        {
+            ghostOrderBook.cleanup();
+            ghostOrderBook.updateVolume(price);
+        }
         return success;
     }
 }

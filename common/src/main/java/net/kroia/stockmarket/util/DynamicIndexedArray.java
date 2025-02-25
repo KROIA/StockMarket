@@ -57,6 +57,10 @@ public class DynamicIndexedArray{
             array[i] = value;
         }
     }
+    public void clear()
+    {
+        setAll(0);
+    }
 
     public boolean add(int virtualIndex, float value)
     {

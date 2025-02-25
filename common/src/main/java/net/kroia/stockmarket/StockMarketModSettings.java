@@ -52,15 +52,13 @@ public class StockMarketModSettings {
     {
         public static final boolean ENABLED = true;
 
-        public static final String USER_NAME = "StockMarketBot";
-        public static final long STARTING_BALANCE = 1000_000_000L*1000L; // Money balance
-
-        public static final int MAX_ORDERS = 200;
-
-        public static final double VOLUME_SCALE = 10;
-        public static final double VOLUME_SPREAD = MAX_ORDERS/2.0;
-        public static final double VOLUME_RANDOMNESS = 2;
         public static final long UPDATE_TIMER_INTERVAL_MS = 500;
+        public static final float ORDER_BOOK_VOLUME_SCALE = 100f;
+        public static final float NEAR_MARKET_VOLUME_SCALE = 2f;
+        public static final float VOLUME_ACCUMULATION_RATE = 0.01f;
+        public static final float VOLUME_FAST_ACCUMULATION_RATE = 0.5f;
+        public static final float VOLUME_DECUMULATION_RATE = 0.005f;
+
 
         private static HashMap<String, ServerTradingBotFactory.BotBuilderContainer> botBuilder;
         public static HashMap<String, ServerTradingBotFactory.BotBuilderContainer> getBotBuilder()
