@@ -84,14 +84,18 @@ public class ServerMarket implements ServerSaveable
         if(!StockMarketModSettings.MarketBot.ENABLED)
             return;
 
-        Set<String> itemIDS = StockMarketModSettings.MarketBot.getBotBuilder().keySet();
+        HashMap<ItemID, ServerTradingBotFactory.BotBuilderContainer> botBuilder  = StockMarketModSettings.MarketBot.getBotBuilder();
 
-        for(String itemID : itemIDS)
+        for(var itemData : botBuilder.entrySet())
         {
-            createDefaultBot(new ItemID(itemID));
+            createDefaultBot(itemData.getKey(), itemData.getValue());
         }
     }
     public static boolean createDefaultBot(ItemID itemID)
+    {
+        return createDefaultBot(itemID, null);
+    }
+    public static boolean createDefaultBot(ItemID itemID, ServerTradingBotFactory.BotBuilderContainer botBuilder)
     {
         if(!StockMarketModSettings.MarketBot.ENABLED)
             return false;
@@ -100,7 +104,8 @@ public class ServerMarket implements ServerSaveable
         {
             ServerBankManager.allowItemID(itemID);
         }
-        ServerTradingBotFactory.BotBuilderContainer botBuilder = StockMarketModSettings.MarketBot.getBotBuilder(itemID.getName());
+        if(botBuilder == null)
+            botBuilder = StockMarketModSettings.MarketBot.getBotBuilder(itemID);
         if(botBuilder == null)
         {
             StockMarketMod.LOGGER.error("[SERVER] No default bot settings available for item: "+itemID);

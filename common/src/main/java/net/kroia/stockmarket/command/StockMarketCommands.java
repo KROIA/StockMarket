@@ -14,6 +14,7 @@ import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
+import net.kroia.stockmarket.market.server.bot.ServerTradingBotFactory;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import net.kroia.stockmarket.networking.packet.server_sender.update.OpenScreenPacket;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncBotSettingsPacket;
@@ -134,9 +135,9 @@ public class StockMarketCommands {
                         .then(Commands.literal("createDefaultBot")
                                 .requires(source -> source.hasPermission(2))
                                 .then(Commands.argument("itemID", StringArgumentType.string()).suggests((context, builder) -> {
-                                                    Set<String> suggestions = StockMarketModSettings.MarketBot.getBotBuilder().keySet();
-                                                    for (String suggestion : suggestions) {
-                                                        builder.suggest("\"" + suggestion + "\"");
+                                                    Set<ItemID> suggestions = StockMarketModSettings.MarketBot.getBotBuilder().keySet();
+                                                    for (ItemID suggestion : suggestions) {
+                                                        builder.suggest("\"" + suggestion.getName() + "\"");
                                                     }
                                                     return builder.buildFuture();
                                                 })

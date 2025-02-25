@@ -11,6 +11,7 @@ import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBotFactory;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtIo;
+import net.minecraft.world.item.ItemStack;
 
 import java.io.File;
 import java.io.IOException;
@@ -18,6 +19,7 @@ import java.lang.reflect.Type;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -181,26 +183,32 @@ public class StockMarketDataHandler {
         return market.load(marketData);
     }
 
-    public static Map<String, ServerTradingBotFactory.DefaultBotSettings> loadDefaultBotSettings()
+    public static Map<ServerTradingBotFactory.ItemData, ServerTradingBotFactory.DefaultBotSettings> loadDefaultBotSettings()
     {
         List<Path> jsonFiles = getJsonFiles(Path.of(getSaveFolder().getPath()+"/DefaultBotSettings"));
-        Map<String, ServerTradingBotFactory.DefaultBotSettings> settings = new HashMap<>();
-        Type mapType = new TypeToken<Map<String, ServerTradingBotFactory.DefaultBotSettings>>() {}.getType();
+        Map<ServerTradingBotFactory.ItemData, ServerTradingBotFactory.DefaultBotSettings> settings = new HashMap<>();
+        Type arrayType = new TypeToken<ArrayList<ServerTradingBotFactory.BotBuilderContainer>>() {}.getType();
         for(Path file : jsonFiles)
         {
             try {
-                Map<String, ServerTradingBotFactory.DefaultBotSettings> tmpMap = loadFromJson("/DefaultBotSettings/"+file.getFileName().toString(), mapType);
-                if(tmpMap != null)
-                    settings.putAll(tmpMap);
+                ArrayList<ServerTradingBotFactory.BotBuilderContainer> tmpArray = loadFromJson("/DefaultBotSettings/"+file.getFileName().toString(), arrayType);
+                if(tmpArray != null) {
+                    for(ServerTradingBotFactory.BotBuilderContainer container : tmpArray)
+                        settings.put(container.itemData, container.defaultSettings);
+                }
             } catch (JsonSyntaxException e) {
                 e.printStackTrace();
             }
         }
         return settings;
     }
-    public static boolean saveDefaultBotSettings(Map<String, ServerTradingBotFactory.DefaultBotSettings> settingsMap, String fileName)
+    public static boolean saveDefaultBotSettings(Map<ServerTradingBotFactory.ItemData, ServerTradingBotFactory.DefaultBotSettings> settingsMap, String fileName)
     {
         return saveAsJson(settingsMap, "DefaultBotSettings/"+fileName);
+    }
+    public static boolean saveDefaultBotSettings(ArrayList<ServerTradingBotFactory.BotBuilderContainer> settings, String fileName)
+    {
+        return saveAsJson(settings, "DefaultBotSettings/"+fileName);
     }
 
     public static List<Path> getJsonFiles(Path path) {
@@ -269,7 +277,6 @@ public class StockMarketDataHandler {
 
     public static boolean saveAsJson(Object o, String fileName)
     {
-
         String json = GSON.toJson(o);
         try {
             Path path = Paths.get(getSaveFolder()+"/"+fileName);
