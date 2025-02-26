@@ -84,7 +84,7 @@ public class ServerMarket implements ServerSaveable
         if(!StockMarketModSettings.MarketBot.ENABLED)
             return;
 
-        HashMap<ItemID, ServerTradingBotFactory.BotBuilderContainer> botBuilder  = StockMarketModSettings.MarketBot.getBotBuilder();
+        HashMap<ItemID, ServerTradingBotFactory.DefaultBotSettings> botBuilder  = StockMarketModSettings.MarketBot.getBotBuilder().getBots();
 
         for(var itemData : botBuilder.entrySet())
         {
@@ -95,7 +95,18 @@ public class ServerMarket implements ServerSaveable
     {
         return createDefaultBot(itemID, null);
     }
-    public static boolean createDefaultBot(ItemID itemID, ServerTradingBotFactory.BotBuilderContainer botBuilder)
+    public static boolean createDefaultBots(String category)
+    {
+        if(!StockMarketModSettings.MarketBot.ENABLED)
+            return false;
+        HashMap<ItemID, ServerTradingBotFactory.DefaultBotSettings> botBuilder  = StockMarketModSettings.MarketBot.getBotBuilder().getBots(category);
+        for(var itemData : botBuilder.entrySet())
+        {
+            createDefaultBot(itemData.getKey(), itemData.getValue());
+        }
+        return true;
+    }
+    public static boolean createDefaultBot(ItemID itemID, ServerTradingBotFactory.DefaultBotSettings botBuilder)
     {
         if(!StockMarketModSettings.MarketBot.ENABLED)
             return false;
@@ -113,7 +124,7 @@ public class ServerMarket implements ServerSaveable
         }
         if(!hasItem(itemID))
         {
-            int initialPrice = botBuilder.defaultSettings.getSettings().defaultPrice;
+            int initialPrice = botBuilder.getSettings().defaultPrice;
             addTradeItem(itemID,initialPrice);
         }
         ServerTradingBot bot = getTradingBot(itemID);
@@ -124,7 +135,7 @@ public class ServerMarket implements ServerSaveable
             setTradingBot(itemID, bot);
         }
         ServerVolatilityBot.Settings settings = (ServerVolatilityBot.Settings)bot.getSettings();
-        botBuilder.defaultSettings.loadDefaultSettings(settings);
+        botBuilder.loadDefaultSettings(settings);
         bot.setSettings(settings);
         return true;
     }
@@ -167,6 +178,17 @@ public class ServerMarket implements ServerSaveable
         item.cleanup();
         tradeItems.remove(itemID);
         rebuildTradeItemsChunks();
+    }
+    public static boolean removeTradingItems(String category)
+    {
+        HashMap<ItemID, ServerTradingBotFactory.DefaultBotSettings> botBuilder  = StockMarketModSettings.MarketBot.getBotBuilder().getBots(category);
+        if(botBuilder == null)
+            return false;
+        for(var itemData : botBuilder.entrySet())
+        {
+            removeTradingItem(itemData.getKey());
+        }
+        return true;
     }
     private static boolean addTradeItem_internal(ItemID itemID, int startPrice)
     {

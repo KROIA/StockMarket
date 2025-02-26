@@ -34,6 +34,10 @@
   "message.stockmarket.stockmarket_data_loaded": "Stockmarket data loaded",
   "message.stockmarket.default_bot_created": "Default bot created for item: {item_name}",
   "message.stockmarket.can_not_create_default_bot": "Can not create default bot for item: {item_name}",
+  "message.stockmarket.default_bots_category_created": "Default bots category: {value} created",
+  "message.stockmarket.can_not_create_default_bots_category": "Can not create default bots for category: {value}",
+  "message.stockmarket.default_market_category_removed": "Market category {value} removed",
+  "message.stockmarket.unknown_market_category": "Can not find market category: {value}",
 
   "message.stockmarket.bot_created": "Bot created for item: {item_name}, you can change its settings and than enable it",
   "message.stockmarket.bot_deleted": "Bot deleted for item: {item_name}",

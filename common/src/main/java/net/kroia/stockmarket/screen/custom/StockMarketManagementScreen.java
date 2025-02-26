@@ -165,8 +165,7 @@ public class StockMarketManagementScreen extends GuiScreen {
                 itemStacks.add(itemID.getStack());
             }
         }
-        tradableItemsView.setAllowedItems(itemStacks);
-        tradableItemsView.sortItems();
+        tradableItemsView.setItems(itemStacks);
     }
 
 

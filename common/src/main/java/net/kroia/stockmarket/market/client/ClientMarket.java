@@ -105,12 +105,17 @@ public class ClientMarket {
             {
                 stillAvailableItemsMap.put(itemID, true);
             }
+            ArrayList<ItemID> toRemove = new ArrayList<>();
             for(ItemID itemID : tradeItems.keySet())
             {
                 if(!stillAvailableItemsMap.containsKey(itemID))
                 {
-                    tradeItems.remove(itemID);
+                    toRemove.add(itemID);
                 }
+            }
+            for(ItemID itemID : toRemove)
+            {
+                tradeItems.remove(itemID);
             }
             return;
         }

@@ -183,22 +183,44 @@ public class StockMarketDataHandler {
         return market.load(marketData);
     }
 
-    public static Map<ServerTradingBotFactory.ItemData, ServerTradingBotFactory.DefaultBotSettings> loadDefaultBotSettings()
+    public static List<String> getDefaultBotSettingsFileNames()
     {
         List<Path> jsonFiles = getJsonFiles(Path.of(getSaveFolder().getPath()+"/DefaultBotSettings"));
-        Map<ServerTradingBotFactory.ItemData, ServerTradingBotFactory.DefaultBotSettings> settings = new HashMap<>();
-        Type arrayType = new TypeToken<ArrayList<ServerTradingBotFactory.BotBuilderContainer>>() {}.getType();
+        ArrayList<String> fileNames = new ArrayList<>();
         for(Path file : jsonFiles)
         {
-            try {
-                ArrayList<ServerTradingBotFactory.BotBuilderContainer> tmpArray = loadFromJson("/DefaultBotSettings/"+file.getFileName().toString(), arrayType);
-                if(tmpArray != null) {
-                    for(ServerTradingBotFactory.BotBuilderContainer container : tmpArray)
-                        settings.put(container.itemData, container.defaultSettings);
-                }
-            } catch (JsonSyntaxException e) {
-                e.printStackTrace();
+            String fileName = file.getFileName().toString();
+            // remove file extension
+            fileName = fileName.substring(0, fileName.lastIndexOf('.'));
+            fileNames.add(fileName);
+        }
+        return fileNames;
+    }
+    public static HashMap<String, HashMap<ItemID, ServerTradingBotFactory.DefaultBotSettings>> loadDefaultBotSettings()
+    {
+        List<String> jsonFiles = getDefaultBotSettingsFileNames();
+        HashMap<String, HashMap<ItemID, ServerTradingBotFactory.DefaultBotSettings>> settings = new HashMap<>();
+        for(String file : jsonFiles)
+        {
+            HashMap<ItemID, ServerTradingBotFactory.DefaultBotSettings> map = loadDefaultBotSettings(file);
+            settings.put(file, map);
+        }
+        return settings;
+    }
+    public static HashMap<ItemID, ServerTradingBotFactory.DefaultBotSettings> loadDefaultBotSettings(String fileName)
+    {
+        if(!fileName.contains(".json"))
+            fileName += ".json";
+        HashMap<ItemID, ServerTradingBotFactory.DefaultBotSettings> settings = new HashMap<>();
+        Type arrayType = new TypeToken<ArrayList<ServerTradingBotFactory.BotBuilderContainer>>() {}.getType();
+        try {
+            ArrayList<ServerTradingBotFactory.BotBuilderContainer> tmpArray = loadFromJson("/DefaultBotSettings/"+fileName, arrayType);
+            if(tmpArray != null) {
+                for(ServerTradingBotFactory.BotBuilderContainer container : tmpArray)
+                    settings.put(container.itemData.getItemID(), container.defaultSettings);
             }
+        } catch (JsonSyntaxException e) {
+            e.printStackTrace();
         }
         return settings;
     }

@@ -509,6 +509,39 @@ public class StockMarketTextMessages {
         return msg;
     }
 
+    private static final Component DEFAULT_BOTS_CATEGORY_CREATED = Component.translatable(prefix+"default_bots_category_created");
+    public static String getDefaultBotsCategoryCreatedMessage(String category)
+    {
+        String msg = DEFAULT_BOTS_CATEGORY_CREATED.getString();
+        msg = replaceVariable(msg, Variables.VALUE, category);
+        return msg;
+    }
+
+    private static final Component CAN_NOT_CREATE_DEFAULT_BOTS_CATEGORY = Component.translatable(prefix+"can_not_create_default_bots_category");
+    public static String getCanNotCreateDefaultBotsCategoryMessage(String category)
+    {
+        String msg = CAN_NOT_CREATE_DEFAULT_BOTS_CATEGORY.getString();
+        msg = replaceVariable(msg, Variables.VALUE, category);
+        return msg;
+    }
+
+
+    private static final Component DEFAULT_MARKET_CATEGORY_REMOVED = Component.translatable(prefix+"default_market_category_removed");
+    public static String getDefaultMarketCategoryRemovedMessage(String category)
+    {
+        String msg = DEFAULT_MARKET_CATEGORY_REMOVED.getString();
+        msg = replaceVariable(msg, Variables.VALUE, category);
+        return msg;
+    }
+
+    private static final Component UNKNOWN_MARKET_CATEGORY = Component.translatable(prefix+"unknown_market_category");
+    public static String getUnknownMarketCategory(String category)
+    {
+        String msg = UNKNOWN_MARKET_CATEGORY.getString();
+        msg = replaceVariable(msg, Variables.VALUE, category);
+        return msg;
+    }
+
     private static final Component NEED_CREATIVE_MODE_FOR_THIS_SCREEN = Component.translatable(prefix+"need_creative_mode_for_this_screen");
     public static String getNeedCreativeModeForThisScreenMessage()
     {

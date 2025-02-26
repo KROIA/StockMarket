@@ -16,10 +16,8 @@ import net.minecraft.world.item.alchemy.PotionUtils;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+
 public class StockMarketModSettings {
     public static void init()
     {
@@ -72,35 +70,86 @@ public class StockMarketModSettings {
         public static final float VOLUME_DECUMULATION_RATE = 0.005f;
 
 
-        private static HashMap<ItemID, ServerTradingBotFactory.BotBuilderContainer> botBuilder;
-        public static HashMap<ItemID, ServerTradingBotFactory.BotBuilderContainer> getBotBuilder()
+        //private static HashMap<ItemID, ServerTradingBotFactory.BotBuilderContainer> botBuilder;
+        public static class BotBuilder
         {
-            botBuilder = new HashMap<>();
+            private HashMap<String,HashMap<ItemID, ServerTradingBotFactory.DefaultBotSettings>> botPresets = new HashMap<>();
+
+            public BotBuilder()
+            {
+
+            }
+            public void loadFromFilesystem()
+            {
+                botPresets = StockMarketDataHandler.loadDefaultBotSettings();
+            }
+            public HashMap<ItemID, ServerTradingBotFactory.DefaultBotSettings> getBots(String presetName)
+            {
+                return botPresets.get(presetName);
+            }
+            public HashMap<ItemID, ServerTradingBotFactory.DefaultBotSettings> getBots()
+            {
+                HashMap<ItemID, ServerTradingBotFactory.DefaultBotSettings> all = new HashMap<>();
+                for(Map.Entry<String, HashMap<ItemID, ServerTradingBotFactory.DefaultBotSettings>> entry : botPresets.entrySet())
+                {
+                    all.putAll(entry.getValue());
+                }
+                return all;
+            }
+            public ServerTradingBotFactory.DefaultBotSettings get(ItemID itemID)
+            {
+                for(Map.Entry<String, HashMap<ItemID, ServerTradingBotFactory.DefaultBotSettings>> entry : botPresets.entrySet())
+                {
+                    if(entry.getValue().containsKey(itemID))
+                    {
+                        return entry.getValue().get(itemID);
+                    }
+                }
+                return null;
+            }
+            public void clear()
+            {
+                botPresets.clear();
+            }
+            public boolean isEmpty()
+            {
+                return botPresets.isEmpty();
+            }
+            public Set<ItemID> keySet()
+            {
+                Set<ItemID> keys = new HashSet<>();
+                for(Map.Entry<String, HashMap<ItemID, ServerTradingBotFactory.DefaultBotSettings>> entry : botPresets.entrySet())
+                {
+                    keys.addAll(entry.getValue().keySet());
+                }
+                return keys;
+            }
+        }
+        public static BotBuilder getBotBuilder()
+        {
+            BotBuilder botBuilder = new BotBuilder();
 
             float priceScale = 1f;
             long updateMS = 500;
             float volatility = 0.2f;
-            botBuilder = new HashMap<>();
 
             boolean recreatePresets = false;
-            Map<ServerTradingBotFactory.ItemData, ServerTradingBotFactory.DefaultBotSettings> allSettings = new HashMap<>();
             try {
                 StockMarketMod.LOGGER.info("If you see a exception after here, in the case you have updated the mod to a newer version, you can ignore the exception.");
-                allSettings = StockMarketDataHandler.loadDefaultBotSettings();
+                botBuilder.loadFromFilesystem();
             } catch (Exception e) {
                 recreatePresets = true;
                 StockMarketMod.LOGGER.error("Failed to load default bot settings, new settings will be generated: "+e.getMessage());
             }
 
             if(!recreatePresets) {
-                for (Map.Entry<ServerTradingBotFactory.ItemData, ServerTradingBotFactory.DefaultBotSettings> entry : allSettings.entrySet()) {
+                for (Map.Entry<ItemID, ServerTradingBotFactory.DefaultBotSettings> entry : botBuilder.getBots().entrySet()) {
                     if (entry == null ||
                             entry.getKey() == null ||
-                            entry.getKey().getItemID() == null ||
                             entry.getValue() == null ||
                             entry.getValue().getSettings() == null) {
                         recreatePresets = true;
-                        allSettings.clear();
+                        botBuilder.clear();
                         break;
                     }
                 }
@@ -108,7 +157,7 @@ public class StockMarketModSettings {
 
 
 
-            if(allSettings.isEmpty() || recreatePresets)
+            if(botBuilder.isEmpty() || recreatePresets)
             {
                 StockMarketMod.LOGGER.error("Generating new default bot settings.");
                 // Create defaults:
@@ -224,12 +273,12 @@ public class StockMarketModSettings {
                 StockMarketDataHandler.saveDefaultBotSettings(tippedArrows, "TippedArrows.json");
 
 
-                allSettings = StockMarketDataHandler.loadDefaultBotSettings();
+                botBuilder.loadFromFilesystem();
             }
-            for(Map.Entry<ServerTradingBotFactory.ItemData, ServerTradingBotFactory.DefaultBotSettings> entry : allSettings.entrySet())
+            /*for(Map.Entry<ServerTradingBotFactory.ItemData, ServerTradingBotFactory.DefaultBotSettings> entry : allSettings.entrySet())
             {
                 ServerTradingBotFactory.botTableBuilder(botBuilder, entry.getKey(), entry.getValue());
-            }
+            }*/
             return botBuilder;
         }
 
@@ -279,7 +328,7 @@ public class StockMarketModSettings {
 
             return score;
         }
-        public static ServerTradingBotFactory.BotBuilderContainer getBotBuilder(ItemID itemID)
+        public static ServerTradingBotFactory.DefaultBotSettings getBotBuilder(ItemID itemID)
         {
             return getBotBuilder().get(itemID);
         }
