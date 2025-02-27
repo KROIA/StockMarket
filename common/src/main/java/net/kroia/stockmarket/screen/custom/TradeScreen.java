@@ -8,6 +8,7 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.GuiScreen;
+import net.kroia.modutilities.gui.elements.ItemSelectionView;
 import net.kroia.modutilities.gui.screens.ItemSelectionScreen;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
@@ -20,14 +21,197 @@ import net.kroia.stockmarket.screen.uiElements.OrderListView;
 import net.kroia.stockmarket.screen.uiElements.OrderbookVolumeChart;
 import net.kroia.stockmarket.screen.uiElements.TradePanel;
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.EnchantedBookItem;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.PotionItem;
 
-import java.util.ArrayList;
+import java.util.*;
 
 
 public class TradeScreen extends GuiScreen {
+
+    static class ItemSorter implements ItemSelectionView.Sorter {
+        @Override
+        public void apply(ArrayList<ItemStack> items) {
+
+
+            Map<String, List<ItemStack>> categorizedItems = new LinkedHashMap<>();
+
+            // Define sorting order (Creative Inventory order)
+            List<String> categoryOrder = Arrays.asList(
+                    "ores", "food", "building_blocks", "decoration_blocks", "redstone", "transportation",
+                    "tools", "combat", "arrows", "brewing", "misc"
+            );
+            List<String> itemIDContains = Arrays.asList(
+                    "log", "planks", "slab", "stairs", "fence", "door", "pressure_plate", "button",
+                    "wool", "carpet", "terracotta", "concrete", "glass",
+                    "torch", "lantern", "campfire",
+                    "furnace", "smoker", "cartography_table", "loom", "smithing_table", "stonecutter",
+                    "grindstone", "anvil", "barrel", "beacon", "bell", "brewing_stand", "cauldron",
+                    "composter", "enchanting_table", "end_crystal", "end_portal_frame", "fletching_table",
+                    "jukebox", "lectern", "note_block", "observer", "piston",
+                    "dispenser", "dropper", "hopper", "redstone_lamp", "repeater", "comparator",
+                    "daylight_detector", "target", "tripwire_hook", "lever",
+                    "rail", "redstone_torch", "redstone_block", "redstone_wire"
+            );
+            // Initialize category lists
+            for (String category : categoryOrder) {
+                categorizedItems.put(category, new ArrayList<>());
+            }
+            for(String itemID : itemIDContains)
+            {
+                categorizedItems.put(itemID, new ArrayList<>());
+            }
+
+            categorizedItems.put("uncategorized", new ArrayList<>()); // Items that don't fit
+
+            // Categorize items
+            for (ItemStack stack : items) {
+                Item item = stack.getItem();
+
+                boolean isAdded = false;
+                for(String itemID : itemIDContains)
+                {
+                    if(idContains(item, itemID))
+                    {
+                        categorizedItems.get(itemID).add(stack);
+                        isAdded = true;
+                        break;
+                    }
+                }
+                if(isAdded)
+                    continue;
+
+                if (isFood(item)) {
+                    categorizedItems.get("food").add(stack);
+                } else if (isEnchantedBook(item)) {
+                    categorizedItems.get("misc").add(stack);
+                } else if (isPotion(item)) {
+                    categorizedItems.get("brewing").add(stack);
+                } else if (isOre(item)){
+                    categorizedItems.get("ores").add(stack);
+                } else if (isArrow(item)){
+                    categorizedItems.get("arrows").add(stack);
+                }else if (isTool(item)){
+                    categorizedItems.get("tools").add(stack);
+                }else if (isRedstoneObject(item)){
+                    categorizedItems.get("redstone").add(stack);
+                }else if (isBuildingBlock(item)) {
+                    categorizedItems.get("building_blocks").add(stack);
+                } else {
+                    categorizedItems.get("uncategorized").add(stack);
+                }
+            }
+
+
+            // Sort each category alphabetically by registry name
+            for (List<ItemStack> category : categorizedItems.values()) {
+                category.sort(Comparator.comparing(stack -> BuiltInRegistries.ITEM.getKey(stack.getItem()).toString()));
+            }
+
+            //HashMap<Item, Boolean> added = new HashMap<>();
+
+            // Merge sorted items back into the original list
+            items.clear();
+            for(String category : itemIDContains)
+            {
+                for(ItemStack stack : categorizedItems.get(category))
+                {
+                    //if(added.containsKey(stack.getItem()))
+                    {
+                        items.add(stack);
+                        //added.put(stack.getItem(), true);
+                    }
+                }
+                categorizedItems.remove(category);
+            }
+            for (String category : categoryOrder) {
+                for(ItemStack stack : categorizedItems.get(category))
+                {
+                    //if(!added.containsKey(stack.getItem()))
+                    {
+                        items.add(stack);
+                        //added.put(stack.getItem(), true);
+                    }
+                }
+                categorizedItems.remove(category);
+            }
+            for(ItemStack stack : categorizedItems.get("uncategorized"))
+            {
+                //if(added.containsKey(stack.getItem()))
+                {
+                    items.add(stack);
+                    //added.put(stack.getItem(), true);
+                }
+            }
+        }
+        private static boolean isFood(Item item) {
+            return item.isEdible();
+        }
+
+        private static boolean isBuildingBlock(Item item) {
+            return BuiltInRegistries.BLOCK.containsKey(BuiltInRegistries.ITEM.getKey(item));
+        }
+
+        private static boolean isEnchantedBook(Item item) {
+            CompoundTag tag = new ItemStack(item).getTag();
+            return item instanceof EnchantedBookItem || (tag != null && tag.contains("StoredEnchantments"));
+        }
+
+        private static boolean isPotion(Item item) {
+            CompoundTag tag = new ItemStack(item).getTag();
+            return item instanceof PotionItem || (tag != null && tag.contains("Potion"));
+        }
+        private static boolean isOre(Item item)
+        {
+            String itemName = ItemUtilities.getItemID(item);
+
+            if(itemName.contains("ore") || itemName.contains("ingot"))
+                return true;
+            if(itemName.contains("quartz") || itemName.contains("diamond") || itemName.contains("emerald"))
+                return true;
+
+            if(itemName.contains("netherite") || itemName.contains("lapis"))
+                return true;
+            return itemName.contains("coal") || itemName.contains("gold") || itemName.contains("iron");
+        }
+        private static boolean isArrow(Item item)
+        {
+            String itemName = ItemUtilities.getItemID(item);
+            return itemName.contains("arrow");
+        }
+        private static boolean isTool(Item item)
+        {
+            String itemName = ItemUtilities.getItemID(item);
+            if(itemName.contains("pickaxe") || itemName.contains("axe") || itemName.contains("shovel"))
+                return true;
+            if(itemName.contains("hoe") || itemName.contains("shears") || itemName.contains("sword"))
+                return true;
+            return false;
+        }
+        private static boolean isRedstoneObject(Item item)
+        {
+            String itemName = ItemUtilities.getItemID(item);
+            if(itemName.contains("redstone") || itemName.contains("piston") || itemName.contains("observer"))
+                return true;
+            if(itemName.contains("comparator") || itemName.contains("repeater") || itemName.contains("dispenser"))
+                return true;
+            return false;
+        }
+        private static boolean idContains(Item item, String contains)
+        {
+            String itemName = ItemUtilities.getItemID(item);
+            return itemName.contains(contains);
+        }
+
+
+
+    }
     private static final String PREFIX = "gui.";
     private static final String NAME = "trade_screen";
 
@@ -256,6 +440,8 @@ public class TradeScreen extends GuiScreen {
                 this,
                 itemStacks,
                 this::onItemSelected);
+
+        screen.getItemSelectionView().setSorter(new ItemSorter());
         screen.sortItems();
         this.minecraft.setScreen(screen);
     }
