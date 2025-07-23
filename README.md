@@ -221,7 +221,8 @@ If you do not have enough money to move a buy order higher, the order will not b
 ---
 ### For Admins / Single Player
 #### Getting started
-When you first join a server/save using this mod, some default markets are getting created by the mod.
+When you first join a server/save using this mod, no tradable items are available in the beginning.
+Tradable items have to be setup by an admin.
 Each player receives its bank account with 0 balance. 
 
 <details open> 
@@ -232,7 +233,8 @@ Each player receives its bank account with 0 balance.
     The simplest way to setup the bots is by calling the command bellow.<br>
     This command creats a bot for each market which was added by default from the mod.<br>
     You may want to change the settings for the bots later.<br>
-<code>/StockMarket createDefaultBots</code>
+<code>/StockMarket createDefaultBots</code><br>
+<code>/StockMarket createDefaultBots 'selectedCategory'</code>
 </details>
 
 <details close> 

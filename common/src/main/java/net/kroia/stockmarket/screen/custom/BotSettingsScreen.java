@@ -66,9 +66,7 @@ public class BotSettingsScreen extends GuiScreen {
     private static final Component TITLE = Component.translatable(PREFIX+"title");
     public static final Component CHANGE_ITEM_BUTTON = Component.translatable(PREFIX+"change_item");
     public static final Component SAVE_BUTTON = Component.translatable(PREFIX+"save_settings");
-    public static final Component BOT_CREATE = Component.translatable(PREFIX+"bot_create");
-    public static final Component BOT_DESTROY = Component.translatable(PREFIX+"bot_destroy");
-    public static final Component BOT_BANK = Component.translatable(PREFIX+"bot_bank");
+    public static final Component BOT_USE = Component.translatable(PREFIX+"bot_use");
     public static final Component MARKET_OPEN = Component.translatable(PREFIX+"market_open");
     public static final Component OPEN_BOT_SETUP = Component.translatable(PREFIX+"open_bot_setup");
 
@@ -86,7 +84,7 @@ public class BotSettingsScreen extends GuiScreen {
     private final OrderbookVolumeChart orderbookVolumeChart;
     private final Button selectItemButton;
     private final Button saveButton;
-    private final Button createDestroyBotButton;
+    private final CheckBox useBotCheckBox;
     private final Button openSetupScreenButton;
     //private final Button manageBankButton;
     private final CheckBox marketOpenCheckBox;
@@ -96,7 +94,6 @@ public class BotSettingsScreen extends GuiScreen {
     private final BotSettingsWidget botSettingsWidget;
 
     private BotSetupScreen botSetupScreen;
-
     private boolean settingsReceived = false;
     private boolean botExists = false;
 
@@ -117,7 +114,8 @@ public class BotSettingsScreen extends GuiScreen {
         saveButton = new Button(SAVE_BUTTON.getString(), this::onSaveSettings);
         normalButtonColor = saveButton.getOutlineColor();
         unsavedChangesButtonColor = 0xFFfc6603;
-        createDestroyBotButton = new Button(BOT_CREATE.getString(), this::onCreateDestroyBot);
+        useBotCheckBox = new CheckBox(BOT_USE.getString(), this::onSettingsChanged);
+        useBotCheckBox.setTextAlignment(GuiElement.Alignment.CENTER);
         openSetupScreenButton = new Button(OPEN_BOT_SETUP.getString(), this::onOpenSetupScreen);
         //manageBankButton = new Button(BOT_BANK.getString(), this::onManageBankButtonClicked);
         currentItemView = new ItemView();
@@ -129,7 +127,7 @@ public class BotSettingsScreen extends GuiScreen {
         layout.spacing = 0;
         setingsListView.setLayout(layout);
 
-        marketOpenCheckBox = new CheckBox(MARKET_OPEN.getString(), this::onMarketOpenCheckBoxChanged);
+        marketOpenCheckBox = new CheckBox(MARKET_OPEN.getString(), this::onSettingsChanged);
         marketOpenCheckBox.setTextAlignment(GuiElement.Alignment.CENTER);
 
         botSettingsWidget = new BotSettingsWidget(settings, this::onSettingsChanged);
@@ -142,7 +140,7 @@ public class BotSettingsScreen extends GuiScreen {
         addElement(orderbookVolumeChart);
         addElement(selectItemButton);
         addElement(saveButton);
-        addElement(createDestroyBotButton);
+        addElement(useBotCheckBox);
         addElement(openSetupScreenButton);
         //addElement(manageBankButton);
         addElement(currentItemView);
@@ -180,8 +178,8 @@ public class BotSettingsScreen extends GuiScreen {
         currentItemView.setPosition(selectItemButton.getRight()+spacing, padding);
         saveButton.setBounds(selectItemButton.getLeft(), selectItemButton.getBottom()+spacing, selectItemButton.getWidth()+currentItemView.getWidth(), selectItemButton.getHeight());
         marketOpenCheckBox.setBounds(saveButton.getLeft(), saveButton.getBottom()+spacing, saveButton.getWidth(), saveButton.getHeight());
-        createDestroyBotButton.setBounds(marketOpenCheckBox.getLeft(), marketOpenCheckBox.getBottom()+spacing, marketOpenCheckBox.getWidth(), marketOpenCheckBox.getHeight());
-        openSetupScreenButton.setBounds(createDestroyBotButton.getLeft(), createDestroyBotButton.getBottom()+spacing, createDestroyBotButton.getWidth(), createDestroyBotButton.getHeight());
+        useBotCheckBox.setBounds(marketOpenCheckBox.getLeft(), marketOpenCheckBox.getBottom()+spacing, marketOpenCheckBox.getWidth(), marketOpenCheckBox.getHeight());
+        openSetupScreenButton.setBounds(useBotCheckBox.getLeft(), useBotCheckBox.getBottom()+spacing, useBotCheckBox.getWidth(), useBotCheckBox.getHeight());
         //manageBankButton.setBounds(openSetupScreenButton.getLeft(), openSetupScreenButton.getBottom()+spacing, openSetupScreenButton.getWidth(), openSetupScreenButton.getHeight());
 
 
@@ -226,14 +224,7 @@ public class BotSettingsScreen extends GuiScreen {
         botExists = ClientMarket.botExists();
         ClientTradeItem item = ClientMarket.getTradeItem(itemID);
         marketOpenCheckBox.setChecked(item.isMarketOpen());
-        if(botExists)
-        {
-            createDestroyBotButton.setLabel(BOT_DESTROY.getString());
-        }
-        else
-        {
-            createDestroyBotButton.setLabel(BOT_CREATE.getString());
-        }
+        useBotCheckBox.setChecked(botExists);
     }
 
     private static void onClientTick(Player player) {
@@ -301,45 +292,11 @@ public class BotSettingsScreen extends GuiScreen {
     }
     private void onSaveSettings()
     {
-        boolean createBot = false;
-        if(botSetupScreen != null)
-        {
-            botSetupScreen = null;
-            if(!botExists)
-                createBot = true;
-        }
         boolean marketOpen = marketOpenCheckBox.isChecked();
-        UpdateBotSettingsPacket.sendPacket(itemID, botSettingsWidget.getSettings(), false, createBot, marketOpen);
+        boolean doDestroyBot = !useBotCheckBox.isChecked() && botExists;
+        boolean doCreateBot = useBotCheckBox.isChecked() && !botExists;
+        UpdateBotSettingsPacket.sendPacket(itemID, botSettingsWidget.getSettings(), doDestroyBot, doCreateBot, marketOpen);
         saveButton.setOutlineColor(normalButtonColor);
-    }
-    private void onCreateDestroyBot()
-    {
-        boolean marketOpen = marketOpenCheckBox.isChecked();
-        if(botExists)
-        {
-            UpdateBotSettingsPacket.sendPacket(itemID, botSettingsWidget.getSettings(), true, false, marketOpen);
-        }
-        else
-        {
-            UpdateBotSettingsPacket.sendPacket(itemID, botSettingsWidget.getSettings(), false, true, marketOpen);
-        }
-        saveButton.setOutlineColor(normalButtonColor);
-        if(itemID != null && itemID.isValid()) {
-            settingsReceived = false;
-            RequestBotSettingsPacket.sendPacket(itemID);
-        }
-    }
-
-    /*private void onManageBankButtonClicked()
-    {
-        UUID botUUID = ClientMarket.getBotUUID();
-        if(botUUID == null)
-            return;
-        BankAccountManagementScreen.openScreen(ClientMarket.getBotUUID(), this);
-    }*/
-    private void onMarketOpenCheckBoxChanged()
-    {
-        onSettingsChanged();
     }
 
 
@@ -352,8 +309,11 @@ public class BotSettingsScreen extends GuiScreen {
     private void onBotSetupApply()
     {
         Minecraft.getInstance().setScreen(this);
+        botSetupScreen = null;
         setBotSettings(settings);
         saveButton.setOutlineColor(unsavedChangesButtonColor);
+        useBotCheckBox.setChecked(true);
+        onSettingsChanged();
     }
     private void onBotSetupCancel()
     {

@@ -74,17 +74,6 @@ public class StockMarketManagementScreen extends GuiScreen {
             {
                 minecraft.setScreen(this);
             }));
-            /*ArrayList<ItemID> items = ClientBankManager.getPotentialBankItemIDs();
-            items.removeAll(BankSystemModSettings.Bank.getPotentialItemBlacklist());
-            items.removeAll(StockMarketModSettings.Market.getNotTradableItems());
-            ArrayList<ItemStack> itemStacks2 = new ArrayList<>();
-            for(ItemID itemID : items)
-            {
-                itemStacks2.add(itemID.getStack());
-            }
-            ItemSelectionScreen itemSelectionScreen = new ItemSelectionScreen(this, itemStacks2, this::onNewTradingItemSelected);
-            itemSelectionScreen.sortItems();
-            this.minecraft.setScreen(itemSelectionScreen);*/
         });
         removeTradingItemButton = new Button(REMOVE_TRADING_ITEM_BUTTON.getString(), () -> {
             if(currentTradingItemID != null) {

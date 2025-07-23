@@ -21,7 +21,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
 
 
         public boolean enableVolumeTracking = true;
-        public float volumeSteeringFactor = 0.1f;
+        public float volumeSteeringFactor = 1.0E-7f;
 
 
         public boolean enableRandomWalk = true;
@@ -106,6 +106,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
         {
             //this.targetItemBalance = (long)(((1-rarity) * (1-rarity)) * 100000)+5000;
             this.defaultPrice = price;
+            this.targetPrice = price;
             this.updateTimerIntervallMS = udateTimerIntervallMS;
 
             this.enableTargetPrice = enableTargetPrice;
@@ -164,7 +165,8 @@ public class ServerVolatilityBot extends ServerTradingBot {
             float scale;
             if(currentItemBalance < 0)
             {
-                scale = (x*x-x)+1;
+                scale = -x+1;
+                //scale = (x*x-x)+1;
             }
             else
             {

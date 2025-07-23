@@ -43,15 +43,26 @@ public class GhostOrderBook implements ServerSaveable {
             float currentVal = virtualOrderVolumeDistribution.get(virtualIndex);
             if((currentVal<targetAmount) || (currentVal>targetAmount)) {
                 float scale = volumeAccumulationRate;
+
                 if(Math.abs(currentVal) < Math.abs(targetAmount)*0.1f)
                 {
                     scale = volumeFastAccumulationRate;
                 }
                 else if(Math.abs(currentVal) > Math.abs(targetAmount))
                 {
-                    scale = -volumeDecumulationRate;
+                    scale = volumeDecumulationRate;
                 }
-                virtualOrderVolumeDistribution.add(virtualIndex, targetAmount * (float) deltaT * scale);
+                float deltaAmount = (targetAmount - currentVal) * (float) deltaT * scale;
+                if(deltaAmount < 0 && currentVal > 0 && -deltaAmount > currentVal)
+                {
+                    deltaAmount = -currentVal;
+                }
+                else if(deltaAmount > 0 && currentVal < 0 && deltaAmount > -currentVal)
+                {
+                    deltaAmount = -currentVal;
+                }
+                virtualOrderVolumeDistribution.add(virtualIndex, deltaAmount);
+
             }
         }
     }

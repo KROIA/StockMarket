@@ -95,9 +95,7 @@
 
   "gui.stockmarket.bot_settings_screen.change_item": "Change Item",
   "gui.stockmarket.bot_settings_screen.save_settings": "Save Settings",
-  "gui.stockmarket.bot_settings_screen.bot_create": "Create Bot",
-  "gui.stockmarket.bot_settings_screen.bot_destroy": "Destroy Bot",
-  "gui.stockmarket.bot_settings_screen.bot_bank": "Bot bank",
+  "gui.stockmarket.bot_settings_screen.bot_use": "Use Bot",
   "gui.stockmarket.bot_settings_screen.market_open": "Market Open",
   "gui.stockmarket.bot_settings_screen.open_bot_setup": "Bot Setup",
 

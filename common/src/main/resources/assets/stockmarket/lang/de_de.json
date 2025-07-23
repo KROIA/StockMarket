@@ -94,9 +94,7 @@
   "message.stockmarket.no_trading_item_available": "Kein Handels Item verfügbar",
   "gui.stockmarket.bot_settings_screen.change_item": "Item ändern",
   "gui.stockmarket.bot_settings_screen.save_settings": "Einstellungen speichern",
-  "gui.stockmarket.bot_settings_screen.bot_create": "Bot erstellen",
-  "gui.stockmarket.bot_settings_screen.bot_destroy": "Bot löschen",
-  "gui.stockmarket.bot_settings_screen.bot_bank": "Bot Bank",
+  "gui.stockmarket.bot_settings_screen.bot_use": "Bot verwenden",
   "gui.stockmarket.bot_settings_screen.market_open": "Markt geöffnet",
   "gui.stockmarket.bot_settings_screen.open_bot_setup": "Bot Setup",
 

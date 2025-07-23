@@ -147,7 +147,7 @@ public class BotSettingsWidget extends GuiElement {
         }
         this.settings = settings;
         enabled.getSecond().setChecked(settings.enabled);
-        updateInterval.getSecond().setSliderValue(1-(double)(settings.updateTimerIntervallMS-100)/9900.0);
+        updateInterval.getSecond().setSliderValue((double)(settings.updateTimerIntervallMS-100)/9900.0);
         defaultPrice.getSecond().setText(Integer.toString(settings.defaultPrice));
         orderBookVolumeScale.getSecond().setText(Float.toString(settings.orderBookVolumeScale));
         nearMarketVolumeScale.getSecond().setText(Float.toString(settings.nearMarketVolumeScale));
@@ -248,7 +248,7 @@ public class BotSettingsWidget extends GuiElement {
     private void validateUserInput()
     {
         settings.enabled = enabled.getSecond().isChecked();
-        settings.updateTimerIntervallMS = getValidated((long)((1-updateInterval.getSecond().getSliderValue())*9900)+100, 100, 10000);
+        settings.updateTimerIntervallMS = getValidated((long)((updateInterval.getSecond().getSliderValue())*9900)+100, 100, 10000);
         settings.defaultPrice = getValidated((int)defaultPrice.getSecond().getDouble(), 0, Integer.MAX_VALUE);
         settings.orderBookVolumeScale = getValidated((float) orderBookVolumeScale.getSecond().getDouble(), 0.0f, Float.MAX_VALUE);
         settings.nearMarketVolumeScale = getValidated((float) nearMarketVolumeScale.getSecond().getDouble(), 0.0f, Float.MAX_VALUE);
@@ -290,16 +290,16 @@ public class BotSettingsWidget extends GuiElement {
     {
         double speed = updateInterval.getSecond().getSliderValue();
         long ms = getMarketSpeedMS();
-        if(speed < 0.2) {
+        if(speed > 0.8) {
             return "Slow "+ms+"ms";
         }
-        else if(speed < 0.4) {
+        else if(speed > 0.6) {
             return "Medium "+ms+"ms";
         }
-        else if(speed < 0.6) {
+        else if(speed > 0.4) {
             return "Fast "+ms+"ms";
         }
-        else if(speed < 0.8) {
+        else if(speed > 0.2) {
             return "Very Fast "+ms+"ms";
         }
         else {
@@ -310,6 +310,6 @@ public class BotSettingsWidget extends GuiElement {
     {
         double speed = updateInterval.getSecond().getSliderValue();
         // map from 100 to 10000
-        return (long)((1-speed)*9900+100);
+        return (long)((speed)*9900+100);
     }
 }

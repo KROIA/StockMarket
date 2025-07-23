@@ -10,6 +10,7 @@ import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
+import net.kroia.stockmarket.networking.packet.server_sender.update.SyncBotSettingsPacket;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
@@ -86,6 +87,7 @@ public class UpdateBotSettingsPacket extends NetworkPacket {
                 }
             }
             ServerMarket.setMarketOpen(itemID, marketOpen);
+            SyncBotSettingsPacket.sendPacket(sender, itemID);
         }
     }
 }

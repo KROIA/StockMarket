@@ -92,9 +92,7 @@
   "message.stockmarket.no_trading_item_available": "Kei handelbars Item verfüegbar",
   "gui.stockmarket.bot_settings_screen.change_item": "Item ändere",
   "gui.stockmarket.bot_settings_screen.save_settings": "Istellige speichere",
-  "gui.stockmarket.bot_settings_screen.bot_create": "Bot erstelle",
-  "gui.stockmarket.bot_settings_screen.bot_destroy": "Bot lösche",
-  "gui.stockmarket.bot_settings_screen.bot_bank": "Bot Bank",
+  "gui.stockmarket.bot_settings_screen.bot_use": "Bot nutze",
   "gui.stockmarket.bot_settings_screen.market_open": "Markt offe",
   "gui.stockmarket.bot_settings_screen.open_bot_setup": "Bot Irichte",
 

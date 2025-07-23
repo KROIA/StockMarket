@@ -32,7 +32,7 @@ public class SyncBotSettingsPacket extends NetworkPacket {
     {
         ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
         ServerVolatilityBot.Settings settings = new ServerVolatilityBot.Settings();
-        settings.enabled = false;
+        //settings.enabled = false;
         SyncBotSettingsPacket packet = new SyncBotSettingsPacket();
 
         if(bot instanceof ServerVolatilityBot volatilityBot)
