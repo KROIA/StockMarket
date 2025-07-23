@@ -21,6 +21,8 @@ public class ClientTradeItem {
 
 
     private final ItemID itemID;
+
+    private final ItemID currencyItemID;
     private PriceHistory priceHistory;
     private OrderbookVolume orderBookVolume;
     private int visualMinPrice = 0;
@@ -31,10 +33,11 @@ public class ClientTradeItem {
     private final Map<Long, Order> orders = new HashMap<>();
 
 
-    public ClientTradeItem(ItemID itemID)
+    public ClientTradeItem(ItemID itemID, ItemID currencyItemID)
     {
         this.itemID = itemID;
-        this.priceHistory = new PriceHistory(itemID, 0);
+        this.currencyItemID = currencyItemID;
+        this.priceHistory = new PriceHistory(itemID, currencyItemID, 0);
     }
 
     public void handlePacket(SyncPricePacket packet)
@@ -146,12 +149,12 @@ public class ClientTradeItem {
 
     public boolean createOrder(int quantity, int price)
     {
-        RequestOrderPacket.generateRequest(itemID, quantity, price);
+        RequestOrderPacket.generateRequest(itemID, currencyItemID, quantity, price);
         return true;
     }
     public boolean createOrder(int quantity)
     {
-        RequestOrderPacket.generateRequest(itemID, quantity);
+        RequestOrderPacket.generateRequest(itemID, currencyItemID, quantity);
         return true;
     }
 

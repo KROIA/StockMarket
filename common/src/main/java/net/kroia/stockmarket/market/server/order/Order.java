@@ -8,6 +8,7 @@ import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncOrderPacket;
 import net.kroia.stockmarket.util.ServerPlayerList;
 import net.kroia.stockmarket.util.StockMarketTextMessages;
@@ -24,6 +25,7 @@ public abstract class Order {
 
     protected long orderID;
     protected ItemID itemID;
+    protected ItemID currencyItemID;
     protected UUID playerUUID;
     protected int amount;
     protected int filledAmount = 0;
@@ -48,17 +50,19 @@ public abstract class Order {
     }
     protected Status status = Status.PENDING;
 
-    protected Order(UUID playerUUID, ItemID itemID, int amount) {
+    protected Order(UUID playerUUID, ItemID itemID, ItemID currencyItemID, int amount) {
         this.itemID = itemID;
         this.orderID = uniqueOrderID();
         this.playerUUID = playerUUID;
         this.amount = amount;
+        this.currencyItemID = currencyItemID;
     }
-    protected Order(UUID playerUUID, ItemID itemID, int amount, boolean isBot) {
+    protected Order(UUID playerUUID, ItemID itemID, ItemID currencyItemID, int amount, boolean isBot) {
         this.itemID = itemID;
         this.orderID = uniqueOrderID();
         this.playerUUID = playerUUID;
         this.amount = amount;
+        this.currencyItemID = currencyItemID;
         this.isBot = isBot;
     }
     protected Order()
@@ -74,7 +78,7 @@ public abstract class Order {
             return false;
         }
 
-        Bank moneyBank = bankUser.getMoneyBank();
+        Bank moneyBank = bankUser.getBank(ServerMarket.getCurrencyItem());
         Bank itemBank = bankUser.getBank(itemID);
         if(itemBank == null)
         {
@@ -137,12 +141,20 @@ public abstract class Order {
         isBot = buf.readBoolean();
         if(!isBot)
             playerUUID = buf.readUUID();
+
+        // Check if currencyItemID is defined in the tag
+        if(buf.isReadable()) {
+            currencyItemID = new ItemID(buf.readItem());
+        } else {
+            currencyItemID = ServerMarket.getCurrencyItem();
+        }
     }
 
     public void copyFrom(Order other)
     {
         orderID = other.orderID;
         itemID = other.itemID;
+        currencyItemID = other.currencyItemID;
         playerUUID = other.playerUUID;
         amount = other.amount;
         filledAmount = other.filledAmount;
@@ -184,6 +196,7 @@ public abstract class Order {
     {
         return  orderID == other.orderID &&
                 itemID.equals(other.itemID) &&
+                currencyItemID.equals(other.currencyItemID) &&
                 playerUUID.compareTo(other.playerUUID)==0 &&
                 amount == other.amount &&
                 filledAmount == other.filledAmount &&
@@ -223,6 +236,10 @@ public abstract class Order {
         return amount < 0;
     }
 
+    public ItemID getCurrencyItemID() {
+        return currencyItemID;
+    }
+
     public void markAsProcessed() {
         if(!isBot)
             StockMarketMod.LOGGER.info("Order processed: " + toString());
@@ -255,7 +272,7 @@ public abstract class Order {
             StockMarketMod.LOGGER.error("BankUser not found for player " + ServerPlayerList.getPlayerName(playerUUID));
             return;
         }
-        Bank moneyBank = user.getMoneyBank();
+        Bank moneyBank = user.getBank(ServerMarket.getCurrencyItem());
         Bank itemBank = user.getBank(itemID);
         if(moneyBank == null)
         {
@@ -338,6 +355,8 @@ public abstract class Order {
         buf.writeBoolean(isBot);
         if(!isBot)
             buf.writeUUID(playerUUID);
+
+        buf.writeItem(currencyItemID.getStack());
     }
 
 }

@@ -9,6 +9,7 @@ import net.minecraft.server.level.ServerPlayer;
 public class RequestOrderPacket extends NetworkPacket {
 
     private ItemID itemID;
+    private ItemID currencyItemID;
     private int amount;
     private int price;
     public enum OrderType {
@@ -22,16 +23,18 @@ public class RequestOrderPacket extends NetworkPacket {
         itemID = null;
         amount = 0;
     }
-    public RequestOrderPacket(ItemID itemID, int amount) {
+    public RequestOrderPacket(ItemID itemID, ItemID currencyItemID, int amount) {
         super();
         this.itemID = itemID;
+        this.currencyItemID = currencyItemID;
         this.amount = amount;
         this.orderType = OrderType.market;
         this.price = 0;
     }
-    public RequestOrderPacket(ItemID itemID, int amount, OrderType orderType, int price) {
+    public RequestOrderPacket(ItemID itemID, ItemID currencyItemID, int amount, OrderType orderType, int price) {
         super();
         this.itemID = itemID;
+        this.currencyItemID = currencyItemID;
         this.amount = amount;
         this.orderType = orderType;
         this.price = price;
@@ -44,6 +47,10 @@ public class RequestOrderPacket extends NetworkPacket {
     public ItemID getItemID() {
         return itemID;
     }
+
+    public ItemID getCurrencyItemID() {
+        return currencyItemID;
+    }
     public int getAmount() {
         return amount;
     }
@@ -53,20 +60,21 @@ public class RequestOrderPacket extends NetworkPacket {
     public int getPrice() {
         return price;
     }
-    public static void generateRequest(ItemID itemID, int amount, int price) {
+    public static void generateRequest(ItemID itemID, ItemID currencyItemID, int amount, int price) {
 
         //StockMarketMod.LOGGER.info("[CLIENT] Sending RequestOrderPacket for item: "+itemID + " amount: "+amount);
-        StockMarketNetworking.sendToServer(new RequestOrderPacket(itemID, amount, OrderType.limit, price));
+        StockMarketNetworking.sendToServer(new RequestOrderPacket(itemID, currencyItemID, amount, OrderType.limit, price));
     }
-    public static void generateRequest(ItemID itemID, int amount) {
+    public static void generateRequest(ItemID itemID, ItemID currencyItemID, int amount) {
         //StockMarketMod.LOGGER.info("[CLIENT] Sending RequestOrderPacket for item: "+itemID + " amount: "+amount);
-        StockMarketNetworking.sendToServer(new RequestOrderPacket(itemID, amount));
+        StockMarketNetworking.sendToServer(new RequestOrderPacket(itemID, currencyItemID, amount));
     }
 
     @Override
     public void toBytes(FriendlyByteBuf buf)
     {
         buf.writeItem(itemID.getStack());
+        buf.writeItem(currencyItemID.getStack());
         buf.writeInt(amount);
         buf.writeUtf(orderType.name());
         buf.writeInt(price);
@@ -76,6 +84,7 @@ public class RequestOrderPacket extends NetworkPacket {
     public void fromBytes(FriendlyByteBuf buf)
     {
         this.itemID = new ItemID(buf.readItem());
+        this.currencyItemID = new ItemID(buf.readItem());
         this.amount = buf.readInt();
         this.orderType = OrderType.valueOf(buf.readUtf());
         this.price = buf.readInt();

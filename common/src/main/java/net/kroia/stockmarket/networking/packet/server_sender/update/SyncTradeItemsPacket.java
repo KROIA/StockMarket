@@ -2,6 +2,7 @@ package net.kroia.stockmarket.networking.packet.server_sender.update;
 
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.NetworkPacket;
+import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.market.client.ClientMarket;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.market.server.ServerTradeItem;
@@ -22,10 +23,12 @@ public class SyncTradeItemsPacket extends NetworkPacket {
     private SyncPricePacket syncPricePacket;
     private Command command;
     private ArrayList<ItemID> stillAvailableItems;
-    public SyncTradeItemsPacket(ArrayList<ItemID> stillAvailableItems) {
+    private ItemID baseCurrencyItemID;
+    public SyncTradeItemsPacket(ArrayList<ItemID> stillAvailableItems, ItemID baseCurrencyItemID) {
         super();
         this.command = Command.STILL_AVAILABLE;
         this.stillAvailableItems = stillAvailableItems;
+        this.baseCurrencyItemID = baseCurrencyItemID;
 
         //syncPricePackets = new ArrayList<>();
     }
@@ -34,10 +37,11 @@ public class SyncTradeItemsPacket extends NetworkPacket {
         this.syncPricePackets = new ArrayList<>();
         this.syncPricePackets.addAll(syncPricePackets);
     }*/
-    public SyncTradeItemsPacket(SyncPricePacket syncPricePacket) {
+    public SyncTradeItemsPacket(SyncPricePacket syncPricePacket, ItemID baseCurrencyItemID) {
         super();
         this.syncPricePacket = syncPricePacket;
         this.command = Command.ADD;
+        this.baseCurrencyItemID = baseCurrencyItemID;
     }
 
     public SyncTradeItemsPacket(FriendlyByteBuf buf) {
@@ -59,6 +63,7 @@ public class SyncTradeItemsPacket extends NetworkPacket {
                 buf.writeItem(itemID.getStack());
             }
         }
+        buf.writeItem(baseCurrencyItemID.getStack());
        /* buf.writeInt(syncPricePackets.size());
         for (SyncPricePacket syncPricePacket : syncPricePackets) {
              syncPricePacket.toBytes(buf);
@@ -81,6 +86,7 @@ public class SyncTradeItemsPacket extends NetworkPacket {
                 stillAvailableItems.add(new ItemID(buf.readItem()));
             }
         }
+        baseCurrencyItemID = new ItemID(buf.readItem());
 
         /*int size = buf.readInt();
         if(syncPricePackets == null)
@@ -105,6 +111,9 @@ public class SyncTradeItemsPacket extends NetworkPacket {
     public Command getCommand() {
         return command;
     }
+    public ItemID getBaseCurrencyItemID() {
+        return baseCurrencyItemID;
+    }
 
     public static void sendPacket(ServerPlayer player)
     {
@@ -117,13 +126,13 @@ public class SyncTradeItemsPacket extends NetworkPacket {
             stillAvailableItems.add(entry.getKey());
         }
 
-        SyncTradeItemsPacket packet = new SyncTradeItemsPacket(stillAvailableItems);
+        SyncTradeItemsPacket packet = new SyncTradeItemsPacket(stillAvailableItems, ServerMarket.getCurrencyItem());
         packet.command = Command.STILL_AVAILABLE;
         StockMarketNetworking.sendToClient(player, packet);
         for(var entry : serverTradeItemMap.entrySet())
         {
             ServerTradeItem item = entry.getValue();
-            StockMarketNetworking.sendToClient(player, new SyncTradeItemsPacket(new SyncPricePacket(item.getItemID(), player.getUUID())));
+            StockMarketNetworking.sendToClient(player, new SyncTradeItemsPacket(new SyncPricePacket(item.getItemID(), player.getUUID()), ServerMarket.getCurrencyItem()));
         }
     }
 

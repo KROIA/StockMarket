@@ -7,6 +7,7 @@ import net.kroia.modutilities.gui.elements.ItemView;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.TextBox;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
+import net.kroia.stockmarket.market.client.ClientMarket;
 import net.minecraft.world.item.ItemStack;
 
 import static net.kroia.stockmarket.screen.custom.TradeScreen.*;
@@ -64,7 +65,7 @@ public class TradePanel extends GuiElement {
         currentItemView = new ItemView();
         currentItemBalanceLabel = new Label();
         currentItemBalanceLabel.setAlignment(Alignment.LEFT);
-        moneyItemView = new ItemView(new ItemStack(BankSystemItems.MONEY.get()));
+        moneyItemView = new ItemView(ClientMarket.getCurrencyItem().getStack().copy());
         moneyItemView.setShowTooltip(false);
         currentMoneyBalanceLabel = new Label();
         currentMoneyBalanceLabel.setAlignment(Alignment.LEFT);

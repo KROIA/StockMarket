@@ -2,9 +2,11 @@ package net.kroia.stockmarket.market.server;
 
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.ServerSaveable;
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.MarketOrder;
 import net.kroia.stockmarket.market.server.order.Order;
@@ -25,10 +27,12 @@ import java.util.UUID;
     * The MatchingEngine class is responsible for matching buy and sell orders.
  */
 public class MatchingEngine implements ServerSaveable {
+
+
     private int price;
     private int tradeVolume;
 
-    private boolean marketOpen = true;
+    private boolean marketOpen = StockMarketModSettings.Market.MARKET_OPEN_AT_CREATION;
 
     // Create a sorted queue for buy and sell orders, sorted by price.
     private final PriorityQueue<LimitOrder> limitBuyOrders = new PriorityQueue<>((o1, o2) -> Double.compare(o2.getPrice(), o1.getPrice()));
@@ -553,7 +557,7 @@ public class MatchingEngine implements ServerSaveable {
         if(targetOrder.isBuy())
         {
             int toFreeAmount = toFillAmount * targetOrder.getPrice();
-            Bank moneyBank = ServerBankManager.getUser(targetOrder.getPlayerUUID()).getMoneyBank();
+            Bank moneyBank = ServerBankManager.getUser(targetOrder.getPlayerUUID()).getBank(ServerMarket.getCurrencyItem());
             canBeMoved = moneyBank.getTotalBalance()-toFreeAmount >= 0;
         }
         else
@@ -565,13 +569,13 @@ public class MatchingEngine implements ServerSaveable {
         if(canBeMoved && player != null)
         {
             cancelOrder(orderID);
-            LimitOrder newOrder = LimitOrder.create(player, targetOrder.getItemID(), targetOrder.getAmount(), newPrice, targetOrder.getFilledAmount());
+            LimitOrder newOrder = LimitOrder.create(player, targetOrder.getItemID(), targetOrder.getCurrencyItemID(), targetOrder.getAmount(), newPrice, targetOrder.getFilledAmount());
             if(newOrder != null) {
                 addOrder(newOrder);
                 return true;
             }
             else {
-                LimitOrder oldOrder = LimitOrder.create(player, targetOrder.getItemID(), targetOrder.getAmount(), targetOrder.getPrice(), targetOrder.getFilledAmount());
+                LimitOrder oldOrder = LimitOrder.create(player, targetOrder.getItemID(), targetOrder.getCurrencyItemID(), targetOrder.getAmount(), targetOrder.getPrice(), targetOrder.getFilledAmount());
                 if(oldOrder != null)
                     addOrder(oldOrder);
                 return false;

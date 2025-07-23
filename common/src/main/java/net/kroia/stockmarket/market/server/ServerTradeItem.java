@@ -20,6 +20,7 @@ import java.util.UUID;
 
 public class ServerTradeItem implements ServerSaveable {
     private ItemID itemID;
+    private ItemID currencyItemID;
     private final PriceHistory priceHistory;
     private final ArrayList<ServerPlayer> subscribers = new ArrayList<>();
     private final MarketManager marketManager;
@@ -30,10 +31,11 @@ public class ServerTradeItem implements ServerSaveable {
     private boolean enabled = true;
 
 
-    public ServerTradeItem(ItemID itemID, int startPrice)
+    public ServerTradeItem(ItemID itemID, ItemID currencyItemID, int startPrice)
     {
         this.itemID = itemID;
-        this.priceHistory = new PriceHistory(itemID, startPrice);
+        this.currencyItemID = currencyItemID;
+        this.priceHistory = new PriceHistory(itemID, currencyItemID, startPrice);
         this.marketManager = new MarketManager(this, startPrice, priceHistory);
 
         //TickEvent.SERVER_POST.register(this::onServerTick);
@@ -41,7 +43,7 @@ public class ServerTradeItem implements ServerSaveable {
 
     private ServerTradeItem()
     {
-        this.priceHistory = new PriceHistory(null, 0);
+        this.priceHistory = new PriceHistory(null, null,0);
         this.marketManager = new MarketManager(this, 0, priceHistory);
 
 
@@ -220,6 +222,11 @@ public class ServerTradeItem implements ServerSaveable {
         CompoundTag itemTag = new CompoundTag();
         success &= itemID.save(itemTag);
         tag.put("itemID", itemTag);
+
+        CompoundTag currencyItemTag = new CompoundTag();
+        success &= currencyItemID.save(currencyItemTag);
+        tag.put("currencyItemID", currencyItemTag);
+
         CompoundTag matchingEngineTag = new CompoundTag();
         success &= marketManager.save(matchingEngineTag);
         tag.put("matchingEngine", matchingEngineTag);
@@ -238,6 +245,7 @@ public class ServerTradeItem implements ServerSaveable {
         if(tag == null)
             return false;
         if(     !tag.contains("itemID") ||
+                !tag.contains("currencyItemID") ||
                 !tag.contains("matchingEngine") ||
                 !tag.contains("priceHistory"))
             return false;
@@ -256,11 +264,14 @@ public class ServerTradeItem implements ServerSaveable {
         else {
             itemID = new ItemID(oldItemID);
         }
+
+        currencyItemID = new ItemID(tag.getCompound("currencyItemID"));
         marketManager.load(tag.getCompound("matchingEngine"));
 
         priceHistory.load(tag.getCompound("priceHistory"));
         marketManager.setItemID(itemID);
         priceHistory.setItemID(itemID);
+        priceHistory.setCurrencyItemID(currencyItemID);
 
         return success;
     }

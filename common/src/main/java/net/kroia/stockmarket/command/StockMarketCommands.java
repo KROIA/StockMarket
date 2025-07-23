@@ -54,6 +54,8 @@ public class StockMarketCommands {
         // /StockMarket <itemID> currentPrice                                           - Get current price
         // /StockMarket save                                                            - Save market data
         // /StockMarket load                                                            - Load market data
+        // /StockMarket closeAllMarkets                                                 - Closes the market place for trading for all items on the market
+        // /StockMarket openAllMarkets                                                  - Opens the market place for trading for all items on the market
 
         dispatcher.register(
                 Commands.literal("StockMarket")
@@ -168,6 +170,7 @@ public class StockMarketCommands {
                                 .requires(source -> source.hasPermission(2))
                                 .then(Commands.argument("category", StringArgumentType.string()).suggests((context, builder) -> {
                                                     List<String> suggestions = StockMarketDataHandler.getDefaultBotSettingsFileNames();
+                                                    builder.suggest("All");
                                                     for (String suggestion : suggestions) {
                                                         builder.suggest("\"" + suggestion + "\"");
                                                     }
@@ -177,13 +180,17 @@ public class StockMarketCommands {
                                                     CommandSourceStack source = context.getSource();
                                                     ServerPlayer player = source.getPlayerOrException();
                                                     String category = StringArgumentType.getString(context, "category");
-                                                    if(ServerMarket.removeTradingItems(category))
+                                                    if(category.equals("All"))
                                                     {
-                                                        PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getDefaultMarketCategoryRemovedMessage(category));
+                                                        ServerMarket.removeAllTradingItems();
+                                                        PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getAllMarketsRemovedMessage());
                                                     }
-                                                    else
-                                                    {
-                                                        PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getUnknownMarketCategory(category));
+                                                    else {
+                                                        if (ServerMarket.removeTradingItems(category)) {
+                                                            PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getDefaultMarketCategoryRemovedMessage(category));
+                                                        } else {
+                                                            PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getUnknownMarketCategory(category));
+                                                        }
                                                     }
                                                     return Command.SINGLE_SUCCESS;
                                                 })
@@ -518,6 +525,32 @@ public class StockMarketCommands {
                                         PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getStockMarketDataLoadedMessage());
                                     else
                                         PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getStockMarketDataLoadFailedMessage());
+
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                        )
+                        .then(Commands.literal("closeAllMarkets")
+                                .requires(source -> source.hasPermission(2))
+                                .executes(context -> {
+                                    CommandSourceStack source = context.getSource();
+                                    ServerPlayer player = source.getPlayerOrException();
+
+                                    ServerMarket.setAllMarketsOpen(false);
+                                    // Notify all serverPlayers
+                                    PlayerUtilities.printToClientConsole(StockMarketTextMessages.getMarketplaceIsNowClosedAllMessage());
+
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                        )
+                        .then(Commands.literal("openAllMarkets")
+                                .requires(source -> source.hasPermission(2))
+                                .executes(context -> {
+                                    CommandSourceStack source = context.getSource();
+                                    ServerPlayer player = source.getPlayerOrException();
+
+                                    ServerMarket.setAllMarketsOpen(true);
+                                    // Notify all serverPlayers
+                                    PlayerUtilities.printToClientConsole(StockMarketTextMessages.getMarketplaceIsNowOpenAllMessage());
 
                                     return Command.SINGLE_SUCCESS;
                                 })

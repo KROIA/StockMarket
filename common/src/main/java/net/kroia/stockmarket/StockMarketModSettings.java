@@ -1,47 +1,72 @@
 package net.kroia.stockmarket;
 
+import com.google.gson.reflect.TypeToken;
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.stockmarket.market.server.DefaultMarketBotSettings;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBotFactory;
 import net.kroia.stockmarket.util.StockMarketDataHandler;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.tags.ItemTags;
-import net.minecraft.tags.TagKey;
-import net.minecraft.world.effect.MobEffectInstance;
-import net.minecraft.world.food.FoodProperties;
 import net.minecraft.world.item.*;
-import net.minecraft.world.item.alchemy.Potion;
-import net.minecraft.world.item.alchemy.PotionBrewing;
-import net.minecraft.world.item.alchemy.PotionUtils;
-import net.minecraft.world.item.enchantment.Enchantment;
-import net.minecraft.world.item.enchantment.EnchantmentHelper;
 
+import java.lang.reflect.Type;
 import java.util.*;
+
+import static java.lang.Integer.valueOf;
 
 public class StockMarketModSettings {
     public static void init()
     {
         Market.init();
+
+
+    }
+
+    public static void tryLoadFromFile()
+    {
+        if(!loadFromJson())
+        {
+            saveToJson();
+        }
     }
     public static final class UI
     {
-        public static final int PRICE_HISTORY_SIZE = 100;
-        public static final int MAX_ORDERBOOK_TILES = 100;
+        public static int PRICE_HISTORY_SIZE = 100;
+        public static int MAX_ORDERBOOK_TILES = 100;
     }
 
     public static final class Market
     {
-        public static final long SHIFT_PRICE_CANDLE_INTERVAL_MS = 60000;
+        public static long SHIFT_PRICE_CANDLE_INTERVAL_MS = 60000;
         public static HashMap<ItemID, Integer> TRADABLE_ITEMS;
+
+        public static boolean MARKET_OPEN_AT_CREATION = false;
         //public static ArrayList<ItemID> NOT_TRADABLE_ITEMS;
+
+        private static ItemStack CURRENCY_ITEM;
+        public static ItemStack getCurrencyItem()
+        {
+            if(CURRENCY_ITEM == null)
+            {
+                CURRENCY_ITEM = BankSystemItems.MONEY.get().getDefaultInstance();
+            }
+            return CURRENCY_ITEM;
+        }
+        private static void setCurrencyItem(ItemStack item)
+        {
+            if(item != null)
+            {
+                CURRENCY_ITEM = item;
+            }
+        }
 
         public static void init()
         {
             TRADABLE_ITEMS = new HashMap<>();
+            //CURRENCY_ITEM = BankSystemItems.MONEY.get().getDefaultInstance();
+            //CURRENCY_ITEM = ItemUtilities.createItemStackFromId("minecraft:emerald", 1);
             //TRADABLE_ITEMS.put("minecraft:diamond", 160);
             //TRADABLE_ITEMS.put("minecraft:iron_ingot", 15);
             //TRADABLE_ITEMS.put("minecraft:gold_ingot", 40);
@@ -58,20 +83,25 @@ public class StockMarketModSettings {
         {
             ArrayList<ItemID> items = new ArrayList<>();
             items.add(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem.NAME));
+
+            if(getCurrencyItem() != null)
+            {
+                items.add(new ItemID(ItemUtilities.getItemID(getCurrencyItem().getItem())));
+            }
             return items;
         }
     }
 
     public static final class MarketBot
     {
-        public static final boolean ENABLED = true;
+        public static boolean ENABLED = true;
 
-        public static final long UPDATE_TIMER_INTERVAL_MS = 500;
-        public static final float ORDER_BOOK_VOLUME_SCALE = 100f;
-        public static final float NEAR_MARKET_VOLUME_SCALE = 2f;
-        public static final float VOLUME_ACCUMULATION_RATE = 0.01f;
-        public static final float VOLUME_FAST_ACCUMULATION_RATE = 0.5f;
-        public static final float VOLUME_DECUMULATION_RATE = 0.005f;
+        public static long UPDATE_TIMER_INTERVAL_MS = 500;
+        public static float ORDER_BOOK_VOLUME_SCALE = 100f;
+        public static float NEAR_MARKET_VOLUME_SCALE = 2f;
+        public static float VOLUME_ACCUMULATION_RATE = 0.01f;
+        public static float VOLUME_FAST_ACCUMULATION_RATE = 0.5f;
+        public static float VOLUME_DECUMULATION_RATE = 0.005f;
 
 
         //private static HashMap<ItemID, ServerTradingBotFactory.BotBuilderContainer> botBuilder;
@@ -174,4 +204,113 @@ public class StockMarketModSettings {
         }
     }
 
+
+    public static boolean saveToJson()
+    {
+        HashMap<String, Object> settings = new HashMap<>();
+        settings.put("UI_PRICE_HISTORY_SIZE", UI.PRICE_HISTORY_SIZE);
+        settings.put("UI_MAX_ORDERBOOK_TILES", UI.MAX_ORDERBOOK_TILES);
+
+        settings.put("MARKET_SHIFT_PRICE_CANDLE_INTERVAL_MS", Market.SHIFT_PRICE_CANDLE_INTERVAL_MS);
+        settings.put("MARKET_OPEN_AT_CREATION", Market.MARKET_OPEN_AT_CREATION);
+        settings.put("MARKET_CURRENCY_ITEM", ItemUtilities.getItemID(Market.getCurrencyItem().getItem()));
+
+        settings.put("MARKET_BOT_ENABLED", MarketBot.ENABLED);
+        settings.put("MARKET_BOT_UPDATE_TIMER_INTERVAL_MS", MarketBot.UPDATE_TIMER_INTERVAL_MS);
+        settings.put("MARKET_BOT_ORDER_BOOK_VOLUME_SCALE", MarketBot.ORDER_BOOK_VOLUME_SCALE);
+        settings.put("MARKET_BOT_NEAR_MARKET_VOLUME_SCALE", MarketBot.NEAR_MARKET_VOLUME_SCALE);
+        settings.put("MARKET_BOT_VOLUME_ACCUMULATION_RATE", MarketBot.VOLUME_ACCUMULATION_RATE);
+        settings.put("MARKET_BOT_VOLUME_FAST_ACCUMULATION_RATE", MarketBot.VOLUME_FAST_ACCUMULATION_RATE);
+        settings.put("MARKET_BOT_VOLUME_DECUMULATION_RATE", MarketBot.VOLUME_DECUMULATION_RATE);
+
+
+
+        boolean success = StockMarketDataHandler.saveAsJson(settings, "stockmarket_initial_settings.json");
+        if(success)
+        {
+            StockMarketMod.LOGGER.info("StockMarketModSettings saved to JSON file.");
+        }
+        else
+        {
+            StockMarketMod.LOGGER.error("Failed to save StockMarketModSettings to JSON file.");
+        }
+        return success;
+    }
+
+    public static boolean loadFromJson()
+    {
+        Type type = new TypeToken<HashMap<String, Object>>() {}.getType();
+        // Check if file exists
+        if(!StockMarketDataHandler.fileExists("stockmarket_initial_settings.json"))
+        {
+            StockMarketMod.LOGGER.warn("StockMarketModSettings JSON file does not exist.");
+            return false;
+        }
+        HashMap<String, Object> settings = StockMarketDataHandler.loadFromJson("stockmarket_initial_settings.json", type);
+        if(settings == null)
+            return false;
+
+        if(settings.containsKey("UI_PRICE_HISTORY_SIZE"))
+        {
+            UI.PRICE_HISTORY_SIZE = ((Double) settings.get("UI_PRICE_HISTORY_SIZE")).intValue();
+        }
+        if(settings.containsKey("UI_MAX_ORDERBOOK_TILES"))
+        {
+            UI.MAX_ORDERBOOK_TILES = ((Double) settings.get("UI_MAX_ORDERBOOK_TILES")).intValue();
+        }
+
+        if(settings.containsKey("MARKET_SHIFT_PRICE_CANDLE_INTERVAL_MS"))
+        {
+            Market.SHIFT_PRICE_CANDLE_INTERVAL_MS = ((Double) settings.get("MARKET_SHIFT_PRICE_CANDLE_INTERVAL_MS")).longValue();
+        }
+        if(settings.containsKey("MARKET_OPEN_AT_CREATION"))
+        {
+            Market.MARKET_OPEN_AT_CREATION = (boolean) settings.get("MARKET_OPEN_AT_CREATION");
+        }
+        if(settings.containsKey("MARKET_CURRENCY_ITEM"))
+        {
+            String itemID = (String) settings.get("MARKET_CURRENCY_ITEM");
+            ItemStack itemStack = ItemUtilities.createItemStackFromId(itemID, 1);
+            if(itemStack != null && !itemStack.isEmpty())
+            {
+                Market.setCurrencyItem(itemStack);
+            }
+            else
+            {
+                StockMarketMod.LOGGER.error("Failed to load currency item from settings: "+itemID);
+                return false;
+            }
+        }
+
+        if(settings.containsKey("MARKET_BOT_ENABLED"))
+        {
+            MarketBot.ENABLED = (boolean) settings.get("MARKET_BOT_ENABLED");
+        }
+        if(settings.containsKey("MARKET_BOT_UPDATE_TIMER_INTERVAL_MS"))
+        {
+            MarketBot.UPDATE_TIMER_INTERVAL_MS = ((Double) settings.get("MARKET_BOT_UPDATE_TIMER_INTERVAL_MS")).longValue();
+        }
+        if(settings.containsKey("MARKET_BOT_ORDER_BOOK_VOLUME_SCALE"))
+        {
+            MarketBot.ORDER_BOOK_VOLUME_SCALE = ((Double) settings.get("MARKET_BOT_ORDER_BOOK_VOLUME_SCALE")).floatValue();
+        }
+        if(settings.containsKey("MARKET_BOT_NEAR_MARKET_VOLUME_SCALE"))
+        {
+            MarketBot.NEAR_MARKET_VOLUME_SCALE = ((Double) settings.get("MARKET_BOT_NEAR_MARKET_VOLUME_SCALE")).floatValue();
+        }
+        if(settings.containsKey("MARKET_BOT_VOLUME_ACCUMULATION_RATE"))
+        {
+            MarketBot.VOLUME_ACCUMULATION_RATE = ((Double) settings.get("MARKET_BOT_VOLUME_ACCUMULATION_RATE")).floatValue();
+        }
+        if(settings.containsKey("MARKET_BOT_VOLUME_FAST_ACCUMULATION_RATE"))
+        {
+            MarketBot.VOLUME_FAST_ACCUMULATION_RATE = ((Double) settings.get("MARKET_BOT_VOLUME_FAST_ACCUMULATION_RATE")).floatValue();
+        }
+        if(settings.containsKey("MARKET_BOT_VOLUME_DECUMULATION_RATE"))
+        {
+            MarketBot.VOLUME_DECUMULATION_RATE = ((Double) settings.get("MARKET_BOT_VOLUME_DECUMULATION_RATE")).floatValue();
+        }
+        StockMarketMod.LOGGER.info("StockMarketModSettings loaded from JSON file.");
+        return true;
+    }
 }

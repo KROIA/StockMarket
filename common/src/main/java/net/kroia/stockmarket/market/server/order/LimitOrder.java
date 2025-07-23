@@ -16,37 +16,37 @@ import java.util.UUID;
 public class LimitOrder extends Order implements ServerSaveable {
     private int price;
 
-    public static LimitOrder create(ServerPlayer player, ItemID itemID, int amount, int price)
+    public static LimitOrder create(ServerPlayer player, ItemID itemID, ItemID currencyItemID, int amount, int price)
     {
         if(Order.tryReserveBankFund(player, itemID, amount, price))
-            return new LimitOrder(player.getUUID(), itemID, amount, price);
+            return new LimitOrder(player.getUUID(), itemID, currencyItemID, amount, price);
         return null;
     }
-    public static LimitOrder create(ServerPlayer player, ItemID itemID, int amount, int price, int alreadyFilledAmount)
+    public static LimitOrder create(ServerPlayer player, ItemID itemID, ItemID currencyItemID, int amount, int price, int alreadyFilledAmount)
     {
         if(Order.tryReserveBankFund(player, itemID, amount-alreadyFilledAmount, price))
-            return new LimitOrder(player.getUUID(), itemID, amount, price, alreadyFilledAmount);
+            return new LimitOrder(player.getUUID(), itemID, currencyItemID, amount, price, alreadyFilledAmount);
         return null;
     }
-    public static LimitOrder createBotOrder(ItemID itemID, int amount, int price)
+    public static LimitOrder createBotOrder(ItemID itemID, ItemID currencyItemID, int amount, int price)
     {
-        return new LimitOrder(null, itemID, amount, price, true);
+        return new LimitOrder(null, itemID, currencyItemID, amount, price, true);
     }
-    protected LimitOrder(UUID playerUUID, ItemID itemID, int amount, int price) {
-        super(playerUUID, itemID, amount);
+    protected LimitOrder(UUID playerUUID, ItemID itemID, ItemID currencyItemID, int amount, int price) {
+        super(playerUUID, itemID, currencyItemID, amount);
         this.price = price;
         if(amount > 0)
             this.lockedMoney = (long) amount * price;
     }
-    protected LimitOrder(UUID playerUUID, ItemID itemID, int amount, int price, int alreadyFilledAmount) {
-        super(playerUUID, itemID, amount);
+    protected LimitOrder(UUID playerUUID, ItemID itemID, ItemID currencyItemID, int amount, int price, int alreadyFilledAmount) {
+        super(playerUUID, itemID, currencyItemID, amount);
         this.price = price;
         this.filledAmount = alreadyFilledAmount;
         if(amount > 0)
             this.lockedMoney = (long) Math.abs(amount-alreadyFilledAmount) * price;
     }
-    protected LimitOrder(UUID playerUUID, ItemID itemID, int amount, int price, boolean isBot) {
-        super(playerUUID, itemID, amount, isBot);
+    protected LimitOrder(UUID playerUUID, ItemID itemID, ItemID currencyItemID, int amount, int price, boolean isBot) {
+        super(playerUUID, itemID, currencyItemID, amount, isBot);
         this.price = price;
         if(amount > 0)
             this.lockedMoney = (long) amount * price;

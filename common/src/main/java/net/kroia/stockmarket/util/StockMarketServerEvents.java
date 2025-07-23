@@ -16,6 +16,9 @@ public class StockMarketServerEvents {
     private static long lastTimeMS = 0;
 
     public static void onServerStart(MinecraftServer server) {
+
+
+
         BankSystemMod.loadDataFromFiles(server);
         StockMarketMod.loadDataFromFiles(server);
         StockMarketModSettings.MarketBot.getBotBuilder(); // Create the default bot settings files if they don't exist

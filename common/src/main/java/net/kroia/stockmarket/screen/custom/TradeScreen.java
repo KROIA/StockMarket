@@ -387,7 +387,7 @@ public class TradeScreen extends GuiScreen {
         instance.orderbookVolumeChart.setOrderBookVolume(item.getOrderBookVolume());
         instance.tradePanel.setCurrentItemBalance(ClientBankManager.getBalance(instance.itemID));
         instance.tradePanel.setCurrentPrice(item.getPrice());
-        instance.tradePanel.setCurrentMoneyBalance(ClientBankManager.getBalance());
+        instance.tradePanel.setCurrentMoneyBalance(ClientBankManager.getBalance(ClientMarket.getCurrencyItem()));
         instance.activeOrderListView.updateActiveOrders();
         instance.candleStickChart.updateOrderDisplay();
         if(instance.marketWasOpen != item.isMarketOpen())

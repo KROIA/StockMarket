@@ -233,6 +233,11 @@ public class StockMarketDataHandler {
         return saveAsJson(settings, "DefaultBotSettings/"+fileName);
     }
 
+    public static boolean fileExists(String fileName) {
+        File file = new File(getSaveFolder(), fileName);
+        return file.exists();
+    }
+
     public static List<Path> getJsonFiles(Path path) {
         try {
             return Files.list(path) // List files

@@ -167,6 +167,26 @@ public class ServerMarket implements ServerSaveable
         }
         return addTradeItem_internal(itemID, startPrice);
     }
+
+    public static void removeAllTradingItems()
+    {
+        for(ServerTradeItem item : tradeItems.values())
+        {
+            item.cleanup();
+        }
+        tradeItems.clear();
+        tradeItemsChunks.clear();
+        shiftPriceHistoryInterval = StockMarketModSettings.Market.SHIFT_PRICE_CANDLE_INTERVAL_MS;
+        MinecraftServer server = UtilitiesPlatform.getServer();
+        if (server == null) {
+            throw new IllegalStateException("Server instance is null. Are you calling this from the server_sender?");
+        }
+        PlayerList playerList = server.getPlayerList();
+        for(ServerPlayer player : playerList.getPlayers())
+        {
+            SyncTradeItemsPacket.sendPacket(player);
+        }
+    }
     public static void removeTradingItem(ItemID itemID)
     {
         ServerTradeItem item = tradeItems.get(itemID);
@@ -197,7 +217,9 @@ public class ServerMarket implements ServerSaveable
             StockMarketMod.LOGGER.warn("[SERVER] Item "+itemID+" can't be allowed for trading because it is not allowed in the bank system");
             return false;
         }
-        ServerTradeItem tradeItem = new ServerTradeItem(itemID, startPrice);
+        ItemID currencyItemID = getCurrencyItem();
+
+        ServerTradeItem tradeItem = new ServerTradeItem(itemID, currencyItemID, startPrice);
         tradeItems.put(itemID, tradeItem);
         rebuildTradeItemsChunks();
 
@@ -305,6 +327,14 @@ public class ServerMarket implements ServerSaveable
             return;
         }
         item.setMarketOpen(open);
+    }
+
+    public static void setAllMarketsOpen(boolean open)
+    {
+        for(ServerTradeItem item : tradeItems.values())
+        {
+            item.setMarketOpen(open);
+        }
     }
     public static boolean isMarketOpen(ItemID itemID)
     {
@@ -482,6 +512,7 @@ public class ServerMarket implements ServerSaveable
     {
         int amount = packet.getAmount();
         ItemID itemID = packet.getItemID();
+        ItemID currencyItemID = packet.getCurrencyItemID();
         String playerName = player.getName().getString();
         //MoneyBank playerBank = ServerBankManager.getBank(player.getUUID());
         RequestOrderPacket.OrderType orderType = packet.getOrderType();
@@ -502,11 +533,11 @@ public class ServerMarket implements ServerSaveable
         switch(orderType)
         {
             case limit:
-                LimitOrder limitOrder = LimitOrder.create(player, itemID, amount, price);
+                LimitOrder limitOrder = LimitOrder.create(player, itemID, currencyItemID, amount, price);
                 ServerMarket.addOrder(limitOrder);
                 break;
             case market:
-                MarketOrder marketOrder = MarketOrder.create(player, itemID, amount);
+                MarketOrder marketOrder = MarketOrder.create(player, itemID, currencyItemID, amount);
                 ServerMarket.addOrder(marketOrder);
                 break;
         }
@@ -653,6 +684,11 @@ public class ServerMarket implements ServerSaveable
             StockMarketMod.LOGGER.info("Market update time: " + (currentTime2-currentTime)+"ms");
     }
 
+    public static ItemID getCurrencyItem()
+    {
+        return new ItemID(StockMarketModSettings.Market.getCurrencyItem());
+    }
+
     private static void rebuildTradeItemsChunks()
     {
         tradeItemsChunks.clear();
@@ -677,4 +713,6 @@ public class ServerMarket implements ServerSaveable
             tradeItemsChunks.add(chunk);
         }
     }
+
+
 }

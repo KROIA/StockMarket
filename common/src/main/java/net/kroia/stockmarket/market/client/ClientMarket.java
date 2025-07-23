@@ -2,6 +2,7 @@ package net.kroia.stockmarket.market.client;
 
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.networking.packet.client_sender.request.RequestManageTradingItemPacket;
@@ -17,6 +18,7 @@ import java.util.*;
 public class ClientMarket {
 
     private static final Map<ItemID, ClientTradeItem> tradeItems = new HashMap<>();
+    private static ItemID CURRENCY_ITEM = null;
 
     private static SyncBotSettingsPacket syncBotSettingsPacket;
     private static SyncBotTargetPricePacket syncBotTargetPricePacket;
@@ -25,13 +27,6 @@ public class ClientMarket {
 
     private static boolean syncBotSettingsPacketChanged = false;
     private static boolean syncBotTargetPricePacketChanged = false;
-
-
-
-    ClientMarket()
-    {
-
-    }
 
     public static void clear()
     {
@@ -80,6 +75,11 @@ public class ClientMarket {
         return false;
     }
 
+    public static ItemID getCurrencyItem()
+    {
+        return CURRENCY_ITEM;
+    }
+
     public static void handlePacket(SyncPricePacket packet)
     {
         ClientTradeItem tradeItem = tradeItems.get(packet.getPriceHistory().getItemID());
@@ -96,7 +96,7 @@ public class ClientMarket {
     {
         //syncTradeItemsPacket = packet;
         syncTradeItemsChanged = true;
-
+        CURRENCY_ITEM = packet.getBaseCurrencyItemID();
         if(packet.getCommand() == SyncTradeItemsPacket.Command.STILL_AVAILABLE)
         {
             ArrayList<ItemID> stillAvailableItems = packet.getStillAvailableItems();
@@ -131,7 +131,7 @@ public class ClientMarket {
             return;
         }
         else {
-            tradeItem = new ClientTradeItem(syncPricePacket.getPriceHistory().getItemID());
+            tradeItem = new ClientTradeItem(syncPricePacket.getPriceHistory().getItemID(), syncPricePacket.getPriceHistory().getCurrencyItemID());
             tradeItem.handlePacket(syncPricePacket);
             tradeItems.put(tradeItem.getItemID(), tradeItem);
         }

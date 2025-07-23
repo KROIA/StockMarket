@@ -260,12 +260,17 @@ public class ServerTradingBot implements ServerSaveable {
         return matchingEngine.getPrice();
     }
 
+    protected ItemID getCurrencyItemID()
+    {
+        return parent.getPriceHistory().getCurrencyItemID();
+    }
+
     protected boolean buyLimit(int volume, int price)
     {
         if(volume <= 0 || price < 0 || matchingEngine == null)
             return false;
         ItemID itemID = parent.getItemID();
-        LimitOrder buyOrder = LimitOrder.createBotOrder(itemID, volume, price);
+        LimitOrder buyOrder = LimitOrder.createBotOrder(itemID, getCurrencyItemID(), volume, price);
         if(buyOrder != null)
         {
             matchingEngine.addOrder(buyOrder);
@@ -279,7 +284,7 @@ public class ServerTradingBot implements ServerSaveable {
         if(volume <= 0 || price < 0 || matchingEngine == null)
             return false;
         ItemID itemID = parent.getItemID();
-        LimitOrder sellOrder = LimitOrder.createBotOrder(itemID, -volume, price);
+        LimitOrder sellOrder = LimitOrder.createBotOrder(itemID, getCurrencyItemID(), -volume, price);
         matchingEngine.addOrder(sellOrder);
         sellOrders.add(sellOrder);
         return true;
@@ -289,7 +294,7 @@ public class ServerTradingBot implements ServerSaveable {
         if(volume == 0 || price < 0 || matchingEngine == null)
             return false;
         ItemID itemID = parent.getItemID();
-        LimitOrder order = LimitOrder.createBotOrder(itemID, volume, price);
+        LimitOrder order = LimitOrder.createBotOrder(itemID, getCurrencyItemID(), volume, price);
         matchingEngine.addOrder(order);
         if(volume > 0)
             buyOrders.add(order);
@@ -302,7 +307,7 @@ public class ServerTradingBot implements ServerSaveable {
         if(volume <= 0 || matchingEngine == null)
             return false;
         ItemID itemID = parent.getItemID();
-        MarketOrder buyOrder = MarketOrder.createBotOrder(itemID, volume);
+        MarketOrder buyOrder = MarketOrder.createBotOrder(itemID, getCurrencyItemID(), volume);
         matchingEngine.addOrder(buyOrder);
         return true;
     }
@@ -311,7 +316,7 @@ public class ServerTradingBot implements ServerSaveable {
         if(volume == 0 || matchingEngine == null)
             return false;
         ItemID itemID = parent.getItemID();
-        MarketOrder sellOrder = MarketOrder.createBotOrder(itemID, volume);
+        MarketOrder sellOrder = MarketOrder.createBotOrder(itemID, getCurrencyItemID(), volume);
         matchingEngine.addOrder(sellOrder);
         return true;
     }
@@ -320,7 +325,7 @@ public class ServerTradingBot implements ServerSaveable {
         if(volume == 0 || matchingEngine == null)
             return false;
         ItemID itemID = parent.getItemID();
-        MarketOrder order = MarketOrder.createBotOrder(itemID, volume);
+        MarketOrder order = MarketOrder.createBotOrder(itemID, getCurrencyItemID(), volume);
         matchingEngine.addOrder(order);
         return true;
     }

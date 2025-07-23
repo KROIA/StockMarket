@@ -18,17 +18,20 @@ public class PriceHistory implements ServerSaveable {
     private Timestamp[] timeStamps = new Timestamp[maxHistorySize];
 
     private ItemID itemID;
+    private ItemID currencyItemID;
 
-    public PriceHistory(ItemID itemID) {
+    public PriceHistory(ItemID itemID, ItemID currencyItemID) {
         this.itemID = itemID;
+        this.currencyItemID = currencyItemID;
         for(int i = 0; i < maxHistorySize; i++)
         {
             timeStamps[i] = new Timestamp();
         }
         clear();
     }
-    public PriceHistory(ItemID itemID, int initialPrice) {
+    public PriceHistory(ItemID itemID, ItemID currencyItemID, int initialPrice) {
         this.itemID = itemID;
+        this.currencyItemID = currencyItemID;
         oldestClosePrice = initialPrice;
         for (int i = 0; i < maxHistorySize; i++) {
             lowPrice[i] = initialPrice;
@@ -41,6 +44,11 @@ public class PriceHistory implements ServerSaveable {
     public void setItemID(ItemID itemID) {
         this.itemID = itemID;
     }
+
+    public void setCurrencyItemID(ItemID currencyItemID) {
+        this.currencyItemID = currencyItemID;
+    }
+
 
     public void clear()
     {
@@ -65,6 +73,9 @@ public class PriceHistory implements ServerSaveable {
     public ItemID getItemID()
     {
         return itemID;
+    }
+    public ItemID getCurrencyItemID() {
+        return currencyItemID;
     }
     public void addPrice(int low, int high, int close, Timestamp timestamp)
     {
@@ -184,6 +195,7 @@ public class PriceHistory implements ServerSaveable {
     // Interface to send the timestamp over the network
     public PriceHistory(FriendlyByteBuf buf) {
         itemID = new ItemID(buf.readItem());
+        currencyItemID = new ItemID(buf.readItem());
         oldestClosePrice = buf.readInt();
         for (int i = 0; i < maxHistorySize; i++) {
             lowPrice[i] = buf.readInt();
@@ -196,6 +208,7 @@ public class PriceHistory implements ServerSaveable {
 
     public void toBytes(FriendlyByteBuf buf) {
         buf.writeItem(itemID.getStack());
+        buf.writeItem(currencyItemID.getStack());
         buf.writeInt(oldestClosePrice);
         for (int i = 0; i < maxHistorySize; i++) {
             buf.writeInt(lowPrice[i]);
@@ -245,7 +258,7 @@ public class PriceHistory implements ServerSaveable {
         boolean hasVolume = tag.contains("volume");
         long[] tmpVolume = tag.getLongArray("volume");
         oldestClosePrice = tag.getInt("oldestClosePrice");
-        Timestamp[] tmpTimeStamps = new Timestamp[maxHistorySize];
+        Timestamp[] tmpTimeStamps = new Timestamp[tmpLowPrice.length];
         ListTag times = tag.getList("timeStamps", 10);
         for (int i = 0; i < tmpLowPrice.length; i++) {
             CompoundTag timeTag = times.getCompound(i);
@@ -253,6 +266,7 @@ public class PriceHistory implements ServerSaveable {
             if(tmpTimeStamps[i] == null)
                 success = false;
         }
+
 
         if(tmpLowPrice.length != maxHistorySize)
         {
