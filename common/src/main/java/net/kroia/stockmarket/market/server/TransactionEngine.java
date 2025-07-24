@@ -1,6 +1,5 @@
 package net.kroia.stockmarket.market.server;
 
-import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.modutilities.PlayerUtilities;
@@ -35,8 +34,8 @@ public class TransactionEngine {
 
         UUID playerUUID1 = o1.getPlayerUUID();
         UUID playerUUID2 = o2.getPlayerUUID();
-        BankUser user1 = (playerUUID1!=null? BankSystemMod.SERVER_BANK_MANAGER.getUser(playerUUID1):null);
-        BankUser user2 = (playerUUID2!=null?BankSystemMod.SERVER_BANK_MANAGER.getUser(playerUUID2):null);
+        BankUser user1 = (playerUUID1!=null? StockMarketMod.BANK_SYSTEM_API.getServerBankManager().getUser(playerUUID1):null);
+        BankUser user2 = (playerUUID2!=null?StockMarketMod.BANK_SYSTEM_API.getServerBankManager().getUser(playerUUID2):null);
         Bank moneyBank1 = (user1!=null?user1.getBank(o1.getCurrencyItemID()):null);
         Bank moneyBank2 = (user2!=null?user2.getBank(o2.getCurrencyItemID()):null);
         Bank itemBank1 = (user1!=null?user1.getBank(o1.getItemID()):null);
@@ -228,7 +227,7 @@ public class TransactionEngine {
             fillAmount = -fillVolume;
 
         UUID playerUUID1 = o1.getPlayerUUID();
-        BankUser user1 = BankSystemMod.SERVER_BANK_MANAGER.getUser(playerUUID1);
+        BankUser user1 = StockMarketMod.BANK_SYSTEM_API.getServerBankManager().getUser(playerUUID1);
         Bank moneyBank1 = user1.getBank(o1.getCurrencyItemID());
         Bank itemBank1 = user1.getBank(o1.getItemID());
 

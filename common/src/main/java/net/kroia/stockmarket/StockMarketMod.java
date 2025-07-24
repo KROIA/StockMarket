@@ -4,6 +4,7 @@ import com.mojang.logging.LogUtils;
 import dev.architectury.event.events.common.CommandRegistrationEvent;
 import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.api.BankSystemAPI;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.stockmarket.block.StockMarketBlocks;
 import net.kroia.stockmarket.command.StockMarketCommands;
@@ -30,11 +31,13 @@ public final class StockMarketMod {
     private static final Logger LOGGER = LogUtils.getLogger();
 
 
+    public static BankSystemAPI BANK_SYSTEM_API = BankSystemMod.getAPI();
     public static StockMarketModSettings SERVER_SETTINGS;
     public static StockMarketDataHandler SERVER_DATA_HANDLER;
     public static StockMarketEvents SERVER_EVENTS;
 
     private static long lastTimeMS = 0;
+    private static boolean bankSystemModLoaded = false;
 
     public static void init() {
         CommandRegistrationEvent.EVENT.register((dispatcher, registryAccess, environment) -> {
@@ -60,6 +63,9 @@ public final class StockMarketMod {
     public static void onServerSetup()
     {
         SERVER_EVENTS = new StockMarketEvents();
+        //BANK_SYSTEM_API.getEvents().getBankDataLoadedFromFileSignal().addListener(StockMarketMod::onBankSystemLoadedSingleShotEventReceiver, 1);
+        BANK_SYSTEM_API.getEvents().getBankDataLoadedFromFileSignal().addListener(()->{bankSystemModLoaded = true;}, 1);
+
     }
 
     // Called from the server side
@@ -67,8 +73,16 @@ public final class StockMarketMod {
         SERVER_SETTINGS = new StockMarketModSettings();
         SERVER_DATA_HANDLER = new StockMarketDataHandler();
 
-        BankSystemMod.SERVER_EVENTS.BANK_DATA_LOADED_FROM_FILE.addListener(StockMarketMod::onBankSystemLoadedSingleShotEventReceiver, 1);
         TickEvent.SERVER_POST.register(StockMarketMod::onServerTick);
+
+        if(bankSystemModLoaded)
+        {
+            onBankSystemLoadedSingleShotEventReceiver();
+        }
+        else
+        {
+            BANK_SYSTEM_API.getEvents().getBankDataLoadedFromFileSignal().addListener(StockMarketMod::onBankSystemLoadedSingleShotEventReceiver, 1);
+        }
     }
 
     // Called from the server side

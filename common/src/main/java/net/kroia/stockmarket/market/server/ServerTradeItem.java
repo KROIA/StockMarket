@@ -1,9 +1,9 @@
 package net.kroia.stockmarket.market.server;
 
-import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ServerSaveable;
+import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncPricePacket;
@@ -170,7 +170,7 @@ public class ServerTradeItem implements ServerSaveable {
     public void cancelAllOrders(UUID playerUUID)
     {
         marketManager.cancelAllOrders(playerUUID);
-        Bank itemBank = BankSystemMod.SERVER_BANK_MANAGER.getUser(playerUUID).getBank(itemID);
+        Bank itemBank = StockMarketMod.BANK_SYSTEM_API.getServerBankManager().getUser(playerUUID).getBank(itemID);
         if(itemBank != null)
             itemBank.unlockAll();
         notifySubscribers();

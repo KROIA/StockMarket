@@ -125,7 +125,7 @@ public class StockMarketModSettings extends ModSettings {
             {
                 items.add(new ItemID(ItemUtilities.getItemID(getCurrencyItem().getItem())));
             }
-            items.addAll(BankSystemMod.SERVER_BANK_MANAGER.getBlacklistedItemIDs());
+            items.addAll(StockMarketMod.BANK_SYSTEM_API.getServerBankManager().getBlacklistedItemIDs());
             return items;
         }
     }
@@ -262,7 +262,7 @@ public class StockMarketModSettings extends ModSettings {
     public boolean saveSettings() {
         boolean success = super.saveSettings();
         if (success) {
-            StockMarketMod.SERVER_EVENTS.STOCKMARKET_DATA_SAVED_TO_FILE.notify();
+            StockMarketMod.SERVER_EVENTS.STOCKMARKET_DATA_SAVED_TO_FILE.notifyListeners();
         }
         return success;
     }
@@ -271,7 +271,7 @@ public class StockMarketModSettings extends ModSettings {
     public boolean loadSettings() {
         boolean success = super.loadSettings();
         if (success) {
-            StockMarketMod.SERVER_EVENTS.STOCKMARKET_DATA_LOADED_FROM_FILE.notify();
+            StockMarketMod.SERVER_EVENTS.STOCKMARKET_DATA_LOADED_FROM_FILE.notifyListeners();
         }
         return success;
     }

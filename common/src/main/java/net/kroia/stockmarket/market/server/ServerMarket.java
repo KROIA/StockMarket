@@ -1,6 +1,5 @@
 package net.kroia.stockmarket.market.server;
 
-import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.ServerSaveable;
@@ -26,7 +25,10 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.PlayerList;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 
 public class ServerMarket implements ServerSaveable
 {
@@ -48,7 +50,7 @@ public class ServerMarket implements ServerSaveable
     }
     public static void init()
     {
-        //BankSystemMod.SERVER_BANK_MANAGER.addEventListener(ServerMarket::handleBankSystemEvents);
+        //StockMarketMod.BANK_SYSTEM_API.getServerBankManager().addEventListener(ServerMarket::handleBankSystemEvents);
         for(var item : StockMarketMod.SERVER_SETTINGS.MARKET.INITIAL_TRADABLE_ITEMS.get().entrySet())
         {
             addTradeItemIfNotExists(item.getKey(), item.getValue());
@@ -99,9 +101,9 @@ public class ServerMarket implements ServerSaveable
         if(!StockMarketMod.SERVER_SETTINGS.MARKET_BOT.ENABLED.get())
             return false;
         //BankUser botUser = getBotUser();
-        if(!BankSystemMod.SERVER_BANK_MANAGER.isItemIDAllowed(itemID))
+        if(!StockMarketMod.BANK_SYSTEM_API.getServerBankManager().isItemIDAllowed(itemID))
         {
-            BankSystemMod.SERVER_BANK_MANAGER.allowItemID(itemID);
+            StockMarketMod.BANK_SYSTEM_API.getServerBankManager().allowItemID(itemID);
         }
         if(botBuilder == null)
             botBuilder = StockMarketModSettings.MarketBot.getBotBuilder(itemID);
@@ -199,7 +201,7 @@ public class ServerMarket implements ServerSaveable
     }
     private static boolean addTradeItem_internal(ItemID itemID, int startPrice)
     {
-        if(!BankSystemMod.SERVER_BANK_MANAGER.allowItemID(itemID))
+        if(!StockMarketMod.BANK_SYSTEM_API.getServerBankManager().allowItemID(itemID))
         {
             StockMarketMod.logWarning("[SERVER] Item "+itemID+" can't be allowed for trading because it is not allowed in the bank system");
             return false;

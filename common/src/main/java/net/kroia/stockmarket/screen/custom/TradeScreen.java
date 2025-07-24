@@ -2,7 +2,6 @@
 package net.kroia.stockmarket.screen.custom;
 
 import dev.architectury.event.events.common.TickEvent;
-import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.networking.packet.client_sender.request.RequestBankDataPacket;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
@@ -385,9 +384,9 @@ public class TradeScreen extends GuiScreen {
         instance.candleStickChart.setMinMaxPrice(item.getVisualMinPrice(), item.getVisualMaxPrice());
         instance.candleStickChart.setPriceHistory(item.getPriceHistory());
         instance.orderbookVolumeChart.setOrderBookVolume(item.getOrderBookVolume());
-        instance.tradePanel.setCurrentItemBalance(BankSystemMod.CLIENT_BANK_MANAGER.getBalance(instance.itemID));
+        instance.tradePanel.setCurrentItemBalance(StockMarketMod.BANK_SYSTEM_API.getClientBankManager().getBalance(instance.itemID));
         instance.tradePanel.setCurrentPrice(item.getPrice());
-        instance.tradePanel.setCurrentMoneyBalance(BankSystemMod.CLIENT_BANK_MANAGER.getBalance(ClientMarket.getCurrencyItem()));
+        instance.tradePanel.setCurrentMoneyBalance(StockMarketMod.BANK_SYSTEM_API.getClientBankManager().getBalance(ClientMarket.getCurrencyItem()));
         instance.activeOrderListView.updateActiveOrders();
         instance.candleStickChart.updateOrderDisplay();
         if(instance.marketWasOpen != item.isMarketOpen())
