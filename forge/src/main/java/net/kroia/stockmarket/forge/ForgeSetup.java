@@ -12,14 +12,14 @@ public class ForgeSetup {
     // Mod setup for common (server)
     @SubscribeEvent
     public static void commonSetup(FMLCommonSetupEvent event) {
-        StockMarketMod.LOGGER.info("[ForgeSetup] Common setup for server.");
+        StockMarketMod.logInfo("[ForgeSetup] Common setup for server.");
         StockMarketMod.onServerSetup();
     }
 
     // Client setup (for client-side logic)
     @SubscribeEvent
     public static void clientSetup(FMLClientSetupEvent event) {
-        StockMarketMod.LOGGER.info("[ForgeSetup] Client setup.");
+        StockMarketMod.logInfo("[ForgeSetup] Client setup.");
         StockMarketMod.onClientSetup();
     }
 }

@@ -20,7 +20,7 @@ public class StockMarketClientHooks {
         }
         else
         {
-            StockMarketMod.LOGGER.warn("Block entity at position: "+pos+" is not of type StockMarketBlockEntity");
+            StockMarketMod.logWarning("Block entity at position: "+pos+" is not of type StockMarketBlockEntity");
             return InteractionResult.FAIL;
         }
         return InteractionResult.SUCCESS;

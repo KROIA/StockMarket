@@ -1,6 +1,6 @@
 package net.kroia.stockmarket.forge;
 
-import net.kroia.stockmarket.util.StockMarketPlayerEvents;
+import net.kroia.stockmarket.StockMarketMod;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -11,14 +11,14 @@ public class ForgePlayerEvents {
     @SubscribeEvent
     public static void onPlayerJoin(PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
-            StockMarketPlayerEvents.onPlayerJoin(player);
+            StockMarketMod.onPlayerJoin(player);
         }
     }
 
     @SubscribeEvent
     public static void onPlayerLeave(PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
-            StockMarketPlayerEvents.onPlayerLeave(player);
+            StockMarketMod.onPlayerLeave(player);
         }
     }
 }

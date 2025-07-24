@@ -5,7 +5,6 @@ import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.ServerSaveable;
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.MarketOrder;
 import net.kroia.stockmarket.market.server.order.Order;
@@ -31,7 +30,7 @@ public class MatchingEngine implements ServerSaveable {
     private int price;
     private int tradeVolume;
 
-    private boolean marketOpen = StockMarketModSettings.Market.MARKET_OPEN_AT_CREATION;
+    private boolean marketOpen = StockMarketMod.SERVER_SETTINGS.MARKET.MARKET_OPEN_AT_CREATION.get();
 
     // Create a sorted queue for buy and sell orders, sorted by price.
     private final PriorityQueue<LimitOrder> limitBuyOrders = new PriorityQueue<>((o1, o2) -> Double.compare(o2.getPrice(), o1.getPrice()));
@@ -154,7 +153,7 @@ public class MatchingEngine implements ServerSaveable {
                 loopTimeout--;
                 if(loopTimeout<=0)
                 {
-                    StockMarketMod.LOGGER.error("Market order processing loop timeout: "+marketOrder);
+                    StockMarketMod.logError("Market order processing loop timeout: "+marketOrder);
                     marketOrder.markAsInvalid("Market order processing loop timeout");
                     break;
                 }
@@ -218,7 +217,7 @@ public class MatchingEngine implements ServerSaveable {
                 if(fillVolume<0)
                 {
                     limitOrders.removeAll(toRemove);
-                    StockMarketMod.LOGGER.error("Market order overfilled: "+marketOrder);
+                    StockMarketMod.logError("Market order overfilled: "+marketOrder);
                 }
                 break;
             }
@@ -229,7 +228,7 @@ public class MatchingEngine implements ServerSaveable {
             loopTimeout--;
             if(loopTimeout<=0)
             {
-                StockMarketMod.LOGGER.error("Market order processing loop timeout: "+marketOrder);
+                StockMarketMod.logError("Market order processing loop timeout: "+marketOrder);
                 marketOrder.markAsInvalid("Market order processing loop timeout");
                 break;
             }
@@ -304,7 +303,7 @@ public class MatchingEngine implements ServerSaveable {
                 loopTimeout--;
                 if(loopTimeout<=0)
                 {
-                    StockMarketMod.LOGGER.error("Limit order processing loop timeout: "+limitOrder);
+                    StockMarketMod.logError("Limit order processing loop timeout: "+limitOrder);
                     limitOrder.markAsInvalid("Limit order processing loop timeout");
                     break;
                 }
@@ -376,7 +375,7 @@ public class MatchingEngine implements ServerSaveable {
                 if(fillVolume<0)
                 {
                     limitOrders.removeAll(toRemove);
-                    StockMarketMod.LOGGER.error("Limit order overfilled: "+limitOrder);
+                    StockMarketMod.logError("Limit order overfilled: "+limitOrder);
                 }
                 break;
             }
@@ -391,7 +390,7 @@ public class MatchingEngine implements ServerSaveable {
             loopTimeout--;
             if(loopTimeout<=0)
             {
-                StockMarketMod.LOGGER.error("Limit order processing loop timeout: "+limitOrder);
+                StockMarketMod.logError("Limit order processing loop timeout: "+limitOrder);
                 limitOrder.markAsInvalid("Limit order processing loop timeout");
                 break;
             }

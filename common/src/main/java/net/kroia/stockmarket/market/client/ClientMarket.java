@@ -2,18 +2,20 @@ package net.kroia.stockmarket.market.client;
 
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import net.kroia.stockmarket.market.server.order.Order;
-import net.kroia.stockmarket.networking.packet.client_sender.request.RequestManageTradingItemPacket;
 import net.kroia.stockmarket.networking.packet.client_sender.request.RequestBotSettingsPacket;
+import net.kroia.stockmarket.networking.packet.client_sender.request.RequestManageTradingItemPacket;
 import net.kroia.stockmarket.networking.packet.client_sender.request.RequestOrderChangePacket;
 import net.kroia.stockmarket.networking.packet.client_sender.request.RequestTradeItemsPacket;
 import net.kroia.stockmarket.networking.packet.server_sender.update.*;
 import net.kroia.stockmarket.screen.custom.BotSettingsScreen;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
 
 public class ClientMarket {
 
@@ -136,7 +138,7 @@ public class ClientMarket {
             tradeItems.put(tradeItem.getItemID(), tradeItem);
         }
 
-        StockMarketMod.LOGGER.info("Trade item: {}", tradeItem.getItemID());
+        StockMarketMod.logInfo("Trade item: "+ tradeItem.getItemID());
         if(Objects.equals(syncPricePacket.getPriceHistory().getItemID(), TradeScreen.getItemID()))
         {
             TradeScreen.updatePlotsData();
@@ -332,7 +334,7 @@ public class ClientMarket {
     }
 
     private static void msgTradeItemNotFound(ItemID itemID) {
-        StockMarketMod.LOGGER.warn("[CLIENT] Trade item not found: " + itemID);
+        StockMarketMod.logWarning("[CLIENT] Trade item not found: " + itemID);
     }
 
     public static ArrayList<ItemID> getAvailableTradeItemIdList()

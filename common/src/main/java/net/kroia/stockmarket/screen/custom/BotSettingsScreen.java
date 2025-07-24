@@ -1,9 +1,7 @@
 package net.kroia.stockmarket.screen.custom;
 
 import dev.architectury.event.events.common.TickEvent;
-import net.kroia.banksystem.screen.custom.BankAccountManagementScreen;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.GuiScreen;
 import net.kroia.modutilities.gui.elements.Button;
@@ -32,9 +30,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 
-import java.lang.reflect.Array;
 import java.util.ArrayList;
-import java.util.UUID;
 
 public class BotSettingsScreen extends GuiScreen {
     private class BotTargetPriceDisplay extends GuiElement{
@@ -205,7 +201,7 @@ public class BotSettingsScreen extends GuiScreen {
             return;
         ClientTradeItem item = ClientMarket.getTradeItem(instance.itemID);
         if (item == null) {
-            StockMarketMod.LOGGER.warn("Trade item not found: " + instance.itemID);
+            StockMarketMod.logWarning("Trade item not found: " + instance.itemID);
             return;
         }
 

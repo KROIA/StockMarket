@@ -71,11 +71,11 @@ public class UpdateStockMarketBlockEntityPacket extends NetworkPacket {
     @Override
     protected void handleOnServer(ServerPlayer sender)
     {
-        StockMarketMod.LOGGER.info("[SERVER] Received UpdateStockMarketBlockEntityPacket from client");
+        StockMarketMod.logInfo("[SERVER] Received UpdateStockMarketBlockEntityPacket from client");
         StockMarketBlockEntity blockEntity = (StockMarketBlockEntity) sender.level().getBlockEntity(this.pos);
         if(blockEntity == null)
         {
-            StockMarketMod.LOGGER.error("BlockEntity not found at position "+this.pos);
+            StockMarketMod.logError("BlockEntity not found at position "+this.pos);
             return;
         }
         blockEntity.setItemID(this.itemID);

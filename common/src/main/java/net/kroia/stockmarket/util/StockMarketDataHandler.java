@@ -8,7 +8,6 @@ import com.google.gson.reflect.TypeToken;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBotFactory;
 import net.minecraft.nbt.CompoundTag;
@@ -30,23 +29,23 @@ import java.util.stream.Collectors;
 
 public class StockMarketDataHandler {
 
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    private static final String FOLDER_NAME = "Finance/StockMarket";
+    private final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private final String FOLDER_NAME = "Finance/StockMarket";
 
-    private static final String PLAYER_DATA_FILE_NAME = "Player_data.dat";
-    private static final String MARKET_DATA_FILE_NAME = "Market_data.dat";
-    private static final boolean COMPRESSED = false;
-    private static File saveFolder;
+    private final String PLAYER_DATA_FILE_NAME = "Player_data.dat";
+    private final String MARKET_DATA_FILE_NAME = "Market_data.dat";
+    private final boolean COMPRESSED = false;
+    private File saveFolder;
 
-    private static boolean isLoaded = false;
+    private boolean isLoaded = false;
 
-    private static long tickCounter = 0;
-    private static int lastPlayerCount = 0;
+    private long tickCounter = 0;
+    private int lastPlayerCount = 0;
 
-    public static void tickUpdate()
+    public void tickUpdate()
     {
         tickCounter++;
-        if(tickCounter >= StockMarketModSettings.Utilities.SAVE_INTERVAL_MINUTES * 1200) // 1 minute = 1200 ticks
+        if(tickCounter >= StockMarketMod.SERVER_SETTINGS.UTILITIES.SAVE_INTERVAL_MINUTES.get() * 1200) // 1 minute = 1200 ticks
         {
             tickCounter = 0;
             // Check if any player is online
@@ -60,7 +59,7 @@ public class StockMarketDataHandler {
 
 
 
-    public static void setSaveFolder(File folder) {
+    public void setSaveFolder(File folder) {
         File rootFolder = new File(folder, FOLDER_NAME);
         // check if folder exists
         if (!rootFolder.exists()) {
@@ -68,17 +67,17 @@ public class StockMarketDataHandler {
         }
         saveFolder = rootFolder;
     }
-    public static File getSaveFolder() {
+    public File getSaveFolder() {
         return saveFolder;
     }
 
-    public static boolean isLoaded() {
+    public boolean isLoaded() {
         return isLoaded;
     }
 
-    public static boolean saveAll()
+    public boolean saveAll()
     {
-        StockMarketMod.LOGGER.info("Saving StockMarket Mod data...");
+        StockMarketMod.logInfo("Saving StockMarket Mod data...");
         boolean success = true;
         success &= save_globalSettings();
         success &= save_player();
@@ -86,14 +85,14 @@ public class StockMarketDataHandler {
             success &= save_market();
 
         if(success)
-            StockMarketMod.LOGGER.info("StockMarket Mod data saved successfully.");
+            StockMarketMod.logInfo("StockMarket Mod data saved successfully.");
         else
-            StockMarketMod.LOGGER.error("Failed to save StockMarket Mod data.");
+            StockMarketMod.logError("Failed to save StockMarket Mod data.");
         return success;
     }
-    public static CompletableFuture<Boolean> saveAllAsync()
+    public CompletableFuture<Boolean> saveAllAsync()
     {
-        StockMarketMod.LOGGER.info("Saving StockMarket Mod data...");
+        StockMarketMod.logInfo("Saving StockMarket Mod data...");
 
         CompletableFuture<Boolean> fut1 = save_playerAsync();
         CompletableFuture<Boolean> fut2;
@@ -104,38 +103,38 @@ public class StockMarketDataHandler {
             fut2 = CompletableFuture.completedFuture(false);
         return fut1.thenCombine(fut2, (a, b) -> a && b).thenCombine(fut3, (a, b) -> a && b).thenApply(success -> {
             if(success)
-                StockMarketMod.LOGGER.info("StockMarket Mod data saved successfully.");
+                StockMarketMod.logInfo("StockMarket Mod data saved successfully.");
             else
-                StockMarketMod.LOGGER.error("Failed to save StockMarket Mod data.");
+                StockMarketMod.logError("Failed to save StockMarket Mod data.");
             return success;
         });
     }
 
-    public static boolean loadAll()
+    public boolean loadAll()
     {
         isLoaded = false;
-        StockMarketMod.LOGGER.info("Loading StockMarket Mod data...");
+        StockMarketMod.logInfo("Loading StockMarket Mod data...");
         boolean success = true;
         success &= load_globalSettings();
         success &= load_player();
         success &= load_market();
 
         if(success) {
-            StockMarketMod.LOGGER.info("StockMarket Mod data loaded successfully.");
+            StockMarketMod.logInfo("StockMarket Mod data loaded successfully.");
             isLoaded = true;
         }
         else
-            StockMarketMod.LOGGER.error("Failed to load StockMarket Mod data.");
+            StockMarketMod.logError("Failed to load StockMarket Mod data.");
         return success;
     }
 
-    public static boolean save_player()
+    public boolean save_player()
     {
         CompoundTag data = new CompoundTag();
         ServerPlayerList.saveToTag(data);
         return saveDataCompound(PLAYER_DATA_FILE_NAME, data);
     }
-    public static CompletableFuture<Boolean> save_playerAsync()
+    public CompletableFuture<Boolean> save_playerAsync()
     {
         CompoundTag data = new CompoundTag();
         ServerPlayerList.saveToTag(data);
@@ -145,7 +144,7 @@ public class StockMarketDataHandler {
         });
         return future;
     }
-    public static boolean load_player()
+    public boolean load_player()
     {
         CompoundTag data = readDataCompound(PLAYER_DATA_FILE_NAME);
         if(data != null)
@@ -153,7 +152,7 @@ public class StockMarketDataHandler {
         return false;
     }
 
-    public static boolean save_market()
+    public boolean save_market()
     {
         boolean success = true;
         CompoundTag data = new CompoundTag();
@@ -166,7 +165,7 @@ public class StockMarketDataHandler {
             success = saveDataCompound(MARKET_DATA_FILE_NAME, data);
         return success;
     }
-    public static CompletableFuture<Boolean> save_marketAsync()
+    public CompletableFuture<Boolean> save_marketAsync()
     {
         CompoundTag data = new CompoundTag();
         ServerMarket market = new ServerMarket();
@@ -185,7 +184,7 @@ public class StockMarketDataHandler {
             future = CompletableFuture.completedFuture(false);
         return future;
     }
-    public static boolean load_market()
+    public boolean load_market()
     {
         CompoundTag data = readDataCompound(MARKET_DATA_FILE_NAME);
         if(data == null)
@@ -199,22 +198,29 @@ public class StockMarketDataHandler {
     }
 
 
-    public static boolean save_globalSettings()
+    public boolean save_globalSettings()
     {
-        return StockMarketModSettings.saveSettings();
+        return StockMarketMod.SERVER_SETTINGS.saveSettings();
     }
 
-    public static CompletableFuture<Boolean> save_globalSettingsAsync()
+    public CompletableFuture<Boolean> save_globalSettingsAsync()
     {
-        return CompletableFuture.supplyAsync(StockMarketModSettings::saveSettings);
+        return CompletableFuture.supplyAsync(StockMarketDataHandler::save_globalSettingsAsyncStatic);
     }
 
-    public static boolean load_globalSettings()
+    // Helper function to save global settings asynchronously
+    private static boolean save_globalSettingsAsyncStatic()
     {
-        return StockMarketModSettings.loadSettings();
+        return StockMarketMod.SERVER_SETTINGS.saveSettings();
     }
 
-    public static List<String> getDefaultBotSettingsFileNames()
+
+    public boolean load_globalSettings()
+    {
+        return StockMarketMod.SERVER_SETTINGS.loadSettings();
+    }
+
+    public List<String> getDefaultBotSettingsFileNames()
     {
         List<Path> jsonFiles = getJsonFiles(Path.of(getSaveFolder().getPath()+"/DefaultBotSettings"));
         ArrayList<String> fileNames = new ArrayList<>();
@@ -227,7 +233,7 @@ public class StockMarketDataHandler {
         }
         return fileNames;
     }
-    public static HashMap<String, HashMap<ItemID, ServerTradingBotFactory.DefaultBotSettings>> loadDefaultBotSettings()
+    public HashMap<String, HashMap<ItemID, ServerTradingBotFactory.DefaultBotSettings>> loadDefaultBotSettings()
     {
         List<String> jsonFiles = getDefaultBotSettingsFileNames();
         HashMap<String, HashMap<ItemID, ServerTradingBotFactory.DefaultBotSettings>> settings = new HashMap<>();
@@ -238,7 +244,7 @@ public class StockMarketDataHandler {
         }
         return settings;
     }
-    public static HashMap<ItemID, ServerTradingBotFactory.DefaultBotSettings> loadDefaultBotSettings(String fileName)
+    public HashMap<ItemID, ServerTradingBotFactory.DefaultBotSettings> loadDefaultBotSettings(String fileName)
     {
         if(!fileName.contains(".json"))
             fileName += ".json";
@@ -255,21 +261,21 @@ public class StockMarketDataHandler {
         }
         return settings;
     }
-    public static boolean saveDefaultBotSettings(Map<ServerTradingBotFactory.ItemData, ServerTradingBotFactory.DefaultBotSettings> settingsMap, String fileName)
+    public boolean saveDefaultBotSettings(Map<ServerTradingBotFactory.ItemData, ServerTradingBotFactory.DefaultBotSettings> settingsMap, String fileName)
     {
         return saveAsJson(settingsMap, "DefaultBotSettings/"+fileName);
     }
-    public static boolean saveDefaultBotSettings(ArrayList<ServerTradingBotFactory.BotBuilderContainer> settings, String fileName)
+    public boolean saveDefaultBotSettings(ArrayList<ServerTradingBotFactory.BotBuilderContainer> settings, String fileName)
     {
         return saveAsJson(settings, "DefaultBotSettings/"+fileName);
     }
 
-    public static boolean fileExists(String fileName) {
+    public boolean fileExists(String fileName) {
         File file = new File(getSaveFolder(), fileName);
         return file.exists();
     }
 
-    public static List<Path> getJsonFiles(Path path) {
+    public List<Path> getJsonFiles(Path path) {
         try {
             return Files.list(path) // List files
                     .filter(Files::isRegularFile)       // Keep only regular files
@@ -283,7 +289,7 @@ public class StockMarketDataHandler {
 
 
 
-    private static CompoundTag readDataCompound(String fileName)
+    private CompoundTag readDataCompound(String fileName)
     {
         CompoundTag dataOut = new CompoundTag();
         File file = new File(saveFolder, fileName);
@@ -299,17 +305,17 @@ public class StockMarketDataHandler {
                 dataOut = data;
                 return dataOut;
             } catch (IOException e) {
-                StockMarketMod.LOGGER.error("Failed to read data from file: " + fileName);
+                StockMarketMod.logError("Failed to read data from file: " + fileName);
                 e.printStackTrace();
             } catch(Exception e)
             {
-                StockMarketMod.LOGGER.error("Failed to read data from file: " + fileName);
+                StockMarketMod.logError("Failed to read data from file: " + fileName);
                 e.printStackTrace();
             }
         }
         return null;
     }
-    public static boolean saveDataCompound(String fileName, CompoundTag data) {
+    public boolean saveDataCompound(String fileName, CompoundTag data) {
         long startMillis = System.currentTimeMillis();
         boolean success = true;
         File file = new File(saveFolder, fileName);
@@ -319,21 +325,21 @@ public class StockMarketDataHandler {
             else
                 NbtIo.write(data, file);
         } catch (IOException e) {
-            StockMarketMod.LOGGER.error("Failed to save data to file: " + fileName);
+            StockMarketMod.logError("Failed to save data to file: " + fileName);
             e.printStackTrace();
             success = false;
         } catch(Exception e)
         {
-            StockMarketMod.LOGGER.error("Failed to save data to file: " + fileName);
+            StockMarketMod.logError("Failed to save data to file: " + fileName);
             e.printStackTrace();
             success = false;
         }
         long endMillis = System.currentTimeMillis();
-        StockMarketMod.LOGGER.info("Saving data to file: " + fileName + " took " + (endMillis - startMillis) + "ms");
+        StockMarketMod.logInfo("Saving data to file: " + fileName + " took " + (endMillis - startMillis) + "ms");
         return success;
     }
 
-    public static boolean saveAsJson(Object o, String fileName)
+    public boolean saveAsJson(Object o, String fileName)
     {
         String json = GSON.toJson(o);
         try {
@@ -346,7 +352,7 @@ public class StockMarketDataHandler {
         }
         return true;
     }
-    public static <T> T loadFromJson(String fileName, Type typeOfT) throws JsonSyntaxException {
+    public <T> T loadFromJson(String fileName, Type typeOfT) throws JsonSyntaxException {
         try {
             // Read JSON content
             String json = Files.readString(Paths.get(getSaveFolder()+"/"+fileName));

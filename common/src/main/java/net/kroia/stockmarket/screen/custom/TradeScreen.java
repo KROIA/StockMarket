@@ -3,7 +3,6 @@ package net.kroia.stockmarket.screen.custom;
 
 import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.banking.ClientBankManager;
 import net.kroia.banksystem.networking.packet.client_sender.request.RequestBankDataPacket;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
@@ -379,7 +378,7 @@ public class TradeScreen extends GuiScreen {
             return;
         ClientTradeItem item = ClientMarket.getTradeItem(instance.itemID);
         if (item == null) {
-            StockMarketMod.LOGGER.warn("Trade item not found: " + instance.itemID);
+            StockMarketMod.logWarning("Trade item not found: " + instance.itemID);
             return;
         }
 

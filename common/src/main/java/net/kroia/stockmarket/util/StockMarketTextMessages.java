@@ -4,7 +4,6 @@ import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.StockMarketModSettings;
 import net.minecraft.network.chat.Component;
 
 public class StockMarketTextMessages {
@@ -33,7 +32,7 @@ public class StockMarketTextMessages {
 
     private static String getCurrencyName()
     {
-        String currencyItemID = ItemUtilities.getItemID(StockMarketModSettings.Market.getCurrencyItem().getItem());
+        String currencyItemID = ItemUtilities.getItemID(StockMarketMod.SERVER_SETTINGS.MARKET.getCurrencyItem().getItem());
         String moneyCurrencyItemID = ItemUtilities.getItemID(BankSystemItems.MONEY.get());
         if(currencyItemID.equals(moneyCurrencyItemID))
         {
@@ -594,7 +593,7 @@ public class StockMarketTextMessages {
     {
         if(!message.contains(variable))
         {
-            StockMarketMod.LOGGER.error("Message: \""+message+"\" does not contain variable: \""+variable+"\" which should be replaced with: \""+replacement+"\"");
+            StockMarketMod.logError("Message: \""+message+"\" does not contain variable: \""+variable+"\" which should be replaced with: \""+replacement+"\"");
             return message;
             //throw new IllegalArgumentException("Message: \""+message+"\" does not contain variable: \""+variable+"\" which should be replaced with: \""+replacement+"\"");
         }

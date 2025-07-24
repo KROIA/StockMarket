@@ -3,7 +3,6 @@ package net.kroia.stockmarket.market.server;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBotFactory;
-import net.kroia.stockmarket.util.StockMarketDataHandler;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.EnchantedBookItem;
 import net.minecraft.world.item.Item;
@@ -87,7 +86,7 @@ public class DefaultMarketBotSettings {
     public static void createDefaultMarketBotSettings() {
         long updateMS = 500;
 
-        StockMarketMod.LOGGER.error("Generating new default bot settings.");
+        StockMarketMod.logInfo("Generating new default bot settings.");
 
         List<Item> allItems = BuiltInRegistries.ITEM.stream().toList();
 
@@ -288,7 +287,7 @@ public class DefaultMarketBotSettings {
     {
         ArrayList<ServerTradingBotFactory.BotBuilderContainer> container = new ArrayList<>();
         createBotSettings(container, category.items, updateTimerIntervallMS);
-        StockMarketDataHandler.saveDefaultBotSettings(container, category.categoryName+".json");
+        StockMarketMod.SERVER_DATA_HANDLER.saveDefaultBotSettings(container, category.categoryName+".json");
     }
     private static void createBotSettings(ArrayList<ServerTradingBotFactory.BotBuilderContainer> container, ArrayList<MinimalMarketData> category, long updateTimerIntervallMS)
     {

@@ -2,7 +2,7 @@ package net.kroia.stockmarket.market.server.bot;
 
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ServerSaveable;
-import net.kroia.stockmarket.StockMarketModSettings;
+import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.GhostOrderBook;
 import net.kroia.stockmarket.market.server.MarketManager;
 import net.kroia.stockmarket.market.server.MatchingEngine;
@@ -25,13 +25,13 @@ public class ServerTradingBot implements ServerSaveable {
     public static class Settings implements ServerSaveable
     {
         public boolean enabled = true;
-        public long updateTimerIntervallMS = StockMarketModSettings.MarketBot.UPDATE_TIMER_INTERVAL_MS;
+        public long updateTimerIntervallMS = StockMarketMod.SERVER_SETTINGS.MARKET_BOT.UPDATE_TIMER_INTERVAL_MS.get();
         public int defaultPrice;
-        public float orderBookVolumeScale = StockMarketModSettings.MarketBot.ORDER_BOOK_VOLUME_SCALE;
-        public float nearMarketVolumeScale = StockMarketModSettings.MarketBot.NEAR_MARKET_VOLUME_SCALE;
-        public float volumeAccumulationRate = StockMarketModSettings.MarketBot.VOLUME_ACCUMULATION_RATE;
-        public float volumeFastAccumulationRate = StockMarketModSettings.MarketBot.VOLUME_FAST_ACCUMULATION_RATE;
-        public float volumeDecumulationRate = StockMarketModSettings.MarketBot.VOLUME_DECUMULATION_RATE;
+        public float orderBookVolumeScale = StockMarketMod.SERVER_SETTINGS.MARKET_BOT.ORDER_BOOK_VOLUME_SCALE.get();
+        public float nearMarketVolumeScale = StockMarketMod.SERVER_SETTINGS.MARKET_BOT.NEAR_MARKET_VOLUME_SCALE.get();
+        public float volumeAccumulationRate = StockMarketMod.SERVER_SETTINGS.MARKET_BOT.VOLUME_ACCUMULATION_RATE.get();
+        public float volumeFastAccumulationRate = StockMarketMod.SERVER_SETTINGS.MARKET_BOT.VOLUME_FAST_ACCUMULATION_RATE.get();
+        public float volumeDecumulationRate = StockMarketMod.SERVER_SETTINGS.MARKET_BOT.VOLUME_DECUMULATION_RATE.get();
 
         @Override
         public boolean save(CompoundTag tag) {

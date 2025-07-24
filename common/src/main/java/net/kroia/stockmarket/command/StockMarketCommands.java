@@ -2,11 +2,8 @@ package net.kroia.stockmarket.command;
 
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
-import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
-import com.mojang.brigadier.arguments.LongArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
-import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.PlayerUtilities;
@@ -14,13 +11,11 @@ import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
-import net.kroia.stockmarket.market.server.bot.ServerTradingBotFactory;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import net.kroia.stockmarket.networking.packet.server_sender.update.OpenScreenPacket;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncBotSettingsPacket;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncTradeItemsPacket;
 import net.kroia.stockmarket.util.ServerPlayerList;
-import net.kroia.stockmarket.util.StockMarketDataHandler;
 import net.kroia.stockmarket.util.StockMarketTextMessages;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -77,7 +72,7 @@ public class StockMarketCommands {
                                             int seconds = IntegerArgumentType.getInteger(context, "seconds");
                                             if(seconds < 0)
                                                 return Command.SINGLE_SUCCESS; // Do not allow negative values
-                                            StockMarketModSettings.Market.SHIFT_PRICE_CANDLE_INTERVAL_MS = seconds * 1000L;
+                                            StockMarketMod.SERVER_SETTINGS.MARKET.SHIFT_PRICE_CANDLE_INTERVAL_MS.set(seconds * 1000L);
                                             // Execute the command on the server_sender
                                             return Command.SINGLE_SUCCESS;
                                         })
@@ -97,7 +92,7 @@ public class StockMarketCommands {
                         .then(Commands.literal("createDefaultBots")
                                 .requires(source -> source.hasPermission(2))
                                 .then(Commands.argument("category", StringArgumentType.string()).suggests((context, builder) -> {
-                                                    List<String> suggestions = StockMarketDataHandler.getDefaultBotSettingsFileNames();
+                                                    List<String> suggestions = StockMarketMod.SERVER_DATA_HANDLER.getDefaultBotSettingsFileNames();
                                                     for (String suggestion : suggestions) {
                                                         builder.suggest("\"" + suggestion + "\"");
                                                     }
@@ -171,7 +166,7 @@ public class StockMarketCommands {
                         .then(Commands.literal("removeMarkets")
                                 .requires(source -> source.hasPermission(2))
                                 .then(Commands.argument("category", StringArgumentType.string()).suggests((context, builder) -> {
-                                                    List<String> suggestions = StockMarketDataHandler.getDefaultBotSettingsFileNames();
+                                                    List<String> suggestions = StockMarketMod.SERVER_DATA_HANDLER.getDefaultBotSettingsFileNames();
                                                     builder.suggest("All");
                                                     for (String suggestion : suggestions) {
                                                         builder.suggest("\"" + suggestion + "\"");
@@ -506,7 +501,7 @@ public class StockMarketCommands {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
 
-                                    StockMarketDataHandler.saveAllAsync().thenAccept(success -> {
+                                    StockMarketMod.SERVER_DATA_HANDLER.saveAllAsync().thenAccept(success -> {
                                         if(success)
                                             PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getStockMarketDataSavedMessage());
                                         else
@@ -523,7 +518,7 @@ public class StockMarketCommands {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
 
-                                    if(StockMarketDataHandler.loadAll())
+                                    if(StockMarketMod.SERVER_DATA_HANDLER.loadAll())
                                         PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getStockMarketDataLoadedMessage());
                                     else
                                         PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getStockMarketDataLoadFailedMessage());

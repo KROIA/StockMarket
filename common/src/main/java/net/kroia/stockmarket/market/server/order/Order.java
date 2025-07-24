@@ -2,7 +2,6 @@ package net.kroia.stockmarket.market.server.order;
 
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.BankUser;
-import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.BankSystemTextMessages;
@@ -243,14 +242,14 @@ public abstract class Order {
 
     public void markAsProcessed() {
         if(!isBot)
-            StockMarketMod.LOGGER.info("Order processed: " + toString());
+            StockMarketMod.logInfo("Order processed: " + toString());
         unlockLockedMoney();
         setStatus(Status.PROCESSED);
     }
     public void markAsInvalid(String reason) {
         invalidReason = reason;
         if(!isBot) {
-            StockMarketMod.LOGGER.info("Order invalid: " + toString());
+            StockMarketMod.logInfo("Order invalid: " + toString());
 
             PlayerUtilities.printToClientConsole(getPlayerUUID(), StockMarketTextMessages.getOrderInvalidMessage(reason));
         }
@@ -259,7 +258,7 @@ public abstract class Order {
     }
     public void markAsCancelled() {
         if(!isBot)
-            StockMarketMod.LOGGER.info("Order canceled: " + toString());
+            StockMarketMod.logInfo("Order canceled: " + toString());
         unlockLockedMoney();
         setStatus(Status.CANCELLED);
     }
@@ -270,19 +269,19 @@ public abstract class Order {
         BankUser user = BankSystemMod.SERVER_BANK_MANAGER.getUser(playerUUID);
         if(user == null)
         {
-            StockMarketMod.LOGGER.error("BankUser not found for player " + ServerPlayerList.getPlayerName(playerUUID));
+            StockMarketMod.logError("BankUser not found for player " + ServerPlayerList.getPlayerName(playerUUID));
             return;
         }
         Bank moneyBank = user.getBank(ServerMarket.getCurrencyItem());
         Bank itemBank = user.getBank(itemID);
         if(moneyBank == null)
         {
-            StockMarketMod.LOGGER.error("MoneyBank not found for player " + ServerPlayerList.getPlayerName(playerUUID));
+            StockMarketMod.logError("MoneyBank not found for player " + ServerPlayerList.getPlayerName(playerUUID));
             return;
         }
         if(itemBank == null)
         {
-            StockMarketMod.LOGGER.error("ItemBank not found for player " + ServerPlayerList.getPlayerName(playerUUID));
+            StockMarketMod.logError("ItemBank not found for player " + ServerPlayerList.getPlayerName(playerUUID));
             return;
         }
 

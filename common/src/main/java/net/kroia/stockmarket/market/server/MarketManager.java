@@ -1,10 +1,8 @@
 package net.kroia.stockmarket.market.server;
 
-import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ServerSaveable;
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBotFactory;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
@@ -53,9 +51,9 @@ public class MarketManager implements ServerSaveable {
 
     public void setTradingBot(ServerTradingBot bot)
     {
-        if(!StockMarketModSettings.MarketBot.ENABLED)
+        if(!StockMarketMod.SERVER_SETTINGS.MARKET_BOT.ENABLED.get())
         {
-            StockMarketMod.LOGGER.warn("[MarketManager] Trading bots are disabled");
+            StockMarketMod.logWarning("[MarketManager] Trading bots are disabled");
             return;
         }
         if(bot.getParent()!= null)
@@ -109,7 +107,7 @@ public class MarketManager implements ServerSaveable {
 
     public void addOrder(Order order)
     {
-        StockMarketMod.LOGGER.info("Adding order: " + order.toString());
+        StockMarketMod.logInfo("Adding order: " + order.toString());
         matchingEngine.addOrder(order);
     }
     public boolean cancelOrder(long orderID)

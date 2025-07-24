@@ -4,7 +4,6 @@ package net.kroia.stockmarket.networking.packet.server_sender.update;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.NetworkPacket;
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.market.client.ClientMarket;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.market.server.order.Order;
@@ -60,13 +59,13 @@ public class SyncPricePacket extends NetworkPacket {
     {
         if(!ServerMarket.hasItem(itemID))
         {
-            StockMarketMod.LOGGER.warn("Item not found: " + itemID);
+            StockMarketMod.logWarning("Item not found: " + itemID);
             return;
         }
         PriceHistory history = ServerMarket.getPriceHistory(itemID);
         if(history == null)
         {
-            StockMarketMod.LOGGER.warn("Price history not found: " + itemID);
+            StockMarketMod.logWarning("Price history not found: " + itemID);
             return;
         }
         int minPrice = history.getLowestPrice();
@@ -88,7 +87,7 @@ public class SyncPricePacket extends NetworkPacket {
 
         minPrice = Math.max(0, minPrice);
 
-        int tiles = StockMarketModSettings.UI.MAX_ORDERBOOK_TILES;
+        int tiles = StockMarketMod.SERVER_SETTINGS.UI.MAX_ORDERBOOK_TILES.get();
         if(maxPrice-minPrice < tiles)
         {
             tiles = maxPrice-minPrice;
