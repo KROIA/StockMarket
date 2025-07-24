@@ -5,20 +5,13 @@ import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBotFactory;
 import net.kroia.stockmarket.util.StockMarketDataHandler;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.world.effect.MobEffectInstance;
-import net.minecraft.world.food.FoodProperties;
+import net.minecraft.world.item.EnchantedBookItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.item.Rarity;
-import net.minecraft.world.item.alchemy.Potion;
-import net.minecraft.world.item.alchemy.PotionUtils;
-import net.minecraft.world.item.enchantment.Enchantment;
-import net.minecraft.world.item.enchantment.EnchantmentHelper;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 public class DefaultMarketBotSettings {
     public static class MinimalMarketData
@@ -87,6 +80,8 @@ public class DefaultMarketBotSettings {
     private static final int HONEYCOMB_PRICE = 10;
     private static final int DYE_PRICE = 1;
 
+    private static final int ENCHANTMENT_BOOK_PRICE = 200; // Base price for enchanted books
+
 
 
     public static void createDefaultMarketBotSettings() {
@@ -109,6 +104,7 @@ public class DefaultMarketBotSettings {
         createAndSaveSettings(getTrapDoors(), updateMS);
         createAndSaveSettings(getPressurePlates(), updateMS);
         createAndSaveSettings(getSand(), updateMS);
+        createAndSaveSettings(getEnchantmentBooks(), updateMS);
         //createAndSaveSettings("Clay", getClay(), updateMS);
         createAndSaveSettings(getWool(), updateMS);
         createAndSaveSettings(getCarpet(), updateMS);
@@ -824,6 +820,22 @@ public class DefaultMarketBotSettings {
         return sandCategory;
     }
 
+    private static MinimalMarketDataCategory getEnchantmentBooks()
+    {
+        MinimalMarketDataCategory books = new MinimalMarketDataCategory("EnchantmentBook");
+        int bookPrice = ENCHANTMENT_BOOK_PRICE;
+
+        List<ItemStack> bookItems = ItemUtilities.getSearchCreativeItems("enchantment book");
+
+        for (ItemStack book : bookItems)
+        {
+            if (book.getItem() instanceof EnchantedBookItem)
+            {
+                books.items.add(new MinimalMarketData(book.getItem(), bookPrice, 0.2f, 0.1f));
+            }
+        }
+        return books;
+    }
 
 
     // Glass blocks

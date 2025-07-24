@@ -6,12 +6,13 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBotFactory;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtIo;
-import net.minecraft.world.item.ItemStack;
 
 import java.io.File;
 import java.io.IOException;
@@ -40,15 +41,20 @@ public class StockMarketDataHandler {
     private static boolean isLoaded = false;
 
     private static long tickCounter = 0;
-    public static long saveTickInterval = 6000; // 5 minutes
+    private static int lastPlayerCount = 0;
 
     public static void tickUpdate()
     {
         tickCounter++;
-        if(tickCounter >= saveTickInterval)
+        if(tickCounter >= StockMarketModSettings.Utilities.SAVE_INTERVAL_MINUTES * 1200) // 1 minute = 1200 ticks
         {
             tickCounter = 0;
-            saveAllAsync();
+            // Check if any player is online
+            int playerCount = PlayerUtilities.getOnlinePlayers().size();
+            if(playerCount > 0 || lastPlayerCount > 0) {
+                lastPlayerCount = playerCount;
+                saveAllAsync();
+            }
         }
     }
 
@@ -74,6 +80,7 @@ public class StockMarketDataHandler {
     {
         StockMarketMod.LOGGER.info("Saving StockMarket Mod data...");
         boolean success = true;
+        success &= save_globalSettings();
         success &= save_player();
         if(ServerMarket.isInitialized())
             success &= save_market();
@@ -90,11 +97,18 @@ public class StockMarketDataHandler {
 
         CompletableFuture<Boolean> fut1 = save_playerAsync();
         CompletableFuture<Boolean> fut2;
+        CompletableFuture<Boolean> fut3 = save_globalSettingsAsync();
         if(ServerMarket.isInitialized())
             fut2 = save_marketAsync();
         else
             fut2 = CompletableFuture.completedFuture(false);
-        return fut1.thenCombine(fut2, (a, b) -> a && b);
+        return fut1.thenCombine(fut2, (a, b) -> a && b).thenCombine(fut3, (a, b) -> a && b).thenApply(success -> {
+            if(success)
+                StockMarketMod.LOGGER.info("StockMarket Mod data saved successfully.");
+            else
+                StockMarketMod.LOGGER.error("Failed to save StockMarket Mod data.");
+            return success;
+        });
     }
 
     public static boolean loadAll()
@@ -102,6 +116,7 @@ public class StockMarketDataHandler {
         isLoaded = false;
         StockMarketMod.LOGGER.info("Loading StockMarket Mod data...");
         boolean success = true;
+        success &= load_globalSettings();
         success &= load_player();
         success &= load_market();
 
@@ -181,6 +196,22 @@ public class StockMarketDataHandler {
             return false;
         CompoundTag marketData = data.getCompound("market");
         return market.load(marketData);
+    }
+
+
+    public static boolean save_globalSettings()
+    {
+        return StockMarketModSettings.saveSettings();
+    }
+
+    public static CompletableFuture<Boolean> save_globalSettingsAsync()
+    {
+        return CompletableFuture.supplyAsync(StockMarketModSettings::saveSettings);
+    }
+
+    public static boolean load_globalSettings()
+    {
+        return StockMarketModSettings.loadSettings();
     }
 
     public static List<String> getDefaultBotSettingsFileNames()

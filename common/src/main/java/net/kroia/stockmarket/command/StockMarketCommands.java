@@ -75,7 +75,9 @@ public class StockMarketCommands {
                                             CommandSourceStack source = context.getSource();
                                             ServerPlayer player = source.getPlayerOrException();
                                             int seconds = IntegerArgumentType.getInteger(context, "seconds");
-                                            ServerMarket.shiftPriceHistoryInterval = seconds * 1000L;
+                                            if(seconds < 0)
+                                                return Command.SINGLE_SUCCESS; // Do not allow negative values
+                                            StockMarketModSettings.Market.SHIFT_PRICE_CANDLE_INTERVAL_MS = seconds * 1000L;
                                             // Execute the command on the server_sender
                                             return Command.SINGLE_SUCCESS;
                                         })

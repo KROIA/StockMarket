@@ -2,7 +2,6 @@ package net.kroia.stockmarket.market.server;
 
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
-import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.ServerSaveable;
 import net.kroia.stockmarket.StockMarketMod;

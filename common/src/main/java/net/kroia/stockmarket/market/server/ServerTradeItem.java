@@ -1,11 +1,9 @@
 package net.kroia.stockmarket.market.server;
 
-import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ServerSaveable;
-import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncPricePacket;
@@ -37,26 +35,15 @@ public class ServerTradeItem implements ServerSaveable {
         this.currencyItemID = currencyItemID;
         this.priceHistory = new PriceHistory(itemID, currencyItemID, startPrice);
         this.marketManager = new MarketManager(this, startPrice, priceHistory);
-
-        //TickEvent.SERVER_POST.register(this::onServerTick);
     }
 
     private ServerTradeItem()
     {
         this.priceHistory = new PriceHistory(null, null,0);
         this.marketManager = new MarketManager(this, 0, priceHistory);
-
-
-        //TickEvent.SERVER_POST.register(this::onServerTick);
     }
-
-    /*public void update(MinecraftServer server, double deltaT)
-    {
-        this.marketManager.update(deltaT);
-    }*/
     public void cleanup()
     {
-        //TickEvent.SERVER_POST.unregister(this::onServerTick);
         enabled = false;
         removeTradingBot();
         clear();

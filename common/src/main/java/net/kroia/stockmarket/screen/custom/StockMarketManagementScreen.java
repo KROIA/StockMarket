@@ -1,28 +1,21 @@
 package net.kroia.stockmarket.screen.custom;
 
 
-import net.kroia.banksystem.BankSystemModSettings;
-import net.kroia.banksystem.banking.ClientBankManager;
-import net.kroia.banksystem.networking.packet.client_sender.request.RequestPotentialBankItemIDsPacket;
 import net.kroia.banksystem.screen.uiElements.AskPopupScreen;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.GuiScreen;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.ItemSelectionView;
 import net.kroia.modutilities.gui.elements.ItemView;
 import net.kroia.modutilities.gui.screens.CreativeModeItemSelectionScreen;
-import net.kroia.modutilities.gui.screens.ItemSelectionScreen;
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.market.client.ClientMarket;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 
-import java.lang.reflect.Array;
 import java.util.ArrayList;
 
 
@@ -56,7 +49,7 @@ public class StockMarketManagementScreen extends GuiScreen {
     protected StockMarketManagementScreen(Screen parent) {
         super(TITLE);
         this.parentScreen = parent;
-        RequestPotentialBankItemIDsPacket.sendRequest();
+        //RequestPotentialBankItemIDsPacket.sendRequest();
 
         ArrayList<ItemStack> itemStacks = new ArrayList<>();
         for(ItemID itemID : ClientMarket.getAvailableTradeItemIdList())

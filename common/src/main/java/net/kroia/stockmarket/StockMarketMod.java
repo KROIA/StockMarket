@@ -35,10 +35,6 @@ public final class StockMarketMod {
         StockMarketTextMessages.init();
         StockMarketNetworking.setupClientReceiverPackets();
         StockMarketNetworking.setupServerReceiverPackets();
-
-        TickEvent.ServerLevelTick.SERVER_POST.register((serverLevel) -> {
-            StockMarketDataHandler.tickUpdate();
-        });
     }
 
     public static void onClientSetup()
@@ -56,7 +52,7 @@ public final class StockMarketMod {
         File rootSaveFolder = server.getWorldPath(LevelResource.ROOT).toFile();
         // Load data from the root save folder
         StockMarketDataHandler.setSaveFolder(rootSaveFolder);
-        StockMarketModSettings.tryLoadFromFile();
+
         StockMarketDataHandler.loadAll();
     }
     public static void saveDataToFiles(MinecraftServer server)

@@ -41,7 +41,6 @@ public class StockMarketServerEvents {
 
         // Save data to the root save folder
         StockMarketMod.saveDataToFiles(server);
-
         ServerMarket.disableAllTradingBots();
 
         // Cleanup
@@ -57,10 +56,11 @@ public class StockMarketServerEvents {
     {
         long currentTimeMillis = System.currentTimeMillis();
 
-        if(currentTimeMillis - lastTimeMS > ServerMarket.shiftPriceHistoryInterval) {
+        ServerMarket.onServerTick(server);
+        if(currentTimeMillis - lastTimeMS > StockMarketModSettings.Market.SHIFT_PRICE_CANDLE_INTERVAL_MS) {
             lastTimeMS = currentTimeMillis;
-
             ServerMarket.shiftPriceHistory();
         }
+        StockMarketDataHandler.tickUpdate();
     }
 }

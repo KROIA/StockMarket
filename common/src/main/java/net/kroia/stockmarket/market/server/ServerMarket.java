@@ -1,9 +1,6 @@
 package net.kroia.stockmarket.market.server;
 
-import dev.architectury.event.events.common.TickEvent;
-import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.ServerBankManager;
-import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.banking.events.ServerBankCloseItemBankEvent;
 import net.kroia.banksystem.banking.events.ServerBankEvent;
 import net.kroia.banksystem.util.ItemID;
@@ -36,14 +33,10 @@ import java.util.*;
 public class ServerMarket implements ServerSaveable
 {
     private static boolean initialized = false;
-    public static long shiftPriceHistoryInterval = StockMarketModSettings.Market.SHIFT_PRICE_CANDLE_INTERVAL_MS; // in ms
+    //public static long shiftPriceHistoryInterval = StockMarketModSettings.Market.SHIFT_PRICE_CANDLE_INTERVAL_MS; // in ms
 
     private static final Map<ItemID, ServerTradeItem> tradeItems = new HashMap<>();
 
-    // For better performance when there are many trade items
-    // The items are processed in chunks
-    // Downside: The update rate is not every tick but every n't ticks depending on how many chunks there are
-    private static final int tradeItemsChunkSize = 100;
     private static final ArrayList<ArrayList<ServerTradeItem>> tradeItemsChunks = new ArrayList<>(); // For processing trade items in chunks
     private static int tradeItemUpdateCallCounter = 0;
 
@@ -58,17 +51,15 @@ public class ServerMarket implements ServerSaveable
     public static void init()
     {
         ServerBankManager.addEventListener(ServerMarket::handleBankSystemEvents);
-        for(var item : StockMarketModSettings.Market.TRADABLE_ITEMS.entrySet())
+        for(var item : StockMarketModSettings.Market.INITIAL_TRADABLE_ITEMS.entrySet())
         {
             addTradeItemIfNotExists(item.getKey(), item.getValue());
         }
         initialized = true;
-        TickEvent.SERVER_POST.register(ServerMarket::onServerTick);
     }
 
     public static void clear()
     {
-        TickEvent.SERVER_POST.unregister(ServerMarket::onServerTick);
         initialized = false;
         for(ServerTradeItem item : tradeItems.values())
         {
@@ -76,7 +67,6 @@ public class ServerMarket implements ServerSaveable
         }
         tradeItems.clear();
         tradeItemsChunks.clear();
-        shiftPriceHistoryInterval = StockMarketModSettings.Market.SHIFT_PRICE_CANDLE_INTERVAL_MS;
     }
 
     public static void createDefaultBots()
@@ -176,7 +166,6 @@ public class ServerMarket implements ServerSaveable
         }
         tradeItems.clear();
         tradeItemsChunks.clear();
-        shiftPriceHistoryInterval = StockMarketModSettings.Market.SHIFT_PRICE_CANDLE_INTERVAL_MS;
         MinecraftServer server = UtilitiesPlatform.getServer();
         if (server == null) {
             throw new IllegalStateException("Server instance is null. Are you calling this from the server_sender?");
@@ -598,7 +587,6 @@ public class ServerMarket implements ServerSaveable
     public boolean save(CompoundTag tag) {
         boolean success = true;
         long startMillis = System.currentTimeMillis();
-        tag.putLong("shiftPriceHistoryInterval", shiftPriceHistoryInterval);
 
         ListTag tradeItems = new ListTag();
         for(ServerTradeItem tradeItem : ServerMarket.tradeItems.values())
@@ -618,9 +606,8 @@ public class ServerMarket implements ServerSaveable
     public boolean load(CompoundTag tag) {
         boolean loadSuccess = true;
         try {
-            if(!tag.contains("shiftPriceHistoryInterval") || !tag.contains("tradeItems"))
+            if(!tag.contains("tradeItems"))
                 return false;
-            shiftPriceHistoryInterval = tag.getLong("shiftPriceHistoryInterval");
 
             ListTag tradeItems = tag.getList("tradeItems", 10);
             Map<ItemID, ServerTradeItem> tradeItemsMap = new HashMap<>();
@@ -692,6 +679,7 @@ public class ServerMarket implements ServerSaveable
     private static void rebuildTradeItemsChunks()
     {
         tradeItemsChunks.clear();
+        int tradeItemsChunkSize = StockMarketModSettings.Utilities.TRADE_ITEM_CHUNK_SIZE;
 
         int chunks = tradeItems.size() / tradeItemsChunkSize;
         if(tradeItems.size() % tradeItemsChunkSize != 0)
