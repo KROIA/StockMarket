@@ -1,6 +1,6 @@
 package net.kroia.stockmarket.market.server;
 
-import net.kroia.banksystem.banking.ServerBankManager;
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.ServerSaveable;
@@ -556,12 +556,12 @@ public class MatchingEngine implements ServerSaveable {
         if(targetOrder.isBuy())
         {
             int toFreeAmount = toFillAmount * targetOrder.getPrice();
-            Bank moneyBank = ServerBankManager.getUser(targetOrder.getPlayerUUID()).getBank(ServerMarket.getCurrencyItem());
+            Bank moneyBank = BankSystemMod.SERVER_BANK_MANAGER.getUser(targetOrder.getPlayerUUID()).getBank(ServerMarket.getCurrencyItem());
             canBeMoved = moneyBank.getTotalBalance()-toFreeAmount >= 0;
         }
         else
         {
-            Bank itemBank = ServerBankManager.getUser(targetOrder.getPlayerUUID()).getBank(targetOrder.getItemID());
+            Bank itemBank = BankSystemMod.SERVER_BANK_MANAGER.getUser(targetOrder.getPlayerUUID()).getBank(targetOrder.getItemID());
             canBeMoved = itemBank.getTotalBalance()-toFillAmount >= 0;
         }
 

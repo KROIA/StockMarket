@@ -26,11 +26,11 @@ public class StockMarketServerEvents {
 
         // Remove StockMarketBotBank if it exists since it is no longer in use
         UUID botUserUUID = UUID.nameUUIDFromBytes("StockMarketBot".getBytes());
-        BankUser botUser = ServerBankManager.getUser(botUserUUID);
+        BankUser botUser = BankSystemMod.SERVER_BANK_MANAGER.getUser(botUserUUID);
         if(botUser != null)
         {
             ServerMarket.cancelAllOrders(botUserUUID);
-            ServerBankManager.removeUser(botUserUUID);
+            BankSystemMod.SERVER_BANK_MANAGER.removeUser(botUserUUID);
         }
 
         TickEvent.SERVER_POST.register(StockMarketServerEvents::onServerTick);

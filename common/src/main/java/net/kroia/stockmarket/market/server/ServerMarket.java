@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.market.server;
 
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.events.ServerBankCloseItemBankEvent;
 import net.kroia.banksystem.banking.events.ServerBankEvent;
@@ -50,7 +51,7 @@ public class ServerMarket implements ServerSaveable
     }
     public static void init()
     {
-        ServerBankManager.addEventListener(ServerMarket::handleBankSystemEvents);
+        BankSystemMod.SERVER_BANK_MANAGER.addEventListener(ServerMarket::handleBankSystemEvents);
         for(var item : StockMarketModSettings.Market.INITIAL_TRADABLE_ITEMS.entrySet())
         {
             addTradeItemIfNotExists(item.getKey(), item.getValue());
@@ -101,9 +102,9 @@ public class ServerMarket implements ServerSaveable
         if(!StockMarketModSettings.MarketBot.ENABLED)
             return false;
         //BankUser botUser = getBotUser();
-        if(!ServerBankManager.isItemIDAllowed(itemID))
+        if(!BankSystemMod.SERVER_BANK_MANAGER.isItemIDAllowed(itemID))
         {
-            ServerBankManager.allowItemID(itemID);
+            BankSystemMod.SERVER_BANK_MANAGER.allowItemID(itemID);
         }
         if(botBuilder == null)
             botBuilder = StockMarketModSettings.MarketBot.getBotBuilder(itemID);
@@ -201,7 +202,7 @@ public class ServerMarket implements ServerSaveable
     }
     private static boolean addTradeItem_internal(ItemID itemID, int startPrice)
     {
-        if(!ServerBankManager.allowItemID(itemID))
+        if(!BankSystemMod.SERVER_BANK_MANAGER.allowItemID(itemID))
         {
             StockMarketMod.LOGGER.warn("[SERVER] Item "+itemID+" can't be allowed for trading because it is not allowed in the bank system");
             return false;

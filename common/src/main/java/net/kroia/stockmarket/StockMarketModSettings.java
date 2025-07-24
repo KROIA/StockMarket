@@ -291,11 +291,7 @@ public class StockMarketModSettings {
             {
                 items.add(new ItemID(ItemUtilities.getItemID(getCurrencyItem().getItem())));
             }
-            var ids = BankSystemMod.SETTINGS.BANK.BLACKLIST_ITEM_IDS.get();
-            for(String id : ids)
-            {
-                items.add(new ItemID(id));
-            }
+            items.addAll(BankSystemMod.SERVER_BANK_MANAGER.getBlacklistedItemIDs());
             return items;
         }
     }

@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.market.server.order;
 
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
@@ -71,7 +72,7 @@ public abstract class Order {
     }
     protected static boolean tryReserveBankFund(ServerPlayer player, ItemID itemID, int amount, int price)
     {
-        BankUser bankUser = ServerBankManager.getUser(player.getUUID());
+        BankUser bankUser = BankSystemMod.SERVER_BANK_MANAGER.getUser(player.getUUID());
         if(bankUser == null)
         {
             PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankNotFoundMessage(player.getName().getString(),itemID.getName()));
@@ -266,7 +267,7 @@ public abstract class Order {
     {
         if(isBot)
             return;
-        BankUser user = ServerBankManager.getUser(playerUUID);
+        BankUser user = BankSystemMod.SERVER_BANK_MANAGER.getUser(playerUUID);
         if(user == null)
         {
             StockMarketMod.LOGGER.error("BankUser not found for player " + ServerPlayerList.getPlayerName(playerUUID));
