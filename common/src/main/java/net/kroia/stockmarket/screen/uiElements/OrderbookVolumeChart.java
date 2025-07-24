@@ -36,7 +36,7 @@ public class OrderbookVolumeChart extends GuiElement {
             return;
         int x = PADDING/2;
 
-        int chartViewHeight = getHeight() - 2*PADDING;
+        int chartViewHeight = getHeight() - 2*PADDING - getHeight()/10;
         int chartViewWidth = getWidth() - PADDING;
 
         float barHeight = (float)chartViewHeight/ orderBookVolume.getTiles();

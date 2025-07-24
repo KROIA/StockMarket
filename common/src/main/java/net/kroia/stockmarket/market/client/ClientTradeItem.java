@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.market.client;
 
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.Order;
@@ -19,7 +20,9 @@ import java.util.Map;
 public class ClientTradeItem {
 
 
-    private final String itemID;
+    private final ItemID itemID;
+
+    private final ItemID currencyItemID;
     private PriceHistory priceHistory;
     private OrderbookVolume orderBookVolume;
     private int visualMinPrice = 0;
@@ -30,10 +33,11 @@ public class ClientTradeItem {
     private final Map<Long, Order> orders = new HashMap<>();
 
 
-    public ClientTradeItem(String itemID)
+    public ClientTradeItem(ItemID itemID, ItemID currencyItemID)
     {
         this.itemID = itemID;
-        this.priceHistory = new PriceHistory(itemID, 0);
+        this.currencyItemID = currencyItemID;
+        this.priceHistory = new PriceHistory(itemID, currencyItemID, 0);
     }
 
     public void handlePacket(SyncPricePacket packet)
@@ -95,7 +99,7 @@ public class ClientTradeItem {
                 case INVALID:
                     PlayerUtilities.printToClientConsole(StockMarketTextMessages.getOrderHasBeenCancelledMessage(order.isBuy())+
                                     amountMsg +
-                                    "\n  "+StockMarketTextMessages.getOrderFilledAmountMessage(order.getFilledAmount(), order.getItemID()) +
+                                    "\n  "+StockMarketTextMessages.getOrderFilledAmountMessage(order.getFilledAmount(), order.getItemID().getName()) +
                                     limitText +
                                     "\n  "+StockMarketTextMessages.getOrderInvalidReasonMessage(order.getInvalidReason()));
                     removeOrder(order.getOrderID());
@@ -115,7 +119,7 @@ public class ClientTradeItem {
     }
 
 
-    public String getItemID()
+    public ItemID getItemID()
     {
         return itemID;
     }
@@ -145,12 +149,12 @@ public class ClientTradeItem {
 
     public boolean createOrder(int quantity, int price)
     {
-        RequestOrderPacket.generateRequest(itemID, quantity, price);
+        RequestOrderPacket.generateRequest(itemID, currencyItemID, quantity, price);
         return true;
     }
     public boolean createOrder(int quantity)
     {
-        RequestOrderPacket.generateRequest(itemID, quantity);
+        RequestOrderPacket.generateRequest(itemID, currencyItemID, quantity);
         return true;
     }
 

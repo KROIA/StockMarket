@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.networking.packet.client_sender.request;
 
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.NetworkPacket;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
@@ -8,11 +9,11 @@ import net.minecraft.server.level.ServerPlayer;
 
 public class RequestOrderChangePacket extends NetworkPacket {
 
-    String itemID;
+    ItemID itemID;
     long targetOrderID;
     int newPrice;
 
-    public RequestOrderChangePacket(String itemID, long targetOrderID, int newPrice) {
+    public RequestOrderChangePacket(ItemID itemID, long targetOrderID, int newPrice) {
         super();
         this.itemID = itemID;
         this.targetOrderID = targetOrderID;
@@ -23,7 +24,7 @@ public class RequestOrderChangePacket extends NetworkPacket {
         super(buf);
     }
 
-    public static void sendRequest(String itemID, long targetOrderID, int newPrice) {
+    public static void sendRequest(ItemID itemID, long targetOrderID, int newPrice) {
         //StockMarketMod.LOGGER.info("[CLIENT] Sending RequestOrderPacket for item: "+itemID + " amount: "+amount);
         StockMarketNetworking.sendToServer(new RequestOrderChangePacket(itemID, targetOrderID, newPrice));
     }
@@ -34,20 +35,20 @@ public class RequestOrderChangePacket extends NetworkPacket {
     public int getNewPrice() {
         return newPrice;
     }
-    public String getItemID() {
+    public ItemID getItemID() {
         return itemID;
     }
 
     @Override
     public void toBytes(FriendlyByteBuf buf) {
-        buf.writeUtf(itemID);
+        buf.writeItem(itemID.getStack());
         buf.writeLong(targetOrderID);
         buf.writeInt(newPrice);
     }
 
     @Override
     public void fromBytes(FriendlyByteBuf buf) {
-        itemID = buf.readUtf();
+        itemID = new ItemID(buf.readItem());
         targetOrderID = buf.readLong();
         newPrice = buf.readInt();
     }

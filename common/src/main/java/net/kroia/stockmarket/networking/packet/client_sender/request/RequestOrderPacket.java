@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.networking.packet.client_sender.request;
 
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.NetworkPacket;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
@@ -7,7 +8,8 @@ import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 public class RequestOrderPacket extends NetworkPacket {
 
-    private String itemID;
+    private ItemID itemID;
+    private ItemID currencyItemID;
     private int amount;
     private int price;
     public enum OrderType {
@@ -18,19 +20,21 @@ public class RequestOrderPacket extends NetworkPacket {
 
     public RequestOrderPacket() {
         super();
-        itemID = "";
+        itemID = null;
         amount = 0;
     }
-    public RequestOrderPacket(String itemID, int amount) {
+    public RequestOrderPacket(ItemID itemID, ItemID currencyItemID, int amount) {
         super();
         this.itemID = itemID;
+        this.currencyItemID = currencyItemID;
         this.amount = amount;
         this.orderType = OrderType.market;
         this.price = 0;
     }
-    public RequestOrderPacket(String itemID, int amount, OrderType orderType, int price) {
+    public RequestOrderPacket(ItemID itemID, ItemID currencyItemID, int amount, OrderType orderType, int price) {
         super();
         this.itemID = itemID;
+        this.currencyItemID = currencyItemID;
         this.amount = amount;
         this.orderType = orderType;
         this.price = price;
@@ -40,8 +44,12 @@ public class RequestOrderPacket extends NetworkPacket {
         super(buf);
     }
 
-    public String getItemID() {
+    public ItemID getItemID() {
         return itemID;
+    }
+
+    public ItemID getCurrencyItemID() {
+        return currencyItemID;
     }
     public int getAmount() {
         return amount;
@@ -52,20 +60,21 @@ public class RequestOrderPacket extends NetworkPacket {
     public int getPrice() {
         return price;
     }
-    public static void generateRequest(String itemID, int amount, int price) {
+    public static void generateRequest(ItemID itemID, ItemID currencyItemID, int amount, int price) {
 
         //StockMarketMod.LOGGER.info("[CLIENT] Sending RequestOrderPacket for item: "+itemID + " amount: "+amount);
-        StockMarketNetworking.sendToServer(new RequestOrderPacket(itemID, amount, OrderType.limit, price));
+        StockMarketNetworking.sendToServer(new RequestOrderPacket(itemID, currencyItemID, amount, OrderType.limit, price));
     }
-    public static void generateRequest(String itemID, int amount) {
+    public static void generateRequest(ItemID itemID, ItemID currencyItemID, int amount) {
         //StockMarketMod.LOGGER.info("[CLIENT] Sending RequestOrderPacket for item: "+itemID + " amount: "+amount);
-        StockMarketNetworking.sendToServer(new RequestOrderPacket(itemID, amount));
+        StockMarketNetworking.sendToServer(new RequestOrderPacket(itemID, currencyItemID, amount));
     }
 
     @Override
     public void toBytes(FriendlyByteBuf buf)
     {
-        buf.writeUtf(itemID);
+        buf.writeItem(itemID.getStack());
+        buf.writeItem(currencyItemID.getStack());
         buf.writeInt(amount);
         buf.writeUtf(orderType.name());
         buf.writeInt(price);
@@ -74,7 +83,8 @@ public class RequestOrderPacket extends NetworkPacket {
     @Override
     public void fromBytes(FriendlyByteBuf buf)
     {
-        this.itemID = buf.readUtf();
+        this.itemID = new ItemID(buf.readItem());
+        this.currencyItemID = new ItemID(buf.readItem());
         this.amount = buf.readInt();
         this.orderType = OrderType.valueOf(buf.readUtf());
         this.price = buf.readInt();

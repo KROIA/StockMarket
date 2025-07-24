@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.networking.packet.client_sender.request;
 
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.networking.NetworkPacket;
 import net.kroia.stockmarket.market.server.ServerMarket;
@@ -20,10 +21,10 @@ public class RequestManageTradingItemPacket extends NetworkPacket {
     Mode mode;
 
     int startPrice;
-    String itemID;
+    ItemID itemID;
 
 
-    private RequestManageTradingItemPacket(String itemID, int startPrice, Mode mode)
+    private RequestManageTradingItemPacket(ItemID itemID, int startPrice, Mode mode)
     {
         super();
         this.itemID = itemID;
@@ -36,16 +37,16 @@ public class RequestManageTradingItemPacket extends NetworkPacket {
         super(buf);
     }
 
-    public static void sendRequest(String itemID, int startPrice, Mode mode)
+    public static void sendRequest(ItemID itemID, int startPrice, Mode mode)
     {
         RequestManageTradingItemPacket packet = new RequestManageTradingItemPacket(itemID, startPrice, mode);
         StockMarketNetworking.sendToServer(packet);
     }
-    public static void sendRequestAllowNewTradingItem(String itemID, int startPrice)
+    public static void sendRequestAllowNewTradingItem(ItemID itemID, int startPrice)
     {
         sendRequest(itemID, startPrice, Mode.ADD_NEW_ITEM);
     }
-    public static void sendRequestRemoveTradingItem(String itemID)
+    public static void sendRequestRemoveTradingItem(ItemID itemID)
     {
         sendRequest(itemID, 0, Mode.REMOVE_ITEM);
     }
@@ -53,14 +54,14 @@ public class RequestManageTradingItemPacket extends NetworkPacket {
     @Override
     public void toBytes(FriendlyByteBuf buf) {
         buf.writeEnum(mode);
-        buf.writeUtf(itemID);
+        buf.writeItem(itemID.getStack());
         buf.writeInt(startPrice);
     }
 
     @Override
     public void fromBytes(FriendlyByteBuf buf) {
         mode = buf.readEnum(Mode.class);
-        itemID = buf.readUtf();
+        itemID = new ItemID(buf.readItem());
         startPrice = buf.readInt();
     }
 
@@ -70,14 +71,14 @@ public class RequestManageTradingItemPacket extends NetworkPacket {
         {
             case ADD_NEW_ITEM:
                 if (ServerMarket.hasItem(itemID)) {
-                    PlayerUtilities.printToClientConsole(sender, StockMarketTextMessages.getMarketplaceAlreadyExistingMessage(itemID));
+                    PlayerUtilities.printToClientConsole(sender, StockMarketTextMessages.getMarketplaceAlreadyExistingMessage(itemID.getName()));
                 }
                 else {
                     if (ServerMarket.addTradeItemIfNotExists(itemID, startPrice)) {
                         // Notify all serverPlayers
-                        PlayerUtilities.printToClientConsole(StockMarketTextMessages.getMarketplaceCreatedMessage(itemID));
+                        PlayerUtilities.printToClientConsole(StockMarketTextMessages.getMarketplaceCreatedMessage(itemID.getName()));
                     } else {
-                        PlayerUtilities.printToClientConsole(sender, StockMarketTextMessages.getMarketplaceIsNotAllowedMessage(itemID));
+                        PlayerUtilities.printToClientConsole(sender, StockMarketTextMessages.getMarketplaceIsNotAllowedMessage(itemID.getName()));
                     }
                 }
                 break;
@@ -85,9 +86,9 @@ public class RequestManageTradingItemPacket extends NetworkPacket {
                 if (ServerMarket.hasItem(itemID)) {
                     ServerMarket.removeTradingItem(itemID);
                     // Notify all serverPlayers
-                    PlayerUtilities.printToClientConsole(StockMarketTextMessages.getMarketplaceDeletedMessage(itemID));
+                    PlayerUtilities.printToClientConsole(StockMarketTextMessages.getMarketplaceDeletedMessage(itemID.getName()));
                 } else {
-                    PlayerUtilities.printToClientConsole(sender, StockMarketTextMessages.getMarketplaceNotExistingMessage(itemID));
+                    PlayerUtilities.printToClientConsole(sender, StockMarketTextMessages.getMarketplaceNotExistingMessage(itemID.getName()));
                 }
                 break;
         }

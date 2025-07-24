@@ -1,23 +1,20 @@
 package net.kroia.stockmarket.screen.custom;
 
 
-import net.kroia.banksystem.BankSystemModSettings;
-import net.kroia.banksystem.banking.ClientBankManager;
-import net.kroia.banksystem.networking.packet.client_sender.request.RequestPotentialBankItemIDsPacket;
 import net.kroia.banksystem.screen.uiElements.AskPopupScreen;
-import net.kroia.modutilities.ItemUtilities;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.GuiScreen;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.ItemSelectionView;
 import net.kroia.modutilities.gui.elements.ItemView;
-import net.kroia.modutilities.gui.screens.ItemSelectionScreen;
+import net.kroia.modutilities.gui.screens.CreativeModeItemSelectionScreen;
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.market.client.ClientMarket;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 
@@ -39,7 +36,7 @@ public class StockMarketManagementScreen extends GuiScreen {
 
 
 
-    private String currentTradingItemID;
+    private ItemID currentTradingItemID;
 
     private final Button newTradingItemButton;
     private final Button removeTradingItemButton;
@@ -52,20 +49,24 @@ public class StockMarketManagementScreen extends GuiScreen {
     protected StockMarketManagementScreen(Screen parent) {
         super(TITLE);
         this.parentScreen = parent;
-        RequestPotentialBankItemIDsPacket.sendRequest();
+        //RequestPotentialBankItemIDsPacket.sendRequest();
 
-        tradableItemsView = new ItemSelectionView(ClientMarket.getAvailableTradeItemIdList(), this::setCurrentTradingItemID);
+        ArrayList<ItemStack> itemStacks = new ArrayList<>();
+        for(ItemID itemID : ClientMarket.getAvailableTradeItemIdList())
+        {
+            itemStacks.add(itemID.getStack());
+        }
+        tradableItemsView = new ItemSelectionView(itemStacks, this::setCurrentTradingItemID);
         tradableItemsView.setItemLabelText(TRADING_ITEMS.getString());
         tradableItemsView.sortItems();
 
         newTradingItemButton = new Button(NEW_TRADING_ITEM_BUTTON.getString());
         newTradingItemButton.setOnFallingEdge(() -> {
-            ArrayList<String> items = ClientBankManager.getPotentialBankItemIDs();
-            items.removeAll(BankSystemModSettings.Bank.POTENTIAL_ITEM_BLACKLIST);
-            items.removeAll(StockMarketModSettings.Market.NOT_TRADABLE_ITEMS);
-            ItemSelectionScreen itemSelectionScreen = new ItemSelectionScreen(this, items, this::onNewTradingItemSelected);
-            itemSelectionScreen.sortItems();
-            this.minecraft.setScreen(itemSelectionScreen);
+
+            Minecraft.getInstance().setScreen(new CreativeModeItemSelectionScreen(this::onNewTradingItemSelected,()->
+            {
+                minecraft.setScreen(this);
+            }));
         });
         removeTradingItemButton = new Button(REMOVE_TRADING_ITEM_BUTTON.getString(), () -> {
             if(currentTradingItemID != null) {
@@ -137,30 +138,38 @@ public class StockMarketManagementScreen extends GuiScreen {
 
     public void updateTradingItems()
     {
-        tradableItemsView.setAllowedItems(ClientMarket.getAvailableTradeItemIdList());
-        tradableItemsView.sortItems();
+        ArrayList<ItemID> items = ClientMarket.getAvailableTradeItemIdList();
+        ArrayList<ItemStack> itemStacks = new ArrayList<>();
+        for(ItemID itemID : items)
+        {
+            //if(itemID.equals(currentTradingItemID))
+            {
+                itemStacks.add(itemID.getStack());
+            }
+        }
+        tradableItemsView.setItems(itemStacks);
     }
 
 
-    private void setCurrentTradingItemID(String newItemID) {
-        currentTradingItemID = newItemID;
-
-        if(currentTradingItemID == null) {
+    private void setCurrentTradingItemID(ItemStack itemStack) {
+        if(itemStack == null) {
+            currentTradingItemID = null;
             currentTradingItemView.setItemStack(null);
             botSettingsButton.setEnabled(false);
         }
         else
         {
-            currentTradingItemView.setItemStack(ItemUtilities.createItemStackFromId(currentTradingItemID));
+            currentTradingItemID = new ItemID(itemStack);
+            currentTradingItemView.setItemStack(itemStack);
             ClientMarket.requestBotSettings(currentTradingItemID);
             botSettingsButton.setEnabled(true);
         }
-
     }
 
-    private void onNewTradingItemSelected(String itemID) {
+    private void onNewTradingItemSelected(ItemStack itemStack) {
+        ItemID itemID = new ItemID(itemStack);
         ClientMarket.requestAllowNewTradingItem(itemID,0);
-        setCurrentTradingItemID(itemID);
+        setCurrentTradingItemID(itemStack);
     }
 
     @Override

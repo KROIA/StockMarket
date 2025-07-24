@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.util;
 
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ServerSaveable;
 import net.kroia.stockmarket.StockMarketModSettings;
 import net.minecraft.nbt.CompoundTag;
@@ -12,40 +13,55 @@ public class PriceHistory implements ServerSaveable {
     private int[] lowPrice = new int[maxHistorySize];
     private int[] highPrice = new int[maxHistorySize];
     private int[] closePrice = new int[maxHistorySize];
+    private long[] volume = new long[maxHistorySize];
     private int oldestClosePrice = 0;
     private Timestamp[] timeStamps = new Timestamp[maxHistorySize];
 
-    private String itemID;
+    private ItemID itemID;
+    private ItemID currencyItemID;
 
-    public PriceHistory(String itemID) {
+    public PriceHistory(ItemID itemID, ItemID currencyItemID) {
         this.itemID = itemID;
+        this.currencyItemID = currencyItemID;
         for(int i = 0; i < maxHistorySize; i++)
         {
             timeStamps[i] = new Timestamp();
         }
         clear();
     }
-    public PriceHistory(String itemID, int initialPrice) {
+    public PriceHistory(ItemID itemID, ItemID currencyItemID, int initialPrice) {
         this.itemID = itemID;
+        this.currencyItemID = currencyItemID;
         oldestClosePrice = initialPrice;
         for (int i = 0; i < maxHistorySize; i++) {
             lowPrice[i] = initialPrice;
             highPrice[i] = initialPrice;
             closePrice[i] = initialPrice;
+            volume[i] = 0;
             timeStamps[i] = new Timestamp();
         }
     }
-    public void setItemID(String itemID) {
+    public void setItemID(ItemID itemID) {
         this.itemID = itemID;
     }
 
+    public void setCurrencyItemID(ItemID currencyItemID) {
+        this.currencyItemID = currencyItemID;
+    }
+
+
     public void clear()
     {
-        oldestClosePrice = 0;
+        clear(0);
+    }
+    public void clear(int defaultValue)
+    {
+        oldestClosePrice = defaultValue;
         for (int i = 0; i < maxHistorySize; i++) {
-            lowPrice[i] = 0;
-            highPrice[i] = 0;
-            closePrice[i] = 0;
+            lowPrice[i] = defaultValue;
+            highPrice[i] = defaultValue;
+            closePrice[i] = defaultValue;
+            volume[i] = 0;
         }
     }
 
@@ -54,9 +70,12 @@ public class PriceHistory implements ServerSaveable {
         return lowPrice.length;
     }
 
-    public String getItemID()
+    public ItemID getItemID()
     {
         return itemID;
+    }
+    public ItemID getCurrencyItemID() {
+        return currencyItemID;
     }
     public void addPrice(int low, int high, int close, Timestamp timestamp)
     {
@@ -66,11 +85,13 @@ public class PriceHistory implements ServerSaveable {
             lowPrice[i] = lowPrice[i+1];
             highPrice[i] = highPrice[i+1];
             closePrice[i] = closePrice[i+1];
+            volume[i] = volume[i+1];
             timeStamps[i] = timeStamps[i+1];
         }
         lowPrice[maxHistorySize-1] = low;
         highPrice[maxHistorySize-1] = high;
         closePrice[maxHistorySize-1] = close;
+        volume[maxHistorySize-1] = 0;
         timeStamps[maxHistorySize-1] = timestamp;
     }
 
@@ -82,9 +103,21 @@ public class PriceHistory implements ServerSaveable {
         lowPrice[maxHistorySize-1] = Math.min(lowPrice[maxHistorySize-1], close);
         highPrice[maxHistorySize-1] = Math.max(highPrice[maxHistorySize-1], close);
     }
+    public void setCurrentVolume(int volume)
+    {
+        this.volume[maxHistorySize-1] = volume;
+    }
+    public void addVolume(int volume)
+    {
+        this.volume[maxHistorySize-1] += volume;
+    }
     public int getCurrentPrice()
     {
         return closePrice[maxHistorySize-1];
+    }
+    public long getCurrentVolume()
+    {
+        return volume[maxHistorySize-1];
     }
 
     public int getLowPrice(int index)
@@ -112,6 +145,19 @@ public class PriceHistory implements ServerSaveable {
     public int getClosePrice()
     {
         return closePrice[maxHistorySize-1];
+    }
+
+    public long getVolume(int index)
+    {
+        return volume[index];
+    }
+    public long getMaxVolume()
+    {
+        long max = Long.MIN_VALUE;
+        for (int i = 0; i < maxHistorySize; i++) {
+            max = Math.max(max, volume[i]);
+        }
+        return max;
     }
 
     public int getOpenPrice(int index)
@@ -148,23 +194,27 @@ public class PriceHistory implements ServerSaveable {
 
     // Interface to send the timestamp over the network
     public PriceHistory(FriendlyByteBuf buf) {
-        itemID = buf.readUtf();
+        itemID = new ItemID(buf.readItem());
+        currencyItemID = new ItemID(buf.readItem());
         oldestClosePrice = buf.readInt();
         for (int i = 0; i < maxHistorySize; i++) {
             lowPrice[i] = buf.readInt();
             highPrice[i] = buf.readInt();
             closePrice[i] = buf.readInt();
+            volume[i] = buf.readLong();
             timeStamps[i] = new Timestamp(buf);
         }
     }
 
     public void toBytes(FriendlyByteBuf buf) {
-        buf.writeUtf(itemID);
+        buf.writeItem(itemID.getStack());
+        buf.writeItem(currencyItemID.getStack());
         buf.writeInt(oldestClosePrice);
         for (int i = 0; i < maxHistorySize; i++) {
             buf.writeInt(lowPrice[i]);
             buf.writeInt(highPrice[i]);
             buf.writeInt(closePrice[i]);
+            buf.writeLong(volume[i]);
             timeStamps[i].toBytes(buf);
         }
     }
@@ -176,6 +226,7 @@ public class PriceHistory implements ServerSaveable {
         tag.putIntArray("lowPrice", lowPrice);
         tag.putIntArray("highPrice", highPrice);
         tag.putIntArray("closePrice", closePrice);
+        tag.putLongArray("volume", volume);
         tag.putInt("oldestClosePrice", oldestClosePrice);
 
         ListTag times = new ListTag();
@@ -204,8 +255,10 @@ public class PriceHistory implements ServerSaveable {
         int[] tmpLowPrice = tag.getIntArray("lowPrice");
         int[] tmpHighPrice = tag.getIntArray("highPrice");
         int[] tmpClosePrice = tag.getIntArray("closePrice");
+        boolean hasVolume = tag.contains("volume");
+        long[] tmpVolume = tag.getLongArray("volume");
         oldestClosePrice = tag.getInt("oldestClosePrice");
-        Timestamp[] tmpTimeStamps = new Timestamp[maxHistorySize];
+        Timestamp[] tmpTimeStamps = new Timestamp[tmpLowPrice.length];
         ListTag times = tag.getList("timeStamps", 10);
         for (int i = 0; i < tmpLowPrice.length; i++) {
             CompoundTag timeTag = times.getCompound(i);
@@ -213,6 +266,7 @@ public class PriceHistory implements ServerSaveable {
             if(tmpTimeStamps[i] == null)
                 success = false;
         }
+
 
         if(tmpLowPrice.length != maxHistorySize)
         {
@@ -223,13 +277,18 @@ public class PriceHistory implements ServerSaveable {
                     lowPrice[i] = tmpLowPrice[0];
                     highPrice[i] = tmpHighPrice[0];
                     closePrice[i] = tmpClosePrice[0];
+                    if(hasVolume)
+                        volume[i] = tmpVolume[0];
                     timeStamps[i] = tmpTimeStamps[0];
+
                 }
                 for(int i=maxHistorySize-tmpLowPrice.length; i<maxHistorySize; i++)
                 {
                     lowPrice[i] = tmpLowPrice[i-maxHistorySize+tmpLowPrice.length];
                     highPrice[i] = tmpHighPrice[i-maxHistorySize+tmpLowPrice.length];
                     closePrice[i] = tmpClosePrice[i-maxHistorySize+tmpLowPrice.length];
+                    if(hasVolume)
+                        volume[i] = tmpVolume[i-maxHistorySize+tmpLowPrice.length];
                     timeStamps[i] = tmpTimeStamps[i-maxHistorySize+tmpLowPrice.length];
                 }
             }
@@ -239,6 +298,8 @@ public class PriceHistory implements ServerSaveable {
                     lowPrice[i] = tmpLowPrice[tmpLowPrice.length-maxHistorySize+i];
                     highPrice[i] = tmpHighPrice[tmpLowPrice.length-maxHistorySize+i];
                     closePrice[i] = tmpClosePrice[tmpLowPrice.length-maxHistorySize+i];
+                    if(hasVolume)
+                        volume[i] = tmpVolume[tmpLowPrice.length-maxHistorySize+i];
                     timeStamps[i] = tmpTimeStamps[tmpLowPrice.length-maxHistorySize+i];
                 }
             }
@@ -247,6 +308,8 @@ public class PriceHistory implements ServerSaveable {
             lowPrice = tmpLowPrice;
             highPrice = tmpHighPrice;
             closePrice = tmpClosePrice;
+            if(hasVolume)
+                volume = tmpVolume;
         }
         return success;
     }

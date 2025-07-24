@@ -1,10 +1,10 @@
 package net.kroia.stockmarket.market.server;
 
-import net.kroia.banksystem.banking.BankUser;
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.ServerBankManager;
-import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.banking.events.ServerBankCloseItemBankEvent;
 import net.kroia.banksystem.banking.events.ServerBankEvent;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.ServerSaveable;
 import net.kroia.modutilities.UtilitiesPlatform;
@@ -34,11 +34,16 @@ import java.util.*;
 public class ServerMarket implements ServerSaveable
 {
     private static boolean initialized = false;
-    public static long shiftPriceHistoryInterval = StockMarketModSettings.Market.SHIFT_PRICE_CANDLE_INTERVAL_MS; // in ms
+    //public static long shiftPriceHistoryInterval = StockMarketModSettings.Market.SHIFT_PRICE_CANDLE_INTERVAL_MS; // in ms
 
-    private static final Map<String, ServerTradeItem> tradeItems = new HashMap<>();
+    private static final Map<ItemID, ServerTradeItem> tradeItems = new HashMap<>();
 
-    private static UUID botUserUUID = UUID.nameUUIDFromBytes(StockMarketModSettings.MarketBot.USER_NAME.getBytes());
+    private static final ArrayList<ArrayList<ServerTradeItem>> tradeItemsChunks = new ArrayList<>(); // For processing trade items in chunks
+    private static int tradeItemUpdateCallCounter = 0;
+
+
+
+    //private static UUID botUserUUID = UUID.nameUUIDFromBytes(StockMarketModSettings.MarketBot.USER_NAME.getBytes());
 
     public static boolean isInitialized()
     {
@@ -46,8 +51,8 @@ public class ServerMarket implements ServerSaveable
     }
     public static void init()
     {
-        ServerBankManager.addEventListener(ServerMarket::handleBankSystemEvents);
-        for(var item : StockMarketModSettings.Market.TRADABLE_ITEMS.entrySet())
+        BankSystemMod.SERVER_BANK_MANAGER.addEventListener(ServerMarket::handleBankSystemEvents);
+        for(var item : StockMarketModSettings.Market.INITIAL_TRADABLE_ITEMS.entrySet())
         {
             addTradeItemIfNotExists(item.getKey(), item.getValue());
         }
@@ -62,7 +67,7 @@ public class ServerMarket implements ServerSaveable
             item.clear();
         }
         tradeItems.clear();
-        shiftPriceHistoryInterval = StockMarketModSettings.Market.SHIFT_PRICE_CANDLE_INTERVAL_MS;
+        tradeItemsChunks.clear();
     }
 
     public static void createDefaultBots()
@@ -70,23 +75,39 @@ public class ServerMarket implements ServerSaveable
         if(!StockMarketModSettings.MarketBot.ENABLED)
             return;
 
-        Set<String> itemIDS = StockMarketModSettings.MarketBot.getBotBuilder().keySet();
+        HashMap<ItemID, ServerTradingBotFactory.DefaultBotSettings> botBuilder  = StockMarketModSettings.MarketBot.getBotBuilder().getBots();
 
-        for(String itemID : itemIDS)
+        for(var itemData : botBuilder.entrySet())
         {
-            createDefaultBot(itemID);
+            createDefaultBot(itemData.getKey(), itemData.getValue());
         }
     }
-    public static boolean createDefaultBot(String itemID)
+    public static boolean createDefaultBot(ItemID itemID)
+    {
+        return createDefaultBot(itemID, null);
+    }
+    public static boolean createDefaultBots(String category)
     {
         if(!StockMarketModSettings.MarketBot.ENABLED)
             return false;
-        BankUser botUser = getBotUser();
-        if(!ServerBankManager.isItemIDAllowed(itemID))
+        HashMap<ItemID, ServerTradingBotFactory.DefaultBotSettings> botBuilder  = StockMarketModSettings.MarketBot.getBotBuilder().getBots(category);
+        for(var itemData : botBuilder.entrySet())
         {
-            ServerBankManager.allowItemID(itemID);
+            createDefaultBot(itemData.getKey(), itemData.getValue());
         }
-        ServerTradingBotFactory.BotBuilderContainer botBuilder = StockMarketModSettings.MarketBot.getBotBuilder(itemID);
+        return true;
+    }
+    public static boolean createDefaultBot(ItemID itemID, ServerTradingBotFactory.DefaultBotSettings botBuilder)
+    {
+        if(!StockMarketModSettings.MarketBot.ENABLED)
+            return false;
+        //BankUser botUser = getBotUser();
+        if(!BankSystemMod.SERVER_BANK_MANAGER.isItemIDAllowed(itemID))
+        {
+            BankSystemMod.SERVER_BANK_MANAGER.allowItemID(itemID);
+        }
+        if(botBuilder == null)
+            botBuilder = StockMarketModSettings.MarketBot.getBotBuilder(itemID);
         if(botBuilder == null)
         {
             StockMarketMod.LOGGER.error("[SERVER] No default bot settings available for item: "+itemID);
@@ -94,7 +115,7 @@ public class ServerMarket implements ServerSaveable
         }
         if(!hasItem(itemID))
         {
-            int initialPrice = botBuilder.defaultSettings.imbalancePriceRange/2;
+            int initialPrice = botBuilder.getSettings().defaultPrice;
             addTradeItem(itemID,initialPrice);
         }
         ServerTradingBot bot = getTradingBot(itemID);
@@ -104,70 +125,59 @@ public class ServerMarket implements ServerSaveable
             bot = new ServerVolatilityBot();
             setTradingBot(itemID, bot);
         }
-        Bank itemBank = botUser.getBank(itemID);
-        if(itemBank == null)
-        {
-            itemBank = botUser.createItemBank(itemID, botBuilder.defaultSettings.targetItemBalance);
-        }
-        if(itemBank.getTotalBalance() < botBuilder.defaultSettings.targetItemBalance)
-        {
-            itemBank.setBalance(botBuilder.defaultSettings.targetItemBalance-itemBank.getLockedBalance());
-        }
-        botBuilder.defaultSettings.loadDefaultSettings((ServerVolatilityBot.Settings)bot.getSettings());
+        ServerVolatilityBot.Settings settings = (ServerVolatilityBot.Settings)bot.getSettings();
+        botBuilder.loadDefaultSettings(settings);
+        bot.setSettings(settings);
         return true;
     }
 
-
-    public static BankUser getBotUser()
-    {
-        BankUser bot = ServerBankManager.getUser(botUserUUID);
-        if(bot == null)
-        {
-            bot = createBotUser();
-        }
-        return bot;
-    }
-    public static UUID getBotUserUUID()
-    {
-        return botUserUUID;
-    }
-    public static BankUser createBotUser()
-    {
-        BankUser bankUser = ServerBankManager.getUser(botUserUUID);
-        if(bankUser != null)
-            return bankUser;
-        bankUser = ServerBankManager.createUser(botUserUUID, StockMarketModSettings.MarketBot.USER_NAME, new ArrayList<>(), true, StockMarketModSettings.MarketBot.STARTING_BALANCE);
-        return bankUser;
-    }
-
-    public static boolean addTradeItem(String itemID, int startPrice)
+    public static boolean addTradeItem(ItemID itemID, int startPrice)
     {
         if(tradeItems.containsKey(itemID))
         {
             StockMarketMod.LOGGER.warn("[SERVER] Trade item already exists: " + itemID);
             return true;
         }
-        if(StockMarketModSettings.Market.NOT_TRADABLE_ITEMS.contains(itemID))
+        if(StockMarketModSettings.Market.getNotTradableItems().contains(itemID))
         {
             StockMarketMod.LOGGER.warn("[SERVER] Item "+itemID+" is not allowed for trading");
             return false;
         }
         return addTradeItem_internal(itemID, startPrice);
     }
-    public static boolean addTradeItemIfNotExists(String itemID, int startPrice)
+    public static boolean addTradeItemIfNotExists(ItemID itemID, int startPrice)
     {
         if(tradeItems.containsKey(itemID))
         {
             return true;
         }
-        if(StockMarketModSettings.Market.NOT_TRADABLE_ITEMS.contains(itemID))
+        if(StockMarketModSettings.Market.getNotTradableItems().contains(itemID))
         {
             StockMarketMod.LOGGER.warn("[SERVER] Item "+itemID+" is not allowed for trading");
             return false;
         }
         return addTradeItem_internal(itemID, startPrice);
     }
-    public static void removeTradingItem(String itemID)
+
+    public static void removeAllTradingItems()
+    {
+        for(ServerTradeItem item : tradeItems.values())
+        {
+            item.cleanup();
+        }
+        tradeItems.clear();
+        tradeItemsChunks.clear();
+        MinecraftServer server = UtilitiesPlatform.getServer();
+        if (server == null) {
+            throw new IllegalStateException("Server instance is null. Are you calling this from the server_sender?");
+        }
+        PlayerList playerList = server.getPlayerList();
+        for(ServerPlayer player : playerList.getPlayers())
+        {
+            SyncTradeItemsPacket.sendPacket(player);
+        }
+    }
+    public static void removeTradingItem(ItemID itemID)
     {
         ServerTradeItem item = tradeItems.get(itemID);
         if(item == null)
@@ -177,16 +187,31 @@ public class ServerMarket implements ServerSaveable
         }
         item.cleanup();
         tradeItems.remove(itemID);
+        rebuildTradeItemsChunks();
     }
-    private static boolean addTradeItem_internal(String itemID, int startPrice)
+    public static boolean removeTradingItems(String category)
     {
-        if(!ServerBankManager.allowItemID(itemID))
+        HashMap<ItemID, ServerTradingBotFactory.DefaultBotSettings> botBuilder  = StockMarketModSettings.MarketBot.getBotBuilder().getBots(category);
+        if(botBuilder == null)
+            return false;
+        for(var itemData : botBuilder.entrySet())
+        {
+            removeTradingItem(itemData.getKey());
+        }
+        return true;
+    }
+    private static boolean addTradeItem_internal(ItemID itemID, int startPrice)
+    {
+        if(!BankSystemMod.SERVER_BANK_MANAGER.allowItemID(itemID))
         {
             StockMarketMod.LOGGER.warn("[SERVER] Item "+itemID+" can't be allowed for trading because it is not allowed in the bank system");
             return false;
         }
-        ServerTradeItem tradeItem = new ServerTradeItem(itemID, startPrice);
+        ItemID currencyItemID = getCurrencyItem();
+
+        ServerTradeItem tradeItem = new ServerTradeItem(itemID, currencyItemID, startPrice);
         tradeItems.put(itemID, tradeItem);
+        rebuildTradeItemsChunks();
 
         MinecraftServer server = UtilitiesPlatform.getServer();
 
@@ -198,14 +223,15 @@ public class ServerMarket implements ServerSaveable
         PlayerList playerList = server.getPlayerList();
         for(ServerPlayer player : playerList.getPlayers())
         {
-            SyncTradeItemsPacket.sendPacket(player);
+            SyncPricePacket.sendPacket(itemID, player);
+            //SyncTradeItemsPacket.sendPacket(player);
         }
         return true;
     }
 
-    public static ArrayList<String> getTradeItemIDs()
+    public static ArrayList<ItemID> getTradeItemIDs()
     {
-        ArrayList<String> tradeItemsList = new ArrayList<>();
+        ArrayList<ItemID> tradeItemsList = new ArrayList<>();
         for(ServerTradeItem tradeItem : tradeItems.values())
         {
             tradeItemsList.add(tradeItem.getItemID());
@@ -213,12 +239,12 @@ public class ServerMarket implements ServerSaveable
         return tradeItemsList;
     }
 
-    public static boolean hasItem(String itemID)
+    public static boolean hasItem(ItemID itemID)
     {
         return tradeItems.containsKey(itemID);
     }
 
-    public static void setTradingBot(String itemID, ServerTradingBot bot)
+    public static void setTradingBot(ItemID itemID, ServerTradingBot bot)
     {
         ServerTradeItem item = tradeItems.get(itemID);
         if(item == null)
@@ -228,7 +254,7 @@ public class ServerMarket implements ServerSaveable
         }
         item.setTradingBot(bot);
     }
-    public static void removeTradingBot(String itemID)
+    public static void removeTradingBot(ItemID itemID)
     {
         ServerTradeItem item = tradeItems.get(itemID);
         if(item == null)
@@ -238,7 +264,7 @@ public class ServerMarket implements ServerSaveable
         }
         item.removeTradingBot();
     }
-    public static boolean hasTradingBot(String itemID)
+    public static boolean hasTradingBot(ItemID itemID)
     {
         ServerTradeItem item = tradeItems.get(itemID);
         if(item == null)
@@ -248,7 +274,7 @@ public class ServerMarket implements ServerSaveable
         }
         return item.hasTradingBot();
     }
-    public static ServerTradingBot getTradingBot(String itemID)
+    public static ServerTradingBot getTradingBot(ItemID itemID)
     {
         ServerTradeItem item = tradeItems.get(itemID);
         if(item == null)
@@ -282,7 +308,7 @@ public class ServerMarket implements ServerSaveable
         }
     }
 
-    public static void setMarketOpen(String itemID, boolean open)
+    public static void setMarketOpen(ItemID itemID, boolean open)
     {
         ServerTradeItem item = tradeItems.get(itemID);
         if(item == null)
@@ -292,7 +318,15 @@ public class ServerMarket implements ServerSaveable
         }
         item.setMarketOpen(open);
     }
-    public static boolean isMarketOpen(String itemID)
+
+    public static void setAllMarketsOpen(boolean open)
+    {
+        for(ServerTradeItem item : tradeItems.values())
+        {
+            item.setMarketOpen(open);
+        }
+    }
+    public static boolean isMarketOpen(ItemID itemID)
     {
         ServerTradeItem item = tradeItems.get(itemID);
         if(item == null)
@@ -339,7 +373,7 @@ public class ServerMarket implements ServerSaveable
             item.cancelAllOrders(playerUUID);
         }
     }
-    public static void cancelAllOrders(UUID playerUUID, String itemID)
+    public static void cancelAllOrders(UUID playerUUID, ItemID itemID)
     {
         ServerTradeItem item = tradeItems.get(itemID);
         if(item == null)
@@ -350,7 +384,7 @@ public class ServerMarket implements ServerSaveable
         item.cancelAllOrders(playerUUID);
     }
 
-    public static OrderbookVolume getOrderBookVolume(String itemID, int tiles, int minPrice, int maxPrice)
+    public static OrderbookVolume getOrderBookVolume(ItemID itemID, int tiles, int minPrice, int maxPrice)
     {
         ServerTradeItem item = tradeItems.get(itemID);
         if(item == null)
@@ -361,7 +395,7 @@ public class ServerMarket implements ServerSaveable
         return item.getOrderBookVolume(tiles, minPrice, maxPrice);
     }
 
-    public static ArrayList<Order> getOrders(String itemID)
+    public static ArrayList<Order> getOrders(ItemID itemID)
     {
         ServerTradeItem item = tradeItems.get(itemID);
         if(item == null)
@@ -371,7 +405,7 @@ public class ServerMarket implements ServerSaveable
         }
         return item.getOrders();
     }
-    public static ArrayList<Order> getOrders(String itemID, UUID playerUUID)
+    public static ArrayList<Order> getOrders(ItemID itemID, UUID playerUUID)
     {
         ServerTradeItem item = tradeItems.get(itemID);
         if(item == null)
@@ -394,7 +428,7 @@ public class ServerMarket implements ServerSaveable
     }
 
 
-    public static int getPrice(String itemID)
+    public static int getPrice(ItemID itemID)
     {
         ServerTradeItem item = tradeItems.get(itemID);
         if(item == null)
@@ -404,7 +438,7 @@ public class ServerMarket implements ServerSaveable
         }
         return item.getPrice();
     }
-    public static PriceHistory getPriceHistory(String itemID)
+    public static PriceHistory getPriceHistory(ItemID itemID)
     {
         ServerTradeItem item = tradeItems.get(itemID);
         if(item == null)
@@ -414,8 +448,25 @@ public class ServerMarket implements ServerSaveable
         }
         return item.getPriceHistory();
     }
+    public static void resetPriceChart(ItemID itemID)
+    {
+        ServerTradeItem item = tradeItems.get(itemID);
+        if(item == null)
+        {
+            msgTradeItemNotFound(itemID);
+            return;
+        }
+        item.resetPriceChart();
+    }
+    public static void resetPriceChart()
+    {
+        for(ServerTradeItem item : tradeItems.values())
+        {
+            item.resetPriceChart();
+        }
+    }
 
-    public static void addPlayerUpdateSubscription(String itemID, ServerPlayer player)
+    public static void addPlayerUpdateSubscription(ItemID itemID, ServerPlayer player)
     {
         ServerTradeItem item = tradeItems.get(itemID);
         if(item == null)
@@ -425,7 +476,7 @@ public class ServerMarket implements ServerSaveable
         }
         item.addSubscriber(player);
     }
-    public static void removePlayerUpdateSubscription(String itemID, ServerPlayer player) {
+    public static void removePlayerUpdateSubscription(ItemID itemID, ServerPlayer player) {
         ServerTradeItem item = tradeItems.get(itemID);
         if (item == null) {
             msgTradeItemNotFound(itemID);
@@ -434,12 +485,12 @@ public class ServerMarket implements ServerSaveable
         item.removeSubscriber(player);
     }
 
-    public static Map<String, ServerTradeItem> getTradeItems()
+    public static Map<ItemID, ServerTradeItem> getTradeItems()
     {
         return tradeItems;
     }
-    private static void msgTradeItemNotFound(String itemID) {
-        StockMarketMod.LOGGER.warn("[SERVER] Trade item not found: " + itemID);
+    private static void msgTradeItemNotFound(ItemID itemID) {
+        StockMarketMod.LOGGER.warn("[SERVER] Trade item not found: " + itemID.getName());
     }
 
     public static void handlePacket(ServerPlayer player, RequestOrderCancelPacket packet)
@@ -450,7 +501,8 @@ public class ServerMarket implements ServerSaveable
     public static void handlePacket(ServerPlayer player, RequestOrderPacket packet)
     {
         int amount = packet.getAmount();
-        String itemID = packet.getItemID();
+        ItemID itemID = packet.getItemID();
+        ItemID currencyItemID = packet.getCurrencyItemID();
         String playerName = player.getName().getString();
         //MoneyBank playerBank = ServerBankManager.getBank(player.getUUID());
         RequestOrderPacket.OrderType orderType = packet.getOrderType();
@@ -471,11 +523,11 @@ public class ServerMarket implements ServerSaveable
         switch(orderType)
         {
             case limit:
-                LimitOrder limitOrder = LimitOrder.create(player, itemID, amount, price);
+                LimitOrder limitOrder = LimitOrder.create(player, itemID, currencyItemID, amount, price);
                 ServerMarket.addOrder(limitOrder);
                 break;
             case market:
-                MarketOrder marketOrder = MarketOrder.create(player, itemID, amount);
+                MarketOrder marketOrder = MarketOrder.create(player, itemID, currencyItemID, amount);
                 ServerMarket.addOrder(marketOrder);
                 break;
         }
@@ -494,7 +546,7 @@ public class ServerMarket implements ServerSaveable
     public static void handlePacket(ServerPlayer player, UpdateSubscribeMarketEventsPacket packet)
     {
         boolean subscribe = packet.doesSubscribe();
-        String itemID = packet.getItemID();
+        ItemID itemID = packet.getItemID();
 
         StockMarketMod.LOGGER.info("[SERVER] Receiving UpdateSubscribeMarketEventsPacket for item "+itemID+
                 " to "+(subscribe ? "subscribe" : "unsubscribe"));
@@ -508,7 +560,7 @@ public class ServerMarket implements ServerSaveable
     }
     public static void handlePacket(ServerPlayer player, RequestOrderChangePacket packet)
     {
-        String itemID = packet.getItemID();
+        ItemID itemID = packet.getItemID();
         long targetOrderID = packet.getTargetOrderID();
         int newPrice = packet.getNewPrice();
         ServerTradeItem item = tradeItems.get(itemID);
@@ -535,7 +587,7 @@ public class ServerMarket implements ServerSaveable
     @Override
     public boolean save(CompoundTag tag) {
         boolean success = true;
-        tag.putLong("shiftPriceHistoryInterval", shiftPriceHistoryInterval);
+        long startMillis = System.currentTimeMillis();
 
         ListTag tradeItems = new ListTag();
         for(ServerTradeItem tradeItem : ServerMarket.tradeItems.values())
@@ -545,6 +597,8 @@ public class ServerMarket implements ServerSaveable
             tradeItems.add(tradeItemTag);
         }
         tag.put("tradeItems", tradeItems);
+        long endMillis = System.currentTimeMillis();
+        StockMarketMod.LOGGER.info("[SERVER] Saving ServerMarket took "+(endMillis-startMillis)+"ms");
 
         return success;
     }
@@ -553,12 +607,11 @@ public class ServerMarket implements ServerSaveable
     public boolean load(CompoundTag tag) {
         boolean loadSuccess = true;
         try {
-            if(!tag.contains("shiftPriceHistoryInterval") || !tag.contains("tradeItems"))
+            if(!tag.contains("tradeItems"))
                 return false;
-            shiftPriceHistoryInterval = tag.getLong("shiftPriceHistoryInterval");
 
             ListTag tradeItems = tag.getList("tradeItems", 10);
-            Map<String, ServerTradeItem> tradeItemsMap = new HashMap<>();
+            Map<ItemID, ServerTradeItem> tradeItemsMap = new HashMap<>();
             for(int i = 0; i < tradeItems.size(); i++)
             {
                 CompoundTag tradeItemTag = tradeItems.getCompound(i);
@@ -568,10 +621,13 @@ public class ServerMarket implements ServerSaveable
                     loadSuccess = false;
                     continue;
                 }
+                if(!tradeItem.getItemID().isValid())
+                    continue;
                 tradeItemsMap.put(tradeItem.getItemID(), tradeItem);
             }
             ServerMarket.tradeItems.clear();
             ServerMarket.tradeItems.putAll(tradeItemsMap);
+            ServerMarket.rebuildTradeItemsChunks();
         } catch (Exception e) {
             StockMarketMod.LOGGER.error("[SERVER] Error loading ServerMarket from NBT");
             e.printStackTrace();
@@ -584,12 +640,68 @@ public class ServerMarket implements ServerSaveable
     {
         if(event instanceof ServerBankCloseItemBankEvent closeEvent)
         {
-            ArrayList<String> removedIDs = closeEvent.getAllRemovedItemIDs();
-            for(String itemID : removedIDs)
+            /*ArrayList<ItemID> removedIDs = closeEvent.getAllRemovedItemIDs();
+            for(ItemID itemID : removedIDs)
             {
                 removeTradingItem(itemID);
-            }
+            }*/
+        }
+    }
+
+    public static void onServerTick(MinecraftServer server)
+    {
+        if(!initialized || tradeItemsChunks.size() == 0)
+            return;
+
+
+        long currentTime = System.currentTimeMillis();
+
+        // For better performance when there are many trade items
+        // The items are processed in chunks
+        // Downside: The update rate is not every tick but every n't ticks depending on how many chunks there are
+        ArrayList<ServerTradeItem> chunk = tradeItemsChunks.get(tradeItemUpdateCallCounter);
+        tradeItemUpdateCallCounter = (tradeItemUpdateCallCounter + 1) % tradeItemsChunks.size();
+        for(ServerTradeItem item : chunk)
+        {
+            item.onServerTick(server);
         }
 
+
+        long currentTime2 = System.currentTimeMillis();
+        if(currentTime2-currentTime > 5)
+            StockMarketMod.LOGGER.info("Market update time: " + (currentTime2-currentTime)+"ms");
     }
+
+    public static ItemID getCurrencyItem()
+    {
+        return new ItemID(StockMarketModSettings.Market.getCurrencyItem());
+    }
+
+    private static void rebuildTradeItemsChunks()
+    {
+        tradeItemsChunks.clear();
+        int tradeItemsChunkSize = StockMarketModSettings.Utilities.TRADE_ITEM_CHUNK_SIZE;
+
+        int chunks = tradeItems.size() / tradeItemsChunkSize;
+        if(tradeItems.size() % tradeItemsChunkSize != 0)
+            chunks++;
+        for(int i = 0; i < chunks; i++)
+        {
+            ArrayList<ServerTradeItem> chunk = new ArrayList<>();
+            int start = i * tradeItemsChunkSize;
+            int end = Math.min(start + tradeItemsChunkSize, tradeItems.size());
+            int index = 0;
+            for(ServerTradeItem item : tradeItems.values())
+            {
+                if(index >= start && index < end)
+                {
+                    chunk.add(item);
+                }
+                index++;
+            }
+            tradeItemsChunks.add(chunk);
+        }
+    }
+
+
 }

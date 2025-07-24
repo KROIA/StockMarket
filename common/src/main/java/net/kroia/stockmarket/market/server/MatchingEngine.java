@@ -1,10 +1,11 @@
 package net.kroia.stockmarket.market.server;
 
-import net.kroia.banksystem.banking.ServerBankManager;
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.ServerSaveable;
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.MarketOrder;
 import net.kroia.stockmarket.market.server.order.Order;
@@ -13,6 +14,7 @@ import net.kroia.stockmarket.util.PriceHistory;
 import net.kroia.stockmarket.util.StockMarketTextMessages;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.ArrayList;
@@ -24,21 +26,36 @@ import java.util.UUID;
     * The MatchingEngine class is responsible for matching buy and sell orders.
  */
 public class MatchingEngine implements ServerSaveable {
+
+
     private int price;
     private int tradeVolume;
 
-    private boolean marketOpen = true;
+    private boolean marketOpen = StockMarketModSettings.Market.MARKET_OPEN_AT_CREATION;
 
     // Create a sorted queue for buy and sell orders, sorted by price.
     private final PriorityQueue<LimitOrder> limitBuyOrders = new PriorityQueue<>((o1, o2) -> Double.compare(o2.getPrice(), o1.getPrice()));
     private final PriorityQueue<LimitOrder> limitSellOrders = new PriorityQueue<>(Comparator.comparingDouble(LimitOrder::getPrice));
 
+    private final GhostOrderBook ghostOrderBook;
+    private long realVolumeImbalance = 0;
     private PriceHistory priceHistory;
     public MatchingEngine(int initialPrice, PriceHistory priceHistory)
     {
         this.priceHistory = priceHistory;
-        this.price = initialPrice;
+        this.ghostOrderBook = new GhostOrderBook(initialPrice);
         tradeVolume = 0;
+        setPrice(initialPrice);
+    }
+
+
+    public void onServerTick(MinecraftServer server)
+    {
+        ghostOrderBook.updateVolume(getPrice());
+    }
+    public GhostOrderBook getGhostOrderBook()
+    {
+        return ghostOrderBook;
     }
 
     public void addOrder(Order order)
@@ -124,9 +141,57 @@ public class MatchingEngine implements ServerSaveable {
         ArrayList<LimitOrder> toRemove = new ArrayList<>();
 
         int fillVolume = Math.abs(marketOrder.getAmount());
+        int startPrice = getPrice();
+        int newPrice = startPrice;
+        int deltaPrice = marketOrder.isBuy() ? 1 : -1;
         for(LimitOrder limitOrder : limitOrders)
         {
-            int filledVolume = TransactionEngine.fill(marketOrder, limitOrder, limitOrder.getPrice());
+            int filledVolume = 0;
+
+            long loopTimeout = 10000;
+
+            while(limitOrder.getPrice() != newPrice) {
+                loopTimeout--;
+                if(loopTimeout<=0)
+                {
+                    StockMarketMod.LOGGER.error("Market order processing loop timeout: "+marketOrder);
+                    marketOrder.markAsInvalid("Market order processing loop timeout");
+                    break;
+                }
+                int ghostVolume = ghostOrderBook.getAmount(newPrice);
+                int transferedVolume = TransactionEngine.ghostFill(marketOrder, ghostVolume, newPrice);
+                filledVolume += transferedVolume;
+                if(transferedVolume > 0) {
+                    if(marketOrder.isBuy()) {
+                        ghostOrderBook.removeAmount(newPrice, transferedVolume);
+                        if(!marketOrder.isBot())
+                        {
+                            realVolumeImbalance -= transferedVolume;
+                        }
+                    }
+                    else if(marketOrder.isSell()) {
+                        ghostOrderBook.removeAmount(newPrice, -transferedVolume);
+                        if(!marketOrder.isBot())
+                        {
+                            realVolumeImbalance += transferedVolume;
+                        }
+                    }
+                    setPrice(newPrice);
+                    priceHistory.addVolume(Math.abs(transferedVolume));
+                }
+                if(marketOrder.isFilled())
+                {
+                    return true;
+                }
+                newPrice += deltaPrice;
+                if(newPrice < 0) {
+                    newPrice = 0;
+                    break;
+                }
+            }
+
+            int transferedVolume = TransactionEngine.fill(marketOrder, limitOrder, limitOrder.getPrice());
+            filledVolume += transferedVolume;
 
             if(limitOrder.isFilled() || limitOrder.getStatus() == Order.Status.CANCELLED || limitOrder.getStatus() == Order.Status.INVALID)
                 toRemove.add(limitOrder);
@@ -135,7 +200,15 @@ public class MatchingEngine implements ServerSaveable {
                 break;
 
             if(filledVolume != 0) {
-                setPrice(limitOrder.getPrice());
+                newPrice = limitOrder.getPrice();
+                priceHistory.addVolume(Math.abs(transferedVolume));
+                if(marketOrder.isBot() && !limitOrder.isBot())
+                {
+                    realVolumeImbalance += limitOrder.isBuy()?-transferedVolume:transferedVolume;
+                }else if(!marketOrder.isBot() && limitOrder.isBot())
+                {
+                    realVolumeImbalance += marketOrder.isBuy()?-transferedVolume:transferedVolume;
+                }
             }
 
             fillVolume -= filledVolume;
@@ -150,7 +223,49 @@ public class MatchingEngine implements ServerSaveable {
                 break;
             }
         }
+        long loopTimeout = 10000;
+        while(fillVolume > 0)
+        {
+            loopTimeout--;
+            if(loopTimeout<=0)
+            {
+                StockMarketMod.LOGGER.error("Market order processing loop timeout: "+marketOrder);
+                marketOrder.markAsInvalid("Market order processing loop timeout");
+                break;
+            }
+            // Fill the remaining volume with ghost orders
+            int ghostVolume = ghostOrderBook.getAmount(newPrice);
+            int transferedVolume = TransactionEngine.ghostFill(marketOrder, ghostVolume, newPrice);
+            fillVolume -= transferedVolume;
+
+            if(transferedVolume > 0) {
+                if(marketOrder.isBuy()) {
+                    ghostOrderBook.removeAmount(newPrice, transferedVolume);
+                    if(!marketOrder.isBot())
+                    {
+                        realVolumeImbalance -= transferedVolume;
+                    }
+                }
+                else if(marketOrder.isSell()) {
+                    ghostOrderBook.removeAmount(newPrice, -transferedVolume);
+                    if(!marketOrder.isBot())
+                    {
+                        realVolumeImbalance += transferedVolume;
+                    }
+                }
+                priceHistory.addVolume(Math.abs(transferedVolume));
+                setPrice(newPrice);
+            }
+            if(marketOrder.isFilled() || marketOrder.getStatus() == Order.Status.INVALID || marketOrder.getStatus() == Order.Status.CANCELLED)
+                break;
+            newPrice += deltaPrice;
+            if(newPrice < 0) {
+                newPrice = 0;
+                break;
+            }
+        }
         limitOrders.removeAll(toRemove);
+
         if(fillVolume != 0)
         {
             marketOrder.markAsInvalid(StockMarketTextMessages.getOrderInvalidReasonOrdersToFillTransactionMessage(marketOrder.isBuy()));
@@ -164,38 +279,97 @@ public class MatchingEngine implements ServerSaveable {
     {
         // Process the limit order
         int fillVolume = Math.abs(limitOrder.getAmount()-limitOrder.getFilledAmount());
+        //int filledVolume = 0;
         PriorityQueue<LimitOrder> limitOrders = limitOrder.isBuy() ? limitSellOrders : limitBuyOrders;
         ArrayList<LimitOrder> toRemove = new ArrayList<>();
-
+        int startPrice = getPrice();
+        int newPrice = startPrice;
+        int deltaPrice = limitOrder.isBuy() ? 1 : -1;
         for(LimitOrder otherOrder : limitOrders)
         {
             LimitOrder fillWith = null;
-            if(otherOrder.getPrice() == limitOrder.getPrice())
+
+
+            long loopTimeout = 10000;
+            while(fillVolume > 0 &&
+                    limitOrder.isBuy() && limitOrder.getPrice() > getPrice() ||
+                    limitOrder.isSell() && limitOrder.getPrice() < getPrice()) {
+
+                if(getPrice() == otherOrder.getPrice())
+                {
+                    fillWith = otherOrder;
+                    break;
+                }
+
+                loopTimeout--;
+                if(loopTimeout<=0)
+                {
+                    StockMarketMod.LOGGER.error("Limit order processing loop timeout: "+limitOrder);
+                    limitOrder.markAsInvalid("Limit order processing loop timeout");
+                    break;
+                }
+                int ghostVolume = ghostOrderBook.getAmount(newPrice);
+                int transferedVolume = TransactionEngine.ghostFill(limitOrder, ghostVolume, newPrice);
+                //filledVolume += transferedVolume;
+                fillVolume -= transferedVolume;
+                if(transferedVolume > 0) {
+                    if(limitOrder.isBuy()) {
+                        ghostOrderBook.removeAmount(newPrice, transferedVolume);
+                        if(!limitOrder.isBot())
+                        {
+                            realVolumeImbalance -= transferedVolume;
+                        }
+                    }
+                    else if(limitOrder.isSell()) {
+                        ghostOrderBook.removeAmount(newPrice, -transferedVolume);
+                        if(!limitOrder.isBot())
+                        {
+                            realVolumeImbalance += transferedVolume;
+                        }
+                    }
+                    priceHistory.addVolume(Math.abs(transferedVolume));
+                    setPrice(newPrice);
+                }
+                if(limitOrder.isFilled())
+                {
+                    break;
+                }
+                newPrice += deltaPrice;
+                if(newPrice < 0) {
+                    newPrice = 0;
+                    break;
+                }
+            }
+            if(limitOrder.getPrice() == otherOrder.getPrice())
             {
                 fillWith = otherOrder;
-            }
-            else
-            {
-                if(limitOrder.isBuy() && limitOrder.getPrice() > otherOrder.getPrice())
-                {
+            }else {
+                if (limitOrder.isBuy() && limitOrder.getPrice() > otherOrder.getPrice()) {
                     fillWith = otherOrder;
-                }
-                else if(limitOrder.isSell() && limitOrder.getPrice() < otherOrder.getPrice())
-                {
+                } else if (limitOrder.isSell() && limitOrder.getPrice() < otherOrder.getPrice()) {
                     fillWith = otherOrder;
                 }
             }
+
             if(fillWith == null)
                 continue;
 
-            int filledVolume = TransactionEngine.fill(limitOrder, fillWith, fillWith.getPrice());
+            int transferedVolume = TransactionEngine.fill(limitOrder, fillWith, fillWith.getPrice());
             if(fillWith.isFilled() || fillWith.getStatus() == Order.Status.CANCELLED || fillWith.getStatus() == Order.Status.INVALID)
                 toRemove.add(fillWith);
-            if(filledVolume != 0)
+            if(transferedVolume != 0)
             {
                 setPrice(fillWith.getPrice());
+                priceHistory.addVolume(Math.abs(transferedVolume));
+                if(limitOrder.isBot() && !fillWith.isBot())
+                {
+                    realVolumeImbalance += fillWith.isBuy()?-transferedVolume:transferedVolume;
+                }else if(!limitOrder.isBot() && fillWith.isBot())
+                {
+                    realVolumeImbalance += limitOrder.isBuy()?-transferedVolume:transferedVolume;
+                }
             }
-            fillVolume -= filledVolume;
+            fillVolume -= transferedVolume;
 
             if(fillVolume <= 0)
             {
@@ -207,6 +381,54 @@ public class MatchingEngine implements ServerSaveable {
                 break;
             }
         }
+
+
+
+        long loopTimeout = 10000;
+        while(  fillVolume > 0 &&
+                (limitOrder.isBuy() && limitOrder.getPrice() > getPrice() ||
+                limitOrder.isSell() && limitOrder.getPrice() < getPrice())) {
+            loopTimeout--;
+            if(loopTimeout<=0)
+            {
+                StockMarketMod.LOGGER.error("Limit order processing loop timeout: "+limitOrder);
+                limitOrder.markAsInvalid("Limit order processing loop timeout");
+                break;
+            }
+            int ghostVolume = ghostOrderBook.getAmount(newPrice);
+            int transferedVolume = TransactionEngine.ghostFill(limitOrder, ghostVolume, newPrice);
+            fillVolume -= transferedVolume;
+            if(transferedVolume > 0) {
+                if(limitOrder.isBuy()) {
+                    ghostOrderBook.removeAmount(newPrice, transferedVolume);
+                    if(!limitOrder.isBot())
+                    {
+                        realVolumeImbalance -= transferedVolume;
+                    }
+                }
+                else if(limitOrder.isSell()) {
+                    ghostOrderBook.removeAmount(newPrice, -transferedVolume);
+                    if(!limitOrder.isBot())
+                    {
+                        realVolumeImbalance += transferedVolume;
+                    }
+                }
+                priceHistory.addVolume(Math.abs(transferedVolume));
+                setPrice(newPrice);
+            }
+            if(limitOrder.isFilled())
+            {
+                break;
+            }
+            newPrice += deltaPrice;
+            if(newPrice < 0) {
+                newPrice = 0;
+                break;
+            }
+        }
+
+
+
         limitOrders.removeAll(toRemove);
         return fillVolume == 0;
     }
@@ -221,6 +443,7 @@ public class MatchingEngine implements ServerSaveable {
     private void setPrice(int price)
     {
         this.price = price;
+        ghostOrderBook.setCurrentMarketPrice(price);
         priceHistory.setCurrentPrice(price);
     }
 
@@ -333,25 +556,25 @@ public class MatchingEngine implements ServerSaveable {
         if(targetOrder.isBuy())
         {
             int toFreeAmount = toFillAmount * targetOrder.getPrice();
-            Bank moneyBank = ServerBankManager.getUser(targetOrder.getPlayerUUID()).getMoneyBank();
+            Bank moneyBank = BankSystemMod.SERVER_BANK_MANAGER.getUser(targetOrder.getPlayerUUID()).getBank(ServerMarket.getCurrencyItem());
             canBeMoved = moneyBank.getTotalBalance()-toFreeAmount >= 0;
         }
         else
         {
-            Bank itemBank = ServerBankManager.getUser(targetOrder.getPlayerUUID()).getBank(targetOrder.getItemID());
+            Bank itemBank = BankSystemMod.SERVER_BANK_MANAGER.getUser(targetOrder.getPlayerUUID()).getBank(targetOrder.getItemID());
             canBeMoved = itemBank.getTotalBalance()-toFillAmount >= 0;
         }
 
         if(canBeMoved && player != null)
         {
             cancelOrder(orderID);
-            LimitOrder newOrder = LimitOrder.create(player, targetOrder.getItemID(), targetOrder.getAmount(), newPrice, targetOrder.getFilledAmount());
+            LimitOrder newOrder = LimitOrder.create(player, targetOrder.getItemID(), targetOrder.getCurrencyItemID(), targetOrder.getAmount(), newPrice, targetOrder.getFilledAmount());
             if(newOrder != null) {
                 addOrder(newOrder);
                 return true;
             }
             else {
-                LimitOrder oldOrder = LimitOrder.create(player, targetOrder.getItemID(), targetOrder.getAmount(), targetOrder.getPrice(), targetOrder.getFilledAmount());
+                LimitOrder oldOrder = LimitOrder.create(player, targetOrder.getItemID(), targetOrder.getCurrencyItemID(), targetOrder.getAmount(), targetOrder.getPrice(), targetOrder.getFilledAmount());
                 if(oldOrder != null)
                     addOrder(oldOrder);
                 return false;
@@ -377,6 +600,9 @@ public class MatchingEngine implements ServerSaveable {
         return limitBuyOrders.removeAll(orders);
     }
 
+    public long getRealVolumeImbalance() {
+        return realVolumeImbalance;
+    }
 
     public String toString()
     {
@@ -410,6 +636,14 @@ public class MatchingEngine implements ServerSaveable {
             if(index >= 0 && index < tiles)
                 volume[index] += order.getAmount()-order.getFilledAmount();
         }
+
+        for(int i=minPrice; i<maxPrice; i++)
+        {
+            int index = (int)((float)(i - minPrice) / priceStep);
+            if(index >= 0 && index < tiles)
+                volume[index] += ghostOrderBook.getAmount(i);
+        }
+
         orderbookVolume.setVolume(volume);
         return orderbookVolume;
     }
@@ -433,6 +667,7 @@ public class MatchingEngine implements ServerSaveable {
                     volume += order.getAmount()-order.getFilledAmount();
             }
         }
+        volume += ghostOrderBook.getAmount(price);
         return volume;
     }
     public int getVolume(int minPrice, int maxPrice)
@@ -447,6 +682,10 @@ public class MatchingEngine implements ServerSaveable {
         {
             if(order.getPrice() >= minPrice && order.getPrice() <= maxPrice)
                 volume += order.getAmount()-order.getFilledAmount();
+        }
+        for(int i=minPrice; i<=maxPrice; i++)
+        {
+            volume += ghostOrderBook.getAmount(i);
         }
         return volume;
     }
@@ -476,6 +715,11 @@ public class MatchingEngine implements ServerSaveable {
         tag.put("buy_orders", buyOrdersList);
         tag.put("sell_orders", sellOrdersList);
         tag.putBoolean("market_open", marketOpen);
+        tag.putLong("real_volume_imbalance", realVolumeImbalance);
+
+        CompoundTag ghostOrderBookTag = new CompoundTag();
+        success &= ghostOrderBook.save(ghostOrderBookTag);
+        tag.put("ghost_order_book", ghostOrderBookTag);
         return success;
     }
 
@@ -490,6 +734,7 @@ public class MatchingEngine implements ServerSaveable {
             return false;
         boolean success = true;
         price = tag.getInt("price");
+        ghostOrderBook.setCurrentMarketPrice(price);
         tradeVolume = tag.getInt("trade_volume");
         ListTag buyOrdersList = tag.getList("buy_orders", 10);
         ListTag sellOrdersList = tag.getList("sell_orders", 10);
@@ -497,6 +742,10 @@ public class MatchingEngine implements ServerSaveable {
             marketOpen = tag.getBoolean("market_open");
         else
             marketOpen = true;
+        if(tag.contains("real_volume_imbalance"))
+            realVolumeImbalance = tag.getLong("real_volume_imbalance");
+        else
+            realVolumeImbalance = 0;
         for(int i = 0; i < buyOrdersList.size(); i++)
         {
             CompoundTag orderTag = buyOrdersList.getCompound(i);
@@ -515,6 +764,17 @@ public class MatchingEngine implements ServerSaveable {
                 success = false;
             else
                 limitSellOrders.add(order);
+        }
+
+        if(tag.contains("ghost_order_book"))
+        {
+            CompoundTag ghostOrderBookTag = tag.getCompound("ghost_order_book");
+            success &= ghostOrderBook.load(ghostOrderBookTag);
+        }
+        else
+        {
+            ghostOrderBook.cleanup();
+            ghostOrderBook.updateVolume(price);
         }
         return success;
     }

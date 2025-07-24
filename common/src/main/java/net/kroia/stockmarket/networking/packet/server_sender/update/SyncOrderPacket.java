@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.networking.packet.server_sender.update;
 
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.NetworkPacket;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.client.ClientMarket;
@@ -33,7 +34,6 @@ public class SyncOrderPacket extends NetworkPacket {
     }
 
     public static void sendResponse(Order order) {
-        String itemID = order.getItemID();
         ServerPlayer player =  ServerPlayerList.getPlayer(order.getPlayerUUID());
         if(player == null)
         {

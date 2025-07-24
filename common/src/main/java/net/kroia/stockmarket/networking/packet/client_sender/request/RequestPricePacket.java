@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.networking.packet.client_sender.request;
 
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.NetworkPacket;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
@@ -8,8 +9,8 @@ import net.minecraft.server.level.ServerPlayer;
 public class RequestPricePacket extends NetworkPacket {
 
 
-    private String itemID;
-    public RequestPricePacket(String itemID) {
+    private ItemID itemID;
+    public RequestPricePacket(ItemID itemID) {
         super();
         this.itemID = itemID;
     }
@@ -20,19 +21,19 @@ public class RequestPricePacket extends NetworkPacket {
 
     @Override
     public void toBytes(FriendlyByteBuf buf) {
-        buf.writeUtf(itemID);
+        buf.writeItem(itemID.getStack());
     }
     @Override
     public void fromBytes(FriendlyByteBuf buf) {
-        this.itemID = buf.readUtf();
+        this.itemID = new ItemID(buf.readItem());
     }
 
-    public static void generateRequest(String itemID) {
+    public static void generateRequest(ItemID itemID) {
         //StockMarketMod.LOGGER.info("[CLIENT] Sending RequestPricePacket for item "+itemID);
         StockMarketNetworking.sendToServer(new RequestPricePacket(itemID));
     }
 
-    public String getItemID() {
+    public ItemID getItemID() {
         return itemID;
     }
 

@@ -1,159 +1,225 @@
 package net.kroia.stockmarket.market.server.bot;
 
+import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.ItemUtilities;
+import net.kroia.modutilities.ServerSaveable;
 import net.kroia.stockmarket.StockMarketModSettings;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.world.item.ItemStack;
 
+import java.rmi.ServerError;
+import java.util.ArrayList;
 import java.util.HashMap;
 
 public class ServerTradingBotFactory {
 
+    public static class EnchantmentData implements ServerSaveable
+    {
+        public String enchantmentID;
+        public int level;
+
+        public EnchantmentData()
+        {}
+        public EnchantmentData(String enchantmentID, int level)
+        {
+            this.enchantmentID = enchantmentID;
+            this.level = level;
+        }
+
+        @Override
+        public boolean save(CompoundTag tag) {
+            tag.putString("id", enchantmentID);
+            tag.putInt("lvl", level);
+            return true;
+        }
+
+        @Override
+        public boolean load(CompoundTag tag) {
+            enchantmentID = tag.getString("id");
+            level = tag.getInt("lvl");
+            return true;
+        }
+    }
+    public static class PotionData implements ServerSaveable
+    {
+        public String potionID;
+        //public int amplifier;
+
+        public PotionData()
+        {}
+        public PotionData(String potionID)
+        {
+            this.potionID = potionID;
+        }
+
+        @Override
+        public boolean save(CompoundTag tag) {
+            tag.putString("Potion", potionID);
+            return true;
+        }
+
+        @Override
+        public boolean load(CompoundTag tag) {
+            potionID = tag.getString("Potion");
+            return true;
+        }
+    }
+
+    public static class ItemData implements ServerSaveable
+    {
+        public String itemID;
+        public EnchantmentData[] enchantments;
+        public PotionData potion;
+
+        public ItemData()
+        {}
+        public ItemData(String itemID)
+        {
+            this.itemID = itemID;
+            this.enchantments = new EnchantmentData[0];
+        }
+        public ItemData(ItemStack stack)
+        {
+            itemID = ItemUtilities.getItemID(stack.getItem());
+            CompoundTag tag = stack.getTag();
+            assert tag != null;
+            ArrayList<EnchantmentData> ench = new ArrayList<>();
+            int i = 0;
+            if (tag != null && tag.contains("StoredEnchantments", Tag.TAG_LIST)) {
+                ListTag enchantments = tag.getList("StoredEnchantments", Tag.TAG_COMPOUND);
+                for (Tag enchantmentTag : enchantments) {
+                    CompoundTag enchantment = (CompoundTag) enchantmentTag;
+                    EnchantmentData enchantmentData = new EnchantmentData();
+                    enchantmentData.load(enchantment);
+                    ench.add(enchantmentData);
+                    i++;
+                }
+                this.enchantments = new EnchantmentData[i];
+                for(int j = 0; j < ench.size(); j++)
+                {
+                    this.enchantments[j] = ench.get(j);
+                }
+            }
+            else {
+                this.enchantments = new EnchantmentData[0];
+            }
+
+            if (tag != null && tag.contains("Potion", Tag.TAG_STRING)) {
+                PotionData potion = new PotionData();
+                potion.load(tag);
+                this.potion = potion;
+            }
+            else {
+                this.potion = null;
+            }
+        }
+        public ItemData(String itemID, EnchantmentData[] enchantments, PotionData potion)
+        {
+            this.itemID = itemID;
+            this.enchantments = enchantments;
+            this.potion = potion;
+        }
+        public ItemStack getItemStack()
+        {
+            ItemStack stack = ItemUtilities.createItemStackFromId(itemID);
+            if(stack == null)
+                return ItemStack.EMPTY;
+            CompoundTag tag = null;
+            if(enchantments.length>0) {
+                if(tag == null)
+                    tag = new CompoundTag();
+                ListTag enchantmentsTag = new ListTag();
+                for (EnchantmentData enchantment : enchantments) {
+                    CompoundTag enchantmentTag = new CompoundTag();
+                    enchantment.save(enchantmentTag);
+                    enchantmentsTag.add(enchantmentTag);
+                }
+                tag.put("StoredEnchantments", enchantmentsTag);
+            }
+
+            if(potion != null) {
+                if(tag == null)
+                    tag = new CompoundTag();
+                potion.save(tag);
+            }
+
+            if(tag != null)
+                stack.setTag(tag);
+            return stack;
+        }
+        public ItemID getItemID()
+        {
+            return new ItemID(getItemStack());
+        }
+        @Override
+        public boolean save(CompoundTag tag) {
+            tag.putString("itemID", itemID);
+            CompoundTag enchantmentsTag = new CompoundTag();
+            for(EnchantmentData enchantment : enchantments)
+            {
+                CompoundTag enchantmentTag = new CompoundTag();
+                enchantment.save(enchantmentTag);
+                enchantmentsTag.put(enchantment.enchantmentID, enchantmentTag);
+            }
+            tag.put("StoredEnchantments", enchantmentsTag);
+            return true;
+        }
+
+        @Override
+        public boolean load(CompoundTag tag) {
+            itemID = tag.getString("itemID");
+            CompoundTag enchantmentsTag = tag.getCompound("StoredEnchantments");
+            enchantments = new EnchantmentData[enchantmentsTag.size()];
+            int i = 0;
+            for(String key : enchantmentsTag.getAllKeys())
+            {
+                CompoundTag enchantmentTag = enchantmentsTag.getCompound(key);
+                EnchantmentData enchantment = new EnchantmentData();
+                enchantment.load(enchantmentTag);
+                enchantments[i] = enchantment;
+                i++;
+            }
+            return true;
+        }
+    }
+
     public static class DefaultBotSettings
     {
-        public int maxOrderCount = StockMarketModSettings.MarketBot.MAX_ORDERS;
-        public double volumeScale = StockMarketModSettings.MarketBot.VOLUME_SCALE;
-        public double volumeSpread = StockMarketModSettings.MarketBot.VOLUME_SPREAD;
-        public double volumeRandomness = StockMarketModSettings.MarketBot.VOLUME_RANDOMNESS;
-        public long updateTimerIntervallMS = StockMarketModSettings.MarketBot.UPDATE_TIMER_INTERVAL_MS;
-        public double volatility = 100;
-        public double orderRandomness = 1;
-        public long targetItemBalance = 0;
-        public long minTimerMillis = 10000;
-        public long maxTimerMillis = 120000;
-        public int imbalancePriceRange = 100;
-        public double imbalancePriceChangeFactor = 0.1;
-        public double imbalancePriceChangeQuadFactor = 10;
-        public double pid_p = 0.1;
-        public double pid_d = 0.1;
-        public double pid_i = 0.0001;
-        public double pid_iBound = 1;
+        private final ServerVolatilityBot.Settings settings;
 
-        public DefaultBotSettings(int price, double rarity, double volatility, long udateTimerIntervallMS)
+
+        public DefaultBotSettings(int price, float rarity, float volatility, long udateTimerIntervallMS)
         {
-            this(new ServerVolatilityBot.Settings(price, rarity, volatility, udateTimerIntervallMS));
+            this(new ServerVolatilityBot.Settings(price, rarity, volatility, udateTimerIntervallMS, true, true, true));
         }
         public DefaultBotSettings(ServerVolatilityBot.Settings settings)
         {
-            maxOrderCount = settings.maxOrderCount;
-            volumeScale = settings.volumeScale;
-            volumeSpread = settings.volumeSpread;
-            volumeRandomness = settings.volumeRandomness;
-            updateTimerIntervallMS = settings.updateTimerIntervallMS;
-            volatility = settings.volatility;
-            orderRandomness = settings.orderRandomness;
-            targetItemBalance = settings.targetItemBalance;
-            minTimerMillis = settings.minTimerMillis;
-            maxTimerMillis = settings.maxTimerMillis;
-            imbalancePriceRange = settings.imbalancePriceRange;
-            imbalancePriceChangeFactor = settings.imbalancePriceChangeFactor;
-            imbalancePriceChangeQuadFactor = settings.imbalancePriceChangeQuadFactor;
-            pid_p = settings.pid_p;
-            pid_d = settings.pid_d;
-            pid_i = settings.pid_i;
-            pid_iBound = settings.pid_iBound;
+            this.settings = new ServerVolatilityBot.Settings();
+            this.settings.copyFrom(settings);
         }
         public void loadDefaultSettings(ServerVolatilityBot.Settings settings)
         {
-            settings.maxOrderCount = maxOrderCount;
-            settings.volumeScale = volumeScale;
-            settings.volumeSpread = volumeSpread;
-            settings.volumeRandomness = volumeRandomness;
-            settings.updateTimerIntervallMS = updateTimerIntervallMS;
-            settings.volatility = volatility;
-            settings.orderRandomness = orderRandomness;
-            settings.targetItemBalance = targetItemBalance;
-            settings.minTimerMillis = minTimerMillis;
-            settings.maxTimerMillis = maxTimerMillis;
-            settings.imbalancePriceRange = imbalancePriceRange;
-            settings.imbalancePriceChangeFactor = imbalancePriceChangeFactor;
-            settings.imbalancePriceChangeQuadFactor = imbalancePriceChangeQuadFactor;
-            settings.pid_p = pid_p;
-            settings.pid_d = pid_d;
-            settings.pid_i = pid_i;
-            settings.pid_iBound = pid_iBound;
+            settings.copyFrom(this.settings);
         }
-        public DefaultBotSettings setMaxOrderCount(int maxOrderCount)
+        public ServerVolatilityBot.Settings getSettings()
         {
-            this.maxOrderCount = maxOrderCount;
-            return this;
-        }
-        public DefaultBotSettings setVolumeScale(double volumeScale)
-        {
-            this.volumeScale = volumeScale;
-            return this;
-        }
-        public DefaultBotSettings setVolumeSpread(double volumeSpread)
-        {
-            this.volumeSpread = volumeSpread;
-            return this;
-        }
-        public DefaultBotSettings setVolumeRandomness(double volumeRandomness)
-        {
-            this.volumeRandomness = volumeRandomness;
-            return this;
+            return settings;
         }
         public DefaultBotSettings setUpdateTimerIntervallMS(long updateTimerIntervallMS)
         {
-            this.updateTimerIntervallMS = updateTimerIntervallMS;
+            this.settings.updateTimerIntervallMS = updateTimerIntervallMS;
             return this;
         }
-        public DefaultBotSettings setVolatility(double volatility)
+        public DefaultBotSettings setVolatility(float volatility)
         {
-            this.volatility = volatility;
+            this.settings.volatility = volatility;
             return this;
         }
-        public DefaultBotSettings setOrderRandomness(double orderRandomness)
+        public DefaultBotSettings setDefaultPrice(int defaultPrice)
         {
-            this.orderRandomness = orderRandomness;
-            return this;
-        }
-        public DefaultBotSettings setTargetItemBalance(long targetItemBalance)
-        {
-            this.targetItemBalance = targetItemBalance;
-            return this;
-        }
-        public DefaultBotSettings setMinTimerMillis(long minTimerMillis)
-        {
-            this.minTimerMillis = minTimerMillis;
-            return this;
-        }
-        public DefaultBotSettings setMaxTimerMillis(long maxTimerMillis)
-        {
-            this.maxTimerMillis = maxTimerMillis;
-            return this;
-        }
-        public DefaultBotSettings setImbalancePriceRange(int imbalancePriceRange)
-        {
-            this.imbalancePriceRange = imbalancePriceRange;
-            return this;
-        }
-        public DefaultBotSettings setImbalancePriceChangeFactor(double imbalancePriceChangeFactor)
-        {
-            this.imbalancePriceChangeFactor = imbalancePriceChangeFactor;
-            return this;
-        }
-        public DefaultBotSettings setImbalancePriceChangeQuadFactor(double imbalancePriceChangeQuadFactor)
-        {
-            this.imbalancePriceChangeQuadFactor = imbalancePriceChangeQuadFactor;
-            return this;
-        }
-        public DefaultBotSettings setPid_p(double pid_p)
-        {
-            this.pid_p = pid_p;
-            return this;
-        }
-        public DefaultBotSettings setPid_d(double pid_d)
-        {
-            this.pid_d = pid_d;
-            return this;
-        }
-        public DefaultBotSettings setPid_i(double pid_i)
-        {
-            this.pid_i = pid_i;
-            return this;
-        }
-        public DefaultBotSettings setPid_iBound(double pid_iBound)
-        {
-            this.pid_iBound = pid_iBound;
+            this.settings.defaultPrice = defaultPrice;
             return this;
         }
     }
@@ -180,29 +246,24 @@ public class ServerTradingBotFactory {
             if(bot.load(tag))
                 return bot;
         }
-        else if(className.compareTo(ServerMarketMakerBot.class.getSimpleName()) == 0)
-        {
-            ServerMarketMakerBot bot = new ServerMarketMakerBot();
-            if(bot.load(tag))
-                return bot;
-        }
 
-        throw new RuntimeException("Unknown bot class: " + className);
+        return null;
     }
 
     public static class BotBuilderContainer
     {
-        public String itemID;
+        //public String itemID;
+        public ItemData itemData;
         public DefaultBotSettings defaultSettings;
     }
     public static void botTableBuilder(
-            HashMap<String, BotBuilderContainer> table,
-            String itemID,
+            HashMap<ItemID, BotBuilderContainer> table,
+            ItemData itemData,
             DefaultBotSettings settings)
     {
         BotBuilderContainer container = new BotBuilderContainer();
+        //container.itemData = new ItemData(itemID.getStack());
         container.defaultSettings = settings;
-        container.itemID = itemID;
-        table.put(itemID, container);
+        table.put(itemData.getItemID(), container);
     }
 }

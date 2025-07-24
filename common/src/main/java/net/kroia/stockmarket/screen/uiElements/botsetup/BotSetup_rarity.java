@@ -68,8 +68,8 @@ public class BotSetup_rarity extends BotSetupGuiElement {
         slider.setBounds(padding, lowLabel.getBottom(), width, 20);
     }
 
-    public double getRarity() {
-        return slider.getSliderValue();
+    public float getRarity() {
+        return (float)slider.getSliderValue();
     }
     public void setTooltipSupplyer(Supplier<String> tooltipSupplier) {
         slider.setTooltipSupplier(tooltipSupplier);

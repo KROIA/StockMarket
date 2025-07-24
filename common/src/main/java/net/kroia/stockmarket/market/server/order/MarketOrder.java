@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.market.server.order;
 
 import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.util.ServerPlayerList;
 import net.minecraft.network.FriendlyByteBuf;
@@ -11,30 +12,27 @@ import java.util.UUID;
 public class MarketOrder extends Order {
 
 
-    public static MarketOrder create(ServerPlayer player, String itemID, int amount)
+    public static MarketOrder create(ServerPlayer player, ItemID itemID, ItemID currencyItemID, int amount)
     {
         int currentPrice = ServerMarket.getPrice(itemID);
         if(Order.tryReserveBankFund(player, itemID, amount, currentPrice)) {
 
-            return new MarketOrder(player.getUUID(), itemID, amount, currentPrice);
+            return new MarketOrder(player.getUUID(), itemID, currencyItemID, amount, currentPrice);
         }
         return null;
     }
-    public static MarketOrder createBotOrder(UUID playerUUID, Bank botMoneyBank, Bank botItemBank, String itemID, int amount)
+    public static MarketOrder createBotOrder(ItemID itemID, ItemID currencyItemID, int amount)
     {
         int currentPrice = ServerMarket.getPrice(itemID);
-        if(Order.tryReserveBankFund(botMoneyBank, botItemBank, playerUUID, itemID, amount, currentPrice, null)){
-            return new MarketOrder(playerUUID, itemID, amount, currentPrice,true);
-        }
-        return null;
+        return new MarketOrder(null, itemID, currencyItemID, amount, currentPrice,true);
     }
-    protected MarketOrder(UUID playerUUID, String itemID, int amount, int currentPrice) {
-        super(playerUUID, itemID, amount);
+    protected MarketOrder(UUID playerUUID, ItemID itemID, ItemID currencyItemID, int amount, int currentPrice) {
+        super(playerUUID, itemID, currencyItemID, amount);
         if(amount > 0)
             this.lockedMoney = (long) Math.abs(amount) * currentPrice;
     }
-    protected MarketOrder(UUID playerUUID, String itemID, int amount, int currentPrice, boolean isBot) {
-        super(playerUUID, itemID, amount, isBot);
+    protected MarketOrder(UUID playerUUID, ItemID itemID, ItemID currencyItemID, int amount, int currentPrice, boolean isBot) {
+        super(playerUUID, itemID, currencyItemID, amount, isBot);
         if(amount > 0)
             this.lockedMoney = (long) Math.abs(amount) * currentPrice;
     }
@@ -60,7 +58,11 @@ public class MarketOrder extends Order {
 
     @Override
     public String toString() {
-        String playerName = ServerPlayerList.getPlayerName(playerUUID);
+        String playerName;
+        if(playerUUID == null)
+            playerName = "Bot";
+        else
+            playerName = ServerPlayerList.getPlayerName(playerUUID);
         if(playerName == null || playerName.isEmpty())
             playerName = playerUUID.toString();
         return "MarketOrder{\n  Owner: " + playerName +

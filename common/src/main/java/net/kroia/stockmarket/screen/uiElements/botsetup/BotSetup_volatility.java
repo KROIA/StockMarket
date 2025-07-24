@@ -69,8 +69,8 @@ public class BotSetup_volatility extends BotSetupGuiElement{
         slider.setBounds(padding, lowLabel.getBottom(), width, 20);
     }
 
-    public double getVolatility() {
-        return slider.getSliderValue();
+    public float getVolatility() {
+        return (float)slider.getSliderValue();
     }
     public void setTooltipSupplyer(Supplier<String> tooltipSupplier) {
         slider.setTooltipSupplier(tooltipSupplier);

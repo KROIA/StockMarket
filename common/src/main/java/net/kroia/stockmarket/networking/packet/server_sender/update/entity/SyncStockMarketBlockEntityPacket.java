@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.networking.packet.server_sender.update.entity;
 
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.NetworkPacket;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
@@ -10,7 +11,7 @@ import net.minecraft.server.level.ServerPlayer;
 
 public class SyncStockMarketBlockEntityPacket extends NetworkPacket {
     private BlockPos pos;
-    private String itemID;
+    private ItemID itemID;
     private int amount;
     private int price;
 
@@ -33,7 +34,7 @@ public class SyncStockMarketBlockEntityPacket extends NetworkPacket {
         return pos;
     }
 
-    public String getItemID() {
+    public ItemID getItemID() {
         return itemID;
     }
 
@@ -53,7 +54,7 @@ public class SyncStockMarketBlockEntityPacket extends NetworkPacket {
     public void toBytes(FriendlyByteBuf buf)
     {
         buf.writeBlockPos(pos);
-        buf.writeUtf(itemID);
+        buf.writeItem(itemID.getStack());
         buf.writeInt(amount);
         buf.writeInt(price);
     }
@@ -61,7 +62,7 @@ public class SyncStockMarketBlockEntityPacket extends NetworkPacket {
     public void fromBytes(FriendlyByteBuf buf)
     {
         this.pos = buf.readBlockPos();
-        this.itemID = buf.readUtf();
+        this.itemID = new ItemID(buf.readItem());
         this.amount = buf.readInt();
         this.price = buf.readInt();
     }

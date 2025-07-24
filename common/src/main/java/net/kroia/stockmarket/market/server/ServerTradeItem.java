@@ -1,8 +1,8 @@
 package net.kroia.stockmarket.market.server;
 
-import dev.architectury.event.events.common.TickEvent;
-import net.kroia.banksystem.banking.ServerBankManager;
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ServerSaveable;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
 import net.kroia.stockmarket.market.server.order.Order;
@@ -17,36 +17,33 @@ import java.util.ArrayList;
 import java.util.UUID;
 
 public class ServerTradeItem implements ServerSaveable {
-    private String itemID;
+    private ItemID itemID;
+    private ItemID currencyItemID;
     private final PriceHistory priceHistory;
     private final ArrayList<ServerPlayer> subscribers = new ArrayList<>();
     private final MarketManager marketManager;
 
-    private long lastMillis = 0;
+    private long lastMillis = System.currentTimeMillis();
     protected long updateTimerIntervallMS = 100;
 
     private boolean enabled = true;
 
 
-    public ServerTradeItem(String itemID, int startPrice)
+    public ServerTradeItem(ItemID itemID, ItemID currencyItemID, int startPrice)
     {
         this.itemID = itemID;
-        this.priceHistory = new PriceHistory(itemID, startPrice);
+        this.currencyItemID = currencyItemID;
+        this.priceHistory = new PriceHistory(itemID, currencyItemID, startPrice);
         this.marketManager = new MarketManager(this, startPrice, priceHistory);
-
-        TickEvent.SERVER_POST.register(this::onServerTick);
     }
 
     private ServerTradeItem()
     {
-        this.priceHistory = new PriceHistory("", 0);
+        this.priceHistory = new PriceHistory(null, null,0);
         this.marketManager = new MarketManager(this, 0, priceHistory);
-
-        TickEvent.SERVER_POST.register(this::onServerTick);
     }
     public void cleanup()
     {
-        TickEvent.SERVER_POST.unregister(this::onServerTick);
         enabled = false;
         removeTradingBot();
         clear();
@@ -80,7 +77,7 @@ public class ServerTradeItem implements ServerSaveable {
     {
         return marketManager.getTradingBot();
     }
-
+/*
     public void setUpdateInterval(long intervalMillis)
     {
         updateTimerIntervallMS = intervalMillis;
@@ -89,8 +86,8 @@ public class ServerTradeItem implements ServerSaveable {
     {
         return updateTimerIntervallMS;
     }
-
-    public String getItemID()
+*/
+    public ItemID getItemID()
     {
         return itemID;
     }
@@ -98,6 +95,10 @@ public class ServerTradeItem implements ServerSaveable {
     public PriceHistory getPriceHistory()
     {
         return priceHistory;
+    }
+    public void resetPriceChart()
+    {
+        priceHistory.clear(marketManager.getCurrentPrice());
     }
 
     public void addSubscriber(ServerPlayer player)
@@ -169,7 +170,7 @@ public class ServerTradeItem implements ServerSaveable {
     public void cancelAllOrders(UUID playerUUID)
     {
         marketManager.cancelAllOrders(playerUUID);
-        Bank itemBank = ServerBankManager.getUser(playerUUID).getBank(itemID);
+        Bank itemBank = BankSystemMod.SERVER_BANK_MANAGER.getUser(playerUUID).getBank(itemID);
         if(itemBank != null)
             itemBank.unlockAll();
         notifySubscribers();
@@ -204,14 +205,25 @@ public class ServerTradeItem implements ServerSaveable {
     @Override
     public boolean save(CompoundTag tag) {
         boolean success = true;
-        tag.putString("itemID", itemID);
+        //long startMillis = System.currentTimeMillis();
+        CompoundTag itemTag = new CompoundTag();
+        success &= itemID.save(itemTag);
+        tag.put("itemID", itemTag);
+
+        CompoundTag currencyItemTag = new CompoundTag();
+        success &= currencyItemID.save(currencyItemTag);
+        tag.put("currencyItemID", currencyItemTag);
+
         CompoundTag matchingEngineTag = new CompoundTag();
         success &= marketManager.save(matchingEngineTag);
         tag.put("matchingEngine", matchingEngineTag);
-
+        //long matchingEngineMillis = System.currentTimeMillis();
         CompoundTag priceHistoryTag = new CompoundTag();
         success &= priceHistory.save(priceHistoryTag);
         tag.put("priceHistory", priceHistoryTag);
+
+        //long endMillis = System.currentTimeMillis();
+        //StockMarketMod.LOGGER.info("[SERVER] Saving ServerMarket item: "+itemID + " " +(endMillis-startMillis)+"ms matching engine part: "+(matchingEngineMillis-startMillis)+"ms price history part: "+(endMillis-matchingEngineMillis)+"ms");
         return success;
     }
 
@@ -220,28 +232,48 @@ public class ServerTradeItem implements ServerSaveable {
         if(tag == null)
             return false;
         if(     !tag.contains("itemID") ||
+                !tag.contains("currencyItemID") ||
                 !tag.contains("matchingEngine") ||
                 !tag.contains("priceHistory"))
             return false;
+        boolean success = true;
 
-        itemID = tag.getString("itemID");
+        String oldItemID = tag.getString("itemID");
+        if(oldItemID.compareTo("")==0)
+        {
+            if(itemID == null)
+            {
+                itemID = new ItemID(tag.getCompound("itemID"));
+            }
+            else
+                success = itemID.load(tag.getCompound("itemID"));
+        }
+        else {
+            itemID = new ItemID(oldItemID);
+        }
+
+        currencyItemID = new ItemID(tag.getCompound("currencyItemID"));
         marketManager.load(tag.getCompound("matchingEngine"));
 
         priceHistory.load(tag.getCompound("priceHistory"));
         marketManager.setItemID(itemID);
         priceHistory.setItemID(itemID);
+        priceHistory.setCurrencyItemID(currencyItemID);
 
-        return !itemID.isEmpty();
+        return success;
     }
 
     public void onServerTick(MinecraftServer server) {
-        if(subscribers.isEmpty() || !enabled)
+        if(!enabled)
             return;
+
+        this.marketManager.onServerTick(server);
 
         long currentTime = System.currentTimeMillis();
         if(currentTime - lastMillis > updateTimerIntervallMS) {
             lastMillis = currentTime;
-            notifySubscribers();
+            if(!subscribers.isEmpty())
+                notifySubscribers();
         }
     }
 }

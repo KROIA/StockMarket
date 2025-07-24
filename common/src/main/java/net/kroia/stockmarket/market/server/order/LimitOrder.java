@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.market.server.order;
 
 import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ServerSaveable;
 import net.kroia.stockmarket.util.ServerPlayerList;
 import net.minecraft.nbt.CompoundTag;
@@ -15,39 +16,37 @@ import java.util.UUID;
 public class LimitOrder extends Order implements ServerSaveable {
     private int price;
 
-    public static LimitOrder create(ServerPlayer player, String itemID, int amount, int price)
+    public static LimitOrder create(ServerPlayer player, ItemID itemID, ItemID currencyItemID, int amount, int price)
     {
         if(Order.tryReserveBankFund(player, itemID, amount, price))
-            return new LimitOrder(player.getUUID(), itemID, amount, price);
+            return new LimitOrder(player.getUUID(), itemID, currencyItemID, amount, price);
         return null;
     }
-    public static LimitOrder create(ServerPlayer player, String itemID, int amount, int price, int alreadyFilledAmount)
+    public static LimitOrder create(ServerPlayer player, ItemID itemID, ItemID currencyItemID, int amount, int price, int alreadyFilledAmount)
     {
         if(Order.tryReserveBankFund(player, itemID, amount-alreadyFilledAmount, price))
-            return new LimitOrder(player.getUUID(), itemID, amount, price, alreadyFilledAmount);
+            return new LimitOrder(player.getUUID(), itemID, currencyItemID, amount, price, alreadyFilledAmount);
         return null;
     }
-    public static LimitOrder createBotOrder(UUID playerUUID, Bank botMoneyBank, Bank botItemBank, String itemID, int amount, int price)
+    public static LimitOrder createBotOrder(ItemID itemID, ItemID currencyItemID, int amount, int price)
     {
-        if(Order.tryReserveBankFund(botMoneyBank, botItemBank, playerUUID, itemID, amount, price, null))
-            return new LimitOrder(playerUUID, itemID, amount, price, true);
-        return null;
+        return new LimitOrder(null, itemID, currencyItemID, amount, price, true);
     }
-    protected LimitOrder(UUID playerUUID, String itemID, int amount, int price) {
-        super(playerUUID, itemID, amount);
+    protected LimitOrder(UUID playerUUID, ItemID itemID, ItemID currencyItemID, int amount, int price) {
+        super(playerUUID, itemID, currencyItemID, amount);
         this.price = price;
         if(amount > 0)
             this.lockedMoney = (long) amount * price;
     }
-    protected LimitOrder(UUID playerUUID, String itemID, int amount, int price, int alreadyFilledAmount) {
-        super(playerUUID, itemID, amount);
+    protected LimitOrder(UUID playerUUID, ItemID itemID, ItemID currencyItemID, int amount, int price, int alreadyFilledAmount) {
+        super(playerUUID, itemID, currencyItemID, amount);
         this.price = price;
         this.filledAmount = alreadyFilledAmount;
         if(amount > 0)
             this.lockedMoney = (long) Math.abs(amount-alreadyFilledAmount) * price;
     }
-    protected LimitOrder(UUID playerUUID, String itemID, int amount, int price, boolean isBot) {
-        super(playerUUID, itemID, amount, isBot);
+    protected LimitOrder(UUID playerUUID, ItemID itemID, ItemID currencyItemID, int amount, int price, boolean isBot) {
+        super(playerUUID, itemID, currencyItemID, amount, isBot);
         this.price = price;
         if(amount > 0)
             this.lockedMoney = (long) amount * price;
@@ -125,7 +124,9 @@ public class LimitOrder extends Order implements ServerSaveable {
     @Override
     public boolean save(CompoundTag tag) {
         tag.putLong("orderID", orderID);
-        tag.putString("itemID", itemID);
+        CompoundTag itemIDTag = new CompoundTag();
+        itemID.save(itemIDTag);
+        tag.put("itemID", itemIDTag);
         tag.putUUID("playerUUID", playerUUID);
         tag.putInt("price", price);
         tag.putInt("amount", amount);
@@ -153,7 +154,16 @@ public class LimitOrder extends Order implements ServerSaveable {
                 !tag.contains("isBot"))
             return false;
         orderID = tag.getLong("orderID");
-        itemID = tag.getString("itemID");
+
+        // Backward compatibility
+        String oldItemID = tag.getString("itemID");
+        if(oldItemID.compareTo("")==0) {
+            CompoundTag itemIDTag = tag.getCompound("itemID");
+            itemID = new ItemID(itemIDTag);
+        }
+        else
+            itemID = new ItemID(oldItemID);
+
         playerUUID = tag.getUUID("playerUUID");
         price = tag.getInt("price");
         amount = tag.getInt("amount");

@@ -1,8 +1,11 @@
 package net.kroia.stockmarket.networking.packet.server_sender.update;
 
+import net.kroia.banksystem.util.BankSystemTextMessages;
+import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.networking.NetworkPacket;
 import net.kroia.stockmarket.StockMarketClientHooks;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
+import net.kroia.stockmarket.util.StockMarketTextMessages;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -29,6 +32,15 @@ public class OpenScreenPacket extends NetworkPacket {
     {
         OpenScreenPacket packet = new OpenScreenPacket();
         packet.screenType = screenType;
+        if(screenType == ScreenType.STOCKMARKET_MANAGEMENT)
+        {
+            // check if player is in creative mode
+            if(!player.isCreative())
+            {
+                PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getNeedCreativeModeForThisScreenMessage());
+                return;
+            }
+        }
         StockMarketNetworking.sendToClient(player, packet);
     }
     @Override

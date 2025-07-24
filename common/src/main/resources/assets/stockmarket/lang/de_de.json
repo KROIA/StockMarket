@@ -34,6 +34,10 @@
   "message.stockmarket.stockmarket_data_loaded": "Stockmarket Daten geladen",
   "message.stockmarket.default_bot_created": "Standard Bot für Item: {item_name} erstellt",
   "message.stockmarket.can_not_create_default_bot": "Standard Bot für Item: {item_name} kann nicht erstellt werden",
+  "message.stockmarket.default_bots_category_created": "Standard Bots der Kategorie: {value} erstellt",
+  "message.stockmarket.can_not_create_default_bots_category": "Standard Bots für Kategorie {value} kann nicht erstellt werden",
+  "message.stockmarket.default_market_category_removed": "Mark Kategorie {value} entfernt",
+  "message.stockmarket.unknown_market_category": "Kann Market Kategorie: {value} nicht finden",
 
 
   "message.stockmarket.bot_created": "Bot erstellt für Item: {item_name}, du kannst seine Einstellungen ändern und ihn dann aktivieren",
@@ -84,36 +88,35 @@
   "message.stockmarket.order_filled_amount": "Gefüllte Mänge: {amount} {item_name}",
   "message.stockmarket.order_invalid_reason": "Ungültigkeits Grund: {reason}",
   "message.stockmarket.order_invalid_reason_market_closed": "Markt ist geschlossen",
+  "message.stockmarket.need_creative_mode_for_this_screen": "Du musst im Kreativmodus sein um auf diesen Bildschirm zuzugreifen",
+
 
   "message.stockmarket.no_trading_item_available": "Kein Handels Item verfügbar",
   "gui.stockmarket.bot_settings_screen.change_item": "Item ändern",
   "gui.stockmarket.bot_settings_screen.save_settings": "Einstellungen speichern",
-  "gui.stockmarket.bot_settings_screen.bot_create": "Bot erstellen",
-  "gui.stockmarket.bot_settings_screen.bot_destroy": "Bot löschen",
-  "gui.stockmarket.bot_settings_screen.bot_bank": "Bot Bank",
+  "gui.stockmarket.bot_settings_screen.bot_use": "Bot verwenden",
   "gui.stockmarket.bot_settings_screen.market_open": "Markt geöffnet",
   "gui.stockmarket.bot_settings_screen.open_bot_setup": "Bot Setup",
 
   "gui.stockmarket.bot_settings_screen.setting_enabled": "Aktiviert",
-  "gui.stockmarket.bot_settings_screen.settings_max_order_count": "Maximale Kauf/Verkaufs Angebote",
-  "gui.stockmarket.bot_settings_screen.settings_volume_scale": "Handelsvolumen skalierung",
-  "gui.stockmarket.bot_settings_screen.settings_volume_spread": "Mengenverteilung",
-  "gui.stockmarket.bot_settings_screen.settings_volume_randomness": "Zufällige Menge",
-  "gui.stockmarket.bot_settings_screen.settings_update_interval": "Aktualisierungsinterval [ms]",
-  "gui.stockmarket.bot_settings_screen.settings_order_randomness": "Zufällige käufe",
+  "gui.stockmarket.bot_settings_screen.settings_update_interval": "Aktuallisierungs Interval [ms]",
+  "gui.stockmarket.bot_settings_screen.settings_default_price": "Standard Preis für das Item",
+  "gui.stockmarket.bot_settings_screen.settings_order_book_volume_scale": "Order-book Volumen Skalierung",
+  "gui.stockmarket.bot_settings_screen.settings_near_market_volume_scale": "Order-book nah market Preis Volumen Skalierung",
+  "gui.stockmarket.bot_settings_screen.settings_volume_accumulation_rate": "Order-book Volumen Akkumulationsrate",
+  "gui.stockmarket.bot_settings_screen.settings_volume_fast_accumulation_rate": "Order-book schnelle Volumen Akkumulationsrate",
+  "gui.stockmarket.bot_settings_screen.settings_volume_decumulation_rate": "Order-book Volumen Deakkumulationsrate",
+  "gui.stockmarket.bot_settings_screen.settings_volume_scale": "Bot Volumen Skalierung",
+  "gui.stockmarket.bot_settings_screen.settings_enable_target_price": "Ziel Preis aktivieren",
+  "gui.stockmarket.bot_settings_screen.settings_target_price_steering_factor": "Ziel Preis Anstrenbungsfaktor",
+  "gui.stockmarket.bot_settings_screen.settings_enable_volume_tracking": "Volumen tracking aktivieren",
+  "gui.stockmarket.bot_settings_screen.settings_volume_steering_factor": "Volumen Anstrenbungsfaktor",
+  "gui.stockmarket.bot_settings_screen.settings_enable_random_walk": "Zufällige Kursschwankung aktivieren",
   "gui.stockmarket.bot_settings_screen.settings_volatility": "Volatilität [%]",
-  "gui.stockmarket.bot_settings_screen.settings_volatility_timer": "Volatilitäts Timer [ms]",
-  "gui.stockmarket.bot_settings_screen.settings_volatility_timer_min": "Volatilitäts Timer Min [ms]",
-  "gui.stockmarket.bot_settings_screen.settings_volatility_timer_max": "Volatilitäts Timer Max [ms]",
-  "gui.stockmarket.bot_settings_screen.settings_target_item_balance": "Ziel Mänge",
-  "gui.stockmarket.bot_settings_screen.settings_imbalance_price_range": "Ziel Preis Bereich",
-  "gui.stockmarket.bot_settings_screen.settings_imbalance_price_change_fac_linear": "Lineare Preis-änderungsrate",
-  "gui.stockmarket.bot_settings_screen.settings_imbalance_price_change_fac_quad": "Quadratische Preis-änderungsrate",
-  "gui.stockmarket.bot_settings_screen.settings_pid_p": "PID P",
-  "gui.stockmarket.bot_settings_screen.settings_pid_i": "PID I",
-  "gui.stockmarket.bot_settings_screen.settings_pid_d": "PID D",
-  "gui.stockmarket.bot_settings_screen.settings_pid_ibounds": "PID I Grenzen",
-  "gui.stockmarket.bot_settings_screen.settings_pid_integrated_err": "PID Integrierter Fehler",
+  "gui.stockmarket.bot_settings_setup_screen_enabled_features.enable_target_price": "Ziel Preis aktivieren\nDer Bot wird versuchen den berechneten Zielpreis zu erreichen.\n ",
+  "gui.stockmarket.bot_settings_setup_screen_enabled_features.enable_volume_tracking": "Volumen tracking aktivieren\nDer Bot zählt alle Käufe/Verkäufe.\nDieser Wert wird für die Berechnung des Zielpreises verwendet.",
+  "gui.stockmarket.bot_settings_setup_screen_enabled_features.enable_random_walk": "Zufällige Kursschwankung aktivieren\nDer Bot wird den Zielpreis zufällig ändern,\nohne weit vom Nominalwert abzuweichen.",
+
 
   "gui.stockmarket.management_screen.title": "Stock Market Management",
   "gui.stockmarket.management_screen.trading_items": "Handels Items",
@@ -140,10 +143,6 @@
 
   "gui.stockmarket.bot_settings_setup_screen_market_speed.question": "Wie schnell soll der bot das Item handeln?\nSetze den Interval in Millisekunden\nFür schnelleres handelä, wähle einen kleinen Wert.\nFür langsams handlä, nim en grosse Wert\nSchnells handle cha d Server-Performance beiträchtige\nMinimum: 1000ms\nMaximum: 10000ms",
   "gui.stockmarket.bot_settings_setup_screen_market_speed.low": "Schnäggätempo",
-  "gui.stockmarket.bot_settings_setup_screen_market_speed.high": "Wie de Blitz",
-
-  "gui.stockmarket.bot_settings_setup_screen_change_bot_stocks.auto_change_money_balance": "Ändere den Geldbetrag auf der Bank des Bots automatisch.\nDas wird gemacht um genügend Liquidität zu haben,\num Items kaufen zu können",
-  "gui.stockmarket.bot_settings_setup_screen_change_bot_stocks.auto_change_item_balance": "Ändere die Anzahl Items auf der Bank des Bots automatisch.\nDas wird gemacht um genügend Items zu haben,\num items verkaufen zu können"
-
+  "gui.stockmarket.bot_settings_setup_screen_market_speed.high": "Wie de Blitz"
 
 }

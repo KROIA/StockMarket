@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.market.server;
 
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.banking.BankUser;
 import net.kroia.banksystem.banking.ServerBankManager;
 import net.kroia.banksystem.banking.bank.Bank;
@@ -35,23 +36,12 @@ public class TransactionEngine {
 
         UUID playerUUID1 = o1.getPlayerUUID();
         UUID playerUUID2 = o2.getPlayerUUID();
-        BankUser user1 = ServerBankManager.getUser(playerUUID1);
-        BankUser user2 = ServerBankManager.getUser(playerUUID2);
-        if(user2 == null)
-        {
-            user2 = ServerBankManager.getUser(playerUUID2);
-        }
-        Bank moneyBank1 = user1.getMoneyBank();
-        Bank moneyBank2 = user2.getMoneyBank();
-        Bank itemBank1 = user1.getBank(o1.getItemID());
-        Bank itemBank2 = user2.getBank(o2.getItemID());
-        if(moneyBank1 == null || moneyBank2 == null || itemBank1 == null || itemBank2 == null)
-        {
-            StockMarketMod.LOGGER.error("Bank/Itembank not found for player: " + o1.getPlayerUUID() + " or " + o2.getPlayerUUID()+
-                    " Order1: " + o1 + " Order2: " + o2+
-                    " Can't fill order");
-            return 0;
-        }
+        BankUser user1 = (playerUUID1!=null? BankSystemMod.SERVER_BANK_MANAGER.getUser(playerUUID1):null);
+        BankUser user2 = (playerUUID2!=null?BankSystemMod.SERVER_BANK_MANAGER.getUser(playerUUID2):null);
+        Bank moneyBank1 = (user1!=null?user1.getBank(o1.getCurrencyItemID()):null);
+        Bank moneyBank2 = (user2!=null?user2.getBank(o2.getCurrencyItemID()):null);
+        Bank itemBank1 = (user1!=null?user1.getBank(o1.getItemID()):null);
+        Bank itemBank2 = (user2!=null?user2.getBank(o2.getItemID()):null);
 
         UUID senderUUID = fillAmount > 0 ? playerUUID1 : playerUUID2;
         UUID receiverUUID = fillAmount > 0 ? playerUUID2 : playerUUID1;
@@ -62,15 +52,102 @@ public class TransactionEngine {
         Order senderOrder = fillAmount > 0 ? o1 : o2;
         Order receiverOrder = fillAmount > 0 ? o2 : o1;
 
-        // Overflow check
-        if(receiverMoneyBank.getTotalBalance() + money < receiverMoneyBank.getTotalBalance() ||
-           receiverItemBank.getTotalBalance() + fillVolume < receiverItemBank.getTotalBalance())
+        if(senderOrder.isBot() && receiverOrder.isBot())
         {
-            StockMarketMod.LOGGER.error("Overflow while filling order from player: " + senderUUID.toString() +
-                    " Order1: " + senderOrder + " Order2: " + receiverOrder +
-                    " Can't fill order");
-            receiverOrder.markAsInvalid("Would lead to an variable overflow");
-            return 0;
+            senderOrder.addFilledAmount(fillVolume);
+            receiverOrder.addFilledAmount(-fillVolume);
+            return fillVolume;
+        }
+
+        // Overflow check
+        if(receiverMoneyBank != null)
+        {
+            if(receiverMoneyBank.getTotalBalance() + money < receiverMoneyBank.getTotalBalance())
+            {
+                StockMarketMod.LOGGER.error("Overflow while filling order from player: " + receiverUUID.toString() +
+                        " Order1: " + senderOrder + " Order2: " + receiverOrder +
+                        " Can't fill order");
+                receiverOrder.markAsInvalid("Would lead to an variable overflow");
+                return 0;
+            }
+        }
+        if(receiverItemBank != null)
+        {
+            if(receiverItemBank.getTotalBalance() + fillVolume < receiverItemBank.getTotalBalance())
+            {
+                StockMarketMod.LOGGER.error("Overflow while filling order from player: " + senderUUID.toString() +
+                        " Order1: " + senderOrder + " Order2: " + receiverOrder +
+                        " Can't fill order");
+                receiverOrder.markAsInvalid("Would lead to an variable overflow");
+                return 0;
+            }
+        }
+
+        if(senderOrder.isBot() || receiverOrder.isBot())
+        {
+            if(receiverItemBank != null)
+            {
+                Bank.Status status = receiverItemBank.deposit(fillVolume);
+                if(status != Bank.Status.SUCCESS)
+                {
+                    StockMarketMod.LOGGER.error("Failed to deposit item for bot: " + receiverUUID.toString() +
+                            " Order1: " + senderOrder + " Order2: " + receiverOrder +
+                            " Can't fill order");
+                    receiverOrder.markAsInvalid("");
+                    return 0;
+                }
+            }
+            if(receiverMoneyBank != null)
+            {
+                Bank.Status status = receiverMoneyBank.deposit(money);
+                if(status != Bank.Status.SUCCESS)
+                {
+                    StockMarketMod.LOGGER.error("Failed to deposit money for bot: " + receiverUUID.toString() +
+                            " Order1: " + senderOrder + " Order2: " + receiverOrder +
+                            " Can't fill order");
+                    receiverOrder.markAsInvalid("");
+                    return 0;
+                }
+            }
+            if(senderItemBank != null)
+            {
+                Bank.Status status = senderItemBank.withdrawLockedPrefered(fillVolume);
+                if(status != Bank.Status.SUCCESS)
+                {
+                    StockMarketMod.LOGGER.error("Failed to withdraw item for bot: " + senderUUID.toString() +
+                            " Order1: " + senderOrder + " Order2: " + receiverOrder +
+                            " Can't fill order");
+                    receiverOrder.markAsInvalid("");
+                    return 0;
+                }
+            }
+            if(senderMoneyBank != null)
+            {
+                Bank.Status status = senderMoneyBank.withdrawLockedPrefered(money);
+                if(status != Bank.Status.SUCCESS)
+                {
+                    StockMarketMod.LOGGER.error("Failed to withdraw money for bot: " + senderUUID.toString() +
+                            " Order1: " + senderOrder + " Order2: " + receiverOrder +
+                            " Can't fill order");
+                    receiverOrder.markAsInvalid("");
+                    return 0;
+                }
+            }
+            senderOrder.addFilledAmount(fillVolume);
+            senderOrder.addTransferedMoney(-money);
+            receiverOrder.addFilledAmount(-fillVolume);
+            receiverOrder.addTransferedMoney(money);
+
+            if(senderOrder.isFilled())
+                senderOrder.markAsProcessed();
+            else if(senderOrder.getStatus() == Order.Status.PENDING)
+                senderOrder.setStatus(Order.Status.PARTIAL);
+
+            if(receiverOrder.isFilled())
+                receiverOrder.markAsProcessed();
+            else if(receiverOrder.getStatus() == Order.Status.PENDING)
+                receiverOrder.setStatus(Order.Status.PARTIAL);
+            return fillVolume;
         }
 
         Bank.Status status = Bank.exchangeFromLockedPrefered(senderMoneyBank, receiverMoneyBank, money,    senderItemBank, receiverItemBank, fillVolume);
@@ -97,7 +174,7 @@ public class TransactionEngine {
                     if (missingMoney > 0)
                         missingText += "\n " + StockMarketTextMessages.getMissingMoneyMessage(missingMoney);
                     if (missingItems > 0)
-                        missingText += "\n  " + StockMarketTextMessages.getMissingItemsMessage(senderOrder.getItemID(), missingItems);
+                        missingText += "\n  " + StockMarketTextMessages.getMissingItemsMessage(senderOrder.getItemID().getName(), missingItems);
 
                     PlayerUtilities.printToClientConsole(senderMoneyBank.getPlayerUUID(), StockMarketTextMessages.getInsufficientFundToConsumeMessage(receiverOrder.toString(), currentPrice, fillVolume, money) + missingText);
 
@@ -121,6 +198,94 @@ public class TransactionEngine {
             else if(receiverOrder.getStatus() == Order.Status.PENDING)
                 receiverOrder.setStatus(Order.Status.PARTIAL);
         }
+        return fillVolume;
+    }
+    public static int ghostFill(Order o1, int ghostAmount, int currentPrice)
+    {
+        if(ghostAmount == 0 || o1.getAmount()-o1.getFilledAmount() == 0)
+            return 0;
+        if(ghostAmount > 0 && o1.isBuy() || ghostAmount < 0 && !o1.isBuy())
+        {
+            // same sign -> both buy or both sell
+            return 0;
+        }
+
+        int fillAmount1 = o1.getAmount() - o1.getFilledAmount();
+        int fillVolume = Math.min(Math.abs(fillAmount1), Math.abs(ghostAmount));
+        long money = (long)fillVolume * (long)currentPrice;
+
+        if(o1.isBot())
+        {
+            if(o1.isBuy())
+                o1.addFilledAmount(fillVolume);
+            else
+                o1.addFilledAmount(-fillVolume);
+            return fillVolume;
+        }
+
+        long transferedMoney = 0;
+        int fillAmount = fillVolume;
+        if(fillAmount1 < 0)
+            fillAmount = -fillVolume;
+
+        UUID playerUUID1 = o1.getPlayerUUID();
+        BankUser user1 = BankSystemMod.SERVER_BANK_MANAGER.getUser(playerUUID1);
+        Bank moneyBank1 = user1.getBank(o1.getCurrencyItemID());
+        Bank itemBank1 = user1.getBank(o1.getItemID());
+
+        long moneyToTransfer = (long)fillVolume * (long)currentPrice;
+        if(o1.isBuy())
+        {
+            if(moneyBank1.getBalance()+(o1.getLockedMoney() + o1.getTransferedMoney()) < moneyToTransfer)
+            {
+                fillVolume = Math.min(fillVolume, (int)(moneyBank1.getBalance()+(o1.getLockedMoney() + o1.getTransferedMoney()) / currentPrice));
+                moneyToTransfer = (long)fillVolume * (long)currentPrice;
+            }
+
+            if(moneyToTransfer > 0) {
+                Bank.Status status = moneyBank1.withdrawLockedPrefered(moneyToTransfer);
+                if (status != Bank.Status.SUCCESS) {
+                    StockMarketMod.LOGGER.error("Failed to withdraw money for ghost fill: " + o1 + " Status: " + status);
+                    o1.markAsInvalid("");
+                    return 0;
+                }
+                status = itemBank1.deposit(fillVolume);
+                if (status != Bank.Status.SUCCESS) {
+                    StockMarketMod.LOGGER.error("Failed to deposit item for ghost fill: " + o1 + " Status: " + status);
+                    moneyBank1.deposit(moneyToTransfer);
+                    o1.markAsInvalid("");
+                    return 0;
+                }
+                o1.addFilledAmount(fillVolume);
+                o1.addTransferedMoney(-money);
+            }
+        }
+        else
+        {
+            Bank.Status status = itemBank1.withdrawLockedPrefered(fillVolume);
+            if(status != Bank.Status.SUCCESS)
+            {
+                StockMarketMod.LOGGER.error("Failed to withdraw item for ghost fill: " + o1 + " Status: " + status);
+                o1.markAsInvalid("");
+                return 0;
+            }
+
+            status = moneyBank1.deposit(moneyToTransfer);
+            if(status != Bank.Status.SUCCESS)
+            {
+                StockMarketMod.LOGGER.error("Failed to deposit money for ghost fill: " + o1 + " Status: " + status);
+                itemBank1.deposit(fillVolume);
+                itemBank1.lockAmount(fillVolume);
+                o1.markAsInvalid("Would lead to an variable overflow");
+                return 0;
+            }
+            o1.addFilledAmount(-fillVolume);
+            o1.addTransferedMoney(money);
+        }
+        if(o1.isFilled())
+            o1.markAsProcessed();
+        else if(o1.getStatus() == Order.Status.PENDING)
+            o1.setStatus(Order.Status.PARTIAL);
         return fillVolume;
     }
 }

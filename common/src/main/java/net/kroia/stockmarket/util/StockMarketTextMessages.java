@@ -1,7 +1,10 @@
 package net.kroia.stockmarket.util;
 
+import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.util.BankSystemTextMessages;
+import net.kroia.modutilities.ItemUtilities;
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.StockMarketModSettings;
 import net.minecraft.network.chat.Component;
 
 public class StockMarketTextMessages {
@@ -26,6 +29,19 @@ public class StockMarketTextMessages {
         public static final String REASON = "{reason}";
     }
     private static final String prefix  = "message."+ StockMarketMod.MOD_ID+".";
+
+
+    private static String getCurrencyName()
+    {
+        String currencyItemID = ItemUtilities.getItemID(StockMarketModSettings.Market.getCurrencyItem().getItem());
+        String moneyCurrencyItemID = ItemUtilities.getItemID(BankSystemItems.MONEY.get());
+        if(currencyItemID.equals(moneyCurrencyItemID))
+        {
+            return BankSystemTextMessages.getCurrencyName();
+        }
+        // If the currency item is not the default money item, return its name
+        return ItemUtilities.getItemName(currencyItemID);
+    }
 
     private static final Component INVALID_ITEM_ID = Component.translatable(prefix+"invalid_item_id");
     public static String getInvalidItemIDMessage(String itemName)
@@ -59,11 +75,25 @@ public class StockMarketTextMessages {
         return msg;
     }
 
+    private static final Component MARKETPLACE_IS_NOW_CLOSED_ALL = Component.translatable(prefix+"marketplace_is_now_closed_all");
+    public static String getMarketplaceIsNowClosedAllMessage()
+    {
+        String msg = MARKETPLACE_IS_NOW_CLOSED_ALL.getString();
+        return msg;
+    }
+
     private static final Component MARKETPLACE_IS_NOW_OPEN = Component.translatable(prefix+"marketplace_is_now_open");
     public static String getMarketplaceIsNowOpenMessage(String itemName)
     {
         String msg = MARKETPLACE_IS_NOW_OPEN.getString();
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
+        return msg;
+    }
+
+    private static final Component MARKETPLACE_IS_NOW_OPEN_ALL = Component.translatable(prefix+"marketplace_is_now_open_all");
+    public static String getMarketplaceIsNowOpenAllMessage()
+    {
+        String msg = MARKETPLACE_IS_NOW_OPEN_ALL.getString();
         return msg;
     }
 
@@ -304,10 +334,10 @@ public class StockMarketTextMessages {
         String msg = INSUFFICIENT_FUND_TO_CONSUME.getString();
         msg = replaceVariable(msg, Variables.ORDER_TEXT, orderText);
         msg = replaceVariable(msg, Variables.PRICE, String.valueOf(price));
-        msg = replaceVariable(msg, Variables.CURRENCY, BankSystemTextMessages.getCurrencyName());
+        msg = replaceVariable(msg, Variables.CURRENCY, getCurrencyName());
         msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(amount));
         msg = replaceVariable(msg, Variables.COST, String.valueOf(totalCost));
-        msg = replaceVariable(msg, Variables.CURRENCY, BankSystemTextMessages.getCurrencyName());
+        msg = replaceVariable(msg, Variables.CURRENCY, getCurrencyName());
         return msg;
     }
 
@@ -318,7 +348,7 @@ public class StockMarketTextMessages {
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
         msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(amount));
         msg = replaceVariable(msg, Variables.PRICE, String.valueOf(price));
-        msg = replaceVariable(msg, Variables.CURRENCY, BankSystemTextMessages.getCurrencyName());
+        msg = replaceVariable(msg, Variables.CURRENCY, getCurrencyName());
         return msg;
     }
 
@@ -345,7 +375,7 @@ public class StockMarketTextMessages {
     {
         String msg = MISSING_MONEY.getString();
         msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(amount));
-        msg = replaceVariable(msg, Variables.CURRENCY, BankSystemTextMessages.getCurrencyName());
+        msg = replaceVariable(msg, Variables.CURRENCY, getCurrencyName());
 
         return msg;
     }
@@ -390,7 +420,7 @@ public class StockMarketTextMessages {
     {
         String msg = ORDER_LIMIT_PRICE.getString();
         msg = replaceVariable(msg, Variables.PRICE, String.valueOf(price));
-        msg = replaceVariable(msg, Variables.CURRENCY, BankSystemTextMessages.getCurrencyName());
+        msg = replaceVariable(msg, Variables.CURRENCY, getCurrencyName());
         return msg;
     }
     private static final Component ORDER_AVERAGE_PRICE = Component.translatable(prefix+"order_average_price");
@@ -398,7 +428,7 @@ public class StockMarketTextMessages {
     {
         String msg = ORDER_AVERAGE_PRICE.getString();
         msg = replaceVariable(msg, Variables.PRICE, String.valueOf(price));
-        msg = replaceVariable(msg, Variables.CURRENCY, BankSystemTextMessages.getCurrencyName());
+        msg = replaceVariable(msg, Variables.CURRENCY, getCurrencyName());
         return msg;
     }
 
@@ -509,6 +539,51 @@ public class StockMarketTextMessages {
         return msg;
     }
 
+    private static final Component DEFAULT_BOTS_CATEGORY_CREATED = Component.translatable(prefix+"default_bots_category_created");
+    public static String getDefaultBotsCategoryCreatedMessage(String category)
+    {
+        String msg = DEFAULT_BOTS_CATEGORY_CREATED.getString();
+        msg = replaceVariable(msg, Variables.VALUE, category);
+        return msg;
+    }
+
+    private static final Component CAN_NOT_CREATE_DEFAULT_BOTS_CATEGORY = Component.translatable(prefix+"can_not_create_default_bots_category");
+    public static String getCanNotCreateDefaultBotsCategoryMessage(String category)
+    {
+        String msg = CAN_NOT_CREATE_DEFAULT_BOTS_CATEGORY.getString();
+        msg = replaceVariable(msg, Variables.VALUE, category);
+        return msg;
+    }
+
+
+    private static final Component DEFAULT_MARKET_CATEGORY_REMOVED = Component.translatable(prefix+"default_market_category_removed");
+    public static String getDefaultMarketCategoryRemovedMessage(String category)
+    {
+        String msg = DEFAULT_MARKET_CATEGORY_REMOVED.getString();
+        msg = replaceVariable(msg, Variables.VALUE, category);
+        return msg;
+    }
+
+    private static final Component ALL_MARKETS_REMOVED = Component.translatable(prefix+"all_markets_removed");
+    public static String getAllMarketsRemovedMessage()
+    {
+        String msg = ALL_MARKETS_REMOVED.getString();
+        return msg;
+    }
+
+    private static final Component UNKNOWN_MARKET_CATEGORY = Component.translatable(prefix+"unknown_market_category");
+    public static String getUnknownMarketCategory(String category)
+    {
+        String msg = UNKNOWN_MARKET_CATEGORY.getString();
+        msg = replaceVariable(msg, Variables.VALUE, category);
+        return msg;
+    }
+
+    private static final Component NEED_CREATIVE_MODE_FOR_THIS_SCREEN = Component.translatable(prefix+"need_creative_mode_for_this_screen");
+    public static String getNeedCreativeModeForThisScreenMessage()
+    {
+        return NEED_CREATIVE_MODE_FOR_THIS_SCREEN.getString();
+    }
 
 
     //--------------------------------------------------------------------------------------------------------
