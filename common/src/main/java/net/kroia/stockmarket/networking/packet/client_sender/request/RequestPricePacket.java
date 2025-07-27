@@ -20,11 +20,11 @@ public class RequestPricePacket extends NetworkPacket {
     }
 
     @Override
-    public void toBytes(FriendlyByteBuf buf) {
+    public void encode(FriendlyByteBuf buf) {
         buf.writeItem(itemID.getStack());
     }
     @Override
-    public void fromBytes(FriendlyByteBuf buf) {
+    public void decode(FriendlyByteBuf buf) {
         this.itemID = new ItemID(buf.readItem());
     }
 

@@ -1,9 +1,5 @@
 package net.kroia.stockmarket.networking.packet.client_sender.update;
 
-import net.kroia.banksystem.banking.BankUser;
-import net.kroia.banksystem.banking.ServerBankManager;
-import net.kroia.banksystem.banking.bank.Bank;
-import net.kroia.banksystem.banking.bank.MoneyBank;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.NetworkPacket;
 import net.kroia.stockmarket.market.server.ServerMarket;
@@ -45,7 +41,7 @@ public class UpdateBotSettingsPacket extends NetworkPacket {
     }
 
     @Override
-    public void toBytes(FriendlyByteBuf buf) {
+    public void encode(FriendlyByteBuf buf) {
         buf.writeItem(itemID.getStack());
         buf.writeBoolean(destroyBot);
         buf.writeBoolean(createBot);
@@ -56,7 +52,7 @@ public class UpdateBotSettingsPacket extends NetworkPacket {
     }
 
     @Override
-    public void fromBytes(FriendlyByteBuf buf) {
+    public void decode(FriendlyByteBuf buf) {
         itemID = new ItemID(buf.readItem());
         destroyBot = buf.readBoolean();
         createBot = buf.readBoolean();

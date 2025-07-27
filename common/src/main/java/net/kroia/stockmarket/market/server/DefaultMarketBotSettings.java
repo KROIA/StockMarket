@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.market.server;
 
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBotFactory;
@@ -293,7 +294,7 @@ public class DefaultMarketBotSettings {
     {
         for (MinimalMarketData data : category) {
             ServerTradingBotFactory.DefaultBotSettings settings = new ServerTradingBotFactory.DefaultBotSettings(data.defaultPrice, data.rarity, data.volatility, updateTimerIntervallMS);
-            ServerTradingBotFactory.ItemData itemData = new ServerTradingBotFactory.ItemData(ItemUtilities.getItemID(data.item));
+            ServerTradingBotFactory.ItemData itemData = new ServerTradingBotFactory.ItemData(new ItemID(data.item.getDefaultInstance()));
             ServerTradingBotFactory.BotBuilderContainer botContainer = new ServerTradingBotFactory.BotBuilderContainer();
             botContainer.itemData = itemData;
             botContainer.defaultSettings = settings;

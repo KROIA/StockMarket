@@ -2,7 +2,7 @@
 package net.kroia.stockmarket.screen.custom;
 
 import dev.architectury.event.events.common.TickEvent;
-import net.kroia.banksystem.networking.packet.client_sender.request.RequestBankDataPacket;
+import net.kroia.banksystem.banking.clientdata.MinimalBankData;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.gui.Gui;
@@ -168,7 +168,7 @@ public class TradeScreen extends GuiScreen {
         }
         private static boolean isOre(Item item)
         {
-            String itemName = ItemUtilities.getItemID(item);
+            String itemName = ItemUtilities.getItemIDStr(item);
 
             if(itemName.contains("ore") || itemName.contains("ingot"))
                 return true;
@@ -181,12 +181,12 @@ public class TradeScreen extends GuiScreen {
         }
         private static boolean isArrow(Item item)
         {
-            String itemName = ItemUtilities.getItemID(item);
+            String itemName = ItemUtilities.getItemIDStr(item);
             return itemName.contains("arrow");
         }
         private static boolean isTool(Item item)
         {
-            String itemName = ItemUtilities.getItemID(item);
+            String itemName = ItemUtilities.getItemIDStr(item);
             if(itemName.contains("pickaxe") || itemName.contains("axe") || itemName.contains("shovel"))
                 return true;
             if(itemName.contains("hoe") || itemName.contains("shears") || itemName.contains("sword"))
@@ -195,7 +195,7 @@ public class TradeScreen extends GuiScreen {
         }
         private static boolean isRedstoneObject(Item item)
         {
-            String itemName = ItemUtilities.getItemID(item);
+            String itemName = ItemUtilities.getItemIDStr(item);
             if(itemName.contains("redstone") || itemName.contains("piston") || itemName.contains("observer"))
                 return true;
             if(itemName.contains("comparator") || itemName.contains("repeater") || itemName.contains("dispenser"))
@@ -204,7 +204,7 @@ public class TradeScreen extends GuiScreen {
         }
         private static boolean idContains(Item item, String contains)
         {
-            String itemName = ItemUtilities.getItemID(item);
+            String itemName = ItemUtilities.getItemIDStr(item);
             return itemName.contains(contains);
         }
 
@@ -306,7 +306,7 @@ public class TradeScreen extends GuiScreen {
         itemStack = itemID.getStack();
         tradePanel.setItemStack(itemStack);
         ClientMarket.subscribeMarketUpdate(itemID);
-        RequestBankDataPacket.sendRequest();
+        //RequestBankDataPacket.sendRequest();
 
         int padding = 10;
         int spacing = 4;
@@ -338,7 +338,7 @@ public class TradeScreen extends GuiScreen {
     }
 
     public static void handlePacket(SyncStockMarketBlockEntityPacket packet) {
-        RequestBankDataPacket.sendRequest();
+       // RequestBankDataPacket.sendRequest();
 
         if (instance != null) {
             instance.itemID = packet.getItemID();
@@ -361,12 +361,12 @@ public class TradeScreen extends GuiScreen {
         if (Minecraft.getInstance().screen != instance || instance == null)
             return;
 
-        long currentTickCount = System.currentTimeMillis();
+        /*long currentTickCount = System.currentTimeMillis();
         if(currentTickCount - lastTickCount > 1000)
         {
             lastTickCount = currentTickCount;
             RequestBankDataPacket.sendRequest();
-        }
+        }*/
     }
 
     //public static void onAvailableTradeItemsChanged() {
@@ -384,9 +384,23 @@ public class TradeScreen extends GuiScreen {
         instance.candleStickChart.setMinMaxPrice(item.getVisualMinPrice(), item.getVisualMaxPrice());
         instance.candleStickChart.setPriceHistory(item.getPriceHistory());
         instance.orderbookVolumeChart.setOrderBookVolume(item.getOrderBookVolume());
-        instance.tradePanel.setCurrentItemBalance(StockMarketMod.BANK_SYSTEM_API.getClientBankManager().getBalance(instance.itemID));
+        assert Minecraft.getInstance().player != null;
+        UUID thisPlayerUUID = Minecraft.getInstance().player.getUUID();
+        StockMarketMod.BANK_SYSTEM_API.getClientBankManager().requestMinimalBankData(thisPlayerUUID, instance.itemID,
+                (MinimalBankData data) -> {
+                    if(data != null)
+                    {
+                        instance.tradePanel.setCurrentItemBalance(data.balance);
+                    }
+                });
+        StockMarketMod.BANK_SYSTEM_API.getClientBankManager().requestMinimalBankData(thisPlayerUUID, ClientMarket.getCurrencyItem(),
+                (MinimalBankData data) -> {
+                    if(data != null)
+                    {
+                        instance.tradePanel.setCurrentMoneyBalance(data.balance);
+                    }
+                });
         instance.tradePanel.setCurrentPrice(item.getPrice());
-        instance.tradePanel.setCurrentMoneyBalance(StockMarketMod.BANK_SYSTEM_API.getClientBankManager().getBalance(ClientMarket.getCurrencyItem()));
         instance.activeOrderListView.updateActiveOrders();
         instance.candleStickChart.updateOrderDisplay();
         if(instance.marketWasOpen != item.isMarketOpen())

@@ -24,14 +24,14 @@ public class UpdateSubscribeMarketEventsPacket extends NetworkPacket {
     }
 
     @Override
-    public void toBytes(FriendlyByteBuf buf)
+    public void encode(FriendlyByteBuf buf)
     {
         buf.writeItem(itemID.getStack());
         buf.writeBoolean(subscribe);
     }
 
     @Override
-    public void fromBytes(FriendlyByteBuf buf)
+    public void decode(FriendlyByteBuf buf)
     {
         this.itemID = new ItemID(buf.readItem());
         this.subscribe = buf.readBoolean();

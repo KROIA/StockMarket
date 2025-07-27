@@ -1,6 +1,5 @@
 package net.kroia.stockmarket.networking.packet.server_sender.update;
 
-import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.networking.NetworkPacket;
 import net.kroia.stockmarket.StockMarketClientHooks;
@@ -44,12 +43,12 @@ public class OpenScreenPacket extends NetworkPacket {
         StockMarketNetworking.sendToClient(player, packet);
     }
     @Override
-    public void toBytes(FriendlyByteBuf buf) {
+    public void encode(FriendlyByteBuf buf) {
         buf.writeUtf(screenType.name());
     }
 
     @Override
-    public void fromBytes(FriendlyByteBuf buf) {
+    public void decode(FriendlyByteBuf buf) {
         screenType = ScreenType.valueOf(buf.readUtf());
     }
 

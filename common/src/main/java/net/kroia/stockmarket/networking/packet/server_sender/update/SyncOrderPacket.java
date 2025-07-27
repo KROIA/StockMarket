@@ -23,12 +23,12 @@ public class SyncOrderPacket extends NetworkPacket {
     }
 
     @Override
-    public void toBytes(FriendlyByteBuf buf) {
+    public void encode(FriendlyByteBuf buf) {
         order.toBytes(buf);
     }
 
     @Override
-    public void fromBytes(FriendlyByteBuf buf) {
+    public void decode(FriendlyByteBuf buf) {
         this.order = Order.construct(buf);
     }
 

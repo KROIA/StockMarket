@@ -2,7 +2,6 @@ package net.kroia.stockmarket.networking.packet.server_sender.update;
 
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.NetworkPacket;
-import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.market.client.ClientMarket;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.market.server.ServerTradeItem;
@@ -50,11 +49,11 @@ public class SyncTradeItemsPacket extends NetworkPacket {
 
 
     @Override
-    public void toBytes(FriendlyByteBuf buf) {
+    public void encode(FriendlyByteBuf buf) {
         buf.writeEnum(command);
         if(command == Command.ADD)
         {
-            syncPricePacket.toBytes(buf);
+            syncPricePacket.encode(buf);
         }
         if(command == Command.STILL_AVAILABLE)
         {
@@ -71,7 +70,7 @@ public class SyncTradeItemsPacket extends NetworkPacket {
     }
 
     @Override
-    public void fromBytes(FriendlyByteBuf buf) {
+    public void decode(FriendlyByteBuf buf) {
 
         command = buf.readEnum(Command.class);
         if(command == Command.ADD)

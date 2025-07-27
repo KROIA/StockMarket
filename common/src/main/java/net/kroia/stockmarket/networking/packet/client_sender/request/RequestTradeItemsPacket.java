@@ -32,12 +32,12 @@ public class RequestTradeItemsPacket extends NetworkPacket {
     }
 
     @Override
-    public void toBytes(FriendlyByteBuf buf) {
+    public void encode(FriendlyByteBuf buf) {
 
     }
 
     @Override
-    public void fromBytes(FriendlyByteBuf buf) {
+    public void decode(FriendlyByteBuf buf) {
 
     }
 }

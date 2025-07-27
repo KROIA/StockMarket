@@ -7,9 +7,9 @@ public class StockMarketEvents {
 
 
 
-    public void clearListeners() {
-        STOCKMARKET_DATA_SAVED_TO_FILE.clearListeners();
-        STOCKMARKET_DATA_LOADED_FROM_FILE.clearListeners();
+    public void removeListeners() {
+        STOCKMARKET_DATA_SAVED_TO_FILE.removeListeners();
+        STOCKMARKET_DATA_LOADED_FROM_FILE.removeListeners();
     }
 
 }

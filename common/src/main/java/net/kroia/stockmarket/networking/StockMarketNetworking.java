@@ -25,13 +25,13 @@ public class StockMarketNetworking {
 
     public static void setupClientReceiverPackets()
     {
-        CHANNEL.register(SyncPricePacket.class, SyncPricePacket::toBytes, SyncPricePacket::new, SyncPricePacket::receive);
-        CHANNEL.register(SyncStockMarketBlockEntityPacket.class, SyncStockMarketBlockEntityPacket::toBytes, SyncStockMarketBlockEntityPacket::new, SyncStockMarketBlockEntityPacket::receive);
-        CHANNEL.register(SyncTradeItemsPacket.class, SyncTradeItemsPacket::toBytes, SyncTradeItemsPacket::new, SyncTradeItemsPacket::receive);
-        CHANNEL.register(SyncOrderPacket.class, SyncOrderPacket::toBytes, SyncOrderPacket::new, SyncOrderPacket::receive);
-        CHANNEL.register(OpenScreenPacket.class, OpenScreenPacket::toBytes, OpenScreenPacket::new, OpenScreenPacket::receive);
-        CHANNEL.register(SyncBotSettingsPacket.class, SyncBotSettingsPacket::toBytes, SyncBotSettingsPacket::new, SyncBotSettingsPacket::receive);
-        CHANNEL.register(SyncBotTargetPricePacket.class, SyncBotTargetPricePacket::toBytes, SyncBotTargetPricePacket::new, SyncBotTargetPricePacket::receive);
+        CHANNEL.register(SyncPricePacket.class, SyncPricePacket::encode, SyncPricePacket::new, SyncPricePacket::receive);
+        CHANNEL.register(SyncStockMarketBlockEntityPacket.class, SyncStockMarketBlockEntityPacket::encode, SyncStockMarketBlockEntityPacket::new, SyncStockMarketBlockEntityPacket::receive);
+        CHANNEL.register(SyncTradeItemsPacket.class, SyncTradeItemsPacket::encode, SyncTradeItemsPacket::new, SyncTradeItemsPacket::receive);
+        CHANNEL.register(SyncOrderPacket.class, SyncOrderPacket::encode, SyncOrderPacket::new, SyncOrderPacket::receive);
+        CHANNEL.register(OpenScreenPacket.class, OpenScreenPacket::encode, OpenScreenPacket::new, OpenScreenPacket::receive);
+        CHANNEL.register(SyncBotSettingsPacket.class, SyncBotSettingsPacket::encode, SyncBotSettingsPacket::new, SyncBotSettingsPacket::receive);
+        CHANNEL.register(SyncBotTargetPricePacket.class, SyncBotTargetPricePacket::encode, SyncBotTargetPricePacket::new, SyncBotTargetPricePacket::receive);
 
     }
     public static void setupServerReceiverPackets()
@@ -39,17 +39,17 @@ public class StockMarketNetworking {
 
 
 
-        CHANNEL.register(RequestPricePacket.class, RequestPricePacket::toBytes, RequestPricePacket::new, RequestPricePacket::receive);
-        CHANNEL.register(RequestOrderPacket.class, RequestOrderPacket::toBytes, RequestOrderPacket::new, RequestOrderPacket::receive);
-        CHANNEL.register(UpdateSubscribeMarketEventsPacket.class, UpdateSubscribeMarketEventsPacket::toBytes, UpdateSubscribeMarketEventsPacket::new, UpdateSubscribeMarketEventsPacket::receive);
-        CHANNEL.register(RequestTradeItemsPacket.class, RequestTradeItemsPacket::toBytes, RequestTradeItemsPacket::new, RequestTradeItemsPacket::receive);
-        CHANNEL.register(RequestOrderCancelPacket.class, RequestOrderCancelPacket::toBytes, RequestOrderCancelPacket::new, RequestOrderCancelPacket::receive);
-        CHANNEL.register(UpdateStockMarketBlockEntityPacket.class, UpdateStockMarketBlockEntityPacket::toBytes, UpdateStockMarketBlockEntityPacket::new, UpdateStockMarketBlockEntityPacket::receive);
-        CHANNEL.register(RequestBotSettingsPacket.class, RequestBotSettingsPacket::toBytes, RequestBotSettingsPacket::new, RequestBotSettingsPacket::receive);
-        CHANNEL.register(UpdateBotSettingsPacket.class, UpdateBotSettingsPacket::toBytes, UpdateBotSettingsPacket::new, UpdateBotSettingsPacket::receive);
-        CHANNEL.register(RequestOrderChangePacket.class, RequestOrderChangePacket::toBytes, RequestOrderChangePacket::new, RequestOrderChangePacket::receive);
-        CHANNEL.register(RequestManageTradingItemPacket.class, RequestManageTradingItemPacket::toBytes, RequestManageTradingItemPacket::new, RequestManageTradingItemPacket::receive);
-        CHANNEL.register(RequestBotTargetPricePacket.class, RequestBotTargetPricePacket::toBytes, RequestBotTargetPricePacket::new, RequestBotTargetPricePacket::receive);
+        CHANNEL.register(RequestPricePacket.class, RequestPricePacket::encode, RequestPricePacket::new, RequestPricePacket::receive);
+        CHANNEL.register(RequestOrderPacket.class, RequestOrderPacket::encode, RequestOrderPacket::new, RequestOrderPacket::receive);
+        CHANNEL.register(UpdateSubscribeMarketEventsPacket.class, UpdateSubscribeMarketEventsPacket::encode, UpdateSubscribeMarketEventsPacket::new, UpdateSubscribeMarketEventsPacket::receive);
+        CHANNEL.register(RequestTradeItemsPacket.class, RequestTradeItemsPacket::encode, RequestTradeItemsPacket::new, RequestTradeItemsPacket::receive);
+        CHANNEL.register(RequestOrderCancelPacket.class, RequestOrderCancelPacket::encode, RequestOrderCancelPacket::new, RequestOrderCancelPacket::receive);
+        CHANNEL.register(UpdateStockMarketBlockEntityPacket.class, UpdateStockMarketBlockEntityPacket::encode, UpdateStockMarketBlockEntityPacket::new, UpdateStockMarketBlockEntityPacket::receive);
+        CHANNEL.register(RequestBotSettingsPacket.class, RequestBotSettingsPacket::encode, RequestBotSettingsPacket::new, RequestBotSettingsPacket::receive);
+        CHANNEL.register(UpdateBotSettingsPacket.class, UpdateBotSettingsPacket::encode, UpdateBotSettingsPacket::new, UpdateBotSettingsPacket::receive);
+        CHANNEL.register(RequestOrderChangePacket.class, RequestOrderChangePacket::encode, RequestOrderChangePacket::new, RequestOrderChangePacket::receive);
+        CHANNEL.register(RequestManageTradingItemPacket.class, RequestManageTradingItemPacket::encode, RequestManageTradingItemPacket::new, RequestManageTradingItemPacket::receive);
+        CHANNEL.register(RequestBotTargetPricePacket.class, RequestBotTargetPricePacket::encode, RequestBotTargetPricePacket::new, RequestBotTargetPricePacket::receive);
 
 
     }

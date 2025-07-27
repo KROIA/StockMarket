@@ -11,8 +11,6 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
-import java.util.UUID;
-
 public class SyncBotSettingsPacket extends NetworkPacket {
 
     ItemID itemID;
@@ -48,7 +46,7 @@ public class SyncBotSettingsPacket extends NetworkPacket {
     }
 
     @Override
-    public void toBytes(FriendlyByteBuf buf) {
+    public void encode(FriendlyByteBuf buf) {
         buf.writeItem(itemID.getStack());
         buf.writeBoolean(botExists);
         //buf.writeUUID(botUUID);
@@ -58,7 +56,7 @@ public class SyncBotSettingsPacket extends NetworkPacket {
     }
 
     @Override
-    public void fromBytes(FriendlyByteBuf buf) {
+    public void decode(FriendlyByteBuf buf) {
         itemID = new ItemID(buf.readItem());
         botExists = buf.readBoolean();
         //botUUID = buf.readUUID();

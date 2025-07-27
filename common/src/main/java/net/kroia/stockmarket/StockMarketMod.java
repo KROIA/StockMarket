@@ -96,7 +96,7 @@ public final class StockMarketMod {
 
         SERVER_SETTINGS = null;
         SERVER_DATA_HANDLER = null;
-        SERVER_EVENTS.clearListeners();
+        SERVER_EVENTS.removeListeners();
     }
 
     private static void onBankSystemLoadedSingleShotEventReceiver()

@@ -5,7 +5,6 @@ import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.setting.ModSettings;
 import net.kroia.modutilities.setting.Setting;
 import net.kroia.modutilities.setting.SettingsGroup;
@@ -123,7 +122,7 @@ public class StockMarketModSettings extends ModSettings {
 
             if(getCurrencyItem() != null)
             {
-                items.add(new ItemID(ItemUtilities.getItemID(getCurrencyItem().getItem())));
+                items.add(new ItemID(getCurrencyItem().getItem().getDefaultInstance()));
             }
             items.addAll(StockMarketMod.BANK_SYSTEM_API.getServerBankManager().getBlacklistedItemIDs());
             return items;

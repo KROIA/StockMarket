@@ -32,8 +32,8 @@ public class StockMarketTextMessages {
 
     private static String getCurrencyName()
     {
-        String currencyItemID = ItemUtilities.getItemID(StockMarketMod.SERVER_SETTINGS.MARKET.getCurrencyItem().getItem());
-        String moneyCurrencyItemID = ItemUtilities.getItemID(BankSystemItems.MONEY.get());
+        String currencyItemID = ItemUtilities.getItemIDStr(StockMarketMod.SERVER_SETTINGS.MARKET.getCurrencyItem().getItem());
+        String moneyCurrencyItemID = ItemUtilities.getItemIDStr(BankSystemItems.MONEY.get());
         if(currencyItemID.equals(moneyCurrencyItemID))
         {
             return BankSystemTextMessages.getCurrencyName();

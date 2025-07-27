@@ -24,12 +24,12 @@ public class RequestOrderCancelPacket extends NetworkPacket {
     }
 
     @Override
-    public void toBytes(FriendlyByteBuf buf)
+    public void encode(FriendlyByteBuf buf)
     {
         buf.writeLong(orderID);
     }
     @Override
-    public void fromBytes(FriendlyByteBuf buf)
+    public void decode(FriendlyByteBuf buf)
     {
         this.orderID = buf.readLong();
     }

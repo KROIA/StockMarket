@@ -52,14 +52,14 @@ public class RequestManageTradingItemPacket extends NetworkPacket {
     }
 
     @Override
-    public void toBytes(FriendlyByteBuf buf) {
+    public void encode(FriendlyByteBuf buf) {
         buf.writeEnum(mode);
         buf.writeItem(itemID.getStack());
         buf.writeInt(startPrice);
     }
 
     @Override
-    public void fromBytes(FriendlyByteBuf buf) {
+    public void decode(FriendlyByteBuf buf) {
         mode = buf.readEnum(Mode.class);
         itemID = new ItemID(buf.readItem());
         startPrice = buf.readInt();

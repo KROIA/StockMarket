@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.market.server.order;
 
-import net.kroia.banksystem.banking.BankUser;
+import net.kroia.banksystem.api.IBank;
+import net.kroia.banksystem.api.IBankUser;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.BankSystemTextMessages;
@@ -70,23 +71,23 @@ public abstract class Order {
     }
     protected static boolean tryReserveBankFund(ServerPlayer player, ItemID itemID, int amount, int price)
     {
-        BankUser bankUser = StockMarketMod.BANK_SYSTEM_API.getServerBankManager().getUser(player.getUUID());
+        IBankUser bankUser = StockMarketMod.BANK_SYSTEM_API.getServerBankManager().getUser(player.getUUID());
         if(bankUser == null)
         {
             PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankNotFoundMessage(player.getName().getString(),itemID.getName()));
             return false;
         }
 
-        Bank moneyBank = bankUser.getBank(ServerMarket.getCurrencyItem());
-        Bank itemBank = bankUser.getBank(itemID);
+        IBank moneyBank = bankUser.getBank(ServerMarket.getCurrencyItem());
+        IBank itemBank = bankUser.getBank(itemID);
         if(itemBank == null)
         {
-            itemBank = bankUser.createItemBank(itemID, 0);
+            itemBank = bankUser.createItemBank(itemID, 0, true);
         }
 
         return tryReserveBankFund(moneyBank, itemBank, player.getUUID(), itemID, amount, price, player);
     }
-    protected static boolean tryReserveBankFund(Bank moneyBank, Bank itemBank, UUID playerUUID, ItemID itemID, int amount, int price, ServerPlayer dbgPlayer)
+    protected static boolean tryReserveBankFund(IBank moneyBank, IBank itemBank, UUID playerUUID, ItemID itemID, int amount, int price, ServerPlayer dbgPlayer)
     {
         if(moneyBank == null)
         {
@@ -265,14 +266,14 @@ public abstract class Order {
     {
         if(isBot)
             return;
-        BankUser user = StockMarketMod.BANK_SYSTEM_API.getServerBankManager().getUser(playerUUID);
+        IBankUser user = StockMarketMod.BANK_SYSTEM_API.getServerBankManager().getUser(playerUUID);
         if(user == null)
         {
             StockMarketMod.logError("BankUser not found for player " + ServerPlayerList.getPlayerName(playerUUID));
             return;
         }
-        Bank moneyBank = user.getBank(ServerMarket.getCurrencyItem());
-        Bank itemBank = user.getBank(itemID);
+        IBank moneyBank = user.getBank(ServerMarket.getCurrencyItem());
+        IBank itemBank = user.getBank(itemID);
         if(moneyBank == null)
         {
             StockMarketMod.logError("MoneyBank not found for player " + ServerPlayerList.getPlayerName(playerUUID));

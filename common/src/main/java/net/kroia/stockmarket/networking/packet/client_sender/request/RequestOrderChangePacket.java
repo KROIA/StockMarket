@@ -40,14 +40,14 @@ public class RequestOrderChangePacket extends NetworkPacket {
     }
 
     @Override
-    public void toBytes(FriendlyByteBuf buf) {
+    public void encode(FriendlyByteBuf buf) {
         buf.writeItem(itemID.getStack());
         buf.writeLong(targetOrderID);
         buf.writeInt(newPrice);
     }
 
     @Override
-    public void fromBytes(FriendlyByteBuf buf) {
+    public void decode(FriendlyByteBuf buf) {
         itemID = new ItemID(buf.readItem());
         targetOrderID = buf.readLong();
         newPrice = buf.readInt();

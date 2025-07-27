@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.market.server;
 
-import net.kroia.banksystem.banking.BankUser;
+import net.kroia.banksystem.api.IBank;
+import net.kroia.banksystem.api.IBankUser;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.stockmarket.StockMarketMod;
@@ -34,19 +35,19 @@ public class TransactionEngine {
 
         UUID playerUUID1 = o1.getPlayerUUID();
         UUID playerUUID2 = o2.getPlayerUUID();
-        BankUser user1 = (playerUUID1!=null? StockMarketMod.BANK_SYSTEM_API.getServerBankManager().getUser(playerUUID1):null);
-        BankUser user2 = (playerUUID2!=null?StockMarketMod.BANK_SYSTEM_API.getServerBankManager().getUser(playerUUID2):null);
-        Bank moneyBank1 = (user1!=null?user1.getBank(o1.getCurrencyItemID()):null);
-        Bank moneyBank2 = (user2!=null?user2.getBank(o2.getCurrencyItemID()):null);
-        Bank itemBank1 = (user1!=null?user1.getBank(o1.getItemID()):null);
-        Bank itemBank2 = (user2!=null?user2.getBank(o2.getItemID()):null);
+        IBankUser user1 = (playerUUID1!=null?StockMarketMod.BANK_SYSTEM_API.getServerBankManager().getUser(playerUUID1):null);
+        IBankUser user2 = (playerUUID2!=null?StockMarketMod.BANK_SYSTEM_API.getServerBankManager().getUser(playerUUID2):null);
+        IBank moneyBank1 = (user1!=null?user1.getBank(o1.getCurrencyItemID()):null);
+        IBank moneyBank2 = (user2!=null?user2.getBank(o2.getCurrencyItemID()):null);
+        IBank itemBank1 = (user1!=null?user1.getBank(o1.getItemID()):null);
+        IBank itemBank2 = (user2!=null?user2.getBank(o2.getItemID()):null);
 
         UUID senderUUID = fillAmount > 0 ? playerUUID1 : playerUUID2;
         UUID receiverUUID = fillAmount > 0 ? playerUUID2 : playerUUID1;
-        Bank senderMoneyBank = fillAmount > 0 ? moneyBank1 : moneyBank2;
-        Bank receiverMoneyBank = fillAmount > 0 ? moneyBank2 : moneyBank1;
-        Bank senderItemBank = fillAmount > 0 ? itemBank2 : itemBank1;
-        Bank receiverItemBank = fillAmount > 0 ? itemBank1 : itemBank2;
+        IBank senderMoneyBank = fillAmount > 0 ? moneyBank1 : moneyBank2;
+        IBank receiverMoneyBank = fillAmount > 0 ? moneyBank2 : moneyBank1;
+        IBank senderItemBank = fillAmount > 0 ? itemBank2 : itemBank1;
+        IBank receiverItemBank = fillAmount > 0 ? itemBank1 : itemBank2;
         Order senderOrder = fillAmount > 0 ? o1 : o2;
         Order receiverOrder = fillAmount > 0 ? o2 : o1;
 
@@ -227,9 +228,9 @@ public class TransactionEngine {
             fillAmount = -fillVolume;
 
         UUID playerUUID1 = o1.getPlayerUUID();
-        BankUser user1 = StockMarketMod.BANK_SYSTEM_API.getServerBankManager().getUser(playerUUID1);
-        Bank moneyBank1 = user1.getBank(o1.getCurrencyItemID());
-        Bank itemBank1 = user1.getBank(o1.getItemID());
+        IBankUser user1 = StockMarketMod.BANK_SYSTEM_API.getServerBankManager().getUser(playerUUID1);
+        IBank moneyBank1 = user1.getBank(o1.getCurrencyItemID());
+        IBank itemBank1 = user1.getBank(o1.getItemID());
 
         long moneyToTransfer = (long)fillVolume * (long)currentPrice;
         if(o1.isBuy())

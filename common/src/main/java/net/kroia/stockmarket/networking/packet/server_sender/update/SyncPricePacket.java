@@ -128,7 +128,7 @@ public class SyncPricePacket extends NetworkPacket {
     }
 
     @Override
-    public void toBytes(FriendlyByteBuf buf) {
+    public void encode(FriendlyByteBuf buf) {
         priceHistory.toBytes(buf);
         orderBookVolume.toBytes(buf);
         buf.writeInt(minPrice);
@@ -142,7 +142,7 @@ public class SyncPricePacket extends NetworkPacket {
     }
 
     @Override
-    public void fromBytes(FriendlyByteBuf buf) {
+    public void decode(FriendlyByteBuf buf) {
         priceHistory = new PriceHistory(buf);
         orderBookVolume = new OrderbookVolume(buf);
         minPrice = buf.readInt();

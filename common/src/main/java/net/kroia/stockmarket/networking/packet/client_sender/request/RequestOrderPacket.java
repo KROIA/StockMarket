@@ -71,7 +71,7 @@ public class RequestOrderPacket extends NetworkPacket {
     }
 
     @Override
-    public void toBytes(FriendlyByteBuf buf)
+    public void encode(FriendlyByteBuf buf)
     {
         buf.writeItem(itemID.getStack());
         buf.writeItem(currencyItemID.getStack());
@@ -81,7 +81,7 @@ public class RequestOrderPacket extends NetworkPacket {
     }
 
     @Override
-    public void fromBytes(FriendlyByteBuf buf)
+    public void decode(FriendlyByteBuf buf)
     {
         this.itemID = new ItemID(buf.readItem());
         this.currencyItemID = new ItemID(buf.readItem());

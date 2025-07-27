@@ -6,7 +6,6 @@ import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
-import net.kroia.stockmarket.networking.packet.server_sender.update.SyncBotSettingsPacket;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncBotTargetPricePacket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
@@ -31,12 +30,12 @@ public class RequestBotTargetPricePacket extends NetworkPacket {
     }
 
     @Override
-    public void toBytes(FriendlyByteBuf buf) {
+    public void encode(FriendlyByteBuf buf) {
         buf.writeItem(itemID.getStack());
     }
 
     @Override
-    public void fromBytes(FriendlyByteBuf buf) {
+    public void decode(FriendlyByteBuf buf) {
         itemID = new ItemID(buf.readItem());
     }
 

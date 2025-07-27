@@ -51,7 +51,7 @@ public class UpdateStockMarketBlockEntityPacket extends NetworkPacket {
     }
 
     @Override
-    public void toBytes(FriendlyByteBuf buf)
+    public void encode(FriendlyByteBuf buf)
     {
         buf.writeBlockPos(pos);
         buf.writeItem(itemID.getStack());
@@ -60,7 +60,7 @@ public class UpdateStockMarketBlockEntityPacket extends NetworkPacket {
     }
 
     @Override
-    public void fromBytes(FriendlyByteBuf buf)
+    public void decode(FriendlyByteBuf buf)
     {
         this.pos = buf.readBlockPos();
         this.itemID = new ItemID(buf.readItem());

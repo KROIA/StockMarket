@@ -1,15 +1,13 @@
 package net.kroia.stockmarket.market.server.bot;
 
+import net.kroia.banksystem.banking.bank.MoneyBank;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.ServerSaveable;
-import net.kroia.stockmarket.StockMarketModSettings;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.item.ItemStack;
 
-import java.rmi.ServerError;
 import java.util.ArrayList;
 import java.util.HashMap;
 
@@ -69,20 +67,20 @@ public class ServerTradingBotFactory {
 
     public static class ItemData implements ServerSaveable
     {
-        public String itemID;
+        public ItemID itemID;
         public EnchantmentData[] enchantments;
         public PotionData potion;
 
         public ItemData()
         {}
-        public ItemData(String itemID)
+        public ItemData(ItemID itemID)
         {
             this.itemID = itemID;
             this.enchantments = new EnchantmentData[0];
         }
         public ItemData(ItemStack stack)
         {
-            itemID = ItemUtilities.getItemID(stack.getItem());
+            itemID = new ItemID(stack);
             CompoundTag tag = stack.getTag();
             assert tag != null;
             ArrayList<EnchantmentData> ench = new ArrayList<>();
@@ -115,7 +113,7 @@ public class ServerTradingBotFactory {
                 this.potion = null;
             }
         }
-        public ItemData(String itemID, EnchantmentData[] enchantments, PotionData potion)
+        public ItemData(ItemID itemID, EnchantmentData[] enchantments, PotionData potion)
         {
             this.itemID = itemID;
             this.enchantments = enchantments;
@@ -123,7 +121,7 @@ public class ServerTradingBotFactory {
         }
         public ItemStack getItemStack()
         {
-            ItemStack stack = ItemUtilities.createItemStackFromId(itemID);
+            ItemStack stack = itemID.getStack();
             if(stack == null)
                 return ItemStack.EMPTY;
             CompoundTag tag = null;
@@ -155,7 +153,9 @@ public class ServerTradingBotFactory {
         }
         @Override
         public boolean save(CompoundTag tag) {
-            tag.putString("itemID", itemID);
+            CompoundTag itemTag = new CompoundTag();
+            itemID.save(itemTag);
+            tag.put("itemID", itemTag);
             CompoundTag enchantmentsTag = new CompoundTag();
             for(EnchantmentData enchantment : enchantments)
             {
@@ -169,7 +169,13 @@ public class ServerTradingBotFactory {
 
         @Override
         public boolean load(CompoundTag tag) {
-            itemID = tag.getString("itemID");
+            itemID = MoneyBank.compatibilityMoneyItemIDConvert(tag.getString("itemID"));
+            // Compatibility with old money item ID format
+            if(itemID == null)
+            {
+                CompoundTag itemTag = tag.getCompound("itemID");
+                itemID = new ItemID(itemTag);
+            }
             CompoundTag enchantmentsTag = tag.getCompound("StoredEnchantments");
             enchantments = new EnchantmentData[enchantmentsTag.size()];
             int i = 0;

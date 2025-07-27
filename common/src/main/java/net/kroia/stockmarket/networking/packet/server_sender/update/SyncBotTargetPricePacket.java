@@ -1,10 +1,8 @@
 package net.kroia.stockmarket.networking.packet.server_sender.update;
 
-import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.NetworkPacket;
 import net.kroia.stockmarket.market.client.ClientMarket;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
-import net.kroia.stockmarket.networking.packet.client_sender.request.RequestBotTargetPricePacket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -31,13 +29,13 @@ public class SyncBotTargetPricePacket extends NetworkPacket {
     }
 
     @Override
-    public void toBytes(FriendlyByteBuf buf) {
+    public void encode(FriendlyByteBuf buf) {
         buf.writeInt(targetPrice);
 
     }
 
     @Override
-    public void fromBytes(FriendlyByteBuf buf) {
+    public void decode(FriendlyByteBuf buf) {
         targetPrice = buf.readInt();
 
     }
