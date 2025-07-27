@@ -13,7 +13,7 @@ import net.kroia.modutilities.gui.elements.base.ListView;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.kroia.modutilities.gui.screens.ItemSelectionScreen;
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.market.client.ClientMarket;
+import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.client.ClientTradeItem;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import net.kroia.stockmarket.networking.packet.client_sender.request.RequestBotSettingsPacket;
@@ -33,6 +33,7 @@ import net.minecraft.world.item.ItemStack;
 import java.util.ArrayList;
 
 public class BotSettingsScreen extends GuiScreen {
+    private static StockMarketModBackend.Instances BACKEND_INSTANCES;
     private class BotTargetPriceDisplay extends GuiElement{
 
         private CandleStickChart chart;
@@ -94,6 +95,10 @@ public class BotSettingsScreen extends GuiScreen {
     private boolean botExists = false;
 
     private final Screen parentScreen;
+
+    public static void setBackend(StockMarketModBackend.Instances backend) {
+        BACKEND_INSTANCES = backend;
+    }
     public BotSettingsScreen(Screen parent) {
         super(TITLE);
         parentScreen = parent;
@@ -187,7 +192,7 @@ public class BotSettingsScreen extends GuiScreen {
     public void onClose() {
         super.onClose();
         instance = null;
-        ClientMarket.unsubscribeMarketUpdate(itemID);
+        BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.unsubscribeMarketUpdate(itemID);
         itemID = null;
         // Unregister the event listener when the screen is closed
         TickEvent.PLAYER_POST.unregister(BotSettingsScreen::onClientTick);
@@ -199,9 +204,9 @@ public class BotSettingsScreen extends GuiScreen {
     public static void updatePlotsData() {
         if(instance == null)
             return;
-        ClientTradeItem item = ClientMarket.getTradeItem(instance.itemID);
+        ClientTradeItem item = BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getTradeItem(instance.itemID);
         if (item == null) {
-            StockMarketMod.logWarning("Trade item not found: " + instance.itemID);
+            BACKEND_INSTANCES.LOGGER.warn("Trade item not found: " + instance.itemID);
             return;
         }
 
@@ -217,8 +222,8 @@ public class BotSettingsScreen extends GuiScreen {
         this.settings.copyFrom(settings);
         botSettingsWidget.setSettings(this.settings);
         saveButton.setOutlineColor(normalButtonColor);
-        botExists = ClientMarket.botExists();
-        ClientTradeItem item = ClientMarket.getTradeItem(itemID);
+        botExists = BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.botExists();
+        ClientTradeItem item = BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getTradeItem(itemID);
         marketOpenCheckBox.setChecked(item.isMarketOpen());
         useBotCheckBox.setChecked(botExists);
     }
@@ -241,37 +246,37 @@ public class BotSettingsScreen extends GuiScreen {
             }
 
         }
-        if(ClientMarket.hasSyncBotSettingsPacketChanged() && !instance.settingsReceived)
+        if(BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.hasSyncBotSettingsPacketChanged() && !instance.settingsReceived)
         {
             instance.settingsReceived = true;
             if(itemID == null)
             {
-                itemID = ClientMarket.getBotSettingsItemID();
+                itemID = BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getBotSettingsItemID();
                 if(itemID == null)
                     return;
                 instance.onItemSelected(itemID.getStack());
             }
-            instance.setBotSettings(ClientMarket.getBotSettings(itemID));
+            instance.setBotSettings(BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getBotSettings(itemID));
         }
-        if(ClientMarket.hasSyncBotTargetPricePacketChanged())
+        if(BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.hasSyncBotTargetPricePacketChanged())
         {
-            instance.settings.targetPrice = ClientMarket.getBotTargetPrice();
+            instance.settings.targetPrice = BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getBotTargetPrice();
         }
     }
 
     private void onItemSelected(ItemStack istemStack) {
-        ClientMarket.unsubscribeMarketUpdate(itemID);
+        BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.unsubscribeMarketUpdate(itemID);
         itemID = new ItemID(istemStack);
         settingsReceived = false;
         botSettingsWidget.clear();
         RequestBotSettingsPacket.sendPacket(itemID);
-        ClientMarket.subscribeMarketUpdate(itemID);
+        BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.subscribeMarketUpdate(itemID);
         currentItemView.setItemStack(itemID.getStack());
     }
 
     private void onSelectItemButtonPressed() {
         ArrayList<ItemStack> itemStacks = new ArrayList<>();
-        for(ItemID itemID : ClientMarket.getAvailableTradeItemIdList())
+        for(ItemID itemID : BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getAvailableTradeItemIdList())
         {
             itemStacks.add(itemID.getStack());
         }

@@ -2,7 +2,7 @@ package net.kroia.stockmarket.market.server;
 
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
-import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBotFactory;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.EnchantedBookItem;
@@ -14,6 +14,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class DefaultMarketBotSettings {
+    protected static StockMarketModBackend.Instances BACKEND_INSTANCES;
+    public static void setBackend(StockMarketModBackend.Instances backend) {
+        BACKEND_INSTANCES = backend;
+    }
     public static class MinimalMarketData
     {
         public Item item;
@@ -87,7 +91,7 @@ public class DefaultMarketBotSettings {
     public static void createDefaultMarketBotSettings() {
         long updateMS = 500;
 
-        StockMarketMod.logInfo("Generating new default bot settings.");
+        BACKEND_INSTANCES.LOGGER.info("Generating new default bot settings.");
 
         List<Item> allItems = BuiltInRegistries.ITEM.stream().toList();
 
@@ -288,7 +292,7 @@ public class DefaultMarketBotSettings {
     {
         ArrayList<ServerTradingBotFactory.BotBuilderContainer> container = new ArrayList<>();
         createBotSettings(container, category.items, updateTimerIntervallMS);
-        StockMarketMod.SERVER_DATA_HANDLER.saveDefaultBotSettings(container, category.categoryName+".json");
+        BACKEND_INSTANCES.SERVER_DATA_HANDLER.saveDefaultBotSettings(container, category.categoryName+".json");
     }
     private static void createBotSettings(ArrayList<ServerTradingBotFactory.BotBuilderContainer> container, ArrayList<MinimalMarketData> category, long updateTimerIntervallMS)
     {

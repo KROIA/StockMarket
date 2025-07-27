@@ -1,14 +1,11 @@
 package net.kroia.stockmarket.networking.packet.server_sender.update;
 
-import net.kroia.modutilities.networking.NetworkPacket;
-import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.market.client.ClientMarket;
 import net.kroia.stockmarket.market.server.order.Order;
-import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.kroia.stockmarket.util.ServerPlayerList;
+import net.kroia.stockmarket.util.StockMarketNetworkPacket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
-public class SyncOrderPacket extends NetworkPacket {
+public class SyncOrderPacket extends StockMarketNetworkPacket {
 
     private Order order;
 
@@ -36,10 +33,10 @@ public class SyncOrderPacket extends NetworkPacket {
         ServerPlayer player =  ServerPlayerList.getPlayer(order.getPlayerUUID());
         if(player == null)
         {
-            StockMarketMod.logWarning("[SERVER] Player not found for order: "+order.toString());
+            BACKEND_INSTANCES.LOGGER.warn("[SERVER] Player not found for order: "+order.toString());
             return;
         }
-        StockMarketNetworking.sendToClient(player, new SyncOrderPacket(order));
+        BACKEND_INSTANCES.NETWORKING.sendToClient(player, new SyncOrderPacket(order));
     }
 
     public Order getOrder() {
@@ -48,6 +45,6 @@ public class SyncOrderPacket extends NetworkPacket {
 
     @Override
     protected void handleOnClient() {
-        ClientMarket.handlePacket(this);
+        BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.handlePacket(this);
     }
 }

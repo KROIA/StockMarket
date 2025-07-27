@@ -7,9 +7,7 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.PlayerUtilities;
-import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.StockMarketModSettings;
-import net.kroia.stockmarket.market.server.ServerMarket;
+import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import net.kroia.stockmarket.networking.packet.server_sender.update.OpenScreenPacket;
@@ -25,6 +23,10 @@ import net.minecraft.server.level.ServerPlayer;
 import java.util.*;
 
 public class StockMarketCommands {
+    private static StockMarketModBackend.Instances BACKEND_INSTANCES;
+    public static void setBackend(StockMarketModBackend.Instances backend) {
+        BACKEND_INSTANCES = backend;
+    }
     // Method to register commands
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
 
@@ -72,7 +74,7 @@ public class StockMarketCommands {
                                             int seconds = IntegerArgumentType.getInteger(context, "seconds");
                                             if(seconds < 0)
                                                 return Command.SINGLE_SUCCESS; // Do not allow negative values
-                                            StockMarketMod.SERVER_SETTINGS.MARKET.SHIFT_PRICE_CANDLE_INTERVAL_MS.set(seconds * 1000L);
+                                            BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.SHIFT_PRICE_CANDLE_INTERVAL_MS.set(seconds * 1000L);
                                             // Execute the command on the server_sender
                                             return Command.SINGLE_SUCCESS;
                                         })
@@ -83,7 +85,7 @@ public class StockMarketCommands {
                                 .executes(context -> {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
-                                    ServerMarket.createDefaultBots();
+                                    BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.createDefaultBots();
                                     player.sendSystemMessage(Component.literal("Default bots created"));
 
                                     return Command.SINGLE_SUCCESS;
@@ -92,7 +94,7 @@ public class StockMarketCommands {
                         .then(Commands.literal("createDefaultBots")
                                 .requires(source -> source.hasPermission(2))
                                 .then(Commands.argument("category", StringArgumentType.string()).suggests((context, builder) -> {
-                                                    List<String> suggestions = StockMarketMod.SERVER_DATA_HANDLER.getDefaultBotSettingsFileNames();
+                                                    List<String> suggestions = BACKEND_INSTANCES.SERVER_DATA_HANDLER.getDefaultBotSettingsFileNames();
                                                     for (String suggestion : suggestions) {
                                                         builder.suggest("\"" + suggestion + "\"");
                                                     }
@@ -102,7 +104,7 @@ public class StockMarketCommands {
                                                     CommandSourceStack source = context.getSource();
                                                     ServerPlayer player = source.getPlayerOrException();
                                                     String category = StringArgumentType.getString(context, "category");
-                                                    if(ServerMarket.createDefaultBots(category))
+                                                    if(BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.createDefaultBots(category))
                                                     {
                                                         PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getDefaultBotsCategoryCreatedMessage(category));
                                                     }
@@ -125,8 +127,8 @@ public class StockMarketCommands {
                                         for(ItemID itemID : items)
                                         {
                                             ServerVolatilityBot bot = new ServerVolatilityBot();
-                                            if(ServerMarket.addTradeItemIfNotExists(itemID, 100))
-                                                ServerMarket.setTradingBot(itemID, bot);
+                                            if(BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.addTradeItemIfNotExists(itemID, 100))
+                                                BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.setTradingBot(itemID, bot);
                                         }
                                     } catch (Exception e) {
                                         e.printStackTrace();
@@ -140,7 +142,7 @@ public class StockMarketCommands {
                         .then(Commands.literal("createDefaultBot")
                                 .requires(source -> source.hasPermission(2))
                                 .then(Commands.argument("itemID", StringArgumentType.string()).suggests((context, builder) -> {
-                                                    Set<ItemID> suggestions = StockMarketModSettings.MarketBot.getBotBuilder().keySet();
+                                                    Set<ItemID> suggestions = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET_BOT.getBotBuilder().keySet();
                                                     for (ItemID suggestion : suggestions) {
                                                         builder.suggest("\"" + suggestion.getName() + "\"");
                                                     }
@@ -151,7 +153,7 @@ public class StockMarketCommands {
                                                     ServerPlayer player = source.getPlayerOrException();
                                                     String itemIDStr = StringArgumentType.getString(context, "itemID");
                                                     ItemID itemID = new ItemID(itemIDStr);
-                                                    if(ServerMarket.createDefaultBot(itemID))
+                                                    if(BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.createDefaultBot(itemID))
                                                     {
                                                         PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getDefaultBotCreatedMessage(itemIDStr));
                                                     }
@@ -166,7 +168,7 @@ public class StockMarketCommands {
                         .then(Commands.literal("removeMarkets")
                                 .requires(source -> source.hasPermission(2))
                                 .then(Commands.argument("category", StringArgumentType.string()).suggests((context, builder) -> {
-                                                    List<String> suggestions = StockMarketMod.SERVER_DATA_HANDLER.getDefaultBotSettingsFileNames();
+                                                    List<String> suggestions = BACKEND_INSTANCES.SERVER_DATA_HANDLER.getDefaultBotSettingsFileNames();
                                                     builder.suggest("All");
                                                     for (String suggestion : suggestions) {
                                                         builder.suggest("\"" + suggestion + "\"");
@@ -179,11 +181,11 @@ public class StockMarketCommands {
                                                     String category = StringArgumentType.getString(context, "category");
                                                     if(category.equals("All"))
                                                     {
-                                                        ServerMarket.removeAllTradingItems();
+                                                        BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.removeAllTradingItems();
                                                         PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getAllMarketsRemovedMessage());
                                                     }
                                                     else {
-                                                        if (ServerMarket.removeTradingItems(category)) {
+                                                        if (BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.removeTradingItems(category)) {
                                                             PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getDefaultMarketCategoryRemovedMessage(category));
                                                         } else {
                                                             PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getUnknownMarketCategory(category));
@@ -198,12 +200,12 @@ public class StockMarketCommands {
                                         .executes(context -> {
                                             CommandSourceStack source = context.getSource();
                                             ServerPlayer player = source.getPlayerOrException();
-                                            ServerMarket.cancelAllOrders(player.getUUID());
+                                            BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.cancelAllOrders(player.getUUID());
 
                                             return Command.SINGLE_SUCCESS;
                                         })
                                         .then(Commands.argument("itemID", StringArgumentType.string()).suggests((context, builder) -> {
-                                                            ArrayList<ItemID> suggestions = ServerMarket.getTradeItemIDs();
+                                                            ArrayList<ItemID> suggestions = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getTradeItemIDs();
                                                             for (ItemID suggestion : suggestions) {
                                                                 builder.suggest("\"" + suggestion.getName() + "\"");
                                                             }
@@ -213,7 +215,7 @@ public class StockMarketCommands {
                                                             CommandSourceStack source = context.getSource();
                                                             ServerPlayer player = source.getPlayerOrException();
                                                             ItemID itemID = new ItemID(StringArgumentType.getString(context, "itemID"));
-                                                            ServerMarket.cancelAllOrders(player.getUUID(), itemID);
+                                                            BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.cancelAllOrders(player.getUUID(), itemID);
 
                                                             return Command.SINGLE_SUCCESS;
                                                         })
@@ -233,11 +235,11 @@ public class StockMarketCommands {
                                                         .executes(context -> {
                                                             CommandSourceStack source = context.getSource();
                                                             String username = StringArgumentType.getString(context, "username");
-                                                            ServerMarket.cancelAllOrders(ServerPlayerList.getPlayerUUID(username));
+                                                            BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.cancelAllOrders(ServerPlayerList.getPlayerUUID(username));
                                                             return Command.SINGLE_SUCCESS;
                                                         })
                                                         .then(Commands.argument("itemID", StringArgumentType.string()).suggests((context, builder) -> {
-                                                                            ArrayList<ItemID> suggestions = ServerMarket.getTradeItemIDs();
+                                                                            ArrayList<ItemID> suggestions = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getTradeItemIDs();
                                                                             for (ItemID suggestion : suggestions) {
                                                                                 builder.suggest("\"" + suggestion.getName()+ "\"");
                                                                             }
@@ -248,7 +250,7 @@ public class StockMarketCommands {
                                                                             ServerPlayer player = source.getPlayerOrException();
                                                                             ItemID itemID = new ItemID(StringArgumentType.getString(context, "itemID"));
                                                                             String username = StringArgumentType.getString(context, "username");
-                                                                            ServerMarket.cancelAllOrders(ServerPlayerList.getPlayerUUID(username), itemID);
+                                                                            BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.cancelAllOrders(ServerPlayerList.getPlayerUUID(username), itemID);
 
                                                                             return Command.SINGLE_SUCCESS;
                                                                         })
@@ -262,7 +264,7 @@ public class StockMarketCommands {
                                 .executes(context -> {
                                     ServerPlayer player = context.getSource().getPlayer();
                                     if(player != null) {
-                                        ArrayList<ItemID> suggestions = ServerMarket.getTradeItemIDs();
+                                        ArrayList<ItemID> suggestions = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getTradeItemIDs();
                                         if(!suggestions.isEmpty()) {
                                             ItemID itemID = suggestions.get(0);
                                             SyncBotSettingsPacket.sendPacket(player, itemID);
@@ -283,10 +285,10 @@ public class StockMarketCommands {
                                         SyncTradeItemsPacket.sendPacket(player);
                                         OpenScreenPacket.sendPacket(player, OpenScreenPacket.ScreenType.STOCKMARKET_MANAGEMENT);
                                         /*
-                                        ArrayList<String> suggestions = ServerMarket.getTradeItemIDs();
+                                        ArrayList<String> suggestions = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getTradeItemIDs();
                                         if(!suggestions.isEmpty()) {
                                             //String itemID = suggestions.get(0);
-                                            //SyncBotSettingsPacket.sendPacket(player, itemID, ServerMarket.getBotUserUUID());
+                                            //SyncBotSettingsPacket.sendPacket(player, itemID, BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getBotUserUUID());
                                             }
                                         else {
                                             PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getNoTradingItemAvailableMessage());
@@ -300,13 +302,13 @@ public class StockMarketCommands {
                                 .executes(context -> {
                                     ServerPlayer player = context.getSource().getPlayer();
                                     if(player != null) {
-                                        ServerMarket.resetPriceChart();
+                                        BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.resetPriceChart();
                                     }
                                     return Command.SINGLE_SUCCESS;
                                 })
                         )
                         .then(Commands.argument("itemID", StringArgumentType.string()).suggests((context, builder) -> {
-                                            ArrayList<ItemID> suggestions = ServerMarket.getTradeItemIDs();
+                                            ArrayList<ItemID> suggestions = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getTradeItemIDs();
                                             for (ItemID suggestion : suggestions) {
                                                 builder.suggest("\"" + suggestion.getName() + "\"");
                                             }
@@ -325,11 +327,11 @@ public class StockMarketCommands {
                                                                 return Command.SINGLE_SUCCESS;
                                                             }
                                                             ItemID itemID = new ItemID(itemIDStr);
-                                                            ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
+                                                            ServerTradingBot bot = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getTradingBot(itemID);
                                                             if (bot == null) {
                                                                 ServerVolatilityBot volatilityBot = new ServerVolatilityBot();
                                                                 volatilityBot.setEnabled(false);
-                                                                ServerMarket.setTradingBot(itemID, volatilityBot);
+                                                                BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.setTradingBot(itemID, volatilityBot);
                                                                 PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getBotCreatedMessage(itemIDStr));
                                                             } else {
                                                                 PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getBotAlreadyExistMessage(itemIDStr));
@@ -350,11 +352,11 @@ public class StockMarketCommands {
                                                                 return Command.SINGLE_SUCCESS;
                                                             }
                                                             ItemID itemID = new ItemID(itemIDStr);
-                                                            ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
+                                                            ServerTradingBot bot = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getTradingBot(itemID);
                                                             if (bot == null) {
                                                                 PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getBotNotExistMessage(itemIDStr));
                                                             } else {
-                                                                ServerMarket.removeTradingBot(itemID);
+                                                                BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.removeTradingBot(itemID);
                                                                 PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getBotDeletedMessage(itemIDStr));
                                                             }
                                                             // Execute the command on the server_sender
@@ -374,10 +376,10 @@ public class StockMarketCommands {
                                                     }
 
                                                     ItemID itemID = new ItemID(itemIDStr);
-                                                    if (ServerMarket.hasItem(itemID)) {
+                                                    if (BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.hasItem(itemID)) {
                                                         PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getMarketplaceAlreadyExistingMessage(itemIDStr));
                                                     } else {
-                                                        if(ServerMarket.addTradeItem(itemID, 0))
+                                                        if(BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.addTradeItem(itemID, 0))
                                                         {
                                                             // Notify all serverPlayers
                                                             PlayerUtilities.printToClientConsole(StockMarketTextMessages.getMarketplaceCreatedMessage(itemIDStr));
@@ -401,8 +403,8 @@ public class StockMarketCommands {
                                                         return Command.SINGLE_SUCCESS;
                                                     }
                                                     ItemID itemID = new ItemID(itemIDStr);
-                                                    if (ServerMarket.hasItem(itemID)) {
-                                                        ServerMarket.removeTradingItem(itemID);
+                                                    if (BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.hasItem(itemID)) {
+                                                        BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.removeTradingItem(itemID);
                                                         // Notify all serverPlayers
                                                         PlayerUtilities.printToClientConsole(StockMarketTextMessages.getMarketplaceDeletedMessage(itemIDStr));
                                                     } else {
@@ -422,10 +424,10 @@ public class StockMarketCommands {
                                                         return Command.SINGLE_SUCCESS;
                                                     }
                                                     ItemID itemID = new ItemID(itemIDStr);
-                                                    if (!ServerMarket.hasItem(itemID)) {
+                                                    if (!BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.hasItem(itemID)) {
                                                         PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getMarketplaceNotExistingMessage(itemIDStr));
                                                     } else {
-                                                        ServerMarket.setMarketOpen(itemID, true);
+                                                        BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.setMarketOpen(itemID, true);
                                                         // Notify all serverPlayers
                                                         PlayerUtilities.printToClientConsole(StockMarketTextMessages.getMarketplaceIsNowOpenMessage(itemIDStr));
                                                     }
@@ -443,10 +445,10 @@ public class StockMarketCommands {
                                                         return Command.SINGLE_SUCCESS;
                                                     }
                                                     ItemID itemID = new ItemID(itemIDStr);
-                                                    if (!ServerMarket.hasItem(itemID)) {
+                                                    if (!BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.hasItem(itemID)) {
                                                         PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getMarketplaceNotExistingMessage(itemIDStr));
                                                     } else {
-                                                        ServerMarket.setMarketOpen(itemID, false);
+                                                        BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.setMarketOpen(itemID, false);
                                                         // Notify all serverPlayers
                                                         PlayerUtilities.printToClientConsole(StockMarketTextMessages.getMarketplaceIsNowClosedMessage(itemIDStr));
                                                     }
@@ -464,11 +466,11 @@ public class StockMarketCommands {
                                                         return Command.SINGLE_SUCCESS;
                                                     }
                                                     ItemID itemID = new ItemID(itemIDStr);
-                                                    if (!ServerMarket.hasItem(itemID)) {
+                                                    if (!BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.hasItem(itemID)) {
                                                         PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getMarketplaceNotExistingMessage(itemIDStr));
                                                         return Command.SINGLE_SUCCESS;
                                                     }
-                                                    int price = ServerMarket.getPrice(itemID);
+                                                    int price = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getPrice(itemID);
                                                     PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getCurrentPriceOfMessage(itemIDStr, price));
                                                     return Command.SINGLE_SUCCESS;
                                                 })
@@ -484,11 +486,11 @@ public class StockMarketCommands {
                                                         return Command.SINGLE_SUCCESS;
                                                     }
                                                     ItemID itemID = new ItemID(itemIDStr);
-                                                    if (!ServerMarket.hasItem(itemID)) {
+                                                    if (!BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.hasItem(itemID)) {
                                                         PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getMarketplaceNotExistingMessage(itemIDStr));
                                                         return Command.SINGLE_SUCCESS;
                                                     }
-                                                    ServerMarket.resetPriceChart(itemID);
+                                                    BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.resetPriceChart(itemID);
                                                     //PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getCurrentPriceOfMessage(itemIDStr, price));
                                                     return Command.SINGLE_SUCCESS;
                                                 })
@@ -501,7 +503,7 @@ public class StockMarketCommands {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
 
-                                    StockMarketMod.SERVER_DATA_HANDLER.saveAllAsync().thenAccept(success -> {
+                                    BACKEND_INSTANCES.SERVER_DATA_HANDLER.saveAllAsync().thenAccept(success -> {
                                         if(success)
                                             PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getStockMarketDataSavedMessage());
                                         else
@@ -518,7 +520,7 @@ public class StockMarketCommands {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
 
-                                    if(StockMarketMod.SERVER_DATA_HANDLER.loadAll())
+                                    if(BACKEND_INSTANCES.SERVER_DATA_HANDLER.loadAll())
                                         PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getStockMarketDataLoadedMessage());
                                     else
                                         PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getStockMarketDataLoadFailedMessage());
@@ -532,7 +534,7 @@ public class StockMarketCommands {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
 
-                                    ServerMarket.setAllMarketsOpen(false);
+                                    BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.setAllMarketsOpen(false);
                                     // Notify all serverPlayers
                                     PlayerUtilities.printToClientConsole(StockMarketTextMessages.getMarketplaceIsNowClosedAllMessage());
 
@@ -545,7 +547,7 @@ public class StockMarketCommands {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
 
-                                    ServerMarket.setAllMarketsOpen(true);
+                                    BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.setAllMarketsOpen(true);
                                     // Notify all serverPlayers
                                     PlayerUtilities.printToClientConsole(StockMarketTextMessages.getMarketplaceIsNowOpenAllMessage());
 
@@ -697,7 +699,7 @@ public class StockMarketCommands {
         }
 
         ItemID itemID = new ItemID(itemIDStr);
-        ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
+        ServerTradingBot bot = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getTradingBot(itemID);
         if (bot instanceof ServerVolatilityBot volatilityBot) {
             return volatilityBot;
         }

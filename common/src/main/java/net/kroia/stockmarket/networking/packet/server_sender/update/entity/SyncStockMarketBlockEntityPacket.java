@@ -1,15 +1,14 @@
 package net.kroia.stockmarket.networking.packet.server_sender.update.entity;
 
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.networking.NetworkPacket;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
-import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
+import net.kroia.stockmarket.util.StockMarketNetworkPacket;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
-public class SyncStockMarketBlockEntityPacket extends NetworkPacket {
+public class SyncStockMarketBlockEntityPacket extends StockMarketNetworkPacket {
     private BlockPos pos;
     private ItemID itemID;
     private int amount;
@@ -47,7 +46,7 @@ public class SyncStockMarketBlockEntityPacket extends NetworkPacket {
     }
 
     public static void sendPacketToClient(BlockPos pos, StockMarketBlockEntity blockEntity, ServerPlayer player) {
-        StockMarketNetworking.sendToClient(player, new SyncStockMarketBlockEntityPacket(pos, blockEntity));
+        new SyncStockMarketBlockEntityPacket(pos, blockEntity).sendToClient(player);
     }
 
     @Override

@@ -1,17 +1,14 @@
 package net.kroia.stockmarket.networking.packet.server_sender.update;
 
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.networking.NetworkPacket;
-import net.kroia.stockmarket.market.client.ClientMarket;
-import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.market.server.ServerTradeItem;
-import net.kroia.stockmarket.networking.StockMarketNetworking;
+import net.kroia.stockmarket.util.StockMarketNetworkPacket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.ArrayList;
 import java.util.Map;
-public class SyncTradeItemsPacket extends NetworkPacket {
+public class SyncTradeItemsPacket extends StockMarketNetworkPacket {
 
     public enum Command
     {
@@ -117,7 +114,7 @@ public class SyncTradeItemsPacket extends NetworkPacket {
     public static void sendPacket(ServerPlayer player)
     {
         //StockMarketMod.LOGGER.info("[SERVER] Sending SyncTradeItemsPacket");
-        Map<ItemID, ServerTradeItem> serverTradeItemMap = ServerMarket.getTradeItems();
+        Map<ItemID, ServerTradeItem> serverTradeItemMap = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getTradeItems();
         ArrayList<SyncPricePacket> syncPricePackets = new ArrayList<>();
         ArrayList<ItemID> stillAvailableItems = new ArrayList<>();
         for(var entry : serverTradeItemMap.entrySet())
@@ -125,18 +122,18 @@ public class SyncTradeItemsPacket extends NetworkPacket {
             stillAvailableItems.add(entry.getKey());
         }
 
-        SyncTradeItemsPacket packet = new SyncTradeItemsPacket(stillAvailableItems, ServerMarket.getCurrencyItem());
+        SyncTradeItemsPacket packet = new SyncTradeItemsPacket(stillAvailableItems, BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getCurrencyItem());
         packet.command = Command.STILL_AVAILABLE;
-        StockMarketNetworking.sendToClient(player, packet);
+        packet.sendToClient(player);
         for(var entry : serverTradeItemMap.entrySet())
         {
             ServerTradeItem item = entry.getValue();
-            StockMarketNetworking.sendToClient(player, new SyncTradeItemsPacket(new SyncPricePacket(item.getItemID(), player.getUUID()), ServerMarket.getCurrencyItem()));
+            new SyncTradeItemsPacket(new SyncPricePacket(item.getItemID(), player.getUUID()), BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getCurrencyItem()).sendToClient(player);
         }
     }
 
     @Override
     protected void handleOnClient() {
-        ClientMarket.handlePacket(this);
+        BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.handlePacket(this);
     }
 }

@@ -10,7 +10,8 @@ import net.kroia.modutilities.gui.elements.ItemSelectionView;
 import net.kroia.modutilities.gui.elements.ItemView;
 import net.kroia.modutilities.gui.screens.CreativeModeItemSelectionScreen;
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.market.client.ClientMarket;
+import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.market.client.ClientStockMarketManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -20,6 +21,7 @@ import java.util.ArrayList;
 
 
 public class StockMarketManagementScreen extends GuiScreen {
+    private static StockMarketModBackend.Instances BACKEND_INSTANCES;
 
     private static final String NAME = "management_screen";
     public static final String PREFIX = "gui."+ StockMarketMod.MOD_ID+"."+NAME+".";
@@ -46,13 +48,17 @@ public class StockMarketManagementScreen extends GuiScreen {
     private final Button botSettingsButton;
 
     private final Screen parentScreen;
+
+    public static void setBackend(StockMarketModBackend.Instances backend) {
+        BACKEND_INSTANCES = backend;
+    }
     protected StockMarketManagementScreen(Screen parent) {
         super(TITLE);
         this.parentScreen = parent;
         //RequestPotentialBankItemIDsPacket.sendRequest();
 
         ArrayList<ItemStack> itemStacks = new ArrayList<>();
-        for(ItemID itemID : ClientMarket.getAvailableTradeItemIdList())
+        for(ItemID itemID : BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getAvailableTradeItemIdList())
         {
             itemStacks.add(itemID.getStack());
         }
@@ -71,7 +77,7 @@ public class StockMarketManagementScreen extends GuiScreen {
         removeTradingItemButton = new Button(REMOVE_TRADING_ITEM_BUTTON.getString(), () -> {
             if(currentTradingItemID != null) {
                 AskPopupScreen popup = new AskPopupScreen(this, () -> {
-                    ClientMarket.requestRemoveTradingItem(currentTradingItemID);
+                    BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.requestRemoveTradingItem(currentTradingItemID);
                     setCurrentTradingItemID(null);
                 }, () -> {}, ASK_TITLE.getString() + " "+currentTradingItemID + "?", ASK_MSG.getString());
                 popup.setSize(400,100);
@@ -88,7 +94,7 @@ public class StockMarketManagementScreen extends GuiScreen {
         botSettingsButton = new Button(BOT_SETTINGS.getString(), () ->
         {
             BotSettingsScreen.openScreen(this);
-            ClientMarket.requestBotSettings(currentTradingItemID); // Trigger request for bot settings
+            BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.requestBotSettings(currentTradingItemID); // Trigger request for bot settings
         });
 
 
@@ -138,7 +144,7 @@ public class StockMarketManagementScreen extends GuiScreen {
 
     public void updateTradingItems()
     {
-        ArrayList<ItemID> items = ClientMarket.getAvailableTradeItemIdList();
+        ArrayList<ItemID> items = BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getAvailableTradeItemIdList();
         ArrayList<ItemStack> itemStacks = new ArrayList<>();
         for(ItemID itemID : items)
         {
@@ -161,20 +167,20 @@ public class StockMarketManagementScreen extends GuiScreen {
         {
             currentTradingItemID = new ItemID(itemStack);
             currentTradingItemView.setItemStack(itemStack);
-            ClientMarket.requestBotSettings(currentTradingItemID);
+            BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.requestBotSettings(currentTradingItemID);
             botSettingsButton.setEnabled(true);
         }
     }
 
     private void onNewTradingItemSelected(ItemStack itemStack) {
         ItemID itemID = new ItemID(itemStack);
-        ClientMarket.requestAllowNewTradingItem(itemID,0);
+        BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.requestAllowNewTradingItem(itemID,0);
         setCurrentTradingItemID(itemStack);
     }
 
     @Override
     public void tick() {
-        if(ClientMarket.hasSyncTradeItemsChanged())
+        if(BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.hasSyncTradeItemsChanged())
         {
             updateTradingItems();
         }

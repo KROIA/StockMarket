@@ -2,21 +2,17 @@ package net.kroia.stockmarket.networking.packet.server_sender.update;
 
 
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.networking.NetworkPacket;
-import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.market.client.ClientMarket;
-import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.market.server.order.Order;
-import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.kroia.stockmarket.util.OrderbookVolume;
 import net.kroia.stockmarket.util.PriceHistory;
+import net.kroia.stockmarket.util.StockMarketNetworkPacket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.ArrayList;
 import java.util.UUID;
 
-public class SyncPricePacket extends NetworkPacket {
+public class SyncPricePacket extends StockMarketNetworkPacket {
     private PriceHistory priceHistory;
     private OrderbookVolume orderBookVolume;
     private int minPrice;
@@ -47,25 +43,25 @@ public class SyncPricePacket extends NetworkPacket {
     public SyncPricePacket(ItemID itemID)
     {
         commonSetup(itemID);
-        this.orders = ServerMarket.getOrders(itemID);
+        this.orders = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getOrders(itemID);
     }
     public SyncPricePacket(ItemID itemID, UUID playerUUID)
     {
         commonSetup(itemID);
-        this.isMarketOpen = ServerMarket.isMarketOpen(itemID);
-        this.orders = ServerMarket.getOrders(itemID, playerUUID);
+        this.isMarketOpen = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.isMarketOpen(itemID);
+        this.orders = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getOrders(itemID, playerUUID);
     }
     private void commonSetup(ItemID itemID)
     {
-        if(!ServerMarket.hasItem(itemID))
+        if(!BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.hasItem(itemID))
         {
-            StockMarketMod.logWarning("Item not found: " + itemID);
+            warn("Item not found: " + itemID);
             return;
         }
-        PriceHistory history = ServerMarket.getPriceHistory(itemID);
+        PriceHistory history = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getPriceHistory(itemID);
         if(history == null)
         {
-            StockMarketMod.logWarning("Price history not found: " + itemID);
+            warn("Price history not found: " + itemID);
             return;
         }
         int minPrice = history.getLowestPrice();
@@ -87,7 +83,7 @@ public class SyncPricePacket extends NetworkPacket {
 
         minPrice = Math.max(0, minPrice);
 
-        int tiles = StockMarketMod.SERVER_SETTINGS.UI.MAX_ORDERBOOK_TILES.get();
+        int tiles = BACKEND_INSTANCES.SERVER_SETTINGS.UI.MAX_ORDERBOOK_TILES.get();
         if(maxPrice-minPrice < tiles)
         {
             tiles = maxPrice-minPrice;
@@ -95,7 +91,7 @@ public class SyncPricePacket extends NetworkPacket {
 
 
 
-        OrderbookVolume orderBookVolume = ServerMarket.getOrderBookVolume(itemID, tiles, minPrice, maxPrice);
+        OrderbookVolume orderBookVolume = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getOrderBookVolume(itemID, tiles, minPrice, maxPrice);
         this.priceHistory = history;
         this.orderBookVolume = orderBookVolume;
         this.minPrice = minPrice;
@@ -105,7 +101,7 @@ public class SyncPricePacket extends NetworkPacket {
     public static void sendPacket(ItemID itemID, ServerPlayer player)
     {
         SyncPricePacket packet = new SyncPricePacket(itemID, player.getUUID());
-        StockMarketNetworking.sendToClient(player, packet);
+        BACKEND_INSTANCES.NETWORKING.sendToClient(player, packet);
     }
 
     public PriceHistory getPriceHistory() {
@@ -129,7 +125,7 @@ public class SyncPricePacket extends NetworkPacket {
 
     @Override
     public void encode(FriendlyByteBuf buf) {
-        priceHistory.toBytes(buf);
+        priceHistory.encode(buf);
         orderBookVolume.toBytes(buf);
         buf.writeInt(minPrice);
         buf.writeInt(maxPrice);
@@ -159,6 +155,6 @@ public class SyncPricePacket extends NetworkPacket {
 
     @Override
     protected void handleOnClient() {
-        ClientMarket.handlePacket(this);
+        BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.handlePacket(this);
     }
 }

@@ -8,7 +8,8 @@ import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.market.server.ServerMarket;
+import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.market.server.ServerStockMarketManager;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncOrderPacket;
 import net.kroia.stockmarket.util.ServerPlayerList;
 import net.kroia.stockmarket.util.StockMarketTextMessages;
@@ -21,6 +22,11 @@ import java.util.UUID;
     * The Order class represents a buy or sell order.
  */
 public abstract class Order {
+
+    protected static StockMarketModBackend.Instances BACKEND_INSTANCES;
+    public static void setBackend(StockMarketModBackend.Instances backend) {
+        BACKEND_INSTANCES = backend;
+    }
     private static long lastOrderID = 0;
 
     protected long orderID;
@@ -71,14 +77,14 @@ public abstract class Order {
     }
     protected static boolean tryReserveBankFund(ServerPlayer player, ItemID itemID, int amount, int price)
     {
-        IBankUser bankUser = StockMarketMod.BANK_SYSTEM_API.getServerBankManager().getUser(player.getUUID());
+        IBankUser bankUser = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getUser(player.getUUID());
         if(bankUser == null)
         {
             PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankNotFoundMessage(player.getName().getString(),itemID.getName()));
             return false;
         }
 
-        IBank moneyBank = bankUser.getBank(ServerMarket.getCurrencyItem());
+        IBank moneyBank = bankUser.getBank(BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getCurrencyItem());
         IBank itemBank = bankUser.getBank(itemID);
         if(itemBank == null)
         {
@@ -146,7 +152,7 @@ public abstract class Order {
         if(buf.isReadable()) {
             currencyItemID = new ItemID(buf.readItem());
         } else {
-            currencyItemID = ServerMarket.getCurrencyItem();
+            currencyItemID = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getCurrencyItem();
         }
     }
 
@@ -242,14 +248,14 @@ public abstract class Order {
 
     public void markAsProcessed() {
         if(!isBot)
-            StockMarketMod.logInfo("Order processed: " + toString());
+            BACKEND_INSTANCES.LOGGER.info("Order processed: " + toString());
         unlockLockedMoney();
         setStatus(Status.PROCESSED);
     }
     public void markAsInvalid(String reason) {
         invalidReason = reason;
         if(!isBot) {
-            StockMarketMod.logInfo("Order invalid: " + toString());
+            BACKEND_INSTANCES.LOGGER.info("Order invalid: " + toString());
 
             PlayerUtilities.printToClientConsole(getPlayerUUID(), StockMarketTextMessages.getOrderInvalidMessage(reason));
         }
@@ -258,7 +264,7 @@ public abstract class Order {
     }
     public void markAsCancelled() {
         if(!isBot)
-            StockMarketMod.logInfo("Order canceled: " + toString());
+            BACKEND_INSTANCES.LOGGER.info("Order canceled: " + toString());
         unlockLockedMoney();
         setStatus(Status.CANCELLED);
     }
@@ -266,22 +272,22 @@ public abstract class Order {
     {
         if(isBot)
             return;
-        IBankUser user = StockMarketMod.BANK_SYSTEM_API.getServerBankManager().getUser(playerUUID);
+        IBankUser user = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getUser(playerUUID);
         if(user == null)
         {
-            StockMarketMod.logError("BankUser not found for player " + ServerPlayerList.getPlayerName(playerUUID));
+            BACKEND_INSTANCES.LOGGER.error("BankUser not found for player " + ServerPlayerList.getPlayerName(playerUUID));
             return;
         }
-        IBank moneyBank = user.getBank(ServerMarket.getCurrencyItem());
+        IBank moneyBank = user.getBank(BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getCurrencyItem());
         IBank itemBank = user.getBank(itemID);
         if(moneyBank == null)
         {
-            StockMarketMod.logError("MoneyBank not found for player " + ServerPlayerList.getPlayerName(playerUUID));
+            BACKEND_INSTANCES.LOGGER.error("MoneyBank not found for player " + ServerPlayerList.getPlayerName(playerUUID));
             return;
         }
         if(itemBank == null)
         {
-            StockMarketMod.logError("ItemBank not found for player " + ServerPlayerList.getPlayerName(playerUUID));
+            BACKEND_INSTANCES.LOGGER.error("ItemBank not found for player " + ServerPlayerList.getPlayerName(playerUUID));
             return;
         }
 

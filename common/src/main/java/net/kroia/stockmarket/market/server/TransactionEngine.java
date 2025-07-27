@@ -5,6 +5,7 @@ import net.kroia.banksystem.api.IBankUser;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.util.StockMarketTextMessages;
 
@@ -15,7 +16,10 @@ import java.util.UUID;
  * It manages the exchange of item and money between the orders
  */
 public class TransactionEngine {
-
+    protected static StockMarketModBackend.Instances BACKEND_INSTANCES;
+    public static void setBackend(StockMarketModBackend.Instances backend) {
+        BACKEND_INSTANCES = backend;
+    }
 
     public static int fill(Order o1, Order o2, int currentPrice)
     {
@@ -35,8 +39,8 @@ public class TransactionEngine {
 
         UUID playerUUID1 = o1.getPlayerUUID();
         UUID playerUUID2 = o2.getPlayerUUID();
-        IBankUser user1 = (playerUUID1!=null?StockMarketMod.BANK_SYSTEM_API.getServerBankManager().getUser(playerUUID1):null);
-        IBankUser user2 = (playerUUID2!=null?StockMarketMod.BANK_SYSTEM_API.getServerBankManager().getUser(playerUUID2):null);
+        IBankUser user1 = (playerUUID1!=null?BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getUser(playerUUID1):null);
+        IBankUser user2 = (playerUUID2!=null?BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getUser(playerUUID2):null);
         IBank moneyBank1 = (user1!=null?user1.getBank(o1.getCurrencyItemID()):null);
         IBank moneyBank2 = (user2!=null?user2.getBank(o2.getCurrencyItemID()):null);
         IBank itemBank1 = (user1!=null?user1.getBank(o1.getItemID()):null);
@@ -63,7 +67,7 @@ public class TransactionEngine {
         {
             if(receiverMoneyBank.getTotalBalance() + money < receiverMoneyBank.getTotalBalance())
             {
-                StockMarketMod.logError("Overflow while filling order from player: " + receiverUUID.toString() +
+                BACKEND_INSTANCES.LOGGER.error("Overflow while filling order from player: " + receiverUUID.toString() +
                         " Order1: " + senderOrder + " Order2: " + receiverOrder +
                         " Can't fill order");
                 receiverOrder.markAsInvalid("Would lead to an variable overflow");
@@ -74,7 +78,7 @@ public class TransactionEngine {
         {
             if(receiverItemBank.getTotalBalance() + fillVolume < receiverItemBank.getTotalBalance())
             {
-                StockMarketMod.logError("Overflow while filling order from player: " + senderUUID.toString() +
+                BACKEND_INSTANCES.LOGGER.error("Overflow while filling order from player: " + senderUUID.toString() +
                         " Order1: " + senderOrder + " Order2: " + receiverOrder +
                         " Can't fill order");
                 receiverOrder.markAsInvalid("Would lead to an variable overflow");
@@ -89,7 +93,7 @@ public class TransactionEngine {
                 Bank.Status status = receiverItemBank.deposit(fillVolume);
                 if(status != Bank.Status.SUCCESS)
                 {
-                    StockMarketMod.logError("Failed to deposit item for bot: " + receiverUUID.toString() +
+                    BACKEND_INSTANCES.LOGGER.error("Failed to deposit item for bot: " + receiverUUID.toString() +
                             " Order1: " + senderOrder + " Order2: " + receiverOrder +
                             " Can't fill order");
                     receiverOrder.markAsInvalid("");
@@ -101,7 +105,7 @@ public class TransactionEngine {
                 Bank.Status status = receiverMoneyBank.deposit(money);
                 if(status != Bank.Status.SUCCESS)
                 {
-                    StockMarketMod.logError("Failed to deposit money for bot: " + receiverUUID.toString() +
+                    BACKEND_INSTANCES.LOGGER.error("Failed to deposit money for bot: " + receiverUUID.toString() +
                             " Order1: " + senderOrder + " Order2: " + receiverOrder +
                             " Can't fill order");
                     receiverOrder.markAsInvalid("");
@@ -113,7 +117,7 @@ public class TransactionEngine {
                 Bank.Status status = senderItemBank.withdrawLockedPrefered(fillVolume);
                 if(status != Bank.Status.SUCCESS)
                 {
-                    StockMarketMod.logError("Failed to withdraw item for bot: " + senderUUID.toString() +
+                    BACKEND_INSTANCES.LOGGER.error("Failed to withdraw item for bot: " + senderUUID.toString() +
                             " Order1: " + senderOrder + " Order2: " + receiverOrder +
                             " Can't fill order");
                     receiverOrder.markAsInvalid("");
@@ -125,7 +129,7 @@ public class TransactionEngine {
                 Bank.Status status = senderMoneyBank.withdrawLockedPrefered(money);
                 if(status != Bank.Status.SUCCESS)
                 {
-                    StockMarketMod.logError("Failed to withdraw money for bot: " + senderUUID.toString() +
+                    BACKEND_INSTANCES.LOGGER.error("Failed to withdraw money for bot: " + senderUUID.toString() +
                             " Order1: " + senderOrder + " Order2: " + receiverOrder +
                             " Can't fill order");
                     receiverOrder.markAsInvalid("");
@@ -155,7 +159,7 @@ public class TransactionEngine {
             switch(status) {
                 case FAILED_OVERFLOW:
                 {
-                    StockMarketMod.logError("Overflow while filling order from player: " + senderUUID.toString() +
+                    BACKEND_INSTANCES.LOGGER.error("Overflow while filling order from player: " + senderUUID.toString() +
                             " Order1: " + senderOrder + " Order2: " + receiverOrder +
                             " Can't fill order");
                     PlayerUtilities.printToClientConsole(senderMoneyBank.getPlayerUUID(), status.toString());
@@ -165,7 +169,7 @@ public class TransactionEngine {
                 case FAILED_NOT_ENOUGH_FUNDS: {
                     long missingMoney = (money - senderMoneyBank.getBalance() - senderMoneyBank.getLockedBalance());
                     long missingItems = (fillVolume - senderItemBank.getBalance() - senderItemBank.getLockedBalance());
-                    StockMarketMod.logError("Insufficient funds from player: " + senderUUID.toString() +
+                    BACKEND_INSTANCES.LOGGER.error("Insufficient funds from player: " + senderUUID.toString() +
                             " Order1: " + senderOrder + " Order2: " + receiverOrder +
                             " Can't fill order");
                     senderOrder.markAsInvalid(StockMarketTextMessages.getInsufficientFundMessage());
@@ -228,7 +232,7 @@ public class TransactionEngine {
             fillAmount = -fillVolume;
 
         UUID playerUUID1 = o1.getPlayerUUID();
-        IBankUser user1 = StockMarketMod.BANK_SYSTEM_API.getServerBankManager().getUser(playerUUID1);
+        IBankUser user1 = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getUser(playerUUID1);
         IBank moneyBank1 = user1.getBank(o1.getCurrencyItemID());
         IBank itemBank1 = user1.getBank(o1.getItemID());
 
@@ -244,13 +248,13 @@ public class TransactionEngine {
             if(moneyToTransfer > 0) {
                 Bank.Status status = moneyBank1.withdrawLockedPrefered(moneyToTransfer);
                 if (status != Bank.Status.SUCCESS) {
-                    StockMarketMod.logError("Failed to withdraw money for ghost fill: " + o1 + " Status: " + status);
+                    BACKEND_INSTANCES.LOGGER.error("Failed to withdraw money for ghost fill: " + o1 + " Status: " + status);
                     o1.markAsInvalid("");
                     return 0;
                 }
                 status = itemBank1.deposit(fillVolume);
                 if (status != Bank.Status.SUCCESS) {
-                    StockMarketMod.logError("Failed to deposit item for ghost fill: " + o1 + " Status: " + status);
+                    BACKEND_INSTANCES.LOGGER.error("Failed to deposit item for ghost fill: " + o1 + " Status: " + status);
                     moneyBank1.deposit(moneyToTransfer);
                     o1.markAsInvalid("");
                     return 0;
@@ -264,7 +268,7 @@ public class TransactionEngine {
             Bank.Status status = itemBank1.withdrawLockedPrefered(fillVolume);
             if(status != Bank.Status.SUCCESS)
             {
-                StockMarketMod.logError("Failed to withdraw item for ghost fill: " + o1 + " Status: " + status);
+                BACKEND_INSTANCES.LOGGER.error("Failed to withdraw item for ghost fill: " + o1 + " Status: " + status);
                 o1.markAsInvalid("");
                 return 0;
             }
@@ -272,7 +276,7 @@ public class TransactionEngine {
             status = moneyBank1.deposit(moneyToTransfer);
             if(status != Bank.Status.SUCCESS)
             {
-                StockMarketMod.logError("Failed to deposit money for ghost fill: " + o1 + " Status: " + status);
+                BACKEND_INSTANCES.LOGGER.error("Failed to deposit money for ghost fill: " + o1 + " Status: " + status);
                 itemBank1.deposit(fillVolume);
                 itemBank1.lockAmount(fillVolume);
                 o1.markAsInvalid("Would lead to an variable overflow");

@@ -1,8 +1,7 @@
 package net.kroia.stockmarket.market.server.order;
 
-import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.stockmarket.market.server.ServerMarket;
+import net.kroia.stockmarket.market.server.ServerStockMarketManager;
 import net.kroia.stockmarket.util.ServerPlayerList;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
@@ -14,7 +13,7 @@ public class MarketOrder extends Order {
 
     public static MarketOrder create(ServerPlayer player, ItemID itemID, ItemID currencyItemID, int amount)
     {
-        int currentPrice = ServerMarket.getPrice(itemID);
+        int currentPrice = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getPrice(itemID);
         if(Order.tryReserveBankFund(player, itemID, amount, currentPrice)) {
 
             return new MarketOrder(player.getUUID(), itemID, currencyItemID, amount, currentPrice);
@@ -23,7 +22,7 @@ public class MarketOrder extends Order {
     }
     public static MarketOrder createBotOrder(ItemID itemID, ItemID currencyItemID, int amount)
     {
-        int currentPrice = ServerMarket.getPrice(itemID);
+        int currentPrice = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getPrice(itemID);
         return new MarketOrder(null, itemID, currencyItemID, amount, currentPrice,true);
     }
     protected MarketOrder(UUID playerUUID, ItemID itemID, ItemID currencyItemID, int amount, int currentPrice) {

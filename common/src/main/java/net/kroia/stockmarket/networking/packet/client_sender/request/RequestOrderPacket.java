@@ -1,12 +1,10 @@
 package net.kroia.stockmarket.networking.packet.client_sender.request;
 
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.networking.NetworkPacket;
-import net.kroia.stockmarket.market.server.ServerMarket;
-import net.kroia.stockmarket.networking.StockMarketNetworking;
+import net.kroia.stockmarket.util.StockMarketNetworkPacket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
-public class RequestOrderPacket extends NetworkPacket {
+public class RequestOrderPacket extends StockMarketNetworkPacket {
 
     private ItemID itemID;
     private ItemID currencyItemID;
@@ -63,11 +61,11 @@ public class RequestOrderPacket extends NetworkPacket {
     public static void generateRequest(ItemID itemID, ItemID currencyItemID, int amount, int price) {
 
         //StockMarketMod.LOGGER.info("[CLIENT] Sending RequestOrderPacket for item: "+itemID + " amount: "+amount);
-        StockMarketNetworking.sendToServer(new RequestOrderPacket(itemID, currencyItemID, amount, OrderType.limit, price));
+        new RequestOrderPacket(itemID, currencyItemID, amount, OrderType.limit, price).sendToServer();
     }
     public static void generateRequest(ItemID itemID, ItemID currencyItemID, int amount) {
         //StockMarketMod.LOGGER.info("[CLIENT] Sending RequestOrderPacket for item: "+itemID + " amount: "+amount);
-        StockMarketNetworking.sendToServer(new RequestOrderPacket(itemID, currencyItemID, amount));
+        new RequestOrderPacket(itemID, currencyItemID, amount).sendToServer();
     }
 
     @Override
@@ -92,7 +90,7 @@ public class RequestOrderPacket extends NetworkPacket {
 
     @Override
     protected void handleOnServer(ServerPlayer sender) {
-        ServerMarket.handlePacket(sender, this);
+        BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.handlePacket(sender, this);
     }
 
 

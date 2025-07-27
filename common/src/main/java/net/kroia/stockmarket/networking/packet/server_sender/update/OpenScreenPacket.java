@@ -1,14 +1,13 @@
 package net.kroia.stockmarket.networking.packet.server_sender.update;
 
 import net.kroia.modutilities.PlayerUtilities;
-import net.kroia.modutilities.networking.NetworkPacket;
-import net.kroia.stockmarket.StockMarketClientHooks;
-import net.kroia.stockmarket.networking.StockMarketNetworking;
+import net.kroia.stockmarket.util.StockMarketClientHooks;
+import net.kroia.stockmarket.util.StockMarketNetworkPacket;
 import net.kroia.stockmarket.util.StockMarketTextMessages;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
-public class OpenScreenPacket extends NetworkPacket {
+public class OpenScreenPacket extends StockMarketNetworkPacket {
 
     public enum ScreenType
     {
@@ -40,7 +39,7 @@ public class OpenScreenPacket extends NetworkPacket {
                 return;
             }
         }
-        StockMarketNetworking.sendToClient(player, packet);
+        packet.sendToClient(player);
     }
     @Override
     public void encode(FriendlyByteBuf buf) {

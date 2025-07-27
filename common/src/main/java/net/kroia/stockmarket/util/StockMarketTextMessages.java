@@ -4,10 +4,16 @@ import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.StockMarketModBackend;
 import net.minecraft.network.chat.Component;
 
 public class StockMarketTextMessages {
+    protected static StockMarketModBackend.Instances BACKEND_INSTANCES;
     private static boolean initialized = false;
+
+    public static void setBackend(StockMarketModBackend.Instances backend) {
+        BACKEND_INSTANCES = backend;
+    }
     public static void init() {
         if (initialized) {
             return;
@@ -32,7 +38,7 @@ public class StockMarketTextMessages {
 
     private static String getCurrencyName()
     {
-        String currencyItemID = ItemUtilities.getItemIDStr(StockMarketMod.SERVER_SETTINGS.MARKET.getCurrencyItem().getItem());
+        String currencyItemID = ItemUtilities.getItemIDStr(BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.getCurrencyItem().getItem());
         String moneyCurrencyItemID = ItemUtilities.getItemIDStr(BankSystemItems.MONEY.get());
         if(currencyItemID.equals(moneyCurrencyItemID))
         {
@@ -593,7 +599,7 @@ public class StockMarketTextMessages {
     {
         if(!message.contains(variable))
         {
-            StockMarketMod.logError("Message: \""+message+"\" does not contain variable: \""+variable+"\" which should be replaced with: \""+replacement+"\"");
+            BACKEND_INSTANCES.LOGGER.error("Message: \""+message+"\" does not contain variable: \""+variable+"\" which should be replaced with: \""+replacement+"\"");
             return message;
             //throw new IllegalArgumentException("Message: \""+message+"\" does not contain variable: \""+variable+"\" which should be replaced with: \""+replacement+"\"");
         }

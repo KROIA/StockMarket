@@ -1,12 +1,10 @@
 package net.kroia.stockmarket.networking.packet.client_sender.request;
 
-import net.kroia.modutilities.networking.NetworkPacket;
-import net.kroia.stockmarket.market.server.ServerMarket;
-import net.kroia.stockmarket.networking.StockMarketNetworking;
+import net.kroia.stockmarket.util.StockMarketNetworkPacket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
-public class RequestOrderCancelPacket extends NetworkPacket {
+public class RequestOrderCancelPacket extends StockMarketNetworkPacket {
     private long orderID;
 
     public RequestOrderCancelPacket(long orderID) {
@@ -20,7 +18,7 @@ public class RequestOrderCancelPacket extends NetworkPacket {
     public static void generateRequest(long orderID) {
 
         //StockMarketMod.LOGGER.info("[CLIENT] Sending RequestOrderCancelPacket for order: "+orderID);
-        StockMarketNetworking.sendToServer(new RequestOrderCancelPacket(orderID));
+        new RequestOrderCancelPacket(orderID).sendToServer();
     }
 
     @Override
@@ -41,7 +39,7 @@ public class RequestOrderCancelPacket extends NetworkPacket {
     @Override
     protected void handleOnServer(ServerPlayer sender)
     {
-        ServerMarket.handlePacket(sender, this);
+        BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.handlePacket(sender, this);
     }
 
 

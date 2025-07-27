@@ -2,10 +2,10 @@ package net.kroia.stockmarket.market.server.bot;
 
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ServerSaveable;
-import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.server.GhostOrderBook;
-import net.kroia.stockmarket.market.server.MarketManager;
 import net.kroia.stockmarket.market.server.MatchingEngine;
+import net.kroia.stockmarket.market.server.TradeManager;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.MarketOrder;
 import net.minecraft.nbt.CompoundTag;
@@ -21,17 +21,21 @@ import java.util.PriorityQueue;
  *
  */
 public class ServerTradingBot implements ServerSaveable {
+    protected static StockMarketModBackend.Instances BACKEND_INSTANCES;
+    public static void setBackend(StockMarketModBackend.Instances backend) {
+        BACKEND_INSTANCES = backend;
+    }
 
     public static class Settings implements ServerSaveable
     {
         public boolean enabled = true;
-        public long updateTimerIntervallMS = StockMarketMod.SERVER_SETTINGS.MARKET_BOT.UPDATE_TIMER_INTERVAL_MS.get();
+        public long updateTimerIntervallMS = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET_BOT.UPDATE_TIMER_INTERVAL_MS.get();
         public int defaultPrice;
-        public float orderBookVolumeScale = StockMarketMod.SERVER_SETTINGS.MARKET_BOT.ORDER_BOOK_VOLUME_SCALE.get();
-        public float nearMarketVolumeScale = StockMarketMod.SERVER_SETTINGS.MARKET_BOT.NEAR_MARKET_VOLUME_SCALE.get();
-        public float volumeAccumulationRate = StockMarketMod.SERVER_SETTINGS.MARKET_BOT.VOLUME_ACCUMULATION_RATE.get();
-        public float volumeFastAccumulationRate = StockMarketMod.SERVER_SETTINGS.MARKET_BOT.VOLUME_FAST_ACCUMULATION_RATE.get();
-        public float volumeDecumulationRate = StockMarketMod.SERVER_SETTINGS.MARKET_BOT.VOLUME_DECUMULATION_RATE.get();
+        public float orderBookVolumeScale = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET_BOT.ORDER_BOOK_VOLUME_SCALE.get();
+        public float nearMarketVolumeScale = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET_BOT.NEAR_MARKET_VOLUME_SCALE.get();
+        public float volumeAccumulationRate = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET_BOT.VOLUME_ACCUMULATION_RATE.get();
+        public float volumeFastAccumulationRate = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET_BOT.VOLUME_FAST_ACCUMULATION_RATE.get();
+        public float volumeDecumulationRate = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET_BOT.VOLUME_DECUMULATION_RATE.get();
 
         @Override
         public boolean save(CompoundTag tag) {
@@ -82,10 +86,14 @@ public class ServerTradingBot implements ServerSaveable {
             this.volumeDecumulationRate = settings.volumeDecumulationRate;
             this.updateTimerIntervallMS = settings.updateTimerIntervallMS;
         }
+
+
+
+
     }
     protected Settings settings;
     private MatchingEngine matchingEngine;
-    MarketManager parent;
+    TradeManager parent;
 
     protected ArrayList<LimitOrder> buyOrders = new ArrayList<>();
     protected ArrayList<LimitOrder> sellOrders = new ArrayList<>();
@@ -136,11 +144,11 @@ public class ServerTradingBot implements ServerSaveable {
     }
 
 
-    public void setParent(MarketManager parent)
+    public void setParent(TradeManager parent)
     {
         this.parent = parent;
     }
-    public MarketManager getParent()
+    public TradeManager getParent()
     {
         return this.parent;
     }

@@ -1,12 +1,10 @@
 package net.kroia.stockmarket.networking.packet.client_sender.update;
 
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.networking.NetworkPacket;
-import net.kroia.stockmarket.market.server.ServerMarket;
-import net.kroia.stockmarket.networking.StockMarketNetworking;
+import net.kroia.stockmarket.util.StockMarketNetworkPacket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
-public class UpdateSubscribeMarketEventsPacket extends NetworkPacket {
+public class UpdateSubscribeMarketEventsPacket extends StockMarketNetworkPacket {
     private ItemID itemID;
     private boolean subscribe;
 
@@ -38,7 +36,7 @@ public class UpdateSubscribeMarketEventsPacket extends NetworkPacket {
     }
 
     public static void generateRequest(ItemID itemID, boolean subscribe) {
-        StockMarketNetworking.sendToServer(new UpdateSubscribeMarketEventsPacket(itemID, subscribe));
+        new UpdateSubscribeMarketEventsPacket(itemID, subscribe);
     }
 
     public ItemID getItemID() {
@@ -52,6 +50,6 @@ public class UpdateSubscribeMarketEventsPacket extends NetworkPacket {
     @Override
     protected void handleOnServer(ServerPlayer sender)
     {
-        ServerMarket.handlePacket(sender, this);
+        BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.handlePacket(sender, this);
     }
 }

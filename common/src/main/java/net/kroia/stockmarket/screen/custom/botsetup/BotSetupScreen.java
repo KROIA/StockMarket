@@ -4,6 +4,7 @@ import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.GuiScreen;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import net.kroia.stockmarket.screen.uiElements.botsetup.*;
 import net.minecraft.network.chat.Component;
@@ -11,7 +12,7 @@ import net.minecraft.network.chat.Component;
 import java.util.ArrayList;
 
 public class BotSetupScreen extends GuiScreen {
-
+    private static StockMarketModBackend.Instances BACKEND_INSTANCES;
     private static final String NAME = "bot_settings_setup_screen";
     public static final String PREFIX = "gui."+ StockMarketMod.MOD_ID+"."+NAME+".";
 
@@ -31,15 +32,16 @@ public class BotSetupScreen extends GuiScreen {
     private final Runnable onCancel;
     private final ServerVolatilityBot.Settings settings;
 
-    private boolean autoChangeMoneyBalance;
-    private boolean autoChangeItemBalance;
-
     // Question pages
     private final BotSetup_rarity rarityPage;
     private final BotSetup_estimatedPrice estimatedPricePage;
     private final BotSetup_volatility volatilityPage;
     private final BotSetup_marketSpeed marketSpeedPage;
     private final BotSetup_enabledFeatures enabledFeaturesPage;
+
+    public static void setBackend(StockMarketModBackend.Instances backend) {
+        BACKEND_INSTANCES = backend;
+    }
 
     public BotSetupScreen(Runnable onApply, Runnable onCancel, ServerVolatilityBot.Settings settings) {
         super(TITLE);
@@ -125,12 +127,6 @@ public class BotSetupScreen extends GuiScreen {
             if(currentPage == pages.size()-1)
                 nextButton.setLabel(APPLY.getString());
         }
-    }
-    public boolean getAutoChangeMoneyBalance() {
-        return autoChangeMoneyBalance;
-    }
-    public boolean getAutoChangeItemBalance() {
-        return autoChangeItemBalance;
     }
     private void onApplyButtonClicked() {
         // Apply changes

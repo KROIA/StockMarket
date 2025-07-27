@@ -4,12 +4,16 @@ import net.kroia.banksystem.banking.bank.MoneyBank;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
-import net.kroia.stockmarket.market.client.ClientMarket;
+import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
 
 public class OrderView extends GuiElement {
+    protected static StockMarketModBackend.Instances BACKEND_INSTANCES;
+    public static void setBackend(StockMarketModBackend.Instances backend) {
+        BACKEND_INSTANCES = backend;
+    }
 
     public static final int padding = 0;
     public static final int dirWidthRatio = 20;
@@ -89,7 +93,7 @@ public class OrderView extends GuiElement {
 
     private void onCancelOrder()
     {
-        ClientMarket.cancelOrder(order);
+        BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.cancelOrder(order);
     }
 
     @Override

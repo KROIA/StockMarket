@@ -4,6 +4,7 @@ import net.kroia.banksystem.api.IBank;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.ServerSaveable;
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.MarketOrder;
 import net.kroia.stockmarket.market.server.order.Order;
@@ -24,12 +25,15 @@ import java.util.UUID;
     * The MatchingEngine class is responsible for matching buy and sell orders.
  */
 public class MatchingEngine implements ServerSaveable {
-
+    protected static StockMarketModBackend.Instances BACKEND_INSTANCES;
+    public static void setBackend(StockMarketModBackend.Instances backend) {
+        BACKEND_INSTANCES = backend;
+    }
 
     private int price;
     private int tradeVolume;
 
-    private boolean marketOpen = StockMarketMod.SERVER_SETTINGS.MARKET.MARKET_OPEN_AT_CREATION.get();
+    private boolean marketOpen = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.MARKET_OPEN_AT_CREATION.get();
 
     // Create a sorted queue for buy and sell orders, sorted by price.
     private final PriorityQueue<LimitOrder> limitBuyOrders = new PriorityQueue<>((o1, o2) -> Double.compare(o2.getPrice(), o1.getPrice()));
@@ -152,7 +156,7 @@ public class MatchingEngine implements ServerSaveable {
                 loopTimeout--;
                 if(loopTimeout<=0)
                 {
-                    StockMarketMod.logError("Market order processing loop timeout: "+marketOrder);
+                    BACKEND_INSTANCES.LOGGER.error("Market order processing loop timeout: "+marketOrder);
                     marketOrder.markAsInvalid("Market order processing loop timeout");
                     break;
                 }
@@ -216,7 +220,7 @@ public class MatchingEngine implements ServerSaveable {
                 if(fillVolume<0)
                 {
                     limitOrders.removeAll(toRemove);
-                    StockMarketMod.logError("Market order overfilled: "+marketOrder);
+                    BACKEND_INSTANCES.LOGGER.error("Market order overfilled: "+marketOrder);
                 }
                 break;
             }
@@ -227,7 +231,7 @@ public class MatchingEngine implements ServerSaveable {
             loopTimeout--;
             if(loopTimeout<=0)
             {
-                StockMarketMod.logError("Market order processing loop timeout: "+marketOrder);
+                BACKEND_INSTANCES.LOGGER.error("Market order processing loop timeout: "+marketOrder);
                 marketOrder.markAsInvalid("Market order processing loop timeout");
                 break;
             }
@@ -302,7 +306,7 @@ public class MatchingEngine implements ServerSaveable {
                 loopTimeout--;
                 if(loopTimeout<=0)
                 {
-                    StockMarketMod.logError("Limit order processing loop timeout: "+limitOrder);
+                    BACKEND_INSTANCES.LOGGER.error("Limit order processing loop timeout: "+limitOrder);
                     limitOrder.markAsInvalid("Limit order processing loop timeout");
                     break;
                 }
@@ -374,7 +378,7 @@ public class MatchingEngine implements ServerSaveable {
                 if(fillVolume<0)
                 {
                     limitOrders.removeAll(toRemove);
-                    StockMarketMod.logError("Limit order overfilled: "+limitOrder);
+                    BACKEND_INSTANCES.LOGGER.error("Limit order overfilled: "+limitOrder);
                 }
                 break;
             }
@@ -389,7 +393,7 @@ public class MatchingEngine implements ServerSaveable {
             loopTimeout--;
             if(loopTimeout<=0)
             {
-                StockMarketMod.logError("Limit order processing loop timeout: "+limitOrder);
+                BACKEND_INSTANCES.LOGGER.error("Limit order processing loop timeout: "+limitOrder);
                 limitOrder.markAsInvalid("Limit order processing loop timeout");
                 break;
             }
@@ -554,13 +558,13 @@ public class MatchingEngine implements ServerSaveable {
         if(targetOrder.isBuy())
         {
             int toFreeAmount = toFillAmount * targetOrder.getPrice();
-            IBank moneyBank = StockMarketMod.BANK_SYSTEM_API.getServerBankManager().getUser(targetOrder.getPlayerUUID()).getBank(ServerMarket.getCurrencyItem());
+            IBank moneyBank = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getUser(targetOrder.getPlayerUUID()).getBank(BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getCurrencyItem());
             if(moneyBank != null)
                 canBeMoved = moneyBank.getTotalBalance()-toFreeAmount >= 0;
         }
         else
         {
-            IBank itemBank = StockMarketMod.BANK_SYSTEM_API.getServerBankManager().getUser(targetOrder.getPlayerUUID()).getBank(targetOrder.getItemID());
+            IBank itemBank = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getUser(targetOrder.getPlayerUUID()).getBank(targetOrder.getItemID());
             if(itemBank != null)
                 canBeMoved = itemBank.getTotalBalance()-toFillAmount >= 0;
         }

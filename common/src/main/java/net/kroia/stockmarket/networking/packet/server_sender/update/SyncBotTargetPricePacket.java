@@ -1,12 +1,10 @@
 package net.kroia.stockmarket.networking.packet.server_sender.update;
 
-import net.kroia.modutilities.networking.NetworkPacket;
-import net.kroia.stockmarket.market.client.ClientMarket;
-import net.kroia.stockmarket.networking.StockMarketNetworking;
+import net.kroia.stockmarket.util.StockMarketNetworkPacket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
-public class SyncBotTargetPricePacket extends NetworkPacket {
+public class SyncBotTargetPricePacket extends StockMarketNetworkPacket {
 
     int targetPrice;
     public SyncBotTargetPricePacket(int targetPrice) {
@@ -21,7 +19,7 @@ public class SyncBotTargetPricePacket extends NetworkPacket {
     public static void sendPacket(ServerPlayer receiver, int targetPrice)
     {
         SyncBotTargetPricePacket packet = new SyncBotTargetPricePacket(targetPrice);
-        StockMarketNetworking.sendToClient(receiver, packet);
+        packet.sendToClient(receiver);
     }
 
     public int getTargetPrice() {
@@ -42,6 +40,6 @@ public class SyncBotTargetPricePacket extends NetworkPacket {
 
     @Override
     protected void handleOnClient() {
-        ClientMarket.handlePacket(this);
+        BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.handlePacket(this);
     }
 }

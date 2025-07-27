@@ -1,13 +1,12 @@
 package net.kroia.stockmarket.networking.packet.client_sender.request;
 
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.networking.NetworkPacket;
-import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncBotSettingsPacket;
+import net.kroia.stockmarket.util.StockMarketNetworkPacket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
-public class RequestBotSettingsPacket extends NetworkPacket {
+public class RequestBotSettingsPacket extends StockMarketNetworkPacket {
 
     ItemID itemID;
 
@@ -23,7 +22,7 @@ public class RequestBotSettingsPacket extends NetworkPacket {
     {
         RequestBotSettingsPacket packet = new RequestBotSettingsPacket();
         packet.itemID = itemID;
-        StockMarketNetworking.sendToServer(packet);
+        packet.sendToServer();
     }
 
     @Override

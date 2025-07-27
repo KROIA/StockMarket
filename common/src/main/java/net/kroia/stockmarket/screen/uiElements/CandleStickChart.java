@@ -1,7 +1,7 @@
 package net.kroia.stockmarket.screen.uiElements;
 
 import net.kroia.modutilities.gui.elements.base.GuiElement;
-import net.kroia.stockmarket.market.client.ClientMarket;
+import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
@@ -11,6 +11,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 
 public class CandleStickChart extends GuiElement {
+    protected static StockMarketModBackend.Instances BACKEND_INSTANCES;
+    public static void setBackend(StockMarketModBackend.Instances backend) {
+        BACKEND_INSTANCES = backend;
+    }
 
     private static int map(int value, int start1, int stop1, int start2, int stop2)
     {
@@ -179,7 +183,7 @@ public class CandleStickChart extends GuiElement {
 
     public void updateOrderDisplay()
     {
-        ArrayList<Order> orders = ClientMarket.getOrders(TradeScreen.getItemID());
+        ArrayList<Order> orders = BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getOrders(TradeScreen.getItemID());
         HashMap<Long,Integer> stillActiveOrderIds = new HashMap<>();
         ArrayList<Long> forRemoval = new ArrayList<>();
 

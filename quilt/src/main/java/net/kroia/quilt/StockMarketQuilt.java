@@ -2,6 +2,7 @@ package net.kroia.quilt;
 
 import net.fabricmc.api.EnvType;
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.StockMarketModBackend;
 import org.quiltmc.loader.api.ModContainer;
 import org.quiltmc.loader.api.minecraft.MinecraftQuiltLoader;
 import org.quiltmc.qsl.base.api.entrypoint.ModInitializer;
@@ -16,36 +17,29 @@ public final class StockMarketQuilt implements ModInitializer {
         // Client Events
         if(MinecraftQuiltLoader.getEnvironmentType() == EnvType.CLIENT) {
             ClientLifecycleEvents.READY.register(client -> {
-                StockMarketMod.logInfo("[QuiltSetup] CLIENT READY");
-                StockMarketMod.onClientSetup();
+                StockMarketModBackend.onClientSetup();
             });
         }
 
 
         // Server Events
         ServerLifecycleEvents.STARTING.register(server-> {
-            StockMarketMod.logInfo("[QuiltSetup] SERVER STARTING");
-            StockMarketMod.onServerSetup(); // Handle world load (start)
+            StockMarketModBackend.onServerSetup(); // Handle world load (start)
         });
 
-        ServerLifecycleEvents.READY.register(server -> {
-            StockMarketMod.logInfo("[QuiltSetup] SERVER READY");
-            StockMarketMod.onServerStart(server);
-        });
+        ServerLifecycleEvents.READY.register(StockMarketModBackend::onServerStart);
 
         // World save event
-        ServerLifecycleEvents.STOPPING.register(server -> {
-            StockMarketMod.logInfo("[QuiltSetup] SERVER STOPPING");
-            StockMarketMod.onServerStop(server); // Handle world save (stop)
-        });
+        // Handle world save (stop)
+        ServerLifecycleEvents.STOPPING.register(StockMarketModBackend::onServerStop);
 
         // Player Events
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
-            StockMarketMod.onPlayerJoin(handler.getPlayer());
+            StockMarketModBackend.onPlayerJoin(handler.getPlayer());
         });
 
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
-            StockMarketMod.onPlayerLeave(handler.getPlayer());
+            StockMarketModBackend.onPlayerLeave(handler.getPlayer());
         });
 
         StockMarketMod.init();

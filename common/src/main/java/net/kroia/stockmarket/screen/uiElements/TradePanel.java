@@ -1,18 +1,21 @@
 package net.kroia.stockmarket.screen.uiElements;
 
 import net.kroia.banksystem.banking.bank.MoneyBank;
-import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.ItemView;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.TextBox;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
-import net.kroia.stockmarket.market.client.ClientMarket;
+import net.kroia.stockmarket.StockMarketModBackend;
 import net.minecraft.world.item.ItemStack;
 
 import static net.kroia.stockmarket.screen.custom.TradeScreen.*;
 
 public class TradePanel extends GuiElement {
+    protected static StockMarketModBackend.Instances BACKEND_INSTANCES;
+    public static void setBackend(StockMarketModBackend.Instances backend) {
+        BACKEND_INSTANCES = backend;
+    }
     private final int buyButtonNormalColor = 0xFF008800;
     private final int buyButtonHoverColor = 0xFF00BB00;
     private final int buyButtonPressedColor = 0xFF00FF00;
@@ -65,7 +68,7 @@ public class TradePanel extends GuiElement {
         currentItemView = new ItemView();
         currentItemBalanceLabel = new Label();
         currentItemBalanceLabel.setAlignment(Alignment.LEFT);
-        moneyItemView = new ItemView(ClientMarket.getCurrencyItem().getStack().copy());
+        moneyItemView = new ItemView(BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getCurrencyItem().getStack().copy());
         moneyItemView.setShowTooltip(false);
         currentMoneyBalanceLabel = new Label();
         currentMoneyBalanceLabel.setAlignment(Alignment.LEFT);

@@ -2,25 +2,39 @@ package net.kroia.stockmarket.util;
 
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ServerSaveable;
-import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.modutilities.networking.INetworkPayloadConverter;
+import net.kroia.stockmarket.StockMarketModBackend;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.network.FriendlyByteBuf;
 
-public class PriceHistory implements ServerSaveable {
+public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
 
-    private final int maxHistorySize = StockMarketMod.SERVER_SETTINGS.UI.PRICE_HISTORY_SIZE.get();
-    private int[] lowPrice = new int[maxHistorySize];
-    private int[] highPrice = new int[maxHistorySize];
-    private int[] closePrice = new int[maxHistorySize];
-    private long[] volume = new long[maxHistorySize];
+    private static StockMarketModBackend.Instances BACKEND_INSTANCES;
+
+
+    private int maxHistorySize;// = BACKEND_INSTANCES.SERVER_SETTINGS.UI.PRICE_HISTORY_SIZE.get();
+    private int[] lowPrice;
+    private int[] highPrice;
+    private int[] closePrice;
+    private long[] volume;
     private int oldestClosePrice = 0;
-    private Timestamp[] timeStamps = new Timestamp[maxHistorySize];
+    private Timestamp[] timeStamps;// = new Timestamp[maxHistorySize];
 
     private ItemID itemID;
     private ItemID currencyItemID;
 
-    public PriceHistory(ItemID itemID, ItemID currencyItemID) {
+    public static void setBackend(StockMarketModBackend.Instances backend) {
+        BACKEND_INSTANCES = backend;
+    }
+
+    public PriceHistory(ItemID itemID, ItemID currencyItemID, int maxHistorySize) {
+        this.maxHistorySize = maxHistorySize;
+        lowPrice = new int[maxHistorySize];
+        highPrice = new int[maxHistorySize];
+        closePrice = new int[maxHistorySize];
+        volume = new long[maxHistorySize];
+        timeStamps = new Timestamp[maxHistorySize];
         this.itemID = itemID;
         this.currencyItemID = currencyItemID;
         for(int i = 0; i < maxHistorySize; i++)
@@ -29,7 +43,13 @@ public class PriceHistory implements ServerSaveable {
         }
         clear();
     }
-    public PriceHistory(ItemID itemID, ItemID currencyItemID, int initialPrice) {
+    public PriceHistory(ItemID itemID, ItemID currencyItemID, int initialPrice, int maxHistorySize) {
+        this.maxHistorySize = maxHistorySize;
+        lowPrice = new int[maxHistorySize];
+        highPrice = new int[maxHistorySize];
+        closePrice = new int[maxHistorySize];
+        volume = new long[maxHistorySize];
+        timeStamps = new Timestamp[maxHistorySize];
         this.itemID = itemID;
         this.currencyItemID = currencyItemID;
         oldestClosePrice = initialPrice;
@@ -194,28 +214,40 @@ public class PriceHistory implements ServerSaveable {
 
     // Interface to send the timestamp over the network
     public PriceHistory(FriendlyByteBuf buf) {
-        itemID = new ItemID(buf.readItem());
-        currencyItemID = new ItemID(buf.readItem());
-        oldestClosePrice = buf.readInt();
-        for (int i = 0; i < maxHistorySize; i++) {
-            lowPrice[i] = buf.readInt();
-            highPrice[i] = buf.readInt();
-            closePrice[i] = buf.readInt();
-            volume[i] = buf.readLong();
-            timeStamps[i] = new Timestamp(buf);
-        }
+        decode(buf);
     }
 
-    public void toBytes(FriendlyByteBuf buf) {
+
+    public void encode(FriendlyByteBuf buf) {
         buf.writeItem(itemID.getStack());
         buf.writeItem(currencyItemID.getStack());
         buf.writeInt(oldestClosePrice);
+        buf.writeInt(maxHistorySize);
         for (int i = 0; i < maxHistorySize; i++) {
             buf.writeInt(lowPrice[i]);
             buf.writeInt(highPrice[i]);
             buf.writeInt(closePrice[i]);
             buf.writeLong(volume[i]);
             timeStamps[i].toBytes(buf);
+        }
+    }
+
+    public void decode(FriendlyByteBuf buf) {
+        itemID = new ItemID(buf.readItem());
+        currencyItemID = new ItemID(buf.readItem());
+        oldestClosePrice = buf.readInt();
+        maxHistorySize = buf.readInt();
+        lowPrice = new int[maxHistorySize];
+        highPrice = new int[maxHistorySize];
+        closePrice = new int[maxHistorySize];
+        volume = new long[maxHistorySize];
+        timeStamps = new Timestamp[maxHistorySize];
+        for (int i = 0; i < maxHistorySize; i++) {
+            lowPrice[i] = buf.readInt();
+            highPrice[i] = buf.readInt();
+            closePrice[i] = buf.readInt();
+            volume[i] = buf.readLong();
+            timeStamps[i] = new Timestamp(buf);
         }
     }
 

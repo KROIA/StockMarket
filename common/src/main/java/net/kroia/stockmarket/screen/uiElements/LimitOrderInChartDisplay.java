@@ -3,7 +3,7 @@ package net.kroia.stockmarket.screen.uiElements;
 import net.kroia.modutilities.ColorUtilities;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
-import net.kroia.stockmarket.market.client.ClientMarket;
+import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
 
@@ -11,7 +11,10 @@ import java.util.function.Function;
 
 public class LimitOrderInChartDisplay extends GuiElement {
 
-
+    protected static StockMarketModBackend.Instances BACKEND_INSTANCES;
+    public static void setBackend(StockMarketModBackend.Instances backend) {
+        BACKEND_INSTANCES = backend;
+    }
     private static final int buyColor = ColorUtilities.getRGB(ColorUtilities.setBrightness(TradeScreen.colorGreen, 0.4f), 255);
     private static final int sellColor = ColorUtilities.getRGB(ColorUtilities.setBrightness(TradeScreen.colorRed, 0.4f), 255);
     private final int color;
@@ -112,7 +115,7 @@ public class LimitOrderInChartDisplay extends GuiElement {
     {
         isDragging = false;
         int newPrice = yPosToPriceFunc.apply(getY()+getHeight()/2);
-        ClientMarket.changeOrderPrice(order.getItemID(), order.getOrderID(), newPrice);
+        BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.changeOrderPrice(order.getItemID(), order.getOrderID(), newPrice);
     }
 
 }

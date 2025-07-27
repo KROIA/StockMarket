@@ -1,17 +1,14 @@
 package net.kroia.stockmarket.networking.packet.server_sender.update;
 
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.networking.NetworkPacket;
-import net.kroia.stockmarket.market.client.ClientMarket;
-import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
-import net.kroia.stockmarket.networking.StockMarketNetworking;
+import net.kroia.stockmarket.util.StockMarketNetworkPacket;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
-public class SyncBotSettingsPacket extends NetworkPacket {
+public class SyncBotSettingsPacket extends StockMarketNetworkPacket {
 
     ItemID itemID;
     ServerVolatilityBot.Settings settings;
@@ -28,7 +25,7 @@ public class SyncBotSettingsPacket extends NetworkPacket {
 
     public static void sendPacket(ServerPlayer receiver, ItemID itemID)
     {
-        ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
+        ServerTradingBot bot = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getTradingBot(itemID);
         ServerVolatilityBot.Settings settings = new ServerVolatilityBot.Settings();
         //settings.enabled = false;
         SyncBotSettingsPacket packet = new SyncBotSettingsPacket();
@@ -42,7 +39,7 @@ public class SyncBotSettingsPacket extends NetworkPacket {
         packet.settings = settings;
         //packet.botUUID = botUUID;
 
-        StockMarketNetworking.sendToClient(receiver, packet);
+        packet.sendToClient(receiver);
     }
 
     @Override
@@ -80,6 +77,6 @@ public class SyncBotSettingsPacket extends NetworkPacket {
 
     @Override
     protected void handleOnClient() {
-        ClientMarket.handlePacket(this);
+        BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.handlePacket(this);
     }
 }

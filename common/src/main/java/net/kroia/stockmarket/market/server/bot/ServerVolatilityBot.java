@@ -83,6 +83,8 @@ public class ServerVolatilityBot extends ServerTradingBot {
             return success;
         }
 
+
+
         @Override
         public void copyFrom(ServerTradingBot.Settings other)
         {

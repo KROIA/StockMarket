@@ -1,17 +1,15 @@
 package net.kroia.stockmarket.networking.packet.client_sender.update;
 
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.networking.NetworkPacket;
-import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
-import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncBotSettingsPacket;
+import net.kroia.stockmarket.util.StockMarketNetworkPacket;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
-public class UpdateBotSettingsPacket extends NetworkPacket {
+public class UpdateBotSettingsPacket extends StockMarketNetworkPacket {
 
     ItemID itemID;
     ServerVolatilityBot.Settings settings;
@@ -37,7 +35,7 @@ public class UpdateBotSettingsPacket extends NetworkPacket {
         packet.destroyBot = destroyBot;
         packet.createBot = createBot;
         packet.marketOpen = marketOpen;
-        StockMarketNetworking.sendToServer(packet);
+        packet.sendToServer();
     }
 
     @Override
@@ -66,23 +64,23 @@ public class UpdateBotSettingsPacket extends NetworkPacket {
     protected void handleOnServer(ServerPlayer sender) {
         if(sender.hasPermissions(2)) {
             // Apply bot settings
-            ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
+            ServerTradingBot bot = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getTradingBot(itemID);
             if(bot == null && createBot)
             {
                 bot = new ServerVolatilityBot();
                 bot.setSettings(settings);
-                ServerMarket.setTradingBot(itemID, bot);
+                BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.setTradingBot(itemID, bot);
             }
             else if(bot != null && destroyBot)
             {
-                ServerMarket.removeTradingBot(itemID);
+                BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.removeTradingBot(itemID);
             }
             else {
                 if (bot instanceof ServerVolatilityBot volatilityBot) {
                     volatilityBot.setSettings(settings);
                 }
             }
-            ServerMarket.setMarketOpen(itemID, marketOpen);
+            BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.setMarketOpen(itemID, marketOpen);
             SyncBotSettingsPacket.sendPacket(sender, itemID);
         }
     }

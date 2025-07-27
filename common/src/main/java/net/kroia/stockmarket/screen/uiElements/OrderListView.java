@@ -4,7 +4,7 @@ import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.VerticalListView;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
-import net.kroia.stockmarket.market.client.ClientMarket;
+import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
 
@@ -12,7 +12,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 
 public class OrderListView extends GuiElement {
-
+    protected static StockMarketModBackend.Instances BACKEND_INSTANCES;
+    public static void setBackend(StockMarketModBackend.Instances backend) {
+        BACKEND_INSTANCES = backend;
+    }
 
     private final Label directionLabel;
     private final Label amountLabel;
@@ -71,7 +74,7 @@ public class OrderListView extends GuiElement {
 
     public void updateActiveOrders()
     {
-        ArrayList<Order> orders = ClientMarket.getOrders(TradeScreen.getItemID());
+        ArrayList<Order> orders = BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getOrders(TradeScreen.getItemID());
         HashMap<Long,Integer> stillActiveOrderIds = new HashMap<>();
         ArrayList<GuiElement> elements = activeOrderListView.getChilds();
 

@@ -2,15 +2,13 @@ package net.kroia.stockmarket.networking.packet.client_sender.request;
 
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.PlayerUtilities;
-import net.kroia.modutilities.networking.NetworkPacket;
-import net.kroia.stockmarket.market.server.ServerMarket;
-import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncTradeItemsPacket;
+import net.kroia.stockmarket.util.StockMarketNetworkPacket;
 import net.kroia.stockmarket.util.StockMarketTextMessages;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
-public class RequestManageTradingItemPacket extends NetworkPacket {
+public class RequestManageTradingItemPacket extends StockMarketNetworkPacket {
 
     public enum Mode
     {
@@ -40,7 +38,7 @@ public class RequestManageTradingItemPacket extends NetworkPacket {
     public static void sendRequest(ItemID itemID, int startPrice, Mode mode)
     {
         RequestManageTradingItemPacket packet = new RequestManageTradingItemPacket(itemID, startPrice, mode);
-        StockMarketNetworking.sendToServer(packet);
+        packet.sendToServer();
     }
     public static void sendRequestAllowNewTradingItem(ItemID itemID, int startPrice)
     {
@@ -70,11 +68,11 @@ public class RequestManageTradingItemPacket extends NetworkPacket {
         switch(mode)
         {
             case ADD_NEW_ITEM:
-                if (ServerMarket.hasItem(itemID)) {
+                if (BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.hasItem(itemID)) {
                     PlayerUtilities.printToClientConsole(sender, StockMarketTextMessages.getMarketplaceAlreadyExistingMessage(itemID.getName()));
                 }
                 else {
-                    if (ServerMarket.addTradeItemIfNotExists(itemID, startPrice)) {
+                    if (BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.addTradeItemIfNotExists(itemID, startPrice)) {
                         // Notify all serverPlayers
                         PlayerUtilities.printToClientConsole(StockMarketTextMessages.getMarketplaceCreatedMessage(itemID.getName()));
                     } else {
@@ -83,8 +81,8 @@ public class RequestManageTradingItemPacket extends NetworkPacket {
                 }
                 break;
             case REMOVE_ITEM:
-                if (ServerMarket.hasItem(itemID)) {
-                    ServerMarket.removeTradingItem(itemID);
+                if (BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.hasItem(itemID)) {
+                    BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.removeTradingItem(itemID);
                     // Notify all serverPlayers
                     PlayerUtilities.printToClientConsole(StockMarketTextMessages.getMarketplaceDeletedMessage(itemID.getName()));
                 } else {

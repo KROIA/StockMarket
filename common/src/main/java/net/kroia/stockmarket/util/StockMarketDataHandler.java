@@ -7,8 +7,8 @@ import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.PlayerUtilities;
-import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.market.server.ServerMarket;
+import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.market.server.ServerStockMarketManager;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBotFactory;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtIo;
@@ -28,7 +28,7 @@ import java.util.stream.Collectors;
 
 
 public class StockMarketDataHandler {
-
+    private static StockMarketModBackend.Instances BACKEND_INSTANCES;
     private final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private final String FOLDER_NAME = "Finance/StockMarket";
 
@@ -42,10 +42,14 @@ public class StockMarketDataHandler {
     private long tickCounter = 0;
     private int lastPlayerCount = 0;
 
+    public static void setBackend(StockMarketModBackend.Instances backend) {
+        BACKEND_INSTANCES = backend;
+    }
+
     public void tickUpdate()
     {
         tickCounter++;
-        if(tickCounter >= StockMarketMod.SERVER_SETTINGS.UTILITIES.SAVE_INTERVAL_MINUTES.get() * 1200) // 1 minute = 1200 ticks
+        if(tickCounter >= BACKEND_INSTANCES.SERVER_SETTINGS.UTILITIES.SAVE_INTERVAL_MINUTES.get() * 1200) // 1 minute = 1200 ticks
         {
             tickCounter = 0;
             // Check if any player is online
@@ -77,35 +81,35 @@ public class StockMarketDataHandler {
 
     public boolean saveAll()
     {
-        StockMarketMod.logInfo("Saving StockMarket Mod data...");
+        BACKEND_INSTANCES.LOGGER.info("Saving StockMarket Mod data...");
         boolean success = true;
         success &= save_globalSettings();
         success &= save_player();
-        if(ServerMarket.isInitialized())
+        if(BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER != null)
             success &= save_market();
 
         if(success)
-            StockMarketMod.logInfo("StockMarket Mod data saved successfully.");
+            BACKEND_INSTANCES.LOGGER.info("StockMarket Mod data saved successfully.");
         else
-            StockMarketMod.logError("Failed to save StockMarket Mod data.");
+            BACKEND_INSTANCES.LOGGER.error("Failed to save StockMarket Mod data.");
         return success;
     }
     public CompletableFuture<Boolean> saveAllAsync()
     {
-        StockMarketMod.logInfo("Saving StockMarket Mod data...");
+        BACKEND_INSTANCES.LOGGER.info("Saving StockMarket Mod data...");
 
         CompletableFuture<Boolean> fut1 = save_playerAsync();
         CompletableFuture<Boolean> fut2;
         CompletableFuture<Boolean> fut3 = save_globalSettingsAsync();
-        if(ServerMarket.isInitialized())
+        if(BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER != null)
             fut2 = save_marketAsync();
         else
             fut2 = CompletableFuture.completedFuture(false);
         return fut1.thenCombine(fut2, (a, b) -> a && b).thenCombine(fut3, (a, b) -> a && b).thenApply(success -> {
             if(success)
-                StockMarketMod.logInfo("StockMarket Mod data saved successfully.");
+                BACKEND_INSTANCES.LOGGER.info("StockMarket Mod data saved successfully.");
             else
-                StockMarketMod.logError("Failed to save StockMarket Mod data.");
+                BACKEND_INSTANCES.LOGGER.error("Failed to save StockMarket Mod data.");
             return success;
         });
     }
@@ -113,18 +117,18 @@ public class StockMarketDataHandler {
     public boolean loadAll()
     {
         isLoaded = false;
-        StockMarketMod.logInfo("Loading StockMarket Mod data...");
+        BACKEND_INSTANCES.LOGGER.info("Loading StockMarket Mod data...");
         boolean success = true;
         success &= load_globalSettings();
         success &= load_player();
         success &= load_market();
 
         if(success) {
-            StockMarketMod.logInfo("StockMarket Mod data loaded successfully.");
+            BACKEND_INSTANCES.LOGGER.info("StockMarket Mod data loaded successfully.");
             isLoaded = true;
         }
         else
-            StockMarketMod.logError("Failed to load StockMarket Mod data.");
+            BACKEND_INSTANCES.LOGGER.error("Failed to load StockMarket Mod data.");
         return success;
     }
 
@@ -156,7 +160,7 @@ public class StockMarketDataHandler {
     {
         boolean success = true;
         CompoundTag data = new CompoundTag();
-        ServerMarket market = new ServerMarket();
+        ServerStockMarketManager market = new ServerStockMarketManager();
         CompoundTag marketData = new CompoundTag();
         success = market.save(marketData);
         data.put("market", marketData);
@@ -168,7 +172,7 @@ public class StockMarketDataHandler {
     public CompletableFuture<Boolean> save_marketAsync()
     {
         CompoundTag data = new CompoundTag();
-        ServerMarket market = new ServerMarket();
+        ServerStockMarketManager market = new ServerStockMarketManager();
         CompoundTag marketData = new CompoundTag();
 
         CompletableFuture<Boolean> future;
@@ -190,7 +194,7 @@ public class StockMarketDataHandler {
         if(data == null)
             return false;
         // Load server_sender market
-        ServerMarket market = new ServerMarket();
+        ServerStockMarketManager market = new ServerStockMarketManager();
         if(!data.contains("market"))
             return false;
         CompoundTag marketData = data.getCompound("market");
@@ -200,7 +204,7 @@ public class StockMarketDataHandler {
 
     public boolean save_globalSettings()
     {
-        return StockMarketMod.SERVER_SETTINGS.saveSettings();
+        return BACKEND_INSTANCES.SERVER_SETTINGS.saveSettings();
     }
 
     public CompletableFuture<Boolean> save_globalSettingsAsync()
@@ -211,13 +215,13 @@ public class StockMarketDataHandler {
     // Helper function to save global settings asynchronously
     private static boolean save_globalSettingsAsyncStatic()
     {
-        return StockMarketMod.SERVER_SETTINGS.saveSettings();
+        return BACKEND_INSTANCES.SERVER_SETTINGS.saveSettings();
     }
 
 
     public boolean load_globalSettings()
     {
-        return StockMarketMod.SERVER_SETTINGS.loadSettings();
+        return BACKEND_INSTANCES.SERVER_SETTINGS.loadSettings();
     }
 
     public List<String> getDefaultBotSettingsFileNames()
@@ -305,12 +309,10 @@ public class StockMarketDataHandler {
                 dataOut = data;
                 return dataOut;
             } catch (IOException e) {
-                StockMarketMod.logError("Failed to read data from file: " + fileName);
-                e.printStackTrace();
+                BACKEND_INSTANCES.LOGGER.error("Failed to read data from file: " + fileName, e);
             } catch(Exception e)
             {
-                StockMarketMod.logError("Failed to read data from file: " + fileName);
-                e.printStackTrace();
+                BACKEND_INSTANCES.LOGGER.error("Failed to read data from file: " + fileName, e);
             }
         }
         return null;
@@ -325,17 +327,15 @@ public class StockMarketDataHandler {
             else
                 NbtIo.write(data, file);
         } catch (IOException e) {
-            StockMarketMod.logError("Failed to save data to file: " + fileName);
-            e.printStackTrace();
+            BACKEND_INSTANCES.LOGGER.error("Failed to save data to file: " + fileName, e);
             success = false;
         } catch(Exception e)
         {
-            StockMarketMod.logError("Failed to save data to file: " + fileName);
-            e.printStackTrace();
+            BACKEND_INSTANCES.LOGGER.error("Failed to save data to file: " + fileName, e);
             success = false;
         }
         long endMillis = System.currentTimeMillis();
-        StockMarketMod.logInfo("Saving data to file: " + fileName + " took " + (endMillis - startMillis) + "ms");
+        BACKEND_INSTANCES.LOGGER.info("Saving data to file: " + fileName + " took " + (endMillis - startMillis) + "ms");
         return success;
     }
 

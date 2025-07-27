@@ -1,15 +1,13 @@
 package net.kroia.stockmarket.networking.packet.client_sender.update.entity;
 
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.networking.NetworkPacket;
-import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
-import net.kroia.stockmarket.networking.StockMarketNetworking;
+import net.kroia.stockmarket.util.StockMarketNetworkPacket;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
-public class UpdateStockMarketBlockEntityPacket extends NetworkPacket {
+public class UpdateStockMarketBlockEntityPacket extends StockMarketNetworkPacket {
     private BlockPos pos;
     private ItemID itemID;
     private int amount;
@@ -47,7 +45,7 @@ public class UpdateStockMarketBlockEntityPacket extends NetworkPacket {
     }
 
     public static void sendPacketToServer(BlockPos pos, StockMarketBlockEntity blockEntity) {
-        StockMarketNetworking.sendToServer(new UpdateStockMarketBlockEntityPacket(pos, blockEntity));
+        new UpdateStockMarketBlockEntityPacket(pos, blockEntity).sendToServer();
     }
 
     @Override
@@ -71,11 +69,11 @@ public class UpdateStockMarketBlockEntityPacket extends NetworkPacket {
     @Override
     protected void handleOnServer(ServerPlayer sender)
     {
-        StockMarketMod.logInfo("[SERVER] Received UpdateStockMarketBlockEntityPacket from client");
+        info("[SERVER] Received UpdateStockMarketBlockEntityPacket from client");
         StockMarketBlockEntity blockEntity = (StockMarketBlockEntity) sender.level().getBlockEntity(this.pos);
         if(blockEntity == null)
         {
-            StockMarketMod.logError("BlockEntity not found at position "+this.pos);
+            error("BlockEntity not found at position "+this.pos);
             return;
         }
         blockEntity.setItemID(this.itemID);

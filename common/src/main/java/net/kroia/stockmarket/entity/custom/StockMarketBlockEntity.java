@@ -2,6 +2,7 @@ package net.kroia.stockmarket.entity.custom;
 
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.block.custom.StockMarketBlock;
 import net.kroia.stockmarket.entity.StockMarketEntities;
 import net.minecraft.core.BlockPos;
@@ -12,12 +13,17 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 
-public class StockMarketBlockEntity extends BlockEntity /*implements MenuProvider */{
+public class StockMarketBlockEntity extends BlockEntity{
+    private static StockMarketModBackend.Instances BACKEND_INSTANCES;
 
     // Current Item that the chart is displaying
     private ItemID itemID;
     private int amount;
     private int price;
+
+    public static void setBackend(StockMarketModBackend.Instances backend) {
+        BACKEND_INSTANCES = backend;
+    }
 
     public StockMarketBlockEntity(BlockPos pos, BlockState state) {
         super(StockMarketEntities.STOCK_MARKET_BLOCK_ENTITY.get(), pos, state);

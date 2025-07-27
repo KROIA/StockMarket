@@ -1,16 +1,14 @@
 package net.kroia.stockmarket.networking.packet.client_sender.request;
 
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.networking.NetworkPacket;
-import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
-import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncBotTargetPricePacket;
+import net.kroia.stockmarket.util.StockMarketNetworkPacket;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
-public class RequestBotTargetPricePacket extends NetworkPacket {
+public class RequestBotTargetPricePacket extends StockMarketNetworkPacket {
 
     ItemID itemID;
 
@@ -26,7 +24,7 @@ public class RequestBotTargetPricePacket extends NetworkPacket {
     {
         RequestBotTargetPricePacket packet = new RequestBotTargetPricePacket();
         packet.itemID = itemID;
-        StockMarketNetworking.sendToServer(packet);
+        packet.sendToServer();
     }
 
     @Override
@@ -42,7 +40,7 @@ public class RequestBotTargetPricePacket extends NetworkPacket {
     @Override
     protected void handleOnServer(ServerPlayer sender) {
         if(sender.hasPermissions(2)) {
-            ServerTradingBot bot = ServerMarket.getTradingBot(itemID);
+            ServerTradingBot bot = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getTradingBot(itemID);
             if(bot == null)
             {
                 return;

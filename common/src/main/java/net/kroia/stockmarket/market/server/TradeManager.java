@@ -2,7 +2,7 @@ package net.kroia.stockmarket.market.server;
 
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ServerSaveable;
-import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBotFactory;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
@@ -16,7 +16,11 @@ import net.minecraft.server.MinecraftServer;
 import java.util.ArrayList;
 import java.util.UUID;
 
-public class MarketManager implements ServerSaveable {
+public class TradeManager implements ServerSaveable {
+    protected static StockMarketModBackend.Instances BACKEND_INSTANCES;
+    public static void setBackend(StockMarketModBackend.Instances backend) {
+        BACKEND_INSTANCES = backend;
+    }
     private ItemID itemID;
 
     private MatchingEngine matchingEngine;
@@ -24,7 +28,7 @@ public class MarketManager implements ServerSaveable {
 
     private PriceHistory priceHistory;
 
-    public MarketManager(ServerTradeItem tradeItem, int initialPrice, PriceHistory history)
+    public TradeManager(ServerTradeItem tradeItem, int initialPrice, PriceHistory history)
     {
         this.itemID = tradeItem.getItemID();
         matchingEngine = new MatchingEngine(initialPrice, history);
@@ -51,9 +55,9 @@ public class MarketManager implements ServerSaveable {
 
     public void setTradingBot(ServerTradingBot bot)
     {
-        if(!StockMarketMod.SERVER_SETTINGS.MARKET_BOT.ENABLED.get())
+        if(!BACKEND_INSTANCES.SERVER_SETTINGS.MARKET_BOT.ENABLED.get())
         {
-            StockMarketMod.logWarning("[MarketManager] Trading bots are disabled");
+            BACKEND_INSTANCES.LOGGER.warn("[TradeManager] Trading bots are disabled");
             return;
         }
         if(bot.getParent()!= null)
@@ -107,7 +111,7 @@ public class MarketManager implements ServerSaveable {
 
     public void addOrder(Order order)
     {
-        StockMarketMod.logInfo("Adding order: " + order.toString());
+        BACKEND_INSTANCES.LOGGER.info("Adding order: " + order.toString());
         matchingEngine.addOrder(order);
     }
     public boolean cancelOrder(long orderID)

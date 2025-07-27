@@ -3,7 +3,7 @@ package net.kroia.stockmarket.market.server;
 import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ServerSaveable;
-import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncPricePacket;
@@ -17,11 +17,13 @@ import java.util.ArrayList;
 import java.util.UUID;
 
 public class ServerTradeItem implements ServerSaveable {
+    protected static StockMarketModBackend.Instances BACKEND_INSTANCES;
+
     private ItemID itemID;
     private ItemID currencyItemID;
     private final PriceHistory priceHistory;
     private final ArrayList<ServerPlayer> subscribers = new ArrayList<>();
-    private final MarketManager marketManager;
+    private final TradeManager marketManager;
 
     private long lastMillis = System.currentTimeMillis();
     protected long updateTimerIntervallMS = 100;
@@ -29,18 +31,21 @@ public class ServerTradeItem implements ServerSaveable {
     private boolean enabled = true;
 
 
+    public static void setBackend(StockMarketModBackend.Instances backend) {
+        BACKEND_INSTANCES = backend;
+    }
     public ServerTradeItem(ItemID itemID, ItemID currencyItemID, int startPrice)
     {
         this.itemID = itemID;
         this.currencyItemID = currencyItemID;
         this.priceHistory = new PriceHistory(itemID, currencyItemID, startPrice);
-        this.marketManager = new MarketManager(this, startPrice, priceHistory);
+        this.marketManager = new TradeManager(this, startPrice, priceHistory);
     }
 
     private ServerTradeItem()
     {
         this.priceHistory = new PriceHistory(null, null,0);
-        this.marketManager = new MarketManager(this, 0, priceHistory);
+        this.marketManager = new TradeManager(this, 0, priceHistory);
     }
     public void cleanup()
     {
@@ -170,7 +175,7 @@ public class ServerTradeItem implements ServerSaveable {
     public void cancelAllOrders(UUID playerUUID)
     {
         marketManager.cancelAllOrders(playerUUID);
-        IBank itemBank = StockMarketMod.BANK_SYSTEM_API.getServerBankManager().getUser(playerUUID).getBank(itemID);
+        IBank itemBank = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getUser(playerUUID).getBank(itemID);
         if(itemBank != null)
             itemBank.unlockAll();
         notifySubscribers();
@@ -223,7 +228,7 @@ public class ServerTradeItem implements ServerSaveable {
         tag.put("priceHistory", priceHistoryTag);
 
         //long endMillis = System.currentTimeMillis();
-        //StockMarketMod.LOGGER.info("[SERVER] Saving ServerMarket item: "+itemID + " " +(endMillis-startMillis)+"ms matching engine part: "+(matchingEngineMillis-startMillis)+"ms price history part: "+(endMillis-matchingEngineMillis)+"ms");
+        //StockMarketMod.LOGGER.info("[SERVER] Saving ServerStockMarketManager item: "+itemID + " " +(endMillis-startMillis)+"ms matching engine part: "+(matchingEngineMillis-startMillis)+"ms price history part: "+(endMillis-matchingEngineMillis)+"ms");
         return success;
     }
 

@@ -193,7 +193,7 @@ public class ServerTradingBotFactory {
 
     public static class DefaultBotSettings
     {
-        private final ServerVolatilityBot.Settings settings;
+        public final ServerVolatilityBot.Settings settings;
 
 
         public DefaultBotSettings(int price, float rarity, float volatility, long udateTimerIntervallMS)

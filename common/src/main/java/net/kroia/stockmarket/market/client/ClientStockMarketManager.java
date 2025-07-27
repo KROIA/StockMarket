@@ -1,7 +1,7 @@
 package net.kroia.stockmarket.market.client;
 
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.networking.packet.client_sender.request.RequestBotSettingsPacket;
@@ -17,20 +17,26 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
-public class ClientMarket {
+public class ClientStockMarketManager {
 
-    private static final Map<ItemID, ClientTradeItem> tradeItems = new HashMap<>();
-    private static ItemID CURRENCY_ITEM = null;
+    protected StockMarketModBackend.Instances BACKEND_INSTANCES;
 
-    private static SyncBotSettingsPacket syncBotSettingsPacket;
-    private static SyncBotTargetPricePacket syncBotTargetPricePacket;
-    //private static SyncTradeItemsPacket syncTradeItemsPacket;
-    private static boolean syncTradeItemsChanged;
+    private final Map<ItemID, ClientTradeItem> tradeItems = new HashMap<>();
+    private ItemID CURRENCY_ITEM = null;
 
-    private static boolean syncBotSettingsPacketChanged = false;
-    private static boolean syncBotTargetPricePacketChanged = false;
+    private SyncBotSettingsPacket syncBotSettingsPacket;
+    private SyncBotTargetPricePacket syncBotTargetPricePacket;
+    //privatc SyncTradeItemsPacket syncTradeItemsPacket;
+    private boolean syncTradeItemsChanged;
 
-    public static void clear()
+    private boolean syncBotSettingsPacketChanged = false;
+    private boolean syncBotTargetPricePacketChanged = false;
+
+    public ClientStockMarketManager(StockMarketModBackend.Instances backendInstances)
+    {
+        this.BACKEND_INSTANCES = backendInstances;
+    }
+    public void clear()
     {
         tradeItems.clear();
         syncBotSettingsPacket = null;
@@ -40,19 +46,19 @@ public class ClientMarket {
         syncBotTargetPricePacket = null;
     }
 
-    public static void requestTradeItems()
+    public void requestTradeItems()
     {
         RequestTradeItemsPacket.generateRequest();
     }
-    public static void requestAllowNewTradingItem(ItemID itemID, int startPrice)
+    public void requestAllowNewTradingItem(ItemID itemID, int startPrice)
     {
         RequestManageTradingItemPacket.sendRequestAllowNewTradingItem(itemID, startPrice);
     }
-    public static void requestRemoveTradingItem(ItemID itemID)
+    public void requestRemoveTradingItem(ItemID itemID)
     {
         RequestManageTradingItemPacket.sendRequestRemoveTradingItem(itemID);
     }
-    public static int getPrice(ItemID itemID)
+    public int getPrice(ItemID itemID)
     {
         ClientTradeItem tradeItem = tradeItems.get(itemID);
         if(tradeItem == null)
@@ -63,11 +69,11 @@ public class ClientMarket {
         return tradeItem.getPrice();
     }
 
-    /*public static SyncTradeItemsPacket getSyncTradeItemsPacket()
+    /*public SyncTradeItemsPacket getSyncTradeItemsPacket()
     {
         return syncTradeItemsPacket;
     }*/
-    public static boolean hasSyncTradeItemsChanged()
+    public boolean hasSyncTradeItemsChanged()
     {
         if(syncTradeItemsChanged)
         {
@@ -77,12 +83,12 @@ public class ClientMarket {
         return false;
     }
 
-    public static ItemID getCurrencyItem()
+    public ItemID getCurrencyItem()
     {
         return CURRENCY_ITEM;
     }
 
-    public static void handlePacket(SyncPricePacket packet)
+    public void handlePacket(SyncPricePacket packet)
     {
         ClientTradeItem tradeItem = tradeItems.get(packet.getPriceHistory().getItemID());
         if(tradeItem == null)
@@ -94,7 +100,7 @@ public class ClientMarket {
         TradeScreen.updatePlotsData();
         BotSettingsScreen.updatePlotsData();
     }
-    public static void handlePacket(SyncTradeItemsPacket packet)
+    public void handlePacket(SyncTradeItemsPacket packet)
     {
         //syncTradeItemsPacket = packet;
         syncTradeItemsChanged = true;
@@ -123,7 +129,7 @@ public class ClientMarket {
         }
 
         SyncPricePacket syncPricePacket = packet.getSyncPricePacket();
-        ClientTradeItem orgInstance = ClientMarket.tradeItems.get(syncPricePacket.getPriceHistory().getItemID());
+        ClientTradeItem orgInstance = tradeItems.get(syncPricePacket.getPriceHistory().getItemID());
         ClientTradeItem tradeItem;
         if(orgInstance != null)
         {
@@ -138,14 +144,14 @@ public class ClientMarket {
             tradeItems.put(tradeItem.getItemID(), tradeItem);
         }
 
-        StockMarketMod.logInfo("Trade item: "+ tradeItem.getItemID());
+        BACKEND_INSTANCES.LOGGER.info("Trade item: "+ tradeItem.getItemID());
         if(Objects.equals(syncPricePacket.getPriceHistory().getItemID(), TradeScreen.getItemID()))
         {
             TradeScreen.updatePlotsData();
         }
     }
 
-    public static void handlePacket(SyncOrderPacket packet)
+    public void handlePacket(SyncOrderPacket packet)
     {
         ClientTradeItem tradeItem = tradeItems.get(packet.getOrder().getItemID());
         if(tradeItem == null)
@@ -159,12 +165,12 @@ public class ClientMarket {
 
 
 
-    public static ClientTradeItem getTradeItem(ItemID itemID)
+    public ClientTradeItem getTradeItem(ItemID itemID)
     {
         return tradeItems.get(itemID);
     }
 
-    public static boolean createOrder(ItemID itemID, int quantity, int price)
+    public boolean createOrder(ItemID itemID, int quantity, int price)
     {
         ClientTradeItem tradeItem = tradeItems.get(itemID);
         if(tradeItem == null)
@@ -174,7 +180,7 @@ public class ClientMarket {
         }
         return tradeItem.createOrder(quantity, price);
     }
-    public static boolean createOrder(ItemID itemID, int quantity)
+    public boolean createOrder(ItemID itemID, int quantity)
     {
         ClientTradeItem tradeItem = tradeItems.get(itemID);
         if(tradeItem == null)
@@ -184,12 +190,12 @@ public class ClientMarket {
         }
         return tradeItem.createOrder(quantity);
     }
-    public static void changeOrderPrice(ItemID itemID, long orderID, int newPrice)
+    public void changeOrderPrice(ItemID itemID, long orderID, int newPrice)
     {
         RequestOrderChangePacket.sendRequest(itemID, orderID, newPrice);
     }
 
-    public static Order getOrder(ItemID itemID, long orderID)
+    public Order getOrder(ItemID itemID, long orderID)
     {
         ClientTradeItem tradeItem = tradeItems.get(itemID);
         if(tradeItem == null)
@@ -200,7 +206,7 @@ public class ClientMarket {
         return tradeItem.getOrder(orderID);
     }
 
-    public static ArrayList<Order> getOrders(ItemID itemID)
+    public ArrayList<Order> getOrders(ItemID itemID)
     {
         ClientTradeItem tradeItem = tradeItems.get(itemID);
         if(tradeItem == null)
@@ -210,7 +216,7 @@ public class ClientMarket {
         }
         return tradeItem.getOrders();
     }
-    public static void removeOrder(ItemID itemID, long orderID)
+    public void removeOrder(ItemID itemID, long orderID)
     {
         ClientTradeItem tradeItem = tradeItems.get(itemID);
         if(tradeItem == null)
@@ -221,11 +227,11 @@ public class ClientMarket {
         tradeItem.removeOrder(orderID);
     }
 
-    public static void cancelOrder(Order order)
+    public void cancelOrder(Order order)
     {
         cancelOrder(order.getItemID(), order.getOrderID());
     }
-    public static void cancelOrder(ItemID itemID, long orderID)
+    public void cancelOrder(ItemID itemID, long orderID)
     {
         ClientTradeItem tradeItem = tradeItems.get(itemID);
         if(tradeItem == null)
@@ -236,7 +242,7 @@ public class ClientMarket {
         tradeItem.cancelOrder(orderID);
     }
 
-    public static void subscribeMarketUpdate(ItemID itemID)
+    public void subscribeMarketUpdate(ItemID itemID)
     {
         ClientTradeItem tradeItem = tradeItems.get(itemID);
         if(tradeItem == null)
@@ -246,7 +252,7 @@ public class ClientMarket {
         }
         tradeItem.subscribe();
     }
-    public static void unsubscribeMarketUpdate(ItemID itemID)
+    public void unsubscribeMarketUpdate(ItemID itemID)
     {
         ClientTradeItem tradeItem = tradeItems.get(itemID);
         if(tradeItem == null)
@@ -258,12 +264,12 @@ public class ClientMarket {
     }
 
 
-    public static void handlePacket(SyncBotSettingsPacket packet)
+    public void handlePacket(SyncBotSettingsPacket packet)
     {
         syncBotSettingsPacket = packet;
         syncBotSettingsPacketChanged = true;
     }
-    public static boolean hasSyncBotSettingsPacketChanged()
+    public boolean hasSyncBotSettingsPacketChanged()
     {
         if(syncBotSettingsPacketChanged)
         {
@@ -272,13 +278,13 @@ public class ClientMarket {
         }
         return false;
     }
-    public static void handlePacket(SyncBotTargetPricePacket packet)
+    public void handlePacket(SyncBotTargetPricePacket packet)
     {
         syncBotTargetPricePacket = packet;
         syncBotTargetPricePacketChanged = true;
     }
 
-    public static boolean hasSyncBotTargetPricePacketChanged()
+    public boolean hasSyncBotTargetPricePacketChanged()
     {
         if(syncBotTargetPricePacketChanged)
         {
@@ -287,7 +293,7 @@ public class ClientMarket {
         }
         return false;
     }
-    public static int getBotTargetPrice()
+    public int getBotTargetPrice()
     {
         if(syncBotTargetPricePacket != null)
         {
@@ -296,7 +302,7 @@ public class ClientMarket {
         return 0;
     }
 
-    public static ServerVolatilityBot.Settings getBotSettings(ItemID itemID)
+    public ServerVolatilityBot.Settings getBotSettings(ItemID itemID)
     {
         if(syncBotSettingsPacket != null)
         {
@@ -308,11 +314,11 @@ public class ClientMarket {
         requestBotSettings(itemID);
         return null;
     }
-    public static void requestBotSettings(ItemID itemID)
+    public void requestBotSettings(ItemID itemID)
     {
         RequestBotSettingsPacket.sendPacket(itemID);
     }
-    public static ItemID getBotSettingsItemID()
+    public ItemID getBotSettingsItemID()
     {
         if(syncBotSettingsPacket != null)
         {
@@ -320,7 +326,7 @@ public class ClientMarket {
         }
         return null;
     }
-    public static boolean botExists()
+    public boolean botExists()
     {
         if(syncBotSettingsPacket != null)
         {
@@ -328,16 +334,16 @@ public class ClientMarket {
         }
         return false;
     }
-    public static SyncBotSettingsPacket getSyncBotSettingsPacket()
+    public SyncBotSettingsPacket getSyncBotSettingsPacket()
     {
         return syncBotSettingsPacket;
     }
 
-    private static void msgTradeItemNotFound(ItemID itemID) {
-        StockMarketMod.logWarning("[CLIENT] Trade item not found: " + itemID);
+    private void msgTradeItemNotFound(ItemID itemID) {
+        BACKEND_INSTANCES.LOGGER.warn("[CLIENT] Trade item not found: " + itemID);
     }
 
-    public static ArrayList<ItemID> getAvailableTradeItemIdList()
+    public ArrayList<ItemID> getAvailableTradeItemIdList()
     {
         return new ArrayList<>(tradeItems.keySet());
     }

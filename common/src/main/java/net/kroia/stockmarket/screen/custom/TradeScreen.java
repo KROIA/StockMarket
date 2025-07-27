@@ -10,8 +10,9 @@ import net.kroia.modutilities.gui.GuiScreen;
 import net.kroia.modutilities.gui.elements.ItemSelectionView;
 import net.kroia.modutilities.gui.screens.ItemSelectionScreen;
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
-import net.kroia.stockmarket.market.client.ClientMarket;
+import net.kroia.stockmarket.market.client.ClientStockMarketManager;
 import net.kroia.stockmarket.market.client.ClientTradeItem;
 import net.kroia.stockmarket.networking.packet.client_sender.update.entity.UpdateStockMarketBlockEntityPacket;
 import net.kroia.stockmarket.networking.packet.server_sender.update.entity.SyncStockMarketBlockEntityPacket;
@@ -33,6 +34,7 @@ import java.util.*;
 
 
 public class TradeScreen extends GuiScreen {
+    private static StockMarketModBackend.Instances BACKEND_INSTANCES;
 
     static class ItemSorter implements ItemSelectionView.Sorter {
         @Override
@@ -249,6 +251,9 @@ public class TradeScreen extends GuiScreen {
     private final TradePanel tradePanel;
     private static TradeScreen instance;
 
+    public static void setBackend(StockMarketModBackend.Instances backend) {
+        BACKEND_INSTANCES = backend;
+    }
     public TradeScreen(StockMarketBlockEntity blockEntity) {
         this(blockEntity.getItemID(), blockEntity.getAmount(), blockEntity.getPrice());
         this.blockEntity = blockEntity;
@@ -302,10 +307,10 @@ public class TradeScreen extends GuiScreen {
 
     @Override
     protected void updateLayout(Gui gui) {
-        ClientMarket.requestTradeItems();
+        BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.requestTradeItems();
         itemStack = itemID.getStack();
         tradePanel.setItemStack(itemStack);
-        ClientMarket.subscribeMarketUpdate(itemID);
+        BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.subscribeMarketUpdate(itemID);
         //RequestBankDataPacket.sendRequest();
 
         int padding = 10;
@@ -327,7 +332,7 @@ public class TradeScreen extends GuiScreen {
         instance = null;
         // Unregister the event listener when the screen is closed
         TickEvent.PLAYER_POST.unregister(TradeScreen::onClientTick);
-        ClientMarket.unsubscribeMarketUpdate(itemID);
+        BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.unsubscribeMarketUpdate(itemID);
         if(blockEntity != null)
         {
             blockEntity.setItemID(itemID);
@@ -346,7 +351,7 @@ public class TradeScreen extends GuiScreen {
             instance.tradePanel.setItemStack(instance.itemStack);
             instance.tradePanel.setAmount(packet.getAmount());
             instance.tradePanel.setLimitPrice(packet.getPrice());
-            ClientMarket.subscribeMarketUpdate(instance.itemID);
+            BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.subscribeMarketUpdate(instance.itemID);
         }
     }
 
@@ -375,9 +380,9 @@ public class TradeScreen extends GuiScreen {
     public static void updatePlotsData() {
         if(instance == null)
             return;
-        ClientTradeItem item = ClientMarket.getTradeItem(instance.itemID);
+        ClientTradeItem item = BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getTradeItem(instance.itemID);
         if (item == null) {
-            StockMarketMod.logWarning("Trade item not found: " + instance.itemID);
+            BACKEND_INSTANCES.LOGGER.warn("Trade item not found: " + instance.itemID);
             return;
         }
 
@@ -386,14 +391,14 @@ public class TradeScreen extends GuiScreen {
         instance.orderbookVolumeChart.setOrderBookVolume(item.getOrderBookVolume());
         assert Minecraft.getInstance().player != null;
         UUID thisPlayerUUID = Minecraft.getInstance().player.getUUID();
-        StockMarketMod.BANK_SYSTEM_API.getClientBankManager().requestMinimalBankData(thisPlayerUUID, instance.itemID,
+        BACKEND_INSTANCES.BANK_SYSTEM_API.getClientBankManager().requestMinimalBankData(thisPlayerUUID, instance.itemID,
                 (MinimalBankData data) -> {
                     if(data != null)
                     {
                         instance.tradePanel.setCurrentItemBalance(data.balance);
                     }
                 });
-        StockMarketMod.BANK_SYSTEM_API.getClientBankManager().requestMinimalBankData(thisPlayerUUID, ClientMarket.getCurrencyItem(),
+        BACKEND_INSTANCES.BANK_SYSTEM_API.getClientBankManager().requestMinimalBankData(thisPlayerUUID, BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getCurrencyItem(),
                 (MinimalBankData data) -> {
                     if(data != null)
                     {
@@ -411,7 +416,7 @@ public class TradeScreen extends GuiScreen {
     }
 
     private void onItemSelected(ItemStack itemStack) {
-        ClientMarket.unsubscribeMarketUpdate(itemID);
+        BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.unsubscribeMarketUpdate(itemID);
         this.itemID = new ItemID(itemStack);
         tradePanel.setItemStack(itemStack);
     }
@@ -420,32 +425,32 @@ public class TradeScreen extends GuiScreen {
     private void onSellMarketButtonPressed() {
         int amount = tradePanel.getAmount();
         if(amount > 0)
-            ClientMarket.createOrder(itemID, -amount);
+            BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.createOrder(itemID, -amount);
     }
 
     private void onBuyMarketButtonPressed() {
         int amount = tradePanel.getAmount();
         if(amount > 0)
-            ClientMarket.createOrder(itemID, amount);
+            BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.createOrder(itemID, amount);
     }
 
     private void onSellLimitButtonPressed() {
         int amount = tradePanel.getAmount();
         int price = tradePanel.getLimitPrice();
         if(amount > 0 && price >= 0)
-            ClientMarket.createOrder(itemID, -amount, price);
+            BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.createOrder(itemID, -amount, price);
     }
 
     private void onBuyLimitButtonPressed() {
         int amount = tradePanel.getAmount();
         int price = tradePanel.getLimitPrice();
         if(amount > 0 && price >= 0)
-            ClientMarket.createOrder(itemID, amount, price);
+            BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.createOrder(itemID, amount, price);
     }
 
     private void onSelectItemButtonPressed() {
         ArrayList<ItemStack> itemStacks = new ArrayList<>();
-        for(ItemID itemID : ClientMarket.getAvailableTradeItemIdList())
+        for(ItemID itemID : BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getAvailableTradeItemIdList())
         {
             itemStacks.add(itemID.getStack());
         }

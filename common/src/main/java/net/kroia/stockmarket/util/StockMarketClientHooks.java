@@ -1,4 +1,4 @@
-package net.kroia.stockmarket;
+package net.kroia.stockmarket.util;
 
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
 import net.kroia.stockmarket.screen.custom.BotSettingsScreen;
@@ -20,7 +20,7 @@ public class StockMarketClientHooks {
         }
         else
         {
-            StockMarketMod.logWarning("Block entity at position: "+pos+" is not of type StockMarketBlockEntity");
+            //BACKEND_INSTANCES.LOGGER.warn("Block entity at position: "+pos+" is not of type StockMarketBlockEntity");
             return InteractionResult.FAIL;
         }
         return InteractionResult.SUCCESS;

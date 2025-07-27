@@ -15,12 +15,15 @@ import net.minecraft.world.item.ItemStack;
 import java.util.*;
 
 public class StockMarketModSettings extends ModSettings {
-
+    private static StockMarketModBackend.Instances BACKEND_INSTANCES;
     public final Utilities UTILITIES = createGroup(new Utilities());
     public final UISettings UI = createGroup(new UISettings());
     public final Market MARKET = createGroup(new Market());
     public final MarketBot MARKET_BOT = createGroup(new MarketBot());
 
+    public static void setBackend(StockMarketModBackend.Instances backend) {
+        BACKEND_INSTANCES = backend;
+    }
 
     public StockMarketModSettings() {
         super("StockMarketModSettings", "settings.json");
@@ -124,7 +127,7 @@ public class StockMarketModSettings extends ModSettings {
             {
                 items.add(new ItemID(getCurrencyItem().getItem().getDefaultInstance()));
             }
-            items.addAll(StockMarketMod.BANK_SYSTEM_API.getServerBankManager().getBlacklistedItemIDs());
+            items.addAll(BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getBlacklistedItemIDs());
             return items;
         }
     }
@@ -155,7 +158,7 @@ public class StockMarketModSettings extends ModSettings {
             }
             public void loadFromFilesystem()
             {
-                botPresets = StockMarketMod.SERVER_DATA_HANDLER.loadDefaultBotSettings();
+                botPresets = BACKEND_INSTANCES.SERVER_DATA_HANDLER.loadDefaultBotSettings();
             }
             public HashMap<ItemID, ServerTradingBotFactory.DefaultBotSettings> getBots(String presetName)
             {
@@ -199,7 +202,7 @@ public class StockMarketModSettings extends ModSettings {
                 return keys;
             }
         }
-        public static BotBuilder getBotBuilder()
+        public BotBuilder getBotBuilder()
         {
             BotBuilder botBuilder = new BotBuilder();
 
@@ -207,11 +210,11 @@ public class StockMarketModSettings extends ModSettings {
 
             boolean recreatePresets = false;
             try {
-                StockMarketMod.logInfo("If you see a exception after here, in the case you have updated the mod to a newer version, you can ignore the exception.");
+                BACKEND_INSTANCES.LOGGER.info("If you see a exception after here, in the case you have updated the mod to a newer version, you can ignore the exception.");
                 botBuilder.loadFromFilesystem();
             } catch (Exception e) {
                 recreatePresets = true;
-                StockMarketMod.logError("Failed to load default bot settings, new settings will be generated: "+e.getMessage());
+                BACKEND_INSTANCES.LOGGER.error("Failed to load default bot settings, new settings will be generated: "+e.getMessage(), e);
             }
 
             if(!recreatePresets) {
@@ -238,7 +241,7 @@ public class StockMarketModSettings extends ModSettings {
         }
 
 
-        public static ServerTradingBotFactory.DefaultBotSettings getBotBuilder(ItemID itemID)
+        public ServerTradingBotFactory.DefaultBotSettings getBotBuilder(ItemID itemID)
         {
             return getBotBuilder().get(itemID);
         }
@@ -253,7 +256,7 @@ public class StockMarketModSettings extends ModSettings {
 
     @Override
     public String getSettingsFilePath() {
-        return StockMarketMod.SERVER_DATA_HANDLER.getSaveFolder().getPath();
+        return BACKEND_INSTANCES.SERVER_DATA_HANDLER.getSaveFolder().getPath();
     }
 
 
@@ -261,7 +264,7 @@ public class StockMarketModSettings extends ModSettings {
     public boolean saveSettings() {
         boolean success = super.saveSettings();
         if (success) {
-            StockMarketMod.SERVER_EVENTS.STOCKMARKET_DATA_SAVED_TO_FILE.notifyListeners();
+            BACKEND_INSTANCES.SERVER_EVENTS.STOCKMARKET_DATA_SAVED_TO_FILE.notifyListeners();
         }
         return success;
     }
@@ -270,7 +273,7 @@ public class StockMarketModSettings extends ModSettings {
     public boolean loadSettings() {
         boolean success = super.loadSettings();
         if (success) {
-            StockMarketMod.SERVER_EVENTS.STOCKMARKET_DATA_LOADED_FROM_FILE.notifyListeners();
+            BACKEND_INSTANCES.SERVER_EVENTS.STOCKMARKET_DATA_LOADED_FROM_FILE.notifyListeners();
         }
         return success;
     }
