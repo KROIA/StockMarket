@@ -4,6 +4,7 @@ import dev.architectury.event.events.common.CommandRegistrationEvent;
 import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.api.BankSystemAPI;
+import net.kroia.banksystem.util.BankSystemDataHandler;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.stockmarket.api.StockMarketAPI;
 import net.kroia.stockmarket.block.StockMarketBlocks;
@@ -49,7 +50,6 @@ public class StockMarketModBackend implements StockMarketAPI {
         public StockMarketModLogger LOGGER;
     }
 
-    private static boolean bankSystemModLoaded = false;
     private static long lastTimeMS = 0;
     private static Instances INSTANCES = new Instances();
 
@@ -112,7 +112,7 @@ public class StockMarketModBackend implements StockMarketAPI {
     {
         if(INSTANCES.SERVER_EVENTS == null)
             INSTANCES.SERVER_EVENTS = new StockMarketEvents();
-        INSTANCES.BANK_SYSTEM_API.getEvents().getBankDataLoadedFromFileSignal().addListener(()->{bankSystemModLoaded = true;}, 1);
+        //INSTANCES.BANK_SYSTEM_API.getEvents().getBankDataLoadedFromFileSignal().addListener(StockMarketModBackend::onPostBankSystemDataLoaded);
         Order.setBackend(INSTANCES);
         ServerTradingBot.setBackend(INSTANCES);
         MatchingEngine.setBackend(INSTANCES);
@@ -132,16 +132,16 @@ public class StockMarketModBackend implements StockMarketAPI {
 
 
 
-        loadDataFromFiles(server);
         TickEvent.SERVER_POST.register(StockMarketModBackend::onServerTick);
 
-        if(bankSystemModLoaded)
+        if(BankSystemDataHandler.isBankDataLoaded())
         {
-            onBankSystemLoadedSingleShotEventReceiver();
+            BankSystemDataHandler.resetBankDataLoaded();
+            onPostBankSystemDataLoaded();
         }
         else
         {
-            INSTANCES.BANK_SYSTEM_API.getEvents().getBankDataLoadedFromFileSignal().addListener(StockMarketModBackend::onBankSystemLoadedSingleShotEventReceiver, 1);
+            INSTANCES.BANK_SYSTEM_API.getEvents().getBankDataLoadedFromFileSignal().addListener(StockMarketModBackend::onPostBankSystemDataLoaded, 1);
         }
     }
 
@@ -155,11 +155,12 @@ public class StockMarketModBackend implements StockMarketAPI {
         INSTANCES.SERVER_EVENTS.removeListeners();
     }
 
-    private static void onBankSystemLoadedSingleShotEventReceiver()
+    private static void onPostBankSystemDataLoaded()
     {
-        loadDataFromFiles(UtilitiesPlatform.getServer());
-        INSTANCES.SERVER_SETTINGS.MARKET_BOT.getBotBuilder(); // Create the default bot settings files if they don't exist
-        INSTANCES.SERVER_STOCKMARKET_MANAGER = new ServerStockMarketManager();
+        if(INSTANCES.SERVER_SETTINGS != null) {
+            loadDataFromFiles(UtilitiesPlatform.getServer());
+            INSTANCES.SERVER_SETTINGS.MARKET_BOT.getBotBuilder(); // Create the default bot settings files if they don't exist
+        }
     }
 
     // Called from the server side
@@ -192,14 +193,14 @@ public class StockMarketModBackend implements StockMarketAPI {
     {
         File rootSaveFolder = server.getWorldPath(LevelResource.ROOT).toFile();
         // Load data from the root save folder
-        INSTANCES.SERVER_DATA_HANDLER.setSaveFolder(rootSaveFolder);
+        INSTANCES.SERVER_DATA_HANDLER.setLevelSavePath(rootSaveFolder.toPath());
         INSTANCES.SERVER_DATA_HANDLER.loadAll();
     }
     public static void saveDataToFiles(MinecraftServer server)
     {
         File rootSaveFolder = server.getWorldPath(LevelResource.ROOT).toFile();
         // Load data from the root save folder
-        INSTANCES.SERVER_DATA_HANDLER.setSaveFolder(rootSaveFolder);
+        INSTANCES.SERVER_DATA_HANDLER.setLevelSavePath(rootSaveFolder.toPath());
         INSTANCES.SERVER_DATA_HANDLER.saveAll();
     }
 }

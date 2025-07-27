@@ -1,6 +1,5 @@
 package net.kroia.stockmarket.market.server;
 
-import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBotFactory;
@@ -20,13 +19,20 @@ public class DefaultMarketBotSettings {
     }
     public static class MinimalMarketData
     {
-        public Item item;
+        public ItemStack item;
         public int defaultPrice;
         public float rarity;
         public float volatility;
-        public MinimalMarketData(Item item, int defaultPrice, float rarity, float volatility)
+        public MinimalMarketData(ItemStack item, int defaultPrice, float rarity, float volatility)
         {
             this.item = item;
+            this.defaultPrice = defaultPrice;
+            this.rarity = rarity;
+            this.volatility = volatility;
+        }
+        public MinimalMarketData(Item item, int defaultPrice, float rarity, float volatility)
+        {
+            this.item = item.getDefaultInstance();
             this.defaultPrice = defaultPrice;
             this.rarity = rarity;
             this.volatility = volatility;
@@ -108,7 +114,7 @@ public class DefaultMarketBotSettings {
         createAndSaveSettings(getTrapDoors(), updateMS);
         createAndSaveSettings(getPressurePlates(), updateMS);
         createAndSaveSettings(getSand(), updateMS);
-        createAndSaveSettings(getEnchantmentBooks(), updateMS);
+        createAndSaveSettings(getEnchantedBooks(), updateMS);
         //createAndSaveSettings("Clay", getClay(), updateMS);
         createAndSaveSettings(getWool(), updateMS);
         createAndSaveSettings(getCarpet(), updateMS);
@@ -298,7 +304,7 @@ public class DefaultMarketBotSettings {
     {
         for (MinimalMarketData data : category) {
             ServerTradingBotFactory.DefaultBotSettings settings = new ServerTradingBotFactory.DefaultBotSettings(data.defaultPrice, data.rarity, data.volatility, updateTimerIntervallMS);
-            ServerTradingBotFactory.ItemData itemData = new ServerTradingBotFactory.ItemData(new ItemID(data.item.getDefaultInstance()));
+            ServerTradingBotFactory.ItemData itemData = new ServerTradingBotFactory.ItemData(data.item);
             ServerTradingBotFactory.BotBuilderContainer botContainer = new ServerTradingBotFactory.BotBuilderContainer();
             botContainer.itemData = itemData;
             botContainer.defaultSettings = settings;
@@ -824,18 +830,18 @@ public class DefaultMarketBotSettings {
         return sandCategory;
     }
 
-    private static MinimalMarketDataCategory getEnchantmentBooks()
+    private static MinimalMarketDataCategory getEnchantedBooks()
     {
-        MinimalMarketDataCategory books = new MinimalMarketDataCategory("EnchantmentBook");
+        MinimalMarketDataCategory books = new MinimalMarketDataCategory("EnchantedBook");
         int bookPrice = ENCHANTMENT_BOOK_PRICE;
 
-        List<ItemStack> bookItems = ItemUtilities.getSearchCreativeItems("enchantment book");
+        List<ItemStack> bookItems = ItemUtilities.getSearchCreativeItems("enchanted book");
 
         for (ItemStack book : bookItems)
         {
             if (book.getItem() instanceof EnchantedBookItem)
             {
-                books.items.add(new MinimalMarketData(book.getItem(), bookPrice, 0.2f, 0.1f));
+                books.items.add(new MinimalMarketData(book, bookPrice, 0.2f, 0.1f));
             }
         }
         return books;

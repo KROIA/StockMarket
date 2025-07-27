@@ -38,13 +38,13 @@ public class ServerTradeItem implements ServerSaveable {
     {
         this.itemID = itemID;
         this.currencyItemID = currencyItemID;
-        this.priceHistory = new PriceHistory(itemID, currencyItemID, startPrice);
+        this.priceHistory = new PriceHistory(itemID, currencyItemID, startPrice, BACKEND_INSTANCES.SERVER_SETTINGS.UI.PRICE_HISTORY_SIZE.get());
         this.marketManager = new TradeManager(this, startPrice, priceHistory);
     }
 
     private ServerTradeItem()
     {
-        this.priceHistory = new PriceHistory(null, null,0);
+        this.priceHistory = new PriceHistory(null, null,0, BACKEND_INSTANCES.SERVER_SETTINGS.UI.PRICE_HISTORY_SIZE.get());
         this.marketManager = new TradeManager(this, 0, priceHistory);
     }
     public void cleanup()

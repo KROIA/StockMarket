@@ -8,6 +8,7 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.setting.ModSettings;
 import net.kroia.modutilities.setting.Setting;
 import net.kroia.modutilities.setting.SettingsGroup;
+import net.kroia.modutilities.setting.parser.ItemStackJsonParser;
 import net.kroia.stockmarket.market.server.DefaultMarketBotSettings;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBotFactory;
 import net.minecraft.world.item.ItemStack;
@@ -26,7 +27,7 @@ public class StockMarketModSettings extends ModSettings {
     }
 
     public StockMarketModSettings() {
-        super("StockMarketModSettings", "settings.json");
+        super("StockMarketModSettings");
     }
 
 
@@ -86,7 +87,7 @@ public class StockMarketModSettings extends ModSettings {
          * The item used as currency in the market
          * Default is the MoneyItem from BankSystemMod
          */
-        private final Setting<ItemStack> CURRENCY_ITEM = registerSetting("CURRENCY_ITEM", BankSystemItems.MONEY.get().getDefaultInstance(), ItemStack.class);
+        private final Setting<ItemStack> CURRENCY_ITEM = registerSetting("CURRENCY_ITEM", BankSystemItems.MONEY.get().getDefaultInstance(), ItemStack.class, new ItemStackJsonParser());
 
         /**
          * List of items that are tradable without creating them manually
@@ -255,14 +256,8 @@ public class StockMarketModSettings extends ModSettings {
      */
 
     @Override
-    public String getSettingsFilePath() {
-        return BACKEND_INSTANCES.SERVER_DATA_HANDLER.getSaveFolder().getPath();
-    }
-
-
-    @Override
-    public boolean saveSettings() {
-        boolean success = super.saveSettings();
+    public boolean saveSettings(String filePath) {
+        boolean success = super.saveSettings(filePath);
         if (success) {
             BACKEND_INSTANCES.SERVER_EVENTS.STOCKMARKET_DATA_SAVED_TO_FILE.notifyListeners();
         }
@@ -270,8 +265,8 @@ public class StockMarketModSettings extends ModSettings {
     }
 
     @Override
-    public boolean loadSettings() {
-        boolean success = super.loadSettings();
+    public boolean loadSettings(String filePath) {
+        boolean success = super.loadSettings(filePath);
         if (success) {
             BACKEND_INSTANCES.SERVER_EVENTS.STOCKMARKET_DATA_LOADED_FROM_FILE.notifyListeners();
         }

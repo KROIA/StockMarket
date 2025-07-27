@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.market.server.bot;
 
+import com.google.gson.*;
 import net.kroia.banksystem.banking.bank.MoneyBank;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ServerSaveable;
@@ -12,6 +13,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 
 public class ServerTradingBotFactory {
+    private final static Gson gson = new GsonBuilder().setPrettyPrinting().create();
+
 
     public static class EnchantmentData implements ServerSaveable
     {
@@ -39,6 +42,26 @@ public class ServerTradingBotFactory {
             level = tag.getInt("lvl");
             return true;
         }
+
+        public JsonElement toJson()
+        {
+            JsonObject data = new JsonObject();
+            data.addProperty("enchantmentID", enchantmentID);
+            data.addProperty("level", level);
+            return data;
+        }
+
+        public boolean fromJson(JsonElement json) {
+            if (json.isJsonObject()) {
+                JsonObject data = json.getAsJsonObject();
+                if (data.has("enchantmentID") && data.has("level")) {
+                    enchantmentID = data.get("enchantmentID").getAsString();
+                    level = data.get("level").getAsInt();
+                    return true;
+                }
+            }
+            return false;
+        }
     }
     public static class PotionData implements ServerSaveable
     {
@@ -62,6 +85,25 @@ public class ServerTradingBotFactory {
         public boolean load(CompoundTag tag) {
             potionID = tag.getString("Potion");
             return true;
+        }
+
+        public JsonElement toJson()
+        {
+            JsonObject data = new JsonObject();
+            data.addProperty("potionID", potionID);
+            //data.addProperty("amplifier", amplifier);
+            return data;
+        }
+        public boolean fromJson(JsonElement json) {
+            if (json.isJsonObject()) {
+                JsonObject data = json.getAsJsonObject();
+                if (data.has("potionID")) {
+                    potionID = data.get("potionID").getAsString();
+                    //amplifier = data.get("amplifier").getAsInt();
+                    return true;
+                }
+            }
+            return false;
         }
     }
 
@@ -189,11 +231,56 @@ public class ServerTradingBotFactory {
             }
             return true;
         }
+
+        JsonElement toJson()
+        {
+            JsonObject data = new JsonObject();
+            data.addProperty("itemID", itemID.getName());
+            if(enchantments.length > 0) {
+                JsonArray enchantmentsTag = new JsonArray();
+                for (EnchantmentData enchantment : enchantments) {
+                    enchantmentsTag.add(enchantment.toJson());
+                }
+                data.add("enchantments", enchantmentsTag);
+            }
+            if(potion != null)
+                data.add("potion", potion.toJson());
+            return data;
+        }
+
+        boolean fromJson(JsonElement json) {
+            if (json.isJsonObject()) {
+                JsonObject data = json.getAsJsonObject();
+                if (data.has("itemID")) {
+                    itemID = new ItemID(data.get("itemID").getAsString());
+                }
+                if (data.has("enchantments")) {
+                    JsonArray enchantmentsTag = data.getAsJsonArray("enchantments");
+                    enchantments = new EnchantmentData[enchantmentsTag.size()];
+                    for (int i = 0; i < enchantmentsTag.size(); i++) {
+                        EnchantmentData enchantment = new EnchantmentData();
+                        enchantment.fromJson(enchantmentsTag.get(i));
+                        enchantments[i] = enchantment;
+                    }
+                } else {
+                    enchantments = new EnchantmentData[0];
+                }
+                if (data.has("potion")) {
+                    potion = new PotionData();
+                    potion.fromJson(data.get("potion"));
+                } else {
+                    potion = null;
+                }
+                return true;
+            }
+            return false;
+        }
+
     }
 
     public static class DefaultBotSettings
     {
-        public final ServerVolatilityBot.Settings settings;
+        private final ServerVolatilityBot.Settings settings;
 
 
         public DefaultBotSettings(int price, float rarity, float volatility, long udateTimerIntervallMS)
@@ -228,6 +315,52 @@ public class ServerTradingBotFactory {
             this.settings.defaultPrice = defaultPrice;
             return this;
         }
+
+        JsonElement toJson()
+        {
+            JsonObject data = new JsonObject();
+            data.addProperty("enabled", settings.enabled);
+            data.addProperty("defaultPrice", settings.defaultPrice);
+            data.addProperty("updateTimerIntervallMS", settings.updateTimerIntervallMS);
+            data.addProperty("orderBookVolumeScale", settings.orderBookVolumeScale);
+            data.addProperty("nearMarketVolumeScale", settings.nearMarketVolumeScale);
+            data.addProperty("volumeAccumulationRate", settings.volumeAccumulationRate);
+            data.addProperty("volumeFastAccumulationRate", settings.volumeFastAccumulationRate);
+            data.addProperty("volumeDecumulationRate", settings.volumeDecumulationRate);
+
+            data.addProperty("volumeScale", settings.volumeScale);
+            data.addProperty("enableTargetPrice", settings.enableTargetPrice);
+            data.addProperty("targetPriceSteeringFactor", settings.targetPriceSteeringFactor);
+            data.addProperty("enableVolumeTracking", settings.targetPrice);
+            data.addProperty("volumeSteeringFactor", settings.volumeSteeringFactor);
+            data.addProperty("enableRandomWalk", settings.enableRandomWalk);
+            data.addProperty("volatility", settings.volatility);
+            return data;
+        }
+
+        boolean fromJson(JsonElement json) {
+            if (json.isJsonObject()) {
+                JsonObject data = json.getAsJsonObject();
+                settings.enabled = data.get("enabled").getAsBoolean();
+                settings.defaultPrice = data.get("defaultPrice").getAsInt();
+                settings.updateTimerIntervallMS = data.get("updateTimerIntervallMS").getAsLong();
+                settings.orderBookVolumeScale = data.get("orderBookVolumeScale").getAsFloat();
+                settings.nearMarketVolumeScale = data.get("nearMarketVolumeScale").getAsFloat();
+                settings.volumeAccumulationRate = data.get("volumeAccumulationRate").getAsFloat();
+                settings.volumeFastAccumulationRate = data.get("volumeFastAccumulationRate").getAsFloat();
+                settings.volumeDecumulationRate = data.get("volumeDecumulationRate").getAsFloat();
+
+                settings.volumeScale = data.get("volumeScale").getAsFloat();
+                settings.enableTargetPrice = data.get("enableTargetPrice").getAsBoolean();
+                settings.targetPriceSteeringFactor = data.get("targetPriceSteeringFactor").getAsFloat();
+                settings.enableVolumeTracking = data.get("enableVolumeTracking").getAsBoolean();
+                settings.volumeSteeringFactor = data.get("volumeSteeringFactor").getAsFloat();
+                settings.enableRandomWalk = data.get("enableRandomWalk").getAsBoolean();
+                settings.volatility = data.get("volatility").getAsFloat();
+                return true;
+            }
+            return false;
+        }
     }
 
     public static ServerTradingBot loadFromTag(CompoundTag tag)
@@ -261,6 +394,36 @@ public class ServerTradingBotFactory {
         //public String itemID;
         public ItemData itemData;
         public DefaultBotSettings defaultSettings;
+
+        public JsonElement toJson()
+        {
+            JsonObject data = new JsonObject();
+            if(itemData != null)
+                data.add("itemData", itemData.toJson());
+            if(defaultSettings != null)
+                data.add("defaultSettings", defaultSettings.toJson());
+            return data;
+        }
+
+        public boolean fromJson(JsonElement json) {
+            if (json.isJsonObject()) {
+                JsonObject data = json.getAsJsonObject();
+                if (data.has("itemData")) {
+                    itemData = new ItemData();
+                    itemData.fromJson(data.get("itemData"));
+                } else {
+                    itemData = null;
+                }
+                if (data.has("defaultSettings")) {
+                    defaultSettings = new DefaultBotSettings(new ServerVolatilityBot.Settings());
+                    defaultSettings.fromJson(data.get("defaultSettings"));
+                } else {
+                    defaultSettings = null;
+                }
+                return true;
+            }
+            return false;
+        }
     }
     public static void botTableBuilder(
             HashMap<ItemID, BotBuilderContainer> table,

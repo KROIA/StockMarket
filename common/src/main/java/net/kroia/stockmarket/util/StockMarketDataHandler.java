@@ -1,49 +1,44 @@
 package net.kroia.stockmarket.util;
 
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonSyntaxException;
-import com.google.gson.reflect.TypeToken;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.DataPersistence;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.stockmarket.StockMarketModBackend;
-import net.kroia.stockmarket.market.server.ServerStockMarketManager;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBotFactory;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.NbtIo;
 
-import java.io.File;
-import java.io.IOException;
-import java.lang.reflect.Type;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 
 
-public class StockMarketDataHandler {
+public class StockMarketDataHandler extends DataPersistence {
     private static StockMarketModBackend.Instances BACKEND_INSTANCES;
-    private final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    private final String FOLDER_NAME = "Finance/StockMarket";
-
     private final String PLAYER_DATA_FILE_NAME = "Player_data.dat";
     private final String MARKET_DATA_FILE_NAME = "Market_data.dat";
-    private final boolean COMPRESSED = false;
-    private File saveFolder;
-
+    private final String MARKET_SETTINGS_FILE_NAME = "settings.json";
+    private final String DEFAULT_BOT_SETTINGS_DIRECTORY = "DefaultBotSettings";
     private boolean isLoaded = false;
-
     private long tickCounter = 0;
     private int lastPlayerCount = 0;
 
+    public StockMarketDataHandler() {
+        super(JsonFormat.PRETTY, NbtFormat.COMPRESSED, Path.of("Finance/StockMarket"));
+        setLogger((msg)->{BACKEND_INSTANCES.LOGGER.error(msg);},
+                (msg,e)->{BACKEND_INSTANCES.LOGGER.error(msg, e);},
+                (msg)->{BACKEND_INSTANCES.LOGGER.info(msg);},
+                (msg)->{BACKEND_INSTANCES.LOGGER.warn(msg);});
+    }
+
     public static void setBackend(StockMarketModBackend.Instances backend) {
         BACKEND_INSTANCES = backend;
+
     }
 
     public void tickUpdate()
@@ -62,17 +57,11 @@ public class StockMarketDataHandler {
     }
 
 
-
-    public void setSaveFolder(File folder) {
-        File rootFolder = new File(folder, FOLDER_NAME);
-        // check if folder exists
-        if (!rootFolder.exists()) {
-            rootFolder.mkdirs();
-        }
-        saveFolder = rootFolder;
-    }
-    public File getSaveFolder() {
-        return saveFolder;
+    @Override
+    public void setLevelSavePath(Path levelSavePath)
+    {
+        super.setLevelSavePath(levelSavePath);
+        createSaveFolder();
     }
 
     public boolean isLoaded() {
@@ -119,7 +108,13 @@ public class StockMarketDataHandler {
         isLoaded = false;
         BACKEND_INSTANCES.LOGGER.info("Loading StockMarket Mod data...");
         boolean success = true;
-        success &= load_globalSettings();
+        Path settingsFilePath = getGlobalSettingsFilePath();
+        if(!fileExists(settingsFilePath)) {
+            BACKEND_INSTANCES.LOGGER.warn("Market settings file not found, creating default settings file.");
+            success &= save_globalSettings(settingsFilePath);
+        }
+        else
+            success &= load_globalSettings(settingsFilePath);
         success &= load_player();
         success &= load_market();
 
@@ -136,21 +131,20 @@ public class StockMarketDataHandler {
     {
         CompoundTag data = new CompoundTag();
         ServerPlayerList.saveToTag(data);
-        return saveDataCompound(PLAYER_DATA_FILE_NAME, data);
+        return saveDataCompound(getPlayerDataFilePath(), data);
     }
     public CompletableFuture<Boolean> save_playerAsync()
     {
         CompoundTag data = new CompoundTag();
         ServerPlayerList.saveToTag(data);
         // Save player data async because it can take much time when there are many players
-        CompletableFuture<Boolean> future = CompletableFuture.supplyAsync(() -> {
-            return saveDataCompound(PLAYER_DATA_FILE_NAME, data);
+        return CompletableFuture.supplyAsync(() -> {
+            return saveDataCompound(getPlayerDataFilePath(), data);
         });
-        return future;
     }
     public boolean load_player()
     {
-        CompoundTag data = readDataCompound(PLAYER_DATA_FILE_NAME);
+        CompoundTag data = readDataCompound(getPlayerDataFilePath());
         if(data != null)
             return ServerPlayerList.loadFromTag(data);
         return false;
@@ -160,28 +154,26 @@ public class StockMarketDataHandler {
     {
         boolean success = true;
         CompoundTag data = new CompoundTag();
-        ServerStockMarketManager market = new ServerStockMarketManager();
         CompoundTag marketData = new CompoundTag();
-        success = market.save(marketData);
+        success = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.save(marketData);
         data.put("market", marketData);
 
         if(success)
-            success = saveDataCompound(MARKET_DATA_FILE_NAME, data);
+            success = saveDataCompound(getMarketDataFilePath(), data);
         return success;
     }
     public CompletableFuture<Boolean> save_marketAsync()
     {
         CompoundTag data = new CompoundTag();
-        ServerStockMarketManager market = new ServerStockMarketManager();
         CompoundTag marketData = new CompoundTag();
 
         CompletableFuture<Boolean> future;
-        if(market.save(marketData)) {
+        if(BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.save(marketData)) {
             data.put("market", marketData);
 
             // Save market data async because it can take much time when there are many trading items
             future = CompletableFuture.supplyAsync(() -> {
-                return saveDataCompound(MARKET_DATA_FILE_NAME, data);
+                return saveDataCompound(getMarketDataFilePath(), data);
             });
         }
         else
@@ -190,43 +182,65 @@ public class StockMarketDataHandler {
     }
     public boolean load_market()
     {
-        CompoundTag data = readDataCompound(MARKET_DATA_FILE_NAME);
+        CompoundTag data = readDataCompound(getMarketDataFilePath());
         if(data == null)
             return false;
         // Load server_sender market
-        ServerStockMarketManager market = new ServerStockMarketManager();
         if(!data.contains("market"))
             return false;
         CompoundTag marketData = data.getCompound("market");
-        return market.load(marketData);
+        return BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.load(marketData);
     }
 
-
+    public Path getGlobalSettingsFilePath()
+    {
+        return getAbsoluteSavePath(MARKET_SETTINGS_FILE_NAME);
+    }
+    public Path getMarketDataFilePath()
+    {
+        return getAbsoluteSavePath(MARKET_DATA_FILE_NAME);
+    }
+    public Path getPlayerDataFilePath()
+    {
+        return getAbsoluteSavePath(PLAYER_DATA_FILE_NAME);
+    }
+    public Path getDefaultBotSettingsFolderPath()
+    {
+        return getAbsoluteSavePath(DEFAULT_BOT_SETTINGS_DIRECTORY);
+    }
     public boolean save_globalSettings()
     {
-        return BACKEND_INSTANCES.SERVER_SETTINGS.saveSettings();
+        return save_globalSettings(getGlobalSettingsFilePath());
+    }
+    public boolean save_globalSettings(Path filePath)
+    {
+        return BACKEND_INSTANCES.SERVER_SETTINGS.saveSettings(filePath.toString());
     }
 
     public CompletableFuture<Boolean> save_globalSettingsAsync()
     {
-        return CompletableFuture.supplyAsync(StockMarketDataHandler::save_globalSettingsAsyncStatic);
+        return save_globalSettingsAsync(getGlobalSettingsFilePath());
+    }
+    public CompletableFuture<Boolean> save_globalSettingsAsync(Path filePath)
+    {
+        return CompletableFuture.supplyAsync(() -> StockMarketDataHandler.save_globalSettingsAsyncStatic(filePath));
     }
 
     // Helper function to save global settings asynchronously
-    private static boolean save_globalSettingsAsyncStatic()
+    private static boolean save_globalSettingsAsyncStatic(Path filePath)
     {
-        return BACKEND_INSTANCES.SERVER_SETTINGS.saveSettings();
+        return BACKEND_INSTANCES.SERVER_SETTINGS.saveSettings(filePath.toString());
     }
 
 
-    public boolean load_globalSettings()
+    public boolean load_globalSettings(Path filePath)
     {
-        return BACKEND_INSTANCES.SERVER_SETTINGS.loadSettings();
+        return BACKEND_INSTANCES.SERVER_SETTINGS.loadSettings(filePath.toString());
     }
 
     public List<String> getDefaultBotSettingsFileNames()
     {
-        List<Path> jsonFiles = getJsonFiles(Path.of(getSaveFolder().getPath()+"/DefaultBotSettings"));
+        List<Path> jsonFiles = getJsonFiles(getDefaultBotSettingsFolderPath());
         ArrayList<String> fileNames = new ArrayList<>();
         for(Path file : jsonFiles)
         {
@@ -239,6 +253,10 @@ public class StockMarketDataHandler {
     }
     public HashMap<String, HashMap<ItemID, ServerTradingBotFactory.DefaultBotSettings>> loadDefaultBotSettings()
     {
+        if(!folderExists(getDefaultBotSettingsFolderPath())) {
+            BACKEND_INSTANCES.LOGGER.error("Default bot settings folder does not exist: " + getDefaultBotSettingsFolderPath());
+            return new HashMap<>();
+        }
         List<String> jsonFiles = getDefaultBotSettingsFileNames();
         HashMap<String, HashMap<ItemID, ServerTradingBotFactory.DefaultBotSettings>> settings = new HashMap<>();
         for(String file : jsonFiles)
@@ -253,113 +271,43 @@ public class StockMarketDataHandler {
         if(!fileName.contains(".json"))
             fileName += ".json";
         HashMap<ItemID, ServerTradingBotFactory.DefaultBotSettings> settings = new HashMap<>();
-        Type arrayType = new TypeToken<ArrayList<ServerTradingBotFactory.BotBuilderContainer>>() {}.getType();
-        try {
-            ArrayList<ServerTradingBotFactory.BotBuilderContainer> tmpArray = loadFromJson("/DefaultBotSettings/"+fileName, arrayType);
-            if(tmpArray != null) {
-                for(ServerTradingBotFactory.BotBuilderContainer container : tmpArray)
+        Path filePath = getDefaultBotSettingsFolderPath().resolve(fileName);
+        if(!fileExists(filePath)) {
+            BACKEND_INSTANCES.LOGGER.error("Default bot settings file does not exist: " + fileName);
+            return settings;
+        }
+        JsonElement jsonElement = loadJson(filePath);
+        if(jsonElement == null || !jsonElement.isJsonArray()) {
+            BACKEND_INSTANCES.LOGGER.error("Failed to load default bot settings from file: " + fileName);
+            return settings;
+        }
+        JsonArray jsonArray = jsonElement.getAsJsonArray();
+        for(JsonElement element : jsonArray) {
+            if(element.isJsonObject()) {
+                JsonObject jsonObject = element.getAsJsonObject();
+                ServerTradingBotFactory.BotBuilderContainer container = new ServerTradingBotFactory.BotBuilderContainer();
+                if(container.fromJson(jsonObject) && container.itemData != null && container.defaultSettings != null) {
                     settings.put(container.itemData.getItemID(), container.defaultSettings);
+                } else {
+                    BACKEND_INSTANCES.LOGGER.error("Invalid BotBuilderContainer in file: " + fileName);
+                }
+            } else {
+                BACKEND_INSTANCES.LOGGER.error("Invalid JSON element in file: " + fileName);
             }
-        } catch (JsonSyntaxException e) {
-            e.printStackTrace();
         }
         return settings;
     }
-    public boolean saveDefaultBotSettings(Map<ServerTradingBotFactory.ItemData, ServerTradingBotFactory.DefaultBotSettings> settingsMap, String fileName)
-    {
-        return saveAsJson(settingsMap, "DefaultBotSettings/"+fileName);
-    }
+
     public boolean saveDefaultBotSettings(ArrayList<ServerTradingBotFactory.BotBuilderContainer> settings, String fileName)
     {
-        return saveAsJson(settings, "DefaultBotSettings/"+fileName);
-    }
-
-    public boolean fileExists(String fileName) {
-        File file = new File(getSaveFolder(), fileName);
-        return file.exists();
-    }
-
-    public List<Path> getJsonFiles(Path path) {
-        try {
-            return Files.list(path) // List files
-                    .filter(Files::isRegularFile)       // Keep only regular files
-                    .filter(_path -> _path.toString().endsWith(".json")) // Keep only .json files
-                    .collect(Collectors.toList()); // Convert to List
-        } catch (IOException e) {
-            //e.printStackTrace();
-            return List.of(); // Return empty list on error
+        JsonArray jsonArray = new JsonArray();
+        for(ServerTradingBotFactory.BotBuilderContainer container : settings) {
+            jsonArray.add(container.toJson());
         }
+        return saveJson(jsonArray, getDefaultBotSettingsFolderPath().resolve(fileName));
     }
 
 
 
-    private CompoundTag readDataCompound(String fileName)
-    {
-        CompoundTag dataOut = new CompoundTag();
-        File file = new File(saveFolder, fileName);
-        if (file.exists()) {
-            try {
-                CompoundTag data;
 
-                if(COMPRESSED)
-                    data = NbtIo.readCompressed(file);
-                else
-                    data = NbtIo.read(file);
-
-                dataOut = data;
-                return dataOut;
-            } catch (IOException e) {
-                BACKEND_INSTANCES.LOGGER.error("Failed to read data from file: " + fileName, e);
-            } catch(Exception e)
-            {
-                BACKEND_INSTANCES.LOGGER.error("Failed to read data from file: " + fileName, e);
-            }
-        }
-        return null;
-    }
-    public boolean saveDataCompound(String fileName, CompoundTag data) {
-        long startMillis = System.currentTimeMillis();
-        boolean success = true;
-        File file = new File(saveFolder, fileName);
-        try {
-            if (COMPRESSED)
-                NbtIo.writeCompressed(data, file);
-            else
-                NbtIo.write(data, file);
-        } catch (IOException e) {
-            BACKEND_INSTANCES.LOGGER.error("Failed to save data to file: " + fileName, e);
-            success = false;
-        } catch(Exception e)
-        {
-            BACKEND_INSTANCES.LOGGER.error("Failed to save data to file: " + fileName, e);
-            success = false;
-        }
-        long endMillis = System.currentTimeMillis();
-        BACKEND_INSTANCES.LOGGER.info("Saving data to file: " + fileName + " took " + (endMillis - startMillis) + "ms");
-        return success;
-    }
-
-    public boolean saveAsJson(Object o, String fileName)
-    {
-        String json = GSON.toJson(o);
-        try {
-            Path path = Paths.get(getSaveFolder()+"/"+fileName);
-            Files.createDirectories(path.getParent());
-            Files.writeString(Paths.get(getSaveFolder()+"/"+fileName), json);
-        } catch (Exception e) {
-            e.printStackTrace();
-            return false;
-        }
-        return true;
-    }
-    public <T> T loadFromJson(String fileName, Type typeOfT) throws JsonSyntaxException {
-        try {
-            // Read JSON content
-            String json = Files.readString(Paths.get(getSaveFolder()+"/"+fileName));
-            return (T) GSON.fromJson(json, TypeToken.get(typeOfT));
-        } catch (Exception e) {
-            e.printStackTrace();
-            return null;
-        }
-    }
 }

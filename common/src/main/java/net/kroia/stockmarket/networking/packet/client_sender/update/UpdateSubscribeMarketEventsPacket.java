@@ -36,7 +36,7 @@ public class UpdateSubscribeMarketEventsPacket extends StockMarketNetworkPacket 
     }
 
     public static void generateRequest(ItemID itemID, boolean subscribe) {
-        new UpdateSubscribeMarketEventsPacket(itemID, subscribe);
+        new UpdateSubscribeMarketEventsPacket(itemID, subscribe).sendToServer();
     }
 
     public ItemID getItemID() {
