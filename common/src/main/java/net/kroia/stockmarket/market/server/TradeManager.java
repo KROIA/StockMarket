@@ -3,6 +3,7 @@ package net.kroia.stockmarket.market.server;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ServerSaveable;
 import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.market.clientdata.BotSettingsData;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBotFactory;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
@@ -12,6 +13,7 @@ import net.kroia.stockmarket.util.PriceHistory;
 import net.kroia.stockmarket.util.Timestamp;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.UUID;
@@ -34,6 +36,29 @@ public class TradeManager implements ServerSaveable {
         matchingEngine = new MatchingEngine(initialPrice, history);
         priceHistory = history;
     }
+
+    public @Nullable BotSettingsData getBotSettingsData()
+    {
+        if(tradingBot == null)
+            return null;
+        if(tradingBot instanceof ServerVolatilityBot volatilityBot)
+        {
+            return new BotSettingsData(itemID, (ServerVolatilityBot.Settings)volatilityBot.getSettings());
+        }
+        return null;
+    }
+    void setBotSettingsData(BotSettingsData botSettingsData)
+    {
+        if(tradingBot == null)
+            return;
+        if(tradingBot instanceof ServerVolatilityBot volatilityBot)
+        {
+            ServerVolatilityBot.Settings settings = botSettingsData.toSettings();
+            volatilityBot.setSettings(settings);
+        }
+    }
+
+
 
     public void onServerTick(MinecraftServer server)
     {

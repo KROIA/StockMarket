@@ -5,6 +5,7 @@ import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.ServerSaveable;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.market.clientdata.BotSettingsData;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBotFactory;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
@@ -52,6 +53,25 @@ public class ServerStockMarketManager implements ServerSaveable
         {
             addTradeItemIfNotExists(item.getKey(), item.getValue());
         }
+    }
+
+    public BotSettingsData getBotSettingsData(ItemID itemID)
+    {
+        ServerTradeItem item = tradeItems.get(itemID);
+        if(item == null)
+        {
+            return null;
+        }
+        return item.getBotSettingsData();
+    }
+    public void setBotSettingsData(ItemID itemID, BotSettingsData botSettingsData)
+    {
+        ServerTradeItem item = tradeItems.get(itemID);
+        if(item == null)
+        {
+            return;
+        }
+        item.setBotSettingsData(botSettingsData);
     }
 
     public void clear()

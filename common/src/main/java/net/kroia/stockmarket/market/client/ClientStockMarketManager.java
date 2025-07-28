@@ -2,6 +2,7 @@ package net.kroia.stockmarket.market.client;
 
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.market.clientdata.BotSettingsData;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.networking.packet.client_sender.request.RequestBotSettingsPacket;
@@ -16,6 +17,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Consumer;
 
 public class ClientStockMarketManager {
 
@@ -266,7 +268,7 @@ public class ClientStockMarketManager {
 
     public void handlePacket(SyncBotSettingsPacket packet)
     {
-        syncBotSettingsPacket = packet;
+        //syncBotSettingsPacket = packet;
         syncBotSettingsPacketChanged = true;
     }
     public boolean hasSyncBotSettingsPacketChanged()
@@ -346,5 +348,12 @@ public class ClientStockMarketManager {
     public ArrayList<ItemID> getAvailableTradeItemIdList()
     {
         return new ArrayList<>(tradeItems.keySet());
+    }
+
+
+
+
+    public void requestBotSettings(ItemID itemID, Consumer<BotSettingsData> callback) {
+        //RequestBotSettingsPacket.sendPacket(itemID, callback);
     }
 }
