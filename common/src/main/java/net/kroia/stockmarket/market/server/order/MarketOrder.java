@@ -1,39 +1,21 @@
 package net.kroia.stockmarket.market.server.order;
 
-import net.kroia.banksystem.util.ItemID;
-import net.kroia.stockmarket.market.server.ServerStockMarketManager;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import net.kroia.stockmarket.util.ServerPlayerList;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.server.level.ServerPlayer;
 
 import java.util.UUID;
 
 public class MarketOrder extends Order {
 
 
-    public static MarketOrder create(ServerPlayer player, ItemID itemID, ItemID currencyItemID, int amount)
-    {
-        int currentPrice = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getPrice(itemID);
-        if(Order.tryReserveBankFund(player, itemID, amount, currentPrice)) {
 
-            return new MarketOrder(player.getUUID(), itemID, currencyItemID, amount, currentPrice);
-        }
-        return null;
+    MarketOrder(UUID playerUUID, long amount, long lockedMoney) {
+        super(playerUUID, amount, lockedMoney);
     }
-    public static MarketOrder createBotOrder(ItemID itemID, ItemID currencyItemID, int amount)
-    {
-        int currentPrice = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getPrice(itemID);
-        return new MarketOrder(null, itemID, currencyItemID, amount, currentPrice,true);
-    }
-    protected MarketOrder(UUID playerUUID, ItemID itemID, ItemID currencyItemID, int amount, int currentPrice) {
-        super(playerUUID, itemID, currencyItemID, amount);
-        if(amount > 0)
-            this.lockedMoney = (long) Math.abs(amount) * currentPrice;
-    }
-    protected MarketOrder(UUID playerUUID, ItemID itemID, ItemID currencyItemID, int amount, int currentPrice, boolean isBot) {
-        super(playerUUID, itemID, currencyItemID, amount, isBot);
-        if(amount > 0)
-            this.lockedMoney = (long) Math.abs(amount) * currentPrice;
+    MarketOrder(long amount) {
+        super(amount);
     }
 
     public MarketOrder(FriendlyByteBuf buf)
@@ -75,15 +57,27 @@ public class MarketOrder extends Order {
     }
 
     @Override
-    public void toBytes(FriendlyByteBuf buf)
+    public void encode(FriendlyByteBuf buf)
     {
         Type type = Type.MARKET;
         buf.writeUtf(type.toString());
-        super.toBytes(buf);
+        super.encode(buf);
+    }
+
+    @Override
+    public void decode(FriendlyByteBuf buf) {
+        super.decode(buf);
     }
 
     @Override
     public void copyFrom(Order other) {
         super.copyFrom(other);
+    }
+
+    @Override
+    public JsonElement toJson() {
+        JsonObject json = (JsonObject) super.toJson();
+        json.addProperty("type", Type.MARKET.toString());
+        return json;
     }
 }

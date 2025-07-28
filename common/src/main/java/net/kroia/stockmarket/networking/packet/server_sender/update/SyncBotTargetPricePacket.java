@@ -1,9 +1,6 @@
 package net.kroia.stockmarket.networking.packet.server_sender.update;
 
-import net.kroia.stockmarket.util.StockMarketNetworkPacket;
-import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.server.level.ServerPlayer;
-
+/*
 public class SyncBotTargetPricePacket extends StockMarketNetworkPacket {
 
     int targetPrice;
@@ -43,3 +40,4 @@ public class SyncBotTargetPricePacket extends StockMarketNetworkPacket {
         BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.handlePacket(this);
     }
 }
+*/

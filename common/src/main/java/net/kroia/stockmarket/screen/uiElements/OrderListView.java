@@ -5,11 +5,14 @@ import net.kroia.modutilities.gui.elements.VerticalListView;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.kroia.stockmarket.StockMarketModBackend;
-import net.kroia.stockmarket.market.server.order.Order;
+import net.kroia.stockmarket.market.clientdata.OrderReadData;
+import net.kroia.stockmarket.market.clientdata.OrderReadListData;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
+import java.util.function.Consumer;
 
 public class OrderListView extends GuiElement {
     protected static StockMarketModBackend.Instances BACKEND_INSTANCES;
@@ -22,9 +25,11 @@ public class OrderListView extends GuiElement {
     private final Label filledLabel;
     private final Label priceLabel;
     private final VerticalListView activeOrderListView;
-    public OrderListView()
+    private final Consumer<OrderReadData> onCancelOrder;
+    public OrderListView(Consumer<OrderReadData> onCancelOrder)
     {
         super();
+        this.onCancelOrder = onCancelOrder;
         activeOrderListView = new VerticalListView(0,0,0,0);
         directionLabel = new Label(TradeScreen.DIRECTION_LABEL.getString());
         amountLabel = new Label(TradeScreen.AMOUNT_LABEL.getString());
@@ -72,40 +77,39 @@ public class OrderListView extends GuiElement {
     }
 
 
-    public void updateActiveOrders()
+    public void updateActiveOrders(OrderReadListData orderList)
     {
-        ArrayList<Order> orders = BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getOrders(TradeScreen.getItemID());
+        List<OrderReadData> orders = orderList.orders;
+        //ArrayList<Order> orders = BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getOrders(TradeScreen.getItemID());
         HashMap<Long,Integer> stillActiveOrderIds = new HashMap<>();
         ArrayList<GuiElement> elements = activeOrderListView.getChilds();
 
-        for (Order item : orders) {
-            long orderID = item.getOrderID();
-            stillActiveOrderIds.put(orderID, 1);
+        for (OrderReadData item : orders) {
+            stillActiveOrderIds.put(item.orderID, 1);
         }
         for (int i = 0; i < elements.size(); ++i) {
             if (elements.get(i) instanceof OrderView view) {
-                Order order = view.getOrder();
-                if(!stillActiveOrderIds.containsKey(order.getOrderID()))
+                OrderReadData order = view.getOrder();
+                if(!stillActiveOrderIds.containsKey(order.orderID))
                 {
                     activeOrderListView.removeChild(view);
                     elements = activeOrderListView.getChilds();
                     i--;
                 }
                 else {
-                    for (Order value : orders) {
-                        if (value.getOrderID() == order.getOrderID()) {
+                    for (OrderReadData value : orders) {
+                        if (value.orderID == order.orderID) {
                             view.setOrder(value);
                             break;
                         }
                     }
                 }
-                stillActiveOrderIds.put(order.getOrderID(), 2);
+                stillActiveOrderIds.put(order.orderID, 2);
             }
         }
-        for (Order order : orders) {
-            long orderID = order.getOrderID();
-            if (stillActiveOrderIds.get(orderID) == 1) {
-                OrderView orderView = new OrderView(order);
+        for (OrderReadData order : orders) {
+            if (stillActiveOrderIds.get(order.orderID) == 1) {
+                OrderView orderView = new OrderView(order, onCancelOrder);
                 activeOrderListView.addChild(orderView);
             }
         }

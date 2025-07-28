@@ -3,9 +3,10 @@ package net.kroia.stockmarket.market.server;
 import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.api.IBankUser;
 import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.PlayerUtilities;
-import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.util.StockMarketTextMessages;
 
@@ -21,17 +22,17 @@ public class TransactionEngine {
         BACKEND_INSTANCES = backend;
     }
 
-    public static int fill(Order o1, Order o2, int currentPrice)
+    public static long fill(TradingPair pair, Order o1, Order o2, int currentPrice)
     {
-        int fillAmount1 = o1.getAmount() - o1.getFilledAmount();
-        int fillAmount2 = o2.getAmount() - o2.getFilledAmount();
+        long fillAmount1 = o1.getPendingAmount();
+        long fillAmount2 = o2.getPendingAmount();
         if(fillAmount1 > 0 && fillAmount2 > 0 || fillAmount1 < 0 && fillAmount2 < 0)
         {
             // same sign -> both buy or both sell
             return 0;
         }
-        int fillVolume = Math.min(Math.abs(fillAmount1), Math.abs(fillAmount2));
-        int fillAmount = fillVolume;
+        long fillVolume = Math.min(Math.abs(fillAmount1), Math.abs(fillAmount2));
+        long fillAmount = fillVolume;
         if(fillAmount1 < 0)
             fillAmount = -fillVolume;
 
@@ -41,10 +42,10 @@ public class TransactionEngine {
         UUID playerUUID2 = o2.getPlayerUUID();
         IBankUser user1 = (playerUUID1!=null?BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getUser(playerUUID1):null);
         IBankUser user2 = (playerUUID2!=null?BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getUser(playerUUID2):null);
-        IBank moneyBank1 = (user1!=null?user1.getBank(o1.getCurrencyItemID()):null);
-        IBank moneyBank2 = (user2!=null?user2.getBank(o2.getCurrencyItemID()):null);
-        IBank itemBank1 = (user1!=null?user1.getBank(o1.getItemID()):null);
-        IBank itemBank2 = (user2!=null?user2.getBank(o2.getItemID()):null);
+        IBank moneyBank1 = (user1!=null?user1.getBank(pair.getCurrency()):null);
+        IBank moneyBank2 = (user2!=null?user2.getBank(pair.getCurrency()):null);
+        IBank itemBank1 = (user1!=null?user1.getBank(pair.getItem()):null);
+        IBank itemBank2 = (user2!=null?user2.getBank(pair.getItem()):null);
 
         UUID senderUUID = fillAmount > 0 ? playerUUID1 : playerUUID2;
         UUID receiverUUID = fillAmount > 0 ? playerUUID2 : playerUUID1;
@@ -54,6 +55,7 @@ public class TransactionEngine {
         IBank receiverItemBank = fillAmount > 0 ? itemBank1 : itemBank2;
         Order senderOrder = fillAmount > 0 ? o1 : o2;
         Order receiverOrder = fillAmount > 0 ? o2 : o1;
+        ItemID senderItemID = fillAmount > 0 ? pair.getItem() : pair.getCurrency();
 
         if(senderOrder.isBot() && receiverOrder.isBot())
         {
@@ -177,7 +179,7 @@ public class TransactionEngine {
                     if (missingMoney > 0)
                         missingText += "\n " + StockMarketTextMessages.getMissingMoneyMessage(missingMoney);
                     if (missingItems > 0)
-                        missingText += "\n  " + StockMarketTextMessages.getMissingItemsMessage(senderOrder.getItemID().getName(), missingItems);
+                        missingText += "\n  " + StockMarketTextMessages.getMissingItemsMessage(senderItemID.getName(), missingItems);
 
                     PlayerUtilities.printToClientConsole(senderMoneyBank.getPlayerUUID(), StockMarketTextMessages.getInsufficientFundToConsumeMessage(receiverOrder.toString(), currentPrice, fillVolume, money) + missingText);
 
@@ -203,7 +205,7 @@ public class TransactionEngine {
         }
         return fillVolume;
     }
-    public static int ghostFill(Order o1, int ghostAmount, int currentPrice)
+    public static long ghostFill(TradingPair pair, Order o1, long ghostAmount, int currentPrice)
     {
         if(ghostAmount == 0 || o1.getAmount()-o1.getFilledAmount() == 0)
             return 0;
@@ -213,8 +215,8 @@ public class TransactionEngine {
             return 0;
         }
 
-        int fillAmount1 = o1.getAmount() - o1.getFilledAmount();
-        int fillVolume = Math.min(Math.abs(fillAmount1), Math.abs(ghostAmount));
+        long fillAmount1 = o1.getPendingAmount();
+        long fillVolume = Math.min(Math.abs(fillAmount1), Math.abs(ghostAmount));
         long money = (long)fillVolume * (long)currentPrice;
 
         if(o1.isBot())
@@ -227,14 +229,14 @@ public class TransactionEngine {
         }
 
         long transferedMoney = 0;
-        int fillAmount = fillVolume;
+        long fillAmount = fillVolume;
         if(fillAmount1 < 0)
             fillAmount = -fillVolume;
 
         UUID playerUUID1 = o1.getPlayerUUID();
         IBankUser user1 = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getUser(playerUUID1);
-        IBank moneyBank1 = user1.getBank(o1.getCurrencyItemID());
-        IBank itemBank1 = user1.getBank(o1.getItemID());
+        IBank moneyBank1 = user1.getBank(pair.getCurrency());
+        IBank itemBank1 = user1.getBank(pair.getItem());
 
         long moneyToTransfer = (long)fillVolume * (long)currentPrice;
         if(o1.isBuy())

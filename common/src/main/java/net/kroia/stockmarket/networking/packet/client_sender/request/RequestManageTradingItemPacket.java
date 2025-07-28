@@ -1,13 +1,6 @@
 package net.kroia.stockmarket.networking.packet.client_sender.request;
 
-import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.PlayerUtilities;
-import net.kroia.stockmarket.networking.packet.server_sender.update.SyncTradeItemsPacket;
-import net.kroia.stockmarket.util.StockMarketNetworkPacket;
-import net.kroia.stockmarket.util.StockMarketTextMessages;
-import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.server.level.ServerPlayer;
-
+/*
 public class RequestManageTradingItemPacket extends StockMarketNetworkPacket {
 
     public enum Mode
@@ -93,3 +86,4 @@ public class RequestManageTradingItemPacket extends StockMarketNetworkPacket {
         SyncTradeItemsPacket.sendPacket(sender);
     }
 }
+*/

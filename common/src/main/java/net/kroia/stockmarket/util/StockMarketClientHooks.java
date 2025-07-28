@@ -1,7 +1,6 @@
 package net.kroia.stockmarket.util;
 
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
-import net.kroia.stockmarket.screen.custom.BotSettingsScreen;
 import net.kroia.stockmarket.screen.custom.StockMarketManagementScreen;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
 import net.minecraft.client.Minecraft;
@@ -33,10 +32,12 @@ public class StockMarketClientHooks {
     }
     public static void openBotSettingsScreen()
     {
-        Minecraft.getInstance().submit(()->{BotSettingsScreen.openScreen();});
+        System.out.println("NOT_IMPLEMENTED Opening Bot Settings Screen");
+       // Minecraft.getInstance().submit(()->{BotSettingsScreen.openScreen();});
     }
     public static void openStockMarketManagementScreen()
     {
+        //System.out.println("NOT_IMPLEMENTED Opening Bot Settings Screen");
         Minecraft.getInstance().submit(()->{
             StockMarketManagementScreen.openScreen();});
     }

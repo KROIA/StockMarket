@@ -5,9 +5,11 @@ import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.stockmarket.StockMarketModBackend;
-import net.kroia.stockmarket.market.server.order.LimitOrder;
+import net.kroia.stockmarket.market.clientdata.OrderReadData;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
+
+import java.util.function.Consumer;
 
 public class OrderView extends GuiElement {
     protected static StockMarketModBackend.Instances BACKEND_INSTANCES;
@@ -35,16 +37,20 @@ public class OrderView extends GuiElement {
     private final int cancelHoverColor = 0xFFf2a45c; // Light Orange
     private final int cancelDownColor = 0xFFd6370b; // Dark Orange
 
-    private Order order;
+    private OrderReadData order;
 
-    public OrderView(Order order) {
+    public OrderView(OrderReadData order, Consumer<OrderReadData> onCancelOrder) {
         super(0,0,0,20);
         this.order = order;
         directionLabel = new Label();
         amountLabel = new Label();
         filledLabel = new Label();
         priceLabel = new Label();
-        cancelButton = new Button(TradeScreen.CANCEL.getString(), this::onCancelOrder);
+        cancelButton = new Button(TradeScreen.CANCEL.getString(), () -> {
+            if(onCancelOrder != null) {
+                onCancelOrder.accept(order);
+            }
+        });
 
         directionLabel.setAlignment(alignment);
         amountLabel.setAlignment(alignment);
@@ -66,7 +72,7 @@ public class OrderView extends GuiElement {
     }
 
 
-    public void setOrder(Order order) {
+    public void setOrder(OrderReadData order) {
         this.order = order;
 
         if(order.isBuy())
@@ -79,21 +85,16 @@ public class OrderView extends GuiElement {
             directionLabel.setText(TradeScreen.SELL.getString());
             setBackgroundColor(TradeScreen.colorRed);
         }
-        amountLabel.setText(MoneyBank.getNormalizedAmount(Math.abs(order.getAmount())));
-        if(order instanceof LimitOrder limitOrder) {
-            priceLabel.setText(String.valueOf(limitOrder.getPrice()));
+        amountLabel.setText(MoneyBank.getNormalizedAmount(Math.abs(order.amount)));
+        if(order.type == Order.Type.LIMIT) {
+            priceLabel.setText(String.valueOf(order.limitPrice));
         }
         else {
             priceLabel.setText("Market");
         }
     }
-    public Order getOrder() {
+    public OrderReadData getOrder() {
         return order;
-    }
-
-    private void onCancelOrder()
-    {
-        BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.cancelOrder(order);
     }
 
     @Override
@@ -116,7 +117,7 @@ public class OrderView extends GuiElement {
 
     @Override
     protected void render() {
-        filledLabel.setText(MoneyBank.getNormalizedAmount(Math.abs(order.getFilledAmount())));
+        filledLabel.setText(MoneyBank.getNormalizedAmount(Math.abs(order.filledAmount)));
     }
 
 }

@@ -1,13 +1,14 @@
 package net.kroia.stockmarket.market.clientdata;
 
-import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.INetworkPayloadEncoder;
+import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import net.minecraft.network.FriendlyByteBuf;
+import org.jetbrains.annotations.NotNull;
 
 public class BotSettingsData implements INetworkPayloadEncoder {
 
-    public ItemID itemID; // The item ID of the bot item, used to identify the bot
+    public final TradingPairData tradingPairData;
 
 
     public boolean enabled;
@@ -27,8 +28,8 @@ public class BotSettingsData implements INetworkPayloadEncoder {
     public float volatility; // 0-1 or higher
     public int targetPrice = 0; //Just for visualisation on the bot settings menu
 
-    public BotSettingsData(ItemID itemID, ServerVolatilityBot.Settings settings) {
-        this.itemID = itemID;
+    public BotSettingsData(@NotNull TradingPair pair, @NotNull ServerVolatilityBot.Settings settings) {
+        this.tradingPairData = new TradingPairData(pair);
         this.enabled = settings.enabled;
         this.updateTimerIntervallMS = settings.updateTimerIntervallMS;
         this.defaultPrice = settings.defaultPrice;
@@ -49,7 +50,7 @@ public class BotSettingsData implements INetworkPayloadEncoder {
 
     public BotSettingsData(FriendlyByteBuf buf)
     {
-        this.itemID = new ItemID(buf.readItem());
+        this.tradingPairData = TradingPairData.decode(buf);
         this.enabled = buf.readBoolean();
         this.updateTimerIntervallMS = buf.readLong();
         this.defaultPrice = buf.readInt();
@@ -70,7 +71,7 @@ public class BotSettingsData implements INetworkPayloadEncoder {
 
     @Override
     public void encode(FriendlyByteBuf buf) {
-        buf.writeItem(itemID.getStack());
+        tradingPairData.encode(buf);
 
         buf.writeBoolean(enabled);
         buf.writeLong(updateTimerIntervallMS);

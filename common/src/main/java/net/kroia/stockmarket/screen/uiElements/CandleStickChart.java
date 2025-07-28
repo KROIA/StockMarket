@@ -2,13 +2,15 @@ package net.kroia.stockmarket.screen.uiElements;
 
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.stockmarket.StockMarketModBackend;
-import net.kroia.stockmarket.market.server.order.LimitOrder;
+import net.kroia.stockmarket.market.clientdata.OrderReadData;
+import net.kroia.stockmarket.market.clientdata.OrderReadListData;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
 import net.kroia.stockmarket.util.PriceHistory;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 
 public class CandleStickChart extends GuiElement {
     protected static StockMarketModBackend.Instances BACKEND_INSTANCES;
@@ -54,7 +56,7 @@ public class CandleStickChart extends GuiElement {
 
         for(LimitOrderInChartDisplay display : limitOrderDisplays.values())
         {
-            display.setY(getChartYPos(display.getOrder().getPrice()));
+            display.setY(getChartYPos(display.getOrder().limitPrice));
         }
     }
 
@@ -139,7 +141,7 @@ public class CandleStickChart extends GuiElement {
         for(LimitOrderInChartDisplay display : limitOrderDisplays.values())
         {
             display.setWidth(getWidth()/2-5);
-            display.setPosition(getWidth()-display.getWidth(), getChartYPos(display.getOrder().getPrice()));
+            display.setPosition(getWidth()-display.getWidth(), getChartYPos(display.getOrder().limitPrice));
         }
     }
 
@@ -181,27 +183,28 @@ public class CandleStickChart extends GuiElement {
     }
 
 
-    public void updateOrderDisplay()
+    public void updateOrderDisplay(OrderReadListData orderList)
     {
-        ArrayList<Order> orders = BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getOrders(TradeScreen.getItemID());
+        List<OrderReadData> orders = orderList.orders;
+        //ArrayList<Order> orders = BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getOrders(TradeScreen.getItemID());
         HashMap<Long,Integer> stillActiveOrderIds = new HashMap<>();
         ArrayList<Long> forRemoval = new ArrayList<>();
 
         for(int j=0; j<orders.size(); ++j)
         {
-            long orderID = orders.get(j).getOrderID();
+            long orderID = orders.get(j).orderID;
             stillActiveOrderIds.put(orderID, 1);
         }
 
         for(LimitOrderInChartDisplay display : limitOrderDisplays.values())
         {
-            if(!stillActiveOrderIds.containsKey(display.getOrder().getOrderID()))
+            if(!stillActiveOrderIds.containsKey(display.getOrder().orderID))
             {
-                forRemoval.add(display.getOrder().getOrderID());
+                forRemoval.add(display.getOrder().orderID);
             }
             else
             {
-                stillActiveOrderIds.put(display.getOrder().getOrderID(), 2);
+                stillActiveOrderIds.put(display.getOrder().orderID, 2);
             }
         }
         for(Long orderID : forRemoval)
@@ -211,20 +214,26 @@ public class CandleStickChart extends GuiElement {
         }
         for(int j=0; j<orders.size(); ++j)
         {
-            Order order = orders.get(j);
-            if(order instanceof LimitOrder limitOrder)
+            OrderReadData order = orders.get(j);
+            if(order.type == Order.Type.LIMIT)
             {
-                long orderID = limitOrder.getOrderID();
+                long orderID = order.orderID;
                 if(stillActiveOrderIds.get(orderID) == 1)
                 {
-                    LimitOrderInChartDisplay orderView = new LimitOrderInChartDisplay(this::getPriceFromYPos, limitOrder);
+                    LimitOrderInChartDisplay orderView = new LimitOrderInChartDisplay(this::getPriceFromYPos, order, this::onOrderReplacedToNewPrice);
                     orderView.setWidth(getWidth()/2-5);
-                    orderView.setPosition(getWidth()-orderView.getWidth(), getChartYPos(limitOrder.getPrice()));
+                    orderView.setPosition(getWidth()-orderView.getWidth(), getChartYPos(order.limitPrice));
                     limitOrderDisplays.put(orderID, orderView);
                     addChild(orderView);
                 }
             }
         }
+    }
+
+    private void onOrderReplacedToNewPrice(OrderReadData order, Integer newPrice)
+    {
+        BACKEND_INSTANCES.LOGGER.warn("NOT_IMPLEMENTED: onOrderReplacedToNewPrice called for order: " + order.orderID + " with new price: " + newPrice);
+       // BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.changeOrderPrice(order.getItemID(), order.getOrderID(), newPrice);
     }
 
     public int getChartYPos(int price)

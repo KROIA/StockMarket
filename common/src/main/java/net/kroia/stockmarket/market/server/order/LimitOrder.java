@@ -1,12 +1,11 @@
 package net.kroia.stockmarket.market.server.order;
 
-import net.kroia.banksystem.banking.bank.Bank;
-import net.kroia.banksystem.util.ItemID;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import net.kroia.modutilities.ServerSaveable;
 import net.kroia.stockmarket.util.ServerPlayerList;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.server.level.ServerPlayer;
 
 import java.util.UUID;
 
@@ -16,44 +15,27 @@ import java.util.UUID;
 public class LimitOrder extends Order implements ServerSaveable {
     private int price;
 
-    public static LimitOrder create(ServerPlayer player, ItemID itemID, ItemID currencyItemID, int amount, int price)
-    {
-        if(Order.tryReserveBankFund(player, itemID, amount, price))
-            return new LimitOrder(player.getUUID(), itemID, currencyItemID, amount, price);
-        return null;
-    }
-    public static LimitOrder create(ServerPlayer player, ItemID itemID, ItemID currencyItemID, int amount, int price, int alreadyFilledAmount)
-    {
-        if(Order.tryReserveBankFund(player, itemID, amount-alreadyFilledAmount, price))
-            return new LimitOrder(player.getUUID(), itemID, currencyItemID, amount, price, alreadyFilledAmount);
-        return null;
-    }
-    public static LimitOrder createBotOrder(ItemID itemID, ItemID currencyItemID, int amount, int price)
-    {
-        return new LimitOrder(null, itemID, currencyItemID, amount, price, true);
-    }
-    protected LimitOrder(UUID playerUUID, ItemID itemID, ItemID currencyItemID, int amount, int price) {
-        super(playerUUID, itemID, currencyItemID, amount);
+
+    LimitOrder(UUID playerUUID, long amount, int price, long lockedMoney) {
+        super(playerUUID, amount, lockedMoney);
         this.price = price;
-        if(amount > 0)
-            this.lockedMoney = (long) amount * price;
     }
-    protected LimitOrder(UUID playerUUID, ItemID itemID, ItemID currencyItemID, int amount, int price, int alreadyFilledAmount) {
-        super(playerUUID, itemID, currencyItemID, amount);
+    LimitOrder(UUID playerUUID, long amount, int price, long lockedMoney, long alreadyFilledAmount) {
+        super(playerUUID, amount, lockedMoney);
         this.price = price;
         this.filledAmount = alreadyFilledAmount;
-        if(amount > 0)
-            this.lockedMoney = (long) Math.abs(amount-alreadyFilledAmount) * price;
     }
-    protected LimitOrder(UUID playerUUID, ItemID itemID, ItemID currencyItemID, int amount, int price, boolean isBot) {
-        super(playerUUID, itemID, currencyItemID, amount, isBot);
+    LimitOrder(long amount, int price) {
+        super(amount);
         this.price = price;
-        if(amount > 0)
-            this.lockedMoney = (long) amount * price;
     }
     private LimitOrder()
     {
         super();
+    }
+
+    public void setPrice(int price) {
+        this.price = price;
     }
     public static LimitOrder loadFromTag(CompoundTag tag)
     {
@@ -66,7 +48,6 @@ public class LimitOrder extends Order implements ServerSaveable {
     public LimitOrder(FriendlyByteBuf buf)
     {
         super(buf);
-        price = buf.readInt();
     }
 
     @Override
@@ -102,12 +83,18 @@ public class LimitOrder extends Order implements ServerSaveable {
     }
 
     @Override
-    public void toBytes(FriendlyByteBuf buf)
+    public void encode(FriendlyByteBuf buf)
     {
         Type type = Type.LIMIT;
         buf.writeUtf(type.toString());
-        super.toBytes(buf);
+        super.encode(buf);
         buf.writeInt(price);
+    }
+
+    @Override
+    public void decode(FriendlyByteBuf buf) {
+        super.decode(buf);
+        price = buf.readInt();
     }
 
     @Override
@@ -123,57 +110,33 @@ public class LimitOrder extends Order implements ServerSaveable {
 
     @Override
     public boolean save(CompoundTag tag) {
-        tag.putLong("orderID", orderID);
-        CompoundTag itemIDTag = new CompoundTag();
-        itemID.save(itemIDTag);
-        tag.put("itemID", itemIDTag);
-        tag.putUUID("playerUUID", playerUUID);
+        if(!super.save(tag))
+            return false;
         tag.putInt("price", price);
-        tag.putInt("amount", amount);
-        tag.putInt("filledAmount", filledAmount);
-        tag.putLong("transferedMoney", transferedMoney);
-        tag.putString("status", status.toString());
-        tag.putString("invalidReason", invalidReason);
-        tag.putBoolean("isBot", isBot);
         return true;
     }
 
     @Override
     public boolean load(CompoundTag tag) {
+        if(!super.load(tag))
+            return false;
+
+
         if(tag == null)
             return false;
-        if(     !tag.contains("orderID") ||
-                !tag.contains("itemID") ||
-                !tag.contains("playerUUID") ||
-                !tag.contains("price") ||
-                !tag.contains("amount") ||
-                !tag.contains("filledAmount") ||
-                !tag.contains("transferedMoney") ||
-                !tag.contains("status") ||
-                !tag.contains("invalidReason") ||
-                !tag.contains("isBot"))
+        if(!tag.contains("price"))
             return false;
-        orderID = tag.getLong("orderID");
 
-        // Backward compatibility
-        String oldItemID = tag.getString("itemID");
-        if(oldItemID.compareTo("")==0) {
-            CompoundTag itemIDTag = tag.getCompound("itemID");
-            itemID = new ItemID(itemIDTag);
-        }
-        else
-            itemID = new ItemID(oldItemID);
-
-        playerUUID = tag.getUUID("playerUUID");
         price = tag.getInt("price");
-        amount = tag.getInt("amount");
-        filledAmount = tag.getInt("filledAmount");
-        transferedMoney = tag.getLong("transferedMoney");
-        status = Status.valueOf(tag.getString("status"));
-        invalidReason = tag.getString("invalidReason");
-        isBot = tag.getBoolean("isBot");
         return true;
     }
 
 
+    @Override
+    public JsonElement toJson() {
+        JsonObject json = (JsonObject) super.toJson();
+        json.addProperty("type", Type.LIMIT.toString());
+        json.addProperty("price", price);
+        return json;
+    }
 }

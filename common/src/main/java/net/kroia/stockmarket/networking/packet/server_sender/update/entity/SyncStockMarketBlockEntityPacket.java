@@ -1,7 +1,7 @@
 package net.kroia.stockmarket.networking.packet.server_sender.update.entity;
 
-import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
+import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
 import net.kroia.stockmarket.util.StockMarketNetworkPacket;
 import net.minecraft.core.BlockPos;
@@ -10,7 +10,7 @@ import net.minecraft.server.level.ServerPlayer;
 
 public class SyncStockMarketBlockEntityPacket extends StockMarketNetworkPacket {
     private BlockPos pos;
-    private ItemID itemID;
+    private TradingPair tradingPair;
     private int amount;
     private int price;
 
@@ -19,7 +19,7 @@ public class SyncStockMarketBlockEntityPacket extends StockMarketNetworkPacket {
     public SyncStockMarketBlockEntityPacket(BlockPos pos, StockMarketBlockEntity blockEntity) {
         super();
         this.pos = pos;
-        this.itemID = blockEntity.getItemID();
+        this.tradingPair = blockEntity.getTradringPair();
         this.amount = blockEntity.getAmount();
         this.price = blockEntity.getPrice();
     }
@@ -33,8 +33,8 @@ public class SyncStockMarketBlockEntityPacket extends StockMarketNetworkPacket {
         return pos;
     }
 
-    public ItemID getItemID() {
-        return itemID;
+    public TradingPair getTradingPair() {
+        return tradingPair;
     }
 
     public int getAmount() {
@@ -53,7 +53,7 @@ public class SyncStockMarketBlockEntityPacket extends StockMarketNetworkPacket {
     public void encode(FriendlyByteBuf buf)
     {
         buf.writeBlockPos(pos);
-        buf.writeItem(itemID.getStack());
+        tradingPair.encode(buf);
         buf.writeInt(amount);
         buf.writeInt(price);
     }
@@ -61,7 +61,9 @@ public class SyncStockMarketBlockEntityPacket extends StockMarketNetworkPacket {
     public void decode(FriendlyByteBuf buf)
     {
         this.pos = buf.readBlockPos();
-        this.itemID = new ItemID(buf.readItem());
+        if(this.tradingPair == null)
+            this.tradingPair = new TradingPair();
+        this.tradingPair.decode(buf);
         this.amount = buf.readInt();
         this.price = buf.readInt();
     }

@@ -127,7 +127,7 @@ public class ServerTradingBotFactory {
             assert tag != null;
             ArrayList<EnchantmentData> ench = new ArrayList<>();
             int i = 0;
-            if (tag != null && tag.contains("StoredEnchantments", Tag.TAG_LIST)) {
+            if (tag.contains("StoredEnchantments", Tag.TAG_COMPOUND)) {
                 ListTag enchantments = tag.getList("StoredEnchantments", Tag.TAG_COMPOUND);
                 for (Tag enchantmentTag : enchantments) {
                     CompoundTag enchantment = (CompoundTag) enchantmentTag;
@@ -363,7 +363,7 @@ public class ServerTradingBotFactory {
         }
     }
 
-    public static ServerTradingBot loadFromTag(CompoundTag tag)
+    /*public static ServerTradingBot loadFromTag(CompoundTag tag)
     {
         if(tag == null)
             return null;
@@ -387,7 +387,7 @@ public class ServerTradingBotFactory {
         }
 
         return null;
-    }
+    }*/
 
     public static class BotBuilderContainer
     {

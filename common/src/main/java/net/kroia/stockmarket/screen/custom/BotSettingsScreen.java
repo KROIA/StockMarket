@@ -1,37 +1,6 @@
 package net.kroia.stockmarket.screen.custom;
 
-import dev.architectury.event.events.common.TickEvent;
-import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.gui.Gui;
-import net.kroia.modutilities.gui.GuiScreen;
-import net.kroia.modutilities.gui.elements.Button;
-import net.kroia.modutilities.gui.elements.CheckBox;
-import net.kroia.modutilities.gui.elements.ItemView;
-import net.kroia.modutilities.gui.elements.VerticalListView;
-import net.kroia.modutilities.gui.elements.base.GuiElement;
-import net.kroia.modutilities.gui.elements.base.ListView;
-import net.kroia.modutilities.gui.layout.LayoutVertical;
-import net.kroia.modutilities.gui.screens.ItemSelectionScreen;
-import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.StockMarketModBackend;
-import net.kroia.stockmarket.market.client.ClientTradeItem;
-import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
-import net.kroia.stockmarket.networking.packet.client_sender.request.RequestBotSettingsPacket;
-import net.kroia.stockmarket.networking.packet.client_sender.request.RequestBotTargetPricePacket;
-import net.kroia.stockmarket.networking.packet.client_sender.request.RequestTradeItemsPacket;
-import net.kroia.stockmarket.networking.packet.client_sender.update.UpdateBotSettingsPacket;
-import net.kroia.stockmarket.screen.custom.botsetup.BotSetupScreen;
-import net.kroia.stockmarket.screen.uiElements.BotSettingsWidget;
-import net.kroia.stockmarket.screen.uiElements.CandleStickChart;
-import net.kroia.stockmarket.screen.uiElements.OrderbookVolumeChart;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.network.chat.Component;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.ItemStack;
-
-import java.util.ArrayList;
-
+/*
 public class BotSettingsScreen extends GuiScreen {
     private static StockMarketModBackend.Instances BACKEND_INSTANCES;
     private class BotTargetPriceDisplay extends GuiElement{
@@ -71,7 +40,7 @@ public class BotSettingsScreen extends GuiScreen {
 
     private final ServerVolatilityBot.Settings settings;
 
-    private static ItemID itemID;
+    private static TradingPair tradingPair;
     private static BotSettingsScreen instance;
     private static long lastTickCount = 0;
 
@@ -104,7 +73,9 @@ public class BotSettingsScreen extends GuiScreen {
         parentScreen = parent;
         instance = this;
         settings = new ServerVolatilityBot.Settings();
-        RequestTradeItemsPacket.generateRequest();
+
+        BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.init();
+        //RequestTradeItemsPacket.generateRequest();
 
         // Create Gui Elements
         this.candleStickChart = new CandleStickChart();
@@ -192,8 +163,8 @@ public class BotSettingsScreen extends GuiScreen {
     public void onClose() {
         super.onClose();
         instance = null;
-        BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.unsubscribeMarketUpdate(itemID);
-        itemID = null;
+        //BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.unsubscribeMarketUpdate(itemID);
+        tradingPair = null;
         // Unregister the event listener when the screen is closed
         TickEvent.PLAYER_POST.unregister(BotSettingsScreen::onClientTick);
 
@@ -204,9 +175,9 @@ public class BotSettingsScreen extends GuiScreen {
     public static void updatePlotsData() {
         if(instance == null)
             return;
-        ClientTradeItem item = BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getTradeItem(instance.itemID);
+        ClientTradeItem item = BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getTradeItem(instance.tradingPair);
         if (item == null) {
-            BACKEND_INSTANCES.LOGGER.warn("Trade item not found: " + instance.itemID);
+            BACKEND_INSTANCES.LOGGER.warn("Trade item not found: " + instance.tradingPair);
             return;
         }
 
@@ -223,7 +194,7 @@ public class BotSettingsScreen extends GuiScreen {
         botSettingsWidget.setSettings(this.settings);
         saveButton.setOutlineColor(normalButtonColor);
         botExists = BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.botExists();
-        ClientTradeItem item = BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getTradeItem(itemID);
+        ClientTradeItem item = BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getTradeItem(tradingPair);
         marketOpenCheckBox.setChecked(item.isMarketOpen());
         useBotCheckBox.setChecked(botExists);
     }
@@ -236,27 +207,31 @@ public class BotSettingsScreen extends GuiScreen {
         if(currentTickCount - lastTickCount > 1000)
         {
             lastTickCount = currentTickCount;
-            if(itemID != null && itemID.isValid())
+            if(tradingPair != null && tradingPair.isValid())
             {
                 if(!instance.settingsReceived)
                 {
-                    RequestBotSettingsPacket.sendPacket(itemID);
+                    RequestBotSettingsPacket.sendPacket(tradingPair);
+
                 }
-                RequestBotTargetPricePacket.sendPacket(itemID);
+                getMarket().requestBotSettingsData((settingsData -> {
+                    instance.onItemSelected(settingsData.tradingPairData.toTradingPair());
+                }));
+                RequestBotTargetPricePacket.sendPacket(tradingPair);
             }
 
         }
         if(BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.hasSyncBotSettingsPacketChanged() && !instance.settingsReceived)
         {
             instance.settingsReceived = true;
-            if(itemID == null)
+            if(tradingPair == null)
             {
-                itemID = BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getBotSettingsItemID();
-                if(itemID == null)
+                tradingPair = BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getBotSettingsItemID();
+                if(tradingPair == null)
                     return;
-                instance.onItemSelected(itemID.getStack());
+                instance.onItemSelected(tradingPair.getStack());
             }
-            instance.setBotSettings(BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getBotSettings(itemID));
+            instance.setBotSettings(BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getBotSettings(tradingPair));
         }
         if(BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.hasSyncBotTargetPricePacketChanged())
         {
@@ -265,13 +240,13 @@ public class BotSettingsScreen extends GuiScreen {
     }
 
     private void onItemSelected(ItemStack istemStack) {
-        BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.unsubscribeMarketUpdate(itemID);
-        itemID = new ItemID(istemStack);
+        BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.unsubscribeMarketUpdate(tradingPair);
+        tradingPair = new ItemID(istemStack);
         settingsReceived = false;
         botSettingsWidget.clear();
-        RequestBotSettingsPacket.sendPacket(itemID);
-        BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.subscribeMarketUpdate(itemID);
-        currentItemView.setItemStack(itemID.getStack());
+        RequestBotSettingsPacket.sendPacket(tradingPair);
+        BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.subscribeMarketUpdate(tradingPair);
+        currentItemView.setItemStack(tradingPair.getStack());
     }
 
     private void onSelectItemButtonPressed() {
@@ -296,7 +271,7 @@ public class BotSettingsScreen extends GuiScreen {
         boolean marketOpen = marketOpenCheckBox.isChecked();
         boolean doDestroyBot = !useBotCheckBox.isChecked() && botExists;
         boolean doCreateBot = useBotCheckBox.isChecked() && !botExists;
-        UpdateBotSettingsPacket.sendPacket(itemID, botSettingsWidget.getSettings(), doDestroyBot, doCreateBot, marketOpen);
+        UpdateBotSettingsPacket.sendPacket(tradingPair, botSettingsWidget.getSettings(), doDestroyBot, doCreateBot, marketOpen);
         saveButton.setOutlineColor(normalButtonColor);
     }
 
@@ -321,4 +296,10 @@ public class BotSettingsScreen extends GuiScreen {
         botSetupScreen = null;
         Minecraft.getInstance().setScreen(this);
     }
+
+    private static ClientMarket getMarket()
+    {
+        return BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getClientMarket(tradingPair);
+    }
 }
+*/

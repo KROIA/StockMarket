@@ -3,24 +3,14 @@ package net.kroia.stockmarket.command;
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
-import com.mojang.brigadier.arguments.StringArgumentType;
-import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.stockmarket.StockMarketModBackend;
-import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
-import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import net.kroia.stockmarket.networking.packet.server_sender.update.OpenScreenPacket;
-import net.kroia.stockmarket.networking.packet.server_sender.update.SyncBotSettingsPacket;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncTradeItemsPacket;
-import net.kroia.stockmarket.util.ServerPlayerList;
 import net.kroia.stockmarket.util.StockMarketTextMessages;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
-
-import java.util.*;
 
 public class StockMarketCommands {
     private static StockMarketModBackend.Instances BACKEND_INSTANCES;
@@ -66,7 +56,7 @@ public class StockMarketCommands {
                                 })
                         )*/
                         .then(Commands.literal("setPriceCandleTimeInterval")
-                                .requires(source -> source.hasPermission(2))
+                                .requires(StockMarketCommands::isPlayerAdmin)
                                 .then(Commands.argument("seconds", IntegerArgumentType.integer(1))
                                         .executes(context -> {
                                             CommandSourceStack source = context.getSource();
@@ -75,13 +65,14 @@ public class StockMarketCommands {
                                             if(seconds < 0)
                                                 return Command.SINGLE_SUCCESS; // Do not allow negative values
                                             BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.SHIFT_PRICE_CANDLE_INTERVAL_MS.set(seconds * 1000L);
+                                            BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.setShiftPriceCandleIntervalMS(seconds * 1000L);
                                             // Execute the command on the server_sender
                                             return Command.SINGLE_SUCCESS;
                                         })
                                 )
                         )
-                        .then(Commands.literal("createDefaultBots")
-                                .requires(source -> source.hasPermission(2))
+                        /*.then(Commands.literal("createDefaultBots")
+                                .requires(StockMarketCommands::isPlayerAdmin)
                                 .executes(context -> {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
@@ -92,7 +83,7 @@ public class StockMarketCommands {
                                 })
                         )
                         .then(Commands.literal("createDefaultBots")
-                                .requires(source -> source.hasPermission(2))
+                                .requires(StockMarketCommands::isPlayerAdmin)
                                 .then(Commands.argument("category", StringArgumentType.string()).suggests((context, builder) -> {
                                                     List<String> suggestions = BACKEND_INSTANCES.SERVER_DATA_HANDLER.getDefaultBotSettingsFileNames();
                                                     for (String suggestion : suggestions) {
@@ -116,31 +107,8 @@ public class StockMarketCommands {
                                                 })
                                 )
                         )
-                        /*.then(Commands.literal("createDefaultBots_allItems")
-                                .requires(source -> source.hasPermission(2))
-                                .executes(context -> {
-                                    CommandSourceStack source = context.getSource();
-                                    ServerPlayer player = source.getPlayerOrException();
-                                    ArrayList<ItemID> items = ServerBankManager.getPotentialBankItemIDs();
-
-                                    try {
-                                        for(ItemID itemID : items)
-                                        {
-                                            ServerVolatilityBot bot = new ServerVolatilityBot();
-                                            if(BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.addTradeItemIfNotExists(itemID, 100))
-                                                BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.setTradingBot(itemID, bot);
-                                        }
-                                    } catch (Exception e) {
-                                        e.printStackTrace();
-                                    }
-
-                                    player.sendSystemMessage(Component.literal("Default bots created"));
-
-                                    return Command.SINGLE_SUCCESS;
-                                })
-                        )*/
                         .then(Commands.literal("createDefaultBot")
-                                .requires(source -> source.hasPermission(2))
+                                .requires(StockMarketCommands::isPlayerAdmin)
                                 .then(Commands.argument("itemID", StringArgumentType.string()).suggests((context, builder) -> {
                                                     Set<ItemID> suggestions = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET_BOT.getBotBuilder().keySet();
                                                     for (ItemID suggestion : suggestions) {
@@ -166,7 +134,7 @@ public class StockMarketCommands {
                                 )
                         )
                         .then(Commands.literal("removeMarkets")
-                                .requires(source -> source.hasPermission(2))
+                                .requires(StockMarketCommands::isPlayerAdmin)
                                 .then(Commands.argument("category", StringArgumentType.string()).suggests((context, builder) -> {
                                                     List<String> suggestions = BACKEND_INSTANCES.SERVER_DATA_HANDLER.getDefaultBotSettingsFileNames();
                                                     builder.suggest("All");
@@ -230,7 +198,7 @@ public class StockMarketCommands {
                                                     }
                                                     return builder.buildFuture();
                                                 })
-                                                .requires(source -> source.hasPermission(2))
+                                                .requires(StockMarketCommands::isPlayerAdmin)
                                                 .then(Commands.literal("cancelAll")
                                                         .executes(context -> {
                                                             CommandSourceStack source = context.getSource();
@@ -260,7 +228,7 @@ public class StockMarketCommands {
                                 )
                         )
                         .then(Commands.literal("BotSettingsGUI")
-                                .requires(source -> source.hasPermission(2))
+                                .requires(StockMarketCommands::isPlayerAdmin)
                                 .executes(context -> {
                                     ServerPlayer player = context.getSource().getPlayer();
                                     if(player != null) {
@@ -276,29 +244,20 @@ public class StockMarketCommands {
                                     }
                                     return Command.SINGLE_SUCCESS;
                                 })
-                        )
+                        )*/
                         .then(Commands.literal("ManagementGUI")
-                                .requires(source -> source.hasPermission(2))
+                                .requires(StockMarketCommands::isPlayerAdmin)
                                 .executes(context -> {
                                     ServerPlayer player = context.getSource().getPlayer();
                                     if(player != null) {
                                         SyncTradeItemsPacket.sendPacket(player);
                                         OpenScreenPacket.sendPacket(player, OpenScreenPacket.ScreenType.STOCKMARKET_MANAGEMENT);
-                                        /*
-                                        ArrayList<String> suggestions = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getTradeItemIDs();
-                                        if(!suggestions.isEmpty()) {
-                                            //String itemID = suggestions.get(0);
-                                            //SyncBotSettingsPacket.sendPacket(player, itemID, BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getBotUserUUID());
-                                            }
-                                        else {
-                                            PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getNoTradingItemAvailableMessage());
-                                        }*/
                                     }
                                     return Command.SINGLE_SUCCESS;
                                 })
                         )
-                        .then(Commands.literal("resetAllPriceCharts")
-                                .requires(source -> source.hasPermission(2))
+                        /*.then(Commands.literal("resetAllPriceCharts")
+                                .requires(StockMarketCommands::isPlayerAdmin)
                                 .executes(context -> {
                                     ServerPlayer player = context.getSource().getPlayer();
                                     if(player != null) {
@@ -314,7 +273,7 @@ public class StockMarketCommands {
                                             }
                                             return builder.buildFuture();
                                         })
-                                        .requires(source -> source.hasPermission(2))
+                                        .requires(StockMarketCommands::isPlayerAdmin)
                                         .then(Commands.literal("bot")
                                                 .then(Commands.literal("create")
                                                         .executes(context -> {
@@ -327,11 +286,17 @@ public class StockMarketCommands {
                                                                 return Command.SINGLE_SUCCESS;
                                                             }
                                                             ItemID itemID = new ItemID(itemIDStr);
-                                                            ServerTradingBot bot = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getTradingBot(itemID);
-                                                            if (bot == null) {
-                                                                ServerVolatilityBot volatilityBot = new ServerVolatilityBot();
-                                                                volatilityBot.setEnabled(false);
-                                                                BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.setTradingBot(itemID, volatilityBot);
+                                                            TradingPair pair = new TradingPair(itemID, BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getDefaultCurrencyItemID());
+                                                            ServerMarket market = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getMarket(pair);
+                                                            if(market == null) {
+                                                                PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getMarketplaceNotExistingMessage(itemIDStr));
+                                                                return Command.SINGLE_SUCCESS; // No market for this item, nothing to do
+                                                            }
+
+                                                            if (!market.hasVolatilityBot()) {
+                                                                ServerVolatilityBot.Settings settings = new ServerVolatilityBot.Settings();
+                                                                settings.enabled = false; // Default to enabled
+                                                                market.createVolatilityBot(settings);
                                                                 PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getBotCreatedMessage(itemIDStr));
                                                             } else {
                                                                 PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getBotAlreadyExistMessage(itemIDStr));
@@ -352,12 +317,18 @@ public class StockMarketCommands {
                                                                 return Command.SINGLE_SUCCESS;
                                                             }
                                                             ItemID itemID = new ItemID(itemIDStr);
-                                                            ServerTradingBot bot = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getTradingBot(itemID);
-                                                            if (bot == null) {
+                                                            TradingPair pair = new TradingPair(itemID, BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getDefaultCurrencyItemID());
+                                                            ServerMarket market = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getMarket(pair);
+                                                            if(market == null) {
+                                                                PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getBotNotExistMessage(itemIDStr));
+                                                                return Command.SINGLE_SUCCESS; // No market for this item, nothing to do
+                                                            }
+
+                                                            if (!market.hasVolatilityBot()) {
                                                                 PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getBotNotExistMessage(itemIDStr));
                                                             } else {
-                                                                BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.removeTradingBot(itemID);
-                                                                PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getBotDeletedMessage(itemIDStr));
+                                                                if(market.destroyVolatilityBot())
+                                                                    PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getBotDeletedMessage(itemIDStr));
                                                             }
                                                             // Execute the command on the server_sender
                                                             return Command.SINGLE_SUCCESS;
@@ -376,10 +347,11 @@ public class StockMarketCommands {
                                                     }
 
                                                     ItemID itemID = new ItemID(itemIDStr);
-                                                    if (BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.hasItem(itemID)) {
+                                                    TradingPair pair = new TradingPair(itemID, BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getDefaultCurrencyItemID());
+                                                    if (BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.marketExists(pair)) {
                                                         PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getMarketplaceAlreadyExistingMessage(itemIDStr));
                                                     } else {
-                                                        if(BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.addTradeItem(itemID, 0))
+                                                        if(BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.createMarket(itemID, 0))
                                                         {
                                                             // Notify all serverPlayers
                                                             PlayerUtilities.printToClientConsole(StockMarketTextMessages.getMarketplaceCreatedMessage(itemIDStr));
@@ -496,9 +468,9 @@ public class StockMarketCommands {
                                                 })
                                         )
 
-                        )
+                        )*/
                         .then(Commands.literal("save")
-                                .requires(source -> source.hasPermission(2))
+                                .requires(StockMarketCommands::isPlayerAdmin)
                                 .executes(context -> {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
@@ -515,7 +487,7 @@ public class StockMarketCommands {
                                 })
                         )
                         .then(Commands.literal("load")
-                                .requires(source -> source.hasPermission(2))
+                                .requires(StockMarketCommands::isPlayerAdmin)
                                 .executes(context -> {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
@@ -529,7 +501,7 @@ public class StockMarketCommands {
                                 })
                         )
                         .then(Commands.literal("closeAllMarkets")
-                                .requires(source -> source.hasPermission(2))
+                                .requires(StockMarketCommands::isPlayerAdmin)
                                 .executes(context -> {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
@@ -542,7 +514,7 @@ public class StockMarketCommands {
                                 })
                         )
                         .then(Commands.literal("openAllMarkets")
-                                .requires(source -> source.hasPermission(2))
+                                .requires(StockMarketCommands::isPlayerAdmin)
                                 .executes(context -> {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
@@ -556,154 +528,9 @@ public class StockMarketCommands {
                         )
         );
     }
-/*
-    private static void bot_set_setting(ServerPlayer executor, ServerVolatilityBot.Settings.Type settingsType, String itemID, double value)
-    {
-        ServerVolatilityBot bot = bot_set_setting_checkParams(executor, settingsType, itemID);
-        if (bot == null)
-            return;
-        switch (settingsType) {
-            case ENABLED:
-            {
-                boolean enabled = value > 0.5 && value < 1.5;
-                bot.setEnabled(enabled);
-                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingEnabledMessage(enabled));
-                break;
-            }
-            case MAX_ORDER_COUNT:
-            {
-                bot.setMaxOrderCount((int)value);
-                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingMaxOrderCountMessage((int)value));
-                break;
-            }
-            case VOLUME_RANDOMNESS:
-            {
-                bot.setVolumeRandomness(value);
-                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingVolumeRandomnessMessage(value));
-                break;
-            }
-            case VOLUME_SCALE:
-            {
-                bot.setVolumeScale(value);
-                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingVolumeScaleMessage(value));
-                break;
-            }
-            case VOLUME_SPREAD:
-            {
-                bot.setVolumeSpread(value);
-                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingVolumeSpreadMessage(value));
-                break;
-            }
-            case UPDATE_INTERVAL:
-            {
-                bot.setUpdateInterval((long)value);
-                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingUpdateIntervalMessage((long)value));
-                break;
-            }
-            case VOLATILITY:
-            {
-                bot.setVolatility(value);
-                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingVolatilityMessage(value));
-                break;
-            }
-            case ORDER_RANDOMNESS:
-            {
-                bot.setOrderRandomness(value);
-                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingOrderRandomnessMessage(value));
-                break;
-            }
-            case INTEGRATED_ERROR:
-            {
-                bot.setintegratedError(value);
-                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingIntegratedMessage(value));
-                break;
-            }
-            case TARGET_ITEM_BALANCE:
-            {
-                bot.setTargetItemBalance((long)value);
-                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingTargetItemBalanceMessage((long)value));
-                break;
-            }
-            case TIMER_VOLATILITY_MILLIS:
-            {
-                bot.setTimerMillis((long)value);
-                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingVolatilityTimerMessage((long)value));
-                break;
-            }
-            case MIN_VOLATILITY_TIMER_MILLIS:
-            {
-                bot.setMinTimerMillis((long)value);
-                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingVolatilityMinTimerMessage((long)value));
-                break;
-            }
-            case MAX_VOLATILITY_TIMER_MILLIS:
-            {
-                bot.setMaxTimerMillis((long)value);
-                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingVolatilityMaxTimerMessage((long)value));
-                break;
-            }
-            case IMBALANCE_PRICE_RANGE:
-            {
-                bot.setImbalancePriceRange((int)value);
-                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingImbalancePriceRangeMessage((int)value));
-                break;
-            }
-            case IMBALANCE_PRICE_CHANGE_FACTOR:
-            {
-                bot.setImbalancePriceChangeFactor(value);
-                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingImbalanceChangeFactorMessage(value));
-                break;
-            }
-            case IMBALANCE_PRICE_CHANGE_QUAD_FACTOR:
-            {
-                bot.setImbalancePriceChangeQuadFactor(value);
-                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingImbalanceChangeQuadFactorMessage(value));
-                break;
-            }
-            case PID_P:
-            {
-                bot.setPidP(value);
-                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingPIDPSetMessage(value));
-                break;
-            }
-            case PID_I:
-            {
-                bot.setPidI(value);
-                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingPIDISetMessage(value));
-                break;
-            }
-            case PID_D:
-            {
-                bot.setPidD(value);
-                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingPIDDSetMessage(value));
-                break;
-            }
-            case PID_I_BOUNDS:
-            {
-                bot.setPidIBound(value);
-                PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotSettingPIDIBoundsSetMessage(value));
-                break;
-            }
-            default:
-                StockMarketMod.LOGGER.error("Unknown/Unhandled setting type: \""+settingsType+"\" für bot settings set command");
-                break;
-        }
-    }
-    private static ServerVolatilityBot bot_set_setting_checkParams(ServerPlayer executor, ServerVolatilityBot.Settings.Type settingsType, String itemIDStr)
-    {
-        String orgItemID = itemIDStr;
-        itemIDStr = ItemUtilities.getNormalizedItemID(orgItemID);
-        if (itemIDStr == null) {
-            PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getInvalidItemIDMessage(orgItemID));
-            return null;
-        }
 
-        ItemID itemID = new ItemID(itemIDStr);
-        ServerTradingBot bot = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getTradingBot(itemID);
-        if (bot instanceof ServerVolatilityBot volatilityBot) {
-            return volatilityBot;
-        }
-        PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotNotExistMessage(itemIDStr));
-        return null;
-    }*/
+    private static boolean isPlayerAdmin(CommandSourceStack source)
+    {
+        return source.hasPermission(BACKEND_INSTANCES.SERVER_SETTINGS.UTILITIES.ADMIN_PERMISSION_LEVEL.get());
+    }
 }

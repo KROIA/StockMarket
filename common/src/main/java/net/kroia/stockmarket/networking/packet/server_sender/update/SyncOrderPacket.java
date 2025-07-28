@@ -1,10 +1,6 @@
 package net.kroia.stockmarket.networking.packet.server_sender.update;
 
-import net.kroia.stockmarket.market.server.order.Order;
-import net.kroia.stockmarket.util.ServerPlayerList;
-import net.kroia.stockmarket.util.StockMarketNetworkPacket;
-import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.server.level.ServerPlayer;
+/*
 public class SyncOrderPacket extends StockMarketNetworkPacket {
 
     private Order order;
@@ -48,3 +44,4 @@ public class SyncOrderPacket extends StockMarketNetworkPacket {
         BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.handlePacket(this);
     }
 }
+*/

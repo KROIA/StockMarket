@@ -1,14 +1,6 @@
 package net.kroia.stockmarket.networking.packet.client_sender.update;
 
-import net.kroia.banksystem.util.ItemID;
-import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
-import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
-import net.kroia.stockmarket.networking.packet.server_sender.update.SyncBotSettingsPacket;
-import net.kroia.stockmarket.util.StockMarketNetworkPacket;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.server.level.ServerPlayer;
-
+/*
 public class UpdateBotSettingsPacket extends StockMarketNetworkPacket {
 
     ItemID itemID;
@@ -85,3 +77,4 @@ public class UpdateBotSettingsPacket extends StockMarketNetworkPacket {
         }
     }
 }
+*/

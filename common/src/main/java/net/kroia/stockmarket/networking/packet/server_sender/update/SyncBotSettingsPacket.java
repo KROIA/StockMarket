@@ -1,13 +1,6 @@
 package net.kroia.stockmarket.networking.packet.server_sender.update;
 
-import net.kroia.banksystem.util.ItemID;
-import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
-import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
-import net.kroia.stockmarket.util.StockMarketNetworkPacket;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.server.level.ServerPlayer;
-
+/*
 public class SyncBotSettingsPacket extends StockMarketNetworkPacket {
 
     ItemID itemID;
@@ -68,9 +61,7 @@ public class SyncBotSettingsPacket extends StockMarketNetworkPacket {
     public ItemID getItemID() {
         return itemID;
     }
-    /*public UUID getBotUUID() {
-        return botUUID;
-    }*/
+
     public boolean botExists() {
         return botExists;
     }
@@ -80,3 +71,4 @@ public class SyncBotSettingsPacket extends StockMarketNetworkPacket {
         BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.handlePacket(this);
     }
 }
+*/

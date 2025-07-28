@@ -1,48 +1,26 @@
 package net.kroia.stockmarket.market.server.order;
 
-import net.kroia.banksystem.api.IBank;
-import net.kroia.banksystem.api.IBankUser;
-import net.kroia.banksystem.banking.bank.Bank;
-import net.kroia.banksystem.item.custom.money.MoneyItem;
-import net.kroia.banksystem.util.BankSystemTextMessages;
-import net.kroia.banksystem.util.ItemID;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import net.kroia.modutilities.PlayerUtilities;
-import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.modutilities.ServerSaveable;
+import net.kroia.modutilities.networking.INetworkPayloadConverter;
 import net.kroia.stockmarket.StockMarketModBackend;
-import net.kroia.stockmarket.market.server.ServerStockMarketManager;
-import net.kroia.stockmarket.networking.packet.server_sender.update.SyncOrderPacket;
-import net.kroia.stockmarket.util.ServerPlayerList;
 import net.kroia.stockmarket.util.StockMarketTextMessages;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
 
 /*
     * The Order class represents a buy or sell order.
  */
-public abstract class Order {
-
-    protected static StockMarketModBackend.Instances BACKEND_INSTANCES;
-    public static void setBackend(StockMarketModBackend.Instances backend) {
-        BACKEND_INSTANCES = backend;
-    }
-    private static long lastOrderID = 0;
-
-    protected long orderID;
-    protected ItemID itemID;
-    protected ItemID currencyItemID;
-    protected UUID playerUUID;
-    protected int amount;
-    protected int filledAmount = 0;
-    protected long transferedMoney = 0;
-
-    protected String invalidReason = "";
-
-    protected long lockedMoney = 0;
-
-    protected boolean isBot = false;
-
+public abstract class Order implements ServerSaveable, INetworkPayloadConverter {
     public enum Status {
         PENDING,
         PROCESSED,
@@ -54,75 +32,46 @@ public abstract class Order {
         MARKET,
         LIMIT
     }
+
+
+    protected static StockMarketModBackend.Instances BACKEND_INSTANCES;
+    public static void setBackend(StockMarketModBackend.Instances backend) {
+        BACKEND_INSTANCES = backend;
+    }
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static long lastOrderID = 0;
+
+
+
+    protected long orderID;
+    protected UUID playerUUID;
+    protected long amount;
+    protected long filledAmount = 0;
+    protected long transferedMoney = 0;
+    protected String invalidReason = "";
+    protected long lockedMoney = 0;
     protected Status status = Status.PENDING;
 
-    protected Order(UUID playerUUID, ItemID itemID, ItemID currencyItemID, int amount) {
-        this.itemID = itemID;
+    protected Order(UUID playerUUID, long amount, long lockedMoney) {
         this.orderID = uniqueOrderID();
         this.playerUUID = playerUUID;
         this.amount = amount;
-        this.currencyItemID = currencyItemID;
+        this.lockedMoney = lockedMoney;
     }
-    protected Order(UUID playerUUID, ItemID itemID, ItemID currencyItemID, int amount, boolean isBot) {
-        this.itemID = itemID;
+
+
+    // Bot order
+    protected Order(long amount) {
         this.orderID = uniqueOrderID();
-        this.playerUUID = playerUUID;
+        this.playerUUID = null;
         this.amount = amount;
-        this.currencyItemID = currencyItemID;
-        this.isBot = isBot;
+        this.lockedMoney = 0;
     }
     protected Order()
     {
 
     }
-    protected static boolean tryReserveBankFund(ServerPlayer player, ItemID itemID, int amount, int price)
-    {
-        IBankUser bankUser = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getUser(player.getUUID());
-        if(bankUser == null)
-        {
-            PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankNotFoundMessage(player.getName().getString(),itemID.getName()));
-            return false;
-        }
 
-        IBank moneyBank = bankUser.getBank(BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getCurrencyItem());
-        IBank itemBank = bankUser.getBank(itemID);
-        if(itemBank == null)
-        {
-            itemBank = bankUser.createItemBank(itemID, 0, true);
-        }
-
-        return tryReserveBankFund(moneyBank, itemBank, player.getUUID(), itemID, amount, price, player);
-    }
-    protected static boolean tryReserveBankFund(IBank moneyBank, IBank itemBank, UUID playerUUID, ItemID itemID, int amount, int price, ServerPlayer dbgPlayer)
-    {
-        if(moneyBank == null)
-        {
-            if(dbgPlayer != null)
-                PlayerUtilities.printToClientConsole(dbgPlayer, BankSystemTextMessages.getBankNotFoundMessage(ServerPlayerList.getPlayerName(playerUUID), MoneyItem.getName()));
-            return false;
-        }
-        if(itemBank == null)
-        {
-            if(dbgPlayer != null)
-                PlayerUtilities.printToClientConsole(dbgPlayer, BankSystemTextMessages.getBankNotFoundMessage(ServerPlayerList.getPlayerName(playerUUID), MoneyItem.getName()));
-            return false;
-        }
-        if(amount > 0) {
-            if (moneyBank.lockAmount((long) price * amount) != Bank.Status.SUCCESS) {
-                if(dbgPlayer != null)
-                    PlayerUtilities.printToClientConsole(dbgPlayer, StockMarketTextMessages.getInsufficientFundToBuyMessage(itemID.getName(), amount, price));
-                return false;
-            }
-        }
-        else {
-            if (itemBank.lockAmount(-amount) != Bank.Status.SUCCESS){
-                if(dbgPlayer != null)
-                    PlayerUtilities.printToClientConsole(dbgPlayer, StockMarketTextMessages.getInsufficientItemsToSellMessage(itemID.getName(), amount));
-                return false;
-            }
-        }
-        return true;
-    }
 
     public static Order construct(FriendlyByteBuf buf)
     {
@@ -135,32 +84,12 @@ public abstract class Order {
     }
     protected Order(FriendlyByteBuf buf)
     {
-        orderID = buf.readLong();
-        itemID = new ItemID(buf.readItem());
-
-        amount = buf.readInt();
-        filledAmount = buf.readInt();
-        lockedMoney = buf.readLong();
-        transferedMoney = buf.readLong();
-        status = Status.valueOf(buf.readUtf());
-        invalidReason = buf.readUtf();
-        isBot = buf.readBoolean();
-        if(!isBot)
-            playerUUID = buf.readUUID();
-
-        // Check if currencyItemID is defined in the tag
-        if(buf.isReadable()) {
-            currencyItemID = new ItemID(buf.readItem());
-        } else {
-            currencyItemID = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getCurrencyItem();
-        }
+        decode(buf);
     }
 
     public void copyFrom(Order other)
     {
         orderID = other.orderID;
-        itemID = other.itemID;
-        currencyItemID = other.currencyItemID;
         playerUUID = other.playerUUID;
         amount = other.amount;
         filledAmount = other.filledAmount;
@@ -168,14 +97,13 @@ public abstract class Order {
         transferedMoney = other.transferedMoney;
         status = other.status;
         invalidReason = other.invalidReason;
-        isBot = other.isBot;
     }
 
     public void markAsBot() {
-        isBot = true;
+        playerUUID = null;
     }
     public boolean isBot() {
-        return isBot;
+        return playerUUID == null;
     }
 
     public long getLockedMoney() {
@@ -200,25 +128,41 @@ public abstract class Order {
 
     boolean isEqual(Order other)
     {
+        boolean playerSame = playerUUID == null && other.playerUUID == null;
+        if(!playerSame)
+        {
+            if(playerUUID != null && other.playerUUID != null)
+                playerSame = playerUUID.equals(other.playerUUID);
+            else
+                return false; // One is bot, the other is not
+        }
+
         return  orderID == other.orderID &&
-                itemID.equals(other.itemID) &&
-                currencyItemID.equals(other.currencyItemID) &&
-                playerUUID.compareTo(other.playerUUID)==0 &&
                 amount == other.amount &&
+                playerSame &&
                 filledAmount == other.filledAmount &&
                 lockedMoney == other.lockedMoney &&
                 transferedMoney == other.transferedMoney &&
                 status == other.status;
     }
 
-    public UUID getPlayerUUID() {
+    public boolean isOwner(@NotNull ServerPlayer player)
+    {
+        if(playerUUID == null)
+            return false;
+        return playerUUID.compareTo(player.getUUID()) == 0;
+    }
+    public boolean isOwner(@NotNull UUID playerUUID)
+    {
+        if(this.playerUUID == null)
+            return false;
+        return this.playerUUID.compareTo(playerUUID) == 0;
+    }
+    public @Nullable UUID getPlayerUUID() {
         return playerUUID;
     }
     public long getOrderID() {
         return orderID;
-    }
-    public ItemID getItemID() {
-        return itemID;
     }
     public long getTransferedMoney() {
         return transferedMoney;
@@ -228,8 +172,12 @@ public abstract class Order {
 
     }
 
-    public int getAmount() {
+    public long getAmount() {
         return amount;
+    }
+    public long getPendingAmount()
+    {
+        return amount - filledAmount;
     }
     public String getInvalidReason() {
         return invalidReason;
@@ -242,35 +190,31 @@ public abstract class Order {
         return amount < 0;
     }
 
-    public ItemID getCurrencyItemID() {
-        return currencyItemID;
-    }
-
     public void markAsProcessed() {
-        if(!isBot)
+        if(!isBot())
             BACKEND_INSTANCES.LOGGER.info("Order processed: " + toString());
-        unlockLockedMoney();
+        //unlockLockedMoney();
         setStatus(Status.PROCESSED);
     }
     public void markAsInvalid(String reason) {
         invalidReason = reason;
-        if(!isBot) {
+        if(!isBot()) {
             BACKEND_INSTANCES.LOGGER.info("Order invalid: " + toString());
 
             PlayerUtilities.printToClientConsole(getPlayerUUID(), StockMarketTextMessages.getOrderInvalidMessage(reason));
         }
-        unlockLockedMoney();
+        //unlockLockedMoney();
         setStatus(Status.INVALID);
     }
     public void markAsCancelled() {
-        if(!isBot)
+        if(!isBot())
             BACKEND_INSTANCES.LOGGER.info("Order canceled: " + toString());
-        unlockLockedMoney();
+        //unlockLockedMoney();
         setStatus(Status.CANCELLED);
     }
-    private void unlockLockedMoney()
+    /*private void unlockLockedMoney()
     {
-        if(isBot)
+        if(isBot())
             return;
         IBankUser user = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getUser(playerUUID);
         if(user == null)
@@ -310,21 +254,21 @@ public abstract class Order {
             else
                 itemBank.unlockAmount(Math.abs(marketOrder.getAmount()-marketOrder.getFilledAmount()));
         }
-    }
+    }*/
 
     public void setStatus(Status status) {
         if(status == this.status)
             return;
         this.status = status;
-        if(isBot)
+        if(isBot())
             return;
-        SyncOrderPacket.sendResponse(this);
+        //SyncOrderPacket.sendResponse(this);
     }
 
     public void notifyPlayer() {
-        if(isBot)
+        if(isBot())
             return;
-        SyncOrderPacket.sendResponse(this);
+        //SyncOrderPacket.sendResponse(this);
     }
 
     public Status getStatus() {
@@ -339,30 +283,111 @@ public abstract class Order {
         return Math.abs(filledAmount) >= Math.abs(amount);
     }
 
-    public void addFilledAmount(int amount) {
+    public void addFilledAmount(long amount) {
         filledAmount += amount;
 
     }
-    public int getFilledAmount() {
+    public long getFilledAmount() {
         return filledAmount;
     }
 
-    public abstract String toString();
-
-    public void toBytes(FriendlyByteBuf buf) {
+    public Type getType()
+    {
+        if(this instanceof LimitOrder)
+            return Type.LIMIT;
+        return Type.MARKET;
+    }
+    @Override
+    public void encode(FriendlyByteBuf buf) {
         buf.writeLong(orderID);
-        buf.writeItem(itemID.getStack());
-        buf.writeInt(amount);
-        buf.writeInt(filledAmount);
+        buf.writeLong(amount);
+        buf.writeLong(filledAmount);
         buf.writeLong(lockedMoney);
         buf.writeLong(transferedMoney);
         buf.writeUtf(status.toString());
         buf.writeUtf(invalidReason);
-        buf.writeBoolean(isBot);
-        if(!isBot)
+        buf.writeBoolean(playerUUID != null);
+        if(playerUUID != null)
             buf.writeUUID(playerUUID);
-
-        buf.writeItem(currencyItemID.getStack());
     }
 
+    @Override
+    public void decode(FriendlyByteBuf buf)
+    {
+        orderID = buf.readLong();
+        amount = buf.readLong();
+        filledAmount = buf.readLong();
+        lockedMoney = buf.readLong();
+        transferedMoney = buf.readLong();
+        status = Status.valueOf(buf.readUtf());
+        invalidReason = buf.readUtf();
+        if(buf.readBoolean())
+            playerUUID = buf.readUUID();
+    }
+
+
+    @Override
+    public boolean save(CompoundTag tag) {
+        tag.putLong("orderID", orderID);
+        if(playerUUID == null) {
+            tag.putBoolean("isBot", true);
+        } else {
+            tag.putUUID("playerUUID", playerUUID);
+        }
+        tag.putLong("amount", amount);
+        tag.putLong("filledAmount", filledAmount);
+        tag.putLong("transferedMoney", transferedMoney);
+        tag.putString("status", status.toString());
+        tag.putString("invalidReason", invalidReason);
+
+        return true;
+    }
+
+    @Override
+    public boolean load(CompoundTag tag) {
+        if(tag == null)
+            return false;
+        if(     !tag.contains("orderID") ||
+                (!tag.contains("playerUUID") && !tag.contains("isBot")) ||
+                !tag.contains("amount") ||
+                !tag.contains("filledAmount") ||
+                !tag.contains("transferedMoney") ||
+                !tag.contains("status") ||
+                !tag.contains("invalidReason"))
+            return false;
+
+        orderID = tag.getLong("orderID");
+        if(tag.contains("playerUUID"))
+            playerUUID = tag.getUUID("playerUUID");
+        else
+            playerUUID = null; // Bot order, no player UUID
+
+        amount = tag.getLong("amount");
+        filledAmount = tag.getLong("filledAmount");
+        transferedMoney = tag.getLong("transferedMoney");
+        status = Status.valueOf(tag.getString("status"));
+        invalidReason = tag.getString("invalidReason");
+        return true;
+    }
+
+    public JsonElement toJson()
+    {
+        JsonObject jsonObject = new JsonObject();
+        jsonObject.addProperty("orderID", orderID);
+        jsonObject.addProperty("playerUUID", playerUUID.toString());
+        jsonObject.addProperty("amount", amount);
+        jsonObject.addProperty("filledAmount", filledAmount);
+        jsonObject.addProperty("transferedMoney", transferedMoney);
+        jsonObject.addProperty("invalidReason", invalidReason);
+        jsonObject.addProperty("status", status.toString());
+        return jsonObject;
+    }
+
+    public String toJsonString() {
+        return GSON.toJson(toJson());
+    }
+    @Override
+    public String toString() {
+        return toJsonString();
+    }
 }

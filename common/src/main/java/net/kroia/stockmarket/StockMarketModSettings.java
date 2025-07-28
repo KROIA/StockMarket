@@ -11,6 +11,7 @@ import net.kroia.modutilities.setting.SettingsGroup;
 import net.kroia.modutilities.setting.parser.ItemStackJsonParser;
 import net.kroia.stockmarket.market.server.DefaultMarketBotSettings;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBotFactory;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.*;
@@ -53,6 +54,12 @@ public class StockMarketModSettings extends ModSettings {
         public final Setting<Integer> TRADE_ITEM_CHUNK_SIZE = registerSetting("TRADE_ITEM_CHUNK_SIZE", 100, Integer.class);
 
         public Utilities() { super("Utilities"); }
+
+
+        public boolean playerIsAdmin(ServerPlayer player)
+        {
+            return player.hasPermissions(ADMIN_PERMISSION_LEVEL.get());
+        }
     }
     public static final class UISettings extends SettingsGroup
     {
@@ -77,6 +84,7 @@ public class StockMarketModSettings extends ModSettings {
          * Defines the time for one candle stick in milliseconds
          */
         public final Setting<Long> SHIFT_PRICE_CANDLE_INTERVAL_MS = registerSetting("SHIFT_PRICE_CANDLE_INTERVAL_MS", 60000L, Long.class); // 1 minute
+        public final Setting<Long> NOTIFY_SUBSCRIBER_INTERVAL_MS = registerSetting("NOTIFY_SUBSCRIBER_INTERVAL_MS", 100L, Long.class); // 1 minute
 
         /**
          * If true, the market will be open directly after creation

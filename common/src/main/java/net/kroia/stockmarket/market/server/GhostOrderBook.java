@@ -1,5 +1,9 @@
 package net.kroia.stockmarket.market.server;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import net.kroia.modutilities.ServerSaveable;
 import net.kroia.stockmarket.util.DynamicIndexedArray;
 import net.minecraft.nbt.CompoundTag;
@@ -10,6 +14,7 @@ import net.minecraft.nbt.CompoundTag;
  * Players can buy or sell into the ghost orders.
  */
 public class GhostOrderBook implements ServerSaveable {
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private int currentMarketPrice = 0;
     private final DynamicIndexedArray virtualOrderVolumeDistribution;
     private long lastMillis;
@@ -21,7 +26,7 @@ public class GhostOrderBook implements ServerSaveable {
     public GhostOrderBook(int initialPrice) {
         virtualOrderVolumeDistribution = new DynamicIndexedArray(1000, this::getTargetAmount);
         lastMillis = System.currentTimeMillis()-1000;
-        setCurrentMarketPrice(initialPrice);
+        setCurrentPrice(initialPrice);
         updateVolume(initialPrice);
     }
 
@@ -67,7 +72,7 @@ public class GhostOrderBook implements ServerSaveable {
         }
     }
 
-    public void setCurrentMarketPrice(int currentMarketPrice) {
+    public void setCurrentPrice(int currentMarketPrice) {
         this.currentMarketPrice = currentMarketPrice;
         int currentIndexOffset = virtualOrderVolumeDistribution.getIndexOffset();
         int sizeForth = virtualOrderVolumeDistribution.getSize()/4;
@@ -117,6 +122,70 @@ public class GhostOrderBook implements ServerSaveable {
     }
     public float getVolumeDecumulationRate() {
         return volumeDecumulationRate;
+    }
+
+
+
+    /**
+     * Get the amount of items to buy or sell based on the price difference
+     * @param price on which the amount should be based
+     * @return the amount of items to buy or sell. Negative values indicate selling
+     */
+    public long getAmount(int price)
+    {
+        if(virtualOrderVolumeDistribution.isInRange(price))
+        {
+            return (long)virtualOrderVolumeDistribution.get(price);
+        }
+        return (long)getTargetAmount(price);
+    }
+    public void removeAmount(int price, long amount)
+    {
+        if(virtualOrderVolumeDistribution.isInRange(price))
+        {
+            if(virtualOrderVolumeDistribution.get(price) > 0)
+            {
+                virtualOrderVolumeDistribution.add(price, -Math.abs(amount));
+            }
+            else if(virtualOrderVolumeDistribution.get(price) < 0)
+            {
+                virtualOrderVolumeDistribution.add(price, Math.abs(amount));
+            }
+        }
+    }
+
+    private float getTargetAmount(int price)
+    {
+        if(price < 0)
+            return 0;
+        // Calculate close price volume distribution
+        float currentPriceFloat = (float)currentMarketPrice;
+        //float relativePrice = (currentPriceFloat - (float)price)/(currentPriceFloat+1);
+        float relativePrice = (currentPriceFloat - (float)price);
+        float width = 1f;
+
+        final float constant1 = (float)(2.0/Math.E);
+
+        float amount = 0;
+        if(relativePrice < 20 && relativePrice > -20) {
+            //amount += (float) Math.E * width * relativePrice * (float) Math.exp(-Math.abs(relativePrice * width));
+            float sqrt = (float) Math.sqrt(Math.abs(relativePrice)) * Math.signum(relativePrice);
+            amount += (float) constant1 * nearMarketVolumeScale * sqrt * (float) Math.exp(-Math.abs(relativePrice*relativePrice*0.05));
+        }
+
+
+        if(relativePrice > 0)
+            amount += 0.1f;
+        else if(relativePrice <= 0)
+            amount += -0.1f;
+        if(price == 0)
+            amount += 0.2f;
+
+        float lowPriceAccumulator = 1/(1+(float)price);
+        if(relativePrice > 0)
+            amount += lowPriceAccumulator*5;
+
+        return (amount*volumeScale);
     }
 
     @Override
@@ -169,65 +238,32 @@ public class GhostOrderBook implements ServerSaveable {
         return true;
     }
 
-    /**
-     * Get the amount of items to buy or sell based on the price difference
-     * @param price on which the amount should be based
-     * @return the amount of items to buy or sell. Negative values indicate selling
-     */
-    public int getAmount(int price)
+    public JsonElement toJson()
     {
-        if(virtualOrderVolumeDistribution.isInRange(price))
+        JsonObject jsonObject = new JsonObject();
+        jsonObject.addProperty("volumeScale", volumeScale);
+        jsonObject.addProperty("nearMarketVolumeScale", nearMarketVolumeScale);
+        jsonObject.addProperty("volumeAccumulationRate", volumeAccumulationRate);
+        jsonObject.addProperty("volumeFastAccumulationRate", volumeFastAccumulationRate);
+        jsonObject.addProperty("volumeDecumulationRate", volumeDecumulationRate);
+        jsonObject.addProperty("currentMarketPrice", currentMarketPrice);
+        jsonObject.addProperty("lastMillis", lastMillis);
+        jsonObject.addProperty("virtualOrderVolumeDistributionSize", virtualOrderVolumeDistribution.getSize());
+        /*JsonObject volumeDistribution = new JsonObject();
+        for(int i=0; i<virtualOrderVolumeDistribution.getSize(); i++)
         {
-            return (int)virtualOrderVolumeDistribution.get(price);
-        }
-        return (int)getTargetAmount(price);
+            int virtualIndex = virtualOrderVolumeDistribution.getVirtualIndex(i);
+            if(virtualIndex < 0)
+                continue;
+            volumeDistribution.addProperty(String.valueOf(virtualIndex), virtualOrderVolumeDistribution.get(virtualIndex));
+        }*/
+        return jsonObject;
     }
-    public void removeAmount(int price, int amount)
-    {
-        if(virtualOrderVolumeDistribution.isInRange(price))
-        {
-            if(virtualOrderVolumeDistribution.get(price) > 0)
-            {
-                virtualOrderVolumeDistribution.add(price, -Math.abs(amount));
-            }
-            else if(virtualOrderVolumeDistribution.get(price) < 0)
-            {
-                virtualOrderVolumeDistribution.add(price, Math.abs(amount));
-            }
-        }
+    public String toJsonString() {
+        return GSON.toJson(toJson());
     }
-
-    private float getTargetAmount(int price)
-    {
-        if(price < 0)
-            return 0;
-        // Calculate close price volume distribution
-        float currentPriceFloat = (float)currentMarketPrice;
-        //float relativePrice = (currentPriceFloat - (float)price)/(currentPriceFloat+1);
-        float relativePrice = (currentPriceFloat - (float)price);
-        float width = 1f;
-
-        final float constant1 = (float)(2.0/Math.E);
-
-        float amount = 0;
-        if(relativePrice < 20 && relativePrice > -20) {
-            //amount += (float) Math.E * width * relativePrice * (float) Math.exp(-Math.abs(relativePrice * width));
-            float sqrt = (float) Math.sqrt(Math.abs(relativePrice)) * Math.signum(relativePrice);
-            amount += (float) constant1 * nearMarketVolumeScale * sqrt * (float) Math.exp(-Math.abs(relativePrice*relativePrice*0.05));
-        }
-
-
-        if(relativePrice > 0)
-            amount += 0.1f;
-        else if(relativePrice <= 0)
-            amount += -0.1f;
-        if(price == 0)
-            amount += 0.2f;
-
-        float lowPriceAccumulator = 1/(1+(float)price);
-        if(relativePrice > 0)
-            amount += lowPriceAccumulator*5;
-
-        return (amount*volumeScale);
+    @Override
+    public String toString() {
+        return toJsonString();
     }
 }

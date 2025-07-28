@@ -7,7 +7,7 @@ import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.TextBox;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.stockmarket.StockMarketModBackend;
-import net.minecraft.world.item.ItemStack;
+import net.kroia.stockmarket.market.TradingPair;
 
 import static net.kroia.stockmarket.screen.custom.TradeScreen.*;
 
@@ -68,7 +68,7 @@ public class TradePanel extends GuiElement {
         currentItemView = new ItemView();
         currentItemBalanceLabel = new Label();
         currentItemBalanceLabel.setAlignment(Alignment.LEFT);
-        moneyItemView = new ItemView(BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getCurrencyItem().getStack().copy());
+        moneyItemView = new ItemView();
         moneyItemView.setShowTooltip(false);
         currentMoneyBalanceLabel = new Label();
         currentMoneyBalanceLabel.setAlignment(Alignment.LEFT);
@@ -147,9 +147,10 @@ public class TradePanel extends GuiElement {
         addChild(marketClosedLabel);
     }
 
-    public void setItemStack(ItemStack item)
+    public void setTradingPair(TradingPair pair)
     {
-        currentItemView.setItemStack(item);
+        currentItemView.setItemStack(pair.getItem().getStack());
+        moneyItemView.setItemStack(pair.getCurrency().getStack());
     }
     public void setCurrentItemBalance(long balance)
     {

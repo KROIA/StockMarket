@@ -5,6 +5,7 @@ import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.block.custom.StockMarketBlock;
 import net.kroia.stockmarket.entity.StockMarketEntities;
+import net.kroia.stockmarket.market.TradingPair;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
@@ -17,7 +18,7 @@ public class StockMarketBlockEntity extends BlockEntity{
     private static StockMarketModBackend.Instances BACKEND_INSTANCES;
 
     // Current Item that the chart is displaying
-    private ItemID itemID;
+    private TradingPair tradingPair;
     private int amount;
     private int price;
 
@@ -27,17 +28,17 @@ public class StockMarketBlockEntity extends BlockEntity{
 
     public StockMarketBlockEntity(BlockPos pos, BlockState state) {
         super(StockMarketEntities.STOCK_MARKET_BLOCK_ENTITY.get(), pos, state);
-        itemID = new ItemID("minecraft:diamond");
+        tradingPair = TradingPair.createDefault();
         amount = 1;
         price = 1;
     }
 
-    public void setItemID(ItemID itemID) {
-        this.itemID = itemID;
+    public void setTradingPair(TradingPair tradingPair) {
+        this.tradingPair = tradingPair;
     }
 
-    public ItemID getItemID() {
-        return itemID;
+    public TradingPair getTradringPair() {
+        return tradingPair;
     }
 
     public int getAmount()
@@ -78,8 +79,8 @@ public class StockMarketBlockEntity extends BlockEntity{
 
         CompoundTag dataTag = new CompoundTag();
         CompoundTag itemTag = new CompoundTag();
-        itemID.save(itemTag);
-        dataTag.put("itemID", itemTag);
+        tradingPair.save(itemTag);
+        dataTag.put("tradingPair", itemTag);
         dataTag.putInt("amount", amount);
         dataTag.putInt("price", price);
         tag.put(StockMarketMod.MOD_ID, dataTag);
@@ -95,17 +96,15 @@ public class StockMarketBlockEntity extends BlockEntity{
     public void load(CompoundTag tag) {
         super.load(tag);
         CompoundTag dataTag = tag.getCompound(StockMarketMod.MOD_ID);
-        String oldItemID = dataTag.getString("itemID");
 
-        // Compatibility with old itemID format
-        if(oldItemID.compareTo("") == 0)
-        {
-            itemID = new ItemID(dataTag.getCompound("itemID"));
+        if (dataTag.contains("tradingPair")) {
+            CompoundTag itemTag = dataTag.getCompound("tradingPair");
+            tradingPair = new TradingPair();
+            tradingPair.load(itemTag);
+        } else {
+            tradingPair = new TradingPair(new ItemID("minecraft:diamond"), BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getDefaultCurrencyItemID());
         }
-        else
-        {
-            itemID = new ItemID(oldItemID);
-        }
+
         amount = dataTag.getInt("amount");
         price = dataTag.getInt("price");
     }

@@ -1,6 +1,5 @@
 package net.kroia.stockmarket.util;
 
-import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ServerSaveable;
 import net.kroia.modutilities.networking.INetworkPayloadConverter;
 import net.kroia.stockmarket.StockMarketModBackend;
@@ -21,37 +20,34 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
     private int oldestClosePrice = 0;
     private Timestamp[] timeStamps;// = new Timestamp[maxHistorySize];
 
-    private ItemID itemID;
-    private ItemID currencyItemID;
-
     public static void setBackend(StockMarketModBackend.Instances backend) {
         BACKEND_INSTANCES = backend;
     }
 
-    public PriceHistory(ItemID itemID, ItemID currencyItemID, int maxHistorySize) {
+    public PriceHistory(int maxHistorySize) {
+        if(maxHistorySize<0)
+            maxHistorySize = 0;
         this.maxHistorySize = maxHistorySize;
         lowPrice = new int[maxHistorySize];
         highPrice = new int[maxHistorySize];
         closePrice = new int[maxHistorySize];
         volume = new long[maxHistorySize];
         timeStamps = new Timestamp[maxHistorySize];
-        this.itemID = itemID;
-        this.currencyItemID = currencyItemID;
         for(int i = 0; i < maxHistorySize; i++)
         {
             timeStamps[i] = new Timestamp();
         }
         clear();
     }
-    public PriceHistory(ItemID itemID, ItemID currencyItemID, int initialPrice, int maxHistorySize) {
+    public PriceHistory(int initialPrice, int maxHistorySize) {
+        if(maxHistorySize<0)
+            maxHistorySize = 0;
         this.maxHistorySize = maxHistorySize;
         lowPrice = new int[maxHistorySize];
         highPrice = new int[maxHistorySize];
         closePrice = new int[maxHistorySize];
         volume = new long[maxHistorySize];
         timeStamps = new Timestamp[maxHistorySize];
-        this.itemID = itemID;
-        this.currencyItemID = currencyItemID;
         oldestClosePrice = initialPrice;
         for (int i = 0; i < maxHistorySize; i++) {
             lowPrice[i] = initialPrice;
@@ -61,14 +57,6 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
             timeStamps[i] = new Timestamp();
         }
     }
-    public void setItemID(ItemID itemID) {
-        this.itemID = itemID;
-    }
-
-    public void setCurrencyItemID(ItemID currencyItemID) {
-        this.currencyItemID = currencyItemID;
-    }
-
 
     public void clear()
     {
@@ -90,13 +78,6 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
         return lowPrice.length;
     }
 
-    public ItemID getItemID()
-    {
-        return itemID;
-    }
-    public ItemID getCurrencyItemID() {
-        return currencyItemID;
-    }
     public void addPrice(int low, int high, int close, Timestamp timestamp)
     {
         // Shift the prices to the left
@@ -123,11 +104,11 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
         lowPrice[maxHistorySize-1] = Math.min(lowPrice[maxHistorySize-1], close);
         highPrice[maxHistorySize-1] = Math.max(highPrice[maxHistorySize-1], close);
     }
-    public void setCurrentVolume(int volume)
+    public void setCurrentVolume(long volume)
     {
         this.volume[maxHistorySize-1] = volume;
     }
-    public void addVolume(int volume)
+    public void addVolume(long volume)
     {
         this.volume[maxHistorySize-1] += volume;
     }
@@ -218,9 +199,8 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
     }
 
 
+    @Override
     public void encode(FriendlyByteBuf buf) {
-        buf.writeItem(itemID.getStack());
-        buf.writeItem(currencyItemID.getStack());
         buf.writeInt(oldestClosePrice);
         buf.writeInt(maxHistorySize);
         for (int i = 0; i < maxHistorySize; i++) {
@@ -232,9 +212,8 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
         }
     }
 
+    @Override
     public void decode(FriendlyByteBuf buf) {
-        itemID = new ItemID(buf.readItem());
-        currencyItemID = new ItemID(buf.readItem());
         oldestClosePrice = buf.readInt();
         maxHistorySize = buf.readInt();
         lowPrice = new int[maxHistorySize];

@@ -2,23 +2,27 @@
 package net.kroia.stockmarket.screen.custom;
 
 import dev.architectury.event.events.common.TickEvent;
-import net.kroia.banksystem.banking.clientdata.MinimalBankData;
+import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
+import net.kroia.modutilities.TimerMillis;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.GuiScreen;
 import net.kroia.modutilities.gui.elements.ItemSelectionView;
-import net.kroia.modutilities.gui.screens.ItemSelectionScreen;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
-import net.kroia.stockmarket.market.client.ClientTradeItem;
+import net.kroia.stockmarket.market.TradingPair;
+import net.kroia.stockmarket.market.client.ClientMarket;
+import net.kroia.stockmarket.market.clientdata.OrderReadData;
+import net.kroia.stockmarket.market.clientdata.TradingViewData;
 import net.kroia.stockmarket.networking.packet.client_sender.update.entity.UpdateStockMarketBlockEntityPacket;
 import net.kroia.stockmarket.networking.packet.server_sender.update.entity.SyncStockMarketBlockEntityPacket;
 import net.kroia.stockmarket.screen.uiElements.CandleStickChart;
 import net.kroia.stockmarket.screen.uiElements.OrderListView;
 import net.kroia.stockmarket.screen.uiElements.OrderbookVolumeChart;
 import net.kroia.stockmarket.screen.uiElements.TradePanel;
+import net.kroia.stockmarket.util.PriceHistory;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
@@ -233,8 +237,7 @@ public class TradeScreen extends GuiScreen {
     public static final int colorGreen = 0x7F00FF00;
     public static final int colorRed = 0x7FFF0000;
 
-    private ItemID itemID;
-    private ItemStack itemStack;
+    private TradingPair tradingPair;
     private boolean marketWasOpen = false;
 
     static long lastTickCount = 0;
@@ -250,26 +253,32 @@ public class TradeScreen extends GuiScreen {
     private final TradePanel tradePanel;
     private static TradeScreen instance;
 
+    private final TimerMillis updateTimer;
+
     public static void setBackend(StockMarketModBackend.Instances backend) {
         BACKEND_INSTANCES = backend;
     }
     public TradeScreen(StockMarketBlockEntity blockEntity) {
-        this(blockEntity.getItemID(), blockEntity.getAmount(), blockEntity.getPrice());
+        this(blockEntity.getTradringPair(), blockEntity.getAmount(), blockEntity.getPrice());
         this.blockEntity = blockEntity;
 
 
+
     }
-    public TradeScreen(ItemID currentItemID, int currentAmount, int currentPrice) {
+    public TradeScreen(TradingPair currentPair, int currentAmount, int currentPrice) {
         super(TITLE);
+        this.updateTimer = new TimerMillis(true); // Update every second
+        updateTimer.start(100);
+        BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.init();
         blockEntity = null;
         instance = this;
 
-        this.itemID = currentItemID;
+        this.tradingPair = currentPair;
 
         // Create Gui Elements
         this.candleStickChart = new CandleStickChart();
         this.orderbookVolumeChart = new OrderbookVolumeChart();
-        this.activeOrderListView = new OrderListView();
+        this.activeOrderListView = new OrderListView(this::cancelOrder);
         this.tradePanel = new TradePanel(this::onSelectItemButtonPressed,
                 this::onBuyMarketButtonPressed,
                 this::onSellMarketButtonPressed,
@@ -286,10 +295,13 @@ public class TradeScreen extends GuiScreen {
         addElement(activeOrderListView);
         addElement(tradePanel);
 
+
         TickEvent.PLAYER_POST.register(TradeScreen::onClientTick);
     }
     public TradeScreen() {
-        this(new ItemID("minecraft:diamond"), 0, 0);
+        this(new TradingPair(new ItemID("minecraft:diamond"), new ItemID(BankSystemItems.MONEY.get().getDefaultInstance())), 0, 0);
+
+
     }
 
     public static void openScreen(StockMarketBlockEntity blockEntity)
@@ -306,10 +318,9 @@ public class TradeScreen extends GuiScreen {
 
     @Override
     protected void updateLayout(Gui gui) {
-        BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.requestTradeItems();
-        itemStack = itemID.getStack();
-        tradePanel.setItemStack(itemStack);
-        BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.subscribeMarketUpdate(itemID);
+        //BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.requestTradeItems();
+        tradePanel.setTradingPair(tradingPair);
+        //BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.subscribeMarketUpdate(tradingPair);
         //RequestBankDataPacket.sendRequest();
 
         int padding = 10;
@@ -331,32 +342,32 @@ public class TradeScreen extends GuiScreen {
         instance = null;
         // Unregister the event listener when the screen is closed
         TickEvent.PLAYER_POST.unregister(TradeScreen::onClientTick);
-        BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.unsubscribeMarketUpdate(itemID);
+        //BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.unsubscribeMarketUpdate(tradingPair);
         if(blockEntity != null)
         {
-            blockEntity.setItemID(itemID);
+            blockEntity.setTradingPair(tradingPair);
             blockEntity.setAmount(tradePanel.getAmount());
             blockEntity.setPrice(tradePanel.getLimitPrice());
             UpdateStockMarketBlockEntityPacket.sendPacketToServer(blockEntity.getBlockPos(), blockEntity);
         }
     }
 
+
     public static void handlePacket(SyncStockMarketBlockEntityPacket packet) {
        // RequestBankDataPacket.sendRequest();
 
         if (instance != null) {
-            instance.itemID = packet.getItemID();
-            instance.itemStack = instance.itemID.getStack();
-            instance.tradePanel.setItemStack(instance.itemStack);
+            instance.tradingPair = packet.getTradingPair();
+            instance.tradePanel.setTradingPair(instance.tradingPair);
             instance.tradePanel.setAmount(packet.getAmount());
             instance.tradePanel.setLimitPrice(packet.getPrice());
-            BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.subscribeMarketUpdate(instance.itemID);
+            //BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.subscribeMarketUpdate(instance.tradingPair);
         }
     }
 
-    public static ItemID getItemID() {
+    public static TradingPair getTradingPair() {
         if(instance != null)
-            return instance.itemID;
+            return instance.tradingPair;
         return null;
     }
 
@@ -365,6 +376,11 @@ public class TradeScreen extends GuiScreen {
         if (Minecraft.getInstance().screen != instance || instance == null)
             return;
 
+
+        if(instance.updateTimer.check() && instance.getMarket() != null)
+        {
+            instance.getMarket().requestTradingViewData(0,100,50, instance::updateView);
+        }
         /*long currentTickCount = System.currentTimeMillis();
         if(currentTickCount - lastTickCount > 1000)
         {
@@ -373,82 +389,161 @@ public class TradeScreen extends GuiScreen {
         }*/
     }
 
+    private void updateView(TradingViewData data)
+    {
+        if(data == null)
+            return;
+
+        candleStickChart.setMinMaxPrice(0,100);
+        PriceHistory history = data.priceHistoryData.toHistory();
+        candleStickChart.setPriceHistory(history);
+        orderbookVolumeChart.setOrderBookVolume(data.orderBookVolumeData);
+        assert Minecraft.getInstance().player != null;
+        UUID thisPlayerUUID = Minecraft.getInstance().player.getUUID();
+        tradePanel.setCurrentItemBalance(data.itemBankData.balance);
+        tradePanel.setCurrentMoneyBalance(data.currencyBankData.balance);
+
+
+        tradePanel.setCurrentPrice(history.getCurrentPrice());
+        getMarket().requestPlayerOrderReadDataList((orders)->{
+            activeOrderListView.updateActiveOrders(orders);
+            candleStickChart.updateOrderDisplay(orders);
+        });
+
+
+        if(marketWasOpen != data.marketIsOpen)
+        {
+            marketWasOpen = data.marketIsOpen;
+            tradePanel.setMarketOpen(data.marketIsOpen);
+        }
+    }
+
     //public static void onAvailableTradeItemsChanged() {
     //}
 
-    public static void updatePlotsData() {
+    /*public static void updatePlotsData_static() {
         if(instance == null)
             return;
-        ClientTradeItem item = BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getTradeItem(instance.itemID);
+        instance.updatePlotData();
+    }
+    public void updatePlotData()
+    {
+        ClientTradeItem item = BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getTradeItem(tradingPair);
         if (item == null) {
-            BACKEND_INSTANCES.LOGGER.warn("Trade item not found: " + instance.itemID);
+            BACKEND_INSTANCES.LOGGER.warn("Trade item not found: " + tradingPair);
             return;
         }
 
-        instance.candleStickChart.setMinMaxPrice(item.getVisualMinPrice(), item.getVisualMaxPrice());
-        instance.candleStickChart.setPriceHistory(item.getPriceHistory());
-        instance.orderbookVolumeChart.setOrderBookVolume(item.getOrderBookVolume());
+        candleStickChart.setMinMaxPrice(item.getVisualMinPrice(), item.getVisualMaxPrice());
+        candleStickChart.setPriceHistory(item.getPriceHistory());
+        orderbookVolumeChart.setOrderBookVolume(item.getOrderBookVolume());
         assert Minecraft.getInstance().player != null;
         UUID thisPlayerUUID = Minecraft.getInstance().player.getUUID();
-        BACKEND_INSTANCES.BANK_SYSTEM_API.getClientBankManager().requestMinimalBankData(thisPlayerUUID, instance.itemID,
+        BACKEND_INSTANCES.BANK_SYSTEM_API.getClientBankManager().requestMinimalBankData(thisPlayerUUID, tradingPair,
                 (MinimalBankData data) -> {
                     if(data != null)
                     {
-                        instance.tradePanel.setCurrentItemBalance(data.balance);
+                        tradePanel.setCurrentItemBalance(data.balance);
                     }
                 });
         BACKEND_INSTANCES.BANK_SYSTEM_API.getClientBankManager().requestMinimalBankData(thisPlayerUUID, BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getCurrencyItem(),
                 (MinimalBankData data) -> {
                     if(data != null)
                     {
-                        instance.tradePanel.setCurrentMoneyBalance(data.balance);
+                        tradePanel.setCurrentMoneyBalance(data.balance);
                     }
                 });
-        instance.tradePanel.setCurrentPrice(item.getPrice());
-        instance.activeOrderListView.updateActiveOrders();
-        instance.candleStickChart.updateOrderDisplay();
-        if(instance.marketWasOpen != item.isMarketOpen())
-        {
-            instance.marketWasOpen = item.isMarketOpen();
-            instance.tradePanel.setMarketOpen(item.isMarketOpen());
-        }
-    }
+        tradePanel.setCurrentPrice(item.getPrice());
+        getMarket().requestPlayerOrderReadDataList((orders)->{
+            activeOrderListView.updateActiveOrders(orders);
+            candleStickChart.updateOrderDisplay(orders);
+        });
 
-    private void onItemSelected(ItemStack itemStack) {
-        BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.unsubscribeMarketUpdate(itemID);
-        this.itemID = new ItemID(itemStack);
+
+        if(marketWasOpen != item.isMarketOpen())
+        {
+            marketWasOpen = item.isMarketOpen();
+            tradePanel.setMarketOpen(item.isMarketOpen());
+        }
+    }*/
+
+    /*private void onItemSelected(ItemStack itemStack) {
+        //BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.unsubscribeMarketUpdate(tradingPair);
+        this.tradingPair = new ItemID(itemStack);
         tradePanel.setItemStack(itemStack);
+    }*/
+    private void onItemSelected(TradingPair tradingPair) {
+        //BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.unsubscribeMarketUpdate(tradingPair);
+        this.tradingPair = tradingPair;
+        tradePanel.setTradingPair(tradingPair);
+        minecraft.setScreen(this);
     }
 
 
     private void onSellMarketButtonPressed() {
         int amount = tradePanel.getAmount();
         if(amount > 0)
-            BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.createOrder(itemID, -amount);
+            getMarket().requestCreateMarketOrder(-amount, (success) -> {
+                if(success)
+                {
+                    BACKEND_INSTANCES.LOGGER.info("Market sell order created successfully.");
+                }
+                else
+                {
+                    BACKEND_INSTANCES.LOGGER.warn("Failed to create market sell order.");
+                }
+            });
     }
 
     private void onBuyMarketButtonPressed() {
         int amount = tradePanel.getAmount();
         if(amount > 0)
-            BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.createOrder(itemID, amount);
+            getMarket().requestCreateMarketOrder(amount, (success) -> {
+                if(success)
+                {
+                    BACKEND_INSTANCES.LOGGER.info("Market buy order created successfully.");
+                }
+                else
+                {
+                    BACKEND_INSTANCES.LOGGER.warn("Failed to create market buy order.");
+                }
+            });
     }
 
     private void onSellLimitButtonPressed() {
         int amount = tradePanel.getAmount();
         int price = tradePanel.getLimitPrice();
         if(amount > 0 && price >= 0)
-            BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.createOrder(itemID, -amount, price);
+            getMarket().requestCreateLimitOrder(-amount, price, (success) -> {
+                if(success)
+                {
+                    BACKEND_INSTANCES.LOGGER.info("Limit sell order created successfully.");
+                }
+                else
+                {
+                    BACKEND_INSTANCES.LOGGER.warn("Failed to create limit sell order.");
+                }
+            });
     }
 
     private void onBuyLimitButtonPressed() {
         int amount = tradePanel.getAmount();
         int price = tradePanel.getLimitPrice();
         if(amount > 0 && price >= 0)
-            BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.createOrder(itemID, amount, price);
+            getMarket().requestCreateLimitOrder(amount, price, (success) -> {
+                if(success)
+                {
+                    BACKEND_INSTANCES.LOGGER.info("Limit buy order created successfully.");
+                }
+                else
+                {
+                    BACKEND_INSTANCES.LOGGER.warn("Failed to create limit buy order.");
+                }
+            });
     }
 
     private void onSelectItemButtonPressed() {
-        ArrayList<ItemStack> itemStacks = new ArrayList<>();
+        /*ArrayList<ItemStack> itemStacks = new ArrayList<>();
         for(ItemID itemID : BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getAvailableTradeItemIdList())
         {
             itemStacks.add(itemID.getStack());
@@ -460,6 +555,34 @@ public class TradeScreen extends GuiScreen {
 
         screen.getItemSelectionView().setSorter(new ItemSorter());
         screen.sortItems();
-        this.minecraft.setScreen(screen);
+        this.minecraft.setScreen(screen);*/
+        TradingPairSelectionScreen screen = new TradingPairSelectionScreen(this::onItemSelected);
+        BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.requestTradingPairs(
+                (tradingPairs) -> {
+                    screen.setAvailableTradingPairs(tradingPairs);
+                    //screen.getItemSelectionView().setSorter(new ItemSorter());
+                    //screen.sortItems();
+
+                });
+        Minecraft.getInstance().setScreen(screen);
+    }
+
+    void cancelOrder(OrderReadData order)
+    {
+        getMarket().requestCancelOrder(order.orderID, (success) -> {
+            if(success)
+            {
+                BACKEND_INSTANCES.LOGGER.info("Order cancelled: " + order.orderID);
+            }
+            else
+            {
+                BACKEND_INSTANCES.LOGGER.warn("Failed to cancel order: " + order.orderID);
+            }
+        });
+    }
+
+    private ClientMarket getMarket()
+    {
+        return BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getClientMarket(tradingPair);
     }
 }

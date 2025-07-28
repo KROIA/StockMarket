@@ -13,6 +13,6 @@ public abstract class StockMarketGenericRequest<IN, OUT> extends GenericRequest<
 
     protected boolean playerIsAdmin(ServerPlayer player)
     {
-        return player.hasPermissions(BACKEND_INSTANCES.SERVER_SETTINGS.UTILITIES.ADMIN_PERMISSION_LEVEL.get());
+        return BACKEND_INSTANCES.SERVER_SETTINGS.UTILITIES.playerIsAdmin(player);
     }
 }

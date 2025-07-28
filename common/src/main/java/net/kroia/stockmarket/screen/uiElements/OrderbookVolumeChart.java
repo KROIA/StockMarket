@@ -1,12 +1,12 @@
 package net.kroia.stockmarket.screen.uiElements;
 
 import net.kroia.modutilities.gui.elements.base.GuiElement;
+import net.kroia.stockmarket.market.clientdata.OrderBookVolumeData;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
-import net.kroia.stockmarket.util.OrderbookVolume;
 
 public class OrderbookVolumeChart extends GuiElement {
 
-    private OrderbookVolume orderBookVolume;
+    private OrderBookVolumeData orderBookVolume;
 
     private final int colorSell = TradeScreen.colorRed;
     private final int colorBuy = TradeScreen.colorGreen;
@@ -25,7 +25,7 @@ public class OrderbookVolumeChart extends GuiElement {
     {
         return start2 + (int)((float)((stop2 - start2) * ((value - start1)) / (float)(stop1 - start1)));
     }
-    public void setOrderBookVolume(OrderbookVolume orderBookVolume)
+    public void setOrderBookVolume(OrderBookVolumeData orderBookVolume)
     {
         this.orderBookVolume = orderBookVolume;
     }
@@ -39,21 +39,21 @@ public class OrderbookVolumeChart extends GuiElement {
         int chartViewHeight = getHeight() - 2*PADDING - getHeight()/10;
         int chartViewWidth = getWidth() - PADDING;
 
-        float barHeight = (float)chartViewHeight/ orderBookVolume.getTiles();
+        float barHeight = (float)chartViewHeight/ orderBookVolume.tiles;
 
-        int[] volume = orderBookVolume.getVolume();
+        long[] volume = orderBookVolume.volume;
         // Get max volume of volume
-        int maxVolume = orderBookVolume.getMaxVolume();
+        long maxVolume = orderBookVolume.getMaxVolume();
         int i = 1;
         int y = (int)(PADDING + chartViewHeight+barHeight/2);
         int lastY = y;
-        for (int vol : volume) {
+        for (long vol : volume) {
             lastY = y;
             y = (int)(PADDING + chartViewHeight+barHeight/2 - barHeight*i);
-            int absVol = Math.abs(vol);
+            long absVol = Math.abs(vol);
             if (absVol > 0) {
                 int color = vol > 0 ? colorBuy : colorSell;
-                int barWidth = map(absVol, 0, maxVolume, 0, chartViewWidth);
+                int barWidth = (int)map(absVol, 0L, maxVolume, 0L, (long)chartViewWidth);
                 int xPos = x + chartViewWidth - barWidth;
                 int height = lastY-y;
                 drawRect(xPos, y, barWidth, height, color);

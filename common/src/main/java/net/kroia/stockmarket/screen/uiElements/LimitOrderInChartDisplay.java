@@ -4,9 +4,10 @@ import net.kroia.modutilities.ColorUtilities;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.stockmarket.StockMarketModBackend;
-import net.kroia.stockmarket.market.server.order.LimitOrder;
+import net.kroia.stockmarket.market.clientdata.OrderReadData;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
 
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 
 public class LimitOrderInChartDisplay extends GuiElement {
@@ -18,17 +19,19 @@ public class LimitOrderInChartDisplay extends GuiElement {
     private static final int buyColor = ColorUtilities.getRGB(ColorUtilities.setBrightness(TradeScreen.colorGreen, 0.4f), 255);
     private static final int sellColor = ColorUtilities.getRGB(ColorUtilities.setBrightness(TradeScreen.colorRed, 0.4f), 255);
     private final int color;
-    private final LimitOrder order;
+    private final OrderReadData order;
 
     private final Button moveButton;
     private int globalMouseYStart;
     private int clickPosYOffset;
     private boolean isDragging = false;
     private final Function<Integer, Integer> yPosToPriceFunc;
+    private final BiConsumer<OrderReadData, Integer> onOrderReplacedToNewPrice;
 
-    public LimitOrderInChartDisplay(Function<Integer, Integer> yPosToPriceFunc, LimitOrder order) {
+    public LimitOrderInChartDisplay(Function<Integer, Integer> yPosToPriceFunc, OrderReadData order, BiConsumer<OrderReadData, Integer> onOrderReplacedToNewPrice) {
         super();
         this.yPosToPriceFunc = yPosToPriceFunc;
+        this.onOrderReplacedToNewPrice = onOrderReplacedToNewPrice;
         this.order = order;
         if(order.isBuy())
             color = buyColor;
@@ -49,7 +52,7 @@ public class LimitOrderInChartDisplay extends GuiElement {
         setSize(15, 5);
     }
 
-    public LimitOrder getOrder()
+    public OrderReadData getOrder()
     {
         return order;
     }
@@ -115,7 +118,9 @@ public class LimitOrderInChartDisplay extends GuiElement {
     {
         isDragging = false;
         int newPrice = yPosToPriceFunc.apply(getY()+getHeight()/2);
-        BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.changeOrderPrice(order.getItemID(), order.getOrderID(), newPrice);
+        if(onOrderReplacedToNewPrice != null)
+            onOrderReplacedToNewPrice.accept(order, newPrice);
+
     }
 
 }

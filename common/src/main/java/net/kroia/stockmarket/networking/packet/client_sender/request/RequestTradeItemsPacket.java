@@ -1,8 +1,6 @@
 package net.kroia.stockmarket.networking.packet.client_sender.request;
 
-import net.kroia.stockmarket.util.StockMarketNetworkPacket;
-import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.server.level.ServerPlayer;
+/*
 public class RequestTradeItemsPacket extends StockMarketNetworkPacket {
 
 
@@ -39,3 +37,4 @@ public class RequestTradeItemsPacket extends StockMarketNetworkPacket {
 
     }
 }
+*/

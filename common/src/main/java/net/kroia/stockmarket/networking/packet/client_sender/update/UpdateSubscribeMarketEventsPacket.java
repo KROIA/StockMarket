@@ -1,9 +1,6 @@
 package net.kroia.stockmarket.networking.packet.client_sender.update;
 
-import net.kroia.banksystem.util.ItemID;
-import net.kroia.stockmarket.util.StockMarketNetworkPacket;
-import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.server.level.ServerPlayer;
+/*
 public class UpdateSubscribeMarketEventsPacket extends StockMarketNetworkPacket {
     private ItemID itemID;
     private boolean subscribe;
@@ -52,4 +49,4 @@ public class UpdateSubscribeMarketEventsPacket extends StockMarketNetworkPacket 
     {
         BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.handlePacket(sender, this);
     }
-}
+}*/

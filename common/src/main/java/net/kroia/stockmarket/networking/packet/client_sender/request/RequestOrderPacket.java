@@ -1,9 +1,6 @@
 package net.kroia.stockmarket.networking.packet.client_sender.request;
 
-import net.kroia.banksystem.util.ItemID;
-import net.kroia.stockmarket.util.StockMarketNetworkPacket;
-import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.server.level.ServerPlayer;
+/*
 public class RequestOrderPacket extends StockMarketNetworkPacket {
 
     private ItemID itemID;
@@ -95,3 +92,4 @@ public class RequestOrderPacket extends StockMarketNetworkPacket {
 
 
 }
+*/

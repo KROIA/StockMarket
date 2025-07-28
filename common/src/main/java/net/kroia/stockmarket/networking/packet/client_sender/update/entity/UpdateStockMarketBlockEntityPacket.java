@@ -1,7 +1,7 @@
 package net.kroia.stockmarket.networking.packet.client_sender.update.entity;
 
-import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
+import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.util.StockMarketNetworkPacket;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
@@ -9,7 +9,7 @@ import net.minecraft.server.level.ServerPlayer;
 
 public class UpdateStockMarketBlockEntityPacket extends StockMarketNetworkPacket {
     private BlockPos pos;
-    private ItemID itemID;
+    private TradingPair tradingPair;
     private int amount;
     private int price;
 
@@ -18,7 +18,7 @@ public class UpdateStockMarketBlockEntityPacket extends StockMarketNetworkPacket
     public UpdateStockMarketBlockEntityPacket(BlockPos pos, StockMarketBlockEntity blockEntity) {
         super();
         this.pos = pos;
-        this.itemID = blockEntity.getItemID();
+        this.tradingPair = blockEntity.getTradringPair();
         this.amount = blockEntity.getAmount();
         this.price = blockEntity.getPrice();
     }
@@ -32,8 +32,8 @@ public class UpdateStockMarketBlockEntityPacket extends StockMarketNetworkPacket
         return pos;
     }
 
-    public ItemID getItemID() {
-        return itemID;
+    public TradingPair getItemID() {
+        return tradingPair;
     }
 
     public int getAmount() {
@@ -52,7 +52,7 @@ public class UpdateStockMarketBlockEntityPacket extends StockMarketNetworkPacket
     public void encode(FriendlyByteBuf buf)
     {
         buf.writeBlockPos(pos);
-        buf.writeItem(itemID.getStack());
+        tradingPair.encode(buf);
         buf.writeInt(amount);
         buf.writeInt(price);
     }
@@ -61,7 +61,11 @@ public class UpdateStockMarketBlockEntityPacket extends StockMarketNetworkPacket
     public void decode(FriendlyByteBuf buf)
     {
         this.pos = buf.readBlockPos();
-        this.itemID = new ItemID(buf.readItem());
+        if(this.tradingPair == null)
+        {
+            this.tradingPair = new TradingPair();
+        }
+        this.tradingPair.decode(buf);
         this.amount = buf.readInt();
         this.price = buf.readInt();
     }
@@ -76,7 +80,7 @@ public class UpdateStockMarketBlockEntityPacket extends StockMarketNetworkPacket
             error("BlockEntity not found at position "+this.pos);
             return;
         }
-        blockEntity.setItemID(this.itemID);
+        blockEntity.setTradingPair(this.tradingPair);
         blockEntity.setAmount(this.amount);
         blockEntity.setPrice(this.price);
         blockEntity.setChanged();

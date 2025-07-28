@@ -1,23 +1,6 @@
 package net.kroia.stockmarket.market.server;
 
-import net.kroia.banksystem.api.IBank;
-import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.ServerSaveable;
-import net.kroia.stockmarket.StockMarketModBackend;
-import net.kroia.stockmarket.market.clientdata.BotSettingsData;
-import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
-import net.kroia.stockmarket.market.server.order.Order;
-import net.kroia.stockmarket.networking.packet.server_sender.update.SyncPricePacket;
-import net.kroia.stockmarket.util.OrderbookVolume;
-import net.kroia.stockmarket.util.PriceHistory;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ServerPlayer;
-import org.jetbrains.annotations.Nullable;
-
-import java.util.ArrayList;
-import java.util.UUID;
-
+/*
 public class ServerTradeItem implements ServerSaveable {
     protected static StockMarketModBackend.Instances BACKEND_INSTANCES;
 
@@ -93,16 +76,6 @@ public class ServerTradeItem implements ServerSaveable {
     {
         return marketManager.getTradingBot();
     }
-/*
-    public void setUpdateInterval(long intervalMillis)
-    {
-        updateTimerIntervallMS = intervalMillis;
-    }
-    public long getUpdateInterval()
-    {
-        return updateTimerIntervallMS;
-    }
-*/
     public ItemID getItemID()
     {
         return itemID;
@@ -293,3 +266,4 @@ public class ServerTradeItem implements ServerSaveable {
         }
     }
 }
+*/

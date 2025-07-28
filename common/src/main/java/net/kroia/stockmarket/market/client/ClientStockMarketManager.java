@@ -1,29 +1,174 @@
 package net.kroia.stockmarket.market.client;
 
-import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.StockMarketModBackend;
-import net.kroia.stockmarket.market.clientdata.BotSettingsData;
-import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
-import net.kroia.stockmarket.market.server.order.Order;
-import net.kroia.stockmarket.networking.packet.client_sender.request.RequestBotSettingsPacket;
-import net.kroia.stockmarket.networking.packet.client_sender.request.RequestManageTradingItemPacket;
-import net.kroia.stockmarket.networking.packet.client_sender.request.RequestOrderChangePacket;
-import net.kroia.stockmarket.networking.packet.client_sender.request.RequestTradeItemsPacket;
-import net.kroia.stockmarket.networking.packet.server_sender.update.*;
-import net.kroia.stockmarket.screen.custom.BotSettingsScreen;
-import net.kroia.stockmarket.screen.custom.TradeScreen;
+import net.kroia.stockmarket.market.TradingPair;
+import net.kroia.stockmarket.market.clientdata.TradingPairData;
+import net.kroia.stockmarket.networking.StockMarketNetworking;
+import net.kroia.stockmarket.networking.packet.server_sender.update.SyncTradeItemsPacket;
+import net.minecraft.client.Minecraft;
 
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
+import java.util.List;
+import java.util.UUID;
 import java.util.function.Consumer;
 
 public class ClientStockMarketManager {
 
     protected StockMarketModBackend.Instances BACKEND_INSTANCES;
+    public ClientStockMarketManager(StockMarketModBackend.Instances backendInstances)
+    {
+        this.BACKEND_INSTANCES = backendInstances;
+    }
 
-    private final Map<ItemID, ClientTradeItem> tradeItems = new HashMap<>();
+    private final List<ClientMarket> clientMarkets = new ArrayList<>();
+    private boolean initialized = false;
+
+    public void init()
+    {
+        if(!initialized)
+        {
+            debug("Initializing client stock market manager.");
+            requestTradingPairs((result) -> {
+                populateClientMarkets(result); // populate the client markets with the received trading pairs
+                initialized = true;
+                debug("Client markets initialized with " + clientMarkets.size() + " trading pairs.");
+            });
+        }
+    }
+
+    public ClientMarket getClientMarket(TradingPair pair)
+    {
+        for(ClientMarket market : clientMarkets)
+        {
+            if(market.getTradingPair().equals(pair))
+            {
+                return market;
+            }
+        }
+        if(!initialized)
+        {
+            init();
+        }
+        return null;
+    }
+
+
+    public void requestCreateMarket(TradingPair pair, Consumer<Boolean> callback )
+    {
+        StockMarketNetworking.CREATE_MARKET_REQUEST.sendRequestToServer(new TradingPairData(pair), (result) -> {
+            if(result)
+            {
+                ClientMarket clientMarket = new ClientMarket(pair);
+                clientMarkets.add(clientMarket);
+            }
+            callback.accept(result);
+        });
+    }
+    public void requestRemoveMarket(TradingPair pair, Consumer<Boolean> callback )
+    {
+        StockMarketNetworking.REMOVE_MARKET_REQUEST.sendRequestToServer(new TradingPairData(pair), (result) -> {
+            if(result)
+            {
+                ClientMarket clientMarket = getClientMarket(pair);
+                if(clientMarket != null)
+                {
+                    clientMarkets.remove(clientMarket);
+                    clientMarket.setDead();
+                }
+            }
+            callback.accept(result);
+        });
+    }
+    public void requestTradingPairs(Consumer<List<TradingPair>> callback )
+    {
+        StockMarketNetworking.TRADING_PAIR_LIST_REQUEST.sendRequestToServer(false, (result)->{
+            List<TradingPair> receivedPairs = new ArrayList<>();
+            for(TradingPairData tradingPairData : result.tradingPairs)
+            {
+                receivedPairs.add(tradingPairData.toTradingPair());
+            }
+            populateClientMarkets(receivedPairs); // populate the client markets with the received trading pairs
+            callback.accept(receivedPairs);
+        });
+    }
+
+
+
+
+
+
+
+    public void handlePacket(SyncTradeItemsPacket packet)
+    {
+        List<TradingPair> receivedPairs = new ArrayList<>();
+        for(TradingPairData tradingPairData : packet.data.tradingPairs)
+        {
+            receivedPairs.add(tradingPairData.toTradingPair());
+        }
+        populateClientMarkets(receivedPairs);
+    }
+
+
+
+
+
+    private void populateClientMarkets(List<TradingPair> receivedPairs)
+    {
+        List<ClientMarket> toRemove = new ArrayList<>(clientMarkets);
+
+        for(TradingPair tradingPair : receivedPairs)
+        {
+            ClientMarket clientMarket = getClientMarket(tradingPair);
+            if(clientMarket == null)
+            {
+                clientMarket = new ClientMarket(tradingPair);
+                clientMarkets.add(clientMarket);
+            }
+            else {
+                toRemove.remove(clientMarket);
+            }
+        }
+
+        for(ClientMarket clientMarket : toRemove)
+        {
+            clientMarkets.remove(clientMarket);
+        }
+        initialized = true;
+    }
+
+
+    protected void info(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.info("[ClientStockMarketManager] " + msg);
+    }
+    protected void error(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.error("[ClientStockMarketManager] " + msg);
+    }
+    protected void error(String msg, Throwable e)
+    {
+        BACKEND_INSTANCES.LOGGER.error("[ServerStockMarketManager] " + msg, e);
+    }
+    protected void warn(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.warn("[ClientStockMarketManager] " + msg);
+    }
+    protected void debug(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.debug("[ClientStockMarketManager] " + msg);
+    }
+
+    private StockMarketNetworking getNetworking() {
+        return BACKEND_INSTANCES.NETWORKING;
+    }
+    public static UUID getLocalPlayerUUID()
+    {
+        return Minecraft.getInstance().player != null ? Minecraft.getInstance().player.getUUID() : null;
+    }
+
+
+
+   /* private final Map<ItemID, ClientTradeItem> tradeItems = new HashMap<>();
     private ItemID CURRENCY_ITEM = null;
 
     private SyncBotSettingsPacket syncBotSettingsPacket;
@@ -34,10 +179,7 @@ public class ClientStockMarketManager {
     private boolean syncBotSettingsPacketChanged = false;
     private boolean syncBotTargetPricePacketChanged = false;
 
-    public ClientStockMarketManager(StockMarketModBackend.Instances backendInstances)
-    {
-        this.BACKEND_INSTANCES = backendInstances;
-    }
+
     public void clear()
     {
         tradeItems.clear();
@@ -71,10 +213,6 @@ public class ClientStockMarketManager {
         return tradeItem.getPrice();
     }
 
-    /*public SyncTradeItemsPacket getSyncTradeItemsPacket()
-    {
-        return syncTradeItemsPacket;
-    }*/
     public boolean hasSyncTradeItemsChanged()
     {
         if(syncTradeItemsChanged)
@@ -355,5 +493,5 @@ public class ClientStockMarketManager {
 
     public void requestBotSettings(ItemID itemID, Consumer<BotSettingsData> callback) {
         //RequestBotSettingsPacket.sendPacket(itemID, callback);
-    }
+    }*/
 }

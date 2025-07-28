@@ -1,17 +1,7 @@
 package net.kroia.stockmarket.networking.packet.server_sender.update;
 
 
-import net.kroia.banksystem.util.ItemID;
-import net.kroia.stockmarket.market.server.order.Order;
-import net.kroia.stockmarket.util.OrderbookVolume;
-import net.kroia.stockmarket.util.PriceHistory;
-import net.kroia.stockmarket.util.StockMarketNetworkPacket;
-import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.server.level.ServerPlayer;
-
-import java.util.ArrayList;
-import java.util.UUID;
-
+/*
 public class SyncPricePacket extends StockMarketNetworkPacket {
     private PriceHistory priceHistory;
     private OrderbookVolume orderBookVolume;
@@ -157,4 +147,4 @@ public class SyncPricePacket extends StockMarketNetworkPacket {
     protected void handleOnClient() {
         BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.handlePacket(this);
     }
-}
+}*/

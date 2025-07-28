@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.market.server.bot;
 
 import net.kroia.banksystem.banking.bank.Bank;
+import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.util.MeanRevertingRandomWalk;
 import net.kroia.stockmarket.util.PID;
 import net.minecraft.nbt.CompoundTag;
@@ -136,8 +137,8 @@ public class ServerVolatilityBot extends ServerTradingBot {
     private final PID pid = new PID(0.1f, 0.01f, 0.1f, 1);
 
     Settings settings;
-    public ServerVolatilityBot() {
-        super();
+    public ServerVolatilityBot(ServerMarket market) {
+        super(market);
         setSettings(new Settings());
         randomWalk1 = new MeanRevertingRandomWalk(0.1, 0.05);
         randomWalk2 = new MeanRevertingRandomWalk(0.1, 0.05);
@@ -153,10 +154,10 @@ public class ServerVolatilityBot extends ServerTradingBot {
 
     @Override
     public void createOrders() {
-        long currentItemBalance = getMatchingEngine().getRealVolumeImbalance();
+        long currentItemBalance = getItemImbalance();
 
 
-        int marketOrderAmount = 0;
+        long marketOrderAmount = 0;
         int targetPrice = settings.defaultPrice;
         float volumeScale = settings.volumeScale;
         if(settings.enableVolumeTracking)
@@ -211,13 +212,13 @@ public class ServerVolatilityBot extends ServerTradingBot {
 
         if(marketOrderAmount > 0)
         {
-            int amount = getVolume(getCurrentPrice()+2);
+            long amount = getOrderBookVolume(getCurrentPrice()+2);
             if(-amount < marketOrderAmount)
                 marketOrderAmount = -amount;
         }
         else if(marketOrderAmount < 0)
         {
-            int amount = getVolume(getCurrentPrice()-2);
+            long amount = getOrderBookVolume(getCurrentPrice()-2);
             if(amount < -marketOrderAmount)
                 marketOrderAmount = -amount;
         }

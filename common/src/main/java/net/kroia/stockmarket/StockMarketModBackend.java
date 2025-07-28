@@ -13,14 +13,15 @@ import net.kroia.stockmarket.entity.StockMarketEntities;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
 import net.kroia.stockmarket.item.StockMarketCreativeModeTab;
 import net.kroia.stockmarket.item.StockMarketItems;
+import net.kroia.stockmarket.market.TradingPair;
+import net.kroia.stockmarket.market.client.ClientMarket;
 import net.kroia.stockmarket.market.client.ClientStockMarketManager;
 import net.kroia.stockmarket.market.server.*;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
 import net.kroia.stockmarket.market.server.order.Order;
+import net.kroia.stockmarket.market.server.order.OrderFactory;
 import net.kroia.stockmarket.menu.StockMarketMenus;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
-import net.kroia.stockmarket.networking.packet.server_sender.update.SyncTradeItemsPacket;
-import net.kroia.stockmarket.screen.custom.BotSettingsScreen;
 import net.kroia.stockmarket.screen.custom.StockMarketManagementScreen;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
 import net.kroia.stockmarket.screen.custom.botsetup.BotSetupScreen;
@@ -66,6 +67,7 @@ public class StockMarketModBackend implements StockMarketAPI {
         StockMarketNetworkPacket.setBackend(INSTANCES);
         StockMarketGenericRequest.setBackend(INSTANCES);
         StockMarketTextMessages.setBackend(INSTANCES);
+        TradingPair.setBackend(INSTANCES);
 
         CommandRegistrationEvent.EVENT.register((dispatcher, registryAccess, environment) -> {
             StockMarketCommands.register(dispatcher);
@@ -95,7 +97,7 @@ public class StockMarketModBackend implements StockMarketAPI {
         INSTANCES.CLIENT_STOCKMARKET_MANAGER = new ClientStockMarketManager(INSTANCES);
 
         BotSetupScreen.setBackend(INSTANCES);
-        BotSettingsScreen.setBackend(INSTANCES);
+        //BotSettingsScreen.setBackend(INSTANCES);
         StockMarketManagementScreen.setBackend(INSTANCES);
         TradeScreen.setBackend(INSTANCES);
         CandleStickChart.setBackend(INSTANCES);
@@ -103,6 +105,7 @@ public class StockMarketModBackend implements StockMarketAPI {
         OrderListView.setBackend(INSTANCES);
         TradePanel.setBackend(INSTANCES);
         OrderView.setBackend(INSTANCES);
+        ClientMarket.setBackend(INSTANCES);
 
         StockMarketMenus.setupScreens();
     }
@@ -116,10 +119,12 @@ public class StockMarketModBackend implements StockMarketAPI {
         Order.setBackend(INSTANCES);
         ServerTradingBot.setBackend(INSTANCES);
         MatchingEngine.setBackend(INSTANCES);
-        TradeManager.setBackend(INSTANCES);
-        ServerTradeItem.setBackend(INSTANCES);
+        //TradeManager.setBackend(INSTANCES);
+        //ServerTradeItem.setBackend(INSTANCES);
         DefaultMarketBotSettings.setBackend(INSTANCES);
         TransactionEngine.setBackend(INSTANCES);
+        OrderFactory.setBackend(INSTANCES);
+        ServerMarket.setBackend(INSTANCES);
     }
 
     // Called from the server side
@@ -167,13 +172,13 @@ public class StockMarketModBackend implements StockMarketAPI {
     public static void onPlayerJoin(ServerPlayer player)
     {
         ServerPlayerList.addPlayer(player);
-        SyncTradeItemsPacket.sendPacket(player);
+        //SyncTradeItemsPacket.sendPacket(player);
     }
 
     // Called from the server side
     public static void onPlayerLeave(ServerPlayer player)
     {
-        INSTANCES.SERVER_STOCKMARKET_MANAGER.removePlayerUpdateSubscription(player);
+        //INSTANCES.SERVER_STOCKMARKET_MANAGER.removePlayerUpdateSubscription(player);
     }
 
     // Called from the server side
@@ -182,10 +187,10 @@ public class StockMarketModBackend implements StockMarketAPI {
         long currentTimeMillis = System.currentTimeMillis();
 
         INSTANCES.SERVER_STOCKMARKET_MANAGER.onServerTick(server);
-        if(currentTimeMillis - lastTimeMS > INSTANCES.SERVER_SETTINGS.MARKET.SHIFT_PRICE_CANDLE_INTERVAL_MS.get()) {
+        /*if(currentTimeMillis - lastTimeMS > INSTANCES.SERVER_SETTINGS.MARKET.SHIFT_PRICE_CANDLE_INTERVAL_MS.get()) {
             lastTimeMS = currentTimeMillis;
             INSTANCES.SERVER_STOCKMARKET_MANAGER.shiftPriceHistory();
-        }
+        }*/
         INSTANCES.SERVER_DATA_HANDLER.tickUpdate();
     }
 

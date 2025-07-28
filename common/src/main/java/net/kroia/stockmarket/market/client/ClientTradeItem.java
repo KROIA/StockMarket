@@ -1,22 +1,6 @@
 package net.kroia.stockmarket.market.client;
 
-import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.PlayerUtilities;
-import net.kroia.stockmarket.market.server.order.LimitOrder;
-import net.kroia.stockmarket.market.server.order.Order;
-import net.kroia.stockmarket.networking.packet.client_sender.request.RequestOrderCancelPacket;
-import net.kroia.stockmarket.networking.packet.client_sender.request.RequestOrderPacket;
-import net.kroia.stockmarket.networking.packet.client_sender.update.UpdateSubscribeMarketEventsPacket;
-import net.kroia.stockmarket.networking.packet.server_sender.update.SyncOrderPacket;
-import net.kroia.stockmarket.networking.packet.server_sender.update.SyncPricePacket;
-import net.kroia.stockmarket.util.OrderbookVolume;
-import net.kroia.stockmarket.util.PriceHistory;
-import net.kroia.stockmarket.util.StockMarketTextMessages;
-
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
-
+/*
 public class ClientTradeItem {
 
 
@@ -192,3 +176,4 @@ public class ClientTradeItem {
         UpdateSubscribeMarketEventsPacket.generateRequest(itemID, false);
     }
 }
+*/

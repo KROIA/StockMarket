@@ -3,15 +3,16 @@ package net.kroia.stockmarket.screen.uiElements;
 import com.mojang.datafixers.util.Pair;
 import net.kroia.modutilities.gui.elements.*;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
+import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
-import net.kroia.stockmarket.screen.custom.BotSettingsScreen;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
 
 public class BotSettingsWidget extends GuiElement {
 
-    private static final String PREFIX = BotSettingsScreen.PREFIX;
+    private static final String NAME = "bot_settings_screen";
+    public static final String PREFIX = "gui."+ StockMarketMod.MOD_ID+"."+NAME+".";
 
     public static final Component SETTING_ENABLED = Component.translatable(PREFIX+"setting_enabled");
     public static final Component SETTINGS_UPDATE_INTERVAL = Component.translatable(PREFIX+"settings_update_interval");

@@ -4,16 +4,12 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ServerSaveable;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.server.GhostOrderBook;
-import net.kroia.stockmarket.market.server.MatchingEngine;
-import net.kroia.stockmarket.market.server.TradeManager;
+import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
-import net.kroia.stockmarket.market.server.order.MarketOrder;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
 
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.PriorityQueue;
 
 /**
  * The ServerTradingBot simulates buy and sell orders to generate a movement in the market if no players are trading
@@ -91,9 +87,12 @@ public class ServerTradingBot implements ServerSaveable {
 
 
     }
+
+    private final ServerMarket serverMarket;
+
     protected Settings settings;
-    private MatchingEngine matchingEngine;
-    TradeManager parent;
+    //private MatchingEngine matchingEngine;
+    //TradeManager parent;
 
     protected ArrayList<LimitOrder> buyOrders = new ArrayList<>();
     protected ArrayList<LimitOrder> sellOrders = new ArrayList<>();
@@ -103,10 +102,12 @@ public class ServerTradingBot implements ServerSaveable {
 
     private long lastMillis = 0;
 
-    public ServerTradingBot() {
+    public ServerTradingBot(ServerMarket serverMarket) {
+        this.serverMarket = serverMarket;
         settings = new Settings();
     }
-    protected ServerTradingBot(Settings settings) {
+    protected ServerTradingBot(ServerMarket market, Settings settings) {
+        this.serverMarket = market;
         this.settings = settings;
     }
 
@@ -115,23 +116,20 @@ public class ServerTradingBot implements ServerSaveable {
         this.settings = settings;
         if(settings == null)
             return;
-        if(matchingEngine != null)
+        GhostOrderBook orderBook = serverMarket.getOrderBook().getGhostOrderBook();
+        if(orderBook != null)
         {
-            GhostOrderBook orderBook = matchingEngine.getGhostOrderBook();
-            if(orderBook != null)
-            {
-                orderBook.setVolumeScale(settings.orderBookVolumeScale);
-                orderBook.setNearMarketVolumeScale(settings.nearMarketVolumeScale);
-                orderBook.setVolumeAccumulationRate(settings.volumeAccumulationRate);
-                orderBook.setVolumeFastAccumulationRate(settings.volumeFastAccumulationRate);
-                orderBook.setVolumeDecumulationRate(settings.volumeDecumulationRate);
-            }
+            orderBook.setVolumeScale(settings.orderBookVolumeScale);
+            orderBook.setNearMarketVolumeScale(settings.nearMarketVolumeScale);
+            orderBook.setVolumeAccumulationRate(settings.volumeAccumulationRate);
+            orderBook.setVolumeFastAccumulationRate(settings.volumeFastAccumulationRate);
+            orderBook.setVolumeDecumulationRate(settings.volumeDecumulationRate);
         }
     }
     public Settings getSettings()
     {
-        if(matchingEngine != null && settings != null) {
-            GhostOrderBook orderBook = matchingEngine.getGhostOrderBook();
+        if(serverMarket.getMatchingEngine() != null && settings != null) {
+            GhostOrderBook orderBook = serverMarket.getOrderBook().getGhostOrderBook();
             if (orderBook != null) {
                 settings.orderBookVolumeScale = orderBook.getVolumeScale();
                 settings.nearMarketVolumeScale = orderBook.getNearMarketVolumeScale();
@@ -144,14 +142,14 @@ public class ServerTradingBot implements ServerSaveable {
     }
 
 
-    public void setParent(TradeManager parent)
+    /*public void setParent(TradeManager parent)
     {
         this.parent = parent;
-    }
-    public TradeManager getParent()
+    }*/
+    /*public TradeManager getParent()
     {
         return this.parent;
-    }
+    }*/
 
     protected void update()
     {
@@ -159,11 +157,7 @@ public class ServerTradingBot implements ServerSaveable {
         createOrders();
     }
 
-    protected MatchingEngine getMatchingEngine()
-    {
-        return matchingEngine;
-    }
-    public void setMatchingEngine(MatchingEngine matchingEngine)
+   /* public void setMatchingEngine(MatchingEngine matchingEngine)
     {
         this.matchingEngine = matchingEngine;
         if(tmp_load_buyOrderIDs != null)
@@ -201,7 +195,7 @@ public class ServerTradingBot implements ServerSaveable {
             }
             tmp_load_sellOrderIDs = null;
         }
-    }
+    }*/
     public void setUpdateInterval(long intervalMillis)
     {
         this.settings.updateTimerIntervallMS = intervalMillis;
@@ -218,29 +212,17 @@ public class ServerTradingBot implements ServerSaveable {
     {
         return this.settings.enabled;
     }
-    public ItemID getItemID()
+    /*public ItemID getItemID()
     {
         return parent.getItemID();
     }
-
+*/
 
 
 
     public void clearOrders()
     {
-        matchingEngine.removeBuyOrder_internal(buyOrders);
-        matchingEngine.removeSellOrder_internal(sellOrders);
-
-        for(LimitOrder order : buyOrders)
-        {
-            order.markAsCancelled();
-        }
-        for(LimitOrder order : sellOrders)
-        {
-            order.markAsCancelled();
-        }
-        buyOrders.clear();
-        sellOrders.clear();
+        serverMarket.cancelAllBotOrders();
     }
 
     protected void createOrders()
@@ -248,101 +230,65 @@ public class ServerTradingBot implements ServerSaveable {
 
     }
 
-    protected int getMarketVolume(int price)
+    protected long getOrderBookVolume(int price)
     {
-        if(matchingEngine == null)
-            return 0;
-        return matchingEngine.getVolume(price);
+        return serverMarket.getOrderBook().getVolume(price, serverMarket.getCurrentPrice());
     }
-    protected int getMarketVolume(int minPrice, int maxPrice)
+    protected long getOrderBookVolume(int minPrice, int maxPrice)
     {
-        if(matchingEngine == null)
-            return 0;
-        return matchingEngine.getVolume(minPrice, maxPrice);
+        return serverMarket.getOrderBook().getVolumeInRange(minPrice, maxPrice);
     }
 
     protected int getCurrentPrice()
     {
-        if(matchingEngine == null)
-            return 0;
-        return matchingEngine.getPrice();
+        return serverMarket.getCurrentPrice();
+    }
+    protected long getItemImbalance()
+    {
+        return serverMarket.getItemImbalance();
     }
 
     protected ItemID getCurrencyItemID()
     {
-        return parent.getPriceHistory().getCurrencyItemID();
+        return serverMarket.getTradingPair().getCurrency();
     }
 
-    protected boolean buyLimit(int volume, int price)
+    protected boolean buyLimit(long volume, int price)
     {
-        if(volume <= 0 || price < 0 || matchingEngine == null)
+        if(volume <= 0 || price < 0)
             return false;
-        ItemID itemID = parent.getItemID();
-        LimitOrder buyOrder = LimitOrder.createBotOrder(itemID, getCurrencyItemID(), volume, price);
-        if(buyOrder != null)
-        {
-            matchingEngine.addOrder(buyOrder);
-            buyOrders.add(buyOrder);
-            return true;
-        }
-        return false;
-    }
-    protected boolean sellLimit(int volume, int price)
-    {
-        if(volume <= 0 || price < 0 || matchingEngine == null)
-            return false;
-        ItemID itemID = parent.getItemID();
-        LimitOrder sellOrder = LimitOrder.createBotOrder(itemID, getCurrencyItemID(), -volume, price);
-        matchingEngine.addOrder(sellOrder);
-        sellOrders.add(sellOrder);
-        return true;
-    }
-    protected boolean limitTrade(int volume, int price)
-    {
-        if(volume == 0 || price < 0 || matchingEngine == null)
-            return false;
-        ItemID itemID = parent.getItemID();
-        LimitOrder order = LimitOrder.createBotOrder(itemID, getCurrencyItemID(), volume, price);
-        matchingEngine.addOrder(order);
-        if(volume > 0)
-            buyOrders.add(order);
-        else
-            sellOrders.add(order);
-        return true;
-    }
-    protected boolean buyMarket(int volume)
-    {
-        if(volume <= 0 || matchingEngine == null)
-            return false;
-        ItemID itemID = parent.getItemID();
-        MarketOrder buyOrder = MarketOrder.createBotOrder(itemID, getCurrencyItemID(), volume);
-        matchingEngine.addOrder(buyOrder);
-        return true;
-    }
-    protected boolean sellMarket(int volume)
-    {
-        if(volume == 0 || matchingEngine == null)
-            return false;
-        ItemID itemID = parent.getItemID();
-        MarketOrder sellOrder = MarketOrder.createBotOrder(itemID, getCurrencyItemID(), volume);
-        matchingEngine.addOrder(sellOrder);
-        return true;
-    }
-    protected boolean marketTrade(int volume)
-    {
-        if(volume == 0 || matchingEngine == null)
-            return false;
-        ItemID itemID = parent.getItemID();
-        MarketOrder order = MarketOrder.createBotOrder(itemID, getCurrencyItemID(), volume);
-        matchingEngine.addOrder(order);
-        return true;
-    }
 
-    protected int getVolume(int price)
+        return serverMarket.createBotLimitOrder(volume, price);
+    }
+    protected boolean sellLimit(long volume, int price)
     {
-        if(matchingEngine == null)
-            return 0;
-        return matchingEngine.getVolume(price);
+        if(volume <= 0 || price < 0)
+            return false;
+        return serverMarket.createBotLimitOrder(-volume, price);
+    }
+    protected boolean limitTrade(long volume, int price)
+    {
+        if(volume == 0 || price < 0)
+            return false;
+        return serverMarket.createBotLimitOrder(volume, price);
+    }
+    protected boolean buyMarket(long volume)
+    {
+        if(volume <= 0)
+            return false;
+        return serverMarket.createBotMarketOrder(volume);
+    }
+    protected boolean sellMarket(long volume)
+    {
+        if(volume <= 0)
+            return false;
+        return serverMarket.createBotMarketOrder(-volume);
+    }
+    protected boolean marketTrade(long volume)
+    {
+        if(volume == 0)
+            return false;
+        return serverMarket.createBotMarketOrder(volume);
     }
 
     @Override
@@ -392,8 +338,8 @@ public class ServerTradingBot implements ServerSaveable {
         return success;
     }
 
-    public void onServerTick(MinecraftServer server) {
-        if(!this.settings.enabled || matchingEngine == null || parent == null)
+    public void update(MinecraftServer server) {
+        if(!this.settings.enabled)
             return;
         long currentTime = System.currentTimeMillis();
 
