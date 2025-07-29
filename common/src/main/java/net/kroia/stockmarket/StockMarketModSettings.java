@@ -108,6 +108,10 @@ public class StockMarketModSettings extends ModSettings {
                 new TypeToken<HashMap<ItemID, Integer>>(){}.getType()
         );
 
+        /**
+         * Defines the size of the virtual order book array which is used as ghost order liquidity
+         */
+        public final Setting<Integer> VIRTUAL_ORDERBOOK_ARRAY_SIZE = registerSetting("VIRTUAL_ORDERBOOK_ARRAY_SIZE", 100, Integer.class);
 
 
         public Market() { super("Market"); }

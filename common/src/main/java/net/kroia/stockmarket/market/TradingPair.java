@@ -4,6 +4,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.JsonUtilities;
 import net.kroia.modutilities.ServerSaveable;
 import net.kroia.modutilities.networking.INetworkPayloadConverter;
 import net.kroia.stockmarket.StockMarketModBackend;
@@ -197,7 +198,7 @@ public class TradingPair implements ServerSaveable, INetworkPayloadConverter {
     }
 
     public String toJsonString() {
-        return toJson().toString();
+        return JsonUtilities.toPrettyString(toJson());
     }
     @Override
     public String toString() {

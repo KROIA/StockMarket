@@ -23,8 +23,8 @@ public class GhostOrderBook implements ServerSaveable {
     private float volumeAccumulationRate = 0.1f;
     private float volumeFastAccumulationRate = 0.5f;
     private float volumeDecumulationRate = 0.01f;
-    public GhostOrderBook(int initialPrice) {
-        virtualOrderVolumeDistribution = new DynamicIndexedArray(1000, this::getTargetAmount);
+    public GhostOrderBook(int realVolumeBookSize, int initialPrice) {
+        virtualOrderVolumeDistribution = new DynamicIndexedArray(realVolumeBookSize, this::getTargetAmount);
         lastMillis = System.currentTimeMillis()-1000;
         setCurrentPrice(initialPrice);
         updateVolume(initialPrice);
@@ -39,14 +39,25 @@ public class GhostOrderBook implements ServerSaveable {
         double deltaT = Math.min((currentMillis - lastMillis) / 1000.0, 1000.0);
         lastMillis = currentMillis;
 
-        for(int i=0; i<virtualOrderVolumeDistribution.getSize(); i++)
+        int startOffset = 0;
+        if(virtualOrderVolumeDistribution.getIndexOffset() < 0)
         {
-            int virtualIndex = virtualOrderVolumeDistribution.getVirtualIndex(i);
-            if(virtualIndex < 0)
+            startOffset -= virtualOrderVolumeDistribution.getIndexOffset();
+        }
+        for(int i=startOffset; i<virtualOrderVolumeDistribution.getSize(); i++)
+        {
+            int priceIndex = virtualOrderVolumeDistribution.getVirtualIndex(i);
+            if(priceIndex < 0)
                 continue;
-            float targetAmount = getTargetAmount(virtualIndex);
-            float currentVal = virtualOrderVolumeDistribution.get(virtualIndex);
+            float targetAmount = getTargetAmount(priceIndex);
+            float currentVal = virtualOrderVolumeDistribution.get(priceIndex);
             if((currentVal<targetAmount) || (currentVal>targetAmount)) {
+                if(currentVal < 0 && targetAmount > 0 || currentVal > 0 && targetAmount < 0)
+                {
+                    currentVal = 0;
+                    virtualOrderVolumeDistribution.set(priceIndex, currentVal);
+                }
+
                 float scale = volumeAccumulationRate;
 
                 if(Math.abs(currentVal) < Math.abs(targetAmount)*0.1f)
@@ -66,7 +77,7 @@ public class GhostOrderBook implements ServerSaveable {
                 {
                     deltaAmount = -currentVal;
                 }
-                virtualOrderVolumeDistribution.add(virtualIndex, deltaAmount);
+                virtualOrderVolumeDistribution.add(priceIndex, deltaAmount);
 
             }
         }
@@ -190,6 +201,8 @@ public class GhostOrderBook implements ServerSaveable {
 
     @Override
     public boolean load(CompoundTag tag) {
+        if(tag.contains("virtualOrderVolumeDistribution"))
+            virtualOrderVolumeDistribution.load(tag.getCompound("virtualOrderVolumeDistribution"));
         volumeScale = tag.getFloat("volumeScale");
         nearMarketVolumeScale = tag.getFloat("nearMarketVolumeStrength");
         volumeAccumulationRate = tag.getFloat("volumeAccumulationRate");
@@ -203,38 +216,18 @@ public class GhostOrderBook implements ServerSaveable {
         if(volumeDecumulationRate <= 0)
             this.volumeDecumulationRate = 0.00001f;
 
-        int size = tag.getInt("arraySize");
-        int[] intArray = tag.getIntArray("volumeArray");
-        float[] array = new float[size];
-        for(int i=0; i<size; i++)
-        {
-            array[i] = Float.intBitsToFloat(intArray[i]);
-        }
-        virtualOrderVolumeDistribution.setOffset(tag.getInt("currentIndexOffset"));
-        for(int i=0; i<size; i++)
-        {
-            virtualOrderVolumeDistribution.set(virtualOrderVolumeDistribution.getVirtualIndex(i), array[i]);
-        }
-
         return true;
     }
     @Override
     public boolean save(CompoundTag tag) {
-        int size = virtualOrderVolumeDistribution.getSize();
-        float[] array = virtualOrderVolumeDistribution.getArray();
-        int[] intArray = new int[size];
-        for(int i=0; i<size; i++)
-        {
-            intArray[i] = Float.floatToIntBits(array[i]);
-        }
+        CompoundTag virtualOrderVolumeDistributionTag = new CompoundTag();
+        virtualOrderVolumeDistribution.save(virtualOrderVolumeDistributionTag);
+        tag.put("virtualOrderVolumeDistribution", virtualOrderVolumeDistributionTag);
         tag.putFloat("volumeScale", volumeScale);
         tag.putFloat("nearMarketVolumeStrength", nearMarketVolumeScale);
         tag.putFloat("volumeAccumulationRate", volumeAccumulationRate);
         tag.putFloat("volumeFastAccumulationRate", volumeFastAccumulationRate);
         tag.putFloat("volumeDecumulationRate", volumeDecumulationRate);
-        tag.putInt("arraySize", size);
-        tag.putInt("currentIndexOffset", virtualOrderVolumeDistribution.getIndexOffset());
-        tag.putIntArray("volumeArray", intArray);
         return true;
     }
 

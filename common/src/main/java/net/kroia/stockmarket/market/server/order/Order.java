@@ -1,9 +1,8 @@
 package net.kroia.stockmarket.market.server.order;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import net.kroia.modutilities.JsonUtilities;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.ServerSaveable;
 import net.kroia.modutilities.networking.INetworkPayloadConverter;
@@ -38,7 +37,6 @@ public abstract class Order implements ServerSaveable, INetworkPayloadConverter 
     public static void setBackend(StockMarketModBackend.Instances backend) {
         BACKEND_INSTANCES = backend;
     }
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static long lastOrderID = 0;
 
 
@@ -384,7 +382,7 @@ public abstract class Order implements ServerSaveable, INetworkPayloadConverter 
     }
 
     public String toJsonString() {
-        return GSON.toJson(toJson());
+        return JsonUtilities.toPrettyString(toJson());
     }
     @Override
     public String toString() {

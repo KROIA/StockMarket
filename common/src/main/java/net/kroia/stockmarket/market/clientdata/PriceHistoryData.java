@@ -10,9 +10,13 @@ public class PriceHistoryData implements INetworkPayloadEncoder {
     private final PriceHistory history;
 
 
+    public PriceHistoryData(@NotNull PriceHistory history, int historyViewCount)
+    {
+        this.history = PriceHistory.copy(history, historyViewCount);
+    }
     public PriceHistoryData(@NotNull PriceHistory history)
     {
-        this.history = history;
+        this.history = PriceHistory.copy(history, -1);
     }
 
     public PriceHistory toHistory() {

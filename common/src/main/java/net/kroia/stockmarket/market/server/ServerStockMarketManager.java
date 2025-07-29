@@ -54,12 +54,19 @@ public class ServerStockMarketManager implements ServerSaveable
             return null;
         return market.getTradingPairData();
     }
-    public @Nullable OrderBookVolumeData getOrderBookVolumeData(@NotNull TradingPair pair, int minPrice, int maxPrice, int tileCount)
+    public @Nullable OrderBookVolumeData getOrderBookVolumeData(@NotNull TradingPair pair, int historyViewCount, int minPrice, int maxPrice, int tileCount)
     {
         ServerMarket market = markets.get(pair);
         if(market == null)
             return null;
-        return market.getOrderBookVolumeData(minPrice, maxPrice, tileCount);
+        return market.getOrderBookVolumeData(historyViewCount, minPrice, maxPrice, tileCount);
+    }
+    public @Nullable OrderBookVolumeData getOrderBookVolumeData(@NotNull TradingPair pair)
+    {
+        ServerMarket market = markets.get(pair);
+        if(market == null)
+            return null;
+        return market.getOrderBookVolumeData();
     }
     public @Nullable OrderReadData getOrderReadData(@NotNull TradingPair pair, long orderID)
     {
@@ -82,19 +89,26 @@ public class ServerStockMarketManager implements ServerSaveable
             return null;
         return market.getOrderReadListData(playerUUID);
     }
-    public @Nullable PriceHistoryData getPriceHistoryData(@NotNull TradingPair pair)
+    public @Nullable PriceHistoryData getPriceHistoryData(@NotNull TradingPair pair, int maxHistoryPointCount)
     {
         ServerMarket market = markets.get(pair);
         if(market == null)
             return null;
-        return market.getPriceHistoryData();
+        return market.getPriceHistoryData(maxHistoryPointCount);
     }
-    public @Nullable TradingViewData getTradingViewData(@NotNull TradingPair pair, UUID player, int minVisiblePrice, int maxVisiblePrice, int orderBookTileCount)
+    public @Nullable TradingViewData getTradingViewData(@NotNull TradingPair pair, UUID player, int maxHistoryPointCount, int minVisiblePrice, int maxVisiblePrice, int orderBookTileCount)
     {
         ServerMarket market = markets.get(pair);
         if(market == null)
             return null;
-        return market.getTradingViewData(player, minVisiblePrice, maxVisiblePrice, orderBookTileCount);
+        return market.getTradingViewData(player, maxHistoryPointCount, minVisiblePrice, maxVisiblePrice, orderBookTileCount);
+    }
+    public @Nullable TradingViewData getTradingViewData(@NotNull TradingPair pair, UUID player)
+    {
+        ServerMarket market = markets.get(pair);
+        if(market == null)
+            return null;
+        return market.getTradingViewData(player);
     }
     public @Nullable ServerMarketSettingsData getMarketSettingsData(@NotNull TradingPair pair)
     {

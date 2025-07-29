@@ -5,6 +5,7 @@ import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.clientdata.*;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.kroia.stockmarket.networking.packet.request.PlayerOrderReadDataListRequest;
+import net.kroia.stockmarket.networking.packet.request.PriceHistoryRequest;
 import net.kroia.stockmarket.networking.packet.request.TradingViewDataRequest;
 
 import java.util.UUID;
@@ -38,12 +39,19 @@ public class ClientMarket {
             return;
         StockMarketNetworking.BOT_SETTINGS_REQUEST.sendRequestToServer(tradingPair, callback);
     }
-    public void requestOrderBookVolume(int minimalVisiblePrice, int maximalVisiblePrice, int tileCount,
+    public void requestOrderBookVolume(int maxHistoryPointCount, int minimalVisiblePrice, int maximalVisiblePrice, int tileCount,
                                        Consumer<OrderBookVolumeData> callback)
     {
         if(checkDeadAndDebug())
             return;
-        TradingViewDataRequest.Input input = new TradingViewDataRequest.Input(tradingPair, minimalVisiblePrice, maximalVisiblePrice, tileCount);
+        TradingViewDataRequest.Input input = new TradingViewDataRequest.Input(tradingPair,maxHistoryPointCount, minimalVisiblePrice, maximalVisiblePrice, tileCount);
+        StockMarketNetworking.ORDER_BOOK_VOLUME_REQUEST.sendRequestToServer(input, callback);
+    }
+    public void requestOrderBookVolume(Consumer<OrderBookVolumeData> callback)
+    {
+        if(checkDeadAndDebug())
+            return;
+        TradingViewDataRequest.Input input = new TradingViewDataRequest.Input(tradingPair);
         StockMarketNetworking.ORDER_BOOK_VOLUME_REQUEST.sendRequestToServer(input, callback);
     }
     public void requestCancelOrder(long orderID,
@@ -107,10 +115,10 @@ public class ClientMarket {
         StockMarketNetworking.PLAYER_ORDER_READ_DATA_LIST_REQUEST.sendRequestToServer(inputData, callback);
     }
 
-    public void requestPriceHistory(Consumer<PriceHistoryData> callback) {
+    public void requestPriceHistory(int maxHistoryPointCount, Consumer<PriceHistoryData> callback) {
         if(checkDeadAndDebug())
             return;
-        StockMarketNetworking.PRICE_HISTORY_REQUEST.sendRequestToServer(new TradingPairData(tradingPair), callback);
+        StockMarketNetworking.PRICE_HISTORY_REQUEST.sendRequestToServer(new PriceHistoryRequest.Input(tradingPair, maxHistoryPointCount), callback);
     }
     public void requestGetMarketSettings(Consumer<ServerMarketSettingsData> callback) {
         if(checkDeadAndDebug())
@@ -127,13 +135,20 @@ public class ClientMarket {
         StockMarketNetworking.SET_SERVER_MARKET_SETTINGS_REQUEST.sendRequestToServer(settings, callback);
     }
 
-    public void requestTradingViewData(int minimalVisiblePrice, int maximalVisiblePrice, int tileCount,
+    public void requestTradingViewData(int maxHistoryPointCount, int minimalVisiblePrice, int maximalVisiblePrice, int tileCount,
                                        Consumer<TradingViewData> callback) {
         if(checkDeadAndDebug())
             return;
-        TradingViewDataRequest.Input input = new TradingViewDataRequest.Input(tradingPair, minimalVisiblePrice, maximalVisiblePrice, tileCount);
+        TradingViewDataRequest.Input input = new TradingViewDataRequest.Input(tradingPair, maxHistoryPointCount, minimalVisiblePrice, maximalVisiblePrice, tileCount);
         StockMarketNetworking.TRADING_VIEW_DATA_REQUEST.sendRequestToServer(input, callback);
     }
+    public void requestTradingViewData(Consumer<TradingViewData> callback) {
+        if(checkDeadAndDebug())
+            return;
+        TradingViewDataRequest.Input input = new TradingViewDataRequest.Input(tradingPair);
+        StockMarketNetworking.TRADING_VIEW_DATA_REQUEST.sendRequestToServer(input, callback);
+    }
+
 
     public void requestBotTargetPrice(Consumer<Integer> callback) {
         if(checkDeadAndDebug())

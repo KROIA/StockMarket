@@ -1,14 +1,15 @@
 package net.kroia.stockmarket.util;
 
-import dev.architectury.utils.value.FloatSupplier;
+import net.kroia.modutilities.ServerSaveable;
+import net.minecraft.nbt.CompoundTag;
 
-import java.security.Provider;
-import java.util.function.Consumer;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.function.Function;
 
-public class DynamicIndexedArray{
+public class DynamicIndexedArray implements ServerSaveable {
 
-    private final float[] array;
+    private float[] array;
     private int indexOffset;
     private final Function<Integer, Float> defaultValueProvider;
 
@@ -146,4 +147,42 @@ public class DynamicIndexedArray{
     }
 
 
+    @Override
+    public boolean save(CompoundTag tag) {
+        tag.putInt("indexOffset", indexOffset);
+        tag.putByteArray("array", floatArrayToByteArray(array));
+        return true;
+    }
+
+    @Override
+    public boolean load(CompoundTag tag) {
+        if(!tag.contains("indexOffset") || !tag.contains("array"))
+            return false;
+
+        indexOffset = tag.getInt("indexOffset");
+        byte[] byteArray = tag.getByteArray("array");
+        if(byteArray.length % 4 != 0) {
+            return false; // Invalid byte array length for floats
+        }
+        array = byteArrayToFloatArray(byteArray);
+        return true;
+    }
+
+    private static byte[] floatArrayToByteArray(float[] floatArray) {
+        ByteBuffer buffer = ByteBuffer.allocate(floatArray.length * 4);
+        buffer.order(ByteOrder.LITTLE_ENDIAN); // or ByteOrder.BIG_ENDIAN
+        for (float f : floatArray) {
+            buffer.putFloat(f);
+        }
+        return buffer.array();
+    }
+    private static float[] byteArrayToFloatArray(byte[] byteArray) {
+        ByteBuffer buffer = ByteBuffer.wrap(byteArray);
+        buffer.order(ByteOrder.LITTLE_ENDIAN); // same as used when writing
+        float[] floatArray = new float[byteArray.length / 4];
+        for (int i = 0; i < floatArray.length; i++) {
+            floatArray[i] = buffer.getFloat();
+        }
+        return floatArray;
+    }
 }

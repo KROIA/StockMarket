@@ -69,13 +69,18 @@ public class TradePanel extends GuiElement {
         currentItemBalanceLabel = new Label();
         currentItemBalanceLabel.setAlignment(Alignment.LEFT);
         moneyItemView = new ItemView();
-        moneyItemView.setShowTooltip(false);
         currentMoneyBalanceLabel = new Label();
         currentMoneyBalanceLabel.setAlignment(Alignment.LEFT);
         currentPriceTextLabel = new Label(PRICE_LABEL.getString());
         currentPriceTextLabel.setAlignment(Alignment.RIGHT);
         currentPriceLabel = new Label();
         currentPriceLabel.setAlignment(Alignment.LEFT);
+        currentPriceLabel.setHoverTooltipSupplier(() -> {
+            String itemName = "";
+            if(moneyItemView.getItemStack()!=null)
+                itemName = moneyItemView.getItemStack().getHoverName().getString();
+            return itemName;
+        });
         amountLabel = new Label(AMOUNT_LABEL.getString()+":");
         amountLabel.setAlignment(Alignment.RIGHT);
         amountTextBox = new TextBox(0,0,0);
@@ -93,6 +98,7 @@ public class TradePanel extends GuiElement {
         marketBuyButton.setHoverColor(buyButtonHoverColor);
         marketBuyButton.setIdleColor(buyButtonNormalColor);
         marketBuyButton.setPressedColor(buyButtonPressedColor);
+        //marketBuyButton.ho
         marketSellButton = new Button(SELL.getString(), onMarketSellButtonClicked);
         marketSellButton.setHoverColor(sellButtonHoverColor);
         marketSellButton.setIdleColor(sellButtonNormalColor);
@@ -162,7 +168,7 @@ public class TradePanel extends GuiElement {
     }
     public void setCurrentPrice(int price)
     {
-        currentPriceLabel.setText(""+price);
+        currentPriceLabel.setText(String.valueOf(price));
     }
 
     public void setAmount(int amount)

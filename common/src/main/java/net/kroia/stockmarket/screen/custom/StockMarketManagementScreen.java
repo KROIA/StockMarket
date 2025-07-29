@@ -10,6 +10,8 @@ import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.client.ClientMarket;
+import net.kroia.stockmarket.market.clientdata.ServerMarketSettingsData;
+import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import net.kroia.stockmarket.screen.uiElements.TradingPairSelectionView;
 import net.kroia.stockmarket.screen.uiElements.TradingPairView;
 import net.minecraft.client.Minecraft;
@@ -78,6 +80,28 @@ public class StockMarketManagementScreen extends GuiScreen {
                 if(success) {
                     setCurrentTradingItemID(tradingPair);
                     tradableItemsView.setAvailableTradingPairs(List.of(tradingPair));
+
+                    ServerVolatilityBot.Settings botSettings = new ServerVolatilityBot.Settings();
+                    botSettings.defaultPrice = 50;
+                    botSettings.enabled = true;
+
+                    ServerMarketSettingsData settingsData = new ServerMarketSettingsData(
+                            tradingPair,
+                            botSettings,
+                            true, // Market open by default
+                            0, // Item imbalance
+                            1000, // Shift price candle interval in ms
+                            100 // Notify subscriber interval in ms
+                    );
+                    settingsData.doCreateBotIfNotExists = true; // Create bot if it doesn't exist
+                    getMarket().requestSetMarketSettings(settingsData, (success2) -> {
+                        if(success2) {
+                            BACKEND_INSTANCES.LOGGER.info("Trading pair created successfully: " + tradingPair);
+                        } else {
+                            BACKEND_INSTANCES.LOGGER.warn("Failed to set market settings for trading pair: " + tradingPair);
+                        }
+                    });
+
                 } else {
                     BACKEND_INSTANCES.LOGGER.warn("Failed to create trading pair: " + tradingPair);
                 }

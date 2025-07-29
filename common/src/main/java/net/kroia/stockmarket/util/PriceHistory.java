@@ -25,8 +25,8 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
     }
 
     public PriceHistory(int maxHistorySize) {
-        if(maxHistorySize<0)
-            maxHistorySize = 0;
+        if(maxHistorySize<1)
+            maxHistorySize = 1;
         this.maxHistorySize = maxHistorySize;
         lowPrice = new int[maxHistorySize];
         highPrice = new int[maxHistorySize];
@@ -40,8 +40,8 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
         clear();
     }
     public PriceHistory(int initialPrice, int maxHistorySize) {
-        if(maxHistorySize<0)
-            maxHistorySize = 0;
+        if(maxHistorySize<1)
+            maxHistorySize = 1;
         this.maxHistorySize = maxHistorySize;
         lowPrice = new int[maxHistorySize];
         highPrice = new int[maxHistorySize];
@@ -56,6 +56,24 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
             volume[i] = 0;
             timeStamps[i] = new Timestamp();
         }
+    }
+    public static PriceHistory copy(PriceHistory org, int maxHistorySize)
+    {
+        if(org == null)
+            return null;
+        if(org.maxHistorySize < maxHistorySize || maxHistorySize < 1)
+            maxHistorySize = org.maxHistorySize;
+
+        PriceHistory copy = new PriceHistory(maxHistorySize);
+        copy.oldestClosePrice = org.oldestClosePrice;
+        for (int i = 0; i < maxHistorySize; i++) {
+            copy.lowPrice[i] = org.lowPrice[i];
+            copy.highPrice[i] = org.highPrice[i];
+            copy.closePrice[i] = org.closePrice[i];
+            copy.volume[i] = org.volume[i];
+            copy.timeStamps[i] = org.timeStamps[i].copy();
+        }
+        return copy;
     }
 
     public void clear()
@@ -81,7 +99,7 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
     public void addPrice(int low, int high, int close, Timestamp timestamp)
     {
         // Shift the prices to the left
-        oldestClosePrice = closePrice[0];
+        /*oldestClosePrice = closePrice[0];
         for (int i = 0; i < maxHistorySize-1; i++) {
             lowPrice[i] = lowPrice[i+1];
             highPrice[i] = highPrice[i+1];
@@ -93,32 +111,46 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
         highPrice[maxHistorySize-1] = high;
         closePrice[maxHistorySize-1] = close;
         volume[maxHistorySize-1] = 0;
-        timeStamps[maxHistorySize-1] = timestamp;
+        timeStamps[maxHistorySize-1] = timestamp;*/
+
+        oldestClosePrice = closePrice[maxHistorySize-1];
+        for (int i = maxHistorySize-1; i > 0; i--) {
+            lowPrice[i] = lowPrice[i-1];
+            highPrice[i] = highPrice[i-1];
+            closePrice[i] = closePrice[i-1];
+            volume[i] = volume[i-1];
+            timeStamps[i] = timeStamps[i-1];
+        }
+        lowPrice[0] = low;
+        highPrice[0] = high;
+        closePrice[0] = close;
+        volume[0] = 0;
+        timeStamps[0] = timestamp;
     }
 
 
 
     public void setCurrentPrice(int close)
     {
-        closePrice[maxHistorySize-1] = close;
-        lowPrice[maxHistorySize-1] = Math.min(lowPrice[maxHistorySize-1], close);
-        highPrice[maxHistorySize-1] = Math.max(highPrice[maxHistorySize-1], close);
+        closePrice[0] = close;
+        lowPrice[0] = Math.min(lowPrice[0], close);
+        highPrice[0] = Math.max(highPrice[0], close);
     }
     public void setCurrentVolume(long volume)
     {
-        this.volume[maxHistorySize-1] = volume;
+        this.volume[0] = volume;
     }
     public void addVolume(long volume)
     {
-        this.volume[maxHistorySize-1] += volume;
+        this.volume[0] += volume;
     }
     public int getCurrentPrice()
     {
-        return closePrice[maxHistorySize-1];
+        return closePrice[0];
     }
     public long getCurrentVolume()
     {
-        return volume[maxHistorySize-1];
+        return volume[0];
     }
 
     public int getLowPrice(int index)
@@ -127,7 +159,7 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
     }
     public int getLowPrice()
     {
-        return lowPrice[maxHistorySize-1];
+        return lowPrice[0];
     }
 
     public int getHighPrice(int index)
@@ -136,7 +168,7 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
     }
     public int getHighPrice()
     {
-        return highPrice[maxHistorySize-1];
+        return highPrice[0];
     }
 
     public int getClosePrice(int index)
@@ -145,43 +177,64 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
     }
     public int getClosePrice()
     {
-        return closePrice[maxHistorySize-1];
+        return closePrice[0];
     }
 
     public long getVolume(int index)
     {
         return volume[index];
     }
+
     public long getMaxVolume()
     {
+        return getMaxVolume(-1);
+    }
+    public long getMaxVolume(int lastIndex)
+    {
+        if(lastIndex <= 0 || lastIndex > maxHistorySize)
+            lastIndex = maxHistorySize;
         long max = Long.MIN_VALUE;
-        for (int i = 0; i < maxHistorySize; i++) {
+        for (int i = 0; i < lastIndex; i++) {
             max = Math.max(max, volume[i]);
         }
         return max;
     }
 
+
     public int getOpenPrice(int index)
     {
-        if(index == 0)
+        if(index == maxHistorySize-1)
         {
             return oldestClosePrice;
         }
-        return closePrice[index-1];
+        return closePrice[index+1];
     }
 
     public int getLowestPrice()
     {
+        return getLowestPrice(-1);
+    }
+    public int getLowestPrice(int lastIndex)
+    {
+        if(lastIndex <= 0 || lastIndex > maxHistorySize)
+            lastIndex = maxHistorySize;
         int min = Integer.MAX_VALUE;
-        for (int i = 0; i < maxHistorySize; i++) {
+        for (int i = 0; i < lastIndex; i++) {
             min = Math.min(min, lowPrice[i]);
         }
         return min;
     }
+
     public int getHighestPrice()
     {
+        return getHighestPrice(-1);
+    }
+    public int getHighestPrice(int lastIndex)
+    {
+        if(lastIndex <= 0 || lastIndex > maxHistorySize)
+            lastIndex = maxHistorySize;
         int max = Integer.MIN_VALUE;
-        for (int i = 0; i < maxHistorySize; i++) {
+        for (int i = 0; i < lastIndex; i++) {
             max = Math.max(max, highPrice[i]);
         }
         return max;
@@ -266,7 +319,6 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
         int[] tmpLowPrice = tag.getIntArray("lowPrice");
         int[] tmpHighPrice = tag.getIntArray("highPrice");
         int[] tmpClosePrice = tag.getIntArray("closePrice");
-        boolean hasVolume = tag.contains("volume");
         long[] tmpVolume = tag.getLongArray("volume");
         oldestClosePrice = tag.getInt("oldestClosePrice");
         Timestamp[] tmpTimeStamps = new Timestamp[tmpLowPrice.length];
@@ -278,49 +330,34 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
                 success = false;
         }
 
-
-        if(tmpLowPrice.length != maxHistorySize)
+        int minSize = Math.min(tmpLowPrice.length, maxHistorySize);
+        for(int i=0; i<minSize; i++)
         {
-            if(tmpLowPrice.length < maxHistorySize)
-            {
-                for(int i=0; i<maxHistorySize-tmpLowPrice.length; i++)
-                {
-                    lowPrice[i] = tmpLowPrice[0];
-                    highPrice[i] = tmpHighPrice[0];
-                    closePrice[i] = tmpClosePrice[0];
-                    if(hasVolume)
-                        volume[i] = tmpVolume[0];
-                    timeStamps[i] = tmpTimeStamps[0];
+            lowPrice[i] = tmpLowPrice[i];
+            highPrice[i] = tmpHighPrice[i];
+            closePrice[i] = tmpClosePrice[i];
+            volume[i] = tmpVolume[i];
+            timeStamps[i] = tmpTimeStamps[i];
+        }
 
-                }
-                for(int i=maxHistorySize-tmpLowPrice.length; i<maxHistorySize; i++)
-                {
-                    lowPrice[i] = tmpLowPrice[i-maxHistorySize+tmpLowPrice.length];
-                    highPrice[i] = tmpHighPrice[i-maxHistorySize+tmpLowPrice.length];
-                    closePrice[i] = tmpClosePrice[i-maxHistorySize+tmpLowPrice.length];
-                    if(hasVolume)
-                        volume[i] = tmpVolume[i-maxHistorySize+tmpLowPrice.length];
-                    timeStamps[i] = tmpTimeStamps[i-maxHistorySize+tmpLowPrice.length];
-                }
+        if(maxHistorySize > tmpLowPrice.length)
+        {
+            Timestamp dummy;
+            if(tmpTimeStamps.length > 0)
+            {
+                dummy = tmpTimeStamps[minSize-1].copy();
             }
             else {
-                for(int i=0; i<maxHistorySize; i++)
-                {
-                    lowPrice[i] = tmpLowPrice[tmpLowPrice.length-maxHistorySize+i];
-                    highPrice[i] = tmpHighPrice[tmpLowPrice.length-maxHistorySize+i];
-                    closePrice[i] = tmpClosePrice[tmpLowPrice.length-maxHistorySize+i];
-                    if(hasVolume)
-                        volume[i] = tmpVolume[tmpLowPrice.length-maxHistorySize+i];
-                    timeStamps[i] = tmpTimeStamps[tmpLowPrice.length-maxHistorySize+i];
-                }
+                dummy = new Timestamp();
             }
-        }
-        else {
-            lowPrice = tmpLowPrice;
-            highPrice = tmpHighPrice;
-            closePrice = tmpClosePrice;
-            if(hasVolume)
-                volume = tmpVolume;
+            for(int i=minSize; i<maxHistorySize; i++)
+            {
+                lowPrice[i] = 0;
+                highPrice[i] = 0;
+                closePrice[i] = 0;
+                volume[i] = 0;
+                timeStamps[i] = dummy.copy();
+            }
         }
         return success;
     }

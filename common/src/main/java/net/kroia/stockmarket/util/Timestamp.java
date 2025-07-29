@@ -38,6 +38,12 @@ public class Timestamp implements ServerSaveable {
         this.minute = calendar.get(Calendar.MINUTE);
     }
 
+    public Timestamp copy()
+    {
+        // Create a copy of the current timestamp
+        return new Timestamp(day, month, year, hour, minute);
+    }
+
     public static long getCurrentTimeStamp() {
         // Get the current time in milliseconds
         return Calendar.getInstance().getTimeInMillis();

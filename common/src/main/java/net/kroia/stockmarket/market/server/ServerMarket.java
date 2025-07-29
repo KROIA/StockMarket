@@ -53,7 +53,7 @@ public class ServerMarket implements ServerSaveable {
     public ServerMarket(TradingPair pair, int initialPrice)
     {
         this.tradingPair = pair;
-        this.orderBook = new OrderBook(initialPrice);
+        this.orderBook = new OrderBook(BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.VIRTUAL_ORDERBOOK_ARRAY_SIZE.get(), initialPrice);
         this.matchingEngine = new MatchingEngine(this);
         this.historicalMarketData = new HistoricalMarketData(initialPrice, BACKEND_INSTANCES.SERVER_SETTINGS.UI.PRICE_HISTORY_SIZE.get());
         this.volatilityBot = null;
@@ -64,7 +64,7 @@ public class ServerMarket implements ServerSaveable {
     public ServerMarket()
     {
         this.tradingPair = new TradingPair();
-        this.orderBook = new OrderBook();
+        this.orderBook = new OrderBook(BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.VIRTUAL_ORDERBOOK_ARRAY_SIZE.get());
         this.matchingEngine = new MatchingEngine(this);
         this.historicalMarketData = new HistoricalMarketData(BACKEND_INSTANCES.SERVER_SETTINGS.UI.PRICE_HISTORY_SIZE.get());
         this.volatilityBot = null;
@@ -82,9 +82,39 @@ public class ServerMarket implements ServerSaveable {
     {
         return new TradingPairData(tradingPair);
     }
-    public OrderBookVolumeData getOrderBookVolumeData(int minPrice, int maxPrice, int tileCount)
+    public OrderBookVolumeData getOrderBookVolumeData(int historyViewCount, int minPrice, int maxPrice, int tileCount)
     {
+        if(minPrice == 0 && maxPrice == 0)
+        {
+            minPrice = historicalMarketData.getHistory().getLowestPrice(historyViewCount);
+            maxPrice = historicalMarketData.getHistory().getHighestPrice(historyViewCount);
+            int range = (maxPrice - minPrice)/2;
+            if(range < 10)
+            {
+                range = 10;
+            }
+            minPrice -= range;
+            maxPrice += range;
+
+            // Fllor to next 5
+            minPrice = (minPrice / 5) * 5;
+            maxPrice = (maxPrice / 5) * 5;
+
+            minPrice = Math.max(0, minPrice);
+        }
+        if(tileCount == 0)
+        {
+            tileCount = BACKEND_INSTANCES.SERVER_SETTINGS.UI.MAX_ORDERBOOK_TILES.get();
+            if(maxPrice-minPrice < tileCount)
+            {
+                tileCount = maxPrice-minPrice;
+            }
+        }
         return new OrderBookVolumeData(minPrice, maxPrice, tileCount, orderBook);
+    }
+    public OrderBookVolumeData getOrderBookVolumeData()
+    {
+        return getOrderBookVolumeData(-1,0, 0, 0);
     }
     public OrderReadData getOrderReadData(long orderID)
     {
@@ -103,11 +133,11 @@ public class ServerMarket implements ServerSaveable {
         List<LimitOrder> orders = orderBook.getOrders(playerUUID);
         return new OrderReadListData(new ArrayList<>(orders));
     }
-    public PriceHistoryData getPriceHistoryData()
+    public PriceHistoryData getPriceHistoryData(int maxHistoryPointCount)
     {
-        return new PriceHistoryData(historicalMarketData.getHistory());
+        return new PriceHistoryData(historicalMarketData.getHistory(), maxHistoryPointCount);
     }
-    public TradingViewData getTradingViewData(UUID player, int minVisiblePrice, int maxVisiblePrice, int orderBookTileCount)
+    public TradingViewData getTradingViewData(UUID player,int maxHistoryPointCount, int minVisiblePrice, int maxVisiblePrice, int orderBookTileCount)
     {
         IBankUser bankUser = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getUser(player);
         if(bankUser == null)
@@ -116,13 +146,25 @@ public class ServerMarket implements ServerSaveable {
         IBank itemBank = bankUser.getBank(tradingPair.getItem());
         IBank moneyBank = bankUser.getBank(tradingPair.getCurrency());
 
+        if(itemBank == null)
+            itemBank = bankUser.createItemBank(tradingPair.getItem(), 0, true);
+
+        if(moneyBank == null)
+            moneyBank = bankUser.createItemBank(tradingPair.getCurrency(), 0, true);
+
         if(itemBank == null || moneyBank == null)
             return null;
 
         List<Order> orders = new ArrayList<>(orderBook.getOrders(player));
 
-        return new TradingViewData(tradingPair, historicalMarketData.getHistory(), orderBook,
-                itemBank, moneyBank, minVisiblePrice, maxVisiblePrice, orderBookTileCount, marketOpen, orders);
+        return new TradingViewData(new TradingPairData(tradingPair), new PriceHistoryData(historicalMarketData.getHistory(), maxHistoryPointCount),
+                itemBank, moneyBank, marketOpen,
+                getOrderBookVolumeData(maxHistoryPointCount, minVisiblePrice, maxVisiblePrice, orderBookTileCount),
+                new OrderReadListData(orders));
+    }
+    public TradingViewData getTradingViewData(UUID player)
+    {
+        return getTradingViewData(player, -1,0, 0, 0);
     }
     public ServerMarketSettingsData getMarketSettingsData()
     {
@@ -547,9 +589,9 @@ public class ServerMarket implements ServerSaveable {
             marketOpen = tag.getBoolean("marketOpen");
         if(tag.contains("itemImbalance"))
             itemImbalance = tag.getLong("itemImbalance");
-        if(!tag.contains("shiftPriceCandleIntervalMS"))
+        if(tag.contains("shiftPriceCandleIntervalMS"))
             shiftPriceCandleIntervalMS = tag.getLong("shiftPriceCandleIntervalMS");
-        if(!tag.contains("notifySubscriberIntervalMS"))
+        if(tag.contains("notifySubscriberIntervalMS"))
             notifySubscriberIntervalMS = tag.getLong("notifySubscriberIntervalMS");
 
         if(shiftPriceCandleIntervalMS < 0)
@@ -557,8 +599,9 @@ public class ServerMarket implements ServerSaveable {
         if(notifySubscriberIntervalMS < 0)
             notifySubscriberIntervalMS = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.NOTIFY_SUBSCRIBER_INTERVAL_MS.get();
 
-        shiftPriceTimer.start(shiftPriceCandleIntervalMS);
-        notifySubscriberTimer.start(notifySubscriberIntervalMS);
+        setShiftPriceCandleIntervalMS(shiftPriceCandleIntervalMS);
+        setNotifySubscriberIntervalMS(notifySubscriberIntervalMS);
+        orderBook.getGhostOrderBook().setCurrentPrice(historicalMarketData.getCurrentPrice());
         return success;
     }
 

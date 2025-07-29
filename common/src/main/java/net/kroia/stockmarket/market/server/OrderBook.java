@@ -25,13 +25,13 @@ public class OrderBook implements ServerSaveable {
 
     private final GhostOrderBook ghostOrderBook;
 
-    public OrderBook()
+    public OrderBook(int realVolumeBookSize)
     {
-        this.ghostOrderBook = new GhostOrderBook(0);
+        this.ghostOrderBook = new GhostOrderBook(realVolumeBookSize,0);
     }
-    public OrderBook(int initialPrice)
+    public OrderBook(int realVolumeBookSize, int initialPrice)
     {
-        this.ghostOrderBook = new GhostOrderBook(initialPrice);
+        this.ghostOrderBook = new GhostOrderBook(realVolumeBookSize, initialPrice);
     }
 
     public void updateGhostOrderBookVolume(int currentPrice)

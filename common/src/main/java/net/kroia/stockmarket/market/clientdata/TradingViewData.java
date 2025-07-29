@@ -3,14 +3,8 @@ package net.kroia.stockmarket.market.clientdata;
 import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.banking.clientdata.MinimalBankData;
 import net.kroia.modutilities.networking.INetworkPayloadEncoder;
-import net.kroia.stockmarket.market.TradingPair;
-import net.kroia.stockmarket.market.server.OrderBook;
-import net.kroia.stockmarket.market.server.order.Order;
-import net.kroia.stockmarket.util.PriceHistory;
 import net.minecraft.network.FriendlyByteBuf;
 import org.jetbrains.annotations.NotNull;
-
-import java.util.List;
 
 public class TradingViewData implements INetworkPayloadEncoder {
     public final TradingPairData tradingPairData;
@@ -22,15 +16,15 @@ public class TradingViewData implements INetworkPayloadEncoder {
     public final MinimalBankData currencyBankData;
     public final boolean marketIsOpen;
 
-    public TradingViewData(@NotNull TradingPair pair, @NotNull PriceHistory history, @NotNull OrderBook orderBook,
+    public TradingViewData(@NotNull TradingPairData pair, @NotNull PriceHistoryData history,
                            @NotNull IBank itemBank, @NotNull IBank currencyBank,
-                           int minVisiblePrice, int maxVisiblePrice, int orderBookTileCount, boolean marketIsOpen,
-                           @NotNull List<@NotNull Order> openOrders) {
-        this.tradingPairData = new TradingPairData(pair);
-        this.priceHistoryData = new PriceHistoryData(history);
+                           boolean marketIsOpen, @NotNull OrderBookVolumeData orderBookVolumeData,
+                           @NotNull OrderReadListData openOrders) {
+        this.tradingPairData = pair;
+        this.priceHistoryData = history;
 
-        this.orderBookVolumeData = new OrderBookVolumeData(minVisiblePrice, maxVisiblePrice, orderBookTileCount, orderBook);
-        this.openOrdersData = new OrderReadListData(openOrders);
+        this.orderBookVolumeData = orderBookVolumeData;
+        this.openOrdersData = openOrders;
 
         this.itemBankData = itemBank.getMinimalData();
         this.currencyBankData = currencyBank.getMinimalData();

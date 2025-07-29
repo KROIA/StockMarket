@@ -13,18 +13,28 @@ public class TradingViewDataRequest extends StockMarketGenericRequest<TradingVie
     public static class Input implements INetworkPayloadEncoder
     {
         public final TradingPairData tradingPairData;
+        public final int maxHistoryPointCount;
         public final int minVisiblePrice;
         public final int maxVisiblePrice;
         public final int orderBookTileCount;
 
-        public Input(TradingPair pair, int minVisiblePrice, int maxVisiblePrice, int orderBookTileCount) {
+        public Input(TradingPair pair, int maxHistoryPointCount, int minVisiblePrice, int maxVisiblePrice, int orderBookTileCount) {
             this.tradingPairData = new TradingPairData(pair);
+            this.maxHistoryPointCount = maxHistoryPointCount;
             this.minVisiblePrice = minVisiblePrice;
             this.maxVisiblePrice = maxVisiblePrice;
             this.orderBookTileCount = orderBookTileCount;
         }
-        private Input(TradingPairData tradingPairData, int minVisiblePrice, int maxVisiblePrice, int orderBookTileCount) {
+        public Input(TradingPair pair) {
+            this.tradingPairData = new TradingPairData(pair);
+            this.maxHistoryPointCount = -1; // Default value, can be set later
+            this.minVisiblePrice = 0;
+            this.maxVisiblePrice = 0;
+            this.orderBookTileCount = 0;
+        }
+        private Input(TradingPairData tradingPairData, int maxHistoryPointCount, int minVisiblePrice, int maxVisiblePrice, int orderBookTileCount) {
             this.tradingPairData = tradingPairData;
+            this.maxHistoryPointCount = maxHistoryPointCount;
             this.minVisiblePrice = minVisiblePrice;
             this.maxVisiblePrice = maxVisiblePrice;
             this.orderBookTileCount = orderBookTileCount;
@@ -37,6 +47,7 @@ public class TradingViewDataRequest extends StockMarketGenericRequest<TradingVie
         @Override
         public void encode(FriendlyByteBuf buf) {
             tradingPairData.encode(buf);
+            buf.writeInt(maxHistoryPointCount);
             buf.writeInt(minVisiblePrice);
             buf.writeInt(maxVisiblePrice);
             buf.writeInt(orderBookTileCount);
@@ -44,10 +55,11 @@ public class TradingViewDataRequest extends StockMarketGenericRequest<TradingVie
 
         public static Input decode(FriendlyByteBuf buf) {
             TradingPairData tradingPairData = TradingPairData.decode(buf);
+            int maxHistoryPointCount = buf.readInt();
             int minVisiblePrice = buf.readInt();
             int maxVisiblePrice = buf.readInt();
             int orderBookTileCount = buf.readInt();
-            return new Input(tradingPairData, minVisiblePrice, maxVisiblePrice, orderBookTileCount);
+            return new Input(tradingPairData, maxHistoryPointCount, minVisiblePrice, maxVisiblePrice, orderBookTileCount);
         }
     }
 
@@ -64,11 +76,11 @@ public class TradingViewDataRequest extends StockMarketGenericRequest<TradingVie
 
     @Override
     public TradingViewData handleOnServer(Input input, ServerPlayer sender) {
-        return BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getTradingViewData(input.tradingPairData.toTradingPair(),
-                sender.getUUID(),
-                input.minVisiblePrice,
-                input.maxVisiblePrice,
-                input.orderBookTileCount);
+            return BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getTradingViewData(input.tradingPairData.toTradingPair(),
+                    sender.getUUID(),
+                    input.maxHistoryPointCount,
+                    input.minVisiblePrice,
+                    input.maxVisiblePrice, input.orderBookTileCount);
     }
 
     @Override

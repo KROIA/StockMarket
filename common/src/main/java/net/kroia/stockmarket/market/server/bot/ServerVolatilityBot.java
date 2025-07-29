@@ -26,7 +26,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
 
 
         public boolean enableRandomWalk = true;
-        public float volatility; // 0-1 or higher
+        public float volatility = 0.2f; // 0-1 or higher
 
         public Settings()
         {

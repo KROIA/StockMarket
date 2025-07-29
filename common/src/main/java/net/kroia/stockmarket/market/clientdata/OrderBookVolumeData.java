@@ -7,6 +7,7 @@ import org.jetbrains.annotations.NotNull;
 
 public class OrderBookVolumeData implements INetworkPayloadEncoder {
 
+
     public final int minPrice;
     public final int maxPrice;
     public final int tiles;
@@ -22,7 +23,8 @@ public class OrderBookVolumeData implements INetworkPayloadEncoder {
         int stepSize = (maxPrice - minPrice) / tileCount;
         for(int i = 0; i < tileCount; i++) {
             int lowerBound = minPrice + i * stepSize;
-            int upperBound = (i == tileCount - 1) ? maxPrice : lowerBound + stepSize;
+            int upperBound = lowerBound + stepSize;
+            //int upperBound = (i == tileCount - 1) ? maxPrice : lowerBound + stepSize;
             this.volume[i] = book.getVolumeInRange(lowerBound, upperBound);
         }
     }
@@ -62,9 +64,8 @@ public class OrderBookVolumeData implements INetworkPayloadEncoder {
     public long getMaxVolume()
     {
         long maxVolume = 0;
-        for(int i = 0; i < volume.length; i++)
-        {
-            maxVolume = Math.max(maxVolume, Math.abs(volume[i]));
+        for (long l : volume) {
+            maxVolume = Math.max(maxVolume, Math.abs(l));
         }
         return maxVolume;
     }

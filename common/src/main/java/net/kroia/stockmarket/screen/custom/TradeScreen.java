@@ -379,7 +379,7 @@ public class TradeScreen extends GuiScreen {
 
         if(instance.updateTimer.check() && instance.getMarket() != null)
         {
-            instance.getMarket().requestTradingViewData(0,100,50, instance::updateView);
+            instance.getMarket().requestTradingViewData(instance.candleStickChart.getMaxCandleCount(), 0,0,0 ,instance::updateView);
         }
         /*long currentTickCount = System.currentTimeMillis();
         if(currentTickCount - lastTickCount > 1000)
@@ -394,22 +394,17 @@ public class TradeScreen extends GuiScreen {
         if(data == null)
             return;
 
-        candleStickChart.setMinMaxPrice(0,100);
+        candleStickChart.setMinMaxPrice(data.orderBookVolumeData.minPrice, data.orderBookVolumeData.maxPrice);
         PriceHistory history = data.priceHistoryData.toHistory();
         candleStickChart.setPriceHistory(history);
         orderbookVolumeChart.setOrderBookVolume(data.orderBookVolumeData);
-        assert Minecraft.getInstance().player != null;
-        UUID thisPlayerUUID = Minecraft.getInstance().player.getUUID();
         tradePanel.setCurrentItemBalance(data.itemBankData.balance);
         tradePanel.setCurrentMoneyBalance(data.currencyBankData.balance);
 
 
         tradePanel.setCurrentPrice(history.getCurrentPrice());
-        getMarket().requestPlayerOrderReadDataList((orders)->{
-            activeOrderListView.updateActiveOrders(orders);
-            candleStickChart.updateOrderDisplay(orders);
-        });
-
+        activeOrderListView.updateActiveOrders(data.openOrdersData);
+        candleStickChart.updateOrderDisplay(data.openOrdersData);
 
         if(marketWasOpen != data.marketIsOpen)
         {

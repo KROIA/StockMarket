@@ -29,6 +29,7 @@ public class CandleStickChart extends GuiElement {
 
     private final int colorUp = TradeScreen.colorGreen;
     private final int colorDown = TradeScreen.colorRed;
+    private static final int minCandleWidth = 3; // Minimum width of a candle in pixels
 
     private int chartViewMinPrice;
     private int chartViewMaxPrice;
@@ -74,6 +75,10 @@ public class CandleStickChart extends GuiElement {
         this.priceHistory = priceHistory;
     }
 
+    public int getMaxCandleCount()
+    {
+        return chartWidth / minCandleWidth;
+    }
     @Override
     protected void renderBackground()
     {
@@ -85,13 +90,10 @@ public class CandleStickChart extends GuiElement {
 
 
         int candleWidth = 0;
-        if(priceHistory != null)
-        {
-            candleWidth = chartWidth / priceHistory.size();
-            candleWidth = candleWidth | 1; // Make sure it is odd
-            if(candleWidth < 3)
-                candleWidth = 3;
-        }
+        candleWidth = chartWidth / priceHistory.size();
+        candleWidth = candleWidth | 1; // Make sure it is odd
+        if(candleWidth < minCandleWidth)
+            candleWidth = minCandleWidth;
         maxLabelWidth = getFont().width(String.valueOf(chartViewMaxPrice)) + 5;
         int labelXPos = getWidth() - maxLabelWidth;
 
@@ -109,22 +111,23 @@ public class CandleStickChart extends GuiElement {
             int y = getChartYPos(i);
             String label = String.valueOf(i);
             drawText(label, labelXPos, y - 4, 0xFFFFFFFF);
-            chartWidth = getWidth()-maxLabelWidth-labelXPos-5;
+            chartWidth = getWidth()-maxLabelWidth-5;
             drawRect(1,  y, x, 1, 0xFF808080);
         }
 
 
         long maxVolume = priceHistory.getMaxVolume();
-        for(int i=priceHistory.size()-1; i>=0; i--)
+        int lastIndex = priceHistory.size()-1;
+        for(int i=lastIndex; i>=0; i--)
         {
             x -= candleWidth;
-            long volume = priceHistory.getVolume(i);
+            long volume = priceHistory.getVolume(lastIndex-i);
             drawRect(x, getHeight()-1, candleWidth, (int)-map(volume, 0, maxVolume, 0, getHeight()/11+PADDING-2), 0xFF91a9b8);
 
-            int low = priceHistory.getLowPrice(i);
-            int high = priceHistory.getHighPrice(i);
-            int close = priceHistory.getClosePrice(i);
-            int open = priceHistory.getOpenPrice(i);
+            int low = priceHistory.getLowPrice(lastIndex-i);
+            int high = priceHistory.getHighPrice(lastIndex-i);
+            int close = priceHistory.getClosePrice(lastIndex-i);
+            int open = priceHistory.getOpenPrice(lastIndex-i);
             renderCandle(x, candleWidth, 0, 0, open, close, high, low);
 
             if(x <= candleWidth)
@@ -165,17 +168,35 @@ public class CandleStickChart extends GuiElement {
             bodyYMax--;
         }
 
+        int wickWidth = candleWidth / 2;
+        if(wickWidth < 1)
+        {
+            wickWidth = 1;
+        }
+        else if(wickWidth > 10)
+        {
+            wickWidth = 10;
+        }
+
+        int wickOffset = (candleWidth - wickWidth) / 2;
+        if(wickOffset <= 0)
+        {
+            wickOffset = 0;
+        }
+
+
+
         if((bodyYMax) - wickYMax > 0) {
             // Wick up
-            drawRect(xOffset + x + candleWidth / 2, yOffset + bodyYMax,
-                    1, wickYMax-bodyYMax, color);
+            drawRect(xOffset + x + wickOffset, yOffset + bodyYMax,
+                    wickWidth, wickYMax-bodyYMax, color);
         }
 
         if(wickYMin - (bodyYMin) > 0)
         {
             // Wick down
-            drawRect(xOffset + x + candleWidth / 2, yOffset + bodyYMin,
-                          1, wickYMin-bodyYMin, color);
+            drawRect(xOffset + x + wickOffset, yOffset + bodyYMin,
+                    wickWidth, wickYMin-bodyYMin, color);
         }
 
         drawRect(xOffset + x, yOffset + bodyYMin,

@@ -124,36 +124,32 @@ public class ServerTradingBotFactory {
         {
             itemID = new ItemID(stack);
             CompoundTag tag = stack.getTag();
-            assert tag != null;
             ArrayList<EnchantmentData> ench = new ArrayList<>();
             int i = 0;
-            if (tag.contains("StoredEnchantments", Tag.TAG_COMPOUND)) {
-                ListTag enchantments = tag.getList("StoredEnchantments", Tag.TAG_COMPOUND);
-                for (Tag enchantmentTag : enchantments) {
-                    CompoundTag enchantment = (CompoundTag) enchantmentTag;
-                    EnchantmentData enchantmentData = new EnchantmentData();
-                    enchantmentData.load(enchantment);
-                    ench.add(enchantmentData);
-                    i++;
+            this.potion = null;
+            if(tag != null) {
+                if (tag.contains("StoredEnchantments", Tag.TAG_COMPOUND)) {
+                    ListTag enchantments = tag.getList("StoredEnchantments", Tag.TAG_COMPOUND);
+                    for (Tag enchantmentTag : enchantments) {
+                        CompoundTag enchantment = (CompoundTag) enchantmentTag;
+                        EnchantmentData enchantmentData = new EnchantmentData();
+                        enchantmentData.load(enchantment);
+                        ench.add(enchantmentData);
+                        i++;
+                    }
+                    this.enchantments = new EnchantmentData[i];
+                    for (int j = 0; j < ench.size(); j++) {
+                        this.enchantments[j] = ench.get(j);
+                    }
                 }
-                this.enchantments = new EnchantmentData[i];
-                for(int j = 0; j < ench.size(); j++)
-                {
-                    this.enchantments[j] = ench.get(j);
+                if (tag.contains("Potion", Tag.TAG_STRING)) {
+                    PotionData potion = new PotionData();
+                    potion.load(tag);
+                    this.potion = potion;
                 }
             }
-            else {
+            if(this.enchantments == null)
                 this.enchantments = new EnchantmentData[0];
-            }
-
-            if (tag != null && tag.contains("Potion", Tag.TAG_STRING)) {
-                PotionData potion = new PotionData();
-                potion.load(tag);
-                this.potion = potion;
-            }
-            else {
-                this.potion = null;
-            }
         }
         public ItemData(ItemID itemID, EnchantmentData[] enchantments, PotionData potion)
         {
