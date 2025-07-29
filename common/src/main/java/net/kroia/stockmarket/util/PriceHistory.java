@@ -61,11 +61,17 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
     {
         if(org == null)
             return null;
-        if(org.maxHistorySize < maxHistorySize || maxHistorySize < 1)
+        int oldestPrice = org.oldestClosePrice;
+        if(org.maxHistorySize < maxHistorySize || maxHistorySize < 1) {
             maxHistorySize = org.maxHistorySize;
+        }
+        else {
+            oldestPrice = org.getOpenPrice(maxHistorySize - 1);
+        }
 
         PriceHistory copy = new PriceHistory(maxHistorySize);
-        copy.oldestClosePrice = org.oldestClosePrice;
+        copy.oldestClosePrice = oldestPrice;
+
         for (int i = 0; i < maxHistorySize; i++) {
             copy.lowPrice[i] = org.lowPrice[i];
             copy.highPrice[i] = org.highPrice[i];

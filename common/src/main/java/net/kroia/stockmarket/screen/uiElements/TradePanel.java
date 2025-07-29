@@ -8,6 +8,7 @@ import net.kroia.modutilities.gui.elements.TextBox;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.TradingPair;
+import net.kroia.stockmarket.util.StockMarketTextMessages;
 
 import static net.kroia.stockmarket.screen.custom.TradeScreen.*;
 
@@ -53,6 +54,7 @@ public class TradePanel extends GuiElement {
 
     private int amount = 0;
     private int limitPrice = 0;
+    private int currentMarketPrice = 0;
 
 
     public TradePanel(Runnable onItemChangeButtonClicked,
@@ -75,12 +77,8 @@ public class TradePanel extends GuiElement {
         currentPriceTextLabel.setAlignment(Alignment.RIGHT);
         currentPriceLabel = new Label();
         currentPriceLabel.setAlignment(Alignment.LEFT);
-        currentPriceLabel.setHoverTooltipSupplier(() -> {
-            String itemName = "";
-            if(moneyItemView.getItemStack()!=null)
-                itemName = moneyItemView.getItemStack().getHoverName().getString();
-            return itemName;
-        });
+
+
         amountLabel = new Label(AMOUNT_LABEL.getString()+":");
         amountLabel.setAlignment(Alignment.RIGHT);
         amountTextBox = new TextBox(0,0,0);
@@ -98,11 +96,14 @@ public class TradePanel extends GuiElement {
         marketBuyButton.setHoverColor(buyButtonHoverColor);
         marketBuyButton.setIdleColor(buyButtonNormalColor);
         marketBuyButton.setPressedColor(buyButtonPressedColor);
+
+
         //marketBuyButton.ho
         marketSellButton = new Button(SELL.getString(), onMarketSellButtonClicked);
         marketSellButton.setHoverColor(sellButtonHoverColor);
         marketSellButton.setIdleColor(sellButtonNormalColor);
         marketSellButton.setPressedColor(sellButtonPressedColor);
+
 
         limitOrderLabel = new Label(LIMIT_ORDER_LABEL.getString());
         limitOrderLabel.setAlignment(Alignment.CENTER);
@@ -123,10 +124,45 @@ public class TradePanel extends GuiElement {
         limitBuyButton.setHoverColor(buyButtonHoverColor);
         limitBuyButton.setIdleColor(buyButtonNormalColor);
         limitBuyButton.setPressedColor(buyButtonPressedColor);
+
+
+
         limitSellButton = new Button(SELL.getString(), onLimitSellButtonClicked);
         limitSellButton.setHoverColor(sellButtonHoverColor);
         limitSellButton.setIdleColor(sellButtonNormalColor);
         limitSellButton.setPressedColor(sellButtonPressedColor);
+
+
+        // Set tooltip mouse position alignment
+        // (TOP_RIGHT means the tooltip will be positioned so that the mouse is at the top right corner of the tooltip)
+        currentItemView.setTooltipMousePositionAlignment(Alignment.RIGHT);
+        moneyItemView.setTooltipMousePositionAlignment(Alignment.RIGHT);
+        currentPriceLabel.setTooltipMousePositionAlignment(Alignment.RIGHT);
+        currentPriceTextLabel.setTooltipMousePositionAlignment(Alignment.RIGHT);
+        amountLabel.setTooltipMousePositionAlignment(Alignment.RIGHT);
+        marketOrderLabel.setTooltipMousePositionAlignment(Alignment.RIGHT);
+        marketBuyButton.setTooltipMousePositionAlignment(Alignment.BOTTOM_RIGHT);
+        marketSellButton.setTooltipMousePositionAlignment(Alignment.BOTTOM_RIGHT);
+        limitOrderLabel.setTooltipMousePositionAlignment(Alignment.RIGHT);
+        limitPriceLabel.setTooltipMousePositionAlignment(Alignment.RIGHT);
+        limitBuyButton.setTooltipMousePositionAlignment(Alignment.BOTTOM_RIGHT);
+        limitSellButton.setTooltipMousePositionAlignment(Alignment.BOTTOM_RIGHT);
+
+
+
+        // Set hover tooltip texts
+        currentPriceLabel.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipCurrentPrice(currentMarketPrice, getItemName(), getCurrencyName()));
+        currentPriceTextLabel.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipCurrentPrice(currentMarketPrice, getItemName(), getCurrencyName()));
+        amountLabel.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipAmount(getItemName()));
+        marketOrderLabel.setHoverTooltipSupplier(StockMarketTextMessages::getTradePanelTooltipMarketOrder);
+        marketBuyButton.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipMarketBuy(amount, getItemName(), limitPrice, getCurrencyName()));
+        marketSellButton.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipMarketSell(amount, getItemName(), limitPrice, getCurrencyName()));
+        limitOrderLabel.setHoverTooltipSupplier(StockMarketTextMessages::getTradePanelTooltipLimitOrder);
+        limitPriceLabel.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipLimitPrice(getItemName()));
+        limitBuyButton.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipLimitBuy(amount, getItemName(), limitPrice, getCurrencyName()));
+        limitSellButton.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipLimitSell(amount, getItemName(), limitPrice, getCurrencyName()));
+
+
 
         marketClosedLabel = new Label(MARKET_CLOSED.getString());
         marketClosedLabel.setAlignment(Alignment.CENTER);
@@ -168,6 +204,7 @@ public class TradePanel extends GuiElement {
     }
     public void setCurrentPrice(int price)
     {
+        currentMarketPrice = price;
         currentPriceLabel.setText(String.valueOf(price));
     }
 
@@ -274,6 +311,21 @@ public class TradePanel extends GuiElement {
             onMarketOpened();
         else
             onMarketClosed();
+    }
+
+    private String getCurrencyName()
+    {
+        String currencyName = "";
+        if(moneyItemView.getItemStack()!=null)
+            currencyName = moneyItemView.getItemStack().getHoverName().getString();
+        return currencyName;
+    }
+    public String getItemName()
+    {
+        String itemName = "";
+        if(currentItemView.getItemStack()!=null)
+            itemName = currentItemView.getItemStack().getHoverName().getString();
+        return itemName;
     }
 
 }

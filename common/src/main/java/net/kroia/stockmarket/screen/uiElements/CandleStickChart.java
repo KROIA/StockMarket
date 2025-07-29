@@ -1,16 +1,19 @@
 package net.kroia.stockmarket.screen.uiElements;
 
 import net.kroia.modutilities.gui.elements.base.GuiElement;
+import net.kroia.modutilities.gui.geometry.Rectangle;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.clientdata.OrderReadData;
 import net.kroia.stockmarket.market.clientdata.OrderReadListData;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
 import net.kroia.stockmarket.util.PriceHistory;
+import net.kroia.stockmarket.util.StockMarketTextMessages;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.function.BiConsumer;
 
 public class CandleStickChart extends GuiElement {
     protected static StockMarketModBackend.Instances BACKEND_INSTANCES;
@@ -36,18 +39,24 @@ public class CandleStickChart extends GuiElement {
     private PriceHistory priceHistory = null;
     int chartWidth = 0;
     int maxLabelWidth = 0;
+    private double scrollValue = 1;
     //int labelXPos = 5;
+
+    private final Rectangle volumeDisplayRect = new Rectangle(0, 0, 0, 0);
 
 
     private HashMap<Long,LimitOrderInChartDisplay> limitOrderDisplays = new HashMap<>();
+    private BiConsumer<OrderReadData, Integer> priceChangeCallback;
 
     private static final int PADDING = 10;
 
-    public CandleStickChart(int x, int y, int width, int height) {
+    public CandleStickChart(BiConsumer<OrderReadData, Integer> priceChangeCallback, int x, int y, int width, int height) {
         super(x, y, width, height);
+        this.priceChangeCallback = priceChangeCallback;
     }
-    public CandleStickChart() {
+    public CandleStickChart(BiConsumer<OrderReadData, Integer> priceChangeCallback) {
         super(0,0,0,1);
+        this.priceChangeCallback = priceChangeCallback;
     }
 
     public void setMinMaxPrice(int minPrice, int maxPrice)
@@ -77,7 +86,19 @@ public class CandleStickChart extends GuiElement {
 
     public int getMaxCandleCount()
     {
-        return chartWidth / minCandleWidth;
+        return Math.max((int)(chartWidth*scrollValue*2) / minCandleWidth,10);
+    }
+
+    @Override
+    protected void mouseScrolled(double delta) {
+        if(!isMouseOver())
+            return;
+        scrollValue -= delta*0.01;
+
+        if(scrollValue < 0)
+            scrollValue = 0;
+        else if(scrollValue > 1)
+            scrollValue = 1;
     }
     @Override
     protected void renderBackground()
@@ -90,10 +111,11 @@ public class CandleStickChart extends GuiElement {
 
 
         int candleWidth = 0;
-        candleWidth = chartWidth / priceHistory.size();
+        candleWidth = (int)Math.ceil((double)getWidth() / (double)priceHistory.size());
         candleWidth = candleWidth | 1; // Make sure it is odd
         if(candleWidth < minCandleWidth)
             candleWidth = minCandleWidth;
+
         maxLabelWidth = getFont().width(String.valueOf(chartViewMaxPrice)) + 5;
         int labelXPos = getWidth() - maxLabelWidth;
 
@@ -111,18 +133,22 @@ public class CandleStickChart extends GuiElement {
             int y = getChartYPos(i);
             String label = String.valueOf(i);
             drawText(label, labelXPos, y - 4, 0xFFFFFFFF);
-            chartWidth = getWidth()-maxLabelWidth-5;
+
             drawRect(1,  y, x, 1, 0xFF808080);
         }
 
 
         long maxVolume = priceHistory.getMaxVolume();
         int lastIndex = priceHistory.size()-1;
+        volumeDisplayRect.x = 0;
+        volumeDisplayRect.y = getHeight() - PADDING - getHeight()/10;
+        volumeDisplayRect.width = chartWidth;
+        volumeDisplayRect.height = getHeight() / 11 + PADDING - 2;
         for(int i=lastIndex; i>=0; i--)
         {
             x -= candleWidth;
             long volume = priceHistory.getVolume(lastIndex-i);
-            drawRect(x, getHeight()-1, candleWidth, (int)-map(volume, 0, maxVolume, 0, getHeight()/11+PADDING-2), 0xFF91a9b8);
+            drawRect(x, getHeight()-1, candleWidth, (int)-map(volume, 0, maxVolume, 0, (float) getHeight() /11+PADDING-2), 0xFF91a9b8);
 
             int low = priceHistory.getLowPrice(lastIndex-i);
             int high = priceHistory.getHighPrice(lastIndex-i);
@@ -136,11 +162,18 @@ public class CandleStickChart extends GuiElement {
     }
     @Override
     protected void render() {
-
+        int mouseX = getMouseX();
+        int mouseY = getMouseY();
+        if(volumeDisplayRect.contains(mouseX, mouseY))
+        {
+            drawTooltipLater(StockMarketTextMessages.getCandlestickChartTooltipTradeVolume(), mouseX, mouseY,
+                    getTooltipBackgroundColor(), getTooltipBackgroundPadding(), Alignment.TOP);
+        }
     }
 
     @Override
     protected void layoutChanged() {
+        chartWidth = getWidth()-maxLabelWidth-5;
         for(LimitOrderInChartDisplay display : limitOrderDisplays.values())
         {
             display.setWidth(getWidth()/2-5);
@@ -168,15 +201,16 @@ public class CandleStickChart extends GuiElement {
             bodyYMax--;
         }
 
-        int wickWidth = candleWidth / 2;
+        int wickWidth = candleWidth / 4;
         if(wickWidth < 1)
         {
             wickWidth = 1;
         }
-        else if(wickWidth > 10)
+        else if(wickWidth > 11)
         {
-            wickWidth = 10;
+            wickWidth = 11;
         }
+        wickWidth |= 1; // Make sure it is odd
 
         int wickOffset = (candleWidth - wickWidth) / 2;
         if(wickOffset <= 0)
@@ -239,7 +273,8 @@ public class CandleStickChart extends GuiElement {
             if(order.type == Order.Type.LIMIT)
             {
                 long orderID = order.orderID;
-                if(stillActiveOrderIds.get(orderID) == 1)
+                int case_ = stillActiveOrderIds.get(orderID);
+                if(case_ == 1)
                 {
                     LimitOrderInChartDisplay orderView = new LimitOrderInChartDisplay(this::getPriceFromYPos, order, this::onOrderReplacedToNewPrice);
                     orderView.setWidth(getWidth()/2-5);
@@ -247,13 +282,26 @@ public class CandleStickChart extends GuiElement {
                     limitOrderDisplays.put(orderID, orderView);
                     addChild(orderView);
                 }
+                else if(case_ == 2)
+                {
+                    LimitOrderInChartDisplay orderView = limitOrderDisplays.get(orderID);
+                    if(orderView != null)
+                    {
+                        orderView.setOrder(order);
+                        orderView.setY(getChartYPos(order.limitPrice));
+                    }
+                }
             }
         }
     }
 
     private void onOrderReplacedToNewPrice(OrderReadData order, Integer newPrice)
     {
-        BACKEND_INSTANCES.LOGGER.warn("NOT_IMPLEMENTED: onOrderReplacedToNewPrice called for order: " + order.orderID + " with new price: " + newPrice);
+        if(priceChangeCallback != null)
+        {
+            priceChangeCallback.accept(order, newPrice);
+        }
+        //BACKEND_INSTANCES.LOGGER.warn("NOT_IMPLEMENTED: onOrderReplacedToNewPrice called for order: " + order.orderID + " with new price: " + newPrice);
        // BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.changeOrderPrice(order.getItemID(), order.getOrderID(), newPrice);
     }
 

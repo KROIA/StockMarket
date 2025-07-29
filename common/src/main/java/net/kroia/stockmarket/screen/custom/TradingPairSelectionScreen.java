@@ -21,20 +21,29 @@ public class TradingPairSelectionScreen extends GuiScreen {
 
 
     private final TradingPairSelectionView tradingPairSelectionView;
+    private final GuiScreen parentScreen;
 
-    public TradingPairSelectionScreen(Consumer<TradingPair> onSelected){
+    public TradingPairSelectionScreen(GuiScreen parent, Consumer<TradingPair> onSelected){
         super(TITLE);
-
+        parentScreen = parent;
         tradingPairSelectionView = new TradingPairSelectionView(onSelected);
 
         addElement(tradingPairSelectionView);
     }
 
+    @Override
+    public void onClose()
+    {
+        super.onClose();
+        if(parentScreen != null) {
+            minecraft.setScreen(parentScreen);
+        }
+    }
 
 
     @Override
     protected void updateLayout(Gui gui) {
-        int padding = 5;
+        int padding = 10;
         tradingPairSelectionView.setSize(getWidth()-2*padding, getHeight()-2*padding);
         tradingPairSelectionView.setPosition(padding, padding);
     }

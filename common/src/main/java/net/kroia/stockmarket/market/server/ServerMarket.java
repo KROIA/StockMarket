@@ -435,33 +435,20 @@ public class ServerMarket implements ServerSaveable {
                         // Failed to lock the amount, cannot change the order price.
                         return false;
                     }
+                    if(orderBook.removeOrder(limitOrder)) {
+                        limitOrder.setPrice(newPrice);
+                        orderBook.addIncommingOrder(limitOrder);
+                        return true;
+                    }
+                }
+            }
+            else {
+                if(orderBook.removeOrder(limitOrder)) {
                     limitOrder.setPrice(newPrice);
+                    orderBook.addIncommingOrder(limitOrder);
                     return true;
                 }
-            } /*else {
-                long toFreeAmount = limitOrder.getPendingAmount();
-                IBank itemBank = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getUser(limitOrder.getPlayerUUID()).getBank(tradingPair.getItem());
-                if (itemBank == null)
-                    return false;
-
-                canBeMoved = itemBank.getTotalBalance() - toFillAmount >= 0 && itemBank.getBalance() >= toFillAmount;
-            }*/
-
-
-           /* if (canBeMoved && player != null) {
-                cancelOrder(orderID);
-
-                LimitOrder newOrder = OrderFactory.createLimitOrder(player, tradingPair, limitOrder.getAmount(), newPrice, limitOrder.getFilledAmount());
-                if (newOrder != null) {
-                    addOrder(newOrder);
-                    return true;
-                } else {
-                    LimitOrder oldOrder = OrderFactory.createLimitOrder(player, tradingPair, limitOrder.getAmount(), limitOrder.getPrice(), limitOrder.getFilledAmount());
-                    if (oldOrder != null)
-                        addOrder(oldOrder);
-                    return false;
-                }
-            }*/
+            }
         }
         return false;
     }

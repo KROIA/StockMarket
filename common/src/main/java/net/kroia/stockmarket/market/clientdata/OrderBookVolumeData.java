@@ -17,13 +17,21 @@ public class OrderBookVolumeData implements INetworkPayloadEncoder {
     public OrderBookVolumeData(int minPrice, int maxPrice, int tileCount, @NotNull OrderBook book) {
         this.minPrice = minPrice;
         this.maxPrice = maxPrice;
+        int maxTiles = maxPrice - minPrice;
+        if(tileCount > maxTiles)
+            tileCount = maxTiles;
+        int stepSize = maxTiles / tileCount;
+        if(maxTiles % tileCount != 0) {
+            stepSize++;
+        }
+        tileCount = maxTiles / stepSize;
         this.tiles = tileCount;
         this.volume = new long[tileCount];
 
-        int stepSize = (maxPrice - minPrice) / tileCount;
+
         for(int i = 0; i < tileCount; i++) {
             int lowerBound = minPrice + i * stepSize;
-            int upperBound = lowerBound + stepSize;
+            int upperBound = lowerBound + stepSize - 1;
             //int upperBound = (i == tileCount - 1) ? maxPrice : lowerBound + stepSize;
             this.volume[i] = book.getVolumeInRange(lowerBound, upperBound);
         }

@@ -20,7 +20,7 @@ public class OrderFactory {
         long lockedMoney = (amount>0? amount * price : 0);
         long lockedItem = (amount<0? -amount : 0);
 
-        if(tryReserveItem(playerUUID, pair, lockedMoney, lockedItem))
+        if(tryReserveItem(playerUUID, pair, lockedMoney, lockedItem, amount > 0))
             return new LimitOrder(playerUUID, amount, price, lockedMoney);
         return null;
     }
@@ -29,7 +29,7 @@ public class OrderFactory {
         long lockedMoney = (amount>0? (amount-alreadyFilledAmount) * price : 0);
         long lockedItem = (amount<0? -amount : 0);
 
-        if(tryReserveItem(playerUUID, pair, lockedMoney, price))
+        if(tryReserveItem(playerUUID, pair, lockedMoney, price, amount > 0))
             return new LimitOrder(playerUUID, amount, price, lockedMoney, alreadyFilledAmount);
         return null;
     }
@@ -44,7 +44,7 @@ public class OrderFactory {
         long lockedMoney = (amount>0? amount * currentMarketPrice : 0);
         long lockedItem = (amount<0? -amount : 0);
 
-        if(tryReserveItem(playerUUID, pair, lockedMoney, lockedItem)) {
+        if(tryReserveItem(playerUUID, pair, lockedMoney, lockedItem, amount > 0)) {
             return new MarketOrder(playerUUID, amount, lockedMoney);
         }
         return null;
@@ -55,7 +55,7 @@ public class OrderFactory {
     }
 
 
-    public static boolean tryReserveItem(UUID playerUUID, TradingPair pair, long moneyAmount, long itemAmount)
+    public static boolean tryReserveItem(UUID playerUUID, TradingPair pair, long moneyAmount, long itemAmount, boolean isBuy)
     {
         if(pair == null || !pair.isValid())
             return false;
@@ -78,18 +78,16 @@ public class OrderFactory {
             return false;
 
 
-        if(moneyAmount > 0)
+        if(isBuy)
         {
             // Is buy
             return tryReserveItem(moneyBank, moneyAmount);
         }
-
-        if(itemAmount > 0)
+        else
         {
             // Is sell
             return tryReserveItem(itemBank, itemAmount);
         }
-        return false;
     }
     /*public static boolean tryReserveBankFund(IBank moneyBank, IBank itemBank, ServerPlayer dbgPlayer, TradingPair pair, int amount, int price)
     {

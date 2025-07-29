@@ -141,8 +141,22 @@
   "gui.stockmarket.bot_settings_setup_screen_volatility.low": "Niedrige Volatilität",
   "gui.stockmarket.bot_settings_setup_screen_volatility.high": "Hohe Volatilität",
 
-  "gui.stockmarket.bot_settings_setup_screen_market_speed.question": "Wie schnell soll der bot das Item handeln?\nSetze den Interval in Millisekunden\nFür schnelleres handelä, wähle einen kleinen Wert.\nFür langsams handlä, nim en grosse Wert\nSchnells handle cha d Server-Performance beiträchtige\nMinimum: 1000ms\nMaximum: 10000ms",
-  "gui.stockmarket.bot_settings_setup_screen_market_speed.low": "Schnäggätempo",
-  "gui.stockmarket.bot_settings_setup_screen_market_speed.high": "Wie de Blitz"
+  "gui.stockmarket.bot_settings_setup_screen_market_speed.question": "Wie schnell soll der bot das Item handeln?\nSetze den Interval in Millisekunden\nFür schnelleres handeln, wähle einen kleinen Wert.\nFür langsams handeln, wähle einen grossen Wert\nSchnelles handeln kann die Server-Performance beeinträchtigen\nMinimum: 100ms\nMaximum: 10000ms",
+  "gui.stockmarket.bot_settings_setup_screen_market_speed.low": "Langsam",
+  "gui.stockmarket.bot_settings_setup_screen_market_speed.high": "Schnell",
+
+  "gui.stockmarket.trade_panel.tooltip_market_buy": "Kaufe sofort {amount} {item_name}\nfür {cost} {currency}",
+  "gui.stockmarket.trade_panel.tooltip_market_sell": "Verkaufe sofort {amount} {item_name}\nfür {cost} {currency}",
+  "gui.stockmarket.trade_panel.tooltip_limit_buy": "Kaufe {amount} {item_name}\nfür je {price} {currency}",
+  "gui.stockmarket.trade_panel.tooltip_limit_sell": "Verkaufe {amount} {item_name}\nfür je{price} {currency}",
+  "gui.stockmarket.trade_panel.amount": "Die Anzahl {item_name} die du\nkaufen oder verkaufen möchtest",
+  "gui.stockmarket.trade_panel.limit_price": "Der Preis für den du\n{item_name} kaufen oder verkaufen möchtest.\nWird nur für Limit Orders verwendet.",
+  "gui.stockmarket.trade_panel.tooltip_current_price": "Handle 1 {item_name}\nfür {price} {currency}",
+  "gui.stockmarket.trade_panel.tooltip_market_order": "Eine Market Order ist eine Order,\num ein Item zum aktuellen Marktpreis zu kaufen oder zu verkaufen.\nDie Order wird sofort ausgeführt,\nwenn genügend Volumen auf dem Markt verfügbar ist.",
+  "gui.stockmarket.trade_panel.tooltip_limit_order": "Eine Limit Order ist eine Order,\num ein Item zu einem bestimmten Preis zu kaufen oder zu verkaufen.\nDie Order wird nur ausgeführt,\nwenn der Marktpreis den angegebenen Preis erreicht.",
+  "gui.stockmarket.candlestick_chart.tooltip_orderbookvolume": "Zeigt ein Histogramm der verfügbaren Liquidität im Orderbuch an.\nDie breite der Balken repräsentiert die Menge an Items,\ndie zu einem bestimmten Preis gekauft oder verkauft werden.",
+  "gui.stockmarket.candlestick_chart.tooltip_tradevolume": "Zeigt ein Histogramm des gehandelten Volumens auf dem Markt an.\nJe höher die Balken, desto mehr Volumen\nwurde im entsprechenden Zeitraum gehandelt.",
+  "gui.stockmarket.orderlistview.filled": "Die Anzahl der Items in der Order, die bereits gehandelt wurden.\nFür kauf Orders: Die Mänge an Items die du bereits erhalten hast.\nFür verlauf Orders: Die Mänge an Items die du bereits verkauft hast.",
+  "gui.stockmarket.limit_order_in_chart_display.move_button": "Bewege die Order zu einem neuen Preis\nmit hoch oder runter ziehen."
 
 }

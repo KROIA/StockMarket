@@ -142,11 +142,22 @@
   "gui.stockmarket.bot_settings_setup_screen_volatility.low": "Lower volatility",
   "gui.stockmarket.bot_settings_setup_screen_volatility.high": "Higher volatility",
 
-  "gui.stockmarket.bot_settings_setup_screen_market_speed.question": "How fast should the bot trade the item?\nSet the Interval in milliseconds.\nFor faster trading, choose a lower value.\nFor slower trading, choose a higher value.\nA faster market may impact the server performance.\nMinimum: 1000ms\nMaximum: 10000ms",
+  "gui.stockmarket.bot_settings_setup_screen_market_speed.question": "How fast should the bot trade the item?\nSet the Interval in milliseconds.\nFor faster trading, choose a lower value.\nFor slower trading, choose a higher value.\nA faster market may impact the server performance.\nMinimum: 100ms\nMaximum: 10000ms",
   "gui.stockmarket.bot_settings_setup_screen_market_speed.low": "Slow",
-  "gui.stockmarket.bot_settings_setup_screen_market_speed.high": "Fast"
+  "gui.stockmarket.bot_settings_setup_screen_market_speed.high": "Fast",
 
-
-
+  "gui.stockmarket.trade_panel.tooltip_market_buy": "Buy {amount} {item_name} now\nfor {cost} {currency}",
+  "gui.stockmarket.trade_panel.tooltip_market_sell": "Sell {amount} {item_name} now\nfor {cost} {currency}",
+  "gui.stockmarket.trade_panel.tooltip_limit_buy": "Buy {amount} {item_name}\nfor {price} {currency} each",
+  "gui.stockmarket.trade_panel.tooltip_limit_sell": "Sell {amount} {item_name}\nfor {price} {currency} each",
+  "gui.stockmarket.trade_panel.amount": "The amount of {item_name}\nyou want to buy or sell.",
+  "gui.stockmarket.trade_panel.limit_price": "The price you want to\nbuy or sell{item_name} for.\nIt is only used for limit orders.",
+  "gui.stockmarket.trade_panel.tooltip_current_price": "Trade 1 {item_name}\nfor {price} {currency}",
+  "gui.stockmarket.trade_panel.tooltip_market_order": "A market order is an order to buy or sell\nan item at the current market price.\nThe order will be filled immediately,\nif there is enough volume available on the market.",
+  "gui.stockmarket.trade_panel.tooltip_limit_order": "A limit order is an order to buy or sell\nan item at a specific price.\nThe order will only be filled\nif the market price reaches the specified price.",
+  "gui.stockmarket.candlestick_chart.tooltip_orderbookvolume": "Shows a histogram for how much liquidity is available in the orderbook.\nThe wider the bars, the more volume is available at a specific price.",
+  "gui.stockmarket.candlestick_chart.tooltip_tradevolume": "Visualizes the volume of the last trades.\nThe higher the bar, the more volume was\ntraded in the specific time span.",
+  "gui.stockmarket.orderlistview.filled": "The amount of the order that has already been filled.\nFor buy orders: The amount of items you have already received.\nFor sell orders: The amount of items you have already sold.",
+  "gui.stockmarket.limit_order_in_chart_display.move_button": "Move Order to a new price\nby drag and drop."
 
 }

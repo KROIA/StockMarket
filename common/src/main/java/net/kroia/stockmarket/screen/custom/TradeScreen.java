@@ -9,6 +9,7 @@ import net.kroia.modutilities.TimerMillis;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.GuiScreen;
 import net.kroia.modutilities.gui.elements.ItemSelectionView;
+import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
@@ -23,6 +24,7 @@ import net.kroia.stockmarket.screen.uiElements.OrderListView;
 import net.kroia.stockmarket.screen.uiElements.OrderbookVolumeChart;
 import net.kroia.stockmarket.screen.uiElements.TradePanel;
 import net.kroia.stockmarket.util.PriceHistory;
+import net.kroia.stockmarket.util.StockMarketTextMessages;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
@@ -276,8 +278,10 @@ public class TradeScreen extends GuiScreen {
         this.tradingPair = currentPair;
 
         // Create Gui Elements
-        this.candleStickChart = new CandleStickChart();
+        this.candleStickChart = new CandleStickChart(this::onOrderChange);
         this.orderbookVolumeChart = new OrderbookVolumeChart();
+        this.orderbookVolumeChart.setTooltipMousePositionAlignment(GuiElement.Alignment.TOP);
+        this.orderbookVolumeChart.setHoverTooltipSupplier(StockMarketTextMessages::getCandlestickChartTooltipOrderBookVolume);
         this.activeOrderListView = new OrderListView(this::cancelOrder);
         this.tradePanel = new TradePanel(this::onSelectItemButtonPressed,
                 this::onBuyMarketButtonPressed,
@@ -379,7 +383,7 @@ public class TradeScreen extends GuiScreen {
 
         if(instance.updateTimer.check() && instance.getMarket() != null)
         {
-            instance.getMarket().requestTradingViewData(instance.candleStickChart.getMaxCandleCount(), 0,0,0 ,instance::updateView);
+            instance.getMarket().requestTradingViewData(instance.candleStickChart.getMaxCandleCount(), 0,0,500 ,instance::updateView);
         }
         /*long currentTickCount = System.currentTimeMillis();
         if(currentTickCount - lastTickCount > 1000)
@@ -551,7 +555,7 @@ public class TradeScreen extends GuiScreen {
         screen.getItemSelectionView().setSorter(new ItemSorter());
         screen.sortItems();
         this.minecraft.setScreen(screen);*/
-        TradingPairSelectionScreen screen = new TradingPairSelectionScreen(this::onItemSelected);
+        TradingPairSelectionScreen screen = new TradingPairSelectionScreen(this, this::onItemSelected);
         BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.requestTradingPairs(
                 (tradingPairs) -> {
                     screen.setAvailableTradingPairs(tradingPairs);
@@ -562,7 +566,7 @@ public class TradeScreen extends GuiScreen {
         Minecraft.getInstance().setScreen(screen);
     }
 
-    void cancelOrder(OrderReadData order)
+    private void cancelOrder(OrderReadData order)
     {
         getMarket().requestCancelOrder(order.orderID, (success) -> {
             if(success)
@@ -574,6 +578,26 @@ public class TradeScreen extends GuiScreen {
                 BACKEND_INSTANCES.LOGGER.warn("Failed to cancel order: " + order.orderID);
             }
         });
+    }
+    private void onOrderChange(OrderReadData order, Integer newPrice)
+    {
+        if(newPrice != null && newPrice >= 0)
+        {
+            getMarket().requestChangeOrder(order.orderID, newPrice, (success) -> {
+                if(success)
+                {
+                    BACKEND_INSTANCES.LOGGER.info("Order price changed successfully: " + order.orderID + " to " + newPrice);
+                }
+                else
+                {
+                    BACKEND_INSTANCES.LOGGER.warn("Failed to change order: " + order.orderID+ " to " + newPrice);
+                }
+            });
+        }
+        else
+        {
+            BACKEND_INSTANCES.LOGGER.warn("Invalid new price for order: " + order.orderID);
+        }
     }
 
     private ClientMarket getMarket()

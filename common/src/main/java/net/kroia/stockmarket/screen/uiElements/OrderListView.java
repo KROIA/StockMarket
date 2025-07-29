@@ -8,6 +8,7 @@ import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.clientdata.OrderReadData;
 import net.kroia.stockmarket.market.clientdata.OrderReadListData;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
+import net.kroia.stockmarket.util.StockMarketTextMessages;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -42,6 +43,10 @@ public class OrderListView extends GuiElement {
         priceLabel.setAlignment(OrderView.alignment);
 
         activeOrderListView.setLayout(new LayoutVertical(0, 0, true, false));
+
+
+        filledLabel.setTooltipMousePositionAlignment(Label.Alignment.BOTTOM);
+        filledLabel.setHoverTooltipSupplier(StockMarketTextMessages::getOrderListViewFilled);
 
 
         addChild(directionLabel);

@@ -286,6 +286,8 @@ public class OrderBook implements ServerSaveable {
         volume += ghostOrderBook.getAmount(price);
         return volume;
     }
+
+
     public long getVolumeInRange(int minPrice, int maxPrice)
     {
         long volume = 0;

@@ -138,7 +138,20 @@
   "gui.stockmarket.bot_settings_setup_screen_volatility.low": "Tüfi Volatilität",
   "gui.stockmarket.bot_settings_setup_screen_volatility.high": "Höchi Volatilität",
 
-  "gui.stockmarket.bot_settings_setup_screen_market_speed.question": "Wie schnell söll de Bot das Item handle?\nSetz de Interval in Millisekunde\nFür schnells handlä, nim en chlinere Wärt.\nFür langsames handeln. wähle einen grossen Wert\nSchnelles handeln kann die Server-Performance beeinträchtigen\nMinimum: 1000ms\nMaximum: 10000ms",
+  "gui.stockmarket.bot_settings_setup_screen_market_speed.question": "Wie schnell söll de Bot das Item handle?\nSetz de Interval in Millisekunde\nFür schnells handlä, nim en chlinere Wert.\nFür langsames handeln. wähl einen grossen Wert\nSchnelles handeln kann die Server-Performance beeinträchtigen\nMinimum: 100ms\nMaximum: 10000ms",
   "gui.stockmarket.bot_settings_setup_screen_market_speed.low": "Langsam",
-  "gui.stockmarket.bot_settings_setup_screen_market_speed.high": "Schnell"
-}
+  "gui.stockmarket.bot_settings_setup_screen_market_speed.high": "Schnell",
+
+  "gui.stockmarket.trade_panel.tooltip_market_buy": "Chauf sofort {amount} {item_name}\nfür {cost} {currency}",
+  "gui.stockmarket.trade_panel.tooltip_market_sell": "Verchauf sofort {amount} {item_name}\nfür {cost} {currency}",
+  "gui.stockmarket.trade_panel.tooltip_limit_buy": "Chauf {amount} {item_name}\nfür je {price} {currency}",
+  "gui.stockmarket.trade_panel.tooltip_limit_sell": "Verchauf {amount} {item_name}\nfür je{price} {currency}",
+  "gui.stockmarket.trade_panel.amount": "D Anzahl {item_name} wo du\nchaufe oder verchaufe wötsch",
+  "gui.stockmarket.trade_panel.limit_price": "Für welle Pris du\n{item_name} chaufe oder verchaufe wötsch.\nWird nu für Limit Orders gnutzt.",
+  "gui.stockmarket.trade_panel.tooltip_current_price": "Handlä 1 {item_name}\nfür {price} {currency}",
+  "gui.stockmarket.trade_panel.tooltip_market_order": "Ä Market Order isch ä Order,\num ä Item zum aktuellä Marktpreis z chaufe oder z verchaufe.\nDie Order wird sofort usgführt,\ninsofern gnueg Volume ufem Markt verfüegbar isch.",
+  "gui.stockmarket.trade_panel.tooltip_limit_order": "Ä Limit Order isch ä Order,\num ä Item zumene bestimmtä Preis z chaufe oder zu verchaufe.\nDie Order wird nur usgführt,\nwenn der Marktpreis de agebeni Preis erreicht.",
+  "gui.stockmarket.candlestick_chart.tooltip_orderbookvolume": "Zeigt ä Histogramm vo de verfüegbare Liquidität im Orderbuch ah.\nD breiti vo de Balkä repräsentiert d Mengi a Items,\nwo zumene bestimmte Preis kauft oder verchauft werded.",
+  "gui.stockmarket.candlestick_chart.tooltip_tradevolume": "Zeigt ä Histogramm vom ghandlete Volume uf em Markt ah.\nJe höcher d Balkä, desto meh Volumä\nisch im entsprächende Zitrum ghandlet worde.",
+  "gui.stockmarket.orderlistview.filled": "D Anzahl vo de Items i de Order, wo bereits ghandelt worde isch.\nFür kauf Orders: D Mängi a Items wo du bereits erhalte hesch.\nFür verlauf Orders: D Mängi a Items wo du bereits verchauft hesch.",
+  "gui.stockmarket.limit_order_in_chart_display.move_button": "Beweg dini Order zumene neue Pris\nmit ufe oder abe zieh."

@@ -591,6 +591,104 @@ public class StockMarketTextMessages {
     }
 
 
+
+    private static final Component TRADE_PANEL_TOOLTIP_MARKET_BUY = Component.translatable("gui."+StockMarketMod.MOD_ID+".trade_panel.tooltip_market_buy");
+    public static String getTradePanelTooltipMarketBuy(long amount, String itemName, long cost, String currency) {
+        String msg = TRADE_PANEL_TOOLTIP_MARKET_BUY.getString();
+        msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(amount));
+        msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
+        msg = replaceVariable(msg, Variables.COST, String.valueOf(cost));
+        msg = replaceVariable(msg, Variables.CURRENCY, currency);
+        return msg;
+    }
+    private static final Component TRADE_PANEL_TOOLTIP_MARKET_SELL = Component.translatable("gui."+StockMarketMod.MOD_ID+".trade_panel.tooltip_market_sell");
+    public static String getTradePanelTooltipMarketSell(long amount, String itemName, long payment, String currency) {
+        String msg = TRADE_PANEL_TOOLTIP_MARKET_SELL.getString();
+        msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(amount));
+        msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
+        msg = replaceVariable(msg, Variables.COST, String.valueOf(payment));
+        msg = replaceVariable(msg, Variables.CURRENCY, currency);
+        return msg;
+    }
+    private static final Component TRADE_PANEL_TOOLTIP_LIMIT_BUY = Component.translatable("gui."+StockMarketMod.MOD_ID+".trade_panel.tooltip_limit_buy");
+    public static String getTradePanelTooltipLimitBuy(long amount, String itemName, long price, String currency) {
+        String msg = TRADE_PANEL_TOOLTIP_LIMIT_BUY.getString();
+        msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(amount));
+        msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
+        msg = replaceVariable(msg, Variables.PRICE, String.valueOf(price));
+        msg = replaceVariable(msg, Variables.CURRENCY, currency);
+        return msg;
+    }
+    private static final Component TRADE_PANEL_TOOLTIP_LIMIT_SELL = Component.translatable("gui."+StockMarketMod.MOD_ID+".trade_panel.tooltip_limit_sell");
+    public static String getTradePanelTooltipLimitSell(long amount, String itemName, long price, String currency) {
+        String msg = TRADE_PANEL_TOOLTIP_LIMIT_SELL.getString();
+        msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(amount));
+        msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
+        msg = replaceVariable(msg, Variables.PRICE, String.valueOf(price));
+        msg = replaceVariable(msg, Variables.CURRENCY, currency);
+        return msg;
+    }
+
+
+
+    private static final Component TRADE_PANEL_TOOLTIP_AMOUNT = Component.translatable("gui."+StockMarketMod.MOD_ID+".trade_panel.amount");
+    public static String getTradePanelTooltipAmount(String itemName) {
+        String msg = TRADE_PANEL_TOOLTIP_AMOUNT.getString();
+        msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
+        return msg;
+    }
+    private static final Component TRADE_PANEL_TOOLTIP_LIMIT_PRICE = Component.translatable("gui."+StockMarketMod.MOD_ID+".trade_panel.limit_price");
+    public static String getTradePanelTooltipLimitPrice(String itemName) {
+        String msg = TRADE_PANEL_TOOLTIP_LIMIT_PRICE.getString();
+        msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
+        return msg;
+    }
+    private static final Component TRADE_PANEL_TOOLTIP_CURRENT_PRICE = Component.translatable("gui."+StockMarketMod.MOD_ID+".trade_panel.tooltip_current_price");
+    public static String getTradePanelTooltipCurrentPrice(long price, String itemName, String currency) {
+        String msg = TRADE_PANEL_TOOLTIP_CURRENT_PRICE.getString();
+        msg = replaceVariable(msg, Variables.PRICE, String.valueOf(price));
+        msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
+        msg = replaceVariable(msg, Variables.CURRENCY, currency);
+        return msg;
+    }
+
+    private static final Component TRADE_PANEL_TOOLTIP_MARKET_ORDER = Component.translatable("gui."+StockMarketMod.MOD_ID+".trade_panel.tooltip_market_order");
+    public static String getTradePanelTooltipMarketOrder() {
+        String msg = TRADE_PANEL_TOOLTIP_MARKET_ORDER.getString();
+        return msg;
+    }
+    private static final Component TRADE_PANEL_TOOLTIP_LIMIT_ORDER = Component.translatable("gui."+StockMarketMod.MOD_ID+".trade_panel.tooltip_limit_order");
+    public static String getTradePanelTooltipLimitOrder() {
+        String msg = TRADE_PANEL_TOOLTIP_LIMIT_ORDER.getString();
+        return msg;
+    }
+
+    private static final Component CANDLESTICKCHART_ORDERBOOKVOLUME = Component.translatable("gui."+StockMarketMod.MOD_ID+".candlestick_chart.tooltip_orderbookvolume");
+    public static String getCandlestickChartTooltipOrderBookVolume() {
+        String msg = CANDLESTICKCHART_ORDERBOOKVOLUME.getString();
+        return msg;
+    }
+
+    private static final Component CANDLESTICKCHART_TRADEVOLUME = Component.translatable("gui."+StockMarketMod.MOD_ID+".candlestick_chart.tooltip_tradevolume");
+    public static String getCandlestickChartTooltipTradeVolume() {
+        String msg = CANDLESTICKCHART_TRADEVOLUME.getString();
+        return msg;
+    }
+
+    private static final Component ORDERLISTVIEW_FILLED = Component.translatable("gui."+StockMarketMod.MOD_ID+".orderlistview.filled");
+    public static String getOrderListViewFilled() {
+        String msg = ORDERLISTVIEW_FILLED.getString();
+        return msg;
+    }
+
+
+    private static final Component LIMIT_ORDER_IN_CHART_DISPLAY_MOVE_BUTTON = Component.translatable("gui."+StockMarketMod.MOD_ID+".limit_order_in_chart_display.move_button");
+
+    public static String getLimitOrderInChartDisplayMoveButton() {
+        String msg = LIMIT_ORDER_IN_CHART_DISPLAY_MOVE_BUTTON.getString();
+        return msg;
+    }
+
     //--------------------------------------------------------------------------------------------------------
     // Helper methods
     //--------------------------------------------------------------------------------------------------------

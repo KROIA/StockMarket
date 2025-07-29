@@ -6,6 +6,7 @@ import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.clientdata.OrderReadData;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
+import net.kroia.stockmarket.util.StockMarketTextMessages;
 
 import java.util.function.BiConsumer;
 import java.util.function.Function;
@@ -18,8 +19,8 @@ public class LimitOrderInChartDisplay extends GuiElement {
     }
     private static final int buyColor = ColorUtilities.getRGB(ColorUtilities.setBrightness(TradeScreen.colorGreen, 0.4f), 255);
     private static final int sellColor = ColorUtilities.getRGB(ColorUtilities.setBrightness(TradeScreen.colorRed, 0.4f), 255);
-    private final int color;
-    private final OrderReadData order;
+    private int color;
+    private OrderReadData order;
 
     private final Button moveButton;
     private int globalMouseYStart;
@@ -32,19 +33,14 @@ public class LimitOrderInChartDisplay extends GuiElement {
         super();
         this.yPosToPriceFunc = yPosToPriceFunc;
         this.onOrderReplacedToNewPrice = onOrderReplacedToNewPrice;
-        this.order = order;
-        if(order.isBuy())
-            color = buyColor;
-        else
-            color = sellColor;
         moveButton = new Button("");
-        moveButton.setOutlineColor(color);
-        moveButton.setIdleColor(color);
-        moveButton.setHoverColor(ColorUtilities.setBrightness(color, 0.9f));
-        moveButton.setPressedColor(ColorUtilities.setBrightness(color, 0.8f));
         moveButton.setOnDown(this::onButtonDown);
         moveButton.setOnRisingEdge(this::onButtonRising);
         moveButton.setOnFallingEdge(this::onButtonFalling);
+        moveButton.setTooltipMousePositionAlignment(Alignment.TOP);
+        moveButton.setHoverTooltipSupplier(StockMarketTextMessages::getLimitOrderInChartDisplayMoveButton);
+
+        setOrder(order);
 
         setOutlineColor(0);
         setBackgroundColor(0);
@@ -55,6 +51,17 @@ public class LimitOrderInChartDisplay extends GuiElement {
     public OrderReadData getOrder()
     {
         return order;
+    }
+    public void setOrder(OrderReadData order) {
+        this.order = order;
+        if(order.isBuy())
+            color = buyColor;
+        else
+            color = sellColor;
+        moveButton.setOutlineColor(color);
+        moveButton.setIdleColor(color);
+        moveButton.setHoverColor(ColorUtilities.setBrightness(color, 0.9f));
+        moveButton.setPressedColor(ColorUtilities.setBrightness(color, 0.8f));
     }
 
 
