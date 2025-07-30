@@ -1,6 +1,5 @@
 package net.kroia.stockmarket.market.server;
 
-import net.kroia.banksystem.api.IServerBankManager;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.ServerSaveable;
@@ -314,19 +313,92 @@ public class ServerStockMarketManager implements ServerSaveable
     }
 
 
-    public boolean createMarket(@NotNull TradingPair pair, int startPrice)
+
+    public boolean createMarket(MarketFactory.DefaultMarketSetupData defaultMarketSetupData)
     {
-        if(!isTradingPairAllowedForTrading(pair))
+        if(defaultMarketSetupData == null)
         {
-            warn("Trading pair " + pair + " is not allowed for trading");
+            warn("Default market setup data is null");
+            return false;
+        }
+        TradingPair pair = defaultMarketSetupData.tradingPair;
+        if(pair == null)
+        {
+            warn("Trading pair is null in default market setup data:\n" + defaultMarketSetupData);
+            return false;
+        }
+        if(!pair.isValid())
+        {
+            warn("Invalid trading pair in default market setup data:\n" + pair);
             return false;
         }
         if(markets.containsKey(pair))
         {
-            warn("Trading pair: " + pair + " already exists");
+            warn("Trading pair: " + pair.getShortDescription() + " already exists");
             return true;
         }
-        if(addTradeItem_internal(pair, startPrice)) {
+        ServerMarket market = MarketFactory.createMarket(defaultMarketSetupData);
+        if(market != null)
+        {
+            markets.put(market.getTradingPair(), market);
+            onMarketAdded(market);
+            rebuildTradeItemsChunks();
+            return true;
+        }
+        return false;
+    }
+    public boolean createMarket(MarketFactory.DefaultMarketSetupDataGroup category)
+    {
+        if(category == null || category.marketSetupDataList.isEmpty())
+        {
+            warn("Category is null or empty: " + category);
+            return false;
+        }
+        boolean success = true;
+        for(MarketFactory.DefaultMarketSetupData data : category.marketSetupDataList)
+        {
+            TradingPair pair = data.tradingPair;
+            if(pair == null)
+            {
+                warn("Trading pair is null in default market setup data:\n" + data);
+                success = false;
+                continue;
+            }
+            if(!pair.isValid())
+            {
+                warn("Invalid trading pair in default market setup data:\n" + pair);
+                success = false;
+                continue;
+            }
+            if(markets.containsKey(pair))
+            {
+                warn("Trading pair: " + pair.getShortDescription() + " already exists");
+                success = false;
+                continue;
+            }
+            ServerMarket market = MarketFactory.createMarket(data);
+            if(market != null)
+            {
+                markets.put(market.getTradingPair(), market);
+                onMarketAdded(market);
+            }
+        }
+        rebuildTradeItemsChunks();
+        return success;
+    }
+
+    public boolean createMarket(@NotNull TradingPair pair, int startPrice)
+    {
+        if(markets.containsKey(pair))
+        {
+            warn("Trading pair: " + pair.getShortDescription() + " already exists");
+            return true;
+        }
+        ServerMarket market = MarketFactory.createMarket(pair, startPrice);
+        if(market != null)
+        {
+            markets.put(market.getTradingPair(), market);
+            onMarketAdded(market);
             rebuildTradeItemsChunks();
             return true;
         }
@@ -345,48 +417,49 @@ public class ServerStockMarketManager implements ServerSaveable
     public boolean createMarket(@NotNull ServerMarketSettingsData settingsData)
     {
         TradingPair pair = settingsData.tradingPairData.toTradingPair();
-        int startPrice = 0;
-        if(settingsData.botSettingsData != null) {
-            startPrice = settingsData.botSettingsData.defaultPrice;
-        }
-        if(createMarket(pair, startPrice))
+        if(markets.containsKey(pair))
         {
-            ServerMarket market = getMarket(pair);
-            return market.setMarketSettingsData(settingsData);
+            warn("Trading pair: " + pair.getShortDescription() + " already exists");
+            return false;
+        }
+        ServerMarket market = MarketFactory.createMarket(settingsData);
+        if(market != null)
+        {
+            markets.put(market.getTradingPair(), market);
+            onMarketAdded(market);
+            rebuildTradeItemsChunks();
+            return true;
         }
         return false;
     }
 
     public boolean createMarkets(@NotNull List<ServerMarketSettingsData> settingsDataList)
     {
+        List<ServerMarketSettingsData> cpy = new ArrayList<>(settingsDataList.size());
         boolean success = true;
         for(ServerMarketSettingsData settingsData : settingsDataList)
         {
-            TradingPair pair = settingsData.tradingPairData.toTradingPair();
-            if(!isTradingPairAllowedForTrading(pair))
+            if(settingsData == null)
             {
-                warn("Trading pair " + pair + " is not allowed for trading");
+                warn("Invalid market settings data: " + settingsData);
                 success = false;
                 continue;
             }
-            if(markets.containsKey(pair))
+            if(markets.containsKey(settingsData.tradingPairData.toTradingPair()))
             {
-                warn("Trading pair: " + pair + " already exists");
+                warn("Trading pair already exists: " + settingsData.tradingPairData.toTradingPair().getShortDescription());
+                success = false;
                 continue;
             }
-            int startPrice = 0;
-            if(settingsData.botSettingsData != null) {
-                startPrice = settingsData.botSettingsData.defaultPrice;
-            }
-            if(addTradeItem_internal(pair, startPrice))
-            {
-                ServerMarket market = getMarket(pair);
-                success &= market.setMarketSettingsData(settingsData);
-            }
-            else
-                success = false;
-
+            cpy.add(settingsData);
         }
+        List<ServerMarket> markets = MarketFactory.createMarkets(cpy);
+        for(ServerMarket market : markets)
+        {
+            this.markets.put(market.getTradingPair(), market);
+            onMarketAdded(market);
+        }
+        success &= markets.size() == cpy.size();
         rebuildTradeItemsChunks();
         return success;
     }
@@ -430,7 +503,7 @@ public class ServerStockMarketManager implements ServerSaveable
 
 
 
-    private boolean addTradeItem_internal(TradingPair pair, int startPrice)
+    /*private boolean addTradeItem_internal(TradingPair pair, int startPrice)
     {
         ItemID item = pair.getItem();
         ItemID currency = pair.getCurrency();
@@ -453,7 +526,7 @@ public class ServerStockMarketManager implements ServerSaveable
         markets.put(pair, market);
         onMarketAdded(market);
         return true;
-    }
+    }*/
 
     private void rebuildTradeItemsChunks()
     {
@@ -521,11 +594,6 @@ public class ServerStockMarketManager implements ServerSaveable
                     loadSuccess = false;
                     continue;
                 }
-                /*if(tradeItem == null)
-                {
-                    loadSuccess = false;
-                    continue;
-                }*/
                 if(!tradeItem.getTradingPair().isValid())
                     continue;
                 tradeItemsMap.put(tradeItem.getTradingPair(), tradeItem);

@@ -217,8 +217,7 @@ public class TradingPair implements ServerSaveable, INetworkPayloadConverter {
     @Override
     public boolean equals(Object obj) {
         if (this == obj) return true;
-        if (!(obj instanceof TradingPair)) return false;
-        TradingPair other = (TradingPair) obj;
+        if (!(obj instanceof TradingPair other)) return false;
         return pairUUID.equals(other.pairUUID);
     }
 }

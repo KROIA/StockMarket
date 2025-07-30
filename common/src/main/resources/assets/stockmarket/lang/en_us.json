@@ -118,7 +118,6 @@
   "gui.stockmarket.bot_settings_setup_screen_enabled_features.enable_volume_tracking": "Enable volume tracking\nThe bot will track the buy/sell volume.\nThis value is used to calculate the target price.",
   "gui.stockmarket.bot_settings_setup_screen_enabled_features.enable_random_walk": "Enable random walk\nThe bot will randomly change the target price\nusing a random walk generator.",
 
-
   "gui.stockmarket.management_screen.title": "Stock Market Management",
   "gui.stockmarket.management_screen.trading_items": "Trading Items",
   "gui.stockmarket.management_screen.new_trading_item": "New Trading Item",
@@ -158,6 +157,11 @@
   "gui.stockmarket.candlestick_chart.tooltip_orderbookvolume": "Shows a histogram for how much liquidity is available in the orderbook.\nThe wider the bars, the more volume is available at a specific price.",
   "gui.stockmarket.candlestick_chart.tooltip_tradevolume": "Visualizes the volume of the last trades.\nThe higher the bar, the more volume was\ntraded in the specific time span.",
   "gui.stockmarket.orderlistview.filled": "The amount of the order that has already been filled.\nFor buy orders: The amount of items you have already received.\nFor sell orders: The amount of items you have already sold.",
-  "gui.stockmarket.limit_order_in_chart_display.move_button": "Move Order to a new price\nby drag and drop."
+  "gui.stockmarket.limit_order_in_chart_display.move_button": "Move Order to a new price\nby drag and drop.",
+
+  "gui.stockmarket.trading_pair_selection_view.clear_item": "Clear Item",
+  "gui.stockmarket.trading_pair_selection_view.clear_currency": "Clear Currency",
+  "gui.stockmarket.trading_pair_selection_view.select_pair": "Select Pair"
+
 
 }

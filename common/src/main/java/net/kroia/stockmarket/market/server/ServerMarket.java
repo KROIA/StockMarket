@@ -186,13 +186,13 @@ public class ServerMarket implements ServerSaveable {
                 volatilityBot.setSettings(settingsData.botSettingsData.toSettings());
             }
             else if(settingsData.doCreateBotIfNotExists)
-                success &= createVolatilityBot(settingsData.botSettingsData.toSettings());
+                createVolatilityBot(settingsData.botSettingsData.toSettings());
 
         }
         else {
             if(volatilityBot != null && settingsData.doDestroyBotIfExists)
             {
-                success &= destroyVolatilityBot();
+                success = destroyVolatilityBot();
             }
         }
 
@@ -206,13 +206,14 @@ public class ServerMarket implements ServerSaveable {
     }
     public boolean setBotSettingsData(@Nullable BotSettingsData botSettingsData)
     {
-        if(botSettingsData == null)
-            return false;
-
+        return setBotSettings(botSettingsData != null ? botSettingsData.toSettings() : null);
+    }
+    public boolean setBotSettings(ServerVolatilityBot.Settings settings)
+    {
         if(volatilityBot == null)
             return false;
 
-        volatilityBot.setSettings(botSettingsData.toSettings());
+        volatilityBot.setSettings(settings);
         return true;
     }
 
@@ -220,7 +221,7 @@ public class ServerMarket implements ServerSaveable {
     public int getBotTargetPrice() {
         if(volatilityBot == null)
             return 0;
-        return ((ServerVolatilityBot.Settings)volatilityBot.getSettings()).targetPrice;
+        return volatilityBot.getTargetPrice();
     }
 
 
@@ -244,14 +245,11 @@ public class ServerMarket implements ServerSaveable {
 
 
 
-    public boolean createVolatilityBot(ServerVolatilityBot.Settings settings)
+    public void createVolatilityBot(ServerVolatilityBot.Settings settings)
     {
-        if(volatilityBot != null)
-            return false;
-
-        volatilityBot = new ServerVolatilityBot(this);
+        if(volatilityBot == null)
+            volatilityBot = new ServerVolatilityBot(this);
         volatilityBot.setSettings(settings);
-        return true;
     }
     public boolean destroyVolatilityBot()
     {

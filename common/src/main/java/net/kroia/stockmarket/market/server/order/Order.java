@@ -190,69 +190,24 @@ public abstract class Order implements ServerSaveable, INetworkPayloadConverter 
 
     public void markAsProcessed() {
         if(!isBot())
-            BACKEND_INSTANCES.LOGGER.info("Order processed: " + toString());
-        //unlockLockedMoney();
+            BACKEND_INSTANCES.LOGGER.debug("Order processed:\n" + toString());
         setStatus(Status.PROCESSED);
     }
     public void markAsInvalid(String reason) {
         invalidReason = reason;
         if(!isBot()) {
-            BACKEND_INSTANCES.LOGGER.info("Order invalid: " + toString());
+            BACKEND_INSTANCES.LOGGER.debug("Order invalid:\n" + toString());
 
             PlayerUtilities.printToClientConsole(getPlayerUUID(), StockMarketTextMessages.getOrderInvalidMessage(reason));
         }
-        //unlockLockedMoney();
         setStatus(Status.INVALID);
     }
     public void markAsCancelled() {
         if(!isBot())
-            BACKEND_INSTANCES.LOGGER.info("Order canceled: " + toString());
-        //unlockLockedMoney();
+            BACKEND_INSTANCES.LOGGER.debug("Order canceled:\n" + toString());
         setStatus(Status.CANCELLED);
     }
-    /*private void unlockLockedMoney()
-    {
-        if(isBot())
-            return;
-        IBankUser user = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getUser(playerUUID);
-        if(user == null)
-        {
-            BACKEND_INSTANCES.LOGGER.error("BankUser not found for player " + ServerPlayerList.getPlayerName(playerUUID));
-            return;
-        }
-        IBank moneyBank = user.getBank(BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getCurrencyItem());
-        IBank itemBank = user.getBank(itemID);
-        if(moneyBank == null)
-        {
-            BACKEND_INSTANCES.LOGGER.error("MoneyBank not found for player " + ServerPlayerList.getPlayerName(playerUUID));
-            return;
-        }
-        if(itemBank == null)
-        {
-            BACKEND_INSTANCES.LOGGER.error("ItemBank not found for player " + ServerPlayerList.getPlayerName(playerUUID));
-            return;
-        }
 
-
-        if(this instanceof LimitOrder limitOrder)
-        {
-            if(limitOrder.isBuy())
-                moneyBank.unlockAmount(Math.max(0,limitOrder.getLockedMoney() - Math.abs(limitOrder.getTransferedMoney())));
-            else
-                itemBank.unlockAmount(Math.abs(limitOrder.getAmount()-limitOrder.getFilledAmount()));
-
-        }
-        else if(this instanceof  MarketOrder marketOrder)
-        {
-            if(marketOrder.isBuy()) {
-                long amount = marketOrder.getLockedMoney() - Math.abs(marketOrder.getTransferedMoney());
-                if(amount > 0)
-                    moneyBank.unlockAmount(amount);
-            }
-            else
-                itemBank.unlockAmount(Math.abs(marketOrder.getAmount()-marketOrder.getFilledAmount()));
-        }
-    }*/
 
     public void setStatus(Status status) {
         if(status == this.status)

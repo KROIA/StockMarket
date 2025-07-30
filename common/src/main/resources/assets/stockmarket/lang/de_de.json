@@ -21,7 +21,9 @@
   "message.stockmarket.marketplace_not_existing": "Es gibt kein Markt um {item_name} zu handeln",
   "message.stockmarket.marketplace_already_existing": "Markt für {item_name} ist bereits vorhanden",
   "message.stockmarket.marketplace_is_now_closed": "Markt für {item_name} ist jetzt geschlossen",
+  "message.stockmarket.marketplace_is_now_closed_all": "Alle Märkte sind jetzt geschlossen",
   "message.stockmarket.marketplace_is_now_open": "Markt für {item_name} ist jetzt geöffnet für den Handel",
+  "message.stockmarket.marketplace_is_now_open_all": "Alle Märkte sind jetzt geöffnet für den Handel",
   "message.stockmarket.marketplace_is_not_allowed": "Markt für {item_name} ist nicht erlaubt",
   "message.stockmarket.marketplace_deleted": "{item_name} kann nicht mehr gehandelt werden",
   "message.stockmarket.marketplace_created": "{item_name} kann jetzt gehandelt werden",
@@ -37,8 +39,8 @@
   "message.stockmarket.default_bots_category_created": "Standard Bots der Kategorie: {value} erstellt",
   "message.stockmarket.can_not_create_default_bots_category": "Standard Bots für Kategorie {value} kann nicht erstellt werden",
   "message.stockmarket.default_market_category_removed": "Mark Kategorie {value} entfernt",
+  "message.stockmarket.all_markets_removed": "Alle Märkte entfernt",
   "message.stockmarket.unknown_market_category": "Kann Market Kategorie: {value} nicht finden",
-
 
   "message.stockmarket.bot_created": "Bot erstellt für Item: {item_name}, du kannst seine Einstellungen ändern und ihn dann aktivieren",
   "message.stockmarket.bot_deleted": "Bot gelöscht für Item: {item_name}",
@@ -90,7 +92,6 @@
   "message.stockmarket.order_invalid_reason_market_closed": "Markt ist geschlossen",
   "message.stockmarket.need_creative_mode_for_this_screen": "Du musst im Kreativmodus sein um auf diesen Bildschirm zuzugreifen",
 
-
   "message.stockmarket.no_trading_item_available": "Kein Handels Item verfügbar",
   "gui.stockmarket.bot_settings_screen.change_item": "Item ändern",
   "gui.stockmarket.bot_settings_screen.save_settings": "Einstellungen speichern",
@@ -117,7 +118,6 @@
   "gui.stockmarket.bot_settings_setup_screen_enabled_features.enable_volume_tracking": "Volumen tracking aktivieren\nDer Bot zählt alle Käufe/Verkäufe.\nDieser Wert wird für die Berechnung des Zielpreises verwendet.",
   "gui.stockmarket.bot_settings_setup_screen_enabled_features.enable_random_walk": "Zufällige Kursschwankung aktivieren\nDer Bot wird den Zielpreis zufällig ändern,\nohne weit vom Nominalwert abzuweichen.",
 
-
   "gui.stockmarket.management_screen.title": "Stock Market Management",
   "gui.stockmarket.management_screen.trading_items": "Handels Items",
   "gui.stockmarket.management_screen.new_trading_item": "Neues Handels Item",
@@ -126,16 +126,16 @@
   "gui.stockmarket.management_screen.ask_remove_message": "Bist du sicher, dass du das item vom Stockmarket entfernen möchtest?\nAlle offenen Bestellungen werden storniert.",
   "gui.stockmarket.management_screen.bot_settings": "Bot Einstellungen",
 
+  "gui.stockmarket.bot_settings_setup_screen.cancel": "Abbrechen",
+  "gui.stockmarket.bot_settings_setup_screen.back": "Zurück",
+  "gui.stockmarket.bot_settings_setup_screen.next": "Weiter",
+  "gui.stockmarket.bot_settings_setup_screen.apply": "Übernehmen",
+
   "gui.stockmarket.bot_settings_setup_screen_rarity.question": "Wie selten ist das Item?\nWie oft kommt es im Spiel vor?\n",
   "gui.stockmarket.bot_settings_setup_screen_rarity.low": "Eher häufig",
   "gui.stockmarket.bot_settings_setup_screen_rarity.high": "Eher selten",
 
   "gui.stockmarket.bot_settings_setup_screen_estimatedValue.question": "Was ist der geschätzte Wert des Items?\nWie viel ist es wert?\nDieser Wert wird als startpreis für den Markt verwendet.",
-
-  "gui.stockmarket.bot_settings_setup_screen.cancel": "Abbrechen",
-  "gui.stockmarket.bot_settings_setup_screen.back": "Zurück",
-  "gui.stockmarket.bot_settings_setup_screen.next": "Weiter",
-  "gui.stockmarket.bot_settings_setup_screen.apply": "Übernehmen",
 
   "gui.stockmarket.bot_settings_setup_screen_volatility.question": "Wie stark soll der Preis des Items schwanken\nFür einen stabilen Markt, wähle einen niedrigen Wert.\nFür einen volatilen Markt, wähle einen hohen Wert.",
   "gui.stockmarket.bot_settings_setup_screen_volatility.low": "Niedrige Volatilität",
@@ -157,6 +157,11 @@
   "gui.stockmarket.candlestick_chart.tooltip_orderbookvolume": "Zeigt ein Histogramm der verfügbaren Liquidität im Orderbuch an.\nDie breite der Balken repräsentiert die Menge an Items,\ndie zu einem bestimmten Preis gekauft oder verkauft werden.",
   "gui.stockmarket.candlestick_chart.tooltip_tradevolume": "Zeigt ein Histogramm des gehandelten Volumens auf dem Markt an.\nJe höher die Balken, desto mehr Volumen\nwurde im entsprechenden Zeitraum gehandelt.",
   "gui.stockmarket.orderlistview.filled": "Die Anzahl der Items in der Order, die bereits gehandelt wurden.\nFür kauf Orders: Die Mänge an Items die du bereits erhalten hast.\nFür verlauf Orders: Die Mänge an Items die du bereits verkauft hast.",
-  "gui.stockmarket.limit_order_in_chart_display.move_button": "Bewege die Order zu einem neuen Preis\nmit hoch oder runter ziehen."
+  "gui.stockmarket.limit_order_in_chart_display.move_button": "Bewege die Order zu einem neuen Preis\nmit hoch oder runter ziehen.",
+
+  "gui.stockmarket.trading_pair_selection_view.clear_item": "Item abwählen",
+  "gui.stockmarket.trading_pair_selection_view.clear_currency": "Währung abwählen",
+  "gui.stockmarket.trading_pair_selection_view.select_pair": "Auswählen"
+
 
 }

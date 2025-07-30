@@ -1,10 +1,12 @@
 package net.kroia.stockmarket.market.server.bot;
 
-import net.kroia.banksystem.banking.bank.Bank;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.util.MeanRevertingRandomWalk;
 import net.kroia.stockmarket.util.PID;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.FriendlyByteBuf;
 
 import java.io.FileWriter;
 import java.util.Random;
@@ -18,7 +20,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
         public boolean enableTargetPrice = true;
         public float targetPriceSteeringFactor = 0.1f;
 
-        public int targetPrice = 0; //Just for visualisation on the bot settings menu
+        //public int targetPrice = 0; //Just for visualisation on the bot settings menu
 
 
         public boolean enableVolumeTracking = true;
@@ -34,11 +36,11 @@ public class ServerVolatilityBot extends ServerTradingBot {
 
         }
 
-        public Settings(int price, float rarity, float volatility, long udateTimerIntervallMS, boolean enableTargetPrice, boolean enableVolumeTracking, boolean enableRandomWalk)
+        /*public Settings(int price, float rarity, float volatility, long udateTimerIntervallMS, boolean enableTargetPrice, boolean enableVolumeTracking, boolean enableRandomWalk)
         {
             this();
             setFromData(price, rarity, volatility, udateTimerIntervallMS, enableTargetPrice, enableVolumeTracking, enableRandomWalk);
-        }
+        }*/
         @Override
         public boolean save(CompoundTag tag) {
             boolean success = super.save(tag);
@@ -50,7 +52,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
             tag.putFloat("volumeSteeringFactor", volumeSteeringFactor);
             tag.putBoolean("enableRandomWalk", enableRandomWalk);
             tag.putFloat("volatility", volatility);
-            tag.putFloat("targetPrice", targetPrice);
+            //tag.putFloat("targetPrice", targetPrice);
 
 
 
@@ -77,13 +79,101 @@ public class ServerVolatilityBot extends ServerTradingBot {
                 enableRandomWalk = tag.getBoolean("enableRandomWalk");
             if(tag.contains("volatility"))
                 volatility = tag.getFloat("volatility");
-            if(tag.contains("targetPrice"))
-                targetPrice = tag.getInt("targetPrice");
 
 
             return success;
         }
 
+        @Override
+        public void encode(FriendlyByteBuf buf) {
+            super.encode(buf);
+            buf.writeFloat(volumeScale);
+            buf.writeBoolean(enableTargetPrice);
+            buf.writeFloat(targetPriceSteeringFactor);
+            buf.writeBoolean(enableVolumeTracking);
+            buf.writeFloat(volumeSteeringFactor);
+            buf.writeBoolean(enableRandomWalk);
+            buf.writeFloat(volatility);
+        }
+        @Override
+        public void decode(FriendlyByteBuf buf) {
+            super.decode(buf);
+            this.volumeScale = buf.readFloat();
+            this.enableTargetPrice = buf.readBoolean();
+            this.targetPriceSteeringFactor = buf.readFloat();
+            this.enableVolumeTracking = buf.readBoolean();
+            this.volumeSteeringFactor = buf.readFloat();
+            this.enableRandomWalk = buf.readBoolean();
+            this.volatility = buf.readFloat();
+        }
+
+        public JsonElement toJson()
+        {
+            JsonObject jsonObject = super.toJson().getAsJsonObject();
+            jsonObject.addProperty("volumeScale", volumeScale);
+            jsonObject.addProperty("enableTargetPrice", enableTargetPrice);
+            jsonObject.addProperty("targetPriceSteeringFactor", targetPriceSteeringFactor);
+            jsonObject.addProperty("enableVolumeTracking", enableVolumeTracking);
+            jsonObject.addProperty("volumeSteeringFactor", volumeSteeringFactor);
+            jsonObject.addProperty("enableRandomWalk", enableRandomWalk);
+            jsonObject.addProperty("volatility", volatility);
+            return jsonObject;
+        }
+
+        public boolean fromJson(JsonElement json) {
+            if(!json.isJsonObject())
+            {
+                return false;
+            }
+            JsonObject jsonObject = json.getAsJsonObject();
+            boolean success = super.fromJson(jsonObject);
+            if(!success)
+                return false;
+
+            JsonElement element = jsonObject.get("volumeScale");
+            
+            if(element != null && element.isJsonPrimitive()) {
+                this.volumeScale = element.getAsFloat();
+                if(this.volumeScale < 0)
+                    this.volumeScale = 0;
+            }
+
+            element = jsonObject.get("enableTargetPrice");
+            if(element != null && element.isJsonPrimitive())
+                this.enableTargetPrice = element.getAsBoolean();
+
+            element = jsonObject.get("targetPriceSteeringFactor");
+            if(element != null && element.isJsonPrimitive()) {
+                this.targetPriceSteeringFactor = element.getAsFloat();
+                if(this.targetPriceSteeringFactor < 0)
+                    this.targetPriceSteeringFactor = 0;
+            }
+
+            element = jsonObject.get("enableVolumeTracking");
+            if(element != null && element.isJsonPrimitive())
+                this.enableVolumeTracking = element.getAsBoolean();
+
+            element = jsonObject.get("volumeSteeringFactor");
+            if(element != null && element.isJsonPrimitive()) {
+                this.volumeSteeringFactor = element.getAsFloat();
+                if(this.volumeSteeringFactor < 0)
+                    this.volumeSteeringFactor = 0;
+            }
+
+            element = jsonObject.get("enableRandomWalk");
+            if(element != null && element.isJsonPrimitive())
+                this.enableRandomWalk = element.getAsBoolean();
+
+            element = jsonObject.get("volatility");
+            if(element != null && element.isJsonPrimitive()) {
+                this.volatility = element.getAsFloat();
+                if(this.volatility < 0)
+                    this.volatility = 0;
+            }
+
+            return true;
+
+        }
 
 
         @Override
@@ -100,16 +190,12 @@ public class ServerVolatilityBot extends ServerTradingBot {
                 this.targetPriceSteeringFactor = st.targetPriceSteeringFactor;
                 this.volumeSteeringFactor = st.volumeSteeringFactor;
                 this.volatility = st.volatility;
-                this.targetPrice = st.targetPrice;
-
             }
         }
-        public void setFromData(int price, float rarity, float volatility, long udateTimerIntervallMS,
+       /* public void setFromData(int price, float rarity, float volatility, long udateTimerIntervallMS,
                                 boolean enableTargetPrice, boolean enableVolumeTracking, boolean enableRandomWalk)
         {
-            //this.targetItemBalance = (long)(((1-rarity) * (1-rarity)) * 100000)+5000;
             this.defaultPrice = price;
-            this.targetPrice = price;
             this.updateTimerIntervallMS = udateTimerIntervallMS;
 
             this.enableTargetPrice = enableTargetPrice;
@@ -123,7 +209,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
 
             this.orderBookVolumeScale = 100f/(0.01f+Math.abs(rarity));
             this.volumeScale = this.orderBookVolumeScale * this.volatility;
-        }
+        }*/
     }
     private MeanRevertingRandomWalk randomWalk1;
     private MeanRevertingRandomWalk randomWalk2;
@@ -136,6 +222,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
     private long timerCounter = 0;
     private final PID pid = new PID(0.1f, 0.01f, 0.1f, 1);
 
+    private int targetPrice;
     Settings settings;
     public ServerVolatilityBot(ServerMarket market) {
         super(market);
@@ -145,6 +232,9 @@ public class ServerVolatilityBot extends ServerTradingBot {
         randomWalk3 = new MeanRevertingRandomWalk(0.1, 0.05);
     }
 
+    public int getTargetPrice() {
+        return targetPrice;
+    }
     @Override
     public void update()
     {
@@ -158,7 +248,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
 
 
         long marketOrderAmount = 0;
-        int targetPrice = settings.defaultPrice;
+        targetPrice = settings.defaultPrice;
         float volumeScale = settings.volumeScale;
         if(settings.enableVolumeTracking)
         {
@@ -208,7 +298,6 @@ public class ServerVolatilityBot extends ServerTradingBot {
             int normalized = (int)(Math.min(Math.max(-10, output),10)*volumeScale);
             marketOrderAmount += normalized;
         }
-        settings.targetPrice = targetPrice;
 
         if(marketOrderAmount > 0)
         {
@@ -223,13 +312,6 @@ public class ServerVolatilityBot extends ServerTradingBot {
                 marketOrderAmount = -amount;
         }
         marketTrade(marketOrderAmount);
-
-    }
-
-
-
-    private void createLimitOrders(Bank itemBank, Bank moneyBank)
-    {
 
     }
 

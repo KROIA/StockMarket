@@ -1,19 +1,16 @@
 package net.kroia.stockmarket.util;
 
 
-import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.DataPersistence;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.stockmarket.StockMarketModBackend;
-import net.kroia.stockmarket.market.server.bot.ServerTradingBotFactory;
+import net.kroia.stockmarket.market.server.MarketFactory;
 import net.minecraft.nbt.CompoundTag;
+import org.jetbrains.annotations.Nullable;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
@@ -23,17 +20,17 @@ public class StockMarketDataHandler extends DataPersistence {
     private final String PLAYER_DATA_FILE_NAME = "Player_data.dat";
     private final String MARKET_DATA_FILE_NAME = "Market_data.dat";
     private final String MARKET_SETTINGS_FILE_NAME = "settings.json";
-    private final String DEFAULT_BOT_SETTINGS_DIRECTORY = "DefaultBotSettings";
+    private final String DEFAULT_MARKET_SETTINGS_DIRECTORY = "DefaultMarketSetupData";
     private boolean isLoaded = false;
     private long tickCounter = 0;
     private int lastPlayerCount = 0;
 
     public StockMarketDataHandler() {
         super(JsonFormat.PRETTY, NbtFormat.COMPRESSED, Path.of("Finance/StockMarket"));
-        setLogger((msg)->{BACKEND_INSTANCES.LOGGER.error(msg);},
-                (msg,e)->{BACKEND_INSTANCES.LOGGER.error(msg, e);},
-                (msg)->{BACKEND_INSTANCES.LOGGER.info(msg);},
-                (msg)->{BACKEND_INSTANCES.LOGGER.warn(msg);});
+        setLogger((msg)->{error(msg);},
+                (msg,e)->{error(msg, e);},
+                (msg)->{info(msg);},
+                (msg)->{warn(msg);});
     }
 
     public static void setBackend(StockMarketModBackend.Instances backend) {
@@ -70,7 +67,7 @@ public class StockMarketDataHandler extends DataPersistence {
 
     public boolean saveAll()
     {
-        BACKEND_INSTANCES.LOGGER.info("Saving StockMarket Mod data...");
+        info("Saving StockMarket Mod data...");
         boolean success = true;
         success &= save_globalSettings();
         success &= save_player();
@@ -78,14 +75,14 @@ public class StockMarketDataHandler extends DataPersistence {
             success &= save_market();
 
         if(success)
-            BACKEND_INSTANCES.LOGGER.info("StockMarket Mod data saved successfully.");
+            info("StockMarket Mod data saved successfully.");
         else
-            BACKEND_INSTANCES.LOGGER.error("Failed to save StockMarket Mod data.");
+            error("Failed to save StockMarket Mod data.");
         return success;
     }
     public CompletableFuture<Boolean> saveAllAsync()
     {
-        BACKEND_INSTANCES.LOGGER.info("Saving StockMarket Mod data...");
+        info("Saving StockMarket Mod data...");
 
         CompletableFuture<Boolean> fut1 = save_playerAsync();
         CompletableFuture<Boolean> fut2;
@@ -96,9 +93,9 @@ public class StockMarketDataHandler extends DataPersistence {
             fut2 = CompletableFuture.completedFuture(false);
         return fut1.thenCombine(fut2, (a, b) -> a && b).thenCombine(fut3, (a, b) -> a && b).thenApply(success -> {
             if(success)
-                BACKEND_INSTANCES.LOGGER.info("StockMarket Mod data saved successfully.");
+                info("StockMarket Mod data saved successfully.");
             else
-                BACKEND_INSTANCES.LOGGER.error("Failed to save StockMarket Mod data.");
+                error("Failed to save StockMarket Mod data.");
             return success;
         });
     }
@@ -106,11 +103,11 @@ public class StockMarketDataHandler extends DataPersistence {
     public boolean loadAll()
     {
         isLoaded = false;
-        BACKEND_INSTANCES.LOGGER.info("Loading StockMarket Mod data...");
+        info("Loading StockMarket Mod data...");
         boolean success = true;
         Path settingsFilePath = getGlobalSettingsFilePath();
         if(!fileExists(settingsFilePath)) {
-            BACKEND_INSTANCES.LOGGER.warn("Market settings file not found, creating default settings file.");
+            warn("Market settings file not found, creating default settings file.");
             success &= save_globalSettings(settingsFilePath);
         }
         else
@@ -119,11 +116,11 @@ public class StockMarketDataHandler extends DataPersistence {
         success &= load_market();
 
         if(success) {
-            BACKEND_INSTANCES.LOGGER.info("StockMarket Mod data loaded successfully.");
+            info("StockMarket Mod data loaded successfully.");
             isLoaded = true;
         }
         else
-            BACKEND_INSTANCES.LOGGER.error("Failed to load StockMarket Mod data.");
+            error("Failed to load StockMarket Mod data.");
         return success;
     }
 
@@ -204,9 +201,9 @@ public class StockMarketDataHandler extends DataPersistence {
     {
         return getAbsoluteSavePath(PLAYER_DATA_FILE_NAME);
     }
-    public Path getDefaultBotSettingsFolderPath()
+    public Path getDefaultMarketSetupDataFolderPath()
     {
-        return getAbsoluteSavePath(DEFAULT_BOT_SETTINGS_DIRECTORY);
+        return getAbsoluteSavePath(DEFAULT_MARKET_SETTINGS_DIRECTORY);
     }
     public boolean save_globalSettings()
     {
@@ -238,9 +235,14 @@ public class StockMarketDataHandler extends DataPersistence {
         return BACKEND_INSTANCES.SERVER_SETTINGS.loadSettings(filePath.toString());
     }
 
-    public List<String> getDefaultBotSettingsFileNames()
+    public List<String> getDefaultMarketSetupDataFileNames()
     {
-        List<Path> jsonFiles = getJsonFiles(getDefaultBotSettingsFolderPath());
+        Path path = getDefaultMarketSetupDataFolderPath();
+        if(!folderExists(path)) {
+            error("Default market setup data folder does not exist: " + path);
+            return new ArrayList<>();
+        }
+        List<Path> jsonFiles = getJsonFiles(getDefaultMarketSetupDataFolderPath());
         ArrayList<String> fileNames = new ArrayList<>();
         for(Path file : jsonFiles)
         {
@@ -251,10 +253,10 @@ public class StockMarketDataHandler extends DataPersistence {
         }
         return fileNames;
     }
-    public HashMap<String, HashMap<ItemID, ServerTradingBotFactory.DefaultBotSettings>> loadDefaultBotSettings()
+    /*public HashMap<String, HashMap<ItemID, ServerTradingBotFactory.DefaultBotSettings>> loadDefaultBotSettings()
     {
-        if(!folderExists(getDefaultBotSettingsFolderPath())) {
-            BACKEND_INSTANCES.LOGGER.error("Default bot settings folder does not exist: " + getDefaultBotSettingsFolderPath());
+        if(!folderExists(getDefaultMarketSetupDataFolderPath())) {
+            error("Default bot settings folder does not exist: " + getDefaultMarketSetupDataFolderPath());
             return new HashMap<>();
         }
         List<String> jsonFiles = getDefaultBotSettingsFileNames();
@@ -271,14 +273,14 @@ public class StockMarketDataHandler extends DataPersistence {
         if(!fileName.contains(".json"))
             fileName += ".json";
         HashMap<ItemID, ServerTradingBotFactory.DefaultBotSettings> settings = new HashMap<>();
-        Path filePath = getDefaultBotSettingsFolderPath().resolve(fileName);
+        Path filePath = getDefaultMarketSetupDataFolderPath().resolve(fileName);
         if(!fileExists(filePath)) {
-            BACKEND_INSTANCES.LOGGER.error("Default bot settings file does not exist: " + fileName);
+            error("Default bot settings file does not exist: " + fileName);
             return settings;
         }
         JsonElement jsonElement = loadJson(filePath);
         if(jsonElement == null || !jsonElement.isJsonArray()) {
-            BACKEND_INSTANCES.LOGGER.error("Failed to load default bot settings from file: " + fileName);
+            error("Failed to load default bot settings from file: " + fileName);
             return settings;
         }
         JsonArray jsonArray = jsonElement.getAsJsonArray();
@@ -289,25 +291,80 @@ public class StockMarketDataHandler extends DataPersistence {
                 if(container.fromJson(jsonObject) && container.itemData != null && container.defaultSettings != null) {
                     settings.put(container.itemData.getItemID(), container.defaultSettings);
                 } else {
-                    BACKEND_INSTANCES.LOGGER.error("Invalid BotBuilderContainer in file: " + fileName);
+                    error("Invalid BotBuilderContainer in file: " + fileName);
                 }
             } else {
-                BACKEND_INSTANCES.LOGGER.error("Invalid JSON element in file: " + fileName);
+                error("Invalid JSON element in file: " + fileName);
             }
         }
         return settings;
-    }
+    }*/
 
-    public boolean saveDefaultBotSettings(ArrayList<ServerTradingBotFactory.BotBuilderContainer> settings, String fileName)
+    /*public boolean saveDefaultBotSettings(ArrayList<ServerTradingBotFactory.BotBuilderContainer> settings, String fileName)
     {
         JsonArray jsonArray = new JsonArray();
         for(ServerTradingBotFactory.BotBuilderContainer container : settings) {
             jsonArray.add(container.toJson());
         }
         return saveJson(jsonArray, getDefaultBotSettingsFolderPath().resolve(fileName));
+    }*/
+    
+    public boolean saveDefaultMarketSetupDataGroup(MarketFactory.DefaultMarketSetupDataGroup category)
+    {
+        if(category == null || category.groupName == null || category.groupName.isEmpty()) {
+            error("Invalid MarketSetupDataGroup:\n" + category);
+            return false;
+        }
+        JsonElement json = category.toJson();
+        if(json == null) {
+            error("Failed to convert MarketSetupDataGroup to JSON:\n" + category);
+            return false;
+        }
+        Path filePath = getDefaultMarketSetupDataFolderPath().resolve(category.groupName + ".json");
+        return saveJson(json, filePath);
+    }
+    public @Nullable MarketFactory.DefaultMarketSetupDataGroup loadDefaultMarketSetupDataGroup(String groupName)
+    {
+        if(groupName == null || groupName.isEmpty()) {
+            error("Invalid group name: " + groupName);
+            return null;
+        }
+        Path filePath = getDefaultMarketSetupDataFolderPath().resolve(groupName + ".json");
+        JsonElement json = loadJson(filePath);
+        if(json == null || !json.isJsonObject()) {
+            error("Failed to load MarketSetupDataGroup from file: " + filePath);
+            return null;
+        }
+        MarketFactory.DefaultMarketSetupDataGroup category = new MarketFactory.DefaultMarketSetupDataGroup();
+        if(!category.fromJson(json)) {
+            error("Failed to parse MarketSetupDataGroup from JSON:\n" + json);
+            return null;
+        }
+        return category;
     }
 
+    
 
 
+    protected void info(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.info("[StockMarketDataHandler] " + msg);
+    }
+    protected void error(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.error("[StockMarketDataHandler] " + msg);
+    }
+    protected void error(String msg, Throwable e)
+    {
+        BACKEND_INSTANCES.LOGGER.error("[MarketFactory] " + msg, e);
+    }
+    protected void warn(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.warn("[StockMarketDataHandler] " + msg);
+    }
+    protected void debug(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.debug("[StockMarketDataHandler] " + msg);
+    }
 
 }

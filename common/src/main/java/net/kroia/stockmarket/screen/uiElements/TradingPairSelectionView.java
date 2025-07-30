@@ -1,14 +1,14 @@
 package net.kroia.stockmarket.screen.uiElements;
 
-import net.kroia.modutilities.gui.elements.Button;
-import net.kroia.modutilities.gui.elements.ItemSelectionView;
-import net.kroia.modutilities.gui.elements.ItemView;
-import net.kroia.modutilities.gui.elements.VerticalListView;
+import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.gui.elements.*;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.gui.geometry.Point;
 import net.kroia.modutilities.gui.layout.Layout;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
+import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.TradingPair;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
@@ -19,6 +19,9 @@ import java.util.function.Consumer;
 
 public class TradingPairSelectionView extends GuiElement {
 
+    public static final Component CLEAR_ITEM = Component.translatable("gui."+ StockMarketMod.MOD_ID + ".trading_pair_selection_view.clear_item");
+    public static final Component CLEAR_CURRENCY = Component.translatable("gui."+ StockMarketMod.MOD_ID + ".trading_pair_selection_view.clear_currency");
+    public static final Component SELECT_PAIR = Component.translatable("gui."+ StockMarketMod.MOD_ID + ".trading_pair_selection_view.select_pair");
 
     private final Consumer<TradingPair> onSelected;
     private TradingPair selectedPair;
@@ -32,6 +35,8 @@ public class TradingPairSelectionView extends GuiElement {
     private final Button clearCurrencyButton;
     private final ItemView selectedCurrencyView;
 
+
+    private final Label selectItemLabel;
     private final VerticalListView tradingPairListView;
     private final ItemSelectionView itemSelectionView;
     private final ItemSelectionView currencySelectionView;
@@ -42,19 +47,21 @@ public class TradingPairSelectionView extends GuiElement {
         selectedPair = TradingPair.createDefault();
 
 
-        clearItemButton = new Button("Clear Item", () -> {
+        clearItemButton = new Button(CLEAR_ITEM.getString(), () -> {
             onItemSelected(null);
         });
         selectedItemView = new ItemView();
 
 
-        clearCurrencyButton = new Button("Clear Currency", () -> {
+        clearCurrencyButton = new Button(CLEAR_CURRENCY.getString(), () -> {
             onCurrencySelected(null);
         });
         selectedCurrencyView = new ItemView();
 
 
 
+        selectItemLabel = new Label(SELECT_PAIR.getString());
+        selectItemLabel.setAlignment(Label.Alignment.CENTER);
         tradingPairListView = new VerticalListView();
         itemSelectionView = new ItemSelectionView(this::onItemSelected);
         currencySelectionView = new ItemSelectionView(this::onCurrencySelected);
@@ -65,6 +72,7 @@ public class TradingPairSelectionView extends GuiElement {
         addChild(clearCurrencyButton);
         addChild(selectedCurrencyView);
         addChild(currencySelectionView);
+        addChild(selectItemLabel);
         addChild(tradingPairListView);
     }
 
@@ -103,7 +111,9 @@ public class TradingPairSelectionView extends GuiElement {
                 column2Width, height - clearCurrencyButton.getHeight() - padding);
 
         pos.x += clearCurrencyButton.getWidth() + selectedCurrencyView.getWidth() + padding;
-        tradingPairListView.setBounds(pos.x, pos.y, column3Width, height);
+        selectItemLabel.setBounds(pos.x, pos.y, column3Width, clearItemButton.getHeight());
+        pos.y += clearItemButton.getHeight() + padding;
+        tradingPairListView.setBounds(pos.x, pos.y, column3Width, height - clearItemButton.getHeight() - padding);
 
         Layout layout = new LayoutVertical();
         layout.stretchX = true;
@@ -119,27 +129,27 @@ public class TradingPairSelectionView extends GuiElement {
         itemSelectionView.clearItems();
         currencySelectionView.clearItems();
 
-        Map<ItemStack, Boolean> itemMap = new HashMap<>();
-        Map<ItemStack, Boolean> currencyMap = new HashMap<>();
+        Map<ItemID, Boolean> itemMap = new HashMap<>();
+        Map<ItemID, Boolean> currencyMap = new HashMap<>();
         for(TradingPair pair : tradingPairs)
         {
-            itemMap.put(pair.getItem().getStack(), true);
-            currencyMap.put(pair.getCurrency().getStack(), true);
+            itemMap.put(pair.getItem(), true);
+            currencyMap.put(pair.getCurrency(), true);
         }
 
-        itemSelectionView.setItems(new ArrayList<>(itemMap.keySet()));
-        currencySelectionView.setItems(new ArrayList<>(currencyMap.keySet()));
+        itemSelectionView.setItems(new ArrayList<>(itemMap.keySet().stream().map(ItemID::getStack).toList()));
+        currencySelectionView.setItems(new ArrayList<>(currencyMap.keySet().stream().map(ItemID::getStack).toList()));
 
-        ItemStack currentItem = selectedItemView.getItemStack();
-        if(currentItem != null)
+        ItemID currentItem = new ItemID(selectedItemView.getItemStack());
+        if(currentItem.getStack() != null)
         {
             if(!itemMap.containsKey(currentItem))
             {
                 selectedItemView.setItemStack(null);
             }
         }
-        ItemStack currentCurrency = selectedCurrencyView.getItemStack();
-        if(currentCurrency != null)
+        ItemID currentCurrency = new ItemID(selectedCurrencyView.getItemStack());
+        if(currentCurrency.getStack() != null)
         {
             if(!currencyMap.containsKey(currentCurrency))
             {

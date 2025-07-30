@@ -3,11 +3,13 @@ package net.kroia.stockmarket.market.client;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.clientdata.*;
+import net.kroia.stockmarket.market.server.MarketFactory;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.kroia.stockmarket.networking.packet.request.PlayerOrderReadDataListRequest;
 import net.kroia.stockmarket.networking.packet.request.PriceHistoryRequest;
 import net.kroia.stockmarket.networking.packet.request.TradingViewDataRequest;
 
+import java.util.List;
 import java.util.UUID;
 import java.util.function.Consumer;
 
@@ -157,6 +159,29 @@ public class ClientMarket {
     }
 
 
+    public void requestDefaultMarketSetupDataGroups(Consumer<List<MarketFactory.DefaultMarketSetupDataGroup>> callback) {
+        if(checkDeadAndDebug())
+            return;
+        StockMarketNetworking.DEFAULT_MARKET_SETUP_DATA_GROUPS_REQUEST.sendRequestToServer(true, callback);
+    }
+
+    public void requestDefaultMarketSetupDataGroup(String groupName, Consumer<MarketFactory.DefaultMarketSetupDataGroup> callback) {
+        if(checkDeadAndDebug())
+            return;
+        StockMarketNetworking.DEFAULT_MARKET_SETUP_DATA_GROUP_REQUEST.sendRequestToServer(groupName, callback);
+    }
+
+    public void requestDefaultMarketSetupData(Consumer<MarketFactory.DefaultMarketSetupData> callback) {
+        if(checkDeadAndDebug())
+            return;
+        StockMarketNetworking.DEFAULT_MARKET_SETUP_DATA_REQUEST.sendRequestToServer(new TradingPairData(tradingPair), callback);
+    }
+
+
+
+
+
+    // Logging methods
     protected void info(String msg)
     {
         BACKEND_INSTANCES.LOGGER.info("[ClientMarket: "+ tradingPair.getShortDescription() + "] " + msg);

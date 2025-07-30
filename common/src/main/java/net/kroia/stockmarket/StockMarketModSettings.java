@@ -1,20 +1,17 @@
 package net.kroia.stockmarket;
 
 import com.google.gson.reflect.TypeToken;
-import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.item.BankSystemItems;
-import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.setting.ModSettings;
 import net.kroia.modutilities.setting.Setting;
 import net.kroia.modutilities.setting.SettingsGroup;
 import net.kroia.modutilities.setting.parser.ItemStackJsonParser;
-import net.kroia.stockmarket.market.server.DefaultMarketBotSettings;
-import net.kroia.stockmarket.market.server.bot.ServerTradingBotFactory;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
 
 public class StockMarketModSettings extends ModSettings {
     private static StockMarketModBackend.Instances BACKEND_INSTANCES;
@@ -135,12 +132,19 @@ public class StockMarketModSettings extends ModSettings {
         public ArrayList<ItemID> getNotTradableItems()
         {
             ArrayList<ItemID> items = new ArrayList<>();
-            items.add(new ItemID(BankSystemMod.MOD_ID+":"+MoneyItem.NAME));
+            ArrayList<ItemStack> moneyItems = BankSystemItems.getMoneyItems();
+            for(ItemStack moneyItem : moneyItems)
+            {
+                if(moneyItem != null && !moneyItem.getItem().equals(BankSystemItems.MONEY.get()))
+                {
+                    items.add(new ItemID(moneyItem));
+                }
+            }
 
-            if(getCurrencyItem() != null)
+            /*if(getCurrencyItem() != null)
             {
                 items.add(new ItemID(getCurrencyItem().getItem().getDefaultInstance()));
-            }
+            }*/
             items.addAll(BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getBlacklistedItemIDs());
             return items;
         }
@@ -162,7 +166,7 @@ public class StockMarketModSettings extends ModSettings {
 
 
         //private static HashMap<ItemID, ServerTradingBotFactory.BotBuilderContainer> botBuilder;
-        public static class BotBuilder
+        /*public static class BotBuilder
         {
             private HashMap<String,HashMap<ItemID, ServerTradingBotFactory.DefaultBotSettings>> botPresets = new HashMap<>();
 
@@ -248,7 +252,7 @@ public class StockMarketModSettings extends ModSettings {
 
             if(botBuilder.isEmpty() || recreatePresets)
             {
-                DefaultMarketBotSettings.createDefaultMarketBotSettings();
+                DefaultMarketSettings.createDefaultMarketSettings();
                 botBuilder.loadFromFilesystem();
             }
             return botBuilder;
@@ -258,7 +262,7 @@ public class StockMarketModSettings extends ModSettings {
         public ServerTradingBotFactory.DefaultBotSettings getBotBuilder(ItemID itemID)
         {
             return getBotBuilder().get(itemID);
-        }
+        }*/
     }
 
 

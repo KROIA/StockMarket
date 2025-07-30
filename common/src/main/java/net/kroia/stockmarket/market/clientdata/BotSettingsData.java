@@ -26,8 +26,6 @@ public class BotSettingsData implements INetworkPayloadEncoder {
     public float volumeSteeringFactor = 1.0E-7f;
     public boolean enableRandomWalk = true;
     public float volatility; // 0-1 or higher
-    public int targetPrice = 0; //Just for visualisation on the bot settings menu
-
     public BotSettingsData(@NotNull TradingPair pair, @NotNull ServerVolatilityBot.Settings settings) {
         this.tradingPairData = new TradingPairData(pair);
         this.enabled = settings.enabled;
@@ -45,7 +43,6 @@ public class BotSettingsData implements INetworkPayloadEncoder {
         this.volumeSteeringFactor = settings.volumeSteeringFactor;
         this.enableRandomWalk = settings.enableRandomWalk;
         this.volatility = settings.volatility;
-        this.targetPrice = settings.targetPrice;
     }
 
     public BotSettingsData(FriendlyByteBuf buf)
@@ -66,7 +63,6 @@ public class BotSettingsData implements INetworkPayloadEncoder {
         this.volumeSteeringFactor = buf.readFloat();
         this.enableRandomWalk = buf.readBoolean();
         this.volatility = buf.readFloat();
-        this.targetPrice = buf.readInt();
     }
 
     @Override
@@ -88,7 +84,6 @@ public class BotSettingsData implements INetworkPayloadEncoder {
         buf.writeFloat(volumeSteeringFactor);
         buf.writeBoolean(enableRandomWalk);
         buf.writeFloat(volatility);
-        buf.writeInt(targetPrice);
     }
 
     public static BotSettingsData decode(FriendlyByteBuf buf) {
@@ -112,7 +107,6 @@ public class BotSettingsData implements INetworkPayloadEncoder {
         settings.volumeSteeringFactor = this.volumeSteeringFactor;
         settings.enableRandomWalk = this.enableRandomWalk;
         settings.volatility = this.volatility;
-        settings.targetPrice = this.targetPrice;
         return settings;
     }
 }

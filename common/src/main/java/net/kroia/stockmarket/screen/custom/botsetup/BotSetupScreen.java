@@ -5,6 +5,7 @@ import net.kroia.modutilities.gui.GuiScreen;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.market.server.MarketFactory;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import net.kroia.stockmarket.screen.uiElements.botsetup.*;
 import net.minecraft.network.chat.Component;
@@ -134,10 +135,16 @@ public class BotSetupScreen extends GuiScreen {
         float rarity = rarityPage.getRarity();
         float volatility = volatilityPage.getVolatility();
 
-        settings.setFromData(price, rarity, volatility, getMarketSpeedMS(),
-                enabledFeaturesPage.isTargetPriceEnabled(),
-                enabledFeaturesPage.isVolumeTrackingEnabled(),
-                enabledFeaturesPage.isRandomWalkEnabled());
+        MarketFactory.DefaultMarketSetupGeneratorData generatorData = new MarketFactory.DefaultMarketSetupGeneratorData();
+        generatorData.defaultPrice = price;
+        generatorData.rarity = rarity;
+        generatorData.volatility = volatility;
+        generatorData.updateIntervalMS = getMarketSpeedMS();
+        generatorData.enableVolumeTracking = enabledFeaturesPage.isVolumeTrackingEnabled();
+        generatorData.enableTargetPrice = enabledFeaturesPage.isTargetPriceEnabled();
+        generatorData.enableRandomWalk = enabledFeaturesPage.isRandomWalkEnabled();
+
+        settings.copyFrom(generatorData.generateDefaultMarketSetupData().botSettings);
         if(onApply != null)
             onApply.run();
     }

@@ -1,12 +1,16 @@
 package net.kroia.stockmarket.market.server.bot;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ServerSaveable;
+import net.kroia.modutilities.networking.INetworkPayloadConverter;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.server.GhostOrderBook;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.MinecraftServer;
 
 import java.util.ArrayList;
@@ -22,7 +26,7 @@ public class ServerTradingBot implements ServerSaveable {
         BACKEND_INSTANCES = backend;
     }
 
-    public static class Settings implements ServerSaveable
+    public static class Settings implements ServerSaveable, INetworkPayloadConverter
     {
         public boolean enabled = true;
         public long updateTimerIntervallMS = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET_BOT.UPDATE_TIMER_INTERVAL_MS.get();
@@ -84,6 +88,110 @@ public class ServerTradingBot implements ServerSaveable {
         }
 
 
+        @Override
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeBoolean(this.enabled);
+            buf.writeInt(this.defaultPrice);
+            buf.writeFloat(this.orderBookVolumeScale);
+            buf.writeFloat(this.nearMarketVolumeScale);
+            buf.writeFloat(this.volumeAccumulationRate);
+            buf.writeFloat(this.volumeFastAccumulationRate);
+            buf.writeFloat(this.volumeDecumulationRate);
+            buf.writeLong(this.updateTimerIntervallMS);
+        }
+        @Override
+        public void decode(FriendlyByteBuf buf) {
+            this.enabled = buf.readBoolean();
+            this.defaultPrice = buf.readInt();
+            this.orderBookVolumeScale = buf.readFloat();
+            this.nearMarketVolumeScale = buf.readFloat();
+            this.volumeAccumulationRate = buf.readFloat();
+            this.volumeFastAccumulationRate = buf.readFloat();
+            this.volumeDecumulationRate = buf.readFloat();
+            this.updateTimerIntervallMS = buf.readLong();
+        }
+
+        public JsonElement toJson()
+        {
+            JsonObject jsonObject = new JsonObject();
+            jsonObject.addProperty("enabled", enabled);
+            jsonObject.addProperty("defaultPrice", defaultPrice);
+            jsonObject.addProperty("orderBookVolumeScale", orderBookVolumeScale);
+            jsonObject.addProperty("nearMarketVolumeScale", nearMarketVolumeScale);
+            jsonObject.addProperty("volumeAccumulationRate", volumeAccumulationRate);
+            jsonObject.addProperty("volumeFastAccumulationRate", volumeFastAccumulationRate);
+            jsonObject.addProperty("volumeDecumulationRate", volumeDecumulationRate);
+            jsonObject.addProperty("updateTimerIntervallMS", updateTimerIntervallMS);
+            return jsonObject;
+        }
+
+        public boolean fromJson(JsonElement json) {
+            if (json == null || !json.isJsonObject()) {
+                return false; // Invalid JSON
+            }
+            JsonObject jsonObject = json.getAsJsonObject();
+            JsonElement element = jsonObject.get("enabled");
+            if(element != null && !element.isJsonPrimitive()) 
+                this.enabled = element.getAsBoolean();
+
+            element = jsonObject.get("defaultPrice");
+            if(element != null && element.isJsonPrimitive()) {
+                this.defaultPrice = element.getAsInt();
+                if(this.defaultPrice < 0) {
+                    this.defaultPrice = 0; // Ensure default price is non-negative
+                }
+            }
+
+            element = jsonObject.get("orderBookVolumeScale");
+            if(element != null && element.isJsonPrimitive()) {
+                this.orderBookVolumeScale = element.getAsFloat();
+                if(this.orderBookVolumeScale < 0) {
+                    this.orderBookVolumeScale = 0; // Ensure order book volume scale is non-negative
+                }
+            }
+
+            element = jsonObject.get("nearMarketVolumeScale");
+            if(element != null && element.isJsonPrimitive()) {
+                this.nearMarketVolumeScale = element.getAsFloat();
+                if(this.nearMarketVolumeScale < 0) {
+                    this.nearMarketVolumeScale = 0; // Ensure near market volume scale is non-negative
+                }
+            }
+
+
+            element = jsonObject.get("volumeAccumulationRate");
+            if(element != null && element.isJsonPrimitive()) {
+                this.volumeAccumulationRate = element.getAsFloat();
+                if(this.volumeAccumulationRate < 0) {
+                    this.volumeAccumulationRate = 0; // Ensure volume accumulation rate is non-negative
+                }
+            }
+            
+            element = jsonObject.get("volumeFastAccumulationRate");
+            if(element != null && element.isJsonPrimitive()) {
+                this.volumeFastAccumulationRate = element.getAsFloat();
+                if(this.volumeFastAccumulationRate < 0) {
+                    this.volumeFastAccumulationRate = 0; // Ensure volume fast accumulation rate is non-negative
+                }
+            }
+            
+            element = jsonObject.get("volumeDecumulationRate");
+            if(element != null && element.isJsonPrimitive()) {
+                this.volumeDecumulationRate = element.getAsFloat();
+                if(this.volumeDecumulationRate < 0) {
+                    this.volumeDecumulationRate = 0; // Ensure volume decumulation rate is non-negative
+                }
+            }
+            
+            JsonElement updateTimerIntervallElement = jsonObject.get("updateTimerIntervallMS");
+            if(updateTimerIntervallElement != null && updateTimerIntervallElement.isJsonPrimitive()) {
+                this.updateTimerIntervallMS = updateTimerIntervallElement.getAsLong();
+                if(this.updateTimerIntervallMS < 0) {
+                    this.updateTimerIntervallMS = 0; // Ensure update timer interval is non-negative
+                }
+            }
+            return true;
+        }
 
 
     }

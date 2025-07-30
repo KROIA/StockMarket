@@ -281,7 +281,8 @@ public class ServerTradingBotFactory {
 
         public DefaultBotSettings(int price, float rarity, float volatility, long udateTimerIntervallMS)
         {
-            this(new ServerVolatilityBot.Settings(price, rarity, volatility, udateTimerIntervallMS, true, true, true));
+            this(new ServerVolatilityBot.Settings());
+            //this(new ServerVolatilityBot.Settings(price, rarity, volatility, udateTimerIntervallMS, true, true, true));
         }
         public DefaultBotSettings(ServerVolatilityBot.Settings settings)
         {
@@ -327,7 +328,7 @@ public class ServerTradingBotFactory {
             data.addProperty("volumeScale", settings.volumeScale);
             data.addProperty("enableTargetPrice", settings.enableTargetPrice);
             data.addProperty("targetPriceSteeringFactor", settings.targetPriceSteeringFactor);
-            data.addProperty("enableVolumeTracking", settings.targetPrice);
+            data.addProperty("enableVolumeTracking", settings.enableVolumeTracking);
             data.addProperty("volumeSteeringFactor", settings.volumeSteeringFactor);
             data.addProperty("enableRandomWalk", settings.enableRandomWalk);
             data.addProperty("volatility", settings.volatility);

@@ -4,11 +4,9 @@ package net.kroia.stockmarket.screen.custom;
 import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.TimerMillis;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.GuiScreen;
-import net.kroia.modutilities.gui.elements.ItemSelectionView;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
@@ -26,198 +24,12 @@ import net.kroia.stockmarket.screen.uiElements.TradePanel;
 import net.kroia.stockmarket.util.PriceHistory;
 import net.kroia.stockmarket.util.StockMarketTextMessages;
 import net.minecraft.client.Minecraft;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.EnchantedBookItem;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.PotionItem;
-
-import java.util.*;
 
 
 public class TradeScreen extends GuiScreen {
     private static StockMarketModBackend.Instances BACKEND_INSTANCES;
-
-    static class ItemSorter implements ItemSelectionView.Sorter {
-        @Override
-        public void apply(ArrayList<ItemStack> items) {
-
-
-            Map<String, List<ItemStack>> categorizedItems = new LinkedHashMap<>();
-
-            // Define sorting order (Creative Inventory order)
-            List<String> categoryOrder = Arrays.asList(
-                    "ores", "food", "building_blocks", "decoration_blocks", "redstone", "transportation",
-                    "tools", "combat", "arrows", "brewing", "misc"
-            );
-            List<String> itemIDContains = Arrays.asList(
-                    "log", "planks", "slab", "stairs", "fence", "door", "pressure_plate", "button",
-                    "wool", "carpet", "terracotta", "concrete", "glass",
-                    "torch", "lantern", "campfire",
-                    "furnace", "smoker", "cartography_table", "loom", "smithing_table", "stonecutter",
-                    "grindstone", "anvil", "barrel", "beacon", "bell", "brewing_stand", "cauldron",
-                    "composter", "enchanting_table", "end_crystal", "end_portal_frame", "fletching_table",
-                    "jukebox", "lectern", "note_block", "observer", "piston",
-                    "dispenser", "dropper", "hopper", "redstone_lamp", "repeater", "comparator",
-                    "daylight_detector", "target", "tripwire_hook", "lever",
-                    "rail", "redstone_torch", "redstone_block", "redstone_wire"
-            );
-            // Initialize category lists
-            for (String category : categoryOrder) {
-                categorizedItems.put(category, new ArrayList<>());
-            }
-            for(String itemID : itemIDContains)
-            {
-                categorizedItems.put(itemID, new ArrayList<>());
-            }
-
-            categorizedItems.put("uncategorized", new ArrayList<>()); // Items that don't fit
-
-            // Categorize items
-            for (ItemStack stack : items) {
-                Item item = stack.getItem();
-
-                boolean isAdded = false;
-                for(String itemID : itemIDContains)
-                {
-                    if(idContains(item, itemID))
-                    {
-                        categorizedItems.get(itemID).add(stack);
-                        isAdded = true;
-                        break;
-                    }
-                }
-                if(isAdded)
-                    continue;
-
-                if (isFood(item)) {
-                    categorizedItems.get("food").add(stack);
-                } else if (isEnchantedBook(item)) {
-                    categorizedItems.get("misc").add(stack);
-                } else if (isPotion(item)) {
-                    categorizedItems.get("brewing").add(stack);
-                } else if (isOre(item)){
-                    categorizedItems.get("ores").add(stack);
-                } else if (isArrow(item)){
-                    categorizedItems.get("arrows").add(stack);
-                }else if (isTool(item)){
-                    categorizedItems.get("tools").add(stack);
-                }else if (isRedstoneObject(item)){
-                    categorizedItems.get("redstone").add(stack);
-                }else if (isBuildingBlock(item)) {
-                    categorizedItems.get("building_blocks").add(stack);
-                } else {
-                    categorizedItems.get("uncategorized").add(stack);
-                }
-            }
-
-
-            // Sort each category alphabetically by registry name
-            for (List<ItemStack> category : categorizedItems.values()) {
-                category.sort(Comparator.comparing(stack -> BuiltInRegistries.ITEM.getKey(stack.getItem()).toString()));
-            }
-
-            //HashMap<Item, Boolean> added = new HashMap<>();
-
-            // Merge sorted items back into the original list
-            items.clear();
-            for(String category : itemIDContains)
-            {
-                for(ItemStack stack : categorizedItems.get(category))
-                {
-                    //if(added.containsKey(stack.getItem()))
-                    {
-                        items.add(stack);
-                        //added.put(stack.getItem(), true);
-                    }
-                }
-                categorizedItems.remove(category);
-            }
-            for (String category : categoryOrder) {
-                for(ItemStack stack : categorizedItems.get(category))
-                {
-                    //if(!added.containsKey(stack.getItem()))
-                    {
-                        items.add(stack);
-                        //added.put(stack.getItem(), true);
-                    }
-                }
-                categorizedItems.remove(category);
-            }
-            for(ItemStack stack : categorizedItems.get("uncategorized"))
-            {
-                //if(added.containsKey(stack.getItem()))
-                {
-                    items.add(stack);
-                    //added.put(stack.getItem(), true);
-                }
-            }
-        }
-        private static boolean isFood(Item item) {
-            return item.isEdible();
-        }
-
-        private static boolean isBuildingBlock(Item item) {
-            return BuiltInRegistries.BLOCK.containsKey(BuiltInRegistries.ITEM.getKey(item));
-        }
-
-        private static boolean isEnchantedBook(Item item) {
-            CompoundTag tag = new ItemStack(item).getTag();
-            return item instanceof EnchantedBookItem || (tag != null && tag.contains("StoredEnchantments"));
-        }
-
-        private static boolean isPotion(Item item) {
-            CompoundTag tag = new ItemStack(item).getTag();
-            return item instanceof PotionItem || (tag != null && tag.contains("Potion"));
-        }
-        private static boolean isOre(Item item)
-        {
-            String itemName = ItemUtilities.getItemIDStr(item);
-
-            if(itemName.contains("ore") || itemName.contains("ingot"))
-                return true;
-            if(itemName.contains("quartz") || itemName.contains("diamond") || itemName.contains("emerald"))
-                return true;
-
-            if(itemName.contains("netherite") || itemName.contains("lapis"))
-                return true;
-            return itemName.contains("coal") || itemName.contains("gold") || itemName.contains("iron");
-        }
-        private static boolean isArrow(Item item)
-        {
-            String itemName = ItemUtilities.getItemIDStr(item);
-            return itemName.contains("arrow");
-        }
-        private static boolean isTool(Item item)
-        {
-            String itemName = ItemUtilities.getItemIDStr(item);
-            if(itemName.contains("pickaxe") || itemName.contains("axe") || itemName.contains("shovel"))
-                return true;
-            if(itemName.contains("hoe") || itemName.contains("shears") || itemName.contains("sword"))
-                return true;
-            return false;
-        }
-        private static boolean isRedstoneObject(Item item)
-        {
-            String itemName = ItemUtilities.getItemIDStr(item);
-            if(itemName.contains("redstone") || itemName.contains("piston") || itemName.contains("observer"))
-                return true;
-            if(itemName.contains("comparator") || itemName.contains("repeater") || itemName.contains("dispenser"))
-                return true;
-            return false;
-        }
-        private static boolean idContains(Item item, String contains)
-        {
-            String itemName = ItemUtilities.getItemIDStr(item);
-            return itemName.contains(contains);
-        }
-
-
-
-    }
     private static final String PREFIX = "gui.";
     private static final String NAME = "trade_screen";
 
@@ -322,10 +134,7 @@ public class TradeScreen extends GuiScreen {
 
     @Override
     protected void updateLayout(Gui gui) {
-        //BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.requestTradeItems();
         tradePanel.setTradingPair(tradingPair);
-        //BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.subscribeMarketUpdate(tradingPair);
-        //RequestBankDataPacket.sendRequest();
 
         int padding = 10;
         int spacing = 4;
@@ -346,7 +155,6 @@ public class TradeScreen extends GuiScreen {
         instance = null;
         // Unregister the event listener when the screen is closed
         TickEvent.PLAYER_POST.unregister(TradeScreen::onClientTick);
-        //BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.unsubscribeMarketUpdate(tradingPair);
         if(blockEntity != null)
         {
             blockEntity.setTradingPair(tradingPair);
@@ -358,14 +166,11 @@ public class TradeScreen extends GuiScreen {
 
 
     public static void handlePacket(SyncStockMarketBlockEntityPacket packet) {
-       // RequestBankDataPacket.sendRequest();
-
         if (instance != null) {
             instance.tradingPair = packet.getTradingPair();
             instance.tradePanel.setTradingPair(instance.tradingPair);
             instance.tradePanel.setAmount(packet.getAmount());
             instance.tradePanel.setLimitPrice(packet.getPrice());
-            //BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.subscribeMarketUpdate(instance.tradingPair);
         }
     }
 
@@ -385,12 +190,6 @@ public class TradeScreen extends GuiScreen {
         {
             instance.getMarket().requestTradingViewData(instance.candleStickChart.getMaxCandleCount(), 0,0,500 ,instance::updateView);
         }
-        /*long currentTickCount = System.currentTimeMillis();
-        if(currentTickCount - lastTickCount > 1000)
-        {
-            lastTickCount = currentTickCount;
-            RequestBankDataPacket.sendRequest();
-        }*/
     }
 
     private void updateView(TradingViewData data)
@@ -417,60 +216,6 @@ public class TradeScreen extends GuiScreen {
         }
     }
 
-    //public static void onAvailableTradeItemsChanged() {
-    //}
-
-    /*public static void updatePlotsData_static() {
-        if(instance == null)
-            return;
-        instance.updatePlotData();
-    }
-    public void updatePlotData()
-    {
-        ClientTradeItem item = BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getTradeItem(tradingPair);
-        if (item == null) {
-            BACKEND_INSTANCES.LOGGER.warn("Trade item not found: " + tradingPair);
-            return;
-        }
-
-        candleStickChart.setMinMaxPrice(item.getVisualMinPrice(), item.getVisualMaxPrice());
-        candleStickChart.setPriceHistory(item.getPriceHistory());
-        orderbookVolumeChart.setOrderBookVolume(item.getOrderBookVolume());
-        assert Minecraft.getInstance().player != null;
-        UUID thisPlayerUUID = Minecraft.getInstance().player.getUUID();
-        BACKEND_INSTANCES.BANK_SYSTEM_API.getClientBankManager().requestMinimalBankData(thisPlayerUUID, tradingPair,
-                (MinimalBankData data) -> {
-                    if(data != null)
-                    {
-                        tradePanel.setCurrentItemBalance(data.balance);
-                    }
-                });
-        BACKEND_INSTANCES.BANK_SYSTEM_API.getClientBankManager().requestMinimalBankData(thisPlayerUUID, BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getCurrencyItem(),
-                (MinimalBankData data) -> {
-                    if(data != null)
-                    {
-                        tradePanel.setCurrentMoneyBalance(data.balance);
-                    }
-                });
-        tradePanel.setCurrentPrice(item.getPrice());
-        getMarket().requestPlayerOrderReadDataList((orders)->{
-            activeOrderListView.updateActiveOrders(orders);
-            candleStickChart.updateOrderDisplay(orders);
-        });
-
-
-        if(marketWasOpen != item.isMarketOpen())
-        {
-            marketWasOpen = item.isMarketOpen();
-            tradePanel.setMarketOpen(item.isMarketOpen());
-        }
-    }*/
-
-    /*private void onItemSelected(ItemStack itemStack) {
-        //BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.unsubscribeMarketUpdate(tradingPair);
-        this.tradingPair = new ItemID(itemStack);
-        tradePanel.setItemStack(itemStack);
-    }*/
     private void onItemSelected(TradingPair tradingPair) {
         //BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.unsubscribeMarketUpdate(tradingPair);
         this.tradingPair = tradingPair;
@@ -485,7 +230,7 @@ public class TradeScreen extends GuiScreen {
             getMarket().requestCreateMarketOrder(-amount, (success) -> {
                 if(success)
                 {
-                    BACKEND_INSTANCES.LOGGER.info("Market sell order created successfully.");
+                    BACKEND_INSTANCES.LOGGER.debug("Market sell order created successfully.");
                 }
                 else
                 {
@@ -500,7 +245,7 @@ public class TradeScreen extends GuiScreen {
             getMarket().requestCreateMarketOrder(amount, (success) -> {
                 if(success)
                 {
-                    BACKEND_INSTANCES.LOGGER.info("Market buy order created successfully.");
+                    BACKEND_INSTANCES.LOGGER.debug("Market buy order created successfully.");
                 }
                 else
                 {
@@ -516,7 +261,7 @@ public class TradeScreen extends GuiScreen {
             getMarket().requestCreateLimitOrder(-amount, price, (success) -> {
                 if(success)
                 {
-                    BACKEND_INSTANCES.LOGGER.info("Limit sell order created successfully.");
+                    BACKEND_INSTANCES.LOGGER.debug("Limit sell order created successfully.");
                 }
                 else
                 {
@@ -532,7 +277,7 @@ public class TradeScreen extends GuiScreen {
             getMarket().requestCreateLimitOrder(amount, price, (success) -> {
                 if(success)
                 {
-                    BACKEND_INSTANCES.LOGGER.info("Limit buy order created successfully.");
+                    BACKEND_INSTANCES.LOGGER.debug("Limit buy order created successfully.");
                 }
                 else
                 {
@@ -542,27 +287,10 @@ public class TradeScreen extends GuiScreen {
     }
 
     private void onSelectItemButtonPressed() {
-        /*ArrayList<ItemStack> itemStacks = new ArrayList<>();
-        for(ItemID itemID : BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getAvailableTradeItemIdList())
-        {
-            itemStacks.add(itemID.getStack());
-        }
-        ItemSelectionScreen screen = new ItemSelectionScreen(
-                this,
-                itemStacks,
-                this::onItemSelected);
 
-        screen.getItemSelectionView().setSorter(new ItemSorter());
-        screen.sortItems();
-        this.minecraft.setScreen(screen);*/
         TradingPairSelectionScreen screen = new TradingPairSelectionScreen(this, this::onItemSelected);
         BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.requestTradingPairs(
-                (tradingPairs) -> {
-                    screen.setAvailableTradingPairs(tradingPairs);
-                    //screen.getItemSelectionView().setSorter(new ItemSorter());
-                    //screen.sortItems();
-
-                });
+                screen::setAvailableTradingPairs);
         Minecraft.getInstance().setScreen(screen);
     }
 
@@ -571,7 +299,7 @@ public class TradeScreen extends GuiScreen {
         getMarket().requestCancelOrder(order.orderID, (success) -> {
             if(success)
             {
-                BACKEND_INSTANCES.LOGGER.info("Order cancelled: " + order.orderID);
+                BACKEND_INSTANCES.LOGGER.debug("Order cancelled: " + order.orderID);
             }
             else
             {
@@ -586,7 +314,7 @@ public class TradeScreen extends GuiScreen {
             getMarket().requestChangeOrder(order.orderID, newPrice, (success) -> {
                 if(success)
                 {
-                    BACKEND_INSTANCES.LOGGER.info("Order price changed successfully: " + order.orderID + " to " + newPrice);
+                    BACKEND_INSTANCES.LOGGER.debug("Order price changed successfully: " + order.orderID + " to " + newPrice);
                 }
                 else
                 {

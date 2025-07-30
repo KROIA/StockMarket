@@ -7,7 +7,6 @@ import net.kroia.stockmarket.market.server.order.MarketOrder;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.util.StockMarketTextMessages;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.server.MinecraftServer;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -23,32 +22,9 @@ public class MatchingEngine implements ServerSaveable {
     }
 
     private final ServerMarket serverMarket;
-
-    //private int price;
-    //private int tradeVolume;
-
-    //private boolean marketOpen = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.MARKET_OPEN_AT_CREATION.get();
-
-    // Create a sorted queue for buy and sell orders, sorted by price.
-    //private final PriorityQueue<LimitOrder> limitBuyOrders = new PriorityQueue<>((o1, o2) -> Double.compare(o2.getPrice(), o1.getPrice()));
-    //private final PriorityQueue<LimitOrder> limitSellOrders = new PriorityQueue<>(Comparator.comparingDouble(LimitOrder::getPrice));
-
-    //private final GhostOrderBook ghostOrderBook;
-    //private long realVolumeImbalance = 0;
-    //private PriceHistory priceHistory;
     public MatchingEngine(ServerMarket market)
     {
         this.serverMarket = market;
-        //this.priceHistory = priceHistory;
-        //this.ghostOrderBook = new GhostOrderBook(initialPrice);
-        //tradeVolume = 0;
-        //setPrice(initialPrice);
-    }
-
-
-    public void onServerTick(MinecraftServer server)
-    {
-        //ghostOrderBook.updateVolume(getPrice());
     }
 
     public void processIncommingOrders(List<Order> orders)
@@ -411,263 +387,22 @@ public class MatchingEngine implements ServerSaveable {
     public int getPrice() {
         return serverMarket.getHistoricalMarketData().getCurrentPrice();
     }
-   /* public int getTradeVolume() {
-        return tradeVolume;
-    }
-    public int resetTradeVolume() {
-        int volume = tradeVolume;
-        tradeVolume = 0;
-        return volume;
-    }*/
-
-    /*public boolean cancelOrder(long orderID)
-    {
-        for(LimitOrder order : limitBuyOrders)
-        {
-            if(order.getOrderID() == orderID)
-            {
-                order.markAsCancelled();
-                limitBuyOrders.remove(order);
-                return true;
-            }
-        }
-        for(LimitOrder order : limitSellOrders)
-        {
-            if(order.getOrderID() == orderID)
-            {
-                order.markAsCancelled();
-                limitSellOrders.remove(order);
-                return true;
-            }
-        }
-        return false;
-    }
-    public void cancelAllOrders(UUID playerOwner)
-    {
-        ArrayList<LimitOrder> toRemove = new ArrayList<>();
-        for(LimitOrder order : limitBuyOrders)
-        {
-            if(order.getPlayerUUID().equals(playerOwner))
-            {
-                order.markAsCancelled();
-                toRemove.add(order);
-            }
-        }
-        limitBuyOrders.removeAll(toRemove);
-        toRemove.clear();
-        for(LimitOrder order : limitSellOrders)
-        {
-            if(order.getPlayerUUID().equals(playerOwner))
-            {
-                order.markAsCancelled();
-                toRemove.add(order);
-            }
-        }
-        limitSellOrders.removeAll(toRemove);
-    }*/
-    /*public void cancelAllOrders()
-    {
-        for(LimitOrder order : limitBuyOrders)
-        {
-            order.markAsCancelled();
-        }
-        limitBuyOrders.clear();
-        for(LimitOrder order : limitSellOrders)
-        {
-            order.markAsCancelled();
-        }
-        limitSellOrders.clear();
-    }*/
-
-    /*public boolean changeOrderPrice(long orderID, int newPrice)
-    {
-        if(newPrice < 0)
-            newPrice = 0;
-        LimitOrder targetOrder = null;
-        for(LimitOrder order : limitBuyOrders)
-        {
-            if(order.getOrderID() == orderID)
-            {
-                targetOrder = order;
-                break;
-            }
-        }
-        if(targetOrder == null) {
-            for (LimitOrder order : limitSellOrders) {
-                if (order.getOrderID() == orderID) {
-                    targetOrder = order;
-                    break;
-                }
-            }
-        }
-        if(targetOrder == null)
-            return false;
-
-        TradingPair tradingPair = serverMarket.getTradingPair();
-
-
-
-        long toFillAmount = targetOrder.getAmount()-targetOrder.getFilledAmount();
-        ServerPlayer player = PlayerUtilities.getOnlinePlayer(targetOrder.getPlayerUUID());
-        boolean canBeMoved = false;
-        if(targetOrder.isBuy())
-        {
-            long toFreeAmount = toFillAmount * targetOrder.getPrice();
-            IBank moneyBank = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getUser(targetOrder.getPlayerUUID()).getBank(tradingPair.getCurrency());
-            if(moneyBank != null)
-                canBeMoved = moneyBank.getTotalBalance()-toFreeAmount >= 0;
-        }
-        else
-        {
-            IBank itemBank = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getUser(targetOrder.getPlayerUUID()).getBank(tradingPair.getItem());
-            if(itemBank != null)
-                canBeMoved = itemBank.getTotalBalance()-toFillAmount >= 0;
-        }
-
-        if(canBeMoved && player != null)
-        {
-            cancelOrder(orderID);
-
-            LimitOrder newOrder = OrderFactory.createLimitOrder(player, tradingPair, targetOrder.getAmount(), newPrice, targetOrder.getFilledAmount());
-            if(newOrder != null) {
-                addOrder(newOrder);
-                return true;
-            }
-            else {
-                LimitOrder oldOrder = OrderFactory.createLimitOrder(player, tradingPair, targetOrder.getAmount(), targetOrder.getPrice(), targetOrder.getFilledAmount());
-                if(oldOrder != null)
-                    addOrder(oldOrder);
-                return false;
-            }
-        }
-        return false;
-    }*/
-
-    /*public boolean removeOrder_internal(LimitOrder toRemove)
-    {
-        return limitBuyOrders.remove(toRemove) || limitSellOrders.remove(toRemove);
-    }
-    public boolean removeOrder_internal(ArrayList<LimitOrder> orders)
-    {
-        return limitBuyOrders.removeAll(orders) || limitSellOrders.removeAll(orders);
-    }*/
-    /*public boolean removeSellOrder_internal(ArrayList<LimitOrder> orders)
-    {
-        return limitSellOrders.removeAll(orders);
-    }
-    public boolean removeBuyOrder_internal(ArrayList<LimitOrder> orders)
-    {
-        return limitBuyOrders.removeAll(orders);
-    }*/
 
 
     public String toString()
     {
         return "MatchingEngine";
-        //return "MatchingEngine{ Price: " + price + " TradeVolume: " + tradeVolume +
-        //        "Sell Orders: "+ limitSellOrders.size()+" Buy Orders: "+ limitBuyOrders.size()+" }";
     }
 
-    /**
-     * Returns a volume heatmap of the order book in the given price range.
-     * The volume is divided into the given number of tiles.
-     * @param tiles The number of tiles to divide the price range into.
-     * @param minPrice The minimum price of the heatmap.
-     * @param maxPrice The maximum price of the heatmap.
-     * @return An array of integers representing the volume in each tile.
-     */
-   /* public OrderbookVolume getOrderBookVolume(int tiles, int minPrice, int maxPrice)
-    {
-        OrderbookVolume orderbookVolume = new OrderbookVolume(tiles, minPrice, maxPrice);
-        int priceRange = maxPrice - minPrice;
-        float priceStep = (float)priceRange / (float)tiles;
-        int[] volume = new int[tiles];
-        for(LimitOrder order : limitBuyOrders)
-        {
-            int index = (int)((float)(order.getPrice() - minPrice) / priceStep);
-            if(index >= 0 && index < tiles)
-                volume[index] += order.getAmount()-order.getFilledAmount();
-        }
-        for(LimitOrder order : limitSellOrders)
-        {
-            int index = (int)((float)(order.getPrice() - minPrice) / priceStep);
-            if(index >= 0 && index < tiles)
-                volume[index] += order.getAmount()-order.getFilledAmount();
-        }
 
-        for(int i=minPrice; i<maxPrice; i++)
-        {
-            int index = (int)((float)(i - minPrice) / priceStep);
-            if(index >= 0 && index < tiles)
-                volume[index] += ghostOrderBook.getAmount(i);
-        }
-
-        orderbookVolume.setVolume(volume);
-        return orderbookVolume;
-    }
-
-    public int getVolume(int price)
-    {
-        int volume = 0;
-        if(price < this.price)
-        {
-            for(LimitOrder order : limitBuyOrders)
-            {
-                if(order.getPrice() == price)
-                    volume += order.getAmount()-order.getFilledAmount();
-            }
-        }
-        else
-        {
-            for(LimitOrder order : limitSellOrders)
-            {
-                if(order.getPrice() == price)
-                    volume += order.getAmount()-order.getFilledAmount();
-            }
-        }
-        volume += ghostOrderBook.getAmount(price);
-        return volume;
-    }
-    public int getVolume(int minPrice, int maxPrice)
-    {
-        int volume = 0;
-        for(LimitOrder order : limitBuyOrders)
-        {
-            if(order.getPrice() >= minPrice && order.getPrice() <= maxPrice)
-                volume += order.getAmount()-order.getFilledAmount();
-        }
-        for(LimitOrder order : limitSellOrders)
-        {
-            if(order.getPrice() >= minPrice && order.getPrice() <= maxPrice)
-                volume += order.getAmount()-order.getFilledAmount();
-        }
-        for(int i=minPrice; i<=maxPrice; i++)
-        {
-            volume += ghostOrderBook.getAmount(i);
-        }
-        return volume;
-    }
-*/
 
     @Override
     public boolean save(CompoundTag tag) {
-        boolean success = true;
-        //tag.putInt("trade_volume", tradeVolume);
-
-        return success;
+        return true;
     }
 
     @Override
     public boolean load(CompoundTag tag) {
-        if(tag == null)
-            return false;
-        /*if(
-                !tag.contains("trade_volume"))
-            return false;*/
-        boolean success = true;
-        //price = tag.getInt("price");
-        //ghostOrderBook.setCurrentMarketPrice(price);
-        //tradeVolume = tag.getInt("trade_volume");
-        return success;
+        return true;
     }
 }

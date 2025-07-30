@@ -21,7 +21,9 @@
   "message.stockmarket.marketplace_not_existing": "Es git kein Markt zum {item_name} handle",
   "message.stockmarket.marketplace_already_existing": "Markt für {item_name} isch bereits vorhande",
   "message.stockmarket.marketplace_is_now_closed": "Markt für {item_name} isch jetzt gschlossä",
+  "message.stockmarket.marketplace_is_now_closed_all": "Alli Märkt sind jetzt gschlossä",
   "message.stockmarket.marketplace_is_now_open": "Markt für {item_name} isch jetzt göffnet zum handle",
+  "message.stockmarket.marketplace_is_now_open_all": "Alli Märkt sind jetzt göffnet zum handle",
   "message.stockmarket.marketplace_is_not_allowed": "Markt für {item_name} isch nöd erlaubt",
   "message.stockmarket.marketplace_deleted": "{item_name} cha nüme ghandelt wärdä",
   "message.stockmarket.marketplace_created": "{item_name} cha jetzt ghandelt wärdä",
@@ -37,6 +39,7 @@
   "message.stockmarket.default_bots_category_created": "Standard Bots vo dä Kategorie: {value} erstellt",
   "message.stockmarket.can_not_create_default_bots_category": "Standard Bots für d Kategorie {value} cha nöd erstellt wärdä",
   "message.stockmarket.default_market_category_removed": "Mark Kategorie {value} entfernt",
+  "message.stockmarket.all_markets_removed": "Alli Märkt entfernt",
   "message.stockmarket.unknown_market_category": "Cha Market Kategorie: {value} nöd findä",
 
   "message.stockmarket.bot_created": "Bot erstellt für Item: {item_name}, du chasch sini Istellige ändere und denn aktivierä",
@@ -88,8 +91,8 @@
   "message.stockmarket.order_invalid_reason": "Ungültigkeits Grund: {reason}",
   "message.stockmarket.order_invalid_reason_market_closed": "Markt isch gschlossä",
   "message.stockmarket.need_creative_mode_for_this_screen": "Du muesch im Kreativmodus si zum uf dä Bildschirm z'zugreife",
-
   "message.stockmarket.no_trading_item_available": "Kei handelbars Item verfüegbar",
+
   "gui.stockmarket.bot_settings_screen.change_item": "Item ändere",
   "gui.stockmarket.bot_settings_screen.save_settings": "Istellige speichere",
   "gui.stockmarket.bot_settings_screen.bot_use": "Bot nutze",
@@ -123,16 +126,16 @@
   "gui.stockmarket.management_screen.ask_remove_message": "Bisch sicher, dass du s Handelsitem lösche wötsch?\nAlli offene Pstellige werded denn storniert.",
   "gui.stockmarket.management_screen.bot_settings": "Bot Istellige",
 
+  "gui.stockmarket.bot_settings_setup_screen.cancel": "Abbrächä",
+  "gui.stockmarket.bot_settings_setup_screen.back": "Zrugg",
+  "gui.stockmarket.bot_settings_setup_screen.next": "Witer",
+  "gui.stockmarket.bot_settings_setup_screen.apply": "Überneh",
+
   "gui.stockmarket.bot_settings_setup_screen_rarity.question": "Wie sältä isch da Item?\nWie oft chunts im Spiel vor?\n",
   "gui.stockmarket.bot_settings_setup_screen_rarity.low": "Eher hüfig",
   "gui.stockmarket.bot_settings_setup_screen_rarity.high": "Eher sältä",
 
   "gui.stockmarket.bot_settings_setup_screen_estimatedValue.question": "Wie schätzisch de Wert vom Item?\nWie viel isches öpe wert?\nDe Wert wird als Startpris für de Markt verwendet.",
-
-  "gui.stockmarket.bot_settings_setup_screen.cancel": "Abbrächä",
-  "gui.stockmarket.bot_settings_setup_screen.back": "Zrugg",
-  "gui.stockmarket.bot_settings_setup_screen.next": "Witer",
-  "gui.stockmarket.bot_settings_setup_screen.apply": "Überneh",
 
   "gui.stockmarket.bot_settings_setup_screen_volatility.question": "Wie starch söll de Pris schanke?\nFür en stabile Markt, wähl en tüferi volatilität.\nFür en volatilä Markt, wähl en höcheri volatilität",
   "gui.stockmarket.bot_settings_setup_screen_volatility.low": "Tüfi Volatilität",
@@ -154,4 +157,9 @@
   "gui.stockmarket.candlestick_chart.tooltip_orderbookvolume": "Zeigt ä Histogramm vo de verfüegbare Liquidität im Orderbuch ah.\nD breiti vo de Balkä repräsentiert d Mengi a Items,\nwo zumene bestimmte Preis kauft oder verchauft werded.",
   "gui.stockmarket.candlestick_chart.tooltip_tradevolume": "Zeigt ä Histogramm vom ghandlete Volume uf em Markt ah.\nJe höcher d Balkä, desto meh Volumä\nisch im entsprächende Zitrum ghandlet worde.",
   "gui.stockmarket.orderlistview.filled": "D Anzahl vo de Items i de Order, wo bereits ghandelt worde isch.\nFür kauf Orders: D Mängi a Items wo du bereits erhalte hesch.\nFür verlauf Orders: D Mängi a Items wo du bereits verchauft hesch.",
-  "gui.stockmarket.limit_order_in_chart_display.move_button": "Beweg dini Order zumene neue Pris\nmit ufe oder abe zieh."
+  "gui.stockmarket.limit_order_in_chart_display.move_button": "Beweg dini Order zumene neue Pris\nmit ufe oder abe zieh.",
+
+  "gui.stockmarket.trading_pair_selection_view.clear_item": "Item abwählä",
+  "gui.stockmarket.trading_pair_selection_view.clear_currency": "Währig abwählä",
+  "gui.stockmarket.trading_pair_selection_view.select_pair": "Uswählä"
+}
