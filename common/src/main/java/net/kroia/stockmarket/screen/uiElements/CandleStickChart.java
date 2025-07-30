@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.screen.uiElements;
 
+import net.kroia.modutilities.TimerMillis;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.gui.geometry.Rectangle;
 import net.kroia.stockmarket.StockMarketModBackend;
@@ -43,6 +44,8 @@ public class CandleStickChart extends GuiElement {
     //int labelXPos = 5;
 
     private final Rectangle volumeDisplayRect = new Rectangle(0, 0, 0, 0);
+    private boolean tooltipTimerStarted = false;
+    private final TimerMillis tooltipTimer = new TimerMillis(false);
 
 
     private HashMap<Long,LimitOrderInChartDisplay> limitOrderDisplays = new HashMap<>();
@@ -166,8 +169,19 @@ public class CandleStickChart extends GuiElement {
         int mouseY = getMouseY();
         if(volumeDisplayRect.contains(mouseX, mouseY))
         {
-            drawTooltipLater(StockMarketTextMessages.getCandlestickChartTooltipTradeVolume(), mouseX, mouseY,
-                    getTooltipBackgroundColor(), getTooltipBackgroundPadding(), Alignment.TOP);
+            if(!tooltipTimerStarted)
+            {
+                tooltipTimerStarted = true;
+                tooltipTimer.start(getHoverTooltipDelay());
+            }
+            else if(tooltipTimer.isFinished())
+            {
+                drawTooltip(StockMarketTextMessages.getCandlestickChartTooltipTradeVolume(), mouseX, mouseY,
+                        getTooltipBackgroundColor(), getTooltipBackgroundPadding(), Alignment.TOP);
+            }
+        }
+        else {
+            tooltipTimerStarted = false;
         }
     }
 
