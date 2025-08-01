@@ -25,6 +25,7 @@ public class PID implements ServerSaveable {
         this.iBound = iBound;
         this.i = 0;
         this.lastError = 0;
+        lastMillis = System.currentTimeMillis();
     }
 
     @Override

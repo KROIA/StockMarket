@@ -1,14 +1,6 @@
 package net.kroia.stockmarket.screen.uiElements.botsetup;
 
-import net.kroia.modutilities.gui.elements.HorizontalSlider;
-import net.kroia.modutilities.gui.elements.Label;
-import net.kroia.modutilities.gui.elements.Slider;
-import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
-import net.minecraft.network.chat.Component;
-
-import java.util.function.Supplier;
-
+/*
 public class BotSetup_rarity extends BotSetupGuiElement {
 
     private static final String NAME = "bot_settings_setup_screen_rarity";
@@ -75,3 +67,4 @@ public class BotSetup_rarity extends BotSetupGuiElement {
         slider.setTooltipSupplier(tooltipSupplier);
     }
 }
+*/

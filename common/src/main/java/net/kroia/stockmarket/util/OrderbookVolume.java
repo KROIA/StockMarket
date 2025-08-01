@@ -7,13 +7,13 @@ public class OrderbookVolume {
     private final int minPrice;
     private final int maxPrice;
     private final int tiles;
-    private final int[] volume;
+    private final long[] volume;
 
     public OrderbookVolume(int tiles, int minPrice, int maxPrice) {
         this.tiles = tiles;
         this.minPrice = minPrice;
         this.maxPrice = maxPrice;
-        this.volume = new int[tiles];
+        this.volume = new long[tiles];
     }
 
     public OrderbookVolume(FriendlyByteBuf buf)
@@ -21,10 +21,10 @@ public class OrderbookVolume {
         tiles = buf.readInt();
         minPrice = buf.readInt();
         maxPrice = buf.readInt();
-        volume = new int[tiles];
+        volume = new long[tiles];
         for (int i = 0; i < tiles; i++)
         {
-            volume[i] = buf.readInt();
+            volume[i] = buf.readLong();
         }
     }
 
@@ -35,20 +35,20 @@ public class OrderbookVolume {
         buf.writeInt(maxPrice);
         for (int i = 0; i < tiles; i++)
         {
-            buf.writeInt(volume[i]);
+            buf.writeLong(volume[i]);
         }
     }
 
-    public int getVolume(int index) {
+    public long getVolume(int index) {
         return volume[index];
     }
-    public int[] getVolume() {
+    public long[] getVolume() {
         return volume;
     }
 
-    public int getMaxVolume()
+    public long getMaxVolume()
     {
-        int maxVolume = 0;
+        long maxVolume = 0;
         for(int i = 0; i < volume.length; i++)
         {
             maxVolume = Math.max(maxVolume, Math.abs(volume[i]));
@@ -60,7 +60,7 @@ public class OrderbookVolume {
         volume[index] = value;
     }
 
-    public void setVolume(int[] volume) {
+    public void setVolume(long[] volume) {
         System.arraycopy(volume, 0, this.volume, 0, this.volume.length);
     }
 

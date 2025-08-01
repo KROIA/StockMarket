@@ -1,10 +1,6 @@
 package net.kroia.stockmarket.screen.uiElements.botsetup;
 
-import net.kroia.modutilities.gui.elements.CheckBox;
-import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
-import net.minecraft.network.chat.Component;
-
+/*
 public class BotSetup_enabledFeatures extends BotSetupGuiElement{
     private static final String NAME = "bot_settings_setup_screen_enabled_features";
     public static final String PREFIX = "gui."+ StockMarketMod.MOD_ID+"."+NAME+".";
@@ -79,3 +75,4 @@ public class BotSetup_enabledFeatures extends BotSetupGuiElement{
         enableRandomWalk.setChecked(enabled);
     }
 }
+*/

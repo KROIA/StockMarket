@@ -1,11 +1,6 @@
 package net.kroia.stockmarket.screen.uiElements.botsetup;
 
-import net.kroia.modutilities.gui.elements.Label;
-import net.kroia.modutilities.gui.elements.TextBox;
-import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
-import net.minecraft.network.chat.Component;
-
+/*
 public class BotSetup_estimatedPrice extends BotSetupGuiElement {
 
     private static final String NAME = "bot_settings_setup_screen_estimatedValue";
@@ -57,3 +52,4 @@ public class BotSetup_estimatedPrice extends BotSetupGuiElement {
         textBox.setText(estimatedPrice);
     }
 }
+*/

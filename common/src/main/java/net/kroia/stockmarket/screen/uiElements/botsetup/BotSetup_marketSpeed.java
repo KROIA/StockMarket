@@ -1,14 +1,6 @@
 package net.kroia.stockmarket.screen.uiElements.botsetup;
 
-import net.kroia.modutilities.gui.elements.HorizontalSlider;
-import net.kroia.modutilities.gui.elements.Label;
-import net.kroia.modutilities.gui.elements.Slider;
-import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
-import net.minecraft.network.chat.Component;
-
-import java.util.function.Supplier;
-
+/*
 public class BotSetup_marketSpeed extends BotSetupGuiElement{
     private static final String NAME = "bot_settings_setup_screen_market_speed";
     public static final String PREFIX = "gui."+ StockMarketMod.MOD_ID+"."+NAME+".";
@@ -75,3 +67,4 @@ public class BotSetup_marketSpeed extends BotSetupGuiElement{
         slider.setTooltipSupplier(tooltipSupplier);
     }
 }
+*/

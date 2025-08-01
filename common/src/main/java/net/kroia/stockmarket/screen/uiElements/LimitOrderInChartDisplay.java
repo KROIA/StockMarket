@@ -1,8 +1,10 @@
 package net.kroia.stockmarket.screen.uiElements;
 
 import net.kroia.modutilities.ColorUtilities;
+import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.clientdata.OrderReadData;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
@@ -26,19 +28,24 @@ public class LimitOrderInChartDisplay extends StockMarketGuiElement {
     private int globalMouseYStart;
     private int clickPosYOffset;
     private boolean isDragging = false;
+    private final TradingPair pair;
     private final Function<Integer, Integer> yPosToPriceFunc;
     private final BiConsumer<OrderReadData, Integer> onOrderReplacedToNewPrice;
 
-    public LimitOrderInChartDisplay(Function<Integer, Integer> yPosToPriceFunc, OrderReadData order, BiConsumer<OrderReadData, Integer> onOrderReplacedToNewPrice) {
+    public LimitOrderInChartDisplay(Function<Integer, Integer> yPosToPriceFunc,
+                                    OrderReadData order,
+                                    TradingPair pair,
+                                    BiConsumer<OrderReadData, Integer> onOrderReplacedToNewPrice) {
         super();
         this.yPosToPriceFunc = yPosToPriceFunc;
         this.onOrderReplacedToNewPrice = onOrderReplacedToNewPrice;
+        this.pair = pair;
         moveButton = new Button("");
         moveButton.setOnDown(this::onButtonDown);
         moveButton.setOnRisingEdge(this::onButtonRising);
         moveButton.setOnFallingEdge(this::onButtonFalling);
         moveButton.setTooltipMousePositionAlignment(Alignment.TOP);
-        moveButton.setHoverTooltipSupplier(StockMarketTextMessages::getLimitOrderInChartDisplayMoveButton);
+        moveButton.setHoverTooltipSupplier(this::getButtonTooltip);
 
         setOrder(order);
 
@@ -69,6 +76,12 @@ public class LimitOrderInChartDisplay extends StockMarketGuiElement {
     protected void render() {
         int xPos = moveButton.getRight();
         drawRect(xPos, getHeight()/2, getWidth()-xPos, 1, color);
+
+        if(isDragging)
+        {
+            moveButton.drawTooltip(getButtonTooltip(), getMouseX(), getMouseY(),
+                    moveButton.getTooltipBackgroundColor(), moveButton.getTooltipBackgroundPadding(), Alignment.RIGHT);
+        }
     }
 
     @Override
@@ -106,6 +119,10 @@ public class LimitOrderInChartDisplay extends StockMarketGuiElement {
     {
         return isDragging;
     }
+    public int getCurrentPrice()
+    {
+        return yPosToPriceFunc.apply(getY() + getHeight()/2);
+    }
 
 
     private void onButtonFalling()
@@ -113,6 +130,7 @@ public class LimitOrderInChartDisplay extends StockMarketGuiElement {
         globalMouseYStart = getParent().getMouseY();
         clickPosYOffset = getMouseY();
         isDragging = true;
+        moveButton.setHoverTooltipSupplier(null);
     }
     private void onButtonDown()
     {
@@ -124,10 +142,21 @@ public class LimitOrderInChartDisplay extends StockMarketGuiElement {
     private void onButtonRising()
     {
         isDragging = false;
-        int newPrice = yPosToPriceFunc.apply(getY()+getHeight()/2);
+        int newPrice = getCurrentPrice();
         if(onOrderReplacedToNewPrice != null)
             onOrderReplacedToNewPrice.accept(order, newPrice);
+        moveButton.setHoverTooltipSupplier(this::getButtonTooltip);
 
+    }
+
+    private String getButtonTooltip()
+    {
+        String displayName = ItemUtilities.getItemDisplayText(pair.getCurrency().getStack());
+        if(isDragging)
+        {
+            return StockMarketTextMessages.getLimitOrderInChartDisplayMoveButtonMoving(getCurrentPrice(), displayName);
+        }
+        return StockMarketTextMessages.getLimitOrderInChartDisplayMoveButton();
     }
 
 }

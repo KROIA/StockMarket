@@ -107,7 +107,7 @@ public class StockMarketModSettings extends ModSettings {
         );
 
         /**
-         * Defines the size of the virtual order book array which is used as ghost order liquidity
+         * Defines the size of the virtual order book array which is used as virtual order liquidity
          */
         public final Setting<Integer> VIRTUAL_ORDERBOOK_ARRAY_SIZE = registerSetting("VIRTUAL_ORDERBOOK_ARRAY_SIZE", 100, Integer.class);
 

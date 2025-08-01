@@ -11,7 +11,7 @@ import net.minecraft.network.chat.Component;
 import java.util.List;
 import java.util.function.Consumer;
 
-public class TradingPairSelectionScreen extends StockMarketGuiScreen {
+public class MarketSelectionScreen extends StockMarketGuiScreen {
 
     private static final String PREFIX = "gui.";
     private static final String NAME = "trading_pair_selection_screen";
@@ -24,7 +24,7 @@ public class TradingPairSelectionScreen extends StockMarketGuiScreen {
     private final TradingPairSelectionView tradingPairSelectionView;
     private final GuiScreen parentScreen;
 
-    public TradingPairSelectionScreen(GuiScreen parent, Consumer<TradingPair> onSelected){
+    public MarketSelectionScreen(GuiScreen parent, Consumer<TradingPair> onSelected){
         super(TITLE);
         parentScreen = parent;
         tradingPairSelectionView = new TradingPairSelectionView(onSelected);

@@ -113,6 +113,7 @@ public class StockMarketModBackend implements StockMarketAPI {
         OrderFactory.setBackend(INSTANCES);
         ServerMarket.setBackend(INSTANCES);
         MarketFactory.setBackend(INSTANCES);
+        VirtualOrderBook.setBackend(INSTANCES);
     }
 
     // Called from the server side
@@ -154,8 +155,8 @@ public class StockMarketModBackend implements StockMarketAPI {
             loadDataFromFiles(UtilitiesPlatform.getServer());
             DefaultMarketSettings.createDefaultMarketSettingsIfNotExist();
 
-            var category = MarketFactory.DefaultMarketSetupDataGroup.load("Ores");
-            INSTANCES.SERVER_STOCKMARKET_MANAGER.createMarket(category);
+            //var category = MarketFactory.DefaultMarketSetupDataGroup.load("Ores");
+            //INSTANCES.SERVER_STOCKMARKET_MANAGER.createMarket(category);
 
             //INSTANCES.SERVER_SETTINGS.MARKET_BOT.getBotBuilder(); // Create the default bot settings files if they don't exist
         }

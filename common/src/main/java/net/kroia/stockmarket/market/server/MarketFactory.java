@@ -72,6 +72,7 @@ public class MarketFactory
 
         public DefaultMarketSetupData generateDefaultMarketSetupData() {
             ServerVolatilityBot.Settings botSettings = new ServerVolatilityBot.Settings();
+            VirtualOrderBook.Settings virtualOrderBookSettings = new VirtualOrderBook.Settings();
 
             botSettings.defaultPrice = defaultPrice;
             botSettings.updateTimerIntervallMS = updateIntervalMS;
@@ -85,10 +86,10 @@ public class MarketFactory
             botSettings.enableRandomWalk = enableRandomWalk;
             botSettings.volatility = Math.abs(volatility);
 
-            botSettings.orderBookVolumeScale = 100f/(0.01f+Math.abs(rarity));
-            botSettings.volumeScale = botSettings.orderBookVolumeScale * this.volatility;
+            virtualOrderBookSettings.volumeScale = 100f/(0.01f+Math.abs(rarity));
+            botSettings.volumeScale = virtualOrderBookSettings.volumeScale * this.volatility;
 
-            return new DefaultMarketSetupData(this.tradingPair, botSettings);
+            return new DefaultMarketSetupData(this.tradingPair, botSettings, virtualOrderBookSettings);
         }
 
         @Override
@@ -187,24 +188,30 @@ public class MarketFactory
     {
         public TradingPair tradingPair;
         public ServerVolatilityBot.Settings botSettings;
+        public VirtualOrderBook.Settings virtualOrderBookSettings;
 
 
         public DefaultMarketSetupData(TradingPair pair) {
             this.tradingPair = pair;
             this.botSettings = null; // Default to no bot settings
         }
-        public DefaultMarketSetupData(TradingPair pair, ServerVolatilityBot.Settings botSettings) {
+        public DefaultMarketSetupData(TradingPair pair,
+                                      ServerVolatilityBot.Settings botSettings,
+                                      VirtualOrderBook.Settings virtualOrderBookSettings) {
             this.tradingPair = pair;
             this.botSettings = botSettings;
+            this.virtualOrderBookSettings = virtualOrderBookSettings;
         }
         private DefaultMarketSetupData() {
             this.tradingPair = new TradingPair();
             this.botSettings = null; // Default to no bot settings
+            this.virtualOrderBookSettings = null; // Default to no virtual order book settings
         }
 
         public static DefaultMarketSetupData create(FriendlyByteBuf buf) {
             DefaultMarketSetupData data = new DefaultMarketSetupData();
             data.decode(buf);
+
             return data;
         }
 
@@ -215,6 +222,11 @@ public class MarketFactory
             buf.writeBoolean(this.botSettings != null);
             if (this.botSettings != null) {
                 this.botSettings.encode(buf);
+            }
+
+            buf.writeBoolean(this.virtualOrderBookSettings != null);
+            if (this.virtualOrderBookSettings != null) {
+                this.virtualOrderBookSettings.encode(buf);
             }
         }
 
@@ -228,6 +240,14 @@ public class MarketFactory
                 data.botSettings.decode(buf);
             } else {
                 data.botSettings = null; // No bot settings provided
+            }
+
+            boolean hasVirtualOrderBookSettings = buf.readBoolean();
+            if (hasVirtualOrderBookSettings) {
+                data.virtualOrderBookSettings = new VirtualOrderBook.Settings();
+                data.virtualOrderBookSettings.decode(buf);
+            } else {
+                data.virtualOrderBookSettings = null; // No virtual order book settings provided
             }
             return data;
         }
@@ -248,6 +268,9 @@ public class MarketFactory
             if (this.botSettings != null) {
                 jsonObject.add("botSettings", this.botSettings.toJson());
             }
+            if (this.virtualOrderBookSettings != null) {
+                jsonObject.add("virtualOrderBookSettings", this.virtualOrderBookSettings.toJson());
+            }
             return jsonObject;
         }
         public boolean fromJson(JsonElement json) {
@@ -259,6 +282,7 @@ public class MarketFactory
             JsonObject jsonObject = json.getAsJsonObject();
             JsonElement tradingPairElement = jsonObject.get("tradingPair");
             JsonElement botSettingsElement = jsonObject.get("botSettings");
+            JsonElement virtualOrderBookSettingsElement = jsonObject.get("virtualOrderBookSettings");
 
             if (tradingPairElement == null) {
                 return false;
@@ -289,6 +313,13 @@ public class MarketFactory
                 success = this.botSettings.fromJson(botSettingsElement);
             } else {
                 this.botSettings = null; // No bot settings provided
+            }
+
+            if (virtualOrderBookSettingsElement != null && virtualOrderBookSettingsElement.isJsonObject()) {
+                this.virtualOrderBookSettings = new VirtualOrderBook.Settings();
+                success &= this.virtualOrderBookSettings.fromJson(virtualOrderBookSettingsElement);
+            } else {
+                this.virtualOrderBookSettings = null; // No virtual order book settings provided
             }
             return success;
         }
@@ -495,7 +526,7 @@ public class MarketFactory
             return null;
         }
         if(data.botSettings != null) {
-            return createMarket(pair, data.botSettings);
+            return createMarket(pair, data.botSettings, data.virtualOrderBookSettings);
         }
         return createMarket(pair, 0);
     }
@@ -529,7 +560,9 @@ public class MarketFactory
         }
         return createMarket_internal(pair, startPrice);
     }
-    public static @Nullable ServerMarket createMarket(@NotNull TradingPair pair, ServerVolatilityBot.Settings botSettings)
+    public static @Nullable ServerMarket createMarket(@NotNull TradingPair pair,
+                                                      @NotNull ServerVolatilityBot.Settings botSettings,
+                                                      @NotNull VirtualOrderBook.Settings virtualOrderBookSettings)
     {
         if(!isTradingPairAllowedForTrading(pair))
         {
@@ -539,6 +572,7 @@ public class MarketFactory
         ServerMarket market = createMarket_internal(pair, botSettings.defaultPrice);
         if(market != null) {
             market.createVolatilityBot(botSettings);
+            market.setVirtualOrderBookSettings(virtualOrderBookSettings);
         }
         return market;
     }
@@ -557,9 +591,22 @@ public class MarketFactory
         TradingPair pair = settingsData.tradingPairData.toTradingPair();
         int startPrice = 0;
         if(settingsData.botSettingsData != null) {
-            startPrice = settingsData.botSettingsData.defaultPrice;
+            startPrice = settingsData.botSettingsData.botSettings.defaultPrice;
         }
-        return createMarket(pair, startPrice);
+        ServerMarket market = createMarket(pair, startPrice);
+        if(market != null) {
+            if(settingsData.botSettingsData != null)
+            {
+                ServerVolatilityBot.Settings botSettings = settingsData.botSettingsData.botSettings;
+                market.createVolatilityBot(botSettings);
+            }
+            if(settingsData.virtualOrderBookSettingsData != null)
+            {
+                VirtualOrderBook.Settings virtualOrderBookSettings = settingsData.virtualOrderBookSettingsData.settings;
+                market.setVirtualOrderBookSettings(virtualOrderBookSettings);
+            }
+        }
+        return market;
     }
 
     public static List<ServerMarket> createMarkets(@NotNull List<ServerMarketSettingsData> settingsDataList)

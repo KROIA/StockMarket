@@ -1,48 +1,62 @@
 package net.kroia.stockmarket.market.server;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import net.kroia.modutilities.JsonUtilities;
 import net.kroia.modutilities.ServerSaveable;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.util.OrderbookVolume;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 
 public class OrderBook implements ServerSaveable {
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-
-
     // Create a sorted queue for buy and sell orders, sorted by price.
     private final PriorityQueue<LimitOrder> limitBuyOrders = new PriorityQueue<>((o1, o2) -> Double.compare(o2.getPrice(), o1.getPrice()));
     private final PriorityQueue<LimitOrder> limitSellOrders = new PriorityQueue<>(Comparator.comparingDouble(LimitOrder::getPrice));
 
     private final List<Order> incommingOrders = new ArrayList<>();
 
-    private final GhostOrderBook ghostOrderBook;
+    private VirtualOrderBook virtualOrderBook;
 
+    public OrderBook()
+    {
+        virtualOrderBook = null;
+    }
     public OrderBook(int realVolumeBookSize)
     {
-        this.ghostOrderBook = new GhostOrderBook(realVolumeBookSize,0);
+        this.virtualOrderBook = new VirtualOrderBook(realVolumeBookSize,0);
     }
     public OrderBook(int realVolumeBookSize, int initialPrice)
     {
-        this.ghostOrderBook = new GhostOrderBook(realVolumeBookSize, initialPrice);
+        this.virtualOrderBook = new VirtualOrderBook(realVolumeBookSize, initialPrice);
     }
 
-    public void updateGhostOrderBookVolume(int currentPrice)
+    public void createVirtualOrderBook(int realVolumeBookSize, int initialPrice, VirtualOrderBook.Settings settings)
     {
-        this.ghostOrderBook.updateVolume(currentPrice);
+        if(virtualOrderBook != null)
+            return; // Virtual order book already exists.
+        this.virtualOrderBook = new VirtualOrderBook(realVolumeBookSize, initialPrice);
+        this.virtualOrderBook.setSettings(settings); // Set the settings for the virtual order book.
     }
-    public GhostOrderBook getGhostOrderBook()
+    public void destroyVirtualOrderBook()
     {
-        return ghostOrderBook;
+        this.virtualOrderBook = null; // Remove the virtual order book.
     }
 
+    public void updateVirtualOrderBookVolume(int currentPrice)
+    {
+        if(virtualOrderBook == null)
+            return; // No virtual order book initialized.
+        this.virtualOrderBook.updateVolume(currentPrice);
+    }
+    public @Nullable VirtualOrderBook getVirtualOrderBook()
+    {
+        return virtualOrderBook;
+    }
 
 
     public void addIncommingOrder(Order order)
@@ -239,7 +253,7 @@ public class OrderBook implements ServerSaveable {
         OrderbookVolume orderbookVolume = new OrderbookVolume(tiles, minPrice, maxPrice);
         int priceRange = maxPrice - minPrice;
         float priceStep = (float)priceRange / (float)tiles;
-        int[] volume = new int[tiles];
+        long[] volume = new long[tiles];
         for(LimitOrder order : limitBuyOrders)
         {
             int index = (int)((float)(order.getPrice() - minPrice) / priceStep);
@@ -253,11 +267,12 @@ public class OrderBook implements ServerSaveable {
                 volume[index] += order.getAmount()-order.getFilledAmount();
         }
 
-        for(int i=minPrice; i<maxPrice; i++)
-        {
-            int index = (int)((float)(i - minPrice) / priceStep);
-            if(index >= 0 && index < tiles)
-                volume[index] += ghostOrderBook.getAmount(i);
+        if(virtualOrderBook != null) {
+            for (int i = minPrice; i < maxPrice; i++) {
+                int index = (int) ((float) (i - minPrice) / priceStep);
+                if (index >= 0 && index < tiles)
+                    volume[index] += virtualOrderBook.getAmount(i);
+            }
         }
 
         orderbookVolume.setVolume(volume);
@@ -283,7 +298,9 @@ public class OrderBook implements ServerSaveable {
                     volume += order.getPendingAmount();
             }
         }
-        volume += ghostOrderBook.getAmount(price);
+        if(virtualOrderBook != null)
+            volume += virtualOrderBook.getAmount(price);
+
         return volume;
     }
 
@@ -301,9 +318,10 @@ public class OrderBook implements ServerSaveable {
             if(order.getPrice() >= minPrice && order.getPrice() <= maxPrice)
                 volume += order.getPendingAmount();
         }
-        for(int i=minPrice; i<=maxPrice; i++)
-        {
-            volume += ghostOrderBook.getAmount(i);
+        if(virtualOrderBook != null) {
+            for (int i = minPrice; i <= maxPrice; i++) {
+                volume += virtualOrderBook.getAmount(i);
+            }
         }
         return volume;
     }
@@ -331,9 +349,11 @@ public class OrderBook implements ServerSaveable {
         tag.put("buy_orders", buyOrdersList);
         tag.put("sell_orders", sellOrdersList);
 
-        CompoundTag ghostOrderBookTag = new CompoundTag();
-        success &= ghostOrderBook.save(ghostOrderBookTag);
-        tag.put("ghost_order_book", ghostOrderBookTag);
+        if(virtualOrderBook != null) {
+            CompoundTag virtualOrderBookTag = new CompoundTag();
+            success &= virtualOrderBook.save(virtualOrderBookTag);
+            tag.put("virtual_order_book", virtualOrderBookTag);
+        }
         return success;
     }
 
@@ -342,8 +362,7 @@ public class OrderBook implements ServerSaveable {
         if(tag == null)
             return false;
         if(     !tag.contains("buy_orders") ||
-                !tag.contains("sell_orders") ||
-                !tag.contains("ghost_order_book"))
+                !tag.contains("sell_orders"))
             return false;
         boolean success = true;
 
@@ -369,14 +388,16 @@ public class OrderBook implements ServerSaveable {
                 limitSellOrders.add(order);
         }
 
-        if(tag.contains("ghost_order_book"))
+        if(tag.contains("virtual_order_book"))
         {
-            CompoundTag ghostOrderBookTag = tag.getCompound("ghost_order_book");
-            success &= ghostOrderBook.load(ghostOrderBookTag);
+            CompoundTag virtualOrderBookTag = tag.getCompound("virtual_order_book");
+            if(virtualOrderBook == null)
+                virtualOrderBook = new VirtualOrderBook(10, 0);
+            success &= virtualOrderBook.load(virtualOrderBookTag);
         }
         else
         {
-            ghostOrderBook.cleanup();
+            virtualOrderBook = null;
         }
         return success;
     }
@@ -390,12 +411,13 @@ public class OrderBook implements ServerSaveable {
         metadata.addProperty("incommingOrderCount", incommingOrders.size());
         jsonObject.add("metadata", metadata);
 
-        jsonObject.add("ghostOrderBook", ghostOrderBook.toJson());
+        if(virtualOrderBook != null)
+            jsonObject.add("virtualOrderBook", virtualOrderBook.toJson());
         return jsonObject;
     }
     public String toJsonString()
     {
-        return GSON.toJson(toJson());
+        return JsonUtilities.toPrettyString(toJson());
     }
 
     @Override

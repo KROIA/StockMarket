@@ -11,6 +11,8 @@ import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.clientdata.ServerMarketSettingsData;
 import net.kroia.stockmarket.market.server.MarketFactory;
+import net.kroia.stockmarket.market.server.VirtualOrderBook;
+import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import net.kroia.stockmarket.screen.uiElements.TradingPairView;
 import net.kroia.stockmarket.util.StockMarketGuiScreen;
 import net.kroia.stockmarket.util.StockMarketTextMessages;
@@ -20,33 +22,29 @@ import net.minecraft.world.item.ItemStack;
 import java.util.ArrayList;
 import java.util.List;
 
-public class TradingPairCreationScreen extends StockMarketGuiScreen {
+public class MarketCreationScreen extends StockMarketGuiScreen {
 
     private static final String PREFIX = "gui."+StockMarketMod.MOD_ID+".trading_pair_creation_screen.";
     private static final String NAME = "trading_pair_creation_screen";
     private static final Component TITLE = Component.translatable(PREFIX + "title");
     private static final Component ITEM_SELECTION_VIEW_TITLE = Component.translatable(PREFIX + "item_selection_title");
     private static final Component CURRENCY_SELECTION_VIEW_TITLE = Component.translatable(PREFIX + "currency_selection_title");
-    private static final Component INITIAL_PRICE_LABEL = Component.translatable(PREFIX + "initial_price_label");
     private static final Component CREATE_MAKET_BUTTON = Component.translatable(PREFIX + "create_market_button");
 
     public static final Component MARKET_OPEN = Component.translatable(PREFIX+"market_open");
-    public static final Component ENABLEMARKET_BOT = Component.translatable(PREFIX+"enable_market_bot");
+    public static final Component ENABLE_VIRTUAL_ORDER_BOOK = Component.translatable(PREFIX+"enable_virtual_order_book");
+    public static final Component ENABLE_MARKET_BOT = Component.translatable(PREFIX+"enable_market_bot");
     public static final Component ENABLE_TARGET_PRICE = Component.translatable(PREFIX+"enable_target_price");
     public static final Component ENABLE_VOLUME_TRACKING = Component.translatable(PREFIX+"enable_volume_tracking");
     public static final Component ENABLE_RANDOM_WALK = Component.translatable(PREFIX+"enable_random_walk");
 
 
-    public static final Component TOOLTIP_INITIAL_PRICE = Component.translatable(PREFIX+"tooltip_initial_price");
-    public static final Component TOOLTIP_CANDLE_TIME_MINUTES = Component.translatable(PREFIX+"tooltip_candle_time_minutes");
     public static final Component TOOLTIP_OPEN_MARKET_CHECKBOX = Component.translatable(PREFIX+"tooltip_open_market_checkbox");
+    public static final Component TOOLTIP_ENABLE_VIRTUAL_ORDER_BOOK_CHECKBOX = Component.translatable(PREFIX+"tooltip_enable_virtual_order_book_checkbox");
     public static final Component TOOLTIP_ENABLE_MARKETBOT_CHECKBOX = Component.translatable(PREFIX+"tooltip_enable_marketbot_checkbox");
     public static final Component TOOLTIP_ENABLE_TARGETPRICE_CHECKBOX = Component.translatable(PREFIX+"tooltip_enable_targetprice_checkbox");
     public static final Component TOOLTIP_ENABLE_VOLUMETRACKING_CHECKBOX = Component.translatable(PREFIX+"tooltip_enable_volumetracking_checkbox");
     public static final Component TOOLTIP_ENABLE_RANDOMWALK_CHECKBOX = Component.translatable(PREFIX+"tooltip_enable_randomwalk_checkbox");
-    public static final Component TOOLTIP_VOLATILITY_SLIDER = Component.translatable(PREFIX+"tooltip_volatility_slider");
-    public static final Component TOOLTIP_RARITY_SLIDER = Component.translatable(PREFIX+"tooltip_rarity_slider");
-    public static final Component TOOLTIP_MARKETSPEED_SLIDER = Component.translatable(PREFIX+"tooltip_marketspeed_slider");
     public static final Component TOOLTIP_CREATE_MARKET_BUTTON = Component.translatable(PREFIX+"tooltip_create_market_button");
 
     private final List<ItemStack> potentialTradingItems = new ArrayList<>();
@@ -70,6 +68,7 @@ public class TradingPairCreationScreen extends StockMarketGuiScreen {
     private final TextBox initialPriceTextBox;
     private final TextBox candleTimeTextBoxMinutes;
 
+    private final CheckBox enableVirtualOrderBook;
     private final CheckBox enableMarketBot;
     private final CheckBox enableTargetPrice;
     private final CheckBox enableVolumeTracking;
@@ -83,8 +82,8 @@ public class TradingPairCreationScreen extends StockMarketGuiScreen {
     private final Button createMarketButton;
 
 
-    private final StockMarketManagementScreen parent;
-    public TradingPairCreationScreen(StockMarketManagementScreen parent)
+    private final ManagementScreen parent;
+    public MarketCreationScreen(ManagementScreen parent)
     {
         super(TITLE);
         this.parent = parent;
@@ -120,7 +119,9 @@ public class TradingPairCreationScreen extends StockMarketGuiScreen {
 
         openMarketCheckBox = new CheckBox(MARKET_OPEN.getString());
         openMarketCheckBox.setChecked(false); // Default to open market
-        enableMarketBot = new CheckBox(ENABLEMARKET_BOT.getString());
+        enableVirtualOrderBook = new CheckBox(ENABLE_VIRTUAL_ORDER_BOOK.getString());
+        enableVirtualOrderBook.setChecked(true);
+        enableMarketBot = new CheckBox(ENABLE_MARKET_BOT.getString());
         enableMarketBot.setChecked(true);
 
         enableTargetPrice = new CheckBox(ENABLE_TARGET_PRICE.getString());
@@ -146,6 +147,21 @@ public class TradingPairCreationScreen extends StockMarketGuiScreen {
             raritySlider.setEnabled(checked);
             marketSpeedSlider.setEnabled(checked);
         });
+        enableVirtualOrderBook.setOnStateChanged((checked)->{
+            // If virtual order book is enabled, we can enable the market bot
+            enableMarketBot.setEnabled(checked);
+            if(!checked) {
+                // If virtual order book is disabled, we disable the market bot
+                enableMarketBot.setChecked(false);
+            }
+            enableTargetPrice.setEnabled(checked);
+            enableVolumeTracking.setEnabled(checked);
+            enableRandomWalk.setEnabled(checked);
+            volatilitySlider.setEnabled(checked);
+            raritySlider.setEnabled(checked);
+            marketSpeedSlider.setEnabled(checked);
+
+        });
 
         createMarketButton = new Button(CREATE_MAKET_BUTTON.getString(), this::onCreateMarketButtonPressed);
         createMarketButton.setEnabled(false);
@@ -162,6 +178,7 @@ public class TradingPairCreationScreen extends StockMarketGuiScreen {
         marketSpeedSlider.setHoverTooltipSupplier(()->{return StockMarketTextMessages.getTradingPairCreationScreenMarketSpeedTooltip(marketSpeedSlider.getSliderValue(), getMarketSpeedMS());});
 
         openMarketCheckBox.setHoverTooltipSupplier(TOOLTIP_OPEN_MARKET_CHECKBOX::getString);
+        enableVirtualOrderBook.setHoverTooltipSupplier(TOOLTIP_ENABLE_VIRTUAL_ORDER_BOOK_CHECKBOX::getString);
         enableMarketBot.setHoverTooltipSupplier(TOOLTIP_ENABLE_MARKETBOT_CHECKBOX::getString);
         enableTargetPrice.setHoverTooltipSupplier(TOOLTIP_ENABLE_TARGETPRICE_CHECKBOX::getString);
         enableVolumeTracking.setHoverTooltipSupplier(TOOLTIP_ENABLE_VOLUMETRACKING_CHECKBOX::getString);
@@ -177,6 +194,7 @@ public class TradingPairCreationScreen extends StockMarketGuiScreen {
         raritySlider.setTooltipMousePositionAlignment(GuiElement.Alignment.RIGHT);
         marketSpeedSlider.setTooltipMousePositionAlignment(GuiElement.Alignment.RIGHT);
         openMarketCheckBox.setTooltipMousePositionAlignment(GuiElement.Alignment.RIGHT);
+        enableVirtualOrderBook.setTooltipMousePositionAlignment(GuiElement.Alignment.RIGHT);
         enableMarketBot.setTooltipMousePositionAlignment(GuiElement.Alignment.RIGHT);
         enableTargetPrice.setTooltipMousePositionAlignment(GuiElement.Alignment.RIGHT);
         enableVolumeTracking.setTooltipMousePositionAlignment(GuiElement.Alignment.RIGHT);
@@ -198,6 +216,7 @@ public class TradingPairCreationScreen extends StockMarketGuiScreen {
         settingsListView.addChild(initialPriceTextBox);
         settingsListView.addChild(candleTimeTextBoxMinutes);
         settingsListView.addChild(openMarketCheckBox);
+        settingsListView.addChild(enableVirtualOrderBook);
         settingsListView.addChild(enableMarketBot);
         settingsListView.addChild(enableTargetPrice);
         settingsListView.addChild(enableVolumeTracking);
@@ -385,53 +404,66 @@ public class TradingPairCreationScreen extends StockMarketGuiScreen {
             if(success)
             {
                 selectMarket(tradingPair);
-                if(getSelectedMarket() == null)
+
+                ServerMarketSettingsData marketSettings;
+
+                if(getSelectedMarket() != null)
                 {
+                    boolean useVirtualOrderBook = enableVirtualOrderBook.isChecked();
                     boolean useMarketBot = enableMarketBot.isChecked();
-                    int initialPrice = initialPriceTextBox.getInt();
-                    if(useMarketBot) {
-                        MarketFactory.DefaultMarketSetupGeneratorData data = new MarketFactory.DefaultMarketSetupGeneratorData();
-                        data.defaultPrice = initialPrice;
-                        data.updateIntervalMS = getMarketSpeedMS();
-                        data.volatility = (float)volatilitySlider.getSliderValue();
-                        data.rarity = (float)raritySlider.getSliderValue();
-                        data.enableTargetPrice = enableTargetPrice.isChecked();
-                        data.enableVolumeTracking = enableVolumeTracking.isChecked();
-                        data.enableRandomWalk = enableRandomWalk.isChecked();
-                        data.tradingPair = tradingPair;
 
-                        boolean marketOpen = openMarketCheckBox.isChecked();
-                        int candleTimeMinutes = candleTimeTextBoxMinutes.getInt();
+                    ServerVolatilityBot.Settings botSettings = new ServerVolatilityBot.Settings();
+                    VirtualOrderBook.Settings virtualOrderBookSettings = new VirtualOrderBook.Settings();
 
-                        ServerMarketSettingsData marketSettings = new ServerMarketSettingsData(tradingPair, data.generateDefaultMarketSetupData().botSettings,
-                                marketOpen, 0,   candleTimeMinutes);
+                    MarketFactory.DefaultMarketSetupGeneratorData data = new MarketFactory.DefaultMarketSetupGeneratorData();
+                    data.defaultPrice = initialPriceTextBox.getInt();
+                    data.updateIntervalMS = getMarketSpeedMS();
+                    data.volatility = (float)volatilitySlider.getSliderValue();
+                    data.rarity = (float)raritySlider.getSliderValue();
+                    data.enableTargetPrice = enableTargetPrice.isChecked();
+                    data.enableVolumeTracking = enableVolumeTracking.isChecked();
+                    data.enableRandomWalk = enableRandomWalk.isChecked();
+                    data.tradingPair = tradingPair;
 
-                        getSelectedMarket().requestSetMarketSettings(marketSettings, (success2) -> {
-                            if(success2)
-                            {
-                                parent.setCurrentTradingPair(tradingPair);
-                                onClose();
-                            }
-                            // Handle failure to create market
-                            String msg = StockMarketTextMessages.getMarketCreationFailedMessage(tradingPair.getItem().getName(), tradingPair.getCurrency().getName());
-                            minecraft.player.sendSystemMessage(Component.literal(msg));
-                        });
+                    boolean marketOpen = openMarketCheckBox.isChecked();
+                    int candleTimeMinutes = candleTimeTextBoxMinutes.getInt();
+
+
+
+
+                    if(useMarketBot && useVirtualOrderBook) {
+
+
+                        MarketFactory.DefaultMarketSetupData setupData = data.generateDefaultMarketSetupData();
+                        botSettings = setupData.botSettings;
+                        virtualOrderBookSettings = setupData.virtualOrderBookSettings;
                     }
-                    else {
+
+                    marketSettings = new ServerMarketSettingsData(tradingPair, botSettings, virtualOrderBookSettings,
+                            marketOpen, 0,   candleTimeMinutes * 60000L);
 
 
-                        getSelectedMarket().requestSetMarketSettings(new ServerMarketSettingsData(tradingPair, null,
-                                openMarketCheckBox.isChecked(), initialPrice, candleTimeTextBoxMinutes.getInt()), (success2) -> {
-                            if(success2)
-                            {
-                                parent.setCurrentTradingPair(tradingPair);
-                                onClose();
-                            }
-                            // Handle failure to create market
-                            String msg = StockMarketTextMessages.getMarketCreationFailedMessage(tradingPair.getItem().getName(), tradingPair.getCurrency().getName());
-                            minecraft.player.sendSystemMessage(Component.literal(msg));
-                        });
+                    if(!useMarketBot)
+                        marketSettings.botSettingsData = null;
+                    marketSettings.doCreateBotIfNotExists = useMarketBot;
+                    if(!useVirtualOrderBook) {
+                        marketSettings.virtualOrderBookSettingsData = null;
+                        marketSettings.doDestroyVirtualOrderBookIfExists = true;
                     }
+                    marketSettings.doCreateVirtualOrderBookIfNotExists = useVirtualOrderBook;
+
+
+                    getSelectedMarket().requestSetMarketSettings(marketSettings, (success2) -> {
+                        if(success2)
+                        {
+                            parent.setCurrentTradingPair(tradingPair);
+                            parent.updateTradingItems();
+                            onClose();
+                        }
+                        // Handle failure to create market
+                        String msg = StockMarketTextMessages.getMarketCreationFailedMessage(tradingPair.getItem().getName(), tradingPair.getCurrency().getName());
+                        minecraft.player.sendSystemMessage(Component.literal(msg));
+                    });
                 }
             }
             else

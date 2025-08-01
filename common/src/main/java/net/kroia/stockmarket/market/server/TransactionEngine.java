@@ -205,18 +205,18 @@ public class TransactionEngine {
         }
         return fillVolume;
     }
-    public static long ghostFill(TradingPair pair, Order o1, long ghostAmount, int currentPrice)
+    public static long virtualFill(TradingPair pair, Order o1, long virtualAmount, int currentPrice)
     {
-        if(ghostAmount == 0 || o1.getAmount()-o1.getFilledAmount() == 0)
+        if(virtualAmount == 0 || o1.getAmount()-o1.getFilledAmount() == 0)
             return 0;
-        if(ghostAmount > 0 && o1.isBuy() || ghostAmount < 0 && !o1.isBuy())
+        if(virtualAmount > 0 && o1.isBuy() || virtualAmount < 0 && !o1.isBuy())
         {
             // same sign -> both buy or both sell
             return 0;
         }
 
         long fillAmount1 = o1.getPendingAmount();
-        long fillVolume = Math.min(Math.abs(fillAmount1), Math.abs(ghostAmount));
+        long fillVolume = Math.min(Math.abs(fillAmount1), Math.abs(virtualAmount));
         long money = (long)fillVolume * (long)currentPrice;
 
         if(o1.isBot())
@@ -250,13 +250,13 @@ public class TransactionEngine {
             if(moneyToTransfer > 0) {
                 Bank.Status status = moneyBank1.withdrawLockedPrefered(moneyToTransfer);
                 if (status != Bank.Status.SUCCESS) {
-                    BACKEND_INSTANCES.LOGGER.error("Failed to withdraw money for ghost fill: " + o1 + " Status: " + status);
+                    BACKEND_INSTANCES.LOGGER.error("Failed to withdraw money for virtual fill: " + o1 + " Status: " + status);
                     o1.markAsInvalid("");
                     return 0;
                 }
                 status = itemBank1.deposit(fillVolume);
                 if (status != Bank.Status.SUCCESS) {
-                    BACKEND_INSTANCES.LOGGER.error("Failed to deposit item for ghost fill: " + o1 + " Status: " + status);
+                    BACKEND_INSTANCES.LOGGER.error("Failed to deposit item for virtual fill: " + o1 + " Status: " + status);
                     moneyBank1.deposit(moneyToTransfer);
                     o1.markAsInvalid("");
                     return 0;
@@ -270,7 +270,7 @@ public class TransactionEngine {
             Bank.Status status = itemBank1.withdrawLockedPrefered(fillVolume);
             if(status != Bank.Status.SUCCESS)
             {
-                BACKEND_INSTANCES.LOGGER.error("Failed to withdraw item for ghost fill: " + o1 + " Status: " + status);
+                BACKEND_INSTANCES.LOGGER.error("Failed to withdraw item for virtual fill: " + o1 + " Status: " + status);
                 o1.markAsInvalid("");
                 return 0;
             }
@@ -278,7 +278,7 @@ public class TransactionEngine {
             status = moneyBank1.deposit(moneyToTransfer);
             if(status != Bank.Status.SUCCESS)
             {
-                BACKEND_INSTANCES.LOGGER.error("Failed to deposit money for ghost fill: " + o1 + " Status: " + status);
+                BACKEND_INSTANCES.LOGGER.error("Failed to deposit money for virtual fill: " + o1 + " Status: " + status);
                 itemBank1.deposit(fillVolume);
                 itemBank1.lockAmount(fillVolume);
                 o1.markAsInvalid("Would lead to an variable overflow");

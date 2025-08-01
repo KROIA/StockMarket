@@ -6,7 +6,6 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ServerSaveable;
 import net.kroia.modutilities.networking.INetworkPayloadConverter;
 import net.kroia.stockmarket.StockMarketModBackend;
-import net.kroia.stockmarket.market.server.GhostOrderBook;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.minecraft.nbt.CompoundTag;
@@ -31,21 +30,21 @@ public class ServerTradingBot implements ServerSaveable {
         public boolean enabled = true;
         public long updateTimerIntervallMS = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET_BOT.UPDATE_TIMER_INTERVAL_MS.get();
         public int defaultPrice;
-        public float orderBookVolumeScale = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET_BOT.ORDER_BOOK_VOLUME_SCALE.get();
-        public float nearMarketVolumeScale = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET_BOT.NEAR_MARKET_VOLUME_SCALE.get();
-        public float volumeAccumulationRate = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET_BOT.VOLUME_ACCUMULATION_RATE.get();
-        public float volumeFastAccumulationRate = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET_BOT.VOLUME_FAST_ACCUMULATION_RATE.get();
-        public float volumeDecumulationRate = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET_BOT.VOLUME_DECUMULATION_RATE.get();
+        //public float orderBookVolumeScale = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET_BOT.ORDER_BOOK_VOLUME_SCALE.get();
+        //public float nearMarketVolumeScale = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET_BOT.NEAR_MARKET_VOLUME_SCALE.get();
+        //public float volumeAccumulationRate = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET_BOT.VOLUME_ACCUMULATION_RATE.get();
+        //public float volumeFastAccumulationRate = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET_BOT.VOLUME_FAST_ACCUMULATION_RATE.get();
+        //public float volumeDecumulationRate = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET_BOT.VOLUME_DECUMULATION_RATE.get();
 
         @Override
         public boolean save(CompoundTag tag) {
             tag.putBoolean("enabled", enabled);
             tag.putInt("defaultPrice", defaultPrice);
-            tag.putFloat("orderBookVolumeScale", orderBookVolumeScale);
-            tag.putFloat("nearMarketVolumeScale", nearMarketVolumeScale);
-            tag.putFloat("volumeAccumulationRate", volumeAccumulationRate);
-            tag.putFloat("volumeFastAccumulationRate", volumeFastAccumulationRate);
-            tag.putFloat("volumeDecumulationRate", volumeDecumulationRate);
+            //tag.putFloat("orderBookVolumeScale", orderBookVolumeScale);
+            //tag.putFloat("nearMarketVolumeScale", nearMarketVolumeScale);
+            //tag.putFloat("volumeAccumulationRate", volumeAccumulationRate);
+            //tag.putFloat("volumeFastAccumulationRate", volumeFastAccumulationRate);
+            //tag.putFloat("volumeDecumulationRate", volumeDecumulationRate);
             tag.putLong("updateTimerIntervallMS", updateTimerIntervallMS);
             return false;
         }
@@ -56,21 +55,21 @@ public class ServerTradingBot implements ServerSaveable {
                 return false;
             if(!tag.contains("enabled") ||
                     !tag.contains("defaultPrice") ||
-                    !tag.contains("orderBookVolumeScale") ||
-                    !tag.contains("nearMarketVolumeScale") ||
-                    !tag.contains("volumeAccumulationRate") ||
-                    !tag.contains("volumeFastAccumulationRate") ||
-                    !tag.contains("volumeDecumulationRate") ||
+                    //!tag.contains("orderBookVolumeScale") ||
+                    //!tag.contains("nearMarketVolumeScale") ||
+                    //!tag.contains("volumeAccumulationRate") ||
+                    //!tag.contains("volumeFastAccumulationRate") ||
+                    //!tag.contains("volumeDecumulationRate") ||
                     !tag.contains("updateTimerIntervallMS"))
                 return false;
 
             enabled = tag.getBoolean("enabled");
             defaultPrice = tag.getInt("defaultPrice");
-            orderBookVolumeScale = tag.getFloat("orderBookVolumeScale");
-            nearMarketVolumeScale = tag.getFloat("nearMarketVolumeScale");
-            volumeAccumulationRate = tag.getFloat("volumeAccumulationRate");
-            volumeFastAccumulationRate = tag.getFloat("volumeFastAccumulationRate");
-            volumeDecumulationRate = tag.getFloat("volumeDecumulationRate");
+            //orderBookVolumeScale = tag.getFloat("orderBookVolumeScale");
+            //nearMarketVolumeScale = tag.getFloat("nearMarketVolumeScale");
+            //volumeAccumulationRate = tag.getFloat("volumeAccumulationRate");
+            //volumeFastAccumulationRate = tag.getFloat("volumeFastAccumulationRate");
+            //volumeDecumulationRate = tag.getFloat("volumeDecumulationRate");
             updateTimerIntervallMS = tag.getLong("updateTimerIntervallMS");
             return true;
         }
@@ -79,11 +78,11 @@ public class ServerTradingBot implements ServerSaveable {
         {
             this.enabled = settings.enabled;
             this.defaultPrice = settings.defaultPrice;
-            this.orderBookVolumeScale = settings.orderBookVolumeScale;
-            this.nearMarketVolumeScale = settings.nearMarketVolumeScale;
-            this.volumeAccumulationRate = settings.volumeAccumulationRate;
-            this.volumeFastAccumulationRate = settings.volumeFastAccumulationRate;
-            this.volumeDecumulationRate = settings.volumeDecumulationRate;
+            //this.orderBookVolumeScale = settings.orderBookVolumeScale;
+            //this.nearMarketVolumeScale = settings.nearMarketVolumeScale;
+            //this.volumeAccumulationRate = settings.volumeAccumulationRate;
+            //this.volumeFastAccumulationRate = settings.volumeFastAccumulationRate;
+            //this.volumeDecumulationRate = settings.volumeDecumulationRate;
             this.updateTimerIntervallMS = settings.updateTimerIntervallMS;
         }
 
@@ -92,22 +91,22 @@ public class ServerTradingBot implements ServerSaveable {
         public void encode(FriendlyByteBuf buf) {
             buf.writeBoolean(this.enabled);
             buf.writeInt(this.defaultPrice);
-            buf.writeFloat(this.orderBookVolumeScale);
-            buf.writeFloat(this.nearMarketVolumeScale);
-            buf.writeFloat(this.volumeAccumulationRate);
-            buf.writeFloat(this.volumeFastAccumulationRate);
-            buf.writeFloat(this.volumeDecumulationRate);
+            //buf.writeFloat(this.orderBookVolumeScale);
+            //buf.writeFloat(this.nearMarketVolumeScale);
+            //buf.writeFloat(this.volumeAccumulationRate);
+            //buf.writeFloat(this.volumeFastAccumulationRate);
+            //buf.writeFloat(this.volumeDecumulationRate);
             buf.writeLong(this.updateTimerIntervallMS);
         }
         @Override
         public void decode(FriendlyByteBuf buf) {
             this.enabled = buf.readBoolean();
             this.defaultPrice = buf.readInt();
-            this.orderBookVolumeScale = buf.readFloat();
-            this.nearMarketVolumeScale = buf.readFloat();
-            this.volumeAccumulationRate = buf.readFloat();
-            this.volumeFastAccumulationRate = buf.readFloat();
-            this.volumeDecumulationRate = buf.readFloat();
+            //this.orderBookVolumeScale = buf.readFloat();
+            //this.nearMarketVolumeScale = buf.readFloat();
+            //this.volumeAccumulationRate = buf.readFloat();
+            //this.volumeFastAccumulationRate = buf.readFloat();
+            //this.volumeDecumulationRate = buf.readFloat();
             this.updateTimerIntervallMS = buf.readLong();
         }
 
@@ -116,11 +115,11 @@ public class ServerTradingBot implements ServerSaveable {
             JsonObject jsonObject = new JsonObject();
             jsonObject.addProperty("enabled", enabled);
             jsonObject.addProperty("defaultPrice", defaultPrice);
-            jsonObject.addProperty("orderBookVolumeScale", orderBookVolumeScale);
-            jsonObject.addProperty("nearMarketVolumeScale", nearMarketVolumeScale);
-            jsonObject.addProperty("volumeAccumulationRate", volumeAccumulationRate);
-            jsonObject.addProperty("volumeFastAccumulationRate", volumeFastAccumulationRate);
-            jsonObject.addProperty("volumeDecumulationRate", volumeDecumulationRate);
+            //jsonObject.addProperty("orderBookVolumeScale", orderBookVolumeScale);
+            //jsonObject.addProperty("nearMarketVolumeScale", nearMarketVolumeScale);
+            //jsonObject.addProperty("volumeAccumulationRate", volumeAccumulationRate);
+            //jsonObject.addProperty("volumeFastAccumulationRate", volumeFastAccumulationRate);
+            //jsonObject.addProperty("volumeDecumulationRate", volumeDecumulationRate);
             jsonObject.addProperty("updateTimerIntervallMS", updateTimerIntervallMS);
             return jsonObject;
         }
@@ -142,7 +141,7 @@ public class ServerTradingBot implements ServerSaveable {
                 }
             }
 
-            element = jsonObject.get("orderBookVolumeScale");
+            /*element = jsonObject.get("orderBookVolumeScale");
             if(element != null && element.isJsonPrimitive()) {
                 this.orderBookVolumeScale = element.getAsFloat();
                 if(this.orderBookVolumeScale < 0) {
@@ -189,7 +188,7 @@ public class ServerTradingBot implements ServerSaveable {
                 if(this.updateTimerIntervallMS < 0) {
                     this.updateTimerIntervallMS = 0; // Ensure update timer interval is non-negative
                 }
-            }
+            }*/
             return true;
         }
 
@@ -224,28 +223,28 @@ public class ServerTradingBot implements ServerSaveable {
         this.settings = settings;
         if(settings == null)
             return;
-        GhostOrderBook orderBook = serverMarket.getOrderBook().getGhostOrderBook();
-        if(orderBook != null)
-        {
-            orderBook.setVolumeScale(settings.orderBookVolumeScale);
-            orderBook.setNearMarketVolumeScale(settings.nearMarketVolumeScale);
-            orderBook.setVolumeAccumulationRate(settings.volumeAccumulationRate);
-            orderBook.setVolumeFastAccumulationRate(settings.volumeFastAccumulationRate);
-            orderBook.setVolumeDecumulationRate(settings.volumeDecumulationRate);
-        }
+        //VirtualOrderBook orderBook = serverMarket.getOrderBook().getGhostOrderBook();
+        //if(orderBook != null)
+        //{
+        //    orderBook.setVolumeScale(settings.orderBookVolumeScale);
+        //    orderBook.setNearMarketVolumeScale(settings.nearMarketVolumeScale);
+        //    orderBook.setVolumeAccumulationRate(settings.volumeAccumulationRate);
+        //    orderBook.setVolumeFastAccumulationRate(settings.volumeFastAccumulationRate);
+        //    orderBook.setVolumeDecumulationRate(settings.volumeDecumulationRate);
+        //}
     }
     public Settings getSettings()
     {
-        if(serverMarket.getMatchingEngine() != null && settings != null) {
-            GhostOrderBook orderBook = serverMarket.getOrderBook().getGhostOrderBook();
-            if (orderBook != null) {
-                settings.orderBookVolumeScale = orderBook.getVolumeScale();
-                settings.nearMarketVolumeScale = orderBook.getNearMarketVolumeScale();
-                settings.volumeAccumulationRate = orderBook.getVolumeAccumulationRate();
-                settings.volumeFastAccumulationRate = orderBook.getVolumeFastAccumulationRate();
-                settings.volumeDecumulationRate = orderBook.getVolumeDecumulationRate();
-            }
-        }
+        //if(serverMarket.getMatchingEngine() != null && settings != null) {
+        //    VirtualOrderBook orderBook = serverMarket.getOrderBook().getGhostOrderBook();
+        //    if (orderBook != null) {
+        //        settings.orderBookVolumeScale = orderBook.getVolumeScale();
+        //        settings.nearMarketVolumeScale = orderBook.getNearMarketVolumeScale();
+        //        settings.volumeAccumulationRate = orderBook.getVolumeAccumulationRate();
+        //        settings.volumeFastAccumulationRate = orderBook.getVolumeFastAccumulationRate();
+        //        settings.volumeDecumulationRate = orderBook.getVolumeDecumulationRate();
+        //    }
+        //}
         return this.settings;
     }
 

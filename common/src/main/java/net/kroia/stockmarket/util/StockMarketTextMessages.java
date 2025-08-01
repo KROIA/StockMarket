@@ -663,13 +663,13 @@ public class StockMarketTextMessages {
         return msg;
     }
 
-    private static final Component CANDLESTICKCHART_ORDERBOOKVOLUME = Component.translatable("gui."+StockMarketMod.MOD_ID+".candlestick_chart.tooltip_orderbookvolume");
+    private static final Component CANDLESTICKCHART_ORDERBOOKVOLUME = Component.translatable("gui."+StockMarketMod.MOD_ID+".trading_chart_widget.tooltip_orderbookvolume");
     public static String getCandlestickChartTooltipOrderBookVolume() {
         String msg = CANDLESTICKCHART_ORDERBOOKVOLUME.getString();
         return msg;
     }
 
-    private static final Component CANDLESTICKCHART_TRADEVOLUME = Component.translatable("gui."+StockMarketMod.MOD_ID+".candlestick_chart.tooltip_tradevolume");
+    private static final Component CANDLESTICKCHART_TRADEVOLUME = Component.translatable("gui."+StockMarketMod.MOD_ID+".trading_chart_widget.tooltip_tradevolume");
     public static String getCandlestickChartTooltipTradeVolume() {
         String msg = CANDLESTICKCHART_TRADEVOLUME.getString();
         return msg;
@@ -686,6 +686,15 @@ public class StockMarketTextMessages {
 
     public static String getLimitOrderInChartDisplayMoveButton() {
         String msg = LIMIT_ORDER_IN_CHART_DISPLAY_MOVE_BUTTON.getString();
+        return msg;
+    }
+
+    private static final Component LIMIT_ORDER_IN_CHART_DISPLAY_MOVE_BUTTON_MOVING = Component.translatable("gui."+StockMarketMod.MOD_ID+".limit_order_in_chart_display.move_button_moving");
+
+    public static String getLimitOrderInChartDisplayMoveButtonMoving(int price, String currencyName) {
+        String msg = LIMIT_ORDER_IN_CHART_DISPLAY_MOVE_BUTTON_MOVING.getString();
+        msg = replaceVariable(msg, Variables.PRICE, String.valueOf(price));
+        msg = replaceVariable(msg, Variables.CURRENCY, currencyName);
         return msg;
     }
 

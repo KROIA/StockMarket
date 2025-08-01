@@ -151,11 +151,11 @@ public class BotSettingsWidget extends StockMarketGuiElement {
         enabled.getSecond().setChecked(settings.enabled);
         updateInterval.getSecond().setSliderValue((double)(settings.updateTimerIntervallMS-100)/9900.0);
         defaultPrice.getSecond().setText(Integer.toString(settings.defaultPrice));
-        orderBookVolumeScale.getSecond().setText(Float.toString(settings.orderBookVolumeScale));
-        nearMarketVolumeScale.getSecond().setText(Float.toString(settings.nearMarketVolumeScale));
-        volumeAccumulationRate.getSecond().setText(Float.toString(settings.volumeAccumulationRate));
-        volumeFastAccumulationRate.getSecond().setText(Float.toString(settings.volumeFastAccumulationRate));
-        volumeDecumulationRate.getSecond().setText(Float.toString(settings.volumeDecumulationRate));
+        //orderBookVolumeScale.getSecond().setText(Float.toString(settings.orderBookVolumeScale));
+        //nearMarketVolumeScale.getSecond().setText(Float.toString(settings.nearMarketVolumeScale));
+        //volumeAccumulationRate.getSecond().setText(Float.toString(settings.volumeAccumulationRate));
+        //volumeFastAccumulationRate.getSecond().setText(Float.toString(settings.volumeFastAccumulationRate));
+        //volumeDecumulationRate.getSecond().setText(Float.toString(settings.volumeDecumulationRate));
 
         volumeScale.getSecond().setText(Float.toString(settings.volumeScale));
         enableTargetPrice.getSecond().setChecked(settings.enableTargetPrice);
@@ -252,11 +252,11 @@ public class BotSettingsWidget extends StockMarketGuiElement {
         settings.enabled = enabled.getSecond().isChecked();
         settings.updateTimerIntervallMS = getValidated((long)((updateInterval.getSecond().getSliderValue())*9900)+100, 100, 10000);
         settings.defaultPrice = getValidated((int)defaultPrice.getSecond().getDouble(), 0, Integer.MAX_VALUE);
-        settings.orderBookVolumeScale = getValidated((float) orderBookVolumeScale.getSecond().getDouble(), 0.0f, Float.MAX_VALUE);
-        settings.nearMarketVolumeScale = getValidated((float) nearMarketVolumeScale.getSecond().getDouble(), 0.0f, Float.MAX_VALUE);
-        settings.volumeAccumulationRate = getValidated((float)volumeAccumulationRate.getSecond().getDouble(), 0.0f, Float.MAX_VALUE);
-        settings.volumeFastAccumulationRate = getValidated((float)volumeFastAccumulationRate.getSecond().getDouble(), 0.0f, Float.MAX_VALUE);
-        settings.volumeDecumulationRate = getValidated((float)volumeDecumulationRate.getSecond().getDouble(), 0.0f, Float.MAX_VALUE);
+        //settings.orderBookVolumeScale = getValidated((float) orderBookVolumeScale.getSecond().getDouble(), 0.0f, Float.MAX_VALUE);
+        //settings.nearMarketVolumeScale = getValidated((float) nearMarketVolumeScale.getSecond().getDouble(), 0.0f, Float.MAX_VALUE);
+        //settings.volumeAccumulationRate = getValidated((float)volumeAccumulationRate.getSecond().getDouble(), 0.0f, Float.MAX_VALUE);
+        //settings.volumeFastAccumulationRate = getValidated((float)volumeFastAccumulationRate.getSecond().getDouble(), 0.0f, Float.MAX_VALUE);
+        //settings.volumeDecumulationRate = getValidated((float)volumeDecumulationRate.getSecond().getDouble(), 0.0f, Float.MAX_VALUE);
 
         settings.volumeScale = getValidated((float)volumeScale.getSecond().getDouble(), 0.0f, Float.MAX_VALUE);
         settings.enableTargetPrice = enableTargetPrice.getSecond().isChecked();

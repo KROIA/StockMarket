@@ -1,26 +1,7 @@
 package net.kroia.stockmarket.screen.uiElements;
 
-import net.kroia.modutilities.TimerMillis;
-import net.kroia.modutilities.gui.geometry.Rectangle;
-import net.kroia.stockmarket.StockMarketModBackend;
-import net.kroia.stockmarket.market.clientdata.OrderReadData;
-import net.kroia.stockmarket.market.clientdata.OrderReadListData;
-import net.kroia.stockmarket.market.server.order.Order;
-import net.kroia.stockmarket.screen.custom.TradeScreen;
-import net.kroia.stockmarket.util.PriceHistory;
-import net.kroia.stockmarket.util.StockMarketGuiElement;
-import net.kroia.stockmarket.util.StockMarketTextMessages;
-
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.function.BiConsumer;
-
-public class CandleStickChart extends StockMarketGuiElement {
-    protected static StockMarketModBackend.Instances BACKEND_INSTANCES;
-    public static void setBackend(StockMarketModBackend.Instances backend) {
-        BACKEND_INSTANCES = backend;
-    }
+/*
+public class CandleStickChartOld extends StockMarketGuiElement {
 
     private static int map(int value, int start1, int stop1, int start2, int stop2)
     {
@@ -41,6 +22,7 @@ public class CandleStickChart extends StockMarketGuiElement {
     int chartWidth = 0;
     int maxLabelWidth = 0;
     private double scrollValue = 1;
+    private final OrderbookVolumeChartWidget orderbookVolumeChart;
     //int labelXPos = 5;
 
     private final Rectangle volumeDisplayRect = new Rectangle(0, 0, 0, 0);
@@ -48,18 +30,24 @@ public class CandleStickChart extends StockMarketGuiElement {
     private final TimerMillis tooltipTimer = new TimerMillis(false);
 
 
-    private HashMap<Long,LimitOrderInChartDisplay> limitOrderDisplays = new HashMap<>();
+    private HashMap<Long, LimitOrderInChartDisplay> limitOrderDisplays = new HashMap<>();
     private BiConsumer<OrderReadData, Integer> priceChangeCallback;
 
     private static final int PADDING = 10;
 
-    public CandleStickChart(BiConsumer<OrderReadData, Integer> priceChangeCallback, int x, int y, int width, int height) {
+    public CandleStickChartOld(BiConsumer<OrderReadData, Integer> priceChangeCallback, int x, int y, int width, int height) {
         super(x, y, width, height);
         this.priceChangeCallback = priceChangeCallback;
+
+        this.orderbookVolumeChart = new OrderbookVolumeChartWidget(this::getChartYPos, colorUp, colorDown);
+        this.orderbookVolumeChart.setTooltipMousePositionAlignment(GuiElement.Alignment.TOP);
+        this.orderbookVolumeChart.setHoverTooltipSupplier(StockMarketTextMessages::getCandlestickChartTooltipOrderBookVolume);
+
+
+        addChild(orderbookVolumeChart);
     }
-    public CandleStickChart(BiConsumer<OrderReadData, Integer> priceChangeCallback) {
-        super(0,0,0,1);
-        this.priceChangeCallback = priceChangeCallback;
+    public CandleStickChartOld(BiConsumer<OrderReadData, Integer> priceChangeCallback) {
+        this(priceChangeCallback,0,0,0,1);
     }
 
     public void setMinMaxPrice(int minPrice, int maxPrice)
@@ -193,6 +181,10 @@ public class CandleStickChart extends StockMarketGuiElement {
             display.setWidth(getWidth()/2-5);
             display.setPosition(getWidth()-display.getWidth(), getChartYPos(display.getOrder().limitPrice));
         }
+
+
+        //orderbookVolumeChart.setBounds(candleStickChart.getRight(), padding, width / 8, candleStickChart.getHeight());
+        //tradePanel.setBounds(orderbookVolumeChart.getRight()+spacing, padding, width/4, height);
     }
 
 
@@ -328,3 +320,4 @@ public class CandleStickChart extends StockMarketGuiElement {
         return Math.round(mapF(y, getHeight()-PADDING-getHeight()/10.f, PADDING, chartViewMinPrice, chartViewMaxPrice));
     }
 }
+*/

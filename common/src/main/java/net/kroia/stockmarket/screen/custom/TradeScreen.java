@@ -6,7 +6,6 @@ import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.TimerMillis;
 import net.kroia.modutilities.gui.Gui;
-import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
 import net.kroia.stockmarket.market.TradingPair;
@@ -14,13 +13,11 @@ import net.kroia.stockmarket.market.clientdata.OrderReadData;
 import net.kroia.stockmarket.market.clientdata.TradingViewData;
 import net.kroia.stockmarket.networking.packet.client_sender.update.entity.UpdateStockMarketBlockEntityPacket;
 import net.kroia.stockmarket.networking.packet.server_sender.update.entity.SyncStockMarketBlockEntityPacket;
-import net.kroia.stockmarket.screen.uiElements.CandleStickChart;
 import net.kroia.stockmarket.screen.uiElements.OrderListView;
-import net.kroia.stockmarket.screen.uiElements.OrderbookVolumeChart;
 import net.kroia.stockmarket.screen.uiElements.TradePanel;
+import net.kroia.stockmarket.screen.uiElements.chart.TradingChartWidget;
 import net.kroia.stockmarket.util.PriceHistory;
 import net.kroia.stockmarket.util.StockMarketGuiScreen;
-import net.kroia.stockmarket.util.StockMarketTextMessages;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
@@ -56,8 +53,9 @@ public class TradeScreen extends StockMarketGuiScreen {
 
 
     // Gui Elements
-    private final CandleStickChart candleStickChart;
-    private final OrderbookVolumeChart orderbookVolumeChart;
+    //private final CandleStickChartOld candleStickChart;
+    //private final OrderbookVolumeChartWidget orderbookVolumeChart;
+    private final TradingChartWidget tradingChart;
 
     private final OrderListView activeOrderListView;
 
@@ -84,10 +82,11 @@ public class TradeScreen extends StockMarketGuiScreen {
         this.tradingPair = currentPair;
 
         // Create Gui Elements
-        this.candleStickChart = new CandleStickChart(this::onOrderChange);
-        this.orderbookVolumeChart = new OrderbookVolumeChart();
-        this.orderbookVolumeChart.setTooltipMousePositionAlignment(GuiElement.Alignment.TOP);
-        this.orderbookVolumeChart.setHoverTooltipSupplier(StockMarketTextMessages::getCandlestickChartTooltipOrderBookVolume);
+        //this.candleStickChart = new CandleStickChartOld(this::onOrderChange);
+        tradingChart = new TradingChartWidget(this::onOrderChange);
+        //this.orderbookVolumeChart = new OrderbookVolumeChartWidget();
+        //this.orderbookVolumeChart.setTooltipMousePositionAlignment(GuiElement.Alignment.TOP);
+        //this.orderbookVolumeChart.setHoverTooltipSupplier(StockMarketTextMessages::getCandlestickChartTooltipOrderBookVolume);
         this.activeOrderListView = new OrderListView(this::cancelOrder);
         this.tradePanel = new TradePanel(this::onSelectItemButtonPressed,
                 this::onBuyMarketButtonPressed,
@@ -100,8 +99,9 @@ public class TradeScreen extends StockMarketGuiScreen {
         tradePanel.setMarketOpen(marketWasOpen);
 
         // Add Gui Elements
-        addElement(candleStickChart);
-        addElement(orderbookVolumeChart);
+        //addElement(candleStickChart);
+        //addElement(orderbookVolumeChart);
+        addElement(tradingChart);
         addElement(activeOrderListView);
         addElement(tradePanel);
 
@@ -130,17 +130,21 @@ public class TradeScreen extends StockMarketGuiScreen {
     protected void updateLayout(Gui gui) {
         tradePanel.setTradingPair(tradingPair);
 
-        int padding = 10;
-        int spacing = 4;
+        int padding = 5;
+        int spacing = 5;
         int width = getWidth()-2*padding;
         int height = getHeight()-2*padding;
 
         int x = padding;
-        candleStickChart.setBounds(x, padding, (width * 5) / 8-spacing/2, height/2);
-        orderbookVolumeChart.setBounds(candleStickChart.getRight(), padding, width / 8, candleStickChart.getHeight());
-        tradePanel.setBounds(orderbookVolumeChart.getRight()+spacing, padding, width/4, height);
 
-        activeOrderListView.setBounds(candleStickChart.getLeft(), candleStickChart.getBottom()+spacing, tradePanel.getLeft()-candleStickChart.getLeft()-spacing, height-candleStickChart.getHeight()-spacing);
+        tradingChart.setBounds(x, padding, (width*2/3)-spacing, height / 2);
+        tradePanel.setBounds(tradingChart.getRight()+spacing, padding, width/3, height);
+
+        //candleStickChart.setBounds(x, padding, (width * 5) / 8-spacing/2, height/2);
+        //orderbookVolumeChart.setBounds(candleStickChart.getRight(), padding, width / 8, candleStickChart.getHeight());
+        //tradePanel.setBounds(orderbookVolumeChart.getRight()+spacing, padding, width/4, height);
+//
+        activeOrderListView.setBounds(tradingChart.getLeft(), tradingChart.getBottom()+spacing, tradingChart.getWidth(), height - tradingChart.getHeight() - spacing);
     }
 
     @Override
@@ -183,7 +187,7 @@ public class TradeScreen extends StockMarketGuiScreen {
 
         if(instance.updateTimer.check() && instance.getSelectedMarket() != null)
         {
-            instance.getSelectedMarket().requestTradingViewData(instance.candleStickChart.getMaxCandleCount(), 0,0,500 ,instance::updateView);
+            instance.getSelectedMarket().requestTradingViewData(instance.tradingChart.getMaxCandleCount(), 0,0,500 ,instance::updateView);
         }
     }
 
@@ -192,17 +196,18 @@ public class TradeScreen extends StockMarketGuiScreen {
         if(data == null)
             return;
 
-        candleStickChart.setMinMaxPrice(data.orderBookVolumeData.minPrice, data.orderBookVolumeData.maxPrice);
+        tradingChart.updateView(data);
+        //candleStickChart.setMinMaxPrice(data.orderBookVolumeData.minPrice, data.orderBookVolumeData.maxPrice);
         PriceHistory history = data.priceHistoryData.toHistory();
-        candleStickChart.setPriceHistory(history);
-        orderbookVolumeChart.setOrderBookVolume(data.orderBookVolumeData);
+        //candleStickChart.setPriceHistory(history);
+        //orderbookVolumeChart.setOrderBookVolume(data.orderBookVolumeData);
         tradePanel.setCurrentItemBalance(data.itemBankData.balance);
         tradePanel.setCurrentMoneyBalance(data.currencyBankData.balance);
 
 
         tradePanel.setCurrentPrice(history.getCurrentPrice());
         activeOrderListView.updateActiveOrders(data.openOrdersData);
-        candleStickChart.updateOrderDisplay(data.openOrdersData);
+        //candleStickChart.updateOrderDisplay(data.openOrdersData);
 
         if(marketWasOpen != data.marketIsOpen)
         {
@@ -284,7 +289,7 @@ public class TradeScreen extends StockMarketGuiScreen {
 
     private void onSelectItemButtonPressed() {
 
-        TradingPairSelectionScreen screen = new TradingPairSelectionScreen(this, this::onItemSelected);
+        MarketSelectionScreen screen = new MarketSelectionScreen(this, this::onItemSelected);
         BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.requestTradingPairs(
                 screen::setAvailableTradingPairs);
         Minecraft.getInstance().setScreen(screen);

@@ -4,8 +4,8 @@ package net.kroia.stockmarket.screen.custom;
 public class BotSettingsScreen extends StockMarketGuiScreen {
     private class BotTargetPriceDisplay extends GuiElement{
 
-        private CandleStickChart chart;
-        public BotTargetPriceDisplay(CandleStickChart cahrt) {
+        private CandleStickChartOld chart;
+        public BotTargetPriceDisplay(CandleStickChartOld cahrt) {
             super();
             this.chart = cahrt;
             enableBackground = false;
@@ -44,9 +44,9 @@ public class BotSettingsScreen extends StockMarketGuiScreen {
     private static long lastTickCount = 0;
 
     // Gui Elements
-    private final CandleStickChart candleStickChart;
+    private final CandleStickChartOld candleStickChart;
     private final BotTargetPriceDisplay botTargetPriceDisplay;
-    private final OrderbookVolumeChart orderbookVolumeChart;
+    private final OrderbookVolumeChartWidget orderbookVolumeChart;
     private final Button selectItemButton;
     private final Button saveButton;
     private final CheckBox useBotCheckBox;
@@ -74,10 +74,10 @@ public class BotSettingsScreen extends StockMarketGuiScreen {
         //RequestTradeItemsPacket.generateRequest();
 
         // Create Gui Elements
-        this.candleStickChart = new CandleStickChart();
+        this.candleStickChart = new CandleStickChartOld();
         this.botTargetPriceDisplay = new BotTargetPriceDisplay(candleStickChart);
         candleStickChart.addChild(botTargetPriceDisplay);
-        this.orderbookVolumeChart = new OrderbookVolumeChart();
+        this.orderbookVolumeChart = new OrderbookVolumeChartWidget();
         selectItemButton = new Button(CHANGE_ITEM_BUTTON.getString(), this::onSelectItemButtonPressed);
         saveButton = new Button(SAVE_BUTTON.getString(), this::onSaveSettings);
         normalButtonColor = saveButton.getOutlineColor();
