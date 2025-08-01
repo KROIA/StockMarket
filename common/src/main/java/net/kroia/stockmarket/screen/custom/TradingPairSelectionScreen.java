@@ -5,12 +5,13 @@ import net.kroia.modutilities.gui.GuiScreen;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.screen.uiElements.TradingPairSelectionView;
+import net.kroia.stockmarket.util.StockMarketGuiScreen;
 import net.minecraft.network.chat.Component;
 
 import java.util.List;
 import java.util.function.Consumer;
 
-public class TradingPairSelectionScreen extends GuiScreen {
+public class TradingPairSelectionScreen extends StockMarketGuiScreen {
 
     private static final String PREFIX = "gui.";
     private static final String NAME = "trading_pair_selection_screen";

@@ -114,9 +114,6 @@
   "gui.stockmarket.bot_settings_screen.settings_volume_steering_factor": "Volumen Anstrenbungsfaktor",
   "gui.stockmarket.bot_settings_screen.settings_enable_random_walk": "Zufällige Kursschwankung aktivieren",
   "gui.stockmarket.bot_settings_screen.settings_volatility": "Volatilität [%]",
-  "gui.stockmarket.bot_settings_setup_screen_enabled_features.enable_target_price": "Ziel Preis aktivieren\nDer Bot wird versuchen den berechneten Zielpreis zu erreichen.\n ",
-  "gui.stockmarket.bot_settings_setup_screen_enabled_features.enable_volume_tracking": "Volumen tracking aktivieren\nDer Bot zählt alle Käufe/Verkäufe.\nDieser Wert wird für die Berechnung des Zielpreises verwendet.",
-  "gui.stockmarket.bot_settings_setup_screen_enabled_features.enable_random_walk": "Zufällige Kursschwankung aktivieren\nDer Bot wird den Zielpreis zufällig ändern,\nohne weit vom Nominalwert abzuweichen.",
 
   "gui.stockmarket.management_screen.title": "Stock Market Management",
   "gui.stockmarket.management_screen.trading_items": "Handels Items",
@@ -125,6 +122,9 @@
   "gui.stockmarket.management_screen.ask_remove_title": "Handels Item entfernen",
   "gui.stockmarket.management_screen.ask_remove_message": "Bist du sicher, dass du das item vom Stockmarket entfernen möchtest?\nAlle offenen Bestellungen werden storniert.",
   "gui.stockmarket.management_screen.bot_settings": "Bot Einstellungen",
+  "gui.stockmarket.management_screen.tooltip_new_trading_pair": "Neues Handels Paar erstellen",
+  "gui.stockmarket.management_screen.tooltip_remove_selected_trading_pair": "Ausgewähltes Handels Paar löschen",
+  "gui.stockmarket.management_screen.tooltip_selected_trading_pair": "Aktuelles Handels Paar: ",
 
   "gui.stockmarket.bot_settings_setup_screen.cancel": "Abbrechen",
   "gui.stockmarket.bot_settings_setup_screen.back": "Zurück",
@@ -161,7 +161,12 @@
 
   "gui.stockmarket.trading_pair_selection_view.clear_item": "Item abwählen",
   "gui.stockmarket.trading_pair_selection_view.clear_currency": "Währung abwählen",
-  "gui.stockmarket.trading_pair_selection_view.select_pair": "Auswählen"
+  "gui.stockmarket.trading_pair_selection_view.select_pair": "Auswählen",
 
-
+  "gui.stockmarket.trading_pair_creation_screen.title": "Trading Pair Creation",
+  "gui.stockmarket.trading_pair_creation_screen.initial_price_label": "Trading Pair Creation",
+  "gui.stockmarket.trading_pair_creation_screen.create_market_button": "Create Market",
+  "gui.stockmarket.trading_pair_creation_screen.enable_target_price": "Ziel Preis aktivieren\nDer Bot wird versuchen den berechneten Zielpreis zu erreichen.\n ",
+  "gui.stockmarket.trading_pair_creation_screen.enable_volume_tracking": "Volumen tracking aktivieren\nDer Bot zählt alle Käufe/Verkäufe.\nDieser Wert wird für die Berechnung des Zielpreises verwendet.",
+  "gui.stockmarket.trading_pair_creation_screen.enable_random_walk": "Zufällige Kursschwankung aktivieren\nDer Bot wird den Zielpreis zufällig ändern,\nohne weit vom Nominalwert abzuweichen."
 }

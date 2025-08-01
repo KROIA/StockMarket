@@ -1,7 +1,6 @@
 package net.kroia.stockmarket.screen.uiElements;
 
 import net.kroia.modutilities.TimerMillis;
-import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.gui.geometry.Rectangle;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.clientdata.OrderReadData;
@@ -9,6 +8,7 @@ import net.kroia.stockmarket.market.clientdata.OrderReadListData;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
 import net.kroia.stockmarket.util.PriceHistory;
+import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.kroia.stockmarket.util.StockMarketTextMessages;
 
 import java.util.ArrayList;
@@ -16,7 +16,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.function.BiConsumer;
 
-public class CandleStickChart extends GuiElement {
+public class CandleStickChart extends StockMarketGuiElement {
     protected static StockMarketModBackend.Instances BACKEND_INSTANCES;
     public static void setBackend(StockMarketModBackend.Instances backend) {
         BACKEND_INSTANCES = backend;

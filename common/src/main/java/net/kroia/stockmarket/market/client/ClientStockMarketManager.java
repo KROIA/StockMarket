@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.market.client;
 
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.clientdata.TradingPairData;
@@ -38,6 +39,8 @@ public class ClientStockMarketManager {
 
     public ClientMarket getClientMarket(TradingPair pair)
     {
+        if(pair == null)
+            return null;
         for(ClientMarket market : clientMarkets)
         {
             if(market.getTradingPair().equals(pair))
@@ -91,8 +94,17 @@ public class ClientStockMarketManager {
             callback.accept(receivedPairs);
         });
     }
-
-
+    public void requestIsTradingPairAllowed(TradingPair pair, Consumer<Boolean> callback )
+    {
+        StockMarketNetworking.IS_TRADING_PAIR_ALLOWED_REQUEST.sendRequestToServer(pair, callback);
+    }
+    public void requestRecommendedPrice(TradingPair pair, Consumer<Integer> callback )
+    {
+        StockMarketNetworking.GET_RECOMMENDED_PRICE_REQUEST.sendRequestToServer(pair, callback);
+    }
+    public void requestPotentialTradeItems(String searchText, Consumer<List<ItemID>> callback) {
+        StockMarketNetworking.POTENTIAL_TRADING_ITEMS_REQUEST.sendRequestToServer(searchText, callback);
+    }
 
 
 

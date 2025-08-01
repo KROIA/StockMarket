@@ -2,29 +2,21 @@ package net.kroia.stockmarket.screen.custom;
 
 
 import net.kroia.banksystem.screen.uiElements.AskPopupScreen;
-import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.Gui;
-import net.kroia.modutilities.gui.GuiScreen;
 import net.kroia.modutilities.gui.elements.Button;
+import net.kroia.modutilities.gui.elements.CheckBox;
+import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.TradingPair;
-import net.kroia.stockmarket.market.client.ClientMarket;
 import net.kroia.stockmarket.market.clientdata.ServerMarketSettingsData;
-import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import net.kroia.stockmarket.screen.uiElements.TradingPairSelectionView;
 import net.kroia.stockmarket.screen.uiElements.TradingPairView;
+import net.kroia.stockmarket.util.StockMarketGuiScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 
-import java.util.List;
-
-public class StockMarketManagementScreen extends GuiScreen {
-    private static StockMarketModBackend.Instances BACKEND_INSTANCES;
-
+public class StockMarketManagementScreen extends StockMarketGuiScreen {
     private static final String NAME = "management_screen";
     public static final String PREFIX = "gui."+ StockMarketMod.MOD_ID+"."+NAME+".";
 
@@ -37,23 +29,30 @@ public class StockMarketManagementScreen extends GuiScreen {
     public static final Component ASK_TITLE = Component.translatable(PREFIX+ "ask_remove_title");
     public static final Component ASK_MSG = Component.translatable(PREFIX+ "ask_remove_message");
     public static final Component BOT_SETTINGS = Component.translatable(PREFIX+ "bot_settings");
+    public static final Component TOOLTIP_NEW_TRADING_PAIR = Component.translatable(PREFIX+ "tooltip_new_trading_pair");
+    public static final Component TOOLTIP_REMOVE_SELECTED_TRADING_PAIR = Component.translatable(PREFIX+ "tooltip_remove_selected_trading_pair");
+    public static final Component TOOLTIP_SELECTED_TRADING_PAIR = Component.translatable(PREFIX+ "tooltip_selected_trading_pair");
 
 
 
     private TradingPair tradingPair;
+    private ServerMarketSettingsData currentMarketSettingsData;
 
-    private final Button newTradingItemButton;
+    private final Button newTradingPairButton;
     private final Button removeTradingItemButton;
     private final TradingPairSelectionView tradableItemsView;
     private final TradingPairView currentTradingItemView;
 
+
+
     private final Button botSettingsButton;
+    private final CheckBox marketOpenCheckBox;
+
 
     private final Screen parentScreen;
+    private TradingPairCreationScreen tradingPairCreationScreen;
 
-    public static void setBackend(StockMarketModBackend.Instances backend) {
-        BACKEND_INSTANCES = backend;
-    }
+
     protected StockMarketManagementScreen(Screen parent) {
         super(TITLE);
         this.parentScreen = parent;
@@ -64,16 +63,21 @@ public class StockMarketManagementScreen extends GuiScreen {
         {
             itemStacks.add(itemID.getStack());
         }*/
-        tradableItemsView = new TradingPairSelectionView(this::setCurrentTradingItemID);
+        tradableItemsView = new TradingPairSelectionView(this::setCurrentTradingPair);
 
         updateTradingItems();
         
         
 
-        newTradingItemButton = new Button(NEW_TRADING_ITEM_BUTTON.getString());
-        newTradingItemButton.setOnFallingEdge(() -> {
+        newTradingPairButton = new Button(NEW_TRADING_ITEM_BUTTON.getString());
+        newTradingPairButton.setOnFallingEdge(() -> {
 
-            BACKEND_INSTANCES.LOGGER.warn("NOT_IMPLEMENTED: CreativeModeItemSelectionScreen.openScreen(this::onNewTradingItemSelected, () -> minecraft.setScreen(this));");
+
+            tradingPairCreationScreen = new TradingPairCreationScreen(this);
+            minecraft.setScreen(tradingPairCreationScreen);
+
+
+            /*BACKEND_INSTANCES.LOGGER.warn("NOT_IMPLEMENTED: CreativeModeItemSelectionScreen.openScreen(this::onNewTradingItemSelected, () -> minecraft.setScreen(this));");
 
             TradingPair tradingPair = new TradingPair(new ItemID(Items.DIAMOND.getDefaultInstance()), new ItemID(Items.IRON_INGOT.getDefaultInstance()));
             BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.requestCreateMarket(tradingPair, (success) -> {
@@ -94,7 +98,7 @@ public class StockMarketManagementScreen extends GuiScreen {
                             100 // Notify subscriber interval in ms
                     );
                     settingsData.doCreateBotIfNotExists = true; // Create bot if it doesn't exist
-                    getMarket().requestSetMarketSettings(settingsData, (success2) -> {
+                    getSelectedMarket().requestSetMarketSettings(settingsData, (success2) -> {
                         if(success2) {
                             BACKEND_INSTANCES.LOGGER.info("Trading pair created successfully: " + tradingPair);
                         } else {
@@ -105,23 +109,20 @@ public class StockMarketManagementScreen extends GuiScreen {
                 } else {
                     BACKEND_INSTANCES.LOGGER.warn("Failed to create trading pair: " + tradingPair);
                 }
-            });
-
-           /* Minecraft.getInstance().setScreen(new CreativeModeItemSelectionScreen(this::onNewTradingItemSelected,()->
-            {
-                minecraft.setScreen(this);
-            }));*/
+            });*/
         });
+        newTradingPairButton.setTooltipMousePositionAlignment(GuiElement.Alignment.TOP_RIGHT);
+        newTradingPairButton.setHoverTooltipSupplier(TOOLTIP_NEW_TRADING_PAIR::getString);
         removeTradingItemButton = new Button(REMOVE_TRADING_ITEM_BUTTON.getString(), () -> {
             if(tradingPair != null) {
                 AskPopupScreen popup = new AskPopupScreen(this, () -> 
                 {
                     BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.requestRemoveMarket(tradingPair, (success)->{
-                        setCurrentTradingItemID(null);
+                        setCurrentTradingPair(null);
                     });
                     //BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.requestRemoveTradingItem(tradingPair);
 
-                }, () -> {}, ASK_TITLE.getString() + " "+tradingPair + "?", ASK_MSG.getString());
+                }, () -> {}, ASK_TITLE.getString() + " "+tradingPair.getShortDescription() + "?", ASK_MSG.getString());
                 popup.setSize(400,100);
                 popup.setColors(0xFFe8711c, 0xFFe04c12, 0xFFf22718, 0xFF70e815);
                 minecraft.setScreen(popup);
@@ -130,16 +131,22 @@ public class StockMarketManagementScreen extends GuiScreen {
         removeTradingItemButton.setIdleColor(0xFFe8711c);
         removeTradingItemButton.setHoverColor(0xFFe04c12);
         removeTradingItemButton.setPressedColor(0xFFe04c12);
+        removeTradingItemButton.setTooltipMousePositionAlignment(GuiElement.Alignment.TOP_RIGHT);
+        removeTradingItemButton.setHoverTooltipSupplier(TOOLTIP_REMOVE_SELECTED_TRADING_PAIR::getString);
 
         currentTradingItemView = new TradingPairView();
+        currentTradingItemView.setTooltipMousePositionAlignment(GuiElement.Alignment.TOP_RIGHT);
+        currentTradingItemView.setHoverTooltipSupplier(()->{
+            return TOOLTIP_SELECTED_TRADING_PAIR.getString() + (tradingPair != null ? tradingPair.getShortDescription() : "None");
+        });
 
         botSettingsButton = new Button(BOT_SETTINGS.getString(), () ->
         {
             BACKEND_INSTANCES.LOGGER.warn("NOT_IMPLEMENTED: BotSettingsScreen.openScreen(this, tradingPair));");
             //BotSettingsScreen.openScreen(this);
             //BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.requestBotSettings(tradingPair); // Trigger request for bot settings
-            if(getMarket() != null)
-                getMarket().requestBotSettingsData((botSettingsData -> {
+            if(getSelectedMarket() != null)
+                getSelectedMarket().requestBotSettingsData((botSettingsData -> {
                     if(botSettingsData != null) {
                         //BotSettingsScreen.openScreen(this, botSettingsData);
                     } else {
@@ -148,14 +155,18 @@ public class StockMarketManagementScreen extends GuiScreen {
                 }));
         });
 
+        marketOpenCheckBox = new CheckBox("Market Open",this::onMarketOpenCheckBoxChanged);
+        marketOpenCheckBox.setTextAlignment(GuiElement.Alignment.CENTER);
+
 
         addElement(tradableItemsView);
-        addElement(newTradingItemButton);
+        addElement(newTradingPairButton);
         addElement(removeTradingItemButton);
         addElement(currentTradingItemView);
         addElement(botSettingsButton);
+        addElement(marketOpenCheckBox);
 
-        setCurrentTradingItemID(null);
+        setCurrentTradingPair(null);
     }
 
     @Override
@@ -167,11 +178,14 @@ public class StockMarketManagementScreen extends GuiScreen {
 
 
 
-        tradableItemsView.setBounds(padding, padding, width/3, height);
-        newTradingItemButton.setBounds(tradableItemsView.getRight()+spacing, padding, 150, 20);
-        removeTradingItemButton.setBounds(newTradingItemButton.getLeft(), newTradingItemButton.getBottom()+spacing, newTradingItemButton.getWidth(), newTradingItemButton.getHeight());
-        currentTradingItemView.setBounds(newTradingItemButton.getRight()+spacing, padding, 60, 20);
-        botSettingsButton.setBounds(removeTradingItemButton.getLeft(), removeTradingItemButton.getBottom()+spacing, removeTradingItemButton.getWidth(), removeTradingItemButton.getHeight());
+        tradableItemsView.setBounds(padding, padding, (width*2)/3, height);
+        newTradingPairButton.setBounds(tradableItemsView.getRight()+spacing, padding, 20, 20);
+        removeTradingItemButton.setBounds(newTradingPairButton.getRight()+spacing, newTradingPairButton.getTop(), width/9-spacing, newTradingPairButton.getHeight());
+        currentTradingItemView.setBounds(removeTradingItemButton.getRight()+spacing, removeTradingItemButton.getTop(), width - removeTradingItemButton.getRight(), removeTradingItemButton.getHeight());
+
+        botSettingsButton.setBounds(newTradingPairButton.getLeft(), newTradingPairButton.getBottom()+spacing, width/3-spacing, newTradingPairButton.getHeight());
+        marketOpenCheckBox.setBounds(botSettingsButton.getLeft(), botSettingsButton.getBottom()+spacing, botSettingsButton.getWidth(), botSettingsButton.getHeight());
+
     }
 
 
@@ -215,37 +229,63 @@ public class StockMarketManagementScreen extends GuiScreen {
     }
 
 
-    private void setCurrentTradingItemID(TradingPair tradingPair) {
+    public void setCurrentTradingPair(TradingPair tradingPair) {
         if(tradingPair == null) {
             this.tradingPair = null;
+            selectMarket(tradingPair);
+            currentMarketSettingsData = null;
             currentTradingItemView.setTradingPair(null);
             botSettingsButton.setEnabled(false);
+            marketOpenCheckBox.setEnabled(false);
+            setCurrentTradingPairMarketSettings(null);
         }
         else
         {
             this.tradingPair = tradingPair;
+            selectMarket(tradingPair);
             currentTradingItemView.setTradingPair(this.tradingPair);
             ///BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.requestBotSettings(this.tradingPair);
             botSettingsButton.setEnabled(true);
+            marketOpenCheckBox.setEnabled(true);
+            marketOpenCheckBox.setChecked(false);
+            if(getSelectedMarket() != null)
+            {
+                getSelectedMarket().requestGetMarketSettings(this::setCurrentTradingPairMarketSettings);
+            }
         }
     }
 
-    private void onNewTradingItemSelected(ItemStack itemStack) {
-        //ItemID itemID = new ItemID(itemStack);
-        //BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.requestAllowNewTradingItem(itemID,0);
-        //setCurrentTradingItemID(itemStack);
+    private void setCurrentTradingPairMarketSettings(ServerMarketSettingsData settingsData) {
+        currentMarketSettingsData = settingsData;
+        if(settingsData == null)
+        {
+
+        }
+        else
+        {
+            marketOpenCheckBox.setChecked(settingsData.marketOpen);
+        }
     }
 
+    private void onMarketOpenCheckBoxChanged(Boolean isOpen)
+    {
+        if(tradingPair == null || currentMarketSettingsData == null)
+            return;
+        if(currentMarketSettingsData.marketOpen != isOpen) {
+            currentMarketSettingsData.marketOpen = isOpen;
+            getSelectedMarket().requestSetMarketSettings(currentMarketSettingsData, (success) -> {
+                if (success) {
+                    BACKEND_INSTANCES.LOGGER.debug("Market open status updated for trading pair: " + tradingPair.getShortDescription() + " to " + isOpen);
+                } else {
+                    BACKEND_INSTANCES.LOGGER.warn("Failed to update market open status for trading pair: " + tradingPair.getShortDescription());
+                }
+            });
+        }
+    }
     @Override
     public void tick() {
-       //if(BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.hasSyncTradeItemsChanged())
-       //{
-       //    updateTradingItems();
-       //}
+
     }
 
-    private ClientMarket getMarket()
-    {
-        return BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getClientMarket(tradingPair);
-    }
+
 }

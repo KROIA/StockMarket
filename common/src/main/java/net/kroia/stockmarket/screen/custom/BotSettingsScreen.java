@@ -1,8 +1,7 @@
 package net.kroia.stockmarket.screen.custom;
 
 /*
-public class BotSettingsScreen extends GuiScreen {
-    private static StockMarketModBackend.Instances BACKEND_INSTANCES;
+public class BotSettingsScreen extends StockMarketGuiScreen {
     private class BotTargetPriceDisplay extends GuiElement{
 
         private CandleStickChart chart;
@@ -65,9 +64,6 @@ public class BotSettingsScreen extends GuiScreen {
 
     private final Screen parentScreen;
 
-    public static void setBackend(StockMarketModBackend.Instances backend) {
-        BACKEND_INSTANCES = backend;
-    }
     public BotSettingsScreen(Screen parent) {
         super(TITLE);
         parentScreen = parent;

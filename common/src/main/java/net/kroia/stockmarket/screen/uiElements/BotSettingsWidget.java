@@ -5,11 +5,12 @@ import net.kroia.modutilities.gui.elements.*;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
+import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
 
-public class BotSettingsWidget extends GuiElement {
+public class BotSettingsWidget extends StockMarketGuiElement {
 
     private static final String NAME = "bot_settings_screen";
     public static final String PREFIX = "gui."+ StockMarketMod.MOD_ID+"."+NAME+".";
@@ -84,13 +85,13 @@ public class BotSettingsWidget extends GuiElement {
         volumeDecumulationRate = new Pair<>(new Label(SETTINGS_VOLUME_DECUMULATION_RATE.getString()), new TextBox());
 
         volumeScale = new Pair<>(new Label(SETTINGS_VOLUME_SCALE.getString()), new TextBox());
-        enableTargetPrice = new Pair<>(new Label(SETTINGS_ENABLE_TARGET_PRICE.getString()), new CheckBox("", onSettingsChanged));
+        enableTargetPrice = new Pair<>(new Label(SETTINGS_ENABLE_TARGET_PRICE.getString()), new CheckBox("", (b)->{if(onSettingsChanged!=null)onSettingsChanged.run();}));
         targetPriceSteeringFactor = new Pair<>(new Label(SETTINGS_TARGET_PRICE_STEERING_FACTOR.getString()), new TextBox());
 
-        enableVolumeTracking = new Pair<>(new Label(SETTINGS_ENABLE_VOLUME_TRACKING.getString()), new CheckBox("", onSettingsChanged));
+        enableVolumeTracking = new Pair<>(new Label(SETTINGS_ENABLE_VOLUME_TRACKING.getString()), new CheckBox("", (b)->{if(onSettingsChanged!=null)onSettingsChanged.run();}));
         volumeSteeringFactor = new Pair<>(new Label(SETTINGS_VOLUME_STEERING_FACTOR.getString()), new TextBox());
 
-        enableRandomWalk = new Pair<>(new Label(SETTINGS_ENABLE_RANDOM_WALK.getString()), new CheckBox("", onSettingsChanged));
+        enableRandomWalk = new Pair<>(new Label(SETTINGS_ENABLE_RANDOM_WALK.getString()), new CheckBox("", (b)->{if(onSettingsChanged!=null)onSettingsChanged.run();}));
         volatility = new Pair<>(new Label(SETTINGS_VOLATILITY.getString()), new HorizontalSlider());
         volatility.getSecond().setTooltipSupplier(()->String.format("%.2f", volatility.getSecond().getSliderValue()*100)+"%");
 
@@ -211,9 +212,9 @@ public class BotSettingsWidget extends GuiElement {
         setHeight(y);
     }
 
-    private void onEnableCheckBoxChanged()
+    private void onEnableCheckBoxChanged(Boolean isSet)
     {
-        settings.enabled = enabled.getSecond().isChecked();
+        settings.enabled = isSet;
         onSettingsChanged.run();
     }
 

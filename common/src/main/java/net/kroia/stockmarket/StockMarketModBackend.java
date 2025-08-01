@@ -14,7 +14,6 @@ import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
 import net.kroia.stockmarket.item.StockMarketCreativeModeTab;
 import net.kroia.stockmarket.item.StockMarketItems;
 import net.kroia.stockmarket.market.TradingPair;
-import net.kroia.stockmarket.market.client.ClientMarket;
 import net.kroia.stockmarket.market.client.ClientStockMarketManager;
 import net.kroia.stockmarket.market.server.*;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
@@ -22,10 +21,6 @@ import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.market.server.order.OrderFactory;
 import net.kroia.stockmarket.menu.StockMarketMenus;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
-import net.kroia.stockmarket.screen.custom.StockMarketManagementScreen;
-import net.kroia.stockmarket.screen.custom.TradeScreen;
-import net.kroia.stockmarket.screen.custom.botsetup.BotSetupScreen;
-import net.kroia.stockmarket.screen.uiElements.*;
 import net.kroia.stockmarket.util.*;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -96,16 +91,8 @@ public class StockMarketModBackend implements StockMarketAPI {
         StockMarketMenus.setupScreens();
         INSTANCES.CLIENT_STOCKMARKET_MANAGER = new ClientStockMarketManager(INSTANCES);
 
-        BotSetupScreen.setBackend(INSTANCES);
-        //BotSettingsScreen.setBackend(INSTANCES);
-        StockMarketManagementScreen.setBackend(INSTANCES);
-        TradeScreen.setBackend(INSTANCES);
-        CandleStickChart.setBackend(INSTANCES);
-        LimitOrderInChartDisplay.setBackend(INSTANCES);
-        OrderListView.setBackend(INSTANCES);
-        TradePanel.setBackend(INSTANCES);
-        OrderView.setBackend(INSTANCES);
-        ClientMarket.setBackend(INSTANCES);
+        StockMarketGuiElement.setBackend(INSTANCES);
+        StockMarketGuiScreen.setBackend(INSTANCES);
 
         StockMarketMenus.setupScreens();
     }

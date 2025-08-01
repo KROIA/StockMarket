@@ -1,9 +1,9 @@
 package net.kroia.stockmarket.screen.uiElements.botsetup;
 
-import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
+import net.kroia.stockmarket.util.StockMarketGuiElement;
 
-public abstract class BotSetupGuiElement extends GuiElement {
+public abstract class BotSetupGuiElement extends StockMarketGuiElement {
 
     protected final ServerVolatilityBot.Settings settings;
 

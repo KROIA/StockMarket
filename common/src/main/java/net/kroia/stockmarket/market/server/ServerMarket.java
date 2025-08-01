@@ -39,7 +39,7 @@ public class ServerMarket implements ServerSaveable {
     private boolean marketOpen = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.MARKET_OPEN_AT_CREATION.get();
     private long itemImbalance;
     private long shiftPriceCandleIntervalMS = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.SHIFT_PRICE_CANDLE_INTERVAL_MS.get();
-    private long notifySubscriberIntervalMS = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.NOTIFY_SUBSCRIBER_INTERVAL_MS.get();
+    //private long notifySubscriberIntervalMS = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.NOTIFY_SUBSCRIBER_INTERVAL_MS.get();
 
 
     private final ArrayList<ServerPlayer> subscribers = new ArrayList<>();
@@ -59,7 +59,7 @@ public class ServerMarket implements ServerSaveable {
         this.volatilityBot = null;
 
         shiftPriceTimer.start(shiftPriceCandleIntervalMS);
-        notifySubscriberTimer.start(notifySubscriberIntervalMS);
+        //notifySubscriberTimer.start(notifySubscriberIntervalMS);
     }
     public ServerMarket()
     {
@@ -168,9 +168,14 @@ public class ServerMarket implements ServerSaveable {
     }
     public ServerMarketSettingsData getMarketSettingsData()
     {
-        return new ServerMarketSettingsData(tradingPair, (ServerVolatilityBot.Settings)volatilityBot.getSettings(),
+        ServerVolatilityBot.Settings botSettings = null;
+        if(volatilityBot != null)
+        {
+            botSettings = (ServerVolatilityBot.Settings)volatilityBot.getSettings();
+        }
+        return new ServerMarketSettingsData(tradingPair, botSettings,
                                             marketOpen, itemImbalance,
-                                            shiftPriceCandleIntervalMS, notifySubscriberIntervalMS);
+                                            shiftPriceCandleIntervalMS/*, notifySubscriberIntervalMS*/);
     }
     public boolean setMarketSettingsData(@Nullable ServerMarketSettingsData settingsData)
     {
@@ -199,7 +204,7 @@ public class ServerMarket implements ServerSaveable {
         marketOpen = settingsData.marketOpen;
         //itemImbalance = settingsData.itemImbalance;
         setShiftPriceCandleIntervalMS(settingsData.shiftPriceCandleIntervalMS);
-        setNotifySubscriberIntervalMS(settingsData.notifySubscriberIntervalMS);
+        //setNotifySubscriberIntervalMS(settingsData.notifySubscriberIntervalMS);
 
 
         return success;
@@ -233,13 +238,13 @@ public class ServerMarket implements ServerSaveable {
     public long getShiftPriceCandleIntervalMS() {
         return shiftPriceCandleIntervalMS;
     }
-    public void setNotifySubscriberIntervalMS(long notifySubscriberIntervalMS) {
+    /*public void setNotifySubscriberIntervalMS(long notifySubscriberIntervalMS) {
         this.notifySubscriberIntervalMS = notifySubscriberIntervalMS;
         notifySubscriberTimer.start(notifySubscriberIntervalMS);
     }
     public long getNotifySubscriberIntervalMS() {
         return notifySubscriberIntervalMS;
-    }
+    }*/
 
 
 
@@ -540,7 +545,7 @@ public class ServerMarket implements ServerSaveable {
         tag.putBoolean("marketOpen", marketOpen);
         tag.putLong("itemImbalance", itemImbalance);
         tag.putLong("shiftPriceCandleIntervalMS", shiftPriceCandleIntervalMS);
-        tag.putLong("notifySubscriberIntervalMS", notifySubscriberIntervalMS);
+        //tag.putLong("notifySubscriberIntervalMS", notifySubscriberIntervalMS);
 
         return true;
     }
@@ -576,16 +581,16 @@ public class ServerMarket implements ServerSaveable {
             itemImbalance = tag.getLong("itemImbalance");
         if(tag.contains("shiftPriceCandleIntervalMS"))
             shiftPriceCandleIntervalMS = tag.getLong("shiftPriceCandleIntervalMS");
-        if(tag.contains("notifySubscriberIntervalMS"))
-            notifySubscriberIntervalMS = tag.getLong("notifySubscriberIntervalMS");
+        //if(tag.contains("notifySubscriberIntervalMS"))
+        //    notifySubscriberIntervalMS = tag.getLong("notifySubscriberIntervalMS");
 
         if(shiftPriceCandleIntervalMS < 0)
             shiftPriceCandleIntervalMS = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.SHIFT_PRICE_CANDLE_INTERVAL_MS.get();
-        if(notifySubscriberIntervalMS < 0)
-            notifySubscriberIntervalMS = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.NOTIFY_SUBSCRIBER_INTERVAL_MS.get();
+        //if(notifySubscriberIntervalMS < 0)
+        //    notifySubscriberIntervalMS = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.NOTIFY_SUBSCRIBER_INTERVAL_MS.get();
 
         setShiftPriceCandleIntervalMS(shiftPriceCandleIntervalMS);
-        setNotifySubscriberIntervalMS(notifySubscriberIntervalMS);
+        //setNotifySubscriberIntervalMS(notifySubscriberIntervalMS);
         orderBook.getGhostOrderBook().setCurrentPrice(historicalMarketData.getCurrentPrice());
         return success;
     }

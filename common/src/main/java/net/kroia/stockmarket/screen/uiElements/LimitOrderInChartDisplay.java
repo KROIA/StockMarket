@@ -2,16 +2,16 @@ package net.kroia.stockmarket.screen.uiElements;
 
 import net.kroia.modutilities.ColorUtilities;
 import net.kroia.modutilities.gui.elements.Button;
-import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.clientdata.OrderReadData;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
+import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.kroia.stockmarket.util.StockMarketTextMessages;
 
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
-public class LimitOrderInChartDisplay extends GuiElement {
+public class LimitOrderInChartDisplay extends StockMarketGuiElement {
 
     protected static StockMarketModBackend.Instances BACKEND_INSTANCES;
     public static void setBackend(StockMarketModBackend.Instances backend) {

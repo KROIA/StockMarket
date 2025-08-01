@@ -689,6 +689,131 @@ public class StockMarketTextMessages {
         return msg;
     }
 
+
+    private static final Component MARKET_CREATION_FAILED = Component.translatable("gui."+StockMarketMod.MOD_ID+".trading_pair_creation_screen.create_market_failed");
+    public static String getMarketCreationFailedMessage(String itemName, String currencyName) {
+        String msg = MARKET_CREATION_FAILED.getString();
+        msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
+        msg = replaceVariable(msg, Variables.CURRENCY, currencyName);
+        return msg;
+    }
+
+    private static final Component TOOLTIP_TRADING_PAIR_CREATION_INITIAL_PRICE = Component.translatable("gui."+StockMarketMod.MOD_ID+".trading_pair_creation_screen.tooltip_initial_price");
+    public static String getTradingPairCreationScreenInitialPriceTooltip(String itemName, String currencyName, int initialPrice) {
+        String msg = TOOLTIP_TRADING_PAIR_CREATION_INITIAL_PRICE.getString();
+        msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
+        msg = replaceVariable(msg, Variables.PRICE, String.valueOf(initialPrice));
+        msg = replaceVariable(msg, Variables.CURRENCY, currencyName);
+        return msg;
+    }
+
+
+    private static final Component TOOLTIP_TRADING_PAIR_CREATION_CANDLETIME = Component.translatable("gui."+StockMarketMod.MOD_ID+".trading_pair_creation_screen.tooltip_candle_time");
+    public static String getTradingPairCreationScreenCandleTimeTooltip(int minutes) {
+        String msg = TOOLTIP_TRADING_PAIR_CREATION_CANDLETIME.getString();
+        msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(minutes));
+        return msg;
+    }
+
+
+    private static final Component TOOLTIP_TRADING_PAIR_CREATION_VOLATILITY_BASE = Component.translatable("gui."+StockMarketMod.MOD_ID+".trading_pair_creation_screen.tooltip_volatility_base");
+    private static final Component TOOLTIP_TRADING_PAIR_CREATION_VOLATILITY_1 = Component.translatable("gui."+StockMarketMod.MOD_ID+".trading_pair_creation_screen.tooltip_volatility_1");
+    private static final Component TOOLTIP_TRADING_PAIR_CREATION_VOLATILITY_2 = Component.translatable("gui."+StockMarketMod.MOD_ID+".trading_pair_creation_screen.tooltip_volatility_2");
+    private static final Component TOOLTIP_TRADING_PAIR_CREATION_VOLATILITY_3 = Component.translatable("gui."+StockMarketMod.MOD_ID+".trading_pair_creation_screen.tooltip_volatility_3");
+    private static final Component TOOLTIP_TRADING_PAIR_CREATION_VOLATILITY_4 = Component.translatable("gui."+StockMarketMod.MOD_ID+".trading_pair_creation_screen.tooltip_volatility_4");
+    private static final Component TOOLTIP_TRADING_PAIR_CREATION_VOLATILITY_5 = Component.translatable("gui."+StockMarketMod.MOD_ID+".trading_pair_creation_screen.tooltip_volatility_5");
+    public static String getTradingPairCreationScreenVolatilityTooltip(double volatility) {
+        String msg = TOOLTIP_TRADING_PAIR_CREATION_VOLATILITY_BASE.getString();
+
+        if(volatility < 0.2) {
+            return replaceVariable(msg, Variables.VALUE, TOOLTIP_TRADING_PAIR_CREATION_VOLATILITY_1.getString());
+        }
+        else if(volatility < 0.4) {
+            return replaceVariable(msg, Variables.VALUE, TOOLTIP_TRADING_PAIR_CREATION_VOLATILITY_2.getString());
+        }
+        else if(volatility < 0.6) {
+            return replaceVariable(msg, Variables.VALUE, TOOLTIP_TRADING_PAIR_CREATION_VOLATILITY_3.getString());
+        }
+        else if(volatility < 0.8) {
+            return replaceVariable(msg, Variables.VALUE, TOOLTIP_TRADING_PAIR_CREATION_VOLATILITY_4.getString());
+        }
+        else {
+            return replaceVariable(msg, Variables.VALUE, TOOLTIP_TRADING_PAIR_CREATION_VOLATILITY_5.getString());
+        }
+    }
+
+
+
+
+
+
+
+    private static final Component TOOLTIP_TRADING_PAIR_CREATION_RARITY_BASE = Component.translatable("gui."+StockMarketMod.MOD_ID+".trading_pair_creation_screen.tooltip_rarity_base");
+    private static final Component TOOLTIP_TRADING_PAIR_CREATION_RARITY_1 = Component.translatable("gui."+StockMarketMod.MOD_ID+".trading_pair_creation_screen.tooltip_rarity_1");
+    private static final Component TOOLTIP_TRADING_PAIR_CREATION_RARITY_2 = Component.translatable("gui."+StockMarketMod.MOD_ID+".trading_pair_creation_screen.tooltip_rarity_2");
+    private static final Component TOOLTIP_TRADING_PAIR_CREATION_RARITY_3 = Component.translatable("gui."+StockMarketMod.MOD_ID+".trading_pair_creation_screen.tooltip_rarity_3");
+    private static final Component TOOLTIP_TRADING_PAIR_CREATION_RARITY_4 = Component.translatable("gui."+StockMarketMod.MOD_ID+".trading_pair_creation_screen.tooltip_rarity_4");
+    private static final Component TOOLTIP_TRADING_PAIR_CREATION_RARITY_5 = Component.translatable("gui."+StockMarketMod.MOD_ID+".trading_pair_creation_screen.tooltip_rarity_5");
+    public static String getTradingPairCreationScreenRarityTooltip(double rarity) {
+        String msg = TOOLTIP_TRADING_PAIR_CREATION_RARITY_BASE.getString();
+
+        if(rarity < 0.2) {
+            return replaceVariable(msg, Variables.VALUE, TOOLTIP_TRADING_PAIR_CREATION_RARITY_1.getString());
+        }
+        else if(rarity < 0.4) {
+            return replaceVariable(msg, Variables.VALUE, TOOLTIP_TRADING_PAIR_CREATION_RARITY_2.getString());
+        }
+        else if(rarity < 0.6) {
+            return replaceVariable(msg, Variables.VALUE, TOOLTIP_TRADING_PAIR_CREATION_RARITY_3.getString());
+        }
+        else if(rarity < 0.8) {
+            return replaceVariable(msg, Variables.VALUE, TOOLTIP_TRADING_PAIR_CREATION_RARITY_4.getString());
+        }
+        else {
+            return replaceVariable(msg, Variables.VALUE, TOOLTIP_TRADING_PAIR_CREATION_RARITY_5.getString());
+        }
+    }
+
+
+
+
+
+    private static final Component TOOLTIP_TRADING_PAIR_CREATION_MARKETSPEED_BASE = Component.translatable("gui."+StockMarketMod.MOD_ID+".trading_pair_creation_screen.tooltip_marketspeed_base");
+    private static final Component TOOLTIP_TRADING_PAIR_CREATION_MARKETSPEED_1 = Component.translatable("gui."+StockMarketMod.MOD_ID+".trading_pair_creation_screen.tooltip_marketspeed_1");
+    private static final Component TOOLTIP_TRADING_PAIR_CREATION_MARKETSPEED_2 = Component.translatable("gui."+StockMarketMod.MOD_ID+".trading_pair_creation_screen.tooltip_marketspeed_2");
+    private static final Component TOOLTIP_TRADING_PAIR_CREATION_MARKETSPEED_3 = Component.translatable("gui."+StockMarketMod.MOD_ID+".trading_pair_creation_screen.tooltip_marketspeed_3");
+    private static final Component TOOLTIP_TRADING_PAIR_CREATION_MARKETSPEED_4 = Component.translatable("gui."+StockMarketMod.MOD_ID+".trading_pair_creation_screen.tooltip_marketspeed_4");
+    private static final Component TOOLTIP_TRADING_PAIR_CREATION_MARKETSPEED_5 = Component.translatable("gui."+StockMarketMod.MOD_ID+".trading_pair_creation_screen.tooltip_marketspeed_5");
+    public static String getTradingPairCreationScreenMarketSpeedTooltip(double normalizedSpeed, long millis) {
+        String msg = TOOLTIP_TRADING_PAIR_CREATION_MARKETSPEED_BASE.getString();
+        msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(millis));
+
+        if(normalizedSpeed < 0.2) {
+            return replaceVariable(msg, Variables.VALUE, TOOLTIP_TRADING_PAIR_CREATION_MARKETSPEED_1.getString());
+        }
+        else if(normalizedSpeed < 0.4) {
+            return replaceVariable(msg, Variables.VALUE, TOOLTIP_TRADING_PAIR_CREATION_MARKETSPEED_2.getString());
+        }
+        else if(normalizedSpeed < 0.6) {
+            return replaceVariable(msg, Variables.VALUE, TOOLTIP_TRADING_PAIR_CREATION_MARKETSPEED_3.getString());
+        }
+        else if(normalizedSpeed < 0.8) {
+            return replaceVariable(msg, Variables.VALUE, TOOLTIP_TRADING_PAIR_CREATION_MARKETSPEED_4.getString());
+        }
+        else {
+            return replaceVariable(msg, Variables.VALUE, TOOLTIP_TRADING_PAIR_CREATION_MARKETSPEED_5.getString());
+        }
+    }
+
+    /*private static final Component TOOLTIP_TRADING_PAIR_CREATION_VOLATILITY = Component.translatable("gui."+StockMarketMod.MOD_ID+".trading_pair_creation_screen.tooltip_volatility");
+    public static String getTradingPairCreationScreenVolatilityTooltip(int minutes) {
+        String msg = TOOLTIP_TRADING_PAIR_CREATION_VOLATILITY.getString();
+        msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(minutes));
+        return msg;
+    }*/
+
+
+
     //--------------------------------------------------------------------------------------------------------
     // Helper methods
     //--------------------------------------------------------------------------------------------------------

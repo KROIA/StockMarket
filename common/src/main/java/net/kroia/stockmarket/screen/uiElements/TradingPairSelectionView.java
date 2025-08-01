@@ -2,12 +2,12 @@ package net.kroia.stockmarket.screen.uiElements;
 
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.elements.*;
-import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.gui.geometry.Point;
 import net.kroia.modutilities.gui.layout.Layout;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.TradingPair;
+import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 
@@ -17,7 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
-public class TradingPairSelectionView extends GuiElement {
+public class TradingPairSelectionView extends StockMarketGuiElement {
 
     public static final Component CLEAR_ITEM = Component.translatable("gui."+ StockMarketMod.MOD_ID + ".trading_pair_selection_view.clear_item");
     public static final Component CLEAR_CURRENCY = Component.translatable("gui."+ StockMarketMod.MOD_ID + ".trading_pair_selection_view.clear_currency");
@@ -96,6 +96,16 @@ public class TradingPairSelectionView extends GuiElement {
         int column1Width = (width * column1WidthRatio) / sumOfRatios;
         int column2Width = (width * column2WidthRatio) / sumOfRatios;
         int column3Width = (width * column3WidthRatio) / sumOfRatios;
+        if(column3Width < 70)
+        {
+            column3Width = 70;
+            // Adjust the other columns to maintain the ratio
+            sumOfRatios = column1WidthRatio + column2WidthRatio;
+            column1Width = ((width-column3Width) * column1WidthRatio) / sumOfRatios;
+            column2Width = ((width-column3Width) * column2WidthRatio) / sumOfRatios;
+        }
+
+
 
         Point pos = new Point(padding, padding);
 

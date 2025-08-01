@@ -1,19 +1,17 @@
 package net.kroia.stockmarket.screen.custom.botsetup;
 
 import net.kroia.modutilities.gui.Gui;
-import net.kroia.modutilities.gui.GuiScreen;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.server.MarketFactory;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import net.kroia.stockmarket.screen.uiElements.botsetup.*;
+import net.kroia.stockmarket.util.StockMarketGuiScreen;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
 
-public class BotSetupScreen extends GuiScreen {
-    private static StockMarketModBackend.Instances BACKEND_INSTANCES;
+public class BotSetupScreen extends StockMarketGuiScreen {
     private static final String NAME = "bot_settings_setup_screen";
     public static final String PREFIX = "gui."+ StockMarketMod.MOD_ID+"."+NAME+".";
 
@@ -39,10 +37,6 @@ public class BotSetupScreen extends GuiScreen {
     private final BotSetup_volatility volatilityPage;
     private final BotSetup_marketSpeed marketSpeedPage;
     private final BotSetup_enabledFeatures enabledFeaturesPage;
-
-    public static void setBackend(StockMarketModBackend.Instances backend) {
-        BACKEND_INSTANCES = backend;
-    }
 
     public BotSetupScreen(Runnable onApply, Runnable onCancel, ServerVolatilityBot.Settings settings) {
         super(TITLE);

@@ -41,7 +41,7 @@ public class TradingPairView extends Button {
         this.setLayout(layout);*/
 
         setTradingPair(tradingPair);
-        setSize(100, 20); // Default size, can be adjusted
+        setSize(60, 20); // Default size, can be adjusted
     }
 
 

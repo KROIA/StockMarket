@@ -12,7 +12,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.item.Items;
 
-import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public class TradingPair implements ServerSaveable, INetworkPayloadConverter {
@@ -91,14 +91,14 @@ public class TradingPair implements ServerSaveable, INetworkPayloadConverter {
     public void setInvalid() {
         this.isValid = false;
     }
-    public void checkValidity(List<ItemID> blacklistedItems)
+    public void checkValidity(Map<ItemID, Boolean> blacklistedItems)
     {
         if(item == null || currency == null || item.isAir() || currency.isAir()) {
             isValid = false;
             return;
         }
 
-        if(blacklistedItems != null && (blacklistedItems.contains(item) || blacklistedItems.contains(currency))) {
+        if(blacklistedItems != null && (blacklistedItems.containsKey(item)) || blacklistedItems.containsKey(currency)) {
             isValid = false;
             return;
         }

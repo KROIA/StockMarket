@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.market.server;
 
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.ServerSaveable;
 import net.kroia.stockmarket.StockMarketModBackend;
@@ -11,6 +12,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -244,12 +246,12 @@ public class ServerStockMarketManager implements ServerSaveable
             market.setShiftPriceCandleIntervalMS(shiftPriceCandleIntervalMS);
         }
     }
-    public void setNotifySubscriberIntervalMS(long notifySubscriberIntervalMS) {
+    /*public void setNotifySubscriberIntervalMS(long notifySubscriberIntervalMS) {
         for(ServerMarket market : markets.values())
         {
             market.setNotifySubscriberIntervalMS(notifySubscriberIntervalMS);
         }
-    }
+    }*/
 
 
     public void setAllMarketsOpen(boolean open)
@@ -264,11 +266,15 @@ public class ServerStockMarketManager implements ServerSaveable
     {
         return new ItemID(BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.getCurrencyItem());
     }
-    boolean isItemAllowedForTrading(ItemID item)
+    public boolean isItemAllowedForTrading(ItemID item)
     {
-        return !BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.getNotTradableItems().contains(item);
+        return !getNotTradableItems().containsKey(item);
     }
-    boolean isTradingPairAllowedForTrading(TradingPair pair)
+    public Map<ItemID, Boolean> getNotTradableItems()
+    {
+        return BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.getNotTradableItems();
+    }
+    public boolean isTradingPairAllowedForTrading(TradingPair pair)
     {
         pair.checkValidity(BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.getNotTradableItems());
         return pair.isValid();
@@ -282,9 +288,35 @@ public class ServerStockMarketManager implements ServerSaveable
     {
         return new ArrayList<>(markets.keySet());
     }
+    public List<ItemID> getPotentialTradingItems(String searchQuery)
+    {
+        List<ItemID> items = new ArrayList<>();
+        List<ItemStack> allItemStacks = ItemUtilities.getSearchCreativeItems(searchQuery);
+        Map<ItemID, Boolean> blackList = getNotTradableItems();
+        for(ItemStack itemStack : allItemStacks)
+        {
+            ItemID itemID = new ItemID(itemStack);
+            /*String itemName = itemStack.getDisplayName().getString();
+            if(itemName.contains("Dollar"))
+            {
+                // Skip items that are not allowed for trading, like money items
+                debug("Skipping item: " + itemName + " because it is not allowed for trading");
+            }*/
+            if(itemID.isValid() && !blackList.containsKey(itemID))
+            {
+                items.add(itemID);
+            }
+        }
+        return items;
+    }
     public boolean marketExists(@NotNull TradingPair pair)
     {
         return markets.containsKey(pair);
+    }
+
+    public int getRecommendedPrice(TradingPair pair)
+    {
+        return 10;
     }
 
 

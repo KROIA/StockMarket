@@ -12,6 +12,7 @@ import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Map;
 
 public class StockMarketModSettings extends ModSettings {
     private static StockMarketModBackend.Instances BACKEND_INSTANCES;
@@ -81,7 +82,7 @@ public class StockMarketModSettings extends ModSettings {
          * Defines the time for one candle stick in milliseconds
          */
         public final Setting<Long> SHIFT_PRICE_CANDLE_INTERVAL_MS = registerSetting("SHIFT_PRICE_CANDLE_INTERVAL_MS", 60000L, Long.class); // 1 minute
-        public final Setting<Long> NOTIFY_SUBSCRIBER_INTERVAL_MS = registerSetting("NOTIFY_SUBSCRIBER_INTERVAL_MS", 100L, Long.class); // 1 minute
+        //public final Setting<Long> NOTIFY_SUBSCRIBER_INTERVAL_MS = registerSetting("NOTIFY_SUBSCRIBER_INTERVAL_MS", 100L, Long.class); // 1 minute
 
         /**
          * If true, the market will be open directly after creation
@@ -129,15 +130,15 @@ public class StockMarketModSettings extends ModSettings {
         }
 
 
-        public ArrayList<ItemID> getNotTradableItems()
+        public Map<ItemID, Boolean> getNotTradableItems()
         {
-            ArrayList<ItemID> items = new ArrayList<>();
+            Map<ItemID, Boolean> items = new HashMap<>();
             ArrayList<ItemStack> moneyItems = BankSystemItems.getMoneyItems();
             for(ItemStack moneyItem : moneyItems)
             {
                 if(moneyItem != null && !moneyItem.getItem().equals(BankSystemItems.MONEY.get()))
                 {
-                    items.add(new ItemID(moneyItem));
+                    items.put(new ItemID(moneyItem), true);
                 }
             }
 
@@ -145,7 +146,9 @@ public class StockMarketModSettings extends ModSettings {
             {
                 items.add(new ItemID(getCurrencyItem().getItem().getDefaultInstance()));
             }*/
-            items.addAll(BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getBlacklistedItemIDs());
+            ArrayList<ItemID> blacklisted = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getBlacklistedItemIDs();
+            for(ItemID id : blacklisted)
+                items.put(id, true);
             return items;
         }
     }

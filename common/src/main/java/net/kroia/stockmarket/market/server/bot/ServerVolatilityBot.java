@@ -33,7 +33,6 @@ public class ServerVolatilityBot extends ServerTradingBot {
         public Settings()
         {
             super();
-
         }
 
         /*public Settings(int price, float rarity, float volatility, long udateTimerIntervallMS, boolean enableTargetPrice, boolean enableVolumeTracking, boolean enableRandomWalk)

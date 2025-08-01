@@ -114,9 +114,6 @@
   "gui.stockmarket.bot_settings_screen.settings_volume_steering_factor": "Volumen Anstrenbungsfaktor",
   "gui.stockmarket.bot_settings_screen.settings_enable_random_walk": "Zufällige Kursschwankung aktivierä",
   "gui.stockmarket.bot_settings_screen.settings_volatility": "Volatilität [%]",
-  "gui.stockmarket.bot_settings_setup_screen_enabled_features.enable_target_price": "Ziel Pris aktivierä\nDer Bot wird versuechä dä berechneti Zielpreis z erreichä.\n ",
-  "gui.stockmarket.bot_settings_setup_screen_enabled_features.enable_volume_tracking": "Volumen tracking aktivierä\nDä Bot zehlt alli Chäuf/Verchäuf.\nDä Wert wird für d Berechnig vom Zielpris benutzt.",
-  "gui.stockmarket.bot_settings_setup_screen_enabled_features.enable_random_walk": "Zufälligi Kursschwankig aktivierä\nDä Bot wird dä Zielpreis zuäfällig änderä,\nohni wit vom Nominalwert abzweichä.",
 
   "gui.stockmarket.management_screen.title": "Stock Market Management",
   "gui.stockmarket.management_screen.trading_items": "Handels Items",
@@ -125,6 +122,9 @@
   "gui.stockmarket.management_screen.ask_remove_title": "Handels Item entfärnä",
   "gui.stockmarket.management_screen.ask_remove_message": "Bisch sicher, dass du s Handelsitem lösche wötsch?\nAlli offene Pstellige werded denn storniert.",
   "gui.stockmarket.management_screen.bot_settings": "Bot Istellige",
+  "gui.stockmarket.management_screen.tooltip_new_trading_pair": "Neus Handels Paar erstellä",
+  "gui.stockmarket.management_screen.tooltip_remove_selected_trading_pair": "Usgwälts Handels Paar löschä",
+  "gui.stockmarket.management_screen.tooltip_selected_trading_pair": "Aktuells Handels Paar: ",
 
   "gui.stockmarket.bot_settings_setup_screen.cancel": "Abbrächä",
   "gui.stockmarket.bot_settings_setup_screen.back": "Zrugg",
@@ -161,5 +161,12 @@
 
   "gui.stockmarket.trading_pair_selection_view.clear_item": "Item abwählä",
   "gui.stockmarket.trading_pair_selection_view.clear_currency": "Währig abwählä",
-  "gui.stockmarket.trading_pair_selection_view.select_pair": "Uswählä"
+  "gui.stockmarket.trading_pair_selection_view.select_pair": "Uswählä",
+
+  "gui.stockmarket.trading_pair_creation_screen.title": "Trading Pair Creation",
+  "gui.stockmarket.trading_pair_creation_screen.initial_price_label": "Trading Pair Creation",
+  "gui.stockmarket.trading_pair_creation_screen.create_market_button": "Create Market",
+  "gui.stockmarket.trading_pair_creation_screen.enable_target_price": "Ziel Pris aktivierä\nDer Bot wird versuechä dä berechneti Zielpreis z erreichä.\n ",
+  "gui.stockmarket.trading_pair_creation_screen.enable_volume_tracking": "Volumen tracking aktivierä\nDä Bot zehlt alli Chäuf/Verchäuf.\nDä Wert wird für d Berechnig vom Zielpris benutzt.",
+  "gui.stockmarket.trading_pair_creation_screen.enable_random_walk": "Zufälligi Kursschwankig aktivierä\nDä Bot wird dä Zielpreis zuäfällig änderä,\nohni wit vom Nominalwert abzweichä."
 }

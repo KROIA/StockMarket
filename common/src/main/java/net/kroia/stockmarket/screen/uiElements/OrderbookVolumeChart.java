@@ -3,8 +3,9 @@ package net.kroia.stockmarket.screen.uiElements;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.stockmarket.market.clientdata.OrderBookVolumeData;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
+import net.kroia.stockmarket.util.StockMarketGuiElement;
 
-public class OrderbookVolumeChart extends GuiElement {
+public class OrderbookVolumeChart extends StockMarketGuiElement {
 
     private OrderBookVolumeData orderBookVolume;
 

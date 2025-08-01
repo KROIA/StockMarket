@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.market.client;
 
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.clientdata.*;

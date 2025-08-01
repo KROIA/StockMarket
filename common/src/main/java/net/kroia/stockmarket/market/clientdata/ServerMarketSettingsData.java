@@ -9,13 +9,13 @@ import org.jetbrains.annotations.Nullable;
 
 public class  ServerMarketSettingsData implements INetworkPayloadEncoder {
 
-    public final TradingPairData tradingPairData;   // referenced from BotSettingsData if available
-    public final BotSettingsData botSettingsData;   // Can be null if no bot is created or settings of bot should not be applyed by the server
+    public TradingPairData tradingPairData;   // referenced from BotSettingsData if available
+    public @Nullable BotSettingsData botSettingsData;   // Can be null if no bot is created or settings of bot should not be applyed by the server
 
-    public final boolean marketOpen;                // Can be changed by the client
-    public final long itemImbalance;                // Read only
-    public final long shiftPriceCandleIntervalMS;   // Can be changed by the client
-    public final long notifySubscriberIntervalMS;   // Can be changed by the client
+    public boolean marketOpen;                // Can be changed by the client
+    public long itemImbalance;                // Read only
+    public long shiftPriceCandleIntervalMS;   // Can be changed by the client
+    //public long notifySubscriberIntervalMS;   // Can be changed by the client
 
 
     public boolean doCreateBotIfNotExists = false;  // Client set only, Server read only
@@ -24,7 +24,7 @@ public class  ServerMarketSettingsData implements INetworkPayloadEncoder {
 
     public ServerMarketSettingsData(@NotNull TradingPair pair, @Nullable ServerVolatilityBot.Settings settings,
                                     boolean marketOpen, long itemImbalance,
-                                    long shiftPriceCandleIntervalMS, long notifySubscriberIntervalMS) {
+                                    long shiftPriceCandleIntervalMS/*, long notifySubscriberIntervalMS*/) {
         if(settings == null) {
             this.botSettingsData = null;
             this.tradingPairData = new TradingPairData(pair);
@@ -38,19 +38,19 @@ public class  ServerMarketSettingsData implements INetworkPayloadEncoder {
         this.marketOpen = marketOpen;
         this.itemImbalance = itemImbalance;
         this.shiftPriceCandleIntervalMS = shiftPriceCandleIntervalMS;
-        this.notifySubscriberIntervalMS = notifySubscriberIntervalMS;
+        //this.notifySubscriberIntervalMS = notifySubscriberIntervalMS;
     }
 
     private ServerMarketSettingsData(TradingPairData pair, BotSettingsData settingsData,
                                      boolean marketOpen, long itemImbalance,
-                                     long shiftPriceCandleIntervalMS, long notifySubscriberIntervalMS) {
+                                     long shiftPriceCandleIntervalMS/*, long notifySubscriberIntervalMS*/) {
         this.tradingPairData = pair;
         this.botSettingsData = settingsData;
 
         this.marketOpen = marketOpen;
         this.itemImbalance = itemImbalance;
         this.shiftPriceCandleIntervalMS = shiftPriceCandleIntervalMS;
-        this.notifySubscriberIntervalMS = notifySubscriberIntervalMS;
+        //this.notifySubscriberIntervalMS = notifySubscriberIntervalMS;
     }
 
 
@@ -66,7 +66,7 @@ public class  ServerMarketSettingsData implements INetworkPayloadEncoder {
         buf.writeBoolean(marketOpen);
         buf.writeLong(itemImbalance);
         buf.writeLong(shiftPriceCandleIntervalMS);
-        buf.writeLong(notifySubscriberIntervalMS);
+        //buf.writeLong(notifySubscriberIntervalMS);
         buf.writeBoolean(doCreateBotIfNotExists);
         buf.writeBoolean(doDestroyBotIfExists);
     }
@@ -85,11 +85,11 @@ public class  ServerMarketSettingsData implements INetworkPayloadEncoder {
         boolean marketOpen = buf.readBoolean();
         long itemImbalance = buf.readLong();
         long shiftPriceCandleIntervalMS = buf.readLong();
-        long notifySubscriberIntervalMS = buf.readLong();
+        //long notifySubscriberIntervalMS = buf.readLong();
 
         ServerMarketSettingsData data = new ServerMarketSettingsData(tradingPairData, botSettingsData,
                                             marketOpen, itemImbalance,
-                                            shiftPriceCandleIntervalMS, notifySubscriberIntervalMS);
+                                            shiftPriceCandleIntervalMS/*, notifySubscriberIntervalMS*/);
         // Read the flag for creating a bot if it does not exist
         data.doCreateBotIfNotExists = buf.readBoolean();
         data.doDestroyBotIfExists = buf.readBoolean();

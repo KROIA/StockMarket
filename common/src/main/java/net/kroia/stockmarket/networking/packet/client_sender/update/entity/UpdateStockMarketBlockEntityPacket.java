@@ -73,7 +73,7 @@ public class UpdateStockMarketBlockEntityPacket extends StockMarketNetworkPacket
     @Override
     protected void handleOnServer(ServerPlayer sender)
     {
-        info("[SERVER] Received UpdateStockMarketBlockEntityPacket from client");
+        //debug("[SERVER] Received UpdateStockMarketBlockEntityPacket from client");
         StockMarketBlockEntity blockEntity = (StockMarketBlockEntity) sender.level().getBlockEntity(this.pos);
         if(blockEntity == null)
         {

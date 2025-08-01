@@ -6,13 +6,10 @@ import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.TimerMillis;
 import net.kroia.modutilities.gui.Gui;
-import net.kroia.modutilities.gui.GuiScreen;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
 import net.kroia.stockmarket.market.TradingPair;
-import net.kroia.stockmarket.market.client.ClientMarket;
 import net.kroia.stockmarket.market.clientdata.OrderReadData;
 import net.kroia.stockmarket.market.clientdata.TradingViewData;
 import net.kroia.stockmarket.networking.packet.client_sender.update.entity.UpdateStockMarketBlockEntityPacket;
@@ -22,14 +19,14 @@ import net.kroia.stockmarket.screen.uiElements.OrderListView;
 import net.kroia.stockmarket.screen.uiElements.OrderbookVolumeChart;
 import net.kroia.stockmarket.screen.uiElements.TradePanel;
 import net.kroia.stockmarket.util.PriceHistory;
+import net.kroia.stockmarket.util.StockMarketGuiScreen;
 import net.kroia.stockmarket.util.StockMarketTextMessages;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
 
 
-public class TradeScreen extends GuiScreen {
-    private static StockMarketModBackend.Instances BACKEND_INSTANCES;
+public class TradeScreen extends StockMarketGuiScreen {
     private static final String PREFIX = "gui.";
     private static final String NAME = "trade_screen";
 
@@ -69,9 +66,6 @@ public class TradeScreen extends GuiScreen {
 
     private final TimerMillis updateTimer;
 
-    public static void setBackend(StockMarketModBackend.Instances backend) {
-        BACKEND_INSTANCES = backend;
-    }
     public TradeScreen(StockMarketBlockEntity blockEntity) {
         this(blockEntity.getTradringPair(), blockEntity.getAmount(), blockEntity.getPrice());
         this.blockEntity = blockEntity;
@@ -168,6 +162,7 @@ public class TradeScreen extends GuiScreen {
     public static void handlePacket(SyncStockMarketBlockEntityPacket packet) {
         if (instance != null) {
             instance.tradingPair = packet.getTradingPair();
+            instance.selectMarket(instance.tradingPair);
             instance.tradePanel.setTradingPair(instance.tradingPair);
             instance.tradePanel.setAmount(packet.getAmount());
             instance.tradePanel.setLimitPrice(packet.getPrice());
@@ -186,9 +181,9 @@ public class TradeScreen extends GuiScreen {
             return;
 
 
-        if(instance.updateTimer.check() && instance.getMarket() != null)
+        if(instance.updateTimer.check() && instance.getSelectedMarket() != null)
         {
-            instance.getMarket().requestTradingViewData(instance.candleStickChart.getMaxCandleCount(), 0,0,500 ,instance::updateView);
+            instance.getSelectedMarket().requestTradingViewData(instance.candleStickChart.getMaxCandleCount(), 0,0,500 ,instance::updateView);
         }
     }
 
@@ -219,6 +214,7 @@ public class TradeScreen extends GuiScreen {
     private void onItemSelected(TradingPair tradingPair) {
         //BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.unsubscribeMarketUpdate(tradingPair);
         this.tradingPair = tradingPair;
+        selectMarket(tradingPair);
         tradePanel.setTradingPair(tradingPair);
         minecraft.setScreen(this);
     }
@@ -227,7 +223,7 @@ public class TradeScreen extends GuiScreen {
     private void onSellMarketButtonPressed() {
         int amount = tradePanel.getAmount();
         if(amount > 0)
-            getMarket().requestCreateMarketOrder(-amount, (success) -> {
+            getSelectedMarket().requestCreateMarketOrder(-amount, (success) -> {
                 if(success)
                 {
                     BACKEND_INSTANCES.LOGGER.debug("Market sell order created successfully.");
@@ -242,7 +238,7 @@ public class TradeScreen extends GuiScreen {
     private void onBuyMarketButtonPressed() {
         int amount = tradePanel.getAmount();
         if(amount > 0)
-            getMarket().requestCreateMarketOrder(amount, (success) -> {
+            getSelectedMarket().requestCreateMarketOrder(amount, (success) -> {
                 if(success)
                 {
                     BACKEND_INSTANCES.LOGGER.debug("Market buy order created successfully.");
@@ -258,7 +254,7 @@ public class TradeScreen extends GuiScreen {
         int amount = tradePanel.getAmount();
         int price = tradePanel.getLimitPrice();
         if(amount > 0 && price >= 0)
-            getMarket().requestCreateLimitOrder(-amount, price, (success) -> {
+            getSelectedMarket().requestCreateLimitOrder(-amount, price, (success) -> {
                 if(success)
                 {
                     BACKEND_INSTANCES.LOGGER.debug("Limit sell order created successfully.");
@@ -274,7 +270,7 @@ public class TradeScreen extends GuiScreen {
         int amount = tradePanel.getAmount();
         int price = tradePanel.getLimitPrice();
         if(amount > 0 && price >= 0)
-            getMarket().requestCreateLimitOrder(amount, price, (success) -> {
+            getSelectedMarket().requestCreateLimitOrder(amount, price, (success) -> {
                 if(success)
                 {
                     BACKEND_INSTANCES.LOGGER.debug("Limit buy order created successfully.");
@@ -296,7 +292,7 @@ public class TradeScreen extends GuiScreen {
 
     private void cancelOrder(OrderReadData order)
     {
-        getMarket().requestCancelOrder(order.orderID, (success) -> {
+        getSelectedMarket().requestCancelOrder(order.orderID, (success) -> {
             if(success)
             {
                 BACKEND_INSTANCES.LOGGER.debug("Order cancelled: " + order.orderID);
@@ -311,7 +307,7 @@ public class TradeScreen extends GuiScreen {
     {
         if(newPrice != null && newPrice >= 0)
         {
-            getMarket().requestChangeOrder(order.orderID, newPrice, (success) -> {
+            getSelectedMarket().requestChangeOrder(order.orderID, newPrice, (success) -> {
                 if(success)
                 {
                     BACKEND_INSTANCES.LOGGER.debug("Order price changed successfully: " + order.orderID + " to " + newPrice);
@@ -327,9 +323,5 @@ public class TradeScreen extends GuiScreen {
             BACKEND_INSTANCES.LOGGER.warn("Invalid new price for order: " + order.orderID);
         }
     }
-
-    private ClientMarket getMarket()
-    {
-        return BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getClientMarket(tradingPair);
-    }
+    
 }

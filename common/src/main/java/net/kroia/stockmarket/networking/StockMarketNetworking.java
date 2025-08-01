@@ -29,6 +29,9 @@ public class StockMarketNetworking extends NetworkManager {
     public static DefaultMarketSetupDataGroupsRequest DEFAULT_MARKET_SETUP_DATA_GROUPS_REQUEST = (DefaultMarketSetupDataGroupsRequest) AsynchronousRequestResponseSystem.register(new DefaultMarketSetupDataGroupsRequest());
     public static DefaultMarketSetupDataGroupRequest DEFAULT_MARKET_SETUP_DATA_GROUP_REQUEST = (DefaultMarketSetupDataGroupRequest) AsynchronousRequestResponseSystem.register(new DefaultMarketSetupDataGroupRequest());
     public static DefaultMarketSetupDataRequest DEFAULT_MARKET_SETUP_DATA_REQUEST = (DefaultMarketSetupDataRequest) AsynchronousRequestResponseSystem.register(new DefaultMarketSetupDataRequest());
+    public static PotentialTradingItemsRequest POTENTIAL_TRADING_ITEMS_REQUEST = (PotentialTradingItemsRequest) AsynchronousRequestResponseSystem.register(new PotentialTradingItemsRequest());
+    public static IsTradingPairAllowedRequest IS_TRADING_PAIR_ALLOWED_REQUEST = (IsTradingPairAllowedRequest) AsynchronousRequestResponseSystem.register(new IsTradingPairAllowedRequest());
+    public static GetRecommendedPriceRequest GET_RECOMMENDED_PRICE_REQUEST = (GetRecommendedPriceRequest) AsynchronousRequestResponseSystem.register(new GetRecommendedPriceRequest());
 
 
     public StockMarketNetworking()

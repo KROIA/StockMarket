@@ -378,15 +378,15 @@ public class DefaultMarketSettings {
     private static MarketFactory.DefaultMarketSetupDataGroup getOres()
     {
         MarketFactory.DefaultMarketSetupDataGroup oresCategory = new MarketFactory.DefaultMarketSetupDataGroup("Ores");
-        oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.COAL, COAL_PRICE, 0.02f, 0.1f));
-        oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.IRON_INGOT, IRON_PRICE, 0.03f, 0.1f));
-        oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.COPPER_INGOT, COPPER_PRICE, 0.03f, 0.1f));
-        oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.GOLD_INGOT, GOLD_PRICE, 0.05f, 0.1f));
-        oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.REDSTONE, REDSTONE_DUST_PRICE, 0.08f, 0.1f));
-        oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.LAPIS_LAZULI, LAPIS_LAZULI_PRICE, 0.08f, 0.1f));
+        oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.COAL, COAL_PRICE, 0.02f, 0.01f));
+        oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.IRON_INGOT, IRON_PRICE, 0.03f, 0.02f));
+        oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.COPPER_INGOT, COPPER_PRICE, 0.03f, 0.02f));
+        oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.GOLD_INGOT, GOLD_PRICE, 0.05f, 0.02f));
+        oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.REDSTONE, REDSTONE_DUST_PRICE, 0.08f, 0.02f));
+        oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.LAPIS_LAZULI, LAPIS_LAZULI_PRICE, 0.08f, 0.01f));
         oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.DIAMOND, DIAMOND_PRICE, 0.1f, 0.1f));
         oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.EMERALD, EMERALD_PRICE, 0.2f, 0.1f));
-        oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.QUARTZ, NETHER_QUARTZ, 0.03f, 0.1f));
+        oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.QUARTZ, NETHER_QUARTZ, 0.03f, 0.01f));
         oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.ANCIENT_DEBRIS, ANCIENT_DEBRIS_PRICE, 0.5f, 0.1f));
         oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.NETHERITE_INGOT, ANCIENT_DEBRIS_PRICE, 0.5f, 0.1f));
         return oresCategory;

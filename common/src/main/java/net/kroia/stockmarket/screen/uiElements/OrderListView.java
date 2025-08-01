@@ -8,14 +8,14 @@ import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.clientdata.OrderReadData;
 import net.kroia.stockmarket.market.clientdata.OrderReadListData;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
+import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.kroia.stockmarket.util.StockMarketTextMessages;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.function.Consumer;
 
-public class OrderListView extends GuiElement {
+public class OrderListView extends StockMarketGuiElement {
     protected static StockMarketModBackend.Instances BACKEND_INSTANCES;
     public static void setBackend(StockMarketModBackend.Instances backend) {
         BACKEND_INSTANCES = backend;
@@ -87,7 +87,7 @@ public class OrderListView extends GuiElement {
         List<OrderReadData> orders = orderList.orders;
         //ArrayList<Order> orders = BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getOrders(TradeScreen.getItemID());
         HashMap<Long,Integer> stillActiveOrderIds = new HashMap<>();
-        ArrayList<GuiElement> elements = activeOrderListView.getChilds();
+        List<GuiElement> elements = activeOrderListView.getChilds();
 
         for (OrderReadData item : orders) {
             stillActiveOrderIds.put(item.orderID, 1);
