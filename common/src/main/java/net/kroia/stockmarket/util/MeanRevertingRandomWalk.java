@@ -8,8 +8,8 @@ import java.util.Random;
 
 public class MeanRevertingRandomWalk implements ServerSaveable {
     private double currentValue;
-    private final double stepSize;
-    private final double meanReversionStrength;
+    private double stepSize;
+    private double meanReversionStrength;
     private final Random random;
 
     /**
@@ -50,6 +50,8 @@ public class MeanRevertingRandomWalk implements ServerSaveable {
     @Override
     public boolean save(CompoundTag tag) {
         tag.putDouble("currentValue", currentValue);
+        tag.putDouble("stepSize", stepSize);
+        tag.putDouble("meanReversionStrength", meanReversionStrength);
         return true;
     }
 
@@ -59,6 +61,14 @@ public class MeanRevertingRandomWalk implements ServerSaveable {
             currentValue = tag.getDouble("currentValue");
         else
             currentValue = 0.0;
+        if(tag.contains("stepSize"))
+            stepSize = tag.getDouble("stepSize");
+        else
+            stepSize = 0.1; // Default value if not present
+        if(tag.contains("meanReversionStrength"))
+            meanReversionStrength = tag.getDouble("meanReversionStrength");
+        else
+            meanReversionStrength = 0.05; // Default value if not present
         return true;
     }
 }

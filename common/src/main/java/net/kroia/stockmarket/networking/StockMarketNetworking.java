@@ -32,6 +32,7 @@ public class StockMarketNetworking extends NetworkManager {
     public static PotentialTradingItemsRequest POTENTIAL_TRADING_ITEMS_REQUEST = (PotentialTradingItemsRequest) AsynchronousRequestResponseSystem.register(new PotentialTradingItemsRequest());
     public static IsTradingPairAllowedRequest IS_TRADING_PAIR_ALLOWED_REQUEST = (IsTradingPairAllowedRequest) AsynchronousRequestResponseSystem.register(new IsTradingPairAllowedRequest());
     public static GetRecommendedPriceRequest GET_RECOMMENDED_PRICE_REQUEST = (GetRecommendedPriceRequest) AsynchronousRequestResponseSystem.register(new GetRecommendedPriceRequest());
+    public static ChartResetRequest CHART_RESET_REQUEST = (ChartResetRequest) AsynchronousRequestResponseSystem.register(new ChartResetRequest());
 
 
     public StockMarketNetworking()

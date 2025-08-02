@@ -16,10 +16,8 @@ import java.util.function.Function;
 
 public class CandleStickChartWidget extends StockMarketGuiElement {
 
-    private int yPadding = 10;
-    private int xPadding = 10;
-    private Function<Integer, Integer> priceToYPosFunc;
-    private Function<Integer, Integer> yPosToPriceFunc;
+    private final Function<Integer, Integer> priceToYPosFunc;
+    private final Function<Integer, Integer> yPosToPriceFunc;
     private final int colorSell;
     private final int colorBuy;
     private final int minCandleWidth = 3; // Minimum width of a candle in pixels
@@ -29,6 +27,8 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
     private double scrollValue = 1;
     private int chartWidth = 0;
     private int candleWidth = 0;
+    private boolean enableBotTargetPriceDisplay = false;
+    private int botTargetPrice = -1;
     private PriceHistory priceHistory = null;
     private HashMap<Long, LimitOrderInChartDisplay> limitOrderDisplays = new HashMap<>();
     private BiConsumer<OrderReadData, Integer> priceChangeCallback;
@@ -43,6 +43,17 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
         this.colorBuy = colorBuy;
         this.colorSell = colorSell;
     }
+    public CandleStickChartWidget(Function<Integer, Integer> priceToYPosFunc,
+                                  Function<Integer, Integer> yPosToPriceFunc,
+                                  int colorBuy, int colorSell) {
+        super();
+        this.priceToYPosFunc = priceToYPosFunc;
+        this.yPosToPriceFunc = yPosToPriceFunc;
+        this.priceChangeCallback = null;
+        this.colorBuy = colorBuy;
+        this.colorSell = colorSell;
+    }
+
 
     @Override
     protected void renderBackground()
@@ -94,7 +105,12 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
         //volumeDisplayRect.width = chartWidth;
         //volumeDisplayRect.height = getHeight() / 11 + PADDING - 2;
         int currentPrice = priceHistory.getCurrentPrice();
-        drawTooltip(String.valueOf(currentPrice), x-candleWidth-3 ,priceToYPosFunc.apply(currentPrice), 0, 0, Alignment.RIGHT);
+        String labelText = String.valueOf(currentPrice);
+        int currentPriceYPos = priceToYPosFunc.apply(currentPrice);
+        drawTooltip(labelText, x-candleWidth-3 ,currentPriceYPos, 0, 0, Alignment.RIGHT);
+
+        int currentPriceLineLeftPos = x - candleWidth;
+        int currentPriceLineWidth = candleWidth + 2;
 
         for(int i=lastIndex; i>=0; i--)
         {
@@ -111,6 +127,15 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
             if(x <= candleWidth)
                 break;
         }
+
+        if(enableBotTargetPriceDisplay && botTargetPrice > 0)
+        {
+            int tooltipWidth = getTextWidth(labelText);
+            int yPos = priceToYPosFunc.apply(botTargetPrice);
+            drawRect(currentPriceLineLeftPos - tooltipWidth-10, yPos, tooltipWidth + currentPriceLineWidth+13, 1, 0xFF0000FF);
+            drawTooltip("Bot Target Price: " + botTargetPrice, currentPriceLineLeftPos - tooltipWidth-10, yPos, 0, 0, Alignment.RIGHT);
+        }
+        drawRect(currentPriceLineLeftPos, currentPriceYPos, currentPriceLineWidth, 1, 0xFF555555);
 
 
     }
@@ -131,12 +156,7 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
         }
     }
 
-    public void setYPadding(int yPadding) {
-        this.yPadding = yPadding;
-    }
-    public void setXPadding(int xPadding) {
-        this.xPadding = xPadding;
-    }
+
     public void setPriceHistory(PriceHistory priceHistory) {
         this.priceHistory = priceHistory;
     }
@@ -150,6 +170,12 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
         {
             display.setY(priceToYPosFunc.apply(display.getOrder().limitPrice));
         }
+    }
+    public void enableBotTargetPriceDisplay(boolean enabled) {
+        enableBotTargetPriceDisplay = enabled;
+    }
+    public void setBotTargetPrice(int botTargetPrice) {
+        this.botTargetPrice = botTargetPrice;
     }
     public int getMaxCandleCount()
     {
@@ -181,6 +207,8 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
 
     public void updateOrderDisplay(OrderReadListData orderList, TradingPair pair)
     {
+        if(priceChangeCallback == null)
+            return;
         List<OrderReadData> orders = orderList.orders;
         //ArrayList<Order> orders = BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getOrders(TradeScreen.getItemID());
         HashMap<Long,Integer> stillActiveOrderIds = new HashMap<>();

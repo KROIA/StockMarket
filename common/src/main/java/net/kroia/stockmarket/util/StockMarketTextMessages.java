@@ -717,9 +717,9 @@ public class StockMarketTextMessages {
     }
 
 
-    private static final Component TOOLTIP_TRADING_PAIR_CREATION_CANDLETIME = Component.translatable("gui."+StockMarketMod.MOD_ID+".trading_pair_creation_screen.tooltip_candle_time");
-    public static String getTradingPairCreationScreenCandleTimeTooltip(int minutes) {
-        String msg = TOOLTIP_TRADING_PAIR_CREATION_CANDLETIME.getString();
+    private static final Component TOOLTIP_MARKET_SETTINGS_CANDLETIME = Component.translatable("gui."+StockMarketMod.MOD_ID+".market_settings_screen.general.candle_time_min.tooltip");
+    public static String getMarketSettingsScreenCandleTimeTooltip(int minutes) {
+        String msg = TOOLTIP_MARKET_SETTINGS_CANDLETIME.getString();
         msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(minutes));
         return msg;
     }

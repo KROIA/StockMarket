@@ -9,23 +9,23 @@ import org.jetbrains.annotations.NotNull;
 public class BotSettingsData implements INetworkPayloadEncoder {
 
     public final TradingPairData tradingPairData;
-    public ServerVolatilityBot.Settings botSettings;
+    public ServerVolatilityBot.Settings settings;
     public BotSettingsData(@NotNull TradingPair pair, @NotNull ServerVolatilityBot.Settings settings) {
         this.tradingPairData = new TradingPairData(pair);
-        this.botSettings = settings;
+        this.settings = settings;
     }
 
     public BotSettingsData(FriendlyByteBuf buf)
     {
         this.tradingPairData = TradingPairData.decode(buf);
-        this.botSettings = new ServerVolatilityBot.Settings();
-        this.botSettings.decode(buf);
+        this.settings = new ServerVolatilityBot.Settings();
+        this.settings.decode(buf);
     }
 
     @Override
     public void encode(FriendlyByteBuf buf) {
         tradingPairData.encode(buf);
-        botSettings.encode(buf);
+        settings.encode(buf);
     }
 
     public static BotSettingsData decode(FriendlyByteBuf buf) {

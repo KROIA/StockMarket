@@ -144,7 +144,7 @@ public class ServerMarket implements ServerSaveable {
     {
         return new PriceHistoryData(historicalMarketData.getHistory(), maxHistoryPointCount);
     }
-    public TradingViewData getTradingViewData(UUID player,int maxHistoryPointCount, int minVisiblePrice, int maxVisiblePrice, int orderBookTileCount)
+    public TradingViewData getTradingViewData(UUID player,int maxHistoryPointCount, int minVisiblePrice, int maxVisiblePrice, int orderBookTileCount, boolean requestBotTargetPrice)
     {
         IBankUser bankUser = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getUser(player);
         if(bankUser == null)
@@ -163,15 +163,19 @@ public class ServerMarket implements ServerSaveable {
             return null;
 
         List<Order> orders = new ArrayList<>(orderBook.getOrders(player));
+        int botTargetPrice = -1;
+        if(requestBotTargetPrice && volatilityBot != null)
+        {
+            botTargetPrice = volatilityBot.getTargetPrice();
+        }
 
         return new TradingViewData(new TradingPairData(tradingPair), new PriceHistoryData(historicalMarketData.getHistory(), maxHistoryPointCount),
-                itemBank, moneyBank, marketOpen,
-                getOrderBookVolumeData(maxHistoryPointCount, minVisiblePrice, maxVisiblePrice, orderBookTileCount),
-                new OrderReadListData(orders));
+                itemBank, moneyBank, getOrderBookVolumeData(maxHistoryPointCount, minVisiblePrice, maxVisiblePrice, orderBookTileCount),
+                new OrderReadListData(orders), marketOpen, botTargetPrice);
     }
     public TradingViewData getTradingViewData(UUID player)
     {
-        return getTradingViewData(player, -1,0, 0, 0);
+        return getTradingViewData(player, -1,0, 0, 0, false);
     }
     public ServerMarketSettingsData getMarketSettingsData()
     {
@@ -200,10 +204,10 @@ public class ServerMarket implements ServerSaveable {
         {
             if(volatilityBot != null)
             {
-                volatilityBot.setSettings(settingsData.botSettingsData.botSettings);
+                volatilityBot.setSettings(settingsData.botSettingsData.settings);
             }
             else if(settingsData.doCreateBotIfNotExists)
-                createVolatilityBot(settingsData.botSettingsData.botSettings);
+                createVolatilityBot(settingsData.botSettingsData.settings);
 
         }
         else if(volatilityBot != null && settingsData.doDestroyBotIfExists)
@@ -234,7 +238,7 @@ public class ServerMarket implements ServerSaveable {
     }
     public boolean setBotSettingsData(@Nullable BotSettingsData botSettingsData)
     {
-        return setBotSettings(botSettingsData != null ? botSettingsData.botSettings : null);
+        return setBotSettings(botSettingsData != null ? botSettingsData.settings : null);
     }
     public boolean setBotSettings(ServerVolatilityBot.Settings settings)
     {
@@ -267,6 +271,10 @@ public class ServerMarket implements ServerSaveable {
         if(volatilityBot == null)
             return 0;
         return volatilityBot.getTargetPrice();
+    }
+    public void resetHistoricalMarketData()
+    {
+        historicalMarketData.clear(historicalMarketData.getCurrentPrice());
     }
 
 

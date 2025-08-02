@@ -2,13 +2,14 @@ package net.kroia.stockmarket.market.server.bot;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import net.kroia.modutilities.TimerMillis;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.util.MeanRevertingRandomWalk;
+import net.kroia.stockmarket.util.NormalizedRandomPriceGenerator;
 import net.kroia.stockmarket.util.PID;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 
-import java.io.FileWriter;
 import java.util.Random;
 
 public class ServerVolatilityBot extends ServerTradingBot {
@@ -210,15 +211,17 @@ public class ServerVolatilityBot extends ServerTradingBot {
             this.volumeScale = this.orderBookVolumeScale * this.volatility;
         }*/
     }
-    private MeanRevertingRandomWalk randomWalk1;
-    private MeanRevertingRandomWalk randomWalk2;
+    //private MeanRevertingRandomWalk randomWalk1;
+    //private MeanRevertingRandomWalk randomWalk2;
+    private final NormalizedRandomPriceGenerator priceGenerator;
     private MeanRevertingRandomWalk randomWalk3;
     private static Random random = new Random();
     //private double speed = 0;
     //public long lastMillis = 0;
-    private long lastTimerMillis = 0;
-    private long targetTimerMillis = 1000;
-    private long timerCounter = 0;
+    //private long lastTimerMillis = 0;
+    //private long targetTimerMillis = 1000;
+    //private long timerCounter = 0;
+    TimerMillis randomWalkTimer = new TimerMillis(false);
     private final PID pid = new PID(0.1f, 0.01f, 0.1f, 1);
 
     private int targetPrice;
@@ -226,9 +229,12 @@ public class ServerVolatilityBot extends ServerTradingBot {
     public ServerVolatilityBot(ServerMarket market) {
         super(market);
         setSettings(new Settings());
-        randomWalk1 = new MeanRevertingRandomWalk(0.1, 0.05);
-        randomWalk2 = new MeanRevertingRandomWalk(0.1, 0.05);
+        //randomWalk1 = new MeanRevertingRandomWalk(0.1, 0.05);
+        //randomWalk2 = new MeanRevertingRandomWalk(0.1, 0.05);
+        priceGenerator = new NormalizedRandomPriceGenerator(5);
+        randomWalkTimer.start(random.nextInt(10000));
         randomWalk3 = new MeanRevertingRandomWalk(0.1, 0.05);
+        //lastTimerMillis = System.currentTimeMillis();
     }
 
     public int getTargetPrice() {
@@ -269,7 +275,15 @@ public class ServerVolatilityBot extends ServerTradingBot {
 
         if(settings.enableRandomWalk)
         {
-            long currentMillis = System.currentTimeMillis();
+            if(randomWalkTimer.check())
+            {
+                randomWalkTimer.start(100+random.nextInt(900));
+                //randomWalk1.nextValue();
+                //randomWalk2.nextValue();
+                priceGenerator.getNextValue();
+            }
+
+            /*long currentMillis = System.currentTimeMillis();
             if(currentMillis - lastTimerMillis > targetTimerMillis)
             {
                 lastTimerMillis = currentMillis;
@@ -281,16 +295,18 @@ public class ServerVolatilityBot extends ServerTradingBot {
                     timerCounter = 0;
                     randomWalk2.nextValue();
                 }
-            }
-            targetPrice += (int)((randomWalk1.getCurrentValue() + randomWalk2.getCurrentValue())*settings.volatility*settings.defaultPrice);
+            }*/
+            targetPrice += (int)(priceGenerator.getCurrentValue() * settings.volatility * settings.defaultPrice);
+            //targetPrice += (int)((randomWalk1.getCurrentValue() + randomWalk2.getCurrentValue())*settings.volatility*settings.defaultPrice);
 
-            marketOrderAmount += (int)(randomWalk3.nextValue()*volumeScale);
+            //marketOrderAmount += (int)(randomWalk3.nextValue()*volumeScale);
         }
+        if(targetPrice < 0)
+            targetPrice = 0;
 
         if(settings.enableTargetPrice)
         {
-            if(targetPrice < 0)
-                targetPrice = 0;
+
 
             int currentPrice = getCurrentPrice();
             float output = pid.update(targetPrice - currentPrice);
@@ -336,12 +352,17 @@ public class ServerVolatilityBot extends ServerTradingBot {
     @Override
     public boolean save(CompoundTag tag) {
         boolean success = super.save(tag);
-        CompoundTag meanRevertingRandomWalkTag = new CompoundTag();
-        randomWalk1.save(meanRevertingRandomWalkTag);
-        tag.put("randomWalk1", meanRevertingRandomWalkTag);
-        CompoundTag meanRevertingRandomWalk2Tag = new CompoundTag();
-        randomWalk2.save(meanRevertingRandomWalk2Tag);
-        tag.put("randomWalk2", meanRevertingRandomWalk2Tag);
+        CompoundTag priceGeneratorTag = new CompoundTag();
+        priceGenerator.save(priceGeneratorTag);
+        tag.put("priceGenerator", priceGeneratorTag);
+
+
+        //CompoundTag meanRevertingRandomWalkTag = new CompoundTag();
+        //randomWalk1.save(meanRevertingRandomWalkTag);
+        //tag.put("randomWalk1", meanRevertingRandomWalkTag);
+        //CompoundTag meanRevertingRandomWalk2Tag = new CompoundTag();
+        //randomWalk2.save(meanRevertingRandomWalk2Tag);
+        //tag.put("randomWalk2", meanRevertingRandomWalk2Tag);
 
 
         return success;
@@ -350,7 +371,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
     public boolean load(CompoundTag tag) {
         boolean success = super.load(tag);
 
-        if(tag.contains("randomWalk1"))
+        /*if(tag.contains("randomWalk1"))
         {
             CompoundTag meanRevertingRandomWalkTag = tag.getCompound("randomWalk1");
             randomWalk1.load(meanRevertingRandomWalkTag);
@@ -359,12 +380,17 @@ public class ServerVolatilityBot extends ServerTradingBot {
         {
             CompoundTag meanRevertingRandomWalk2Tag = tag.getCompound("randomWalk2");
             randomWalk2.load(meanRevertingRandomWalk2Tag);
+        }*/
+        if(tag.contains("priceGenerator"))
+        {
+            CompoundTag priceGeneratorTag = tag.getCompound("priceGenerator");
+            priceGenerator.load(priceGeneratorTag);
         }
 
         return success;
     }
 
-
+/*
     private void debugPlotRandomWalk()
     {
         try (FileWriter writer = new FileWriter("randomWalk.csv")) {
@@ -379,5 +405,5 @@ public class ServerVolatilityBot extends ServerTradingBot {
         } catch (Exception e) {
             e.printStackTrace();
         }
-    }
+    }*/
 }

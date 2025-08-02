@@ -121,6 +121,7 @@ public class VirtualOrderBook implements ServerSaveable {
     private long lastMillis;
     private Settings settings = new Settings();
 
+    //private boolean dbgSavedToFile = false;
 
     public VirtualOrderBook(int realVolumeBookSize, int initialPrice) {
         virtualOrderVolumeDistribution = new DynamicIndexedArray(realVolumeBookSize, this::getTargetAmount);
@@ -162,8 +163,7 @@ public class VirtualOrderBook implements ServerSaveable {
                 if(Math.abs(currentVal) < Math.abs(targetAmount)*0.1f)
                 {
                     scale = settings.volumeFastAccumulationRate;
-                }
-                else if(Math.abs(currentVal) > Math.abs(targetAmount))
+                }else if(Math.abs(currentVal) > Math.abs(targetAmount))
                 {
                     scale = settings.volumeDecumulationRate;
                 }
@@ -180,6 +180,36 @@ public class VirtualOrderBook implements ServerSaveable {
 
             }
         }
+
+       /* if(!dbgSavedToFile)
+        {
+            dbgSavedToFile = true;
+            String fileName = "virtual_order_book.csv";
+            int minPrice = 0;
+            int maxPrice = 100;
+            currentMarketPrice = 50;
+
+            // Open file
+            StringBuilder sb = new StringBuilder();
+            sb.append("Price;Amount\n");
+            for(int i=minPrice; i<=maxPrice; i++)
+            {
+                float amount = getTargetAmount(i);
+                sb.append(i).append(";").append(amount).append("\n");
+            }
+            // Write to file
+            File file = new File(fileName);
+            try {
+                if(!file.exists()) {
+                    file.createNewFile();
+                }
+                java.nio.file.Files.write(file.toPath(), sb.toString().getBytes());
+            } catch (java.io.IOException e) {
+                e.printStackTrace();
+            }
+
+            currentMarketPrice = currentPrice;
+        }*/
     }
 
     public void setCurrentPrice(int currentMarketPrice) {
@@ -281,15 +311,14 @@ public class VirtualOrderBook implements ServerSaveable {
         float currentPriceFloat = (float)currentMarketPrice;
         //float relativePrice = (currentPriceFloat - (float)price)/(currentPriceFloat+1);
         float relativePrice = (currentPriceFloat - (float)price);
-        float width = 1f;
 
         final float constant1 = (float)(2.0/Math.E);
 
         float amount = 0;
-        if(relativePrice < 20 && relativePrice > -20) {
+        if(relativePrice < 40 && relativePrice > -40) {
             //amount += (float) Math.E * width * relativePrice * (float) Math.exp(-Math.abs(relativePrice * width));
             float sqrt = (float) Math.sqrt(Math.abs(relativePrice)) * Math.signum(relativePrice);
-            amount += (float) constant1 * settings.nearMarketVolumeScale * sqrt * (float) Math.exp(-Math.abs(relativePrice*relativePrice*0.05));
+            amount += (float) constant1 * settings.nearMarketVolumeScale * sqrt * (float) Math.exp(-Math.abs(relativePrice*relativePrice*0.01));
         }
 
 

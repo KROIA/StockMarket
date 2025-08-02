@@ -97,12 +97,17 @@ public class ServerStockMarketManager implements ServerSaveable
             return null;
         return market.getPriceHistoryData(maxHistoryPointCount);
     }
-    public @Nullable TradingViewData getTradingViewData(@NotNull TradingPair pair, UUID player, int maxHistoryPointCount, int minVisiblePrice, int maxVisiblePrice, int orderBookTileCount)
+    public @Nullable TradingViewData getTradingViewData(@NotNull TradingPair pair, UUID player,
+                                                        int maxHistoryPointCount,
+                                                        int minVisiblePrice,
+                                                        int maxVisiblePrice,
+                                                        int orderBookTileCount,
+                                                        boolean requestBotTargetPrice)
     {
         ServerMarket market = markets.get(pair);
         if(market == null)
             return null;
-        return market.getTradingViewData(player, maxHistoryPointCount, minVisiblePrice, maxVisiblePrice, orderBookTileCount);
+        return market.getTradingViewData(player, maxHistoryPointCount, minVisiblePrice, maxVisiblePrice, orderBookTileCount, requestBotTargetPrice);
     }
     public @Nullable TradingViewData getTradingViewData(@NotNull TradingPair pair, UUID player)
     {

@@ -87,7 +87,7 @@ public class MarketFactory
             botSettings.volatility = Math.abs(volatility);
 
             virtualOrderBookSettings.volumeScale = 100f/(0.01f+Math.abs(rarity));
-            botSettings.volumeScale = virtualOrderBookSettings.volumeScale * this.volatility;
+            botSettings.volumeScale = virtualOrderBookSettings.volumeScale * this.volatility/10;
 
             return new DefaultMarketSetupData(this.tradingPair, botSettings, virtualOrderBookSettings);
         }
@@ -591,13 +591,13 @@ public class MarketFactory
         TradingPair pair = settingsData.tradingPairData.toTradingPair();
         int startPrice = 0;
         if(settingsData.botSettingsData != null) {
-            startPrice = settingsData.botSettingsData.botSettings.defaultPrice;
+            startPrice = settingsData.botSettingsData.settings.defaultPrice;
         }
         ServerMarket market = createMarket(pair, startPrice);
         if(market != null) {
             if(settingsData.botSettingsData != null)
             {
-                ServerVolatilityBot.Settings botSettings = settingsData.botSettingsData.botSettings;
+                ServerVolatilityBot.Settings botSettings = settingsData.botSettingsData.settings;
                 market.createVolatilityBot(botSettings);
             }
             if(settingsData.virtualOrderBookSettingsData != null)

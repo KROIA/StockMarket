@@ -48,6 +48,7 @@ public class ManagementScreen extends StockMarketGuiScreen {
 
 
     private final Screen parentScreen;
+    private MarketSettingsScreen marketSettingsScreen;
     private MarketCreationScreen tradingPairCreationScreen;
 
 
@@ -99,6 +100,40 @@ public class ManagementScreen extends StockMarketGuiScreen {
 
         marketSettingsButton = new Button(MARKET_SETTINGS.getString(), () ->
         {
+            if(tradingPair != null) {
+                marketSettingsScreen = new MarketSettingsScreen(this, (settings)->
+                {
+                    if(settings != null) {
+                        currentMarketSettingsData = settings;
+                        getSelectedMarket().requestSetMarketSettings(settings, (success) -> {
+                            if (success) {
+                                getSelectedMarket().requestGetMarketSettings(
+                                        (settingsData -> {
+                                            if (settingsData != null) {
+                                                setCurrentTradingPairMarketSettings(settingsData);
+                                                marketSettingsScreen.setSettings(settingsData);
+                                            }
+                                        }));
+                            }
+                        });
+                    }
+                });
+                if (currentMarketSettingsData != null) {
+                    getSelectedMarket().requestGetMarketSettings(
+                            (settingsData -> {
+                                if (settingsData != null) {
+                                    marketSettingsScreen.setSettings(settingsData);
+                                    minecraft.setScreen(marketSettingsScreen);
+                                }
+                            }));
+                }
+                else
+                {
+                    marketSettingsScreen.setSettings(currentMarketSettingsData);
+                    minecraft.setScreen(marketSettingsScreen);
+                }
+            }
+            /*
             BACKEND_INSTANCES.LOGGER.warn("NOT_IMPLEMENTED: BotSettingsScreen.openScreen(this, tradingPair));");
             //BotSettingsScreen.openScreen(this);
             //BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.requestBotSettings(tradingPair); // Trigger request for bot settings
@@ -109,7 +144,7 @@ public class ManagementScreen extends StockMarketGuiScreen {
                     } else {
                         BACKEND_INSTANCES.LOGGER.warn("Bot settings data is null for trading pair: " + tradingPair);
                     }
-                }));
+                }));*/
         });
 
         marketOpenCheckBox = new CheckBox("Market Open",this::onMarketOpenCheckBoxChanged);
@@ -138,7 +173,7 @@ public class ManagementScreen extends StockMarketGuiScreen {
         tradableItemsView.setBounds(padding, padding, (width*2)/3, height);
         newTradingPairButton.setBounds(tradableItemsView.getRight()+spacing, padding, 20, 20);
         removeTradingItemButton.setBounds(newTradingPairButton.getRight()+spacing, newTradingPairButton.getTop(), width/9-spacing, newTradingPairButton.getHeight());
-        currentTradingItemView.setBounds(removeTradingItemButton.getRight()+spacing, removeTradingItemButton.getTop(), width - removeTradingItemButton.getRight()+spacing, removeTradingItemButton.getHeight());
+        currentTradingItemView.setBounds(removeTradingItemButton.getRight()+spacing, removeTradingItemButton.getTop(), width - removeTradingItemButton.getRight(), removeTradingItemButton.getHeight());
 
         marketSettingsButton.setBounds(newTradingPairButton.getLeft(), newTradingPairButton.getBottom()+spacing, width/3-spacing, newTradingPairButton.getHeight());
         marketOpenCheckBox.setBounds(marketSettingsButton.getLeft(), marketSettingsButton.getBottom()+spacing, marketSettingsButton.getWidth(), marketSettingsButton.getHeight());

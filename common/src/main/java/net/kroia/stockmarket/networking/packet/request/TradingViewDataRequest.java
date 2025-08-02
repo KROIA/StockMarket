@@ -17,27 +17,31 @@ public class TradingViewDataRequest extends StockMarketGenericRequest<TradingVie
         public final int minVisiblePrice;
         public final int maxVisiblePrice;
         public final int orderBookTileCount;
+        public final boolean requestBotTargetPrice;
 
-        public Input(TradingPair pair, int maxHistoryPointCount, int minVisiblePrice, int maxVisiblePrice, int orderBookTileCount) {
+        public Input(TradingPair pair, int maxHistoryPointCount, int minVisiblePrice, int maxVisiblePrice, int orderBookTileCount, boolean requestBotTargetPrice) {
             this.tradingPairData = new TradingPairData(pair);
             this.maxHistoryPointCount = maxHistoryPointCount;
             this.minVisiblePrice = minVisiblePrice;
             this.maxVisiblePrice = maxVisiblePrice;
             this.orderBookTileCount = orderBookTileCount;
+            this.requestBotTargetPrice = requestBotTargetPrice;
         }
-        public Input(TradingPair pair) {
+        public Input(TradingPair pair, boolean requestBotTargetPrice) {
             this.tradingPairData = new TradingPairData(pair);
             this.maxHistoryPointCount = -1; // Default value, can be set later
             this.minVisiblePrice = 0;
             this.maxVisiblePrice = 0;
             this.orderBookTileCount = 0;
+            this.requestBotTargetPrice = requestBotTargetPrice; // Default value, can be set later
         }
-        private Input(TradingPairData tradingPairData, int maxHistoryPointCount, int minVisiblePrice, int maxVisiblePrice, int orderBookTileCount) {
+        private Input(TradingPairData tradingPairData, int maxHistoryPointCount, int minVisiblePrice, int maxVisiblePrice, int orderBookTileCount, boolean requestBotTargetPrice) {
             this.tradingPairData = tradingPairData;
             this.maxHistoryPointCount = maxHistoryPointCount;
             this.minVisiblePrice = minVisiblePrice;
             this.maxVisiblePrice = maxVisiblePrice;
             this.orderBookTileCount = orderBookTileCount;
+            this.requestBotTargetPrice = requestBotTargetPrice;
         }
 
         public TradingPairData getTradingPairData() {
@@ -51,6 +55,7 @@ public class TradingViewDataRequest extends StockMarketGenericRequest<TradingVie
             buf.writeInt(minVisiblePrice);
             buf.writeInt(maxVisiblePrice);
             buf.writeInt(orderBookTileCount);
+            buf.writeBoolean(requestBotTargetPrice);
         }
 
         public static Input decode(FriendlyByteBuf buf) {
@@ -59,7 +64,8 @@ public class TradingViewDataRequest extends StockMarketGenericRequest<TradingVie
             int minVisiblePrice = buf.readInt();
             int maxVisiblePrice = buf.readInt();
             int orderBookTileCount = buf.readInt();
-            return new Input(tradingPairData, maxHistoryPointCount, minVisiblePrice, maxVisiblePrice, orderBookTileCount);
+            boolean requestBotTargetPrice = buf.readBoolean();
+            return new Input(tradingPairData, maxHistoryPointCount, minVisiblePrice, maxVisiblePrice, orderBookTileCount, requestBotTargetPrice);
         }
     }
 
@@ -76,11 +82,15 @@ public class TradingViewDataRequest extends StockMarketGenericRequest<TradingVie
 
     @Override
     public TradingViewData handleOnServer(Input input, ServerPlayer sender) {
-            return BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getTradingViewData(input.tradingPairData.toTradingPair(),
-                    sender.getUUID(),
-                    input.maxHistoryPointCount,
-                    input.minVisiblePrice,
-                    input.maxVisiblePrice, input.orderBookTileCount);
+        boolean requestBotTargetPrice = input.requestBotTargetPrice && playerIsAdmin(sender);
+        return BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getTradingViewData(
+                input.tradingPairData.toTradingPair(),
+                sender.getUUID(),
+                input.maxHistoryPointCount,
+                input.minVisiblePrice,
+                input.maxVisiblePrice,
+                input.orderBookTileCount,
+                requestBotTargetPrice);
     }
 
     @Override

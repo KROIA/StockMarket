@@ -21,13 +21,13 @@ public abstract class StockMarketGuiElement extends GuiElement {
         super(x, y, width, height);
     }
 
-    protected ClientStockMarketManager getMarketManager() {
+    public ClientStockMarketManager getMarketManager() {
         return BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER;
     }
-    protected void selectMarket(TradingPair tradingPair) {
+    public void selectMarket(TradingPair tradingPair) {
         this.selectedMarket = getMarketManager().getClientMarket(tradingPair);
     }
-    protected ClientMarket getSelectedMarket() {
+    public ClientMarket getSelectedMarket() {
         return selectedMarket;
     }
 }

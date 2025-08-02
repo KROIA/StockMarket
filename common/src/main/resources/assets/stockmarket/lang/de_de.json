@@ -157,6 +157,7 @@
   "gui.stockmarket.trading_chart_widget.tooltip_tradevolume": "Zeigt ein Histogramm des gehandelten Volumens auf dem Markt an.\nJe höher die Balken, desto mehr Volumen\nwurde im entsprechenden Zeitraum gehandelt.",
   "gui.stockmarket.orderlistview.filled": "Die Anzahl der Items in der Order, die bereits gehandelt wurden.\nFür kauf Orders: Die Mänge an Items die du bereits erhalten hast.\nFür verlauf Orders: Die Mänge an Items die du bereits verkauft hast.",
   "gui.stockmarket.limit_order_in_chart_display.move_button": "Bewege die Order zu einem neuen Preis\nmit hoch oder runter ziehen.",
+  "gui.stockmarket.limit_order_in_chart_display.move_button_moving": "Neuer Preis würde sein:\n{price} {currency}",
 
   "gui.stockmarket.trading_pair_selection_view.clear_item": "Item abwählen",
   "gui.stockmarket.trading_pair_selection_view.clear_currency": "Währung abwählen",
@@ -174,12 +175,7 @@
   "gui.stockmarket.trading_pair_creation_screen.enable_random_walk": "Zufällige Kursschwankung",
   "gui.stockmarket.trading_pair_creation_screen.create_market_failed": "Markt für {item_name} mit {currency} als Währung konnte nicht erstellt werden",
   "gui.stockmarket.trading_pair_creation_screen.tooltip_initial_price": "{item_name} wird zu beginn für\n{price} {currency} gehandelt.",
-  "gui.stockmarket.trading_pair_creation_screen.tooltip_candle_time": "Jeder Candlestick ist {amount} minuten breit.",
   "gui.stockmarket.trading_pair_creation_screen.tooltip_open_market_checkbox": "Der Markt wird nach der erstellung geöffnet sein.\nDer Markt kann jederzeit im Management Screen geöffnet/geschlossen werden.",
-  "gui.stockmarket.trading_pair_creation_screen.tooltip_enable_marketbot_checkbox": "Der Marketbot wird für diese Handelspaar aktiviert.\nDer Bot sorgt für realistische Kursschwankungen.",
-  "gui.stockmarket.trading_pair_creation_screen.tooltip_enable_targetprice_checkbox": "Der Bot wird versuchen einen berechneten\nZielpreis zu halten.",
-  "gui.stockmarket.trading_pair_creation_screen.tooltip_enable_volumetracking_checkbox": "Der Bot wird das effektiv,\nvon Spielern gehandelte Volumen,\ntracken um den Zielpreis zu bestimmen.",
-  "gui.stockmarket.trading_pair_creation_screen.tooltip_enable_randomwalk_checkbox": "Der Bot wird eine Zufällige Kursschwankung erzeugen.",
   "gui.stockmarket.trading_pair_creation_screen.tooltip_create_market_button": "Erstelle den markt mit dem gewählten Handelspaar.\nDu kannst die Einstellungen später im Management Screen ändern.",
   "gui.stockmarket.trading_pair_creation_screen.tooltip_volatility_base": "Die Marktvolatilität ist auf {value} gesetzt.",
   "gui.stockmarket.trading_pair_creation_screen.tooltip_volatility_1": "Tief",
@@ -198,7 +194,21 @@
   "gui.stockmarket.trading_pair_creation_screen.tooltip_marketspeed_2": "mittel",
   "gui.stockmarket.trading_pair_creation_screen.tooltip_marketspeed_3": "schnell",
   "gui.stockmarket.trading_pair_creation_screen.tooltip_marketspeed_4": "sehr schnell",
-  "gui.stockmarket.trading_pair_creation_screen.tooltip_marketspeed_5": "extrem schnell"
+  "gui.stockmarket.trading_pair_creation_screen.tooltip_marketspeed_5": "extrem schnell",
+
+  "gui.stockmarket.market_settings_screen.title": "Market Einstellungs Fenster",
+  "gui.stockmarket.market_settings_screen.save_button": "Speicheren",
+  "gui.stockmarket.market_settings_screen.cancel_button": "Abbrechen",
+  "gui.stockmarket.market_settings_screen.general.title": "Allgemeine Einstellungen",
+  "gui.stockmarket.market_settings_screen.general.chart_reset": "Chart zurücksetzen",
+  "gui.stockmarket.market_settings_screen.general.is_market_open": "Markt geöffnet",
+  "gui.stockmarket.market_settings_screen.virtual_order_book.title": "Virtual Order Book",
+  "gui.stockmarket.market_settings_screen.virtual_order_book.enable": "Aktivieren",
+  "gui.stockmarket.market_settings_screen.bot_settings.title": "Bot Einstellungen",
+  "gui.stockmarket.market_settings_screen.bot_settings.enable": "Aktivieren",
+  "gui.stockmarket.market_settings_screen.bot_settings.enable_target_price": "Ziel Preis",
+  "gui.stockmarket.market_settings_screen.bot_settings.enable_volume_tracking": "Volumen Tracking",
+  "gui.stockmarket.market_settings_screen.bot_settings.enable_random_walk": "Zufällige Kursschwankung"
 
 
 }

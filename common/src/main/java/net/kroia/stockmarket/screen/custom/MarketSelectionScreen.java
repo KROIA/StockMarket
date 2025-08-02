@@ -44,7 +44,7 @@ public class MarketSelectionScreen extends StockMarketGuiScreen {
 
     @Override
     protected void updateLayout(Gui gui) {
-        int padding = 10;
+        int padding = 5;
         tradingPairSelectionView.setSize(getWidth()-2*padding, getHeight()-2*padding);
         tradingPairSelectionView.setPosition(padding, padding);
     }

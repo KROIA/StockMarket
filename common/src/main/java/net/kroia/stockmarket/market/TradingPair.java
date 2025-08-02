@@ -42,7 +42,7 @@ public class TradingPair implements ServerSaveable, INetworkPayloadConverter {
         UUID itemUUID = item.getUUID();
         UUID currencyUUID = currency.getUUID();
         if(itemUUID == null || currencyUUID == null || itemUUID.toString().compareTo(currencyUUID.toString()) == 0) {
-            this.pairUUID = UUID.fromString("");
+            this.pairUUID = UUID.nameUUIDFromBytes(("").getBytes());
             isValid = false;
         }
         else {

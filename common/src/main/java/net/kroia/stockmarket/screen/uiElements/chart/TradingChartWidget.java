@@ -26,8 +26,16 @@ public class TradingChartWidget extends StockMarketGuiElement {
     public TradingChartWidget(BiConsumer<OrderReadData, Integer> priceChangeCallback) {
         super();
 
-        candleStickChart = new CandleStickChartWidget(this::getChartYPos, this::getPriceFromYPos,
-                priceChangeCallback, colorGreen, colorRed);
+        if(priceChangeCallback == null)
+        {
+            candleStickChart = new CandleStickChartWidget(this::getChartYPos, this::getPriceFromYPos, colorGreen, colorRed);
+        }
+        else
+        {
+            candleStickChart = new CandleStickChartWidget(this::getChartYPos, this::getPriceFromYPos,
+                    priceChangeCallback, colorGreen, colorRed);
+        }
+
         tradingVolumeHistoryChart = new TradingVolumeHistoryChart();
         tradingVolumeHistoryChart.setEnableBackground(false);
         tradingVolumeHistoryChart.setEnableOutline(false);
@@ -42,6 +50,9 @@ public class TradingChartWidget extends StockMarketGuiElement {
         addChild(candleStickChart);
         addChild(tradingVolumeHistoryChart);
         addChild(orderbookVolumeChart);
+    }
+    public TradingChartWidget() {
+        this(null);
     }
 
 
@@ -77,6 +88,10 @@ public class TradingChartWidget extends StockMarketGuiElement {
         orderbookVolumeChart.setMinMaxPrice(minPrice, maxPrice);
     }
 
+    public void enableBotTargetPriceDisplay(boolean enabled)
+    {
+        candleStickChart.enableBotTargetPriceDisplay(enabled);
+    }
     public void updateView(TradingViewData data)
     {
         if(data == null)
@@ -87,7 +102,7 @@ public class TradingChartWidget extends StockMarketGuiElement {
         candleStickChart.setPriceHistory(history);
         tradingVolumeHistoryChart.setPriceHistory(history);
         orderbookVolumeChart.setOrderBookVolume(data.orderBookVolumeData);
-
+        candleStickChart.setBotTargetPrice(data.botTargetPrice);
         candleStickChart.updateOrderDisplay(data.openOrdersData, data.tradingPairData.toTradingPair());
     }
     public int getMaxCandleCount()

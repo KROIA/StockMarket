@@ -40,11 +40,6 @@ public class MarketCreationScreen extends StockMarketGuiScreen {
 
 
     public static final Component TOOLTIP_OPEN_MARKET_CHECKBOX = Component.translatable(PREFIX+"tooltip_open_market_checkbox");
-    public static final Component TOOLTIP_ENABLE_VIRTUAL_ORDER_BOOK_CHECKBOX = Component.translatable(PREFIX+"tooltip_enable_virtual_order_book_checkbox");
-    public static final Component TOOLTIP_ENABLE_MARKETBOT_CHECKBOX = Component.translatable(PREFIX+"tooltip_enable_marketbot_checkbox");
-    public static final Component TOOLTIP_ENABLE_TARGETPRICE_CHECKBOX = Component.translatable(PREFIX+"tooltip_enable_targetprice_checkbox");
-    public static final Component TOOLTIP_ENABLE_VOLUMETRACKING_CHECKBOX = Component.translatable(PREFIX+"tooltip_enable_volumetracking_checkbox");
-    public static final Component TOOLTIP_ENABLE_RANDOMWALK_CHECKBOX = Component.translatable(PREFIX+"tooltip_enable_randomwalk_checkbox");
     public static final Component TOOLTIP_CREATE_MARKET_BUTTON = Component.translatable(PREFIX+"tooltip_create_market_button");
 
     private final List<ItemStack> potentialTradingItems = new ArrayList<>();
@@ -171,18 +166,18 @@ public class MarketCreationScreen extends StockMarketGuiScreen {
         initialPriceTextBox.setHoverTooltipSupplier(this::getInitialPriceTooltip);
         candleTimeTextBoxMinutes.setHoverTooltipSupplier(()->{
             int minutes = candleTimeTextBoxMinutes.getInt();
-            return StockMarketTextMessages.getTradingPairCreationScreenCandleTimeTooltip(minutes);
+            return StockMarketTextMessages.getMarketSettingsScreenCandleTimeTooltip(minutes);
         });
         volatilitySlider.setHoverTooltipSupplier(()->{return StockMarketTextMessages.getTradingPairCreationScreenVolatilityTooltip(volatilitySlider.getSliderValue());});
         raritySlider.setHoverTooltipSupplier(()->{return StockMarketTextMessages.getTradingPairCreationScreenRarityTooltip(raritySlider.getSliderValue());});
         marketSpeedSlider.setHoverTooltipSupplier(()->{return StockMarketTextMessages.getTradingPairCreationScreenMarketSpeedTooltip(marketSpeedSlider.getSliderValue(), getMarketSpeedMS());});
 
         openMarketCheckBox.setHoverTooltipSupplier(TOOLTIP_OPEN_MARKET_CHECKBOX::getString);
-        enableVirtualOrderBook.setHoverTooltipSupplier(TOOLTIP_ENABLE_VIRTUAL_ORDER_BOOK_CHECKBOX::getString);
-        enableMarketBot.setHoverTooltipSupplier(TOOLTIP_ENABLE_MARKETBOT_CHECKBOX::getString);
-        enableTargetPrice.setHoverTooltipSupplier(TOOLTIP_ENABLE_TARGETPRICE_CHECKBOX::getString);
-        enableVolumeTracking.setHoverTooltipSupplier(TOOLTIP_ENABLE_VOLUMETRACKING_CHECKBOX::getString);
-        enableRandomWalk.setHoverTooltipSupplier(TOOLTIP_ENABLE_RANDOMWALK_CHECKBOX::getString);
+        enableVirtualOrderBook.setHoverTooltipSupplier(MarketSettingsScreen.TEXTS.VIRTUAL_ORDER_BOOK_ENABLE_TOOLTIP::getString);
+        enableMarketBot.setHoverTooltipSupplier(MarketSettingsScreen.TEXTS.BOT_SETTINGS_ENABLE_TOOLTIP::getString);
+        enableTargetPrice.setHoverTooltipSupplier(MarketSettingsScreen.TEXTS.BOT_SETTINGS_ENABLE_TARGET_PRICE_TOOLTIP::getString);
+        enableVolumeTracking.setHoverTooltipSupplier(MarketSettingsScreen.TEXTS.BOT_SETTINGS_ENABLE_VOLUME_TRACKING_TOOLTIP::getString);
+        enableRandomWalk.setHoverTooltipSupplier(MarketSettingsScreen.TEXTS.BOT_SETTINGS_ENABLE_RANDOM_WALK_TOOLTIP::getString);
 
         createMarketButton.setHoverTooltipSupplier(TOOLTIP_CREATE_MARKET_BUTTON::getString);
 
@@ -213,6 +208,7 @@ public class MarketCreationScreen extends StockMarketGuiScreen {
 
         addElement(settingsListView);
         addElement(currentPairView);
+        addElement(createMarketButton);
         settingsListView.addChild(initialPriceTextBox);
         settingsListView.addChild(candleTimeTextBoxMinutes);
         settingsListView.addChild(openMarketCheckBox);
@@ -224,7 +220,7 @@ public class MarketCreationScreen extends StockMarketGuiScreen {
         settingsListView.addChild(volatilitySlider);
         settingsListView.addChild(raritySlider);
         settingsListView.addChild(marketSpeedSlider);
-        settingsListView.addChild(createMarketButton);
+       // settingsListView.addChild(createMarketButton);
         for(GuiElement element : settingsListView.getChilds())
         {
             element.setHeight(20);
@@ -277,6 +273,8 @@ public class MarketCreationScreen extends StockMarketGuiScreen {
 
 
         currentPairView.setBounds(x, y, w, elementHeight);
+        y += elementHeight + spacing;
+        createMarketButton.setBounds(x, y, w, elementHeight);
         y += elementHeight + spacing;
         settingsListView.setBounds(x, y, w, height - y + spacing);
         /*initialPriceTextBox.setBounds(x, y, w, elementHeight);
