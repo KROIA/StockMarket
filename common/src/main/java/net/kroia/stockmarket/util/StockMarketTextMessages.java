@@ -481,12 +481,6 @@ public class StockMarketTextMessages {
     }
 
 
-    private static final Component NO_TRADING_ITEM_AVAILABLE = Component.translatable(prefix+"no_trading_item_available");
-    public static String getNoTradingItemAvailableMessage()
-    {
-        return NO_TRADING_ITEM_AVAILABLE.getString();
-    }
-
     private static final Component ORDER_REPLACED = Component.translatable(prefix+"order_replaced");
     public static String getOrderReplacedMessage()
     {

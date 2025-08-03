@@ -1,10 +1,7 @@
 package net.kroia.stockmarket.screen.uiElements;
 
 import net.kroia.banksystem.banking.bank.MoneyBank;
-import net.kroia.modutilities.gui.elements.Button;
-import net.kroia.modutilities.gui.elements.ItemView;
-import net.kroia.modutilities.gui.elements.Label;
-import net.kroia.modutilities.gui.elements.TextBox;
+import net.kroia.modutilities.gui.elements.*;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
@@ -29,11 +26,16 @@ public class TradePanel extends StockMarketGuiElement {
 
     private final Button changeItemButton;
 
+
+    private final Frame balanceFrame;
     private final Label yourItemBalanceLabel;
     private final ItemView currentItemView;
     private final Label currentItemBalanceLabel;
     private final ItemView moneyItemView;
     private final Label currentMoneyBalanceLabel;
+
+
+
     private final Label currentPriceTextLabel;
     private final Label currentPriceLabel;
 
@@ -65,14 +67,25 @@ public class TradePanel extends StockMarketGuiElement {
         super();
         changeItemButton = new Button(CHANGE_ITEM_BUTTON.getString());
         changeItemButton.setOnFallingEdge(onItemChangeButtonClicked);
+
+        balanceFrame = new Frame();
+        balanceFrame.setEnableBackground(false);
         yourItemBalanceLabel = new Label(YOUR_BALANCE_LABEL.getString());
         yourItemBalanceLabel.setAlignment(Alignment.CENTER);
         currentItemView = new ItemView();
         currentItemBalanceLabel = new Label();
-        currentItemBalanceLabel.setAlignment(Alignment.LEFT);
+        currentItemBalanceLabel.setAlignment(Alignment.RIGHT);
         moneyItemView = new ItemView();
         currentMoneyBalanceLabel = new Label();
         currentMoneyBalanceLabel.setAlignment(Alignment.LEFT);
+        balanceFrame.addChild(yourItemBalanceLabel);
+        balanceFrame.addChild(currentItemView);
+        balanceFrame.addChild(currentItemBalanceLabel);
+        balanceFrame.addChild(moneyItemView);
+        balanceFrame.addChild(currentMoneyBalanceLabel);
+
+
+
         currentPriceTextLabel = new Label(PRICE_LABEL.getString());
         currentPriceTextLabel.setAlignment(Alignment.RIGHT);
         currentPriceLabel = new Label();
@@ -167,13 +180,14 @@ public class TradePanel extends StockMarketGuiElement {
         marketClosedLabel = new Label(MARKET_CLOSED.getString());
         marketClosedLabel.setAlignment(Alignment.CENTER);
 
-        addChild(yourItemBalanceLabel);
-        addChild(currentItemView);
-        addChild(currentItemBalanceLabel);
-        addChild(moneyItemView);
+        //addChild(yourItemBalanceLabel);
+        //addChild(currentItemView);
+        //addChild(currentItemBalanceLabel);
+        //addChild(moneyItemView);
+        addChild(balanceFrame);
         addChild(currentPriceTextLabel);
         addChild(currentPriceLabel);
-        addChild(currentMoneyBalanceLabel);
+        //addChild(currentMoneyBalanceLabel);
         addChild(changeItemButton);
         addChild(amountLabel);
         addChild(amountTextBox);
@@ -229,12 +243,12 @@ public class TradePanel extends StockMarketGuiElement {
 
     @Override
     protected void layoutChanged() {
-        int padding = 4;
-        int spacing = 4;
+        int padding = 5;
+        int spacing = 5;
         int width = getWidth()-2*padding;
         int height = getHeight()-2*padding;
-        int labelHeight = 14;
-        int buttonHeight = 16;
+        int labelHeight = 15;
+        int buttonHeight = 15;
 
 
         int y = padding;
@@ -243,29 +257,33 @@ public class TradePanel extends StockMarketGuiElement {
         changeItemButton.setBounds(x, y, width, buttonHeight);
 
 
-        yourItemBalanceLabel.setBounds(x, changeItemButton.getBottom()+spacing, width, labelHeight);
-        currentItemView.setPosition(x, yourItemBalanceLabel.getBottom()+spacing);
-        currentItemBalanceLabel.setBounds(currentItemView.getRight(),currentItemView.getTop(), width/2-spacing/2-currentItemView.getWidth(), currentItemView.getHeight());
-        moneyItemView.setPosition(currentItemBalanceLabel.getRight()+spacing, currentItemBalanceLabel.getTop());
+        yourItemBalanceLabel.setBounds(0, spacing, width, labelHeight);
+        currentItemBalanceLabel.setBounds(0, yourItemBalanceLabel.getBottom(), width/2-(spacing+1)/2-currentItemView.getWidth(), currentItemView.getHeight());
+        currentItemView.setPosition(currentItemBalanceLabel.getRight(), currentItemBalanceLabel.getTop());
+        moneyItemView.setPosition(currentItemView.getRight()+spacing, currentItemBalanceLabel.getTop());
         currentMoneyBalanceLabel.setBounds(moneyItemView.getRight(),moneyItemView.getTop(), currentItemBalanceLabel.getWidth(), moneyItemView.getHeight());
-        currentPriceTextLabel.setBounds(x, currentItemView.getBottom()+spacing, (width-spacing)/2, labelHeight);
+        balanceFrame.setBounds(x, changeItemButton.getBottom()+spacing,
+                width, currentMoneyBalanceLabel.getBottom() - yourItemBalanceLabel.getTop()+ spacing*2);
+
+
+        currentPriceTextLabel.setBounds(x, balanceFrame.getBottom()+spacing, (width-spacing)/2, labelHeight);
         currentPriceLabel.setBounds(currentPriceTextLabel.getRight()+spacing, currentPriceTextLabel.getTop(), currentPriceTextLabel.getWidth(), currentPriceTextLabel.getHeight());
 
 
         marketClosedLabel.setBounds(x, currentPriceLabel.getBottom()+spacing*6, width, labelHeight);
 
-
-        amountLabel.setBounds(x, currentPriceLabel.getBottom()+spacing*6, (width-spacing)/2, labelHeight);
+        int tradingStartY = height - (buttonHeight*2+ 4*labelHeight+3*spacing);
+        amountLabel.setBounds(x, tradingStartY, (width-spacing)/2, labelHeight);
         amountTextBox.setBounds(amountLabel.getRight()+spacing, amountLabel.getTop(), amountLabel.getWidth(), amountLabel.getHeight());
 
         marketOrderLabel.setBounds(x, amountLabel.getBottom()+spacing*2, width, labelHeight);
-        marketBuyButton.setBounds(x, marketOrderLabel.getBottom()+spacing, (width-spacing)/2, buttonHeight);
+        marketBuyButton.setBounds(x, marketOrderLabel.getBottom(), (width-spacing)/2, buttonHeight);
         marketSellButton.setBounds(marketBuyButton.getRight()+spacing, marketBuyButton.getTop(), marketBuyButton.getWidth(), marketBuyButton.getHeight());
 
         limitOrderLabel.setBounds(x, marketBuyButton.getBottom()+spacing*2, width, labelHeight);
-        limitPriceLabel.setBounds(x, limitOrderLabel.getBottom()+spacing, (width-spacing)/2, labelHeight);
+        limitPriceLabel.setBounds(x, limitOrderLabel.getBottom(), (width-spacing)/2, labelHeight);
         limitPriceTextBox.setBounds(limitPriceLabel.getRight()+spacing, limitPriceLabel.getTop(), limitPriceLabel.getWidth(), limitPriceLabel.getHeight());
-        limitBuyButton.setBounds(x, limitPriceLabel.getBottom()+spacing, (width-spacing)/2, buttonHeight);
+        limitBuyButton.setBounds(x, limitPriceLabel.getBottom(), (width-spacing)/2, buttonHeight);
         limitSellButton.setBounds(limitBuyButton.getRight()+spacing, limitBuyButton.getTop(), limitBuyButton.getWidth(), limitBuyButton.getHeight());
 
     }

@@ -24,23 +24,22 @@ import net.minecraft.world.entity.player.Player;
 
 
 public class TradeScreen extends StockMarketGuiScreen {
-    private static final String PREFIX = "gui.";
-    private static final String NAME = "trade_screen";
+    private static final String PREFIX = "gui."+StockMarketMod.MOD_ID + ".trade_screen.";
 
-    private static final Component TITLE = Component.translatable(PREFIX + StockMarketMod.MOD_ID + "."+NAME+".stock_market_block_screen");
-    public static final Component YOUR_BALANCE_LABEL = Component.translatable(PREFIX+StockMarketMod.MOD_ID + "."+NAME+".your_balance");
-    public static final Component CHANGE_ITEM_BUTTON = Component.translatable(PREFIX+StockMarketMod.MOD_ID + "."+NAME+".change_item");
-    public static final Component AMOUNT_LABEL = Component.translatable(PREFIX+StockMarketMod.MOD_ID + "."+NAME+".amount");
-    public static final Component MARKET_ORDER_LABEL = Component.translatable(PREFIX+StockMarketMod.MOD_ID + "."+NAME+".market_order");
-    public static final Component LIMIT_ORDER_LABEL = Component.translatable(PREFIX+StockMarketMod.MOD_ID + "."+NAME+".limit_order");
-    public static final Component LIMIT_PRICE_LABEL = Component.translatable(PREFIX+StockMarketMod.MOD_ID + "."+NAME+".limit_price");
-    public static final Component PRICE_LABEL = Component.translatable(PREFIX+StockMarketMod.MOD_ID + "."+NAME+".price");
-    public static final Component BUY = Component.translatable(PREFIX+StockMarketMod.MOD_ID + "."+NAME+".buy");
-    public static final Component SELL = Component.translatable(PREFIX+StockMarketMod.MOD_ID + "."+NAME+".sell");
-    public static final Component MARKET_CLOSED = Component.translatable(PREFIX+StockMarketMod.MOD_ID + "."+NAME+".market_closed");
-    public static final Component CANCEL = Component.translatable(PREFIX+ StockMarketMod.MOD_ID + "."+NAME+".cancel");
-    public static final Component DIRECTION_LABEL = Component.translatable(PREFIX+ StockMarketMod.MOD_ID + "."+NAME+".direction");
-    public static final Component FILLED_LABEL = Component.translatable(PREFIX+ StockMarketMod.MOD_ID + "."+NAME+".filled");
+    private static final Component TITLE = Component.translatable(PREFIX +"stock_market_block_screen");
+    public static final Component YOUR_BALANCE_LABEL = Component.translatable(PREFIX+"your_balance");
+    public static final Component CHANGE_ITEM_BUTTON = Component.translatable(PREFIX+"change_item");
+    public static final Component AMOUNT_LABEL = Component.translatable(PREFIX+"amount");
+    public static final Component MARKET_ORDER_LABEL = Component.translatable(PREFIX+"market_order");
+    public static final Component LIMIT_ORDER_LABEL = Component.translatable(PREFIX+"limit_order");
+    public static final Component LIMIT_PRICE_LABEL = Component.translatable(PREFIX+"limit_price");
+    public static final Component PRICE_LABEL = Component.translatable(PREFIX+"price");
+    public static final Component BUY = Component.translatable(PREFIX+"buy");
+    public static final Component SELL = Component.translatable(PREFIX+"sell");
+    public static final Component MARKET_CLOSED = Component.translatable(PREFIX+"market_closed");
+    public static final Component CANCEL = Component.translatable(PREFIX+ "cancel");
+    public static final Component DIRECTION_LABEL = Component.translatable(PREFIX+ "direction");
+    public static final Component FILLED_LABEL = Component.translatable(PREFIX+ "filled");
 
     public static final int colorGreen = 0x7F00FF00;
     public static final int colorRed = 0x7FFF0000;
@@ -138,7 +137,7 @@ public class TradeScreen extends StockMarketGuiScreen {
         int x = padding;
 
         tradingChart.setBounds(x, padding, (width*2/3)-spacing, height / 2);
-        tradePanel.setBounds(tradingChart.getRight()+spacing, padding, width/3, height);
+        tradePanel.setBounds(tradingChart.getRight()+spacing, padding, width - tradingChart.getRight(), height);
 
         //candleStickChart.setBounds(x, padding, (width * 5) / 8-spacing/2, height/2);
         //orderbookVolumeChart.setBounds(candleStickChart.getRight(), padding, width / 8, candleStickChart.getHeight());

@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.screen.uiElements.chart;
 
+import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.clientdata.OrderReadData;
 import net.kroia.stockmarket.market.clientdata.OrderReadListData;
@@ -7,6 +8,7 @@ import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.screen.uiElements.LimitOrderInChartDisplay;
 import net.kroia.stockmarket.util.PriceHistory;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
+import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -15,7 +17,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 
 public class CandleStickChartWidget extends StockMarketGuiElement {
-
+    private static final Component BOT_TARGET_PRICE = Component.translatable("gui."+ StockMarketMod.MOD_ID + ".candle_stick_chart.bot_target_price");
     private final Function<Integer, Integer> priceToYPosFunc;
     private final Function<Integer, Integer> yPosToPriceFunc;
     private final int colorSell;
@@ -107,7 +109,7 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
         int currentPrice = priceHistory.getCurrentPrice();
         String labelText = String.valueOf(currentPrice);
         int currentPriceYPos = priceToYPosFunc.apply(currentPrice);
-        drawTooltip(labelText, x-candleWidth-3 ,currentPriceYPos, 0, 0, Alignment.RIGHT);
+        drawText(labelText, x-candleWidth-3 ,currentPriceYPos,  Alignment.RIGHT);
 
         int currentPriceLineLeftPos = x - candleWidth;
         int currentPriceLineWidth = candleWidth + 2;
@@ -133,7 +135,7 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
             int tooltipWidth = getTextWidth(labelText);
             int yPos = priceToYPosFunc.apply(botTargetPrice);
             drawRect(currentPriceLineLeftPos - tooltipWidth-10, yPos, tooltipWidth + currentPriceLineWidth+13, 1, 0xFF0000FF);
-            drawTooltip("Bot Target Price: " + botTargetPrice, currentPriceLineLeftPos - tooltipWidth-10, yPos, 0, 0, Alignment.RIGHT);
+            drawText(BOT_TARGET_PRICE.getString() + botTargetPrice, currentPriceLineLeftPos - tooltipWidth-10, yPos, Alignment.RIGHT);
         }
         drawRect(currentPriceLineLeftPos, currentPriceYPos, currentPriceLineWidth, 1, 0xFF555555);
 

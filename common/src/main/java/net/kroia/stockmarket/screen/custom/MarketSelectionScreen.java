@@ -37,7 +37,10 @@ public class MarketSelectionScreen extends StockMarketGuiScreen {
     {
         super.onClose();
         if(parentScreen != null) {
+            int mousePosX = getMouseX();
+            int mousePosY = getMouseY();
             minecraft.setScreen(parentScreen);
+            setMousePos(mousePosX, mousePosY);
         }
     }
 

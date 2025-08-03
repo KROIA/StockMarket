@@ -48,7 +48,7 @@ public class TradingVolumeHistoryChart extends StockMarketGuiElement {
             //int open = priceHistory.getOpenPrice(lastIndex-i);
             //renderCandle(x, candleWidth, 0, 0, open, close, high, low);
 
-            if(x < candleWidth)
+            if(x <= candleWidth)
                 break;
         }
     }

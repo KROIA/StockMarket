@@ -29,7 +29,7 @@ public class MarketCreationScreen extends StockMarketGuiScreen {
     private static final Component TITLE = Component.translatable(PREFIX + "title");
     private static final Component ITEM_SELECTION_VIEW_TITLE = Component.translatable(PREFIX + "item_selection_title");
     private static final Component CURRENCY_SELECTION_VIEW_TITLE = Component.translatable(PREFIX + "currency_selection_title");
-    private static final Component CREATE_MAKET_BUTTON = Component.translatable(PREFIX + "create_market_button");
+    private static final Component CREATE_MARKET_BUTTON = Component.translatable(PREFIX + "create_market_button");
 
     public static final Component MARKET_OPEN = Component.translatable(PREFIX+"market_open");
     public static final Component ENABLE_VIRTUAL_ORDER_BOOK = Component.translatable(PREFIX+"enable_virtual_order_book");
@@ -158,7 +158,7 @@ public class MarketCreationScreen extends StockMarketGuiScreen {
 
         });
 
-        createMarketButton = new Button(CREATE_MAKET_BUTTON.getString(), this::onCreateMarketButtonPressed);
+        createMarketButton = new Button(CREATE_MARKET_BUTTON.getString(), this::onCreateMarketButtonPressed);
         createMarketButton.setEnabled(false);
 
         currentPairView.setHoverTooltipSupplier(this::getInitialPriceTooltip);
@@ -242,7 +242,10 @@ public class MarketCreationScreen extends StockMarketGuiScreen {
     @Override
     public void onClose() {
         super.onClose();
+        int mousePosX = getMouseX();
+        int mousePosY = getMouseY();
         minecraft.setScreen(parent);
+        setMousePos(mousePosX, mousePosY);
     }
 
     @Override

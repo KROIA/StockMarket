@@ -19,15 +19,17 @@ import java.util.function.Consumer;
 
 public class TradingPairSelectionView extends StockMarketGuiElement {
 
+    public static final Component FILTER = Component.translatable("gui."+ StockMarketMod.MOD_ID + ".trading_pair_selection_view.filter");
     public static final Component CLEAR_ITEM = Component.translatable("gui."+ StockMarketMod.MOD_ID + ".trading_pair_selection_view.clear_item");
     public static final Component CLEAR_CURRENCY = Component.translatable("gui."+ StockMarketMod.MOD_ID + ".trading_pair_selection_view.clear_currency");
-    public static final Component SELECT_PAIR = Component.translatable("gui."+ StockMarketMod.MOD_ID + ".trading_pair_selection_view.select_pair");
+    public static final Component SELECT_MARKET = Component.translatable("gui."+ StockMarketMod.MOD_ID + ".trading_pair_selection_view.select_market");
 
     private final Consumer<TradingPair> onSelected;
     private TradingPair selectedPair;
     private List<TradingPair> availableTradingPairs;
 
 
+    private final Label filterLabel;
 
     private final Button clearItemButton;
     private final ItemView selectedItemView;
@@ -36,7 +38,7 @@ public class TradingPairSelectionView extends StockMarketGuiElement {
     private final ItemView selectedCurrencyView;
 
 
-    private final Label selectItemLabel;
+    private final Label selectedMarketLabel;
     private final VerticalListView tradingPairListView;
     private final ItemSelectionView itemSelectionView;
     private final ItemSelectionView currencySelectionView;
@@ -46,6 +48,8 @@ public class TradingPairSelectionView extends StockMarketGuiElement {
         this.onSelected = onSelected;
         selectedPair = TradingPair.createDefault();
 
+        filterLabel = new Label(FILTER.getString());
+        filterLabel.setAlignment(Label.Alignment.CENTER);
 
         clearItemButton = new Button(CLEAR_ITEM.getString(), () -> {
             onItemSelected(null);
@@ -60,19 +64,25 @@ public class TradingPairSelectionView extends StockMarketGuiElement {
 
 
 
-        selectItemLabel = new Label(SELECT_PAIR.getString());
-        selectItemLabel.setAlignment(Label.Alignment.CENTER);
+        selectedMarketLabel = new Label(SELECT_MARKET.getString());
+        selectedMarketLabel.setAlignment(Label.Alignment.CENTER);
         tradingPairListView = new VerticalListView();
+        Layout layout = new LayoutVertical();
+        layout.stretchX = true;
+        tradingPairListView.setLayout(layout);
+
         itemSelectionView = new ItemSelectionView(this::onItemSelected);
         currencySelectionView = new ItemSelectionView(this::onCurrencySelected);
 
+
+        addChild(filterLabel);
         addChild(clearItemButton);
         addChild(selectedItemView);
         addChild(itemSelectionView);
         addChild(clearCurrencyButton);
         addChild(selectedCurrencyView);
         addChild(currencySelectionView);
-        addChild(selectItemLabel);
+        addChild(selectedMarketLabel);
         addChild(tradingPairListView);
     }
 
@@ -85,6 +95,7 @@ public class TradingPairSelectionView extends StockMarketGuiElement {
     @Override
     protected void layoutChanged() {
         int padding = 5;
+        int spacing = 5;
         int width = getWidth() - padding * 2;
         int height = getHeight() - padding * 2;
 
@@ -96,11 +107,11 @@ public class TradingPairSelectionView extends StockMarketGuiElement {
         int column1Width = (width * column1WidthRatio) / sumOfRatios;
         int column2Width = (width * column2WidthRatio) / sumOfRatios;
         int column3Width = (width * column3WidthRatio) / sumOfRatios;
-        if(column3Width < 70)
+        if(column3Width < 80)
         {
-            column3Width = 70;
+            column3Width = 80;
             // Adjust the other columns to maintain the ratio
-            sumOfRatios = column1WidthRatio + column2WidthRatio;
+            sumOfRatios = column1WidthRatio + column2WidthRatio + padding;
             column1Width = ((width-column3Width) * column1WidthRatio) / sumOfRatios;
             column2Width = ((width-column3Width) * column2WidthRatio) / sumOfRatios;
         }
@@ -109,25 +120,25 @@ public class TradingPairSelectionView extends StockMarketGuiElement {
 
         Point pos = new Point(padding, padding);
 
-        clearItemButton.setBounds(pos.x, pos.y, column1Width - selectedItemView.getWidth() - padding, selectedItemView.getHeight());
+        filterLabel.setBounds(pos.x, pos.y, column1Width + column2Width, 15);
+        pos.y += filterLabel.getHeight() + spacing;
+        clearItemButton.setBounds(pos.x, pos.y, column1Width - selectedItemView.getWidth() - spacing, selectedItemView.getHeight());
         selectedItemView.setPosition(clearItemButton.getRight(), clearItemButton.getTop());
-        itemSelectionView.setBounds(pos.x, pos.y + clearItemButton.getHeight() + padding,
-                column1Width - padding, height - clearItemButton.getHeight() - padding);
+        itemSelectionView.setBounds(pos.x, clearItemButton.getBottom() + spacing,
+                column1Width - spacing, height - clearItemButton.getBottom());
 
-        pos.x += clearItemButton.getWidth()+selectedItemView.getWidth() + padding;
+        pos.x += clearItemButton.getWidth()+selectedItemView.getWidth() + spacing;
         clearCurrencyButton.setBounds(pos.x, pos.y, column2Width - selectedCurrencyView.getWidth(), selectedCurrencyView.getHeight());
         selectedCurrencyView.setPosition(clearCurrencyButton.getRight(), clearCurrencyButton.getTop());
-        currencySelectionView.setBounds(pos.x, pos.y + clearCurrencyButton.getHeight() + padding,
-                column2Width, height - clearCurrencyButton.getHeight() - padding);
+        currencySelectionView.setBounds(pos.x, clearCurrencyButton.getBottom() + spacing,
+                column2Width, height - clearCurrencyButton.getBottom());
 
-        pos.x += clearCurrencyButton.getWidth() + selectedCurrencyView.getWidth() + padding;
-        selectItemLabel.setBounds(pos.x, pos.y, column3Width, clearItemButton.getHeight());
-        pos.y += clearItemButton.getHeight() + padding;
-        tradingPairListView.setBounds(pos.x, pos.y, column3Width, height - clearItemButton.getHeight() - padding);
+        pos.x += clearCurrencyButton.getWidth() + selectedCurrencyView.getWidth() + spacing;
+        selectedMarketLabel.setBounds(pos.x, filterLabel.getTop(), column3Width, filterLabel.getHeight());
+        pos.y += clearItemButton.getHeight() + spacing;
+        tradingPairListView.setBounds(pos.x, selectedMarketLabel.getBottom() + spacing, column3Width, height - selectedMarketLabel.getBottom());
 
-        Layout layout = new LayoutVertical();
-        layout.stretchX = true;
-        tradingPairListView.setLayout(layout);
+
     }
 
     public TradingPair getSelectedTradingPair() {
