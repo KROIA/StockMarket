@@ -555,7 +555,8 @@ public class DefaultMarketSettings {
         MarketFactory.DefaultMarketSetupDataGroup books = new MarketFactory.DefaultMarketSetupDataGroup("EnchantedBook");
         int bookPrice = ENCHANTMENT_BOOK_PRICE;
 
-        List<ItemStack> bookItems = ItemUtilities.getSearchCreativeItems("enchanted book");
+        String searchText =  Items.ENCHANTED_BOOK.getDefaultInstance().getHoverName().getString();
+        List<ItemStack> bookItems = ItemUtilities.getSearchCreativeItems(searchText);
 
         for (ItemStack book : bookItems)
         {

@@ -4,8 +4,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.JsonUtilities;
-import net.kroia.modutilities.ServerSaveable;
+import net.kroia.modutilities.*;
 import net.kroia.modutilities.networking.INetworkPayloadConverter;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.minecraft.nbt.CompoundTag;
@@ -209,7 +208,17 @@ public class TradingPair implements ServerSaveable, INetworkPayloadConverter {
     }
 
     public String getShortDescription() {
-        return item.getName() + " <-> " + currency.getName();
+
+        if(UtilitiesPlatform.isClient()) {
+            String itemText = ClientPlayerUtilities.getItemDisplayText(item.getStack());
+            String currencyText = ClientPlayerUtilities.getItemDisplayText(currency.getStack());
+            return itemText + "\n<->\n" + currencyText;
+        }
+        else {
+            return item.getName() + "\n<->\n" + currency.getName();
+        }
+
+        //return item.getName() + " <-> " + currency.getName();
     }
 
     @Override

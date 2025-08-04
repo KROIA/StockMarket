@@ -22,11 +22,15 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
 
+import java.util.List;
+
 
 public class TradeScreen extends StockMarketGuiScreen {
     private static final String PREFIX = "gui."+StockMarketMod.MOD_ID + ".trade_screen.";
 
-    private static final Component TITLE = Component.translatable(PREFIX +"stock_market_block_screen");
+    private static final Component TITLE = Component.translatable(PREFIX +"title");
+    public static final Component PREVIOUS_PAIR_TOOLTIP = Component.translatable(PREFIX+"previous_pair.tooltip");
+    public static final Component NEXT_PAIR_TOOLTIP  = Component.translatable(PREFIX+"next_pair.tooltip");
     public static final Component YOUR_BALANCE_LABEL = Component.translatable(PREFIX+"your_balance");
     public static final Component CHANGE_ITEM_BUTTON = Component.translatable(PREFIX+"change_item");
     public static final Component AMOUNT_LABEL = Component.translatable(PREFIX+"amount");
@@ -58,10 +62,12 @@ public class TradeScreen extends StockMarketGuiScreen {
 
     private final OrderListView activeOrderListView;
 
-    private final TradePanel tradePanel;
+    private final TradePanel tradingPanel;
     private static TradeScreen instance;
 
     private final TimerMillis updateTimer;
+    private List<TradingPair> tradingPairsCarusel;
+    private int currentTradingPairCaruselIndex = 0;
 
     public TradeScreen(StockMarketBlockEntity blockEntity) {
         this(blockEntity.getTradringPair(), blockEntity.getAmount(), blockEntity.getPrice());
@@ -87,22 +93,29 @@ public class TradeScreen extends StockMarketGuiScreen {
         //this.orderbookVolumeChart.setTooltipMousePositionAlignment(GuiElement.Alignment.TOP);
         //this.orderbookVolumeChart.setHoverTooltipSupplier(StockMarketTextMessages::getCandlestickChartTooltipOrderBookVolume);
         this.activeOrderListView = new OrderListView(this::cancelOrder);
-        this.tradePanel = new TradePanel(this::onSelectItemButtonPressed,
+        this.tradingPanel = new TradePanel(this::onSelectItemButtonPressed,
                 this::onBuyMarketButtonPressed,
                 this::onSellMarketButtonPressed,
                 this::onBuyLimitButtonPressed,
-                this::onSellLimitButtonPressed);
+                this::onSellLimitButtonPressed,
+                this::onSelectNextMarketButtonPressed,
+                this::onSelectPreviousMarketButtonPressed);
 
-        tradePanel.setAmount(currentAmount);
-        tradePanel.setLimitPrice(currentPrice);
-        tradePanel.setMarketOpen(marketWasOpen);
+        tradingPanel.setAmount(currentAmount);
+        tradingPanel.setLimitPrice(currentPrice);
+        tradingPanel.setMarketOpen(marketWasOpen);
 
         // Add Gui Elements
 
         addElement(tradingChart);
         addElement(activeOrderListView);
-        addElement(tradePanel);
+        addElement(tradingPanel);
 
+        getMarketManager().requestTradingPairs(
+                (tradingPairs) -> {
+                    tradingPairsCarusel = tradingPairs;
+                    setPreviousNextMarket();
+                });
 
         TickEvent.PLAYER_POST.register(TradeScreen::onClientTick);
     }
@@ -126,7 +139,7 @@ public class TradeScreen extends StockMarketGuiScreen {
 
     @Override
     protected void updateLayout(Gui gui) {
-        tradePanel.setTradingPair(tradingPair);
+        tradingPanel.setTradingPair(tradingPair);
 
         int padding = 5;
         int spacing = 5;
@@ -136,7 +149,7 @@ public class TradeScreen extends StockMarketGuiScreen {
         int x = padding;
 
         tradingChart.setBounds(x, padding, (((width*3)/4)-spacing), ((height*2) / 3));
-        tradePanel.setBounds(tradingChart.getRight()+spacing, padding, width - tradingChart.getRight(), height);
+        tradingPanel.setBounds(tradingChart.getRight()+spacing, padding, width - tradingChart.getRight(), height);
 
         //candleStickChart.setBounds(x, padding, (width * 5) / 8-spacing/2, height/2);
         //orderbookVolumeChart.setBounds(candleStickChart.getRight(), padding, width / 8, candleStickChart.getHeight());
@@ -154,8 +167,8 @@ public class TradeScreen extends StockMarketGuiScreen {
         if(blockEntity != null)
         {
             blockEntity.setTradingPair(tradingPair);
-            blockEntity.setAmount(tradePanel.getAmount());
-            blockEntity.setPrice(tradePanel.getLimitPrice());
+            blockEntity.setAmount(tradingPanel.getAmount());
+            blockEntity.setPrice(tradingPanel.getLimitPrice());
             UpdateStockMarketBlockEntityPacket.sendPacketToServer(blockEntity.getBlockPos(), blockEntity);
         }
     }
@@ -165,9 +178,9 @@ public class TradeScreen extends StockMarketGuiScreen {
         if (instance != null) {
             instance.tradingPair = packet.getTradingPair();
             instance.selectMarket(instance.tradingPair);
-            instance.tradePanel.setTradingPair(instance.tradingPair);
-            instance.tradePanel.setAmount(packet.getAmount());
-            instance.tradePanel.setLimitPrice(packet.getPrice());
+            instance.tradingPanel.setTradingPair(instance.tradingPair);
+            instance.tradingPanel.setAmount(packet.getAmount());
+            instance.tradingPanel.setLimitPrice(packet.getPrice());
         }
     }
 
@@ -199,18 +212,18 @@ public class TradeScreen extends StockMarketGuiScreen {
         PriceHistory history = data.priceHistoryData.toHistory();
         //candleStickChart.setPriceHistory(history);
         //orderbookVolumeChart.setOrderBookVolume(data.orderBookVolumeData);
-        tradePanel.setCurrentItemBalance(data.itemBankData.balance);
-        tradePanel.setCurrentMoneyBalance(data.currencyBankData.balance);
+        tradingPanel.setCurrentItemBalance(data.itemBankData.balance);
+        tradingPanel.setCurrentMoneyBalance(data.currencyBankData.balance);
 
 
-        tradePanel.setCurrentPrice(history.getCurrentPrice());
+        tradingPanel.setCurrentPrice(history.getCurrentPrice());
         activeOrderListView.updateActiveOrders(data.openOrdersData);
         //candleStickChart.updateOrderDisplay(data.openOrdersData);
 
         if(marketWasOpen != data.marketIsOpen)
         {
             marketWasOpen = data.marketIsOpen;
-            tradePanel.setMarketOpen(data.marketIsOpen);
+            tradingPanel.setMarketOpen(data.marketIsOpen);
         }
     }
 
@@ -218,13 +231,13 @@ public class TradeScreen extends StockMarketGuiScreen {
         //BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.unsubscribeMarketUpdate(tradingPair);
         this.tradingPair = tradingPair;
         selectMarket(tradingPair);
-        tradePanel.setTradingPair(tradingPair);
+        tradingPanel.setTradingPair(tradingPair);
         minecraft.setScreen(this);
     }
 
 
     private void onSellMarketButtonPressed() {
-        int amount = tradePanel.getAmount();
+        int amount = tradingPanel.getAmount();
         if(amount > 0)
             getSelectedMarket().requestCreateMarketOrder(-amount, (success) -> {
                 if(success)
@@ -239,7 +252,7 @@ public class TradeScreen extends StockMarketGuiScreen {
     }
 
     private void onBuyMarketButtonPressed() {
-        int amount = tradePanel.getAmount();
+        int amount = tradingPanel.getAmount();
         if(amount > 0)
             getSelectedMarket().requestCreateMarketOrder(amount, (success) -> {
                 if(success)
@@ -254,8 +267,8 @@ public class TradeScreen extends StockMarketGuiScreen {
     }
 
     private void onSellLimitButtonPressed() {
-        int amount = tradePanel.getAmount();
-        int price = tradePanel.getLimitPrice();
+        int amount = tradingPanel.getAmount();
+        int price = tradingPanel.getLimitPrice();
         if(amount > 0 && price >= 0)
             getSelectedMarket().requestCreateLimitOrder(-amount, price, (success) -> {
                 if(success)
@@ -270,8 +283,8 @@ public class TradeScreen extends StockMarketGuiScreen {
     }
 
     private void onBuyLimitButtonPressed() {
-        int amount = tradePanel.getAmount();
-        int price = tradePanel.getLimitPrice();
+        int amount = tradingPanel.getAmount();
+        int price = tradingPanel.getLimitPrice();
         if(amount > 0 && price >= 0)
             getSelectedMarket().requestCreateLimitOrder(amount, price, (success) -> {
                 if(success)
@@ -288,10 +301,60 @@ public class TradeScreen extends StockMarketGuiScreen {
     private void onSelectItemButtonPressed() {
 
         MarketSelectionScreen screen = new MarketSelectionScreen(this, this::onItemSelected);
-        BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.requestTradingPairs(
-                screen::setAvailableTradingPairs);
+        getMarketManager().requestTradingPairs(
+                (tradingPairs) -> {
+                    screen.setAvailableTradingPairs(tradingPairs);
+                    tradingPairsCarusel = tradingPairs;
+                    setPreviousNextMarket();
+                });
         Minecraft.getInstance().setScreen(screen);
     }
+    private void onSelectNextMarketButtonPressed()
+    {
+        TradingPair nextPair = tradingPanel.getNextTradingPair();
+        if(nextPair != null)
+            onItemSelected(nextPair);
+        currentTradingPairCaruselIndex++;
+        setPreviousNextMarket();
+    }
+    private void onSelectPreviousMarketButtonPressed()
+    {
+        TradingPair previousTradingPair = tradingPanel.getPreviousTradingPair();
+        if(previousTradingPair != null)
+            onItemSelected(previousTradingPair);
+        currentTradingPairCaruselIndex--;
+        setPreviousNextMarket();
+    }
+    private void setPreviousNextMarket()
+    {
+        if(tradingPairsCarusel == null || tradingPairsCarusel.isEmpty())
+        {
+            tradingPanel.setPreviousTradingPair(null);
+            tradingPanel.setNextTradingPair(null);
+            return;
+        }
+        if(tradingPairsCarusel.size() == 1)
+        {
+            tradingPanel.setPreviousTradingPair(tradingPairsCarusel.get(0));
+            tradingPanel.setNextTradingPair(null);
+            return;
+        }
+        if(tradingPairsCarusel.size() == 2)
+        {
+            tradingPanel.setPreviousTradingPair(tradingPairsCarusel.get(0));
+            tradingPanel.setNextTradingPair(tradingPairsCarusel.get(1));
+            return;
+        }
+
+
+        int size = tradingPairsCarusel.size();
+        currentTradingPairCaruselIndex = currentTradingPairCaruselIndex % size;
+        TradingPair previousPair = tradingPairsCarusel.get(currentTradingPairCaruselIndex);
+        TradingPair nextPair = tradingPairsCarusel.get((currentTradingPairCaruselIndex + 2) % size);
+        tradingPanel.setPreviousTradingPair(previousPair);
+        tradingPanel.setNextTradingPair(nextPair);
+    }
+
 
     private void cancelOrder(OrderReadData order)
     {

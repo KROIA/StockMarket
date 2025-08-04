@@ -1,8 +1,10 @@
 package net.kroia.stockmarket.screen.custom;
 
 
+import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.screen.uiElements.AskPopupScreen;
 import net.kroia.modutilities.PlayerUtilities;
+import net.kroia.modutilities.TimerMillis;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.CheckBox;
@@ -17,11 +19,13 @@ import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.clientdata.ServerMarketSettingsData;
 import net.kroia.stockmarket.screen.uiElements.TradingPairSelectionView;
 import net.kroia.stockmarket.screen.uiElements.TradingPairView;
+import net.kroia.stockmarket.screen.uiElements.chart.TradingChartWidget;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.kroia.stockmarket.util.StockMarketGuiScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.player.Player;
 
 public class ManagementScreen extends StockMarketGuiScreen {
     public static final int padding = 5;
@@ -59,7 +63,7 @@ public class ManagementScreen extends StockMarketGuiScreen {
         public static final Component TOOLTIP_NEW_CUSTOM_MARKET = Component.translatable(PREFIX + "new_custom_market.tooltip");
         public static final Component TOOLTIP_NEW_MARKET_BY_CATEGORY = Component.translatable(PREFIX + "new_market_by_category.tooltip");
         public static final Component TOOLTIP_REMOVE_SELECTED_TRADING_PAIR = Component.translatable(PREFIX + "remove_selected_trading_pair.tooltip");
-        public static final Component TOOLTIP_SELECTED_TRADING_PAIR = Component.translatable(PREFIX + "selected_trading_pair.tooltip");
+        //public static final Component TOOLTIP_SELECTED_TRADING_PAIR = Component.translatable(PREFIX + "selected_trading_pair.tooltip");
 
 
         public static final Component GENERAL_TITLE = Component.translatable(PREFIX + "general.title");
@@ -273,7 +277,7 @@ public class ManagementScreen extends StockMarketGuiScreen {
             currentTradingItemView = new TradingPairView();
             currentTradingItemView.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.TOP_RIGHT);
             currentTradingItemView.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
-            currentTradingItemView.setHoverTooltipSupplier(()-> TEXT.TOOLTIP_SELECTED_TRADING_PAIR.getString() + (tradingPair != null ? tradingPair.getShortDescription() : "None"));
+            //currentTradingItemView.setHoverTooltipSupplier(()-> TEXT.TOOLTIP_SELECTED_TRADING_PAIR.getString() + (tradingPair != null ? tradingPair.getShortDescription() : "None"));
             currentTradingItemView.setClickable(false);
 
             marketSettingsButton = new Button(TEXT.MARKET_SETTINGS.getString(), this::onMarketSettingsButtonClicked);
@@ -468,13 +472,21 @@ public class ManagementScreen extends StockMarketGuiScreen {
     private MarketSettingsScreen marketSettingsScreen;
     private MarketCreationScreen tradingPairCreationScreen;
     private MarketCreationByCategoryScreen marketCreationByCategoryScreen;
+    private final TradingChartWidget tradingChart;
+    private static ManagementScreen instance;
+    private final TimerMillis updateTimer;
 
 
     protected ManagementScreen(Screen parent) {
         super(TEXT.TITLE);
+        instance = this;
+        updateTimer = new TimerMillis(true);
+        updateTimer.start(500);
         this.parentScreen = parent;
         tradableItemsView = new TradingPairSelectionView(this::setCurrentTradingPair);
         updateTradingItems();
+
+        tradingChart = new TradingChartWidget();
 
         listView = new VerticalListView();
         Layout layout = new LayoutVertical();
@@ -492,9 +504,11 @@ public class ManagementScreen extends StockMarketGuiScreen {
 
         addElement(tradableItemsView);
         addElement(listView);
+        addElement(tradingChart);
 
 
         setCurrentTradingPair(null);
+        TickEvent.PLAYER_POST.register(ManagementScreen::onClientTick);
     }
 
     @Override
@@ -502,9 +516,10 @@ public class ManagementScreen extends StockMarketGuiScreen {
         int width = getWidth()-2*padding;
         int height = getHeight()-2*padding;
 
-
-
-        tradableItemsView.setBounds(padding, padding, (width*2)/3, height);
+        int leftSideWidth = (width*2)/3;
+        int chartHeight = (height/3);
+        tradingChart.setBounds(padding, padding, leftSideWidth, chartHeight);
+        tradableItemsView.setBounds(tradingChart.getLeft(), tradingChart.getBottom()+spacing, tradingChart.getWidth(), height - tradingChart.getBottom());
         listView.setBounds(tradableItemsView.getRight()+spacing, padding, width - tradableItemsView.getRight(), height);
 
         /*generalManagerWidget.setPosition(tradableItemsView.getRight()+spacing, padding);
@@ -530,6 +545,8 @@ public class ManagementScreen extends StockMarketGuiScreen {
 
     @Override
     public void onClose() {
+        TickEvent.PLAYER_POST.unregister(ManagementScreen::onClientTick);
+        instance = null;
         super.onClose();
         if(parentScreen != null)
             Minecraft.getInstance().setScreen(parentScreen);
@@ -584,5 +601,17 @@ public class ManagementScreen extends StockMarketGuiScreen {
         currentMarketSettingsData = settingsData;
         if(settingsData != null)
             currentPairManagerWidget.setMarketOpenCheckBoxChecked(settingsData.marketOpen);
+    }
+
+    private static void onClientTick(Player player) {
+        if (Minecraft.getInstance().screen != instance || instance == null)
+            return;
+
+
+        if(instance.updateTimer.check() && instance.getSelectedMarket() != null)
+        {
+            instance.getSelectedMarket().requestTradingViewData(instance.tradingChart.getMaxCandleCount(),
+                    0,0,500, false ,instance.tradingChart::updateView);
+        }
     }
 }

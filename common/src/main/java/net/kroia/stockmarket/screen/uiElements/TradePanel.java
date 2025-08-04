@@ -3,7 +3,6 @@ package net.kroia.stockmarket.screen.uiElements;
 import net.kroia.banksystem.banking.bank.MoneyBank;
 import net.kroia.modutilities.gui.elements.*;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
-import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.kroia.stockmarket.util.StockMarketTextMessages;
@@ -11,10 +10,6 @@ import net.kroia.stockmarket.util.StockMarketTextMessages;
 import static net.kroia.stockmarket.screen.custom.TradeScreen.*;
 
 public class TradePanel extends StockMarketGuiElement {
-    protected static StockMarketModBackend.Instances BACKEND_INSTANCES;
-    public static void setBackend(StockMarketModBackend.Instances backend) {
-        BACKEND_INSTANCES = backend;
-    }
     private final int buyButtonNormalColor = 0xFF008800;
     private final int buyButtonHoverColor = 0xFF00BB00;
     private final int buyButtonPressedColor = 0xFF00FF00;
@@ -25,6 +20,8 @@ public class TradePanel extends StockMarketGuiElement {
     private final int sellButtonPressedColor = 0xFFFF0000;
 
 
+    private final TradingPairView previousTradingPairView;
+    private final TradingPairView nextTradingPairView;
     private final Button changeItemButton;
 
 
@@ -64,10 +61,24 @@ public class TradePanel extends StockMarketGuiElement {
                       Runnable onMarketBuyButtonClicked,
                       Runnable onMarketSellButtonClicked,
                       Runnable onLimitBuyButtonClicked,
-                      Runnable onLimitSellButtonClicked) {
+                      Runnable onLimitSellButtonClicked,
+                      Runnable onSelectNextMarketButtonClicked,
+                      Runnable onSelectPreviousMarketButtonClicked) {
         super();
+
+        previousTradingPairView = new TradingPairView();
+        previousTradingPairView.setOnFallingEdge(onSelectPreviousMarketButtonClicked);
+        previousTradingPairView.setHoverTooltipSupplier(PREVIOUS_PAIR_TOOLTIP::getString);
+        previousTradingPairView.setHoverTooltipMousePositionAlignment(Alignment.TOP_RIGHT);
+        nextTradingPairView = new TradingPairView();
+        nextTradingPairView.setOnFallingEdge(onSelectNextMarketButtonClicked);
+        nextTradingPairView.setHoverTooltipSupplier(NEXT_PAIR_TOOLTIP::getString);
+        nextTradingPairView.setHoverTooltipMousePositionAlignment(Alignment.TOP_RIGHT);
+
         changeItemButton = new Button(CHANGE_ITEM_BUTTON.getString());
         changeItemButton.setOnFallingEdge(onItemChangeButtonClicked);
+        setPreviousTradingPair(null);
+        setNextTradingPair(null);
 
         balanceFrame = new Frame();
         balanceFrame.setEnableBackground(false);
@@ -185,6 +196,8 @@ public class TradePanel extends StockMarketGuiElement {
         //addChild(currentItemView);
         //addChild(currentItemBalanceLabel);
         //addChild(moneyItemView);
+        addChild(previousTradingPairView);
+        addChild(nextTradingPairView);
         addChild(balanceFrame);
         addChild(currentPriceTextLabel);
         addChild(currentPriceLabel);
@@ -259,7 +272,9 @@ public class TradePanel extends StockMarketGuiElement {
         int y = padding;
         int x = padding;
 
-        changeItemButton.setBounds(x, y, width, buttonHeight);
+        previousTradingPairView.setBounds(x, y, width/2-(spacing+1)/2, 20);
+        nextTradingPairView.setBounds(previousTradingPairView.getRight()+spacing, y, width/2-(spacing+1)/2, 20);
+        changeItemButton.setBounds(x, previousTradingPairView.getBottom()+spacing, width, buttonHeight);
 
 
         yourItemBalanceLabel.setBounds(0, spacing, width, labelHeight);
@@ -349,6 +364,20 @@ public class TradePanel extends StockMarketGuiElement {
         if(currentItemView.getItemStack()!=null)
             itemName = currentItemView.getItemStack().getHoverName().getString();
         return itemName;
+    }
+    public void setPreviousTradingPair(TradingPair pair) {
+        previousTradingPairView.setTradingPair(pair);
+        previousTradingPairView.setEnabled(pair != null);
+    }
+    public TradingPair getPreviousTradingPair() {
+        return previousTradingPairView.getTradingPair();
+    }
+    public void setNextTradingPair(TradingPair pair) {
+        nextTradingPairView.setTradingPair(pair);
+        nextTradingPairView.setEnabled(pair != null);
+    }
+    public TradingPair getNextTradingPair() {
+        return nextTradingPairView.getTradingPair();
     }
 
 }

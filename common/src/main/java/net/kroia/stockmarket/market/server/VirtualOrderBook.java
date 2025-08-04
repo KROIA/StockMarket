@@ -23,12 +23,30 @@ public class VirtualOrderBook implements ServerSaveable {
 
     public static class Settings implements ServerSaveable, INetworkPayloadConverter
     {
-        public float volumeScale = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET_BOT.ORDER_BOOK_VOLUME_SCALE.get();
-        public float nearMarketVolumeScale = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET_BOT.NEAR_MARKET_VOLUME_SCALE.get();
-        public float volumeAccumulationRate = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET_BOT.VOLUME_ACCUMULATION_RATE.get();
-        public float volumeFastAccumulationRate = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET_BOT.VOLUME_FAST_ACCUMULATION_RATE.get();
-        public float volumeDecumulationRate = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET_BOT.VOLUME_DECUMULATION_RATE.get();
+        public float volumeScale;
+        public float nearMarketVolumeScale;
+        public float volumeAccumulationRate ;
+        public float volumeFastAccumulationRate;
+        public float volumeDecumulationRate;
 
+        public Settings()
+        {
+            if(BACKEND_INSTANCES.SERVER_SETTINGS != null)
+            {
+                volumeScale = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET_BOT.ORDER_BOOK_VOLUME_SCALE.get();
+                nearMarketVolumeScale = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET_BOT.NEAR_MARKET_VOLUME_SCALE.get();
+                volumeAccumulationRate = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET_BOT.VOLUME_ACCUMULATION_RATE.get();
+                volumeFastAccumulationRate = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET_BOT.VOLUME_FAST_ACCUMULATION_RATE.get();
+                volumeDecumulationRate = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET_BOT.VOLUME_DECUMULATION_RATE.get();
+            }
+            else {
+                volumeScale = 100.0f;
+                nearMarketVolumeScale = 2f;
+                volumeAccumulationRate = 0.001f;
+                volumeFastAccumulationRate = 0.1f;
+                volumeDecumulationRate = 0.0001f;
+            }
+        }
         @Override
         public boolean save(CompoundTag tag) {
             tag.putFloat("volumeScale", volumeScale);

@@ -259,8 +259,8 @@ public class MarketCreationScreen extends StockMarketGuiScreen {
     protected void updateLayout(Gui gui) {
         int padding = 5;
         int spacing = 5;
-        int width = this.width - padding * 2;
-        int height = this.height - padding * 2;
+        int width = getWidth() - padding * 2;
+        int height = getHeight() - padding * 2;
 
         int elementHeight = 20;
 

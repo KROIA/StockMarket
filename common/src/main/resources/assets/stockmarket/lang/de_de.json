@@ -2,7 +2,9 @@
   "block.stockmarket.stock_market_block": "Stock Market Terminal Block",
   "item.stockmarket.stock_market_block": "Stock Market Block",
   "item.stockmarket.trading_software": "Handels Software",
-  "gui.stockmarket.stock_market_block_screen": "Stock Market Block",
+  "gui.stockmarket.trade_screen.title": "Stock Market Block",
+  "gui.stockmarket.trade_screen.previous_pair.tooltip": "Wähle vorherigen Markt",
+  "gui.stockmarket.trade_screen.next_pair.tooltip": "Wähle nächsten Markt",
   "gui.stockmarket.trade_screen.your_balance": "Dein Guthaben",
   "gui.stockmarket.trade_screen.change_item": "Item ändern",
   "gui.stockmarket.trade_screen.amount": "Mänge",
@@ -106,7 +108,6 @@
   "gui.stockmarket.management_screen.new_custom_market.tooltip": "Neuen Markt erstellen",
   "gui.stockmarket.management_screen.new_market_by_category.tooltip": "Neuen Markt anhand einer Kategorie erstellen",
   "gui.stockmarket.management_screen.remove_selected_trading_pair.tooltip": "Ausgewähltes Handels Paar löschen",
-  "gui.stockmarket.management_screen.selected_trading_pair.tooltip": "Aktuelles Handels Paar: ",
 
   "gui.stockmarket.trade_panel.tooltip_market_buy": "Kaufe sofort {amount} {item_name}\nfür {cost} {currency}",
   "gui.stockmarket.trade_panel.tooltip_market_sell": "Verkaufe sofort {amount} {item_name}\nfür {cost} {currency}",

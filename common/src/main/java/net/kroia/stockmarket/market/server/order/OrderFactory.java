@@ -27,7 +27,6 @@ public class OrderFactory {
     public static LimitOrder createLimitOrder(UUID playerUUID, TradingPair pair, long amount, int price, long alreadyFilledAmount)
     {
         long lockedMoney = (amount>0? (amount-alreadyFilledAmount) * price : 0);
-        long lockedItem = (amount<0? -amount : 0);
 
         if(tryReserveItem(playerUUID, pair, lockedMoney, price, amount > 0))
             return new LimitOrder(playerUUID, amount, price, lockedMoney, alreadyFilledAmount);
@@ -89,50 +88,15 @@ public class OrderFactory {
             return tryReserveItem(itemBank, itemAmount);
         }
     }
-    /*public static boolean tryReserveBankFund(IBank moneyBank, IBank itemBank, ServerPlayer dbgPlayer, TradingPair pair, int amount, int price)
-    {
-        if(moneyBank == null)
-        {
-            if(dbgPlayer != null)
-                PlayerUtilities.printToClientConsole(dbgPlayer, BankSystemTextMessages.getBankNotFoundMessage(dbgPlayer.getName().getString(), MoneyItem.getName()));
-            return false;
-        }
-        if(itemBank == null)
-        {
-            if(dbgPlayer != null)
-                PlayerUtilities.printToClientConsole(dbgPlayer, BankSystemTextMessages.getBankNotFoundMessage(dbgPlayer.getName().getString(), MoneyItem.getName()));
-            return false;
-        }
-        if(amount > 0) {
-            if (moneyBank.lockAmount((long) price * amount) != Bank.Status.SUCCESS) {
-                if(dbgPlayer != null)
-                    PlayerUtilities.printToClientConsole(dbgPlayer, StockMarketTextMessages.getInsufficientFundToBuyMessage(pair.getCurrency().getName(), amount, price));
-                return false;
-            }
-        }
-        else {
-            if (itemBank.lockAmount(-amount) != Bank.Status.SUCCESS){
-                if(dbgPlayer != null)
-                    PlayerUtilities.printToClientConsole(dbgPlayer, StockMarketTextMessages.getInsufficientItemsToSellMessage(pair.getItem().getName(), amount));
-                return false;
-            }
-        }
-        return true;
-    }*/
+
     public static boolean tryReserveItem(IBank bank, long amount)
     {
         if(bank == null)
         {
-            //if(dbgPlayer != null)
-            //    PlayerUtilities.printToClientConsole(dbgPlayer, BankSystemTextMessages.getBankNotFoundMessage(dbgPlayer.getName().getString(), MoneyItem.getName()));
             return false;
         }
         if(amount > 0) {
-            if (bank.lockAmount(amount) != Bank.Status.SUCCESS) {
-                //if(dbgPlayer != null)
-                //    PlayerUtilities.printToClientConsole(dbgPlayer, StockMarketTextMessages.getMissingItemsMessage(bank.getItemID().getName(), amount));
-                return false;
-            }
+            return bank.lockAmount(amount) == Bank.Status.SUCCESS;
         }
         return true;
     }

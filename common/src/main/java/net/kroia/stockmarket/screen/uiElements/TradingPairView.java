@@ -45,6 +45,13 @@ public class TradingPairView extends Button {
 
         setTradingPair(tradingPair);
         setSize(60, 20); // Default size, can be adjusted
+
+        setHoverTooltipSupplier(()->{
+            if(tradingPair == null) {
+                return "";
+            }
+            return tradingPair.getShortDescription();
+        });
     }
 
 

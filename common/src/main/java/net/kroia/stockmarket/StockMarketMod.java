@@ -4,6 +4,7 @@ import net.kroia.stockmarket.api.StockMarketAPI;
 
 public final class StockMarketMod {
     public static final String MOD_ID = "stockmarket";
+    public static final String VERSION = "2.0.0_ALPHA";
 
     private static StockMarketModBackend backend;
 

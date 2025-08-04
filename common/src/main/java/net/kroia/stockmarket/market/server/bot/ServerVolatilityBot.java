@@ -15,13 +15,10 @@ import java.util.Random;
 public class ServerVolatilityBot extends ServerTradingBot {
     public static class Settings extends ServerTradingBot.Settings
     {
-
         public float volumeScale = 2f;
 
         public boolean enableTargetPrice = true;
         public float targetPriceSteeringFactor = 0.1f;
-
-        //public int targetPrice = 0; //Just for visualisation on the bot settings menu
 
 
         public boolean enableVolumeTracking = true;
@@ -36,11 +33,6 @@ public class ServerVolatilityBot extends ServerTradingBot {
             super();
         }
 
-        /*public Settings(int price, float rarity, float volatility, long udateTimerIntervallMS, boolean enableTargetPrice, boolean enableVolumeTracking, boolean enableRandomWalk)
-        {
-            this();
-            setFromData(price, rarity, volatility, udateTimerIntervallMS, enableTargetPrice, enableVolumeTracking, enableRandomWalk);
-        }*/
         @Override
         public boolean save(CompoundTag tag) {
             boolean success = super.save(tag);
@@ -52,9 +44,6 @@ public class ServerVolatilityBot extends ServerTradingBot {
             tag.putFloat("volumeSteeringFactor", volumeSteeringFactor);
             tag.putBoolean("enableRandomWalk", enableRandomWalk);
             tag.putFloat("volatility", volatility);
-            //tag.putFloat("targetPrice", targetPrice);
-
-
 
             return success;
         }
@@ -192,35 +181,11 @@ public class ServerVolatilityBot extends ServerTradingBot {
                 this.volatility = st.volatility;
             }
         }
-       /* public void setFromData(int price, float rarity, float volatility, long udateTimerIntervallMS,
-                                boolean enableTargetPrice, boolean enableVolumeTracking, boolean enableRandomWalk)
-        {
-            this.defaultPrice = price;
-            this.updateTimerIntervallMS = udateTimerIntervallMS;
-
-            this.enableTargetPrice = enableTargetPrice;
-            this.targetPriceSteeringFactor = Math.max(rarity*0.1f,0.00001f);
-
-            this.enableVolumeTracking = enableVolumeTracking;
-            this.volumeSteeringFactor = Math.max(0.0000001f/(1.2f-rarity),0.0000001f);
-
-            this.enableRandomWalk = enableRandomWalk;
-            this.volatility = Math.abs(volatility);
-
-            this.orderBookVolumeScale = 100f/(0.01f+Math.abs(rarity));
-            this.volumeScale = this.orderBookVolumeScale * this.volatility;
-        }*/
     }
-    //private MeanRevertingRandomWalk randomWalk1;
-    //private MeanRevertingRandomWalk randomWalk2;
+
     private final NormalizedRandomPriceGenerator priceGenerator;
     private MeanRevertingRandomWalk randomWalk3;
     private static Random random = new Random();
-    //private double speed = 0;
-    //public long lastMillis = 0;
-    //private long lastTimerMillis = 0;
-    //private long targetTimerMillis = 1000;
-    //private long timerCounter = 0;
     TimerMillis randomWalkTimer = new TimerMillis(false);
     private final PID pid = new PID(0.1f, 0.01f, 0.1f, 1);
 
@@ -229,12 +194,9 @@ public class ServerVolatilityBot extends ServerTradingBot {
     public ServerVolatilityBot(ServerMarket market) {
         super(market);
         setSettings(new Settings());
-        //randomWalk1 = new MeanRevertingRandomWalk(0.1, 0.05);
-        //randomWalk2 = new MeanRevertingRandomWalk(0.1, 0.05);
         priceGenerator = new NormalizedRandomPriceGenerator(5);
         randomWalkTimer.start(random.nextInt(10000));
         randomWalk3 = new MeanRevertingRandomWalk(0.1, 0.05);
-        //lastTimerMillis = System.currentTimeMillis();
     }
 
     public int getTargetPrice() {
@@ -343,32 +305,11 @@ public class ServerVolatilityBot extends ServerTradingBot {
         CompoundTag priceGeneratorTag = new CompoundTag();
         priceGenerator.save(priceGeneratorTag);
         tag.put("priceGenerator", priceGeneratorTag);
-
-
-        //CompoundTag meanRevertingRandomWalkTag = new CompoundTag();
-        //randomWalk1.save(meanRevertingRandomWalkTag);
-        //tag.put("randomWalk1", meanRevertingRandomWalkTag);
-        //CompoundTag meanRevertingRandomWalk2Tag = new CompoundTag();
-        //randomWalk2.save(meanRevertingRandomWalk2Tag);
-        //tag.put("randomWalk2", meanRevertingRandomWalk2Tag);
-
-
         return success;
     }
     @Override
     public boolean load(CompoundTag tag) {
         boolean success = super.load(tag);
-
-        /*if(tag.contains("randomWalk1"))
-        {
-            CompoundTag meanRevertingRandomWalkTag = tag.getCompound("randomWalk1");
-            randomWalk1.load(meanRevertingRandomWalkTag);
-        }
-        if(tag.contains("randomWalk2"))
-        {
-            CompoundTag meanRevertingRandomWalk2Tag = tag.getCompound("randomWalk2");
-            randomWalk2.load(meanRevertingRandomWalk2Tag);
-        }*/
         if(tag.contains("priceGenerator"))
         {
             CompoundTag priceGeneratorTag = tag.getCompound("priceGenerator");
@@ -377,21 +318,4 @@ public class ServerVolatilityBot extends ServerTradingBot {
 
         return success;
     }
-
-/*
-    private void debugPlotRandomWalk()
-    {
-        try (FileWriter writer = new FileWriter("randomWalk.csv")) {
-            writer.write("Index,randomWalk1,randomWalk2\n"); // CSV header
-            for(int i=0; i<10000; i++)
-            {
-                writer.write(i + ";" + randomWalk1.nextValue() + ";"+ randomWalk2.getCurrentValue() + "\n");
-                if(i%10 == 0)
-                    randomWalk2.nextValue();
-            }
-            writer.close();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }*/
 }

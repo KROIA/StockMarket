@@ -1,7 +1,7 @@
 package net.kroia.stockmarket.screen.uiElements;
 
+import net.kroia.modutilities.ClientPlayerUtilities;
 import net.kroia.modutilities.ColorUtilities;
-import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.TradingPair;
@@ -152,7 +152,7 @@ public class LimitOrderInChartDisplay extends StockMarketGuiElement {
 
     private String getButtonTooltip()
     {
-        String displayName = ItemUtilities.getItemDisplayText(pair.getCurrency().getStack());
+        String displayName = ClientPlayerUtilities.getItemDisplayText(pair.getCurrency().getStack());
         if(isDragging)
         {
             return StockMarketTextMessages.getLimitOrderInChartDisplayMoveButtonMoving(getCurrentPrice(), displayName);

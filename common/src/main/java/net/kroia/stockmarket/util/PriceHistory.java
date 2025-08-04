@@ -2,27 +2,20 @@ package net.kroia.stockmarket.util;
 
 import net.kroia.modutilities.ServerSaveable;
 import net.kroia.modutilities.networking.INetworkPayloadConverter;
-import net.kroia.stockmarket.StockMarketModBackend;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.network.FriendlyByteBuf;
 
 public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
 
-    private static StockMarketModBackend.Instances BACKEND_INSTANCES;
 
-
-    private int maxHistorySize;// = BACKEND_INSTANCES.SERVER_SETTINGS.UI.PRICE_HISTORY_SIZE.get();
+    private int maxHistorySize;
     private int[] lowPrice;
     private int[] highPrice;
     private int[] closePrice;
     private long[] volume;
     private int oldestClosePrice = 0;
     private Timestamp[] timeStamps;// = new Timestamp[maxHistorySize];
-
-    public static void setBackend(StockMarketModBackend.Instances backend) {
-        BACKEND_INSTANCES = backend;
-    }
 
     public PriceHistory(int maxHistorySize) {
         if(maxHistorySize<1)

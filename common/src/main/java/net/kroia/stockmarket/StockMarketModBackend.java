@@ -46,13 +46,11 @@ public class StockMarketModBackend implements StockMarketAPI {
         public StockMarketModLogger LOGGER;
     }
 
-    private static long lastTimeMS = 0;
-    private static Instances INSTANCES = new Instances();
+    private static final Instances INSTANCES = new Instances();
 
 
     StockMarketModBackend()
     {
-
         INSTANCES.LOGGER = new StockMarketModLogger(INSTANCES);
         StockMarketDataHandler.setBackend(INSTANCES);
         ServerStockMarketManager.setBackend(INSTANCES);
@@ -102,12 +100,9 @@ public class StockMarketModBackend implements StockMarketAPI {
     {
         if(INSTANCES.SERVER_EVENTS == null)
             INSTANCES.SERVER_EVENTS = new StockMarketEvents();
-        //INSTANCES.BANK_SYSTEM_API.getEvents().getBankDataLoadedFromFileSignal().addListener(StockMarketModBackend::onPostBankSystemDataLoaded);
         Order.setBackend(INSTANCES);
         ServerTradingBot.setBackend(INSTANCES);
         MatchingEngine.setBackend(INSTANCES);
-        //TradeManager.setBackend(INSTANCES);
-        //ServerTradeItem.setBackend(INSTANCES);
         DefaultMarketSettings.setBackend(INSTANCES);
         TransactionEngine.setBackend(INSTANCES);
         OrderFactory.setBackend(INSTANCES);
@@ -154,14 +149,6 @@ public class StockMarketModBackend implements StockMarketAPI {
         if(INSTANCES.SERVER_SETTINGS != null) {
             loadDataFromFiles(UtilitiesPlatform.getServer());
             DefaultMarketSettings.createDefaultMarketSettingsIfNotExist();
-
-            //NormalizedRandomPriceGenerator generator = new NormalizedRandomPriceGenerator(5);
-            //generator.testToFile(10000); // Test the random price generator and save to file
-
-            //var category = MarketFactory.DefaultMarketSetupDataGroup.load("Ores");
-            //INSTANCES.SERVER_STOCKMARKET_MANAGER.createMarket(category);
-
-            //INSTANCES.SERVER_SETTINGS.MARKET_BOT.getBotBuilder(); // Create the default bot settings files if they don't exist
         }
     }
 
@@ -169,25 +156,18 @@ public class StockMarketModBackend implements StockMarketAPI {
     public static void onPlayerJoin(ServerPlayer player)
     {
         ServerPlayerList.addPlayer(player);
-        //SyncTradeItemsPacket.sendPacket(player);
     }
 
     // Called from the server side
     public static void onPlayerLeave(ServerPlayer player)
     {
-        //INSTANCES.SERVER_STOCKMARKET_MANAGER.removePlayerUpdateSubscription(player);
+
     }
 
     // Called from the server side
     private static void onServerTick(MinecraftServer server)
     {
-        long currentTimeMillis = System.currentTimeMillis();
-
         INSTANCES.SERVER_STOCKMARKET_MANAGER.onServerTick(server);
-        /*if(currentTimeMillis - lastTimeMS > INSTANCES.SERVER_SETTINGS.MARKET.SHIFT_PRICE_CANDLE_INTERVAL_MS.get()) {
-            lastTimeMS = currentTimeMillis;
-            INSTANCES.SERVER_STOCKMARKET_MANAGER.shiftPriceHistory();
-        }*/
         INSTANCES.SERVER_DATA_HANDLER.tickUpdate();
     }
 

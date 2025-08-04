@@ -4,12 +4,15 @@ package net.kroia.stockmarket.util;
 import com.google.gson.JsonElement;
 import net.kroia.modutilities.DataPersistence;
 import net.kroia.modutilities.PlayerUtilities;
+import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.server.MarketFactory;
 import net.minecraft.nbt.CompoundTag;
 import org.jetbrains.annotations.Nullable;
 
-import java.nio.file.Path;
+import java.io.IOException;
+import java.nio.file.*;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -154,6 +157,7 @@ public class StockMarketDataHandler extends DataPersistence {
         CompoundTag marketData = new CompoundTag();
         success = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.save(marketData);
         data.put("market", marketData);
+        data.putString("version", StockMarketMod.VERSION);
 
         if(success)
             success = saveDataCompound(getMarketDataFilePath(), data);
@@ -167,6 +171,7 @@ public class StockMarketDataHandler extends DataPersistence {
         CompletableFuture<Boolean> future;
         if(BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.save(marketData)) {
             data.put("market", marketData);
+            data.putString("version", StockMarketMod.VERSION);
 
             // Save market data async because it can take much time when there are many trading items
             future = CompletableFuture.supplyAsync(() -> {
@@ -185,6 +190,45 @@ public class StockMarketDataHandler extends DataPersistence {
         // Load server_sender market
         if(!data.contains("market"))
             return false;
+        if(!data.contains("version")) {
+            boolean backupSuccess = true;
+            // copy stockmarket folder to a backup folder
+            Path backupPath = getAbsoluteSavePath("../StockMarketBackup_" + System.currentTimeMillis());
+            // create path
+            if(!createFolder(backupPath)) {
+                error("Failed to create backup folder: " + backupPath);
+                backupSuccess = false;
+            }
+            // copy folder
+            Path stockMarketFolder = getAbsoluteSavePath();
+            try{
+                copyFolder(stockMarketFolder, backupPath);
+            }catch (IOException e) {
+                error("Failed to copy StockMarket folder to backup folder: " + backupPath, e);
+                backupSuccess = false;
+            }
+            String msg = "Market data file is missing version information. This means you updated the mod to a newer version.\n"+
+                    "In that case the changes are not compatible with the previous version.\n"+
+                    "The market must therefore be reset.\n";
+            if(backupSuccess)
+                msg += "To prevent losing the save with the old market data, a copy is created at:\n" + backupPath + "\n";
+            else {
+                msg += "The backup folder could not be created. Please make sure to backup your world manually,\n" +
+                        "if you don't want to loose the old stock market data.\n"+
+                        "You can find the data here: "+ stockMarketFolder + "\n";
+            }
+            error(msg);
+            if(backupSuccess)
+            {
+                // Delete all files and paths in the market data folder recursively
+                try {
+                    deleteFolderContents(getAbsoluteSavePath());
+                } catch (IOException e) {
+                    error("Failed to delete old market data files.", e);
+                }
+            }
+            return false;
+        }
         CompoundTag marketData = data.getCompound("market");
         return BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.load(marketData);
     }
@@ -367,4 +411,45 @@ public class StockMarketDataHandler extends DataPersistence {
         BACKEND_INSTANCES.LOGGER.debug("[StockMarketDataHandler] " + msg);
     }
 
+
+    public static void copyFolder(Path source, Path target) throws IOException {
+        Files.walkFileTree(source, new SimpleFileVisitor<Path>() {
+            @Override
+            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+                Path targetDir = target.resolve(source.relativize(dir));
+                if (!Files.exists(targetDir)) {
+                    Files.createDirectories(targetDir);
+                }
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                Path targetFile = target.resolve(source.relativize(file));
+                Files.copy(file, targetFile, StandardCopyOption.REPLACE_EXISTING);
+                return FileVisitResult.CONTINUE;
+            }
+        });
+    }
+    public static void deleteFolderContents(Path folder) throws IOException {
+        if (!Files.isDirectory(folder)) {
+            throw new IllegalArgumentException("Provided path is not a directory: " + folder);
+        }
+
+        Files.walkFileTree(folder, new SimpleFileVisitor<Path>() {
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                Files.delete(file);
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+                if (!dir.equals(folder)) {
+                    Files.delete(dir); // delete subdirectory
+                }
+                return FileVisitResult.CONTINUE;
+            }
+        });
+    }
 }
