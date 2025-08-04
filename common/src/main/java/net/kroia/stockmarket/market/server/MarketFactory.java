@@ -86,10 +86,10 @@ public class MarketFactory
             botSettings.volumeSteeringFactor = Math.max(0.0000001f/(1.2f-rarity),0.0000001f);
 
             botSettings.enableRandomWalk = enableRandomWalk;
-            botSettings.volatility = Math.abs(volatility);
+            botSettings.volatility = Math.abs(1000.f * volatility / Math.max((float)defaultPrice, 1000));
 
             virtualOrderBookSettings.volumeScale = 100f/(0.01f+Math.abs(rarity));
-            botSettings.volumeScale = virtualOrderBookSettings.volumeScale * this.volatility/10;
+            botSettings.volumeScale = virtualOrderBookSettings.volumeScale * this.volatility;
 
             return new DefaultMarketSetupData(this.tradingPair, botSettings, virtualOrderBookSettings);
         }
@@ -286,7 +286,9 @@ public class MarketFactory
             JsonElement botSettingsElement = jsonObject.get("botSettings");
             JsonElement virtualOrderBookSettingsElement = jsonObject.get("virtualOrderBookSettings");
 
-            if (tradingPairElement == null) {
+            if (    tradingPairElement == null ||
+                    botSettingsElement == null ||
+                    virtualOrderBookSettingsElement == null) {
                 return false;
             }
 
@@ -310,14 +312,14 @@ public class MarketFactory
                 this.tradingPair = new TradingPair(item, currency);
             }
             boolean success = true;
-            if (botSettingsElement != null && botSettingsElement.isJsonObject()) {
+            if (botSettingsElement.isJsonObject()) {
                 this.botSettings = new ServerVolatilityBot.Settings();
                 success = this.botSettings.fromJson(botSettingsElement);
             } else {
                 this.botSettings = null; // No bot settings provided
             }
 
-            if (virtualOrderBookSettingsElement != null && virtualOrderBookSettingsElement.isJsonObject()) {
+            if (virtualOrderBookSettingsElement.isJsonObject()) {
                 this.virtualOrderBookSettings = new VirtualOrderBook.Settings();
                 success &= this.virtualOrderBookSettings.fromJson(virtualOrderBookSettingsElement);
             } else {

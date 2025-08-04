@@ -98,7 +98,12 @@ public class TradingChartWidget extends StockMarketGuiElement {
     public void updateView(TradingViewData data)
     {
         if(data == null)
+        {
+            candleStickChart.setPriceHistory(null);
+            tradingVolumeHistoryChart.setPriceHistory(null);
+            orderbookVolumeChart.setOrderBookVolume(null);
             return;
+        }
 
         this.setMinMaxPrice(data.orderBookVolumeData.minPrice, data.orderBookVolumeData.maxPrice);
         PriceHistory history = data.priceHistoryData.toHistory();

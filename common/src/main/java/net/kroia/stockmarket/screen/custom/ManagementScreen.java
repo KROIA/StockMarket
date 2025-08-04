@@ -487,6 +487,7 @@ public class ManagementScreen extends StockMarketGuiScreen {
         updateTradingItems();
 
         tradingChart = new TradingChartWidget();
+        tradingChart.enableBotTargetPriceDisplay(true);
 
         listView = new VerticalListView();
         Layout layout = new LayoutVertical();
@@ -578,6 +579,7 @@ public class ManagementScreen extends StockMarketGuiScreen {
             currentPairManagerWidget.setCurrentTradingPair(null);
             currentPairManagerWidget.setEnabled(false);
             setCurrentTradingPairMarketSettings(null);
+            tradingChart.updateView(null);
         }
         else
         {
@@ -611,7 +613,7 @@ public class ManagementScreen extends StockMarketGuiScreen {
         if(instance.updateTimer.check() && instance.getSelectedMarket() != null)
         {
             instance.getSelectedMarket().requestTradingViewData(instance.tradingChart.getMaxCandleCount(),
-                    0,0,500, false ,instance.tradingChart::updateView);
+                    0,0,500, true ,instance.tradingChart::updateView);
         }
     }
 }

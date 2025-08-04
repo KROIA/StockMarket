@@ -15,7 +15,6 @@ import net.kroia.stockmarket.market.server.order.OrderFactory;
 import net.kroia.stockmarket.networking.packet.request.VirtualOrderBookSettingsData;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -38,14 +37,19 @@ public class ServerMarket implements ServerSaveable {
     private final HistoricalMarketData historicalMarketData;
     private ServerVolatilityBot volatilityBot;
     private boolean marketOpen = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.MARKET_OPEN_AT_CREATION.get();
+
+    /**
+     * The amount of items in this market that are received from the game world and vanished in the market.
+     * If this value is positive, it means that more volume has been sold by players than bought
+     */
     private long itemImbalance;
     private long shiftPriceCandleIntervalMS = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.SHIFT_PRICE_CANDLE_INTERVAL_MS.get();
     //private long notifySubscriberIntervalMS = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.NOTIFY_SUBSCRIBER_INTERVAL_MS.get();
 
 
-    private final ArrayList<ServerPlayer> subscribers = new ArrayList<>();
+    //private final ArrayList<ServerPlayer> subscribers = new ArrayList<>();
     protected TimerMillis shiftPriceTimer = new TimerMillis(true);
-    protected TimerMillis notifySubscriberTimer = new TimerMillis(true);
+    //protected TimerMillis notifySubscriberTimer = new TimerMillis(true);
 
     public ServerMarket(TradingPair pair)
     {
@@ -381,10 +385,10 @@ public class ServerMarket implements ServerSaveable {
         orderBook.updateVirtualOrderBookVolume(historicalMarketData.getCurrentPrice());
 
 
-        if(notifySubscriberTimer.check()) {
-            if(!subscribers.isEmpty())
-                notifySubscribers();
-        }
+        //if(notifySubscriberTimer.check()) {
+        //    if(!subscribers.isEmpty())
+        //        notifySubscribers();
+        //}
 
         if(shiftPriceTimer.check()) {
             shiftPriceHistory();

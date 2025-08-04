@@ -43,6 +43,7 @@ public class OrderbookVolumeChartWidget extends StockMarketGuiElement {
     }
     @Override
     protected void renderBackground() {
+        super.renderBackground();
         if(orderBookVolume == null)
             return;
         int x = xPadding;

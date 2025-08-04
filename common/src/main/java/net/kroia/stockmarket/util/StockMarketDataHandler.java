@@ -24,6 +24,7 @@ public class StockMarketDataHandler extends DataPersistence {
     private final String MARKET_DATA_FILE_NAME = "Market_data.dat";
     private final String MARKET_SETTINGS_FILE_NAME = "settings.json";
     private final String DEFAULT_MARKET_SETTINGS_DIRECTORY = "DefaultMarketSetupData";
+    private final String DEFAULT_MARKET_PRICE_FILE_NAME = "base_prices.json";
     private boolean isLoaded = false;
     private long tickCounter = 0;
     private int lastPlayerCount = 0;
@@ -249,6 +250,10 @@ public class StockMarketDataHandler extends DataPersistence {
     {
         return getAbsoluteSavePath(DEFAULT_MARKET_SETTINGS_DIRECTORY);
     }
+    public Path getBasePricesFilePath()
+    {
+        return getAbsoluteSavePath(DEFAULT_MARKET_PRICE_FILE_NAME);
+    }
     public boolean save_globalSettings()
     {
         return save_globalSettings(getGlobalSettingsFilePath());
@@ -385,6 +390,34 @@ public class StockMarketDataHandler extends DataPersistence {
             return null;
         }
         return category;
+    }
+
+    public boolean basePriceFileExists()
+    {
+        Path filePath = getBasePricesFilePath();
+        return fileExists(filePath);
+    }
+    public boolean saveBasePricesFile(JsonElement json)
+    {
+        if(json == null || !json.isJsonObject()) {
+            error("Invalid JSON element for base prices: " + json);
+            return false;
+        }
+        return saveJson(json, getBasePricesFilePath());
+    }
+    public @Nullable JsonElement loadBasePricesFile()
+    {
+        Path filePath = getBasePricesFilePath();
+        if(!fileExists(filePath)) {
+            error("Base prices file does not exist: " + filePath);
+            return null;
+        }
+        JsonElement json = loadJson(filePath);
+        if(json == null || !json.isJsonObject()) {
+            error("Failed to load base prices from file: " + filePath);
+            return null;
+        }
+        return json;
     }
 
     

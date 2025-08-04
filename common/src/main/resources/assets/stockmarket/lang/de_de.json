@@ -164,7 +164,7 @@
 
   "gui.stockmarket.market_settings_screen.title": "Market Einstellungs Fenster",
   "gui.stockmarket.market_settings_screen.save_button": "Speicheren",
-  "gui.stockmarket.market_settings_screen.cancel_button": "Abbrechen",
+  "gui.stockmarket.market_settings_screen.back_button": "Zurück",
   "gui.stockmarket.market_settings_screen.general.title": "Allgemeine Einstellungen",
   "gui.stockmarket.market_settings_screen.general.chart_reset": "Chart zurücksetzen",
   "gui.stockmarket.market_settings_screen.general.is_market_open": "Markt geöffnet",

@@ -184,23 +184,23 @@ public class ServerVolatilityBot extends ServerTradingBot {
     }
 
     private final NormalizedRandomPriceGenerator priceGenerator;
-    private MeanRevertingRandomWalk randomWalk3;
+    private MeanRevertingRandomWalk randomWalk;
     private static Random random = new Random();
     TimerMillis randomWalkTimer = new TimerMillis(false);
-    private final PID pid = new PID(0.1f, 0.01f, 0.1f, 1);
+    private final PID pid = new PID(0.1f, 0.1f, 0, 1);
 
-    private int targetPrice;
+    private float targetPriceF;
     Settings settings;
     public ServerVolatilityBot(ServerMarket market) {
         super(market);
         setSettings(new Settings());
         priceGenerator = new NormalizedRandomPriceGenerator(5);
         randomWalkTimer.start(random.nextInt(10000));
-        randomWalk3 = new MeanRevertingRandomWalk(0.1, 0.05);
+        randomWalk = new MeanRevertingRandomWalk(0.1, 0.05);
     }
 
     public int getTargetPrice() {
-        return targetPrice;
+        return Math.round(targetPriceF);
     }
     @Override
     public void update()
@@ -214,26 +214,23 @@ public class ServerVolatilityBot extends ServerTradingBot {
         long currentItemBalance = getItemImbalance();
 
 
-        long marketOrderAmount = 0;
-        targetPrice = settings.defaultPrice;
+        float marketOrderAmountF = 0;
+        targetPriceF = (float)settings.defaultPrice;
 
-        int randomWalkDeltaTargetPrice = 0;
+        float randomWalkDeltaTargetPriceF = 0;
         if(settings.enableVolumeTracking)
         {
-
-            // plot((((-x+abs(-x))/2)^2+(-x+abs(-x))/2+exp((-x-abs(-x))/2)))
             float x = (float)currentItemBalance * settings.volumeSteeringFactor;
             float scale;
             if(currentItemBalance < 0)
             {
                 scale = -x+1;
-                //scale = (x*x-x)+1;
             }
             else
             {
                 scale = (float)Math.exp(-x);
             }
-            targetPrice = Math.max((int)(targetPrice * scale), 0);
+            targetPriceF = Math.max((targetPriceF * scale), 0);
         }
 
         if(settings.enableRandomWalk)
@@ -244,38 +241,36 @@ public class ServerVolatilityBot extends ServerTradingBot {
                 priceGenerator.getNextValue();
             }
             double randomWalkValue = (priceGenerator.getCurrentValue() * (double)settings.volatility * (double)settings.defaultPrice);
-            randomWalkDeltaTargetPrice = (int)randomWalkValue;
-            targetPrice += randomWalkDeltaTargetPrice;
-            //BACKEND_INSTANCES.LOGGER.debug("Random Walk Value: "+randomWalkValue+", Target Price: "+targetPrice);
-
+            randomWalkDeltaTargetPriceF = (int)Math.round(randomWalkValue);
+            targetPriceF += randomWalkDeltaTargetPriceF;
+            marketOrderAmountF +=  (float)randomWalk.nextValue() * settings.volatility * settings.volumeScale;
         }
 
-        if(targetPrice < 0)
-            targetPrice = 0;
+        if(targetPriceF < 0)
+            targetPriceF = 0;
 
         if(settings.enableTargetPrice)
         {
-
-
-            int currentPrice = getCurrentPrice();
-            float output = pid.update(targetPrice - currentPrice);
-            int normalized = (int)(Math.min(Math.max(-10, output*5),10));
-            marketOrderAmount += normalized;
+            float currentPriceF = getCurrentPrice();
+            float output = pid.update(targetPriceF - currentPriceF);
+            float normalized = (Math.min(Math.max(-10, output*5),10) * settings.volumeScale);
+            marketOrderAmountF += normalized;
         }
 
-        if(marketOrderAmount > 0)
+        if(marketOrderAmountF > 0)
         {
             long amount = getOrderBookVolume(getCurrentPrice()+2);
-            if(-amount < marketOrderAmount)
-                marketOrderAmount = -amount;
+            if(-amount < marketOrderAmountF)
+                marketOrderAmountF = -amount;
         }
-        else if(marketOrderAmount < 0)
+        else if(marketOrderAmountF < 0)
         {
             long amount = getOrderBookVolume(getCurrentPrice()-2);
-            if(amount < -marketOrderAmount)
-                marketOrderAmount = -amount;
+            if(amount < -marketOrderAmountF)
+                marketOrderAmountF = -amount;
         }
-        marketTrade((long)(marketOrderAmount * settings.volumeScale));
+        long marketOrderAmount = Math.round(marketOrderAmountF);
+        marketTrade(marketOrderAmount);
 
     }
 
@@ -305,6 +300,9 @@ public class ServerVolatilityBot extends ServerTradingBot {
         CompoundTag priceGeneratorTag = new CompoundTag();
         priceGenerator.save(priceGeneratorTag);
         tag.put("priceGenerator", priceGeneratorTag);
+        CompoundTag randomWalkTag = new CompoundTag();
+        randomWalk.save(randomWalkTag);
+        tag.put("randomWalk", randomWalkTag);
         return success;
     }
     @Override
@@ -314,6 +312,11 @@ public class ServerVolatilityBot extends ServerTradingBot {
         {
             CompoundTag priceGeneratorTag = tag.getCompound("priceGenerator");
             priceGenerator.load(priceGeneratorTag);
+        }
+        if(tag.contains("randomWalk"))
+        {
+            CompoundTag randomWalkTag = tag.getCompound("randomWalk");
+            randomWalk.load(randomWalkTag);
         }
 
         return success;

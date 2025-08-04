@@ -148,7 +148,7 @@ public class ServerTradingBot implements ServerSaveable {
 
     protected void update()
     {
-        clearOrders();
+        //clearOrders();
         createOrders();
     }
 

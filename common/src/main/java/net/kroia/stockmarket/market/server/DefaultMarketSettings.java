@@ -1,12 +1,18 @@
 package net.kroia.stockmarket.market.server;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.stockmarket.StockMarketModBackend;
-import net.minecraft.world.item.EnchantedBookItem;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.item.*;
+import net.minecraft.world.item.alchemy.PotionUtils;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
+import net.minecraft.world.item.enchantment.Enchantments;
 
 import java.util.List;
+import java.util.Map;
 
 public class DefaultMarketSettings {
     protected static StockMarketModBackend.Instances BACKEND_INSTANCES;
@@ -14,49 +20,146 @@ public class DefaultMarketSettings {
         BACKEND_INSTANCES = backend;
     }
 
+    private static float INFLATION_SCALE = 10;
 
     // Basic Block prices
-    private static final int LOG_PRICE = 20;
-    private static final int PLANK_PRICE = Math.max(1,LOG_PRICE/4);
-    private static final int STICK_PRICE = Math.max(1,LOG_PRICE/8);
-    private static final int STONE_PRICE = 20;
-    private static final int SAND_PRICE = 20;
-    private static final int GRAVEL_PRICE = 20;
-    private static final int CLAY_BALL_PRICE = 5;
-    private static final int WOOL_PRICE = 5;
+    private static int LOG_PRICE = 20;
+    private static int PLANK_PRICE = Math.max(1,LOG_PRICE/4);
+    private static int STICK_PRICE = Math.max(1,LOG_PRICE/8);
+    private static int STONE_PRICE = 20;
+    private static int COBBLESTONE_PRICE = Math.max(1,STONE_PRICE/2); // Cobblestone is generally cheaper than stone
+    private static int SAND_PRICE = 20;
+    private static int DIRT_PRICE = 5; // Dirt is generally cheaper than sand
+    private static int GRAVEL_PRICE = 20;
+    private static int CLAY_BALL_PRICE = 5;
+    private static int WOOL_PRICE = 5;
+    private static int GLASS_PRICE = SAND_PRICE;
+    private static int OBSIDIAN_PRICE = 100; // Obsidian is more expensive due to its rarity and mining difficulty
 
 
     // Ore prices
-    private static final int COAL_PRICE = 8;
-    private static final int IRON_PRICE = 30;
-    private static final int COPPER_PRICE = 20;
-    private static final int GOLD_PRICE = 100;
-    private static final int DIAMOND_PRICE = 200;
-    private static final int EMERALD_PRICE = 300;
-    private static final int LAPIS_LAZULI_PRICE = 50;
-    private static final int ANCIENT_DEBRIS_PRICE = 500;
-    private static final int NETHERITE_SCRAP_PRICE = ANCIENT_DEBRIS_PRICE;
-    private static final int REDSTONE_DUST_PRICE = 10;
-    private static final int NETHER_QUARTZ = 10;
+    private static int COAL_PRICE = 8;
+    private static int IRON_PRICE = 30;
+    private static int COPPER_PRICE = 20;
+    private static int GOLD_PRICE = 100;
+    private static int DIAMOND_PRICE = 200;
+    private static int EMERALD_PRICE = 300;
+    private static int LAPIS_LAZULI_PRICE = 50;
+    private static int ANCIENT_DEBRIS_PRICE = 500;
+    private static int NETHERITE_SCRAP_PRICE = ANCIENT_DEBRIS_PRICE;
+    private static int REDSTONE_DUST_PRICE = 10;
+    private static int NETHER_QUARTZ = 10;
 
 
     // Plants
-    private static final int BAMBOO_PRICE = 2;
+    private static int BAMBOO_PRICE = 2;
 
 
 
     // Misc
-    private static final int PRISMARINE_SHARD_PRICE = 10;
-    private static final int CHORUS_FRUIT_PRICE = 10;
-    private static final int HONEYCOMB_PRICE = 10;
-    private static final int DYE_PRICE = 1;
+    private static int PRISMARINE_SHARD_PRICE = 10;
+    private static int CHORUS_FRUIT_PRICE = 10;
+    private static int HONEYCOMB_PRICE = 10;
+    private static int DYE_PRICE = 1;
 
-    private static final int ENCHANTMENT_BOOK_PRICE = 200; // Base price for enchanted books
+    private static int ENCHANTMENT_BOOK_PRICE_FACTOR = 10; // Base price for enchanted books
+    private static int POTION_PRICE_FACTOR = 10; // Base price for enchanted books
+
+
+    private static JsonElement getBasePricesJson()
+    {
+        JsonObject basePrices = new JsonObject();
+        basePrices.addProperty("INFLATION_SCALE", INFLATION_SCALE);
+        basePrices.addProperty("log_price", LOG_PRICE);
+        basePrices.addProperty("plank_price", PLANK_PRICE);
+        basePrices.addProperty("stick_price", STICK_PRICE);
+        basePrices.addProperty("stone_price", STONE_PRICE);
+        basePrices.addProperty("cobblestone_price", COBBLESTONE_PRICE);
+        basePrices.addProperty("sand_price", SAND_PRICE);
+        basePrices.addProperty("dirt_price", DIRT_PRICE);
+        basePrices.addProperty("glass_price", GLASS_PRICE);
+        basePrices.addProperty("obsidian_price", OBSIDIAN_PRICE);
+        basePrices.addProperty("gravel_price", GRAVEL_PRICE);
+        basePrices.addProperty("clay_ball_price", CLAY_BALL_PRICE);
+        basePrices.addProperty("wool_price", WOOL_PRICE);
+        basePrices.addProperty("coal_price", COAL_PRICE);
+        basePrices.addProperty("iron_price", IRON_PRICE);
+        basePrices.addProperty("copper_price", COPPER_PRICE);
+        basePrices.addProperty("gold_price", GOLD_PRICE);
+        basePrices.addProperty("diamond_price", DIAMOND_PRICE);
+        basePrices.addProperty("emerald_price", EMERALD_PRICE);
+        basePrices.addProperty("lapis_lazuli_price", LAPIS_LAZULI_PRICE);
+        basePrices.addProperty("ancient_debris_price", ANCIENT_DEBRIS_PRICE);
+        basePrices.addProperty("netherite_scrap_price", NETHERITE_SCRAP_PRICE);
+        basePrices.addProperty("redstone_dust_price", REDSTONE_DUST_PRICE);
+        basePrices.addProperty("nether_quartz_price", NETHER_QUARTZ);
+        basePrices.addProperty("bamboo_price", BAMBOO_PRICE);
+        basePrices.addProperty("prismarine_shard_price", PRISMARINE_SHARD_PRICE);
+        basePrices.addProperty("chorus_fruit_price", CHORUS_FRUIT_PRICE);
+        basePrices.addProperty("honeycomb_price", HONEYCOMB_PRICE);
+        basePrices.addProperty("dye_price", DYE_PRICE);
+        basePrices.addProperty("enchanted_book_price_factor", ENCHANTMENT_BOOK_PRICE_FACTOR);
+        basePrices.addProperty("potion_price_factor", POTION_PRICE_FACTOR);
+        // Add more prices as needed
+
+
+
+
+        return basePrices;
+    }
+    private static void readBasePrices(JsonElement json)
+    {
+        if(json == null)
+            return;
+        if(!json.isJsonObject())
+            return;
+        JsonObject jsonObject = json.getAsJsonObject();
+        INFLATION_SCALE = jsonObject.has("INFLATION_SCALE") ? jsonObject.get("INFLATION_SCALE").getAsFloat() : INFLATION_SCALE;
+        LOG_PRICE = getOrDefaultScaled(jsonObject, "log_price", LOG_PRICE);
+        PLANK_PRICE = getOrDefaultScaled(jsonObject, "plank_price", PLANK_PRICE);
+        STICK_PRICE = getOrDefaultScaled(jsonObject, "stick_price", STICK_PRICE);
+        STONE_PRICE = getOrDefaultScaled(jsonObject, "stone_price", STONE_PRICE);
+        COBBLESTONE_PRICE = getOrDefaultScaled(jsonObject, "cobblestone_price", COBBLESTONE_PRICE);
+        SAND_PRICE = getOrDefaultScaled(jsonObject, "sand_price", SAND_PRICE);
+        DIRT_PRICE = getOrDefaultScaled(jsonObject, "dirt_price", DIRT_PRICE);
+        GLASS_PRICE = getOrDefaultScaled(jsonObject, "glass_price", GLASS_PRICE);
+        OBSIDIAN_PRICE = getOrDefaultScaled(jsonObject, "obsidian_price", OBSIDIAN_PRICE);
+        GRAVEL_PRICE = getOrDefaultScaled(jsonObject, "gravel_price", GRAVEL_PRICE);
+        CLAY_BALL_PRICE = getOrDefaultScaled(jsonObject, "clay_ball_price", CLAY_BALL_PRICE);
+        WOOL_PRICE = getOrDefaultScaled(jsonObject, "wool_price", WOOL_PRICE);
+        COAL_PRICE = getOrDefaultScaled(jsonObject, "coal_price", COAL_PRICE);
+        IRON_PRICE = getOrDefaultScaled(jsonObject, "iron_price", IRON_PRICE);
+        COPPER_PRICE = getOrDefaultScaled(jsonObject, "copper_price", COPPER_PRICE);
+        GOLD_PRICE = getOrDefaultScaled(jsonObject, "gold_price", GOLD_PRICE);
+        DIAMOND_PRICE = getOrDefaultScaled(jsonObject, "diamond_price", DIAMOND_PRICE);
+        EMERALD_PRICE = getOrDefaultScaled(jsonObject, "emerald_price", EMERALD_PRICE);
+        LAPIS_LAZULI_PRICE = getOrDefaultScaled(jsonObject, "lapis_lazuli_price", LAPIS_LAZULI_PRICE);
+        ANCIENT_DEBRIS_PRICE = getOrDefaultScaled(jsonObject, "ancient_debris_price", ANCIENT_DEBRIS_PRICE);
+        NETHERITE_SCRAP_PRICE = getOrDefaultScaled(jsonObject, "netherite_scrap_price", NETHERITE_SCRAP_PRICE);
+        REDSTONE_DUST_PRICE = getOrDefaultScaled(jsonObject, "redstone_dust_price", REDSTONE_DUST_PRICE);
+        NETHER_QUARTZ = getOrDefaultScaled(jsonObject, "nether_quartz_price", NETHER_QUARTZ);
+        BAMBOO_PRICE = getOrDefaultScaled(jsonObject, "bamboo_price", BAMBOO_PRICE);
+        PRISMARINE_SHARD_PRICE = getOrDefaultScaled(jsonObject, "prismarine_shard_price", PRISMARINE_SHARD_PRICE);
+        CHORUS_FRUIT_PRICE = getOrDefaultScaled(jsonObject, "chorus_fruit_price", CHORUS_FRUIT_PRICE);
+        HONEYCOMB_PRICE = getOrDefaultScaled(jsonObject, "honeycomb_price", HONEYCOMB_PRICE);
+        DYE_PRICE = getOrDefaultScaled(jsonObject, "dye_price", DYE_PRICE);
+        ENCHANTMENT_BOOK_PRICE_FACTOR = getOrDefaultScaled(jsonObject, "enchanted_book_price_factor", ENCHANTMENT_BOOK_PRICE_FACTOR);
+        POTION_PRICE_FACTOR = getOrDefaultScaled(jsonObject, "potion_price_factor", POTION_PRICE_FACTOR);
+        // Add more prices as needed
+
+    }
+    private static int getOrDefaultScaled(JsonObject obj, String key, int defaultValue) {
+        if (obj.has(key) && obj.get(key).isJsonPrimitive() && obj.get(key).getAsJsonPrimitive().isNumber()) {
+            return (int) (obj.get(key).getAsInt() * INFLATION_SCALE);
+        }
+        return (int)(defaultValue * INFLATION_SCALE);
+    }
 
 
 
     public static void createDefaultMarketSettingsIfNotExist() {
-        //BACKEND_INSTANCES.LOGGER.info("Generating new default market settings.");
+
+        loadOrSaveBasePrices();
 
         // Create defaults:
         getOres().saveIfNotExists();
@@ -90,6 +193,19 @@ public class DefaultMarketSettings {
 
     }
 
+
+    private static void loadOrSaveBasePrices()
+    {
+        if(BACKEND_INSTANCES.SERVER_DATA_HANDLER.basePriceFileExists())
+        {
+            readBasePrices(BACKEND_INSTANCES.SERVER_DATA_HANDLER.loadBasePricesFile());
+        }
+        else
+        {
+            BACKEND_INSTANCES.SERVER_DATA_HANDLER.saveBasePricesFile(getBasePricesJson());
+            readBasePrices(BACKEND_INSTANCES.SERVER_DATA_HANDLER.loadBasePricesFile());
+        }
+    }
 
 
 
@@ -378,15 +494,15 @@ public class DefaultMarketSettings {
     private static MarketFactory.DefaultMarketSetupDataGroup getOres()
     {
         MarketFactory.DefaultMarketSetupDataGroup oresCategory = new MarketFactory.DefaultMarketSetupDataGroup("Ores");
-        oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.COAL, COAL_PRICE, 0.02f, 0.01f));
-        oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.IRON_INGOT, IRON_PRICE, 0.03f, 0.02f));
-        oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.COPPER_INGOT, COPPER_PRICE, 0.03f, 0.02f));
-        oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.GOLD_INGOT, GOLD_PRICE, 0.05f, 0.02f));
-        oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.REDSTONE, REDSTONE_DUST_PRICE, 0.08f, 0.02f));
-        oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.LAPIS_LAZULI, LAPIS_LAZULI_PRICE, 0.08f, 0.01f));
-        oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.DIAMOND, DIAMOND_PRICE, 0.1f, 0.1f));
-        oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.EMERALD, EMERALD_PRICE, 0.2f, 0.1f));
-        oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.QUARTZ, NETHER_QUARTZ, 0.03f, 0.01f));
+        oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.COAL, COAL_PRICE, 0.02f, 0.1f));
+        oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.IRON_INGOT, IRON_PRICE, 0.03f, 0.1f));
+        oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.COPPER_INGOT, COPPER_PRICE, 0.03f, 0.1f));
+        oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.GOLD_INGOT, GOLD_PRICE, 0.05f, 0.1f));
+        oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.REDSTONE, REDSTONE_DUST_PRICE, 0.08f, 0.1f));
+        oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.LAPIS_LAZULI, LAPIS_LAZULI_PRICE, 0.08f, 0.1f));
+        oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.DIAMOND, DIAMOND_PRICE, 0.1f, 0.2f));
+        oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.EMERALD, EMERALD_PRICE, 0.2f, 0.2f));
+        oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.QUARTZ, NETHER_QUARTZ, 0.03f, 0.1f));
         oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.ANCIENT_DEBRIS, ANCIENT_DEBRIS_PRICE, 0.5f, 0.1f));
         oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.NETHERITE_INGOT, ANCIENT_DEBRIS_PRICE, 0.5f, 0.1f));
         return oresCategory;
@@ -547,34 +663,181 @@ public class DefaultMarketSettings {
         sandCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.SAND, sandPrice, 0.02f, 0.1f));
         sandCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.RED_SAND, sandPrice, 0.02f, 0.1f));
         sandCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.GRAVEL, sandPrice, 0.02f, 0.1f));
+        sandCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.SOUL_SAND, sandPrice, 0.02f, 0.1f));
         return sandCategory;
+    }
+
+    public static MarketFactory.DefaultMarketSetupDataGroup getGlassBlocks()
+    {
+        MarketFactory.DefaultMarketSetupDataGroup glassCategory = new MarketFactory.DefaultMarketSetupDataGroup("GlassBlocks");
+        int glassPrice = GLASS_PRICE;
+        float rarity = 0.02f;
+        float volatility = 0.1f;
+
+        glassCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.GLASS, glassPrice, rarity, volatility));
+        glassCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.WHITE_STAINED_GLASS, glassPrice, rarity, volatility));
+        glassCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.ORANGE_STAINED_GLASS, glassPrice, rarity, volatility));
+        glassCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.MAGENTA_STAINED_GLASS, glassPrice, rarity, volatility));
+        glassCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.LIGHT_BLUE_STAINED_GLASS, glassPrice, rarity, volatility));
+        glassCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.YELLOW_STAINED_GLASS, glassPrice, rarity, volatility));
+        glassCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.LIME_STAINED_GLASS, glassPrice, rarity, volatility));
+        glassCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.PINK_STAINED_GLASS, glassPrice, rarity, volatility));
+        glassCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.GRAY_STAINED_GLASS, glassPrice, rarity, volatility));
+        glassCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.LIGHT_GRAY_STAINED_GLASS, glassPrice, rarity, volatility));
+        glassCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.CYAN_STAINED_GLASS, glassPrice, rarity, volatility));
+        glassCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.PURPLE_STAINED_GLASS, glassPrice, rarity, volatility));
+        glassCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.BLUE_STAINED_GLASS, glassPrice, rarity, volatility));
+        glassCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.BROWN_STAINED_GLASS, glassPrice, rarity, volatility));
+        glassCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.GREEN_STAINED_GLASS, glassPrice, rarity, volatility));
+        glassCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.RED_STAINED_GLASS, glassPrice, rarity, volatility));
+        glassCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.BLACK_STAINED_GLASS, glassPrice, rarity, volatility));
+
+
+        return glassCategory;
+    }
+
+    public static MarketFactory.DefaultMarketSetupDataGroup getGlassPlanes()
+    {
+        MarketFactory.DefaultMarketSetupDataGroup glassCategory = new MarketFactory.DefaultMarketSetupDataGroup("GlassPlanes");
+        int glassPrice = (GLASS_PRICE*6)/16;
+        float rarity = 0.02f;
+        float volatility = 0.1f;
+
+        glassCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.GLASS_PANE, glassPrice, rarity, volatility));
+        glassCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.WHITE_STAINED_GLASS_PANE, glassPrice, rarity, volatility));
+        glassCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.ORANGE_STAINED_GLASS_PANE, glassPrice, rarity, volatility));
+        glassCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.MAGENTA_STAINED_GLASS_PANE, glassPrice, rarity, volatility));
+        glassCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.LIGHT_BLUE_STAINED_GLASS_PANE, glassPrice, rarity, volatility));
+        glassCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.YELLOW_STAINED_GLASS_PANE, glassPrice, rarity, volatility));
+        glassCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.LIME_STAINED_GLASS_PANE, glassPrice, rarity, volatility));
+        glassCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.PINK_STAINED_GLASS_PANE, glassPrice, rarity, volatility));
+        glassCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.GRAY_STAINED_GLASS_PANE, glassPrice, rarity, volatility));
+        glassCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.LIGHT_GRAY_STAINED_GLASS_PANE, glassPrice, rarity, volatility));
+        glassCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.CYAN_STAINED_GLASS_PANE, glassPrice, rarity, volatility));
+        glassCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.PURPLE_STAINED_GLASS_PANE, glassPrice, rarity, volatility));
+        glassCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.BLUE_STAINED_GLASS_PANE, glassPrice, rarity, volatility));
+        glassCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.BROWN_STAINED_GLASS_PANE, glassPrice, rarity, volatility));
+        glassCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.GREEN_STAINED_GLASS_PANE, glassPrice, rarity, volatility));
+        glassCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.RED_STAINED_GLASS_PANE, glassPrice, rarity, volatility));
+        glassCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.BLACK_STAINED_GLASS_PANE, glassPrice, rarity, volatility));
+
+        return glassCategory;
     }
 
     private static MarketFactory.DefaultMarketSetupDataGroup getEnchantedBooks()
     {
         MarketFactory.DefaultMarketSetupDataGroup books = new MarketFactory.DefaultMarketSetupDataGroup("EnchantedBook");
-        int bookPrice = ENCHANTMENT_BOOK_PRICE;
+        int bookPriceFactor = ENCHANTMENT_BOOK_PRICE_FACTOR;
 
         String searchText =  Items.ENCHANTED_BOOK.getDefaultInstance().getHoverName().getString();
         List<ItemStack> bookItems = ItemUtilities.getSearchCreativeItems(searchText);
 
+
+        Enchantments.SHARPNESS.getRarity();
+
         for (ItemStack book : bookItems)
         {
-            if (book.getItem() instanceof EnchantedBookItem)
+            if (book.getItem() instanceof EnchantedBookItem enchantedBook)
             {
-                books.add(new MarketFactory.DefaultMarketSetupGeneratorData(book, bookPrice, 0.2f, 0.1f));
+                int price = ItemPriceCalculator.calculateItemPrice(book) * bookPriceFactor;
+                books.add(new MarketFactory.DefaultMarketSetupGeneratorData(book, price, 0.2f, 0.1f));
             }
         }
         return books;
     }
 
+    private static MarketFactory.DefaultMarketSetupDataGroup getSplashPotions()
+    {
+        MarketFactory.DefaultMarketSetupDataGroup splashPotions = new MarketFactory.DefaultMarketSetupDataGroup("SplashPotions");
+        int potionPriceFactor = POTION_PRICE_FACTOR;
 
-    // Glass blocks
-    // Glass panes
+        String searchText =  Items.SPLASH_POTION.getDefaultInstance().getHoverName().getString();
+        List<ItemStack> potionItems = ItemUtilities.getSearchCreativeItems(searchText);
+
+        for (ItemStack potion : potionItems)
+        {
+            if (potion.getItem() instanceof SplashPotionItem)
+            {
+                int price = ItemPriceCalculator.calculateItemPrice(potion) * potionPriceFactor;
+                splashPotions.add(new MarketFactory.DefaultMarketSetupGeneratorData(potion, price, 0.2f, 0.1f));
+            }
+        }
+        return splashPotions;
+    }
+
+    public static MarketFactory.DefaultMarketSetupDataGroup getPotions()
+    {
+        MarketFactory.DefaultMarketSetupDataGroup potions = new MarketFactory.DefaultMarketSetupDataGroup("Potions");
+        int potionPriceFactor = POTION_PRICE_FACTOR;
+
+        String searchText =  Items.POTION.getDefaultInstance().getHoverName().getString();
+        List<ItemStack> potionItems = ItemUtilities.getSearchCreativeItems(searchText);
+
+        for (ItemStack potion : potionItems)
+        {
+            if (potion.getItem() instanceof PotionItem)
+            {
+                int price = ItemPriceCalculator.calculateItemPrice(potion) * potionPriceFactor;
+                potions.add(new MarketFactory.DefaultMarketSetupGeneratorData(potion, price, 0.2f, 0.1f));
+            }
+        }
+        return potions;
+    }
+
+
+    public static MarketFactory.DefaultMarketSetupDataGroup getLingeringPotions()
+    {
+        MarketFactory.DefaultMarketSetupDataGroup lingeringPotions = new MarketFactory.DefaultMarketSetupDataGroup("LingeringPotions");
+        int potionPriceFactor = POTION_PRICE_FACTOR;
+
+        String searchText =  Items.LINGERING_POTION.getDefaultInstance().getHoverName().getString();
+        List<ItemStack> potionItems = ItemUtilities.getSearchCreativeItems(searchText);
+
+        for (ItemStack potion : potionItems)
+        {
+            if (potion.getItem() instanceof LingeringPotionItem)
+            {
+                int price = ItemPriceCalculator.calculateItemPrice(potion) * potionPriceFactor;
+                lingeringPotions.add(new MarketFactory.DefaultMarketSetupGeneratorData(potion, price, 0.2f, 0.1f));
+            }
+        }
+        return lingeringPotions;
+    }
+
+
+    public static MarketFactory.DefaultMarketSetupDataGroup getMiscBlocks()
+    {
+        MarketFactory.DefaultMarketSetupDataGroup miscBlocks = new MarketFactory.DefaultMarketSetupDataGroup("MiscBlocks");
+
+
+
+        miscBlocks.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.OBSIDIAN, OBSIDIAN_PRICE, 0.2f, 0.1f));
+        miscBlocks.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.DIRT, DIRT_PRICE, 0.02f, 0.1f));
+        miscBlocks.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.CLAY_BALL, CLAY_BALL_PRICE, 0.02f, 0.1f));
+        miscBlocks.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.COBBLESTONE, COBBLESTONE_PRICE, 0.02f, 0.1f));
+        miscBlocks.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.GRAVEL, GRAVEL_PRICE, 0.02f, 0.1f));
+        miscBlocks.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.SAND, SAND_PRICE, 0.02f, 0.1f));
+        miscBlocks.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.SOUL_SAND, SOUL_SAND_PRICE, 0.02f, 0.1f));
+        miscBlocks.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.COBWEB, COBWEB_PRICE, 0.02f, 0.1f));
+        miscBlocks.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.BEDROCK, BEDROCK_PRICE, 0.2f, 0.1f));
+        miscBlocks.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.BARRIER, BARRIER_PRICE, 0.2f, 0.1f));
+        miscBlocks.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.BOOKSHELF, BOOKSHELF_PRICE, 0.02f, 0.1f));
+        miscBlocks.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.CHEST, CHEST_PRICE, 0.02f, 0.1f));
+        miscBlocks.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.FURNACE, FURNACE_PRICE, 0.02f, 0.1f));
+        miscBlocks.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.CRAFTING_TABLE, CRAFTING_TABLE_PRICE, 0.02f, 0.1f));
+        miscBlocks.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.ENDER_CHEST, ENDER_CHEST_PRICE, 0.2f, 0.1f));
+        miscBlocks.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.BREWING_STAND, BREWING_STAND_PRICE, 0.02f, 0.1f));
+        miscBlocks.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.SMOKER, SMOKER_PRICE, 0.02f, 0.1f));
+        miscBlocks.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.BLAST_FURNACE, BLAST_FURNACE_PRICE, 0.02f, 0.1f));
+
+
+
+        return miscBlocks;
+    }
+
+
     // Dirt/obsidian/gravel/sand/soulSand
     // Arrows
-    // Potions
-    // Slpash potions
     // Enchanted books
     // Foods
     // dyes
@@ -583,4 +846,59 @@ public class DefaultMarketSettings {
 
 
 
+    public static class ItemPriceCalculator {
+
+        public static int calculateItemPrice(ItemStack stack) {
+            if (stack == null || stack.isEmpty()) return 0;
+
+            int basePrice = getBaseItemValue(stack);
+            int enchantmentBonus = getEnchantmentValue(stack);
+            int potionBonus = getPotionValue(stack);
+            int nameBonus = stack.hasCustomHoverName() ? 10 : 0;
+            int durabilityBonus = getDurabilityBonus(stack);
+
+            int total = basePrice + enchantmentBonus + potionBonus + nameBonus + durabilityBonus;
+            return total * stack.getCount();
+        }
+
+        public static int getBaseItemValue(ItemStack stack) {
+            // You can assign specific values per item if needed
+            if (stack.getItem() == Items.DIAMOND_SWORD) return 100;
+            if (stack.getItem() == Items.NETHERITE_CHESTPLATE) return 500;
+            if (stack.getItem() == Items.DIRT) return 1;
+            return 10; // default fallback
+        }
+
+        public static int getEnchantmentValue(ItemStack stack) {
+            Map<Enchantment, Integer> enchantments = EnchantmentHelper.getEnchantments(stack);
+            int value = 0;
+            for (Map.Entry<Enchantment, Integer> entry : enchantments.entrySet()) {
+                int level = entry.getValue();
+                int rarityMultiplier = entry.getKey().getRarity().ordinal() + 1; // COMMON = 0, RARE = 2, etc.
+                value += 10 * level * rarityMultiplier;
+            }
+            return value;
+        }
+
+        public static int getPotionValue(ItemStack stack) {
+            if (!(stack.getItem() instanceof PotionItem)) return 0;
+            List<MobEffectInstance> effects = PotionUtils.getMobEffects(stack);
+            int value = 0;
+            for (MobEffectInstance effect : effects) {
+                int amplifier = effect.getAmplifier() + 1;
+                int duration = effect.getDuration() / 20; // ticks to seconds
+                value += (amplifier * 5 + 2) * (duration / 10); // value grows with amplifier and duration
+            }
+            return value;
+        }
+
+        public static int getDurabilityBonus(ItemStack stack) {
+            if (!stack.isDamageableItem()) return 0;
+            int maxDurability = stack.getMaxDamage();
+            int currentDurability = maxDurability - stack.getDamageValue();
+            return (int)((currentDurability / (double)maxDurability) * 20); // max +20 bonus if fully intact
+        }
+    }
+
 }
+

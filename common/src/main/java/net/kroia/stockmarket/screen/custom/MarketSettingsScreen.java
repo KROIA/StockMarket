@@ -14,6 +14,7 @@ import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.clientdata.ServerMarketSettingsData;
 import net.kroia.stockmarket.market.server.VirtualOrderBook;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
+import net.kroia.stockmarket.screen.uiElements.TradingPairView;
 import net.kroia.stockmarket.screen.uiElements.chart.TradingChartWidget;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.kroia.stockmarket.util.StockMarketGuiScreen;
@@ -35,7 +36,7 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
 
         public static final Component TITLE = Component.translatable(PREFIX + "title");
         public static final Component SAVE_BUTTON = Component.translatable(PREFIX + "save_button");
-        public static final Component CANCEL_BUTTON = Component.translatable(PREFIX + "cancel_button");
+        public static final Component BACK_BUTTON = Component.translatable(PREFIX + "back_button");
 
 
         // GeneralGui
@@ -611,8 +612,9 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
     private static MarketSettingsScreen instance = null;
     //private ServerMarketSettingsData serverMarketSettingsData;
     private final TradingChartWidget tradingChart;
+    private final TradingPairView tradingPairView;
     private final Button saveButton;
-    private final Button cancelButton;
+    private final Button backButton;
     private final ListView listView;
     GeneralGuiElement generalGuiElement;
     private final VirtualOderBookGuiElement virtualOrderBookGuiElement;
@@ -625,6 +627,9 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
 
         tradingChart = new TradingChartWidget();
         tradingChart.enableBotTargetPriceDisplay(true);
+
+        tradingPairView = new TradingPairView();
+
         saveButton = new Button(TEXTS.SAVE_BUTTON.getString(), () -> {
             ServerMarketSettingsData settings = getSettings();
             if(settings != null)
@@ -633,7 +638,7 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
             }
             //onClose();
         });
-        cancelButton = new Button(TEXTS.CANCEL_BUTTON.getString(), this::onClose);
+        backButton = new Button(TEXTS.BACK_BUTTON.getString(), this::onClose);
 
 
 
@@ -652,8 +657,9 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
         listView.addChild(botGuiElement);
 
 
+        addElement(tradingPairView);
         addElement(saveButton);
-        addElement(cancelButton);
+        addElement(backButton);
         addElement(tradingChart);
         addElement(listView);
 
@@ -686,9 +692,10 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
         int chartWidth = (width*2)/3;
 
         tradingChart.setBounds(padding, padding, chartWidth, height);
-        saveButton.setBounds(tradingChart.getRight()+spacing, padding, (width-chartWidth) / 2 - spacing, 20);
-        cancelButton.setBounds(saveButton.getRight() + spacing, saveButton.getTop(), saveButton.getWidth(), 20);
-        listView.setBounds(saveButton.getLeft(), saveButton.getBottom() + spacing, (width-chartWidth) - spacing, height - saveButton.getBottom());
+        tradingPairView.setBounds(tradingChart.getRight()+spacing, padding, (width-chartWidth)/3-spacing, 20);
+        saveButton.setBounds(tradingPairView.getRight()+spacing, tradingPairView.getTop(), (width-chartWidth) / 3 - spacing, 20);
+        backButton.setBounds(saveButton.getRight() + spacing, saveButton.getTop(), saveButton.getWidth(), 20);
+        listView.setBounds(tradingPairView.getLeft(), tradingPairView.getBottom() + spacing, (width-chartWidth) - spacing, height - tradingPairView.getBottom());
     }
 
     public void setSettings(ServerMarketSettingsData settings)
@@ -699,10 +706,14 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
             if(settings.tradingPairData != null) {
                 TradingPair tradingPair = settings.tradingPairData.toTradingPair();
                 selectMarket(tradingPair);
+                tradingPairView.setTradingPair(tradingPair);
                 generalGuiElement.selectMarket(tradingPair);
                 virtualOrderBookGuiElement.selectMarket(tradingPair);
                 botGuiElement.selectMarket(tradingPair);
             }
+        }
+        else {
+            tradingPairView.setTradingPair(null);
         }
 
 
