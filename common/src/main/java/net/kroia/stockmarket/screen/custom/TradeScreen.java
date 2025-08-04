@@ -98,8 +98,7 @@ public class TradeScreen extends StockMarketGuiScreen {
         tradePanel.setMarketOpen(marketWasOpen);
 
         // Add Gui Elements
-        //addElement(candleStickChart);
-        //addElement(orderbookVolumeChart);
+
         addElement(tradingChart);
         addElement(activeOrderListView);
         addElement(tradePanel);
@@ -131,12 +130,12 @@ public class TradeScreen extends StockMarketGuiScreen {
 
         int padding = 5;
         int spacing = 5;
-        int width = getWidth()-2*padding;
-        int height = getHeight()-2*padding;
+        int width = (getWidth())-2*padding;
+        int height = (getHeight())-2*padding;
 
         int x = padding;
 
-        tradingChart.setBounds(x, padding, (width*2/3)-spacing, height / 2);
+        tradingChart.setBounds(x, padding, (((width*3)/4)-spacing), ((height*2) / 3));
         tradePanel.setBounds(tradingChart.getRight()+spacing, padding, width - tradingChart.getRight(), height);
 
         //candleStickChart.setBounds(x, padding, (width * 5) / 8-spacing/2, height/2);

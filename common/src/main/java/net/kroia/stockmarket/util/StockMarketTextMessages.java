@@ -808,6 +808,9 @@ public class StockMarketTextMessages {
         }
     }
 
+
+
+
     /*private static final Component TOOLTIP_TRADING_PAIR_CREATION_VOLATILITY = Component.translatable("gui."+StockMarketMod.MOD_ID+".trading_pair_creation_screen.tooltip_volatility");
     public static String getTradingPairCreationScreenVolatilityTooltip(int minutes) {
         String msg = TOOLTIP_TRADING_PAIR_CREATION_VOLATILITY.getString();

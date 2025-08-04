@@ -4,6 +4,7 @@ import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.ItemView;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.stockmarket.market.TradingPair;
+import net.kroia.stockmarket.util.StockMarketGuiElement;
 import org.jetbrains.annotations.Nullable;
 
 public class TradingPairView extends Button {
@@ -27,8 +28,10 @@ public class TradingPairView extends Button {
         this.setLayoutType(Alignment.CENTER);
 
         itemView = new ItemView();
+        itemView.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
         //arrowLabel = new Label("<->");
         currencyItemView = new ItemView();
+        currencyItemView.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
 
         addChild(itemView);
         //addChild(arrowLabel);

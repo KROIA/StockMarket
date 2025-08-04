@@ -186,7 +186,19 @@ public class ClientMarket {
     public void requestChartReset(Consumer<Boolean> callback) {
         if(checkDeadAndDebug())
             return;
-        StockMarketNetworking.CHART_RESET_REQUEST.sendRequestToServer(tradingPair, callback);
+        StockMarketNetworking.CHART_RESET_REQUEST.sendRequestToServer(List.of(tradingPair), (results)->
+        {
+            if(results == null || results.isEmpty()) {
+                callback.accept(false);
+                return;
+            }
+            callback.accept(results.get(0));
+        });
+    }
+    public void requestMarketOpen(boolean open, Consumer<Boolean> callback) {
+        if(checkDeadAndDebug())
+            return;
+        BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.requestSetMarketOpen(tradingPair, open, callback);
     }
 
 

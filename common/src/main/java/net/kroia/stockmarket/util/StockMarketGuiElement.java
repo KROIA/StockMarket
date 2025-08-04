@@ -10,6 +10,11 @@ public abstract class StockMarketGuiElement extends GuiElement {
     protected static StockMarketModBackend.Instances BACKEND_INSTANCES;
     protected ClientMarket selectedMarket;
 
+    public final static float hoverToolTipFontSize = 0.8f;
+    public final static int padding = 5;
+    private final static int spacing = 5;
+
+
     public static void setBackend(StockMarketModBackend.Instances backend) {
         BACKEND_INSTANCES = backend;
     }
@@ -30,4 +35,16 @@ public abstract class StockMarketGuiElement extends GuiElement {
     public ClientMarket getSelectedMarket() {
         return selectedMarket;
     }
+
+
+    /*@Override
+    public void addChild(GuiElement el)
+    {
+        if(el != null)
+        {
+            super.addChild(el);
+            float hoverToolTipFontSize = 0.5f;
+            el.setHoverTooltipFontScale(hoverToolTipFontSize);
+        }
+    }*/
 }

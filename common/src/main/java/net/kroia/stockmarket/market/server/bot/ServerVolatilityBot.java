@@ -254,7 +254,8 @@ public class ServerVolatilityBot extends ServerTradingBot {
 
         long marketOrderAmount = 0;
         targetPrice = settings.defaultPrice;
-        float volumeScale = settings.volumeScale;
+
+        int randomWalkDeltaTargetPrice = 0;
         if(settings.enableVolumeTracking)
         {
 
@@ -278,29 +279,15 @@ public class ServerVolatilityBot extends ServerTradingBot {
             if(randomWalkTimer.check())
             {
                 randomWalkTimer.start(100+random.nextInt(900));
-                //randomWalk1.nextValue();
-                //randomWalk2.nextValue();
                 priceGenerator.getNextValue();
             }
+            double randomWalkValue = (priceGenerator.getCurrentValue() * (double)settings.volatility * (double)settings.defaultPrice);
+            randomWalkDeltaTargetPrice = (int)randomWalkValue;
+            targetPrice += randomWalkDeltaTargetPrice;
+            //BACKEND_INSTANCES.LOGGER.debug("Random Walk Value: "+randomWalkValue+", Target Price: "+targetPrice);
 
-            /*long currentMillis = System.currentTimeMillis();
-            if(currentMillis - lastTimerMillis > targetTimerMillis)
-            {
-                lastTimerMillis = currentMillis;
-                targetTimerMillis = 1000 + random.nextLong(100000);
-                randomWalk1.nextValue();
-                timerCounter++;
-                if(timerCounter >= 10)
-                {
-                    timerCounter = 0;
-                    randomWalk2.nextValue();
-                }
-            }*/
-            targetPrice += (int)(priceGenerator.getCurrentValue() * settings.volatility * settings.defaultPrice);
-            //targetPrice += (int)((randomWalk1.getCurrentValue() + randomWalk2.getCurrentValue())*settings.volatility*settings.defaultPrice);
-
-            //marketOrderAmount += (int)(randomWalk3.nextValue()*volumeScale);
         }
+
         if(targetPrice < 0)
             targetPrice = 0;
 
@@ -310,7 +297,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
 
             int currentPrice = getCurrentPrice();
             float output = pid.update(targetPrice - currentPrice);
-            int normalized = (int)(Math.min(Math.max(-10, output),10)*volumeScale);
+            int normalized = (int)(Math.min(Math.max(-10, output*5),10));
             marketOrderAmount += normalized;
         }
 
@@ -326,7 +313,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
             if(amount < -marketOrderAmount)
                 marketOrderAmount = -amount;
         }
-        marketTrade(marketOrderAmount);
+        marketTrade((long)(marketOrderAmount * settings.volumeScale));
 
     }
 
@@ -336,6 +323,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
         if(settings instanceof Settings) {
             super.setSettings(settings);
             this.settings = (Settings)settings;
+            pid.setCurrentMillis();
             pid.setKP(this.settings.targetPriceSteeringFactor);
         }
         else

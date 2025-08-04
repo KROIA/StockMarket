@@ -24,6 +24,11 @@ import net.minecraft.world.entity.player.Player;
 import java.util.function.Consumer;
 
 public class MarketSettingsScreen extends StockMarketGuiScreen {
+    public final float textFontSize = StockMarketGuiElement.hoverToolTipFontSize;
+    public final int elementHeight = 15;
+    public final int spacing = 3;
+    public final int padding = 3;
+
     public static final class TEXTS
     {
         private static final String PREFIX = "gui." + StockMarketMod.MOD_ID + ".market_settings_screen.";
@@ -88,7 +93,7 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
     }
 
 
-    private static class GeneralGuiElement extends StockMarketGuiElement
+    private class GeneralGuiElement extends StockMarketGuiElement
     {
         public final Label titleLabel;
         public final Button chartResetButton;
@@ -128,10 +133,12 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
 
             for(GuiElement child : getChilds())
             {
-                child.setTooltipMousePositionAlignment(Alignment.RIGHT);
+                child.setHoverTooltipMousePositionAlignment(Alignment.RIGHT);
+                child.setHoverTooltipFontScale(textFontSize);
+                child.setTextFontScale(textFontSize);
             }
 
-            int targetHeight = 25 * 4 + 5;
+            int targetHeight = (elementHeight+spacing) * 4 + 5;
             this.setHeight(targetHeight);
         }
         @Override
@@ -141,11 +148,9 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
 
         @Override
         protected void layoutChanged() {
-            int padding = 5;
-            int spacing = 5;
             int width = getWidth() - padding * 2;
+
             //int height = getHeight() - padding * 2;
-            int elementHeight = 20;
 
             int y = padding;
             titleLabel.setBounds(padding, y, width, elementHeight);
@@ -183,7 +188,7 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
         }
     }
 
-    public static class VirtualOderBookGuiElement extends StockMarketGuiElement
+    public class VirtualOderBookGuiElement extends StockMarketGuiElement
     {
         VirtualOrderBook.Settings virtualOrderBookSettings;
 
@@ -274,10 +279,12 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
 
             for(GuiElement child : getChilds())
             {
-                child.setTooltipMousePositionAlignment(Alignment.RIGHT);
+                child.setHoverTooltipMousePositionAlignment(Alignment.RIGHT);
+                child.setHoverTooltipFontScale(textFontSize);
+                child.setTextFontScale(textFontSize);
             }
 
-            int targetHeight = 25 * 7 + 5;
+            int targetHeight = (elementHeight+spacing) * 7 + 5;
             this.setHeight(targetHeight);
         }
 
@@ -288,11 +295,9 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
 
         @Override
         protected void layoutChanged() {
-            int padding = 5;
-            int spacing = 5;
             int width = getWidth() - padding * 2;
             //int height = getHeight() - padding * 2;
-            int elementHeight = 20;
+            int elementHeight = 15;
 
             int y = padding;
             titleLabel.setBounds(padding, y, width, elementHeight);
@@ -361,7 +366,7 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
         }
     }
 
-    private static class BotGuiElement extends StockMarketGuiElement
+    private class BotGuiElement extends StockMarketGuiElement
     {
         private ServerVolatilityBot.Settings botSettings;
 
@@ -500,10 +505,12 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
 
             for(GuiElement child : getChilds())
             {
-                child.setTooltipMousePositionAlignment(Alignment.RIGHT);
+                child.setHoverTooltipMousePositionAlignment(Alignment.RIGHT);
+                child.setHoverTooltipFontScale(textFontSize);
+                child.setTextFontScale(textFontSize);
             }
 
-            int targetHeight = 25 * 11 + 5;
+            int targetHeight = (elementHeight+spacing) * 11 + 5;
             this.setHeight(targetHeight);
         }
 
@@ -563,11 +570,9 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
         }
         @Override
         protected void layoutChanged() {
-            int padding = 5;
-            int spacing = 5;
             int width = getWidth() - padding * 2;
             //int height = getHeight() - padding * 2;
-            int elementHeight = 20;
+            int elementHeight = 15;
 
             int y = padding;
             titleLabel.setBounds(padding, y, width, elementHeight);
@@ -678,7 +683,7 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
         int width = getWidth() - padding * 2;
         int height = getHeight() - padding * 2;
 
-        int chartWidth = width/2;
+        int chartWidth = (width*2)/3;
 
         tradingChart.setBounds(padding, padding, chartWidth, height);
         saveButton.setBounds(tradingChart.getRight()+spacing, padding, (width-chartWidth) / 2 - spacing, 20);

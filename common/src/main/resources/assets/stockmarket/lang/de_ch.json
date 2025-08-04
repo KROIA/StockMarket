@@ -1,4 +1,4 @@
-{
+ {
   "block.stockmarket.stock_market_block": "Stock Market Terminal Block",
   "item.stockmarket.stock_market_block": "Stock Market Block",
   "item.stockmarket.trading_software": "Handels Programm",
@@ -103,10 +103,10 @@
   "gui.stockmarket.management_screen.ask_remove_message": "Bisch sicher, dass du de Markt lösche wötsch?\nAlli offene Pstellige werded denn storniert.",
   "gui.stockmarket.management_screen.market_settings": "Markt Istellige",
   "gui.stockmarket.management_screen.market_open": "Markt göffnet",
-  "gui.stockmarket.management_screen.tooltip_new_custom_market": "Neuä Markt erstellä",
-  "gui.stockmarket.management_screen.tooltip_new_market_by_category": "Neuä Markt ahand vonere Kategorie erstellä",
-  "gui.stockmarket.management_screen.tooltip_remove_selected_trading_pair": "Usgwälts Handels Paar löschä",
-  "gui.stockmarket.management_screen.tooltip_selected_trading_pair": "Aktuells Handels Paar: ",
+  "gui.stockmarket.management_screen.new_custom_market.tooltip": "Neuä Markt erstellä",
+  "gui.stockmarket.management_screen.new_market_by_category.tooltip": "Neuä Markt ahand vonere Kategorie erstellä",
+  "gui.stockmarket.management_screen.remove_selected_trading_pair.tooltip": "Usgwälts Handels Paar löschä",
+  "gui.stockmarket.management_screen.selected_trading_pair.tooltip": "Aktuells Handels Paar: ",
 
   "gui.stockmarket.trade_panel.tooltip_market_buy": "Chauf sofort {amount} {item_name}\nfür {cost} {currency}",
   "gui.stockmarket.trade_panel.tooltip_market_sell": "Verchauf sofort {amount} {item_name}\nfür {cost} {currency}",

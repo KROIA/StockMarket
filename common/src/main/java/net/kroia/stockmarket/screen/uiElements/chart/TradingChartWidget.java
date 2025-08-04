@@ -35,17 +35,20 @@ public class TradingChartWidget extends StockMarketGuiElement {
             candleStickChart = new CandleStickChartWidget(this::getChartYPos, this::getPriceFromYPos,
                     priceChangeCallback, colorGreen, colorRed);
         }
+        //candleStickChart.setTextFontScale(0.5f);
 
         tradingVolumeHistoryChart = new TradingVolumeHistoryChart();
         tradingVolumeHistoryChart.setEnableBackground(false);
         tradingVolumeHistoryChart.setEnableOutline(false);
         tradingVolumeHistoryChart.setHoverTooltipSupplier(StockMarketTextMessages::getCandlestickChartTooltipTradeVolume);
-        tradingVolumeHistoryChart.setTooltipMousePositionAlignment(GuiElement.Alignment.TOP);
+        tradingVolumeHistoryChart.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.TOP);
+        tradingVolumeHistoryChart.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
         orderbookVolumeChart = new OrderbookVolumeChartWidget(this::getChartYPos, colorGreen, colorRed);
         orderbookVolumeChart.setEnableBackground(false);
         orderbookVolumeChart.setEnableOutline(false);
         orderbookVolumeChart.setHoverTooltipSupplier(StockMarketTextMessages::getCandlestickChartTooltipOrderBookVolume);
-        orderbookVolumeChart.setTooltipMousePositionAlignment(GuiElement.Alignment.TOP);
+        orderbookVolumeChart.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.TOP);
+        orderbookVolumeChart.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
 
         addChild(candleStickChart);
         addChild(tradingVolumeHistoryChart);
@@ -105,6 +108,24 @@ public class TradingChartWidget extends StockMarketGuiElement {
         candleStickChart.setBotTargetPrice(data.botTargetPrice);
         candleStickChart.updateOrderDisplay(data.openOrdersData, data.tradingPairData.toTradingPair());
     }
+
+    /*@Override
+    public void renderBackgroundInternal()
+    {
+        getGraphics().pushPose();
+        getGraphics().scale(0.5f,0.5f,1);
+        super.renderBackgroundInternal();
+        getGraphics().popPose();
+    }
+    @Override
+    public void renderInternal()
+    {
+        getGraphics().pushPose();
+        getGraphics().scale(0.5f,0.5f,1);
+        super.renderInternal();
+        getGraphics().popPose();
+    }*/
+
     public int getMaxCandleCount()
     {
         return candleStickChart.getMaxCandleCount();
@@ -126,4 +147,6 @@ public class TradingChartWidget extends StockMarketGuiElement {
     {
         return Math.round(mapF(y, candleStickChart.getHeight()-yPadding, yPadding, chartViewMinPrice, chartViewMaxPrice));
     }
+
+
 }

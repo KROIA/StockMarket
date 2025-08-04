@@ -44,8 +44,9 @@ public class LimitOrderInChartDisplay extends StockMarketGuiElement {
         moveButton.setOnDown(this::onButtonDown);
         moveButton.setOnRisingEdge(this::onButtonRising);
         moveButton.setOnFallingEdge(this::onButtonFalling);
-        moveButton.setTooltipMousePositionAlignment(Alignment.TOP);
+        moveButton.setHoverTooltipMousePositionAlignment(Alignment.TOP);
         moveButton.setHoverTooltipSupplier(this::getButtonTooltip);
+        moveButton.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
 
         setOrder(order);
 

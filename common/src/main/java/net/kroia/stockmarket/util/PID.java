@@ -84,6 +84,10 @@ public class PID implements ServerSaveable {
     public float getLastError() {
         return lastError;
     }
+    public void setCurrentMillis()
+    {
+        lastMillis = System.currentTimeMillis();
+    }
 
     public float update(float error)
     {

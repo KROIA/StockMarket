@@ -6,7 +6,9 @@ import net.kroia.stockmarket.util.StockMarketGenericRequest;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
-public class ChartResetRequest extends StockMarketGenericRequest<TradingPair, Boolean> {
+import java.util.List;
+
+public class ChartResetRequest extends StockMarketGenericRequest<List<TradingPair>, List<Boolean>> {
 
 
     @Override
@@ -15,42 +17,71 @@ public class ChartResetRequest extends StockMarketGenericRequest<TradingPair, Bo
     }
 
     @Override
-    public Boolean handleOnClient(TradingPair input) {
+    public List<Boolean> handleOnClient(List<TradingPair> input) {
         return null;
     }
 
     @Override
-    public Boolean handleOnServer(TradingPair input, ServerPlayer sender) {
+    public List<Boolean> handleOnServer(List<TradingPair> input, ServerPlayer sender) {
         if(playerIsAdmin(sender)) {
-            ServerMarket market = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getMarket(input);
-            if (market == null) {
-                return false; // Market not found
+            // Reset the chart for each trading pair in the input list
+            List<Boolean> results = new java.util.ArrayList<>(input.size());
+            for (TradingPair tradingPair : input) {
+                ServerMarket market = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getMarket(tradingPair);
+                if (market != null) {
+                    market.resetHistoricalMarketData();
+                    results.add(true);
+                }
+                else {
+                    results.add(false); // Market not found
+                }
             }
-            market.resetHistoricalMarketData();
-            return true; // Successfully reset the chart
+            return results;
         }
-        return false; // Player is not an admin
+        else {
+            // If the player is not an admin, return a list of false values
+            List<Boolean> results = new java.util.ArrayList<>(input.size());
+            for (int i = 0; i < input.size(); i++) {
+                results.add(false);
+            }
+            return results;
+        }
     }
 
     @Override
-    public void encodeInput(FriendlyByteBuf buf, TradingPair input) {
-        input.encode(buf);
+    public void encodeInput(FriendlyByteBuf buf, List<TradingPair> input) {
+        buf.writeInt(input.size());
+        for (TradingPair tradingPair : input) {
+            tradingPair.encode(buf);
+        }
     }
 
     @Override
-    public void encodeOutput(FriendlyByteBuf buf, Boolean output) {
-        buf.writeBoolean(output);
+    public void encodeOutput(FriendlyByteBuf buf, List<Boolean> output) {
+        buf.writeInt(output.size());
+        for (Boolean result : output) {
+            buf.writeBoolean(result);
+        }
     }
 
     @Override
-    public TradingPair decodeInput(FriendlyByteBuf buf) {
-        TradingPair tradingPair = new TradingPair();
-        tradingPair.decode(buf);
-        return tradingPair;
+    public List<TradingPair> decodeInput(FriendlyByteBuf buf) {
+        int size = buf.readInt();
+        List<TradingPair> tradingPairs = new java.util.ArrayList<>(size);
+        for (int i = 0; i < size; i++) {
+            TradingPair tradingPair = new TradingPair(buf);
+            tradingPairs.add(tradingPair);
+        }
+        return tradingPairs;
     }
 
     @Override
-    public Boolean decodeOutput(FriendlyByteBuf buf) {
-        return buf.readBoolean();
+    public List<Boolean> decodeOutput(FriendlyByteBuf buf) {
+        int size = buf.readInt();
+        List<Boolean> results = new java.util.ArrayList<>(size);
+        for (int i = 0; i < size; i++) {
+            results.add(buf.readBoolean());
+        }
+        return results;
     }
 }

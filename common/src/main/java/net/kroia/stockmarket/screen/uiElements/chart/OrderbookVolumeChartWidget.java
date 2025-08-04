@@ -42,7 +42,7 @@ public class OrderbookVolumeChartWidget extends StockMarketGuiElement {
         this.chartViewMaxPrice = maxPrice;
     }
     @Override
-    protected void render() {
+    protected void renderBackground() {
         if(orderBookVolume == null)
             return;
         int x = xPadding;
@@ -74,6 +74,11 @@ public class OrderbookVolumeChartWidget extends StockMarketGuiElement {
             }
             i++;
         }
+    }
+
+    @Override
+    protected void render() {
+        // No foreground rendering needed for this widget
     }
 
     @Override

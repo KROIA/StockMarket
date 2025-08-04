@@ -155,8 +155,8 @@ public class StockMarketModBackend implements StockMarketAPI {
             loadDataFromFiles(UtilitiesPlatform.getServer());
             DefaultMarketSettings.createDefaultMarketSettingsIfNotExist();
 
-            NormalizedRandomPriceGenerator generator = new NormalizedRandomPriceGenerator(5);
-            generator.testToFile(10000); // Test the random price generator and save to file
+            //NormalizedRandomPriceGenerator generator = new NormalizedRandomPriceGenerator(5);
+            //generator.testToFile(10000); // Test the random price generator and save to file
 
             //var category = MarketFactory.DefaultMarketSetupDataGroup.load("Ores");
             //INSTANCES.SERVER_STOCKMARKET_MANAGER.createMarket(category);

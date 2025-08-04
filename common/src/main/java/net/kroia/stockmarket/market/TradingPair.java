@@ -58,12 +58,15 @@ public class TradingPair implements ServerSaveable, INetworkPayloadConverter {
         }
     }
     public TradingPair(CompoundTag tag) {
+        this();
         load(tag);
     }
     public TradingPair(FriendlyByteBuf buf) {
+        this();
         decode(buf);
     }
     public TradingPair(JsonElement json) {
+        this();
         fromJson(json);
     }
 

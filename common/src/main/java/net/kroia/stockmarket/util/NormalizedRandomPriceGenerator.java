@@ -27,7 +27,7 @@ public class NormalizedRandomPriceGenerator implements ServerSaveable {
 
         // Normalize coefficients to ensure they sum to 1
         for (int i = 0; i < order; i++) {
-            coefficients[i] /= sumCoeff;
+            coefficients[i] = coefficients[i] * (double)order / sumCoeff;
         }
     }
 

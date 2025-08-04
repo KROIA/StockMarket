@@ -187,8 +187,6 @@ public class TradingPairSelectionView extends StockMarketGuiElement {
         Layout layout = tradingPairListView.getLayout();
         if(layout != null)
             layout.enabled = false;
-        List<TradingPairView> tradingPairViews = new ArrayList<>(availableTradingPairs.size());
-
         for(TradingPair pair : availableTradingPairs)
         {
             ItemStack itemStack = selectedItemView.getItemStack();

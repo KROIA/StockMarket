@@ -11,9 +11,11 @@ public abstract class StockMarketGuiScreen extends GuiScreen {
 
     protected static StockMarketModBackend.Instances BACKEND_INSTANCES;
     protected ClientMarket selectedMarket;
+    public static final float guiScale = 0.8f;
 
     protected StockMarketGuiScreen(Component pTitle) {
         super(pTitle);
+        setGuiScale(guiScale);
     }
 
     public static void setBackend(StockMarketModBackend.Instances backend) {

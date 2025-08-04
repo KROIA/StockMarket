@@ -7,7 +7,7 @@ import net.kroia.stockmarket.util.StockMarketGenericRequest;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
-import java.util.ArrayList;
+import java.util.List;
 
 public class DefaultMarketSetupDataRequest extends StockMarketGenericRequest<TradingPairData, MarketFactory.DefaultMarketSetupData> {
     @Override
@@ -25,7 +25,7 @@ public class DefaultMarketSetupDataRequest extends StockMarketGenericRequest<Tra
         if(!playerIsAdmin(sender)) {
             return null; // Only allow admins to request default market setup data
         }
-        ArrayList<MarketFactory.DefaultMarketSetupDataGroup> categories = MarketFactory.DefaultMarketSetupDataGroup.loadAll();
+        List<MarketFactory.DefaultMarketSetupDataGroup> categories = MarketFactory.DefaultMarketSetupDataGroup.loadAll();
         if (categories.isEmpty()) {
             return null; // No categories found, return null
         }

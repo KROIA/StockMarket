@@ -2,6 +2,7 @@ package net.kroia.stockmarket.screen.uiElements;
 
 import net.kroia.banksystem.banking.bank.MoneyBank;
 import net.kroia.modutilities.gui.elements.*;
+import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
@@ -148,18 +149,18 @@ public class TradePanel extends StockMarketGuiElement {
 
         // Set tooltip mouse position alignment
         // (TOP_RIGHT means the tooltip will be positioned so that the mouse is at the top right corner of the tooltip)
-        currentItemView.setTooltipMousePositionAlignment(Alignment.RIGHT);
-        moneyItemView.setTooltipMousePositionAlignment(Alignment.RIGHT);
-        currentPriceLabel.setTooltipMousePositionAlignment(Alignment.RIGHT);
-        currentPriceTextLabel.setTooltipMousePositionAlignment(Alignment.RIGHT);
-        amountLabel.setTooltipMousePositionAlignment(Alignment.RIGHT);
-        marketOrderLabel.setTooltipMousePositionAlignment(Alignment.RIGHT);
-        marketBuyButton.setTooltipMousePositionAlignment(Alignment.BOTTOM_RIGHT);
-        marketSellButton.setTooltipMousePositionAlignment(Alignment.BOTTOM_RIGHT);
-        limitOrderLabel.setTooltipMousePositionAlignment(Alignment.RIGHT);
-        limitPriceLabel.setTooltipMousePositionAlignment(Alignment.RIGHT);
-        limitBuyButton.setTooltipMousePositionAlignment(Alignment.BOTTOM_RIGHT);
-        limitSellButton.setTooltipMousePositionAlignment(Alignment.BOTTOM_RIGHT);
+        currentItemView.setHoverTooltipMousePositionAlignment(Alignment.RIGHT);
+        moneyItemView.setHoverTooltipMousePositionAlignment(Alignment.RIGHT);
+        currentPriceLabel.setHoverTooltipMousePositionAlignment(Alignment.RIGHT);
+        currentPriceTextLabel.setHoverTooltipMousePositionAlignment(Alignment.RIGHT);
+        amountLabel.setHoverTooltipMousePositionAlignment(Alignment.RIGHT);
+        marketOrderLabel.setHoverTooltipMousePositionAlignment(Alignment.RIGHT);
+        marketBuyButton.setHoverTooltipMousePositionAlignment(Alignment.BOTTOM_RIGHT);
+        marketSellButton.setHoverTooltipMousePositionAlignment(Alignment.BOTTOM_RIGHT);
+        limitOrderLabel.setHoverTooltipMousePositionAlignment(Alignment.RIGHT);
+        limitPriceLabel.setHoverTooltipMousePositionAlignment(Alignment.RIGHT);
+        limitBuyButton.setHoverTooltipMousePositionAlignment(Alignment.BOTTOM_RIGHT);
+        limitSellButton.setHoverTooltipMousePositionAlignment(Alignment.BOTTOM_RIGHT);
 
 
 
@@ -201,6 +202,10 @@ public class TradePanel extends StockMarketGuiElement {
         addChild(limitSellButton);
 
         addChild(marketClosedLabel);
+
+        for(GuiElement child : getChilds()) {
+            child.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
+        }
     }
 
     public void setTradingPair(TradingPair pair)

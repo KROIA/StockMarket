@@ -14,6 +14,7 @@ public class StockMarketNetworking extends NetworkManager {
 
     public static BotSettingsRequest BOT_SETTINGS_REQUEST = (BotSettingsRequest) AsynchronousRequestResponseSystem.register(new BotSettingsRequest());
     public static CreateMarketRequest CREATE_MARKET_REQUEST = (CreateMarketRequest) AsynchronousRequestResponseSystem.register(new CreateMarketRequest());
+    public static CreateMarketsRequest CREATE_MARKETS_REQUEST = (CreateMarketsRequest) AsynchronousRequestResponseSystem.register(new CreateMarketsRequest());
     public static RemoveMarketRequest REMOVE_MARKET_REQUEST = (RemoveMarketRequest) AsynchronousRequestResponseSystem.register(new RemoveMarketRequest());
     public static OrderBookVolumeRequest ORDER_BOOK_VOLUME_REQUEST = (OrderBookVolumeRequest) AsynchronousRequestResponseSystem.register(new OrderBookVolumeRequest());
     public static OrderCancelRequest ORDER_CANCEL_REQUEST = (OrderCancelRequest) AsynchronousRequestResponseSystem.register(new OrderCancelRequest());
@@ -33,6 +34,7 @@ public class StockMarketNetworking extends NetworkManager {
     public static IsTradingPairAllowedRequest IS_TRADING_PAIR_ALLOWED_REQUEST = (IsTradingPairAllowedRequest) AsynchronousRequestResponseSystem.register(new IsTradingPairAllowedRequest());
     public static GetRecommendedPriceRequest GET_RECOMMENDED_PRICE_REQUEST = (GetRecommendedPriceRequest) AsynchronousRequestResponseSystem.register(new GetRecommendedPriceRequest());
     public static ChartResetRequest CHART_RESET_REQUEST = (ChartResetRequest) AsynchronousRequestResponseSystem.register(new ChartResetRequest());
+    public static SetMarketOpenRequest SET_MARKET_OPEN_REQUEST = (SetMarketOpenRequest) AsynchronousRequestResponseSystem.register(new SetMarketOpenRequest());
 
 
     public StockMarketNetworking()

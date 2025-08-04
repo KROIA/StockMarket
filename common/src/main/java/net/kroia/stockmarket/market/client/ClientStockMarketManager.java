@@ -4,9 +4,11 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.clientdata.TradingPairData;
+import net.kroia.stockmarket.market.server.MarketFactory;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncTradeItemsPacket;
 import net.minecraft.client.Minecraft;
+import net.minecraft.util.Tuple;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -19,6 +21,7 @@ public class ClientStockMarketManager {
     public ClientStockMarketManager(StockMarketModBackend.Instances backendInstances)
     {
         this.BACKEND_INSTANCES = backendInstances;
+        ClientMarket.setBackend(backendInstances);
     }
 
     private final List<ClientMarket> clientMarkets = new ArrayList<>();
@@ -67,10 +70,28 @@ public class ClientStockMarketManager {
             callback.accept(result);
         });
     }
-    public void requestRemoveMarket(TradingPair pair, Consumer<Boolean> callback )
+    public void requestCreateMarkets(List<MarketFactory.DefaultMarketSetupData> setupDataList, Consumer<List<Boolean>> callback)
     {
-        StockMarketNetworking.REMOVE_MARKET_REQUEST.sendRequestToServer(new TradingPairData(pair), (result) -> {
-            if(result)
+        StockMarketNetworking.CREATE_MARKETS_REQUEST.sendRequestToServer(setupDataList, (result) -> {
+            for(int i=0; i<setupDataList.size(); i++)
+            {
+                if(result.get(i)) {
+                    TradingPair pair = setupDataList.get(i).tradingPair;
+                    ClientMarket clientMarket = getClientMarket(pair);
+                    if (clientMarket == null) // Only add if the market was successfully created
+                    {
+                        clientMarket = new ClientMarket(pair);
+                        clientMarkets.add(clientMarket);
+                    }
+                }
+            }
+            callback.accept(result);
+        });
+    }
+    public void requestRemoveMarket(TradingPair pair, Consumer<Boolean> callback)
+    {
+        StockMarketNetworking.REMOVE_MARKET_REQUEST.sendRequestToServer(List.of(pair), (result) -> {
+            if(result.size() == 1)
             {
                 ClientMarket clientMarket = getClientMarket(pair);
                 if(clientMarket != null)
@@ -78,10 +99,60 @@ public class ClientStockMarketManager {
                     clientMarkets.remove(clientMarket);
                     clientMarket.setDead();
                 }
+                callback.accept(result.get(0));
+            }
+            else
+            {
+                callback.accept(false);
+            }
+        });
+    }
+    public void requestRemoveMarket(List<TradingPair> pairs, Consumer<List<Boolean>> callback )
+    {
+        StockMarketNetworking.REMOVE_MARKET_REQUEST.sendRequestToServer(pairs, (result) -> {
+            if(pairs.size() == result.size()) {
+                for (int i = 0; i < pairs.size(); i++) {
+                    if(!result.get(i)) {
+                        continue; // Skip if the removal was not successful
+                    }
+                    ClientMarket clientMarket = getClientMarket(pairs.get(i));
+                    if (clientMarket != null) {
+                        clientMarkets.remove(clientMarket);
+                        clientMarket.setDead();
+                    }
+                }
             }
             callback.accept(result);
         });
     }
+
+    public void requestChartReset(List<TradingPair> pairs, Consumer<List<Boolean>> callback) {
+        StockMarketNetworking.CHART_RESET_REQUEST.sendRequestToServer(pairs, callback);
+    }
+    public void requestSetMarketOpen(TradingPair pair, boolean open, Consumer<Boolean> callback)
+    {
+        StockMarketNetworking.SET_MARKET_OPEN_REQUEST.sendRequestToServer(List.of(new Tuple<>(pair, open)), (result) -> {
+            if(result.size() == 1)
+                callback.accept(result.get(0));
+            else
+                callback.accept(false);
+        });
+    }
+    public void requestSetMarketOpen(List<Tuple<TradingPair, Boolean>> pairs, Consumer<List<Boolean>> callback)
+    {
+        StockMarketNetworking.SET_MARKET_OPEN_REQUEST.sendRequestToServer(pairs, callback);
+    }
+    public void requestSetMarketOpen(List<TradingPair> pairs, boolean allOpen, Consumer<List<Boolean>> callback)
+    {
+        List<Tuple<TradingPair, Boolean>> pairsTuples = new ArrayList<>();
+        for(TradingPair pair : pairs)
+        {
+            pairsTuples.add(new Tuple<>(pair, allOpen));
+        }
+        StockMarketNetworking.SET_MARKET_OPEN_REQUEST.sendRequestToServer(pairsTuples, callback);
+    }
+
+
     public void requestTradingPairs(Consumer<List<TradingPair>> callback )
     {
         StockMarketNetworking.TRADING_PAIR_LIST_REQUEST.sendRequestToServer(false, (result)->{
@@ -93,6 +164,10 @@ public class ClientStockMarketManager {
             populateClientMarkets(receivedPairs); // populate the client markets with the received trading pairs
             callback.accept(receivedPairs);
         });
+    }
+    public void requestMarketCategories(Consumer<List<MarketFactory.DefaultMarketSetupDataGroup>> callback)
+    {
+        StockMarketNetworking.DEFAULT_MARKET_SETUP_DATA_GROUPS_REQUEST.sendRequestToServer(false, callback);
     }
     public void requestIsTradingPairAllowed(TradingPair pair, Consumer<Boolean> callback )
     {

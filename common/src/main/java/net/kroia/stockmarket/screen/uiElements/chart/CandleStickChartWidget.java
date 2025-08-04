@@ -89,12 +89,15 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
         int x = getChartRightEndPos();
         int labelXPos = x + 5;
 
+        //getGraphics().pushPose();
+        //getGraphics().scale(0.5f,0.5f,1);
+
         // Draw yAxis
         for(int i=chartViewMaxPrice; i>=chartViewMinPrice; i-=yAxisLabelIncrement)
         {
-            int y = priceToYPosFunc.apply(i);
+            int y = priceToYPosFunc(i);
             String label = String.valueOf(i);
-            drawText(label, labelXPos, y - 4, 0xFFFFFFFF);
+            drawText(label, labelXPos, y, 0xFFFFFFFF, Alignment.LEFT);
 
             drawRect(1,  y, x, 1, 0xFF808080);
         }
@@ -108,11 +111,13 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
         //volumeDisplayRect.height = getHeight() / 11 + PADDING - 2;
         int currentPrice = priceHistory.getCurrentPrice();
         String labelText = String.valueOf(currentPrice);
-        int currentPriceYPos = priceToYPosFunc.apply(currentPrice);
+        int currentPriceYPos = priceToYPosFunc(currentPrice);
         drawText(labelText, x-candleWidth-3 ,currentPriceYPos,  Alignment.RIGHT);
 
         int currentPriceLineLeftPos = x - candleWidth;
         int currentPriceLineWidth = candleWidth + 2;
+
+
 
         for(int i=lastIndex; i>=0; i--)
         {
@@ -133,11 +138,13 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
         if(enableBotTargetPriceDisplay && botTargetPrice > 0)
         {
             int tooltipWidth = getTextWidth(labelText);
-            int yPos = priceToYPosFunc.apply(botTargetPrice);
+            int yPos = priceToYPosFunc(botTargetPrice);
             drawRect(currentPriceLineLeftPos - tooltipWidth-10, yPos, tooltipWidth + currentPriceLineWidth+13, 1, 0xFF0000FF);
             drawText(BOT_TARGET_PRICE.getString() + botTargetPrice, currentPriceLineLeftPos - tooltipWidth-10, yPos, Alignment.RIGHT);
         }
         drawRect(currentPriceLineLeftPos, currentPriceYPos, currentPriceLineWidth, 1, 0xFF555555);
+        //getGraphics().popPose();
+
 
 
     }
@@ -154,7 +161,7 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
         for(LimitOrderInChartDisplay display : limitOrderDisplays.values())
         {
             display.setWidth(getWidth()/2-5);
-            display.setPosition(getWidth()-display.getWidth(), priceToYPosFunc.apply(display.getOrder().limitPrice));
+            display.setPosition(getWidth()-display.getWidth(), priceToYPosFunc(display.getOrder().limitPrice));
         }
     }
 
@@ -170,7 +177,7 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
 
         for(LimitOrderInChartDisplay display : limitOrderDisplays.values())
         {
-            display.setY(priceToYPosFunc.apply(display.getOrder().limitPrice));
+            display.setY(priceToYPosFunc(display.getOrder().limitPrice));
         }
     }
     public void enableBotTargetPriceDisplay(boolean enabled) {
@@ -249,7 +256,7 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
                 {
                     LimitOrderInChartDisplay orderView = new LimitOrderInChartDisplay(yPosToPriceFunc, order, pair, priceChangeCallback);
                     orderView.setWidth(getWidth()/2-5);
-                    orderView.setPosition(getWidth()-orderView.getWidth(), priceToYPosFunc.apply(order.limitPrice));
+                    orderView.setPosition(getWidth()-orderView.getWidth(), priceToYPosFunc(order.limitPrice));
                     limitOrderDisplays.put(orderID, orderView);
                     addChild(orderView);
                 }
@@ -259,7 +266,7 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
                     if(orderView != null)
                     {
                         orderView.setOrder(order);
-                        orderView.setY(priceToYPosFunc.apply(order.limitPrice));
+                        orderView.setY(priceToYPosFunc(order.limitPrice));
                     }
                 }
             }
@@ -272,12 +279,12 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
         int color = open > close ? colorSell : colorBuy;
 
         // Draw wick
-        int wickYMin = priceToYPosFunc.apply(low);
-        int wickYMax = priceToYPosFunc.apply(high);
+        int wickYMin = priceToYPosFunc(low);
+        int wickYMax = priceToYPosFunc(high);
 
         // Draw body
-        int bodyYMin = priceToYPosFunc.apply(Math.min(open, close));
-        int bodyYMax = priceToYPosFunc.apply(Math.max(open, close));
+        int bodyYMin = priceToYPosFunc(Math.min(open, close));
+        int bodyYMax = priceToYPosFunc(Math.max(open, close));
 
         if(bodyYMin == bodyYMax)
         {
@@ -319,5 +326,9 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
 
         drawRect(xOffset + x, yOffset + bodyYMin,
                 candleWidth, bodyYMax-bodyYMin, color);
+    }
+
+    private int priceToYPosFunc(int price) {
+        return priceToYPosFunc.apply(price);
     }
 }

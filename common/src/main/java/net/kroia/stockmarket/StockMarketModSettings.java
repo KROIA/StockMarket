@@ -160,9 +160,9 @@ public class StockMarketModSettings extends ModSettings {
         public final Setting<Long> UPDATE_TIMER_INTERVAL_MS = registerSetting("MARKET_BOT_UPDATE_TIMER_INTERVAL_MS", 500L, Long.class); // 1 second
         public final Setting<Float> ORDER_BOOK_VOLUME_SCALE = registerSetting("MARKET_BOT_ORDER_BOOK_VOLUME_SCALE", 100f, Float.class); // Scale for the order book volume visualization
         public final Setting<Float> NEAR_MARKET_VOLUME_SCALE = registerSetting("MARKET_BOT_NEAR_MARKET_VOLUME_SCALE", 2f, Float.class); // Scale for the near market volume visualization
-        public final Setting<Float> VOLUME_ACCUMULATION_RATE = registerSetting("MARKET_BOT_VOLUME_ACCUMULATION_RATE", 0.01f, Float.class); // Rate at which the volume is accumulated
-        public final Setting<Float> VOLUME_FAST_ACCUMULATION_RATE = registerSetting("MARKET_BOT_VOLUME_FAST_ACCUMULATION_RATE", 0.5f, Float.class); // Rate at which the volume is accumulated when the bot is active
-        public final Setting<Float> VOLUME_DECUMULATION_RATE = registerSetting("MARKET_BOT_VOLUME_DECUMULATION_RATE", 0.005f, Float.class); // Rate at which the volume is decumulated
+        public final Setting<Float> VOLUME_ACCUMULATION_RATE = registerSetting("MARKET_BOT_VOLUME_ACCUMULATION_RATE", 0.001f, Float.class); // Rate at which the volume is accumulated
+        public final Setting<Float> VOLUME_FAST_ACCUMULATION_RATE = registerSetting("MARKET_BOT_VOLUME_FAST_ACCUMULATION_RATE", 0.1f, Float.class); // Rate at which the volume is accumulated when the bot is active
+        public final Setting<Float> VOLUME_DECUMULATION_RATE = registerSetting("MARKET_BOT_VOLUME_DECUMULATION_RATE", 0.0001f, Float.class); // Rate at which the volume is decumulated
 
 
         public MarketBot() { super("MarketBot"); }

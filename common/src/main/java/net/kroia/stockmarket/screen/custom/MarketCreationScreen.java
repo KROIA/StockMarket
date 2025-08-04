@@ -14,6 +14,7 @@ import net.kroia.stockmarket.market.server.MarketFactory;
 import net.kroia.stockmarket.market.server.VirtualOrderBook;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import net.kroia.stockmarket.screen.uiElements.TradingPairView;
+import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.kroia.stockmarket.util.StockMarketGuiScreen;
 import net.kroia.stockmarket.util.StockMarketTextMessages;
 import net.minecraft.network.chat.Component;
@@ -25,7 +26,6 @@ import java.util.List;
 public class MarketCreationScreen extends StockMarketGuiScreen {
 
     private static final String PREFIX = "gui."+StockMarketMod.MOD_ID+".trading_pair_creation_screen.";
-    private static final String NAME = "trading_pair_creation_screen";
     private static final Component TITLE = Component.translatable(PREFIX + "title");
     private static final Component ITEM_SELECTION_VIEW_TITLE = Component.translatable(PREFIX + "item_selection_title");
     private static final Component CURRENCY_SELECTION_VIEW_TITLE = Component.translatable(PREFIX + "currency_selection_title");
@@ -162,7 +162,7 @@ public class MarketCreationScreen extends StockMarketGuiScreen {
         createMarketButton.setEnabled(false);
 
         currentPairView.setHoverTooltipSupplier(this::getInitialPriceTooltip);
-        currentPairView.setTooltipMousePositionAlignment(GuiElement.Alignment.TOP_RIGHT);
+        currentPairView.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.TOP_RIGHT);
         initialPriceTextBox.setHoverTooltipSupplier(this::getInitialPriceTooltip);
         candleTimeTextBoxMinutes.setHoverTooltipSupplier(()->{
             int minutes = candleTimeTextBoxMinutes.getInt();
@@ -183,18 +183,18 @@ public class MarketCreationScreen extends StockMarketGuiScreen {
 
 
 
-        initialPriceTextBox.setTooltipMousePositionAlignment(GuiElement.Alignment.RIGHT);
-        candleTimeTextBoxMinutes.setTooltipMousePositionAlignment(GuiElement.Alignment.RIGHT);
-        volatilitySlider.setTooltipMousePositionAlignment(GuiElement.Alignment.RIGHT);
-        raritySlider.setTooltipMousePositionAlignment(GuiElement.Alignment.RIGHT);
-        marketSpeedSlider.setTooltipMousePositionAlignment(GuiElement.Alignment.RIGHT);
-        openMarketCheckBox.setTooltipMousePositionAlignment(GuiElement.Alignment.RIGHT);
-        enableVirtualOrderBook.setTooltipMousePositionAlignment(GuiElement.Alignment.RIGHT);
-        enableMarketBot.setTooltipMousePositionAlignment(GuiElement.Alignment.RIGHT);
-        enableTargetPrice.setTooltipMousePositionAlignment(GuiElement.Alignment.RIGHT);
-        enableVolumeTracking.setTooltipMousePositionAlignment(GuiElement.Alignment.RIGHT);
-        enableRandomWalk.setTooltipMousePositionAlignment(GuiElement.Alignment.RIGHT);
-        createMarketButton.setTooltipMousePositionAlignment(GuiElement.Alignment.RIGHT);
+        initialPriceTextBox.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.RIGHT);
+        candleTimeTextBoxMinutes.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.RIGHT);
+        volatilitySlider.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.RIGHT);
+        raritySlider.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.RIGHT);
+        marketSpeedSlider.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.RIGHT);
+        openMarketCheckBox.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.RIGHT);
+        enableVirtualOrderBook.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.RIGHT);
+        enableMarketBot.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.RIGHT);
+        enableTargetPrice.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.RIGHT);
+        enableVolumeTracking.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.RIGHT);
+        enableRandomWalk.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.RIGHT);
+        createMarketButton.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.RIGHT);
 
 
 
@@ -224,6 +224,11 @@ public class MarketCreationScreen extends StockMarketGuiScreen {
         for(GuiElement element : settingsListView.getChilds())
         {
             element.setHeight(20);
+            element.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
+        }
+        for(GuiElement element : getElements())
+        {
+            element.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
         }
 
 
@@ -245,6 +250,8 @@ public class MarketCreationScreen extends StockMarketGuiScreen {
         int mousePosX = getMouseX();
         int mousePosY = getMouseY();
         minecraft.setScreen(parent);
+        parent.updateTradingItems();
+        parent.updateLoadCurrentSettings();
         setMousePos(mousePosX, mousePosY);
     }
 

@@ -46,6 +46,6 @@ public class StockMarketModLogger {
         if(INSTANCES.SERVER_SETTINGS != null)
             enabled = INSTANCES.SERVER_SETTINGS.UTILITIES.LOGGING_ENABLE_DEBUG.get();
         if(enabled)
-            LOGGER.debug(message);
+            LOGGER.info("DBG: "+ message);
     }
 }

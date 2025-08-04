@@ -12,6 +12,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.Tuple;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -266,6 +267,29 @@ public class ServerStockMarketManager implements ServerSaveable
             market.setMarketOpen(open);
         }
     }
+    public boolean setMarketOpen(@NotNull TradingPair pair, boolean open)
+    {
+        ServerMarket market = markets.get(pair);
+        if(market == null)
+        {
+            warn("Market not found for trading pair: " + pair);
+            return false;
+        }
+        market.setMarketOpen(open);
+        return true;
+    }
+    public List<Boolean> setMarketOpen(List<Tuple<TradingPair, Boolean>> pairsAndOpenStates)
+    {
+        List<Boolean> results = new ArrayList<>(pairsAndOpenStates.size());
+        for(Tuple<TradingPair, Boolean> pairAndOpenState : pairsAndOpenStates)
+        {
+            TradingPair pair = pairAndOpenState.getA();
+            boolean open = pairAndOpenState.getB();
+            boolean result = setMarketOpen(pair, open);
+            results.add(result);
+        }
+        return results;
+    }
 
     public ItemID getDefaultCurrencyItemID()
     {
@@ -470,7 +494,7 @@ public class ServerStockMarketManager implements ServerSaveable
         return false;
     }
 
-    public boolean createMarkets(@NotNull List<ServerMarketSettingsData> settingsDataList)
+    /*public boolean createMarkets(@NotNull List<ServerMarketSettingsData> settingsDataList)
     {
         List<ServerMarketSettingsData> cpy = new ArrayList<>(settingsDataList.size());
         boolean success = true;
@@ -499,6 +523,22 @@ public class ServerStockMarketManager implements ServerSaveable
         success &= markets.size() == cpy.size();
         rebuildTradeItemsChunks();
         return success;
+    }*/
+    public List<Boolean> createMarkets(@NotNull List<MarketFactory.DefaultMarketSetupData> defaultMarketSetupDataList)
+    {
+        List<Boolean> results = new ArrayList<>(defaultMarketSetupDataList.size());
+        for(MarketFactory.DefaultMarketSetupData data : defaultMarketSetupDataList)
+        {
+            if(marketExists(data.tradingPair))
+            {
+                warn("Market already exists for trading pair: " + data.tradingPair.getShortDescription());
+                results.add(false);
+                continue;
+            }
+            boolean result = createMarket(data);
+            results.add(result);
+        }
+        return results;
     }
 
     public boolean removeTradeItem(@NotNull TradingPair pair)
@@ -568,6 +608,7 @@ public class ServerStockMarketManager implements ServerSaveable
     private void rebuildTradeItemsChunks()
     {
         tradeItemsChunks.clear();
+        tradeItemUpdateCallCounter = 0;
         int tradeItemsChunkSize = BACKEND_INSTANCES.SERVER_SETTINGS.UTILITIES.TRADE_ITEM_CHUNK_SIZE.get();
 
         int chunks = markets.size() / tradeItemsChunkSize;

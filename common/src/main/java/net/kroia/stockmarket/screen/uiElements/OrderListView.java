@@ -45,8 +45,9 @@ public class OrderListView extends StockMarketGuiElement {
         activeOrderListView.setLayout(new LayoutVertical(0, 0, true, false));
 
 
-        filledLabel.setTooltipMousePositionAlignment(Label.Alignment.BOTTOM);
+        filledLabel.setHoverTooltipMousePositionAlignment(Label.Alignment.BOTTOM);
         filledLabel.setHoverTooltipSupplier(StockMarketTextMessages::getOrderListViewFilled);
+        filledLabel.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
 
 
         addChild(directionLabel);
