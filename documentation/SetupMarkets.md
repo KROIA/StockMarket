@@ -7,7 +7,7 @@ There are two ways to create a market.
 
 ---
 ### Custom Market
-You want to create a market that trades two specific items against each other, this chapter is for you.
+You want to create a market that trades two specific items against each other, this chapter is for you.<br>
 In the [ManagementGUI](AdminSection.md/#managementgui), click on the `+` Button.
 
 <tr>
@@ -32,7 +32,7 @@ Visit the [Manage Markets](ManageMarkets.md) chapter to tune the markets setting
 
 ---
 ### Use Presets to create a Market
-If you want to quickly setup some item-money pairs that have preset settings, this chapter is for you.
+If you want to quickly setup some item-money pairs that have preset settings, this chapter is for you.<br>
 In the [ManagementGUI](AdminSection.md/#managementgui), click on the `+ by Category` Button.
 
 <tr>
