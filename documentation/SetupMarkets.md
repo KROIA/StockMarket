@@ -51,5 +51,5 @@ In this screen are three columns.
 3) **Selected Markets**: In this list are all pairs that got selected. 
    By clicking the `Create selected markets` button, all these selected markets will be created.
 
-> :link: More infos about the presets can be found [here](MarketPresets.md). <rb>
+> :link: More infos about the presets can be found [here](MarketPresets.md). <br>
 > :link: Visit the [Manage Markets](#manage-markets) chapter to tune the markets settings.
