@@ -101,8 +101,8 @@ It also helps to regulate a market.
 ---
 - **Volume Tracking**: This feature solves a problem that can occure when large quantities of an asses are bought or soled over a long time.
   
-  > [!WARNING] 
-  > This feature only works if the **Target Price** feature is enabled
+> [!WARNING] 
+> This feature only works if the **Target Price** feature is enabled
 
 
   Let's take this scenario:
@@ -146,8 +146,8 @@ if(enableVolumeTracking)
 ---
 - **Random Walk**: When enabled, the bot creates a random looking chart pattern by changing the markets target price around its default price.
 
-  > [!WARNING] 
-  > This feature only works if the **Target Price** feature is enabled
+> [!WARNING] 
+> This feature only works if the **Target Price** feature is enabled
 
 
 <tr>
