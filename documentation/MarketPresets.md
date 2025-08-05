@@ -137,7 +137,15 @@ This folder contains a list of json files. Each file represents a **Asset Catego
 You can add/remove/change the files on the fly. In game the MarketCreationByCategory Screen must be reopend to refresh the content.
 
 ### Asset Category File
-The most basic group is a empty group, only containing its name and a [Item](#item) entry for displaying a icon.
+The most basic group is a empty group, only containing its name.
+``` Json
+{
+  "groupName": "Ores",
+  "markets": []
+}
+```
+
+You can add a custom [Item](#item) that is used as icon for displaying the category on the setup screen.
 ``` Json
 {
   "groupName": "Ores",
@@ -149,19 +157,46 @@ The most basic group is a empty group, only containing its name and a [Item](#it
 ```
 
 
+
 ---
 Market settings are added in the **"markets"** array.
 This example shows the market where coal gets traded for money.
 It consists of 3 sections:
-- **"tradingPair"**: Contains informations about both items, most basic information is the itemID but sometimes this is not enough. More about that in the section [ItemID](#itemid)
-- **"botSettings"**: Contains the settings for the market bot.
-- **"virtualOrderBookSettings"**: Contains the settings for the virtual order book
+- **"tradingPair"**: Contains informations about both items, most basic information is the itemID but sometimes this is not enough. More about that in the section [ItemID](#itemid).
+If no `"currency"` item was found inside the `"tradingPair"` JsonObject, the default currency is used.
 
-All 3 sections must be contained in a market settings json entry.
+- **"botSettings"**: Contains the settings for the market bot.
+  This is optional, if it is not present in the file, no bot will be instantiated.
+  In that case you need to add a special field to define the default price:
+``` Json
+...
+  "markets": [
+    {
+      "tradingPair": {
+        "item": {
+          "itemID": "minecraft:coal"
+        },
+        "currency": {
+          "itemID": "banksystem:money"
+        }
+      },
+      "defaultPrice": 20                 <---
+    }
+...
+``` 
+
+
+- **"virtualOrderBookSettings"**: Contains the settings for the virtual order book.
+  This is optional, if it is not present in the file, no virtual order book will be instantiated.
+
+
   
 ``` Json
 {
   "groupName": "Ores",
+  "iconItemID": {
+    "itemID": "minecraft:iron_ingot"
+  },
   "markets": [
     {
       "tradingPair": {
@@ -191,6 +226,8 @@ All 3 sections must be contained in a market settings json entry.
         "volumeFastAccumulationRate": 0.1,
         "volumeDecumulationRate": 1.0E-4
       }
+      "isMarketOpen": false,
+      "candleTimeMin": 5,
     }
   ]
 }
@@ -211,3 +248,6 @@ To identify a item, the minecraft item id string is not enough. Some items are d
   ]
 }
 ``` 
+
+### Regenerate the presets
+Delete the folder: `WorldName\Finance\StockMarket\DefaultMarketSetupData` or the specific json file inside it and restart the server.

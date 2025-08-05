@@ -119,6 +119,7 @@ public class MatchingEngine implements ServerSaveable {
                         priceHistory.addVolume(Math.abs(transferedVolume));
                     }
                     if (marketOrder.isFilled()) {
+                        limitOrders.removeAll(toRemove);
                         return true;
                     }
                     newPrice += deltaPrice;
@@ -164,7 +165,7 @@ public class MatchingEngine implements ServerSaveable {
                 break;
             }
         }
-        limitOrders.removeAll(toRemove);
+
         if(virtualOrderBook != null) {
             long loopTimeout = 10000;
             while (fillVolume > 0) {
@@ -205,7 +206,7 @@ public class MatchingEngine implements ServerSaveable {
             }
         }
 
-
+        limitOrders.removeAll(toRemove);
 
         if(fillVolume != 0)
         {

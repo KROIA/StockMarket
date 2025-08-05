@@ -178,7 +178,7 @@ public class VirtualOrderBook implements ServerSaveable {
 
                 float scale = settings.volumeAccumulationRate;
 
-                if(Math.abs(currentVal) < Math.abs(targetAmount)*0.5f)
+                if(Math.abs(currentVal) < Math.abs(targetAmount)*0.2f)
                 {
                     scale = settings.volumeFastAccumulationRate;
                 }else if(Math.abs(currentVal) > Math.abs(targetAmount))

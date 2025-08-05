@@ -64,6 +64,14 @@ Try one or multiple of the following steps:
 1) Lower the `Volume scale` in the `Bot Settings` section. Large price jumps are a result of large market orders, created by the bot. Lower the value. For example, divide the value by `10` and press `Save` and wait a view minutes to let the bot settle in.
 2) Increase the `Volume` in the `Virtual Order Book Settings` section. By increasing this value, the large bot orders do not have as much of a impact in the price movemenent. 
 
+<tr>
+<td>
+<div align="center">
+    <img src="images/oscilatingMarketFix.gif" > 
+    <figcaption><b>Reducing the bot order volume</b></figcaption>
+</div>
+</td>
+
 
 ### Players are going crazy
 There are many scenarios that can happen and each scenario is different, depending on the trading pairs it is happening on. Some markets are more robust against the influence of players and some are more likely influenced. 

@@ -9,10 +9,7 @@ import net.kroia.modutilities.gui.layout.Layout;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.TradingPair;
-import net.kroia.stockmarket.market.clientdata.ServerMarketSettingsData;
 import net.kroia.stockmarket.market.server.MarketFactory;
-import net.kroia.stockmarket.market.server.VirtualOrderBook;
-import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import net.kroia.stockmarket.screen.uiElements.TradingPairView;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.kroia.stockmarket.util.StockMarketGuiScreen;
@@ -408,7 +405,52 @@ public class MarketCreationScreen extends StockMarketGuiScreen {
     private void onCreateMarketButtonPressed()
     {
         TradingPair tradingPair = new TradingPair(new ItemID(selectedItem), new ItemID(selectedCurrency));
-        getMarketManager().requestCreateMarket(tradingPair, (success)->{
+
+
+        boolean useVirtualOrderBook = enableVirtualOrderBook.isChecked();
+        boolean useMarketBot = enableMarketBot.isChecked();
+
+        MarketFactory.DefaultMarketSetupGeneratorData data = new MarketFactory.DefaultMarketSetupGeneratorData();
+        data.defaultPrice = initialPriceTextBox.getInt();
+        data.updateIntervalMS = getMarketSpeedMS();
+        data.volatility = (float)volatilitySlider.getSliderValue();
+        data.rarity = (float)raritySlider.getSliderValue();
+        data.enableTargetPrice = enableTargetPrice.isChecked();
+        data.enableVolumeTracking = enableVolumeTracking.isChecked();
+        data.enableRandomWalk = enableRandomWalk.isChecked();
+        data.tradingPair = tradingPair;
+
+        boolean marketOpen = openMarketCheckBox.isChecked();
+        int candleTimeMinutes = candleTimeTextBoxMinutes.getInt();
+
+        MarketFactory.DefaultMarketSetupData setupData = data.generateDefaultMarketSetupData();
+        if(!useVirtualOrderBook)
+            setupData.virtualOrderBookSettings = null;
+        if(!useMarketBot)
+            setupData.botSettings = null;
+
+        setupData.isMarketOpen = marketOpen;
+        setupData.candleTimeMin = candleTimeMinutes;
+        setupData.defaultPrice = data.defaultPrice;
+
+        getMarketManager().requestCreateMarket(setupData, (success)->{
+            if(success)
+            {
+                selectMarket(tradingPair);
+                parent.setCurrentTradingPair(tradingPair);
+                parent.updateTradingItems();
+                onClose();
+            }
+            else
+            {
+                // Handle failure to create market
+                String msg = StockMarketTextMessages.getMarketCreationFailedMessage(tradingPair.getItem().getName(), tradingPair.getCurrency().getName());
+                minecraft.player.sendSystemMessage(Component.literal(msg));
+            }
+        });
+
+
+        /*getMarketManager().requestCreateMarket(tradingPair, (success)->{
             if(success)
             {
                 selectMarket(tradingPair);
@@ -480,7 +522,7 @@ public class MarketCreationScreen extends StockMarketGuiScreen {
                 String msg = StockMarketTextMessages.getMarketCreationFailedMessage(tradingPair.getItem().getName(), tradingPair.getCurrency().getName());
                 minecraft.player.sendSystemMessage(Component.literal(msg));
             }
-        });
+        });*/
     }
 
 

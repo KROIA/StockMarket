@@ -73,7 +73,7 @@ No one would place an order at a price where the market never reaches.
 - **Accumulaton rate**: Scale factor for how fast the volume accumulates to reach its target volume distribution after some volume was consumed by orders.
   For example if a player creates a large buy order, it consumes a part of the order book. After that, orders are beeing placed again until the volume is refilled. This value defines how fast the volume grows back.
 
-- **Fast accumulatiion rate**: This factor does the same as the **Accumulaton rate** but it gets used when the gap between the current volume, at a specific price is more than 50% off its target volume. 
+- **Fast accumulatiion rate**: This factor does the same as the **Accumulaton rate** but it gets used when the gap between the current volume, at a specific price is more than 80% off its target volume. 
 
 - **Decummulation rate**: The factor for how fast a already existing volume will decrease if the price moves away and the target volume, according to the distribution formula, would be lower than the current volume.
   A smal walue will create regions of support and resistance which makes it somehow more realistic. 

@@ -70,6 +70,16 @@ public class ClientStockMarketManager {
             callback.accept(result);
         });
     }
+    public void requestCreateMarket(MarketFactory.DefaultMarketSetupData setupData, Consumer<Boolean> callback )
+    {
+        StockMarketNetworking.CREATE_MARKETS_REQUEST.sendRequestToServer(List.of(setupData), (result) -> {
+            if(result.size() == 1 && result.get(0)) // Check if the market was successfully created
+            {
+                callback.accept(true);
+            }
+            callback.accept(false);
+        });
+    }
     public void requestCreateMarkets(List<MarketFactory.DefaultMarketSetupData> setupDataList, Consumer<List<Boolean>> callback)
     {
         StockMarketNetworking.CREATE_MARKETS_REQUEST.sendRequestToServer(setupDataList, (result) -> {

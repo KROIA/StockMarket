@@ -13,8 +13,8 @@ In the [ManagementGUI](AdminSection.md/#managementgui), click on the `+` Button.
 <tr>
 <td>
 <div align="center">
-    <img src="images/MarketCreationScreen_1.png" > 
-    <figcaption><b>StockMarket MarketCreation Screen</b></figcaption>
+    <img src="images/setupCustomMarket.gif" width="1000"> 
+    <figcaption><b></b></figcaption>
 </div>
 </td>
 
@@ -38,7 +38,7 @@ In the [ManagementGUI](AdminSection.md/#managementgui), click on the `+ by Categ
 <tr>
 <td>
 <div align="center">
-    <img src="images/MarketCreationByCategoryScreen_1.png" > 
+    <img src="images/setupMarketFromPresets.gif" width="1000"> 
     <figcaption><b>StockMarket MarketCreationByCategory Screen</b></figcaption>
 </div>
 </td>

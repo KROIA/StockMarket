@@ -186,14 +186,24 @@ public class TradingPair implements ServerSaveable, INetworkPayloadConverter {
         this.isValid = jsonObject.get("isValid").getAsBoolean();
 
         if (    itemElement == null ||
-                currencyElement == null ||
+                //currencyElement == null ||
                 pairUUIDString == null) {
             this.isValid = false;
             return false;
         }
 
         boolean success = item.fromJson(itemElement);
-        success &= currency.fromJson(currencyElement);
+
+        if(currencyElement == null)
+        {
+            if(BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER != null)
+                currency = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getDefaultCurrencyItemID();
+            else
+                currency = new ItemID(BankSystemItems.MONEY.get().getDefaultInstance());
+        }
+        else {
+            success &= currency.fromJson(currencyElement);
+        }
         pairUUID = UUID.fromString(pairUUIDString);
         isValid &= success;
         return success;

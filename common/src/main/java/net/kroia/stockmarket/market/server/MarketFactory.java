@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.kroia.banksystem.api.IServerBankManager;
+import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.JsonUtilities;
 import net.kroia.modutilities.networking.INetworkPayloadConverter;
@@ -89,9 +90,9 @@ public class MarketFactory
             botSettings.volatility = Math.abs(1000.f * volatility / Math.max((float)defaultPrice, 1000));
 
             virtualOrderBookSettings.volumeScale = 100f/(0.01f+Math.abs(rarity));
-            botSettings.volumeScale = virtualOrderBookSettings.volumeScale * this.volatility;
+            botSettings.volumeScale = virtualOrderBookSettings.volumeScale * this.volatility/10;
 
-            return new DefaultMarketSetupData(this.tradingPair, botSettings, virtualOrderBookSettings);
+            return new DefaultMarketSetupData(this.tradingPair, botSettings, virtualOrderBookSettings, false, 5);
         }
 
         @Override
@@ -189,8 +190,12 @@ public class MarketFactory
     public static class DefaultMarketSetupData implements INetworkPayloadEncoder
     {
         public TradingPair tradingPair;
+
         public ServerVolatilityBot.Settings botSettings;
         public VirtualOrderBook.Settings virtualOrderBookSettings;
+        public boolean isMarketOpen = false;
+        public long candleTimeMin = 5;
+        public int defaultPrice;
 
 
         public DefaultMarketSetupData(TradingPair pair) {
@@ -199,10 +204,15 @@ public class MarketFactory
         }
         public DefaultMarketSetupData(TradingPair pair,
                                       ServerVolatilityBot.Settings botSettings,
-                                      VirtualOrderBook.Settings virtualOrderBookSettings) {
+                                      VirtualOrderBook.Settings virtualOrderBookSettings,
+                                      boolean isMarketOpen,
+                                      long candleTimeMin) {
             this.tradingPair = pair;
             this.botSettings = botSettings;
+            defaultPrice = (botSettings != null) ? botSettings.defaultPrice : 0; // Use bot settings default price if available
             this.virtualOrderBookSettings = virtualOrderBookSettings;
+            this.isMarketOpen = isMarketOpen;
+            this.candleTimeMin = candleTimeMin; // Default to 1 minute candle time
         }
         private DefaultMarketSetupData() {
             this.tradingPair = new TradingPair();
@@ -230,6 +240,10 @@ public class MarketFactory
             if (this.virtualOrderBookSettings != null) {
                 this.virtualOrderBookSettings.encode(buf);
             }
+
+            buf.writeBoolean(this.isMarketOpen); // Write market open status
+            buf.writeLong(this.candleTimeMin); // Write candle time in minutes, default to 1 minute
+            buf.writeInt(this.defaultPrice); // Write default price, if needed
         }
 
 
@@ -251,6 +265,10 @@ public class MarketFactory
             } else {
                 data.virtualOrderBookSettings = null; // No virtual order book settings provided
             }
+
+            data.isMarketOpen = buf.readBoolean(); // Read market open status
+            data.candleTimeMin = buf.readLong(); // Read candle time in minutes, default to 1 minute
+            data.defaultPrice = buf.readInt(); // Read default price, if needed
             return data;
         }
 
@@ -273,6 +291,12 @@ public class MarketFactory
             if (this.virtualOrderBookSettings != null) {
                 jsonObject.add("virtualOrderBookSettings", this.virtualOrderBookSettings.toJson());
             }
+
+            jsonObject.addProperty("isMarketOpen", this.isMarketOpen); // Add market open status
+            jsonObject.addProperty("candleTimeMin", this.candleTimeMin); // Add candle time in minutes, default to 1 minute
+            if (this.botSettings == null)
+                jsonObject.addProperty("defaultPrice", this.defaultPrice); // Add default price, if needed
+
             return jsonObject;
         }
         public boolean fromJson(JsonElement json) {
@@ -286,9 +310,7 @@ public class MarketFactory
             JsonElement botSettingsElement = jsonObject.get("botSettings");
             JsonElement virtualOrderBookSettingsElement = jsonObject.get("virtualOrderBookSettings");
 
-            if (    tradingPairElement == null ||
-                    botSettingsElement == null ||
-                    virtualOrderBookSettingsElement == null) {
+            if (    tradingPairElement == null) {
                 return false;
             }
 
@@ -297,7 +319,7 @@ public class MarketFactory
                 JsonElement itemElement = pairObject.get("item");
                 JsonElement currencyElement = pairObject.get("currency");
 
-                if(itemElement == null || currencyElement == null)
+                if(itemElement == null)
                     return false; // Invalid trading pair data
 
 
@@ -305,26 +327,65 @@ public class MarketFactory
                 if(!item.fromJson(itemElement))
                     return false; // Invalid item data
 
-                ItemID currency = new ItemID(currencyElement);
-                if(!currency.fromJson(currencyElement))
-                    return false; // Invalid currency data
+                ItemID currency = null;
+                if(currencyElement == null) {
+                    if(BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER != null)
+                        currency = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getDefaultCurrencyItemID();
+                    else
+                        currency = new ItemID(BankSystemItems.MONEY.get().getDefaultInstance());
+                }
+                else {
+                    currency = new ItemID(currencyElement);
+                    if (!currency.fromJson(currencyElement))
+                        return false; // Invalid currency data
+                }
 
                 this.tradingPair = new TradingPair(item, currency);
             }
             boolean success = true;
-            if (botSettingsElement.isJsonObject()) {
+            if (botSettingsElement != null && botSettingsElement.isJsonObject()) {
                 this.botSettings = new ServerVolatilityBot.Settings();
                 success = this.botSettings.fromJson(botSettingsElement);
+                this.defaultPrice = this.botSettings.defaultPrice; // Use bot settings default price if available
             } else {
                 this.botSettings = null; // No bot settings provided
+
+                // Fallback for default price
+                JsonElement defaultPriceElement = jsonObject.get("defaultPrice");
+                if (defaultPriceElement != null && defaultPriceElement.isJsonPrimitive() && defaultPriceElement.getAsJsonPrimitive().isNumber()) {
+                    this.defaultPrice = Math.max(0, defaultPriceElement.getAsInt()); // Default to 0 if not specified
+                } else {
+                    this.defaultPrice = 0; // Default value if not present
+                }
             }
 
-            if (virtualOrderBookSettingsElement.isJsonObject()) {
+            if (virtualOrderBookSettingsElement != null && virtualOrderBookSettingsElement.isJsonObject()) {
                 this.virtualOrderBookSettings = new VirtualOrderBook.Settings();
                 success &= this.virtualOrderBookSettings.fromJson(virtualOrderBookSettingsElement);
             } else {
                 this.virtualOrderBookSettings = null; // No virtual order book settings provided
             }
+
+            JsonElement isMarketOpenElement = jsonObject.get("isMarketOpen");
+            if (isMarketOpenElement != null && isMarketOpenElement.isJsonPrimitive() && isMarketOpenElement.getAsJsonPrimitive().isBoolean()) {
+                this.isMarketOpen = isMarketOpenElement.getAsBoolean();
+            } else {
+                if(BACKEND_INSTANCES.SERVER_SETTINGS != null)
+                    this.isMarketOpen = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.MARKET_OPEN_AT_CREATION.get(); // Use server settings for market open status
+                else
+                    this.isMarketOpen = false; // Default to closed market if not specified
+            }
+            JsonElement candleTimeMinElement = jsonObject.get("candleTimeMin");
+            if (candleTimeMinElement != null && candleTimeMinElement.isJsonPrimitive() && candleTimeMinElement.getAsJsonPrimitive().isNumber()) {
+                this.candleTimeMin = Math.max(1, candleTimeMinElement.getAsInt()); // Default to 1 minute if not specified
+            } else {
+                if(BACKEND_INSTANCES.SERVER_SETTINGS != null)
+                    this.candleTimeMin = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.SHIFT_PRICE_CANDLE_INTERVAL_MS.get()/ 60000; // Use server settings for candle time in minutes
+                else
+                    this.candleTimeMin = 1; // Default to 1 minute if not specified
+            }
+
+
             return success;
         }
 
@@ -704,10 +765,17 @@ public class MarketFactory
             error("Trading pair " + pair + " is not allowed for trading");
             return null;
         }
+        return createMarket(pair,
+                data.botSettings,
+                data.virtualOrderBookSettings,
+                data.defaultPrice,
+                data.candleTimeMin,
+                data.isMarketOpen);
+        /*
         if(data.botSettings != null) {
             return createMarket(pair, data.botSettings, data.virtualOrderBookSettings);
         }
-        return createMarket(pair, 0);
+        return createMarket(pair, 0);*/
     }
     public static List<ServerMarket> createMarkets(DefaultMarketSetupDataGroup group)
     {
@@ -737,21 +805,35 @@ public class MarketFactory
             error("Trading pair " + pair + " is not allowed for trading");
             return null;
         }
-        return createMarket_internal(pair, startPrice);
+        return createMarket_internal(pair, BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.VIRTUAL_ORDERBOOK_ARRAY_SIZE.get(),  startPrice);
     }
     public static @Nullable ServerMarket createMarket(@NotNull TradingPair pair,
-                                                      @NotNull ServerVolatilityBot.Settings botSettings,
-                                                      @NotNull VirtualOrderBook.Settings virtualOrderBookSettings)
+                                                      @Nullable ServerVolatilityBot.Settings botSettings,
+                                                      @Nullable VirtualOrderBook.Settings virtualOrderBookSettings,
+                                                      int defaultPrice,
+                                                      long candleTimeMin,
+                                                      boolean isMarketOpen)
     {
         if(!isTradingPairAllowedForTrading(pair))
         {
             error("Trading pair " + pair + " is not allowed for trading");
             return null;
         }
-        ServerMarket market = createMarket_internal(pair, botSettings.defaultPrice);
+        int virtualOrderBookSize = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.VIRTUAL_ORDERBOOK_ARRAY_SIZE.get();
+        if(virtualOrderBookSettings == null)
+        {
+            virtualOrderBookSize = 0;
+        }
+        if(botSettings != null)
+            defaultPrice = botSettings.defaultPrice; // Use bot settings default price if available
+        ServerMarket market = createMarket_internal(pair, virtualOrderBookSize, defaultPrice);
         if(market != null) {
-            market.createVolatilityBot(botSettings);
-            market.setVirtualOrderBookSettings(virtualOrderBookSettings);
+            if(botSettings != null)
+                market.createVolatilityBot(botSettings);
+            if(virtualOrderBookSettings != null)
+                market.setVirtualOrderBookSettings(virtualOrderBookSettings);
+            market.setShiftPriceCandleIntervalMS(candleTimeMin * 60 * 1000); // Convert minutes to milliseconds
+            market.setMarketOpen(isMarketOpen);
         }
         return market;
     }
@@ -804,7 +886,7 @@ public class MarketFactory
 
 
 
-    private static @Nullable ServerMarket createMarket_internal(TradingPair pair, int startPrice)
+    private static @Nullable ServerMarket createMarket_internal(TradingPair pair, int virtualOrderBookSize, int startPrice)
     {
         ItemID item = pair.getItem();
         ItemID currency = pair.getCurrency();
@@ -823,7 +905,10 @@ public class MarketFactory
                 return null;
             }
         }
-        return new ServerMarket(pair, startPrice);
+        return new ServerMarket(pair,
+                startPrice,
+                virtualOrderBookSize,
+                BACKEND_INSTANCES.SERVER_SETTINGS.UI.PRICE_HISTORY_SIZE.get());
     }
 
 

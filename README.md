@@ -18,13 +18,14 @@ StockMarket is a Minecraft mod that brings a better way for trading to the game.
 * [Blocks](#blocks)
 * [Items](#items)
 * [Matching Engine](#matching-engine)
-    * [market-order](#market-order)
+    * [Market-order](#market-order)
     * [Limit Order](#limit-order)
 * [How to use](#how-to-use)
     * [For server player / single player](#for-server-player--single-player)
     * [For admins / single player](documentation/AdminSection.md)
 * [Commands](documentation/AdminSection.md/#commands)
 * [Development setup](documentation/DevGuide.md) 
+* [Discord to help me improve the mod](https://discord.gg/qHNVaDGAyB)
 
 
 ---

@@ -329,7 +329,23 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
                 success = false;
         }
 
-        int minSize = Math.min(tmpLowPrice.length, maxHistorySize);
+        this.maxHistorySize = tmpLowPrice.length;
+        lowPrice = new int[maxHistorySize];
+        highPrice = new int[maxHistorySize];
+        closePrice = new int[maxHistorySize];
+        volume = new long[maxHistorySize];
+        timeStamps = new Timestamp[maxHistorySize];
+        for (int i = 0; i < maxHistorySize; i++) {
+            lowPrice[i] = tmpLowPrice[i];
+            highPrice[i] = tmpHighPrice[i];
+            closePrice[i] = tmpClosePrice[i];
+            volume[i] = tmpVolume[i];
+            timeStamps[i] = tmpTimeStamps[i].copy();
+        }
+
+
+
+        /*int minSize = Math.min(tmpLowPrice.length, maxHistorySize);
         for(int i=0; i<minSize; i++)
         {
             lowPrice[i] = tmpLowPrice[i];
@@ -357,7 +373,7 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
                 volume[i] = 0;
                 timeStamps[i] = dummy.copy();
             }
-        }
+        }*/
         return success;
     }
 }

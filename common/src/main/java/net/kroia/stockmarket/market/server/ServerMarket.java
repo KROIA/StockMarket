@@ -51,27 +51,27 @@ public class ServerMarket implements ServerSaveable {
     protected TimerMillis shiftPriceTimer = new TimerMillis(true);
     //protected TimerMillis notifySubscriberTimer = new TimerMillis(true);
 
-    public ServerMarket(TradingPair pair)
+    public ServerMarket(TradingPair pair, int virtualOrderBookArraySize, int historySize)
     {
-        this(pair, 0);
+        this(pair, 0, virtualOrderBookArraySize, historySize);
     }
-    public ServerMarket(TradingPair pair, int initialPrice)
+    public ServerMarket(TradingPair pair, int initialPrice, int virtualOrderBookArraySize, int historySize)
     {
         this.tradingPair = pair;
-        this.orderBook = new OrderBook(BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.VIRTUAL_ORDERBOOK_ARRAY_SIZE.get(), initialPrice);
+        this.orderBook = new OrderBook(virtualOrderBookArraySize, initialPrice);
         this.matchingEngine = new MatchingEngine(this);
-        this.historicalMarketData = new HistoricalMarketData(initialPrice, BACKEND_INSTANCES.SERVER_SETTINGS.UI.PRICE_HISTORY_SIZE.get());
+        this.historicalMarketData = new HistoricalMarketData(initialPrice, historySize);
         this.volatilityBot = null;
 
         shiftPriceTimer.start(shiftPriceCandleIntervalMS);
         //notifySubscriberTimer.start(notifySubscriberIntervalMS);
     }
-    public ServerMarket()
+    public ServerMarket(int virtualOrderBookArraySize, int historySize)
     {
         this.tradingPair = new TradingPair();
-        this.orderBook = new OrderBook(BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.VIRTUAL_ORDERBOOK_ARRAY_SIZE.get());
+        this.orderBook = new OrderBook(virtualOrderBookArraySize);
         this.matchingEngine = new MatchingEngine(this);
-        this.historicalMarketData = new HistoricalMarketData(BACKEND_INSTANCES.SERVER_SETTINGS.UI.PRICE_HISTORY_SIZE.get());
+        this.historicalMarketData = new HistoricalMarketData(historySize);
         this.volatilityBot = null;
 
     }

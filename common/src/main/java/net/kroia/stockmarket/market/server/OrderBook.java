@@ -28,11 +28,13 @@ public class OrderBook implements ServerSaveable {
     }
     public OrderBook(int realVolumeBookSize)
     {
-        this.virtualOrderBook = new VirtualOrderBook(realVolumeBookSize,0);
+        if(realVolumeBookSize > 0)
+            this.virtualOrderBook = new VirtualOrderBook(realVolumeBookSize,0);
     }
     public OrderBook(int realVolumeBookSize, int initialPrice)
     {
-        this.virtualOrderBook = new VirtualOrderBook(realVolumeBookSize, initialPrice);
+        if(realVolumeBookSize > 0)
+            this.virtualOrderBook = new VirtualOrderBook(realVolumeBookSize, initialPrice);
     }
 
     public void createVirtualOrderBook(int realVolumeBookSize, int initialPrice, VirtualOrderBook.Settings settings)

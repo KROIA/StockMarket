@@ -665,7 +665,7 @@ public class ServerStockMarketManager implements ServerSaveable
             for(int i = 0; i < tradeItems.size(); i++)
             {
                 CompoundTag tradeItemTag = tradeItems.getCompound(i);
-                ServerMarket tradeItem = new ServerMarket();
+                ServerMarket tradeItem = new ServerMarket(0, BACKEND_INSTANCES.SERVER_SETTINGS.UI.PRICE_HISTORY_SIZE.get());
                 if(!tradeItem.load(tradeItemTag))
                 {
                     error("Failed to load trade item from NBT: " + tradeItemTag);
