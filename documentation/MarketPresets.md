@@ -15,36 +15,120 @@ If you want to change the base price of the preset markets, do the following ste
 4) The folder: `StockMarket\DefaultMarketSetupData` gets created again with the new market preset settings.
 
 ### base_prices.json
-The file contains the base prices for all assets. The first parameter: `INFLATION_SCALE` can be used as factor for each other price. The mod does multiply each price in this list with that inflation scale value.
-This makes it easy to just ajust the inflation of the currency but letting the price ratios between the assets constant.
+The file contains the base prices for all assets.
 ``` Json
 {
-  "INFLATION_SCALE": 1.0,
-  "log_price": 20,
-  "plank_price": 5,
-  "stick_price": 2,
-  "stone_price": 20,
-  "sand_price": 20,
-  "gravel_price": 20,
-  "clay_ball_price": 5,
-  "wool_price": 5,
-  "coal_price": 8,
-  "iron_price": 30,
-  "copper_price": 20,
-  "gold_price": 100,
-  "diamond_price": 200,
-  "emerald_price": 300,
-  "lapis_lazuli_price": 50,
-  "ancient_debris_price": 500,
-  "netherite_scrap_price": 500,
-  "redstone_dust_price": 10,
-  "nether_quartz_price": 10,
-  "bamboo_price": 2,
-  "prismarine_shard_price": 10,
-  "chorus_fruit_price": 10,
-  "honeycomb_price": 10,
-  "dye_price": 1,
-  "enchanted_book_price": 200
+  "CommonBlock": {
+    "log": 20,
+    "plank": 5,
+    "stone": 20,
+    "cobblestone": 10,
+    "sand": 20,
+    "dirt": 5,
+    "gravel": 20,
+    "clay_ball": 5,
+    "wool": 5,
+    "glass": 20,
+    "obsidian": 100,
+    "nether_brick": 100
+  },
+  "Ore": {
+    "coal": 8,
+    "iron": 30,
+    "copper": 20,
+    "gold": 100,
+    "diamond": 200,
+    "emerald": 300,
+    "lapis_lazuli": 50,
+    "ancient_debris": 500,
+    "netherite_scrap": 500,
+    "redstone_dust": 10,
+    "nether_quartz": 10,
+    "prismarine_shard": 10,
+    "amethyst_shard": 10
+  },
+  "Gardening": {
+    "bamboo": 2,
+    "chorus_fruit": 10,
+    "dye": 1,
+    "beehive": 20,
+    "bee_nest": 20,
+    "sapling": 5,
+    "seed": 2,
+    "potato": 5,
+    "sugar_cane": 5,
+    "cocoa_beans": 5,
+    "wheat": 5,
+    "sweet_berries": 5,
+    "beetroot": 5,
+    "glow_berries": 5
+  },
+  "Food": {
+    "cooked_beef": 5,
+    "cooked_chicken": 5,
+    "cooked_porkchop": 5,
+    "cooked_mutton": 5,
+    "cooked_rabbit": 5,
+    "cooked_salmon": 5,
+    "cooked_cod": 5,
+    "bread": 5,
+    "cookie": 5,
+    "cake": 5,
+    "pumpkin_pie": 5,
+    "mushroom_stew": 5,
+    "rabbit_stew": 5,
+    "suspicious_stew": 5,
+    "enchanted_golden_apple": 1000,
+    "apple": 5,
+    "carrot": 5,
+    "golden_apple": 805,
+    "golden_carrot": 105,
+    "beetroot_soup": 10,
+    "baked_potato": 10
+  },
+  "AnimalLoot": {
+    "rabbit_hide": 5,
+    "leather": 20,
+    "bone": 5,
+    "feather": 5,
+    "raw_beef": 5,
+    "raw_chicken": 5,
+    "raw_porkchop": 5,
+    "raw_mutton": 5,
+    "raw_rabbit": 5,
+    "raw_salmon": 5,
+    "cod": 5,
+    "tropical_fish": 5,
+    "puffer_fish": 5,
+    "honeycomb": 10,
+    "honey_bottle": 10,
+    "ink_sac": 10,
+    "spider_eye": 10
+  },
+  "Furniture": {},
+  "Enchantment": {
+    "enchantment_factor": 10.0
+  },
+  "Potion": {
+    "potion_factor": 1.0
+  },
+  "Arrow": {
+    "potion_factor": 1.0
+  },
+  "Misc": {
+    "book": 10,
+    "ender_pearl": 50,
+    "slime_ball": 30,
+    "flint": 10,
+    "blaze_powder": 100,
+    "ghast_tear": 100,
+    "nether_star": 1000,
+    "glowstone_dust": 10,
+    "string": 10
+  },
+  "Dye": {
+    "dye": 10
+  }
 }
 ```
 
@@ -53,10 +137,13 @@ This folder contains a list of json files. Each file represents a **Asset Catego
 You can add/remove/change the files on the fly. In game the MarketCreationByCategory Screen must be reopend to refresh the content.
 
 ### Asset Category File
-The most basic group is a empty group, only containing its name.
+The most basic group is a empty group, only containing its name and a [Item](#item) entry for displaying a icon.
 ``` Json
 {
   "groupName": "Ores",
+  "iconItemID": {
+    "itemID": "minecraft:iron_ingot"
+  },
   "markets": []
 }
 ```
@@ -116,10 +203,10 @@ To identify a item, the minecraft item id string is not enough. Some items are d
 ``` Json
 "item": {
   "itemID": "minecraft:enchanted_book",
-  "enchantments": [
+  "StoredEnchantments": [
     {
-      "enchantmentID": "minecraft:protection",
-      "level": 1
+      "id": "minecraft:protection",
+      "lvl": 1
     }
   ]
 }

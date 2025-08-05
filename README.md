@@ -29,8 +29,12 @@ StockMarket is a Minecraft mod that brings a better way for trading to the game.
 
 ---
 ## Features
-- Adds a banking system to the game for money and items.
-- Adds new [blocks](#blocks) to interact with the market or bank account.
+- Adds a realistic trading system to the game 
+  - Custom trading pairs can be defined 
+  - A list of preconfigured trading pairs are ready to be activated to avoid long parameter tweaking.
+  - Players have real impact on the price movement.
+
+- Adds new [blocks](#blocks) to interact with the market.
 - Implementation of a [matching engine](#matching-engine) inspired by the real market.
 - Configurable [bot](#stock-market-bot) which provides the market with liquidity and volatility 
 
@@ -217,11 +221,6 @@ If you do not have enough money to move a buy order higher, the order will not b
     <img src="documentation/images/tradingView.gif" > 
 </div>
 </td>
-
----
-### For Admins / Single Player
-[Click here to visit the guide for admins](documentation/AdminSection.md)
-
 
 
 

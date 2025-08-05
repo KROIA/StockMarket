@@ -74,6 +74,7 @@ public class StockMarketDataHandler extends DataPersistence {
         info("Saving StockMarket Mod data...");
         boolean success = true;
         success &= save_globalSettings();
+        success &= save_defaultPrices();
         success &= save_player();
         if(BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER != null)
             success &= save_market();
@@ -91,16 +92,20 @@ public class StockMarketDataHandler extends DataPersistence {
         CompletableFuture<Boolean> fut1 = save_playerAsync();
         CompletableFuture<Boolean> fut2;
         CompletableFuture<Boolean> fut3 = save_globalSettingsAsync();
+        CompletableFuture<Boolean> fut4 = CompletableFuture.supplyAsync(this::save_defaultPrices);
         if(BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER != null)
             fut2 = save_marketAsync();
         else
             fut2 = CompletableFuture.completedFuture(false);
-        return fut1.thenCombine(fut2, (a, b) -> a && b).thenCombine(fut3, (a, b) -> a && b).thenApply(success -> {
-            if(success)
+
+        // Combine all futures to ensure all data is saved before returning
+        return CompletableFuture.allOf(fut1, fut2, fut3, fut4).thenApply(v -> {
+            boolean allSuccess = fut1.join() && fut2.join() && fut3.join() && fut4.join();
+            if(allSuccess)
                 info("StockMarket Mod data saved successfully.");
             else
                 error("Failed to save StockMarket Mod data.");
-            return success;
+            return allSuccess;
         });
     }
 
@@ -116,6 +121,17 @@ public class StockMarketDataHandler extends DataPersistence {
         }
         else
             success &= load_globalSettings(settingsFilePath);
+
+        Path basePricesFilePath = getBasePricesFilePath();
+        if(!fileExists(basePricesFilePath)) {
+            warn("Base prices file not found, creating default base prices file.");
+            BACKEND_INSTANCES.DEFAULT_PRICES.balancePrices(); // Ensure default prices are balanced
+            success &= save_defaultPrices(basePricesFilePath);
+        }
+        else
+            success &= load_defaultPrices(basePricesFilePath);
+
+
         success &= load_player();
         success &= load_market();
 
@@ -283,6 +299,24 @@ public class StockMarketDataHandler extends DataPersistence {
     {
         return BACKEND_INSTANCES.SERVER_SETTINGS.loadSettings(filePath.toString());
     }
+
+    public boolean save_defaultPrices(Path filePath)
+    {
+        return BACKEND_INSTANCES.DEFAULT_PRICES.saveSettings(filePath.toString());
+    }
+    public boolean save_defaultPrices()
+    {
+        return save_defaultPrices(getBasePricesFilePath());
+    }
+    public boolean load_defaultPrices(Path filePath)
+    {
+        return BACKEND_INSTANCES.DEFAULT_PRICES.loadSettings(filePath.toString());
+    }
+    public boolean load_defaultPrices()
+    {
+        return load_defaultPrices(getBasePricesFilePath());
+    }
+
 
     public List<String> getDefaultMarketSetupDataFileNames()
     {

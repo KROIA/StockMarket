@@ -35,6 +35,7 @@ public class StockMarketModBackend implements StockMarketAPI {
     {
         public BankSystemAPI BANK_SYSTEM_API;
         public StockMarketModSettings SERVER_SETTINGS;
+        public DefaultMarketSettings.DefaultPrices DEFAULT_PRICES;
         public StockMarketDataHandler SERVER_DATA_HANDLER;
         public ServerStockMarketManager SERVER_STOCKMARKET_MANAGER;
         public ClientStockMarketManager CLIENT_STOCKMARKET_MANAGER;
@@ -115,6 +116,7 @@ public class StockMarketModBackend implements StockMarketAPI {
     public static void onServerStart(MinecraftServer server) {
         INSTANCES.SERVER_SETTINGS = new StockMarketModSettings();
         INSTANCES.SERVER_SETTINGS.setLogger((msg)->{INSTANCES.LOGGER.error(msg);}, (msg, e)->{INSTANCES.LOGGER.error(msg, e);}, (msg)->{INSTANCES.LOGGER.info(msg);});
+        INSTANCES.DEFAULT_PRICES = new DefaultMarketSettings.DefaultPrices();
 
         INSTANCES.SERVER_DATA_HANDLER = new StockMarketDataHandler();
         INSTANCES.SERVER_STOCKMARKET_MANAGER = new ServerStockMarketManager();

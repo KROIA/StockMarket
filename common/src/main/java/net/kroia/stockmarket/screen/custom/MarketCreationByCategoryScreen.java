@@ -1,8 +1,10 @@
 package net.kroia.stockmarket.screen.custom;
 
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.PlayerUtilities;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.elements.Button;
+import net.kroia.modutilities.gui.elements.ItemView;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.VerticalListView;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
@@ -133,27 +135,37 @@ public class MarketCreationByCategoryScreen extends StockMarketGuiScreen {
         }*/
     }
 
-    public static final class CategoryElement
+    public static final class CategoryElement extends StockMarketGuiElement
     {
         private final MarketFactory.DefaultMarketSetupDataGroup category;
 
+        private final ItemView iconView;
         private final Button button;
         private final List<MarketElement> marketElementList = new ArrayList<>();
 
         public CategoryElement(MarketFactory.DefaultMarketSetupDataGroup category, Consumer<CategoryElement> onClick, Consumer<TradingPair> onMarketElementAdd) {
             this.category = category;
+
+            this.iconView = new ItemView();
+            ItemID iconID = category.getIconItemID();
+            if(iconID != null ) {
+                this.iconView.setItemStack(iconID.getStack());
+            }
+
             this.button = new Button(category.groupName);
-            this.button.setHeight(15);
             this.button.setOnFallingEdge(() -> onClick.accept(this));
+
+
 
             for(MarketFactory.DefaultMarketSetupData elementData : category.marketSetupDataList) {
                 MarketElement marketElement = new MarketElement(elementData, "+", TEXT.ADD_MARKET_BUTTON_TOOLTIP.getString(), onMarketElementAdd);
                 marketElementList.add(marketElement);
             }
-        }
 
-        public Button getButton() {
-            return button;
+            addChild(iconView);
+            addChild(button);
+
+            this.setHeight(20);
         }
         public MarketFactory.DefaultMarketSetupDataGroup getCategory() {
             return category;
@@ -177,6 +189,21 @@ public class MarketCreationByCategoryScreen extends StockMarketGuiScreen {
                     return; // No need to check further
                 }
             }
+        }
+
+        @Override
+        protected void render() {
+
+        }
+
+        @Override
+        protected void layoutChanged() {
+            int width = getWidth();
+            int height = getHeight();
+
+            button.setBounds(0, 0, width - height, height);
+            iconView.setBounds(button.getRight(), 0, height, height);
+
         }
         /*public List<MarketFactory.DefaultMarketSetupData> getSelectedMarketSetupData() {
             List<MarketFactory.DefaultMarketSetupData> selectedData = new ArrayList<>();
@@ -327,7 +354,7 @@ public class MarketCreationByCategoryScreen extends StockMarketGuiScreen {
 
         for (MarketFactory.DefaultMarketSetupDataGroup category : categories) {
             CategoryElement categoryElement = new CategoryElement(category, this::onCategoryButtonClicked, this::onMarketElementAdd);
-            categoriesListView.addChild(categoryElement.getButton());
+            categoriesListView.addChild(categoryElement);
             this.categories.add(categoryElement);
         }
     }

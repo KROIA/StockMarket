@@ -340,6 +340,8 @@ public class MarketFactory
         public String groupName = "Group";
         public final List<DefaultMarketSetupData> marketSetupDataList = new ArrayList<>();
 
+        private ItemID iconItemID;
+
         public DefaultMarketSetupDataGroup()
         {
 
@@ -348,16 +350,84 @@ public class MarketFactory
         {
             this.groupName = groupName;
         }
-        public DefaultMarketSetupDataGroup(String groupName, List<DefaultMarketSetupData> marketSetupDataList)
+        public DefaultMarketSetupDataGroup(String groupName, ItemStack icon)
         {
             this.groupName = groupName;
-            this.marketSetupDataList.addAll(marketSetupDataList);
+            if(icon != null && !icon.isEmpty())
+            {
+                this.iconItemID = new ItemID(icon);
+            }
+            else
+            {
+                this.iconItemID = null; // No icon item ID provided
+            }
         }
+        public DefaultMarketSetupDataGroup(String groupName, Item icon)
+        {
+            this.groupName = groupName;
+            if(icon != null)
+            {
+                this.iconItemID = new ItemID(icon.getDefaultInstance());
+            }
+            else
+            {
+                this.iconItemID = null; // No icon item ID provided
+            }
+        }
+        public void setIconItem(ItemStack icon)
+        {
+            if(icon != null && !icon.isEmpty())
+            {
+                this.iconItemID = new ItemID(icon);
+            }
+            else
+            {
+                this.iconItemID = null; // No icon item ID provided
+            }
+        }
+        public void setIconItem(Item icon)
+        {
+            if(icon != null)
+            {
+                this.iconItemID = new ItemID(icon.getDefaultInstance());
+            }
+            else
+            {
+                this.iconItemID = null; // No icon item ID provided
+            }
+        }
+        public void setIconItemID(ItemID iconItemID)
+        {
+            this.iconItemID = iconItemID;
+        }
+        //public DefaultMarketSetupDataGroup(String groupName, List<DefaultMarketSetupData> marketSetupDataList)
+        //{
+        //    this.groupName = groupName;
+        //    this.marketSetupDataList.addAll(marketSetupDataList);
+        //}
+
+        public boolean isEmpty()
+        {
+            return this.marketSetupDataList.isEmpty();
+        }
+        public int size()
+        {
+            return this.marketSetupDataList.size();
+        }
+
 
         public void add(DefaultMarketSetupData data)
         {
             if(data != null)
             {
+                for(DefaultMarketSetupData existingData : this.marketSetupDataList)
+                {
+                    if(existingData.tradingPair.equals(data.tradingPair))
+                    {
+                        warn("Trading pair " + data.tradingPair + " already exists in group " + this.groupName + ", skipping addition.");
+                        return;
+                    }
+                }
                 this.marketSetupDataList.add(data);
             }
         }
@@ -369,6 +439,7 @@ public class MarketFactory
                 {
                     if(data.tradingPair.equals(generatorData.tradingPair))
                     {
+                        warn("Trading pair " + generatorData.tradingPair + " already exists in group " + this.groupName + ", skipping addition.");
                         return;
                     }
                 }
@@ -415,6 +486,10 @@ public class MarketFactory
             }
             return false;
         }
+        public @Nullable ItemID getIconItemID()
+        {
+            return iconItemID;
+        }
 
 
         public boolean save()
@@ -439,6 +514,7 @@ public class MarketFactory
                 this.groupName = loadedGroup.groupName;
                 this.marketSetupDataList.clear();
                 this.marketSetupDataList.addAll(loadedGroup.marketSetupDataList);
+                this.iconItemID = loadedGroup.iconItemID; // Load icon item ID if it exists
                 return true;
             }
             return false;
@@ -487,6 +563,10 @@ public class MarketFactory
         @Override
         public void encode(FriendlyByteBuf buf) {
             buf.writeUtf(this.groupName, 256); // Write group name with a max length of 256 characters
+            buf.writeBoolean(this.iconItemID != null);
+            if(this.iconItemID != null) {
+                this.iconItemID.encode(buf); // Encode the icon item ID if it exists
+            }
             buf.writeInt(this.marketSetupDataList.size()); // Write the size of the market setup data list
             for(DefaultMarketSetupData data : this.marketSetupDataList) {
                 if(data != null) {
@@ -501,6 +581,11 @@ public class MarketFactory
         public static DefaultMarketSetupDataGroup decode(FriendlyByteBuf buf) {
             DefaultMarketSetupDataGroup group = new DefaultMarketSetupDataGroup();
             group.groupName = buf.readUtf(256); // Read group name with a max length of 256 characters
+            if(buf.readBoolean()) {
+                group.iconItemID = new ItemID(buf); // Decode the icon item ID if it exists
+            } else {
+                group.iconItemID = null; // No icon item ID provided
+            }
             int size = buf.readInt(); // Read the size of the market setup data list
             for(int i = 0; i < size; i++) {
                 DefaultMarketSetupData data = DefaultMarketSetupData.decode(buf);
@@ -524,6 +609,11 @@ public class MarketFactory
         {
             JsonObject jsonObject = new JsonObject();
             jsonObject.addProperty("groupName", groupName);
+
+            if(iconItemID != null) {
+                jsonObject.add("iconItemID", iconItemID.toJson());
+            }
+
             JsonArray jsonArray = new JsonArray();
             for(DefaultMarketSetupData data : marketSetupDataList)
             {
@@ -548,6 +638,21 @@ public class MarketFactory
             {
                 this.groupName = groupNameElement.getAsString();
             }
+
+            JsonElement iconItemIDElement = jsonObject.get("iconItemID");
+            if(iconItemIDElement != null && iconItemIDElement.isJsonObject())
+            {
+                this.iconItemID = new ItemID(iconItemIDElement);
+                if(!this.iconItemID.fromJson(iconItemIDElement))
+                {
+                    this.iconItemID = null; // Invalid icon item ID data
+                }
+            }
+            else
+            {
+                this.iconItemID = null; // No icon item ID provided
+            }
+
             JsonElement marketSetupDataListElement = jsonObject.get("markets");
             if(marketSetupDataListElement != null && marketSetupDataListElement.isJsonArray())
             {
