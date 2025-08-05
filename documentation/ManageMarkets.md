@@ -67,7 +67,7 @@ Try one or multiple of the following steps:
 <tr>
 <td>
 <div align="center">
-    <img src="images/oscilatingMarketFix.gif" > 
+    <img src="images/oscilatingMarketFix.gif" width="1000" > 
     <figcaption><b>Reducing the bot order volume</b></figcaption>
 </div>
 </td>
