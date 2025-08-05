@@ -2,9 +2,9 @@ package net.kroia.stockmarket.market.server;
 
 import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.api.IBankUser;
-import net.kroia.modutilities.ServerSaveable;
 import net.kroia.modutilities.TimerMillis;
 import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.api.IServerMarket;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.clientdata.*;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
@@ -22,13 +22,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-public class ServerMarket implements ServerSaveable {
+public class ServerMarket implements IServerMarket {
 
     protected static StockMarketModBackend.Instances BACKEND_INSTANCES;
     public static void setBackend(StockMarketModBackend.Instances backend) {
         BACKEND_INSTANCES = backend;
     }
-
 
 
     private final TradingPair tradingPair;
@@ -59,8 +58,9 @@ public class ServerMarket implements ServerSaveable {
     {
         this.tradingPair = pair;
         this.orderBook = new OrderBook(virtualOrderBookArraySize, initialPrice);
-        this.matchingEngine = new MatchingEngine(this);
         this.historicalMarketData = new HistoricalMarketData(initialPrice, historySize);
+        this.matchingEngine = new MatchingEngine(this, historicalMarketData, orderBook, tradingPair);
+
         this.volatilityBot = null;
 
         shiftPriceTimer.start(shiftPriceCandleIntervalMS);
@@ -70,29 +70,51 @@ public class ServerMarket implements ServerSaveable {
     {
         this.tradingPair = new TradingPair();
         this.orderBook = new OrderBook(virtualOrderBookArraySize);
-        this.matchingEngine = new MatchingEngine(this);
         this.historicalMarketData = new HistoricalMarketData(historySize);
+        this.matchingEngine = new MatchingEngine(this ,historicalMarketData, orderBook, tradingPair);
+
         this.volatilityBot = null;
 
     }
 
+    @Override
+    public void update(MinecraftServer server)
+    {
+        if(volatilityBot != null)
+        {
+            volatilityBot.update(server);
+        }
+        matchingEngine.processIncommingOrders(orderBook.getAndClearIncommingOrders());
+        orderBook.updateVirtualOrderBookVolume(historicalMarketData.getCurrentPrice());
 
+        if(shiftPriceTimer.check()) {
+            shiftPriceHistory();
+        }
+    }
+
+    @Override
     public @Nullable BotSettingsData getBotSettingsData()
     {
         if(volatilityBot == null)
             return null;
         return new BotSettingsData(tradingPair, (ServerVolatilityBot.Settings)volatilityBot.getSettings());
     }
+
+    @Override
     public @Nullable VirtualOrderBookSettingsData getVirtualOrderBookSettingsData()
     {
         if(orderBook.getVirtualOrderBook() == null)
             return null;
         return new VirtualOrderBookSettingsData(tradingPair, orderBook.getVirtualOrderBook().getSettings());
     }
+
+    @Override
     public TradingPairData getTradingPairData()
     {
         return new TradingPairData(tradingPair);
     }
+
+    @Override
     public OrderBookVolumeData getOrderBookVolumeData(int historyViewCount, int minPrice, int maxPrice, int tileCount)
     {
         if(minPrice == 0 && maxPrice == 0)
@@ -123,10 +145,14 @@ public class ServerMarket implements ServerSaveable {
         }
         return new OrderBookVolumeData(minPrice, maxPrice, tileCount, orderBook);
     }
+
+    @Override
     public OrderBookVolumeData getOrderBookVolumeData()
     {
         return getOrderBookVolumeData(-1,0, 0, 0);
     }
+
+    @Override
     public OrderReadData getOrderReadData(long orderID)
     {
         LimitOrder order = orderBook.getOrder(orderID);
@@ -134,20 +160,24 @@ public class ServerMarket implements ServerSaveable {
             return null;
         return new OrderReadData(order);
     }
+    @Override
     public OrderReadListData getOrderReadListData(List<Long> orderIDs)
     {
         List<LimitOrder> orders = orderBook.getOrders(orderIDs);
         return new OrderReadListData(new ArrayList<>(orders));
     }
+    @Override
     public OrderReadListData getOrderReadListData(UUID playerUUID)
     {
         List<LimitOrder> orders = orderBook.getOrders(playerUUID);
         return new OrderReadListData(new ArrayList<>(orders));
     }
+    @Override
     public PriceHistoryData getPriceHistoryData(int maxHistoryPointCount)
     {
         return new PriceHistoryData(historicalMarketData.getHistory(), maxHistoryPointCount);
     }
+    @Override
     public TradingViewData getTradingViewData(UUID player,int maxHistoryPointCount, int minVisiblePrice, int maxVisiblePrice, int orderBookTileCount, boolean requestBotTargetPrice)
     {
         IBankUser bankUser = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getUser(player);
@@ -177,10 +207,12 @@ public class ServerMarket implements ServerSaveable {
                 itemBank, moneyBank, getOrderBookVolumeData(maxHistoryPointCount, minVisiblePrice, maxVisiblePrice, orderBookTileCount),
                 new OrderReadListData(orders), marketOpen, botTargetPrice);
     }
+    @Override
     public TradingViewData getTradingViewData(UUID player)
     {
         return getTradingViewData(player, -1,0, 0, 0, false);
     }
+    @Override
     public ServerMarketSettingsData getMarketSettingsData()
     {
         ServerVolatilityBot.Settings botSettings = null;
@@ -197,6 +229,7 @@ public class ServerMarket implements ServerSaveable {
                                             marketOpen, itemImbalance,
                                             shiftPriceCandleIntervalMS/*, notifySubscriberIntervalMS*/);
     }
+    @Override
     public boolean setMarketSettingsData(@Nullable ServerMarketSettingsData settingsData)
     {
         if(settingsData == null)
@@ -240,10 +273,12 @@ public class ServerMarket implements ServerSaveable {
 
         return success;
     }
+    @Override
     public boolean setBotSettingsData(@Nullable BotSettingsData botSettingsData)
     {
         return setBotSettings(botSettingsData != null ? botSettingsData.settings : null);
     }
+    @Override
     public boolean setBotSettings(ServerVolatilityBot.Settings settings)
     {
         if(volatilityBot == null)
@@ -253,6 +288,7 @@ public class ServerMarket implements ServerSaveable {
         return true;
     }
 
+    @Override
     public boolean setVirtualOrderBookSettingsData(@Nullable VirtualOrderBookSettingsData virtualOrderBookSettingsData)
     {
         if(virtualOrderBookSettingsData == null || orderBook.getVirtualOrderBook() == null)
@@ -261,6 +297,7 @@ public class ServerMarket implements ServerSaveable {
         orderBook.getVirtualOrderBook().setSettings(virtualOrderBookSettingsData.settings);
         return true;
     }
+    @Override
     public boolean setVirtualOrderBookSettings(VirtualOrderBook.Settings settings)
     {
         if(orderBook.getVirtualOrderBook() == null)
@@ -271,43 +308,41 @@ public class ServerMarket implements ServerSaveable {
     }
 
 
+    @Override
     public int getBotTargetPrice() {
         if(volatilityBot == null)
             return 0;
         return volatilityBot.getTargetPrice();
     }
+    @Override
     public void resetHistoricalMarketData()
     {
         historicalMarketData.clear(historicalMarketData.getCurrentPrice());
     }
 
 
-
+    @Override
     public void setShiftPriceCandleIntervalMS(long shiftPriceCandleIntervalMS) {
         this.shiftPriceCandleIntervalMS = shiftPriceCandleIntervalMS;
         shiftPriceTimer.start(shiftPriceCandleIntervalMS);
     }
+    @Override
     public long getShiftPriceCandleIntervalMS() {
         return shiftPriceCandleIntervalMS;
     }
-    /*public void setNotifySubscriberIntervalMS(long notifySubscriberIntervalMS) {
-        this.notifySubscriberIntervalMS = notifySubscriberIntervalMS;
-        notifySubscriberTimer.start(notifySubscriberIntervalMS);
-    }
-    public long getNotifySubscriberIntervalMS() {
-        return notifySubscriberIntervalMS;
-    }*/
 
 
 
 
-
+    @Override
     public void createVolatilityBot(ServerVolatilityBot.Settings settings)
     {
         if(volatilityBot == null)
             volatilityBot = new ServerVolatilityBot(this);
         volatilityBot.setSettings(settings);
     }
+
+    @Override
     public boolean destroyVolatilityBot()
     {
         if(volatilityBot == null)
@@ -318,10 +353,14 @@ public class ServerMarket implements ServerSaveable {
         volatilityBot = null;
         return true;
     }
+
+    @Override
     public boolean hasVolatilityBot()
     {
         return volatilityBot != null;
     }
+
+    @Override
     public void createVirtualOrderBook(int realVolumeBookSize, VirtualOrderBook.Settings settings)
     {
         if(orderBook.getVirtualOrderBook() == null)
@@ -332,6 +371,8 @@ public class ServerMarket implements ServerSaveable {
             orderBook.getVirtualOrderBook().setSettings(settings);
         }
     }
+
+    @Override
     public boolean destroyVirtualOrderBook()
     {
         if(orderBook.getVirtualOrderBook() == null)
@@ -340,62 +381,53 @@ public class ServerMarket implements ServerSaveable {
         orderBook.destroyVirtualOrderBook();
         return true;
     }
+    @Override
     public boolean hasVirtualOrderBook()
     {
         return orderBook.getVirtualOrderBook() != null;
     }
 
+    @Override
     public TradingPair getTradingPair() {
         return tradingPair;
     }
+    @Override
     public OrderBook getOrderBook() {
         return orderBook;
     }
-    public MatchingEngine getMatchingEngine() {
+    /*public MatchingEngine getMatchingEngine() {
         return matchingEngine;
-    }
-    public HistoricalMarketData getHistoricalMarketData() {
-        return historicalMarketData;
-    }
+    }*/
+    //@Override
+    //public HistoricalMarketData getHistoricalMarketData() {
+    //    return historicalMarketData;
+    //}
+    @Override
     public int getCurrentPrice() {
         return historicalMarketData.getCurrentPrice();
     }
+    @Override
     public boolean isMarketOpen() {
         return marketOpen;
     }
+    @Override
     public void openMarket()
     {
         marketOpen = true;
     }
+    @Override
     public void closeMarket()
     {
         marketOpen = false;
     }
+    @Override
     public void setMarketOpen(boolean marketOpen) {
         this.marketOpen = marketOpen;
     }
 
-    public void update(MinecraftServer server)
-    {
-        if(volatilityBot != null)
-        {
-            volatilityBot.update(server);
-        }
-        matchingEngine.processIncommingOrders(orderBook.getAndClearIncommingOrders());
-        orderBook.updateVirtualOrderBookVolume(historicalMarketData.getCurrentPrice());
 
 
-        //if(notifySubscriberTimer.check()) {
-        //    if(!subscribers.isEmpty())
-        //        notifySubscribers();
-        //}
-
-        if(shiftPriceTimer.check()) {
-            shiftPriceHistory();
-        }
-    }
-
-
+    @Override
     public boolean createLimitOrder(UUID playerUUID, long amount, int price)
     {
         if(!marketOpen)
@@ -408,6 +440,7 @@ public class ServerMarket implements ServerSaveable {
         addOrder(order);
         return true;
     }
+    @Override
     public boolean createMarketOrder(UUID playerUUID, long amount)
     {
         if(!marketOpen)
@@ -421,25 +454,23 @@ public class ServerMarket implements ServerSaveable {
         addOrder(order);
         return true;
     }
+
+    @Override
     public boolean createBotLimitOrder(long amount, int price)
     {
-        //if(!marketOpen)
-        //    return false;
-
         LimitOrder order = OrderFactory.createBotLimitOrder(amount, price);
         addOrder(order);
         return true;
     }
+    @Override
     public boolean createBotMarketOrder(long amount)
     {
-        //if(!marketOpen)
-        //    return false;
-
         MarketOrder order = OrderFactory.createBotMarketOrder(amount);
         addOrder(order);
         return true;
     }
 
+    @Override
     public boolean cancelOrder(long orderID)
     {
         Order order = orderBook.getOrder(orderID);
@@ -447,6 +478,7 @@ public class ServerMarket implements ServerSaveable {
             return false;
         return cancelOrder(order);
     }
+    @Override
     public boolean cancelOrder(Order order)
     {
         if(order == null)
@@ -463,6 +495,7 @@ public class ServerMarket implements ServerSaveable {
         return true;
     }
 
+    @Override
     public void cancelAllBotOrders()
     {
         var orders = orderBook.removeAllBotOrders();
@@ -471,12 +504,15 @@ public class ServerMarket implements ServerSaveable {
             order.markAsCancelled();
         }
     }
+    @Override
     public long getItemImbalance() {
         return itemImbalance;
     }
+    @Override
     public void addItemImbalance(long amount) {
         itemImbalance += amount;
     }
+    @Override
     public void setItemImbalance(long itemImbalance) {
         this.itemImbalance = itemImbalance;
     }
@@ -535,7 +571,7 @@ public class ServerMarket implements ServerSaveable {
         }
         return false;
     }
-    protected void orderInvalid(Order order, String reason)
+    /*protected void orderInvalid(Order order, String reason)
     {
         cancelOrder(order.getOrderID());
         order.markAsInvalid(reason);
@@ -551,7 +587,7 @@ public class ServerMarket implements ServerSaveable {
         {
             
         }
-    }
+    }*/
 
     protected void shiftPriceHistory()
     {
@@ -589,13 +625,6 @@ public class ServerMarket implements ServerSaveable {
     }
 
 
-    protected void notifySubscribers()
-    {
-        /*for(ServerPlayer player : subscribers)
-        {
-            SyncPricePacket.sendPacket(itemID, player);
-        }*/
-    }
 
 
     @Override

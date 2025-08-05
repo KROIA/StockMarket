@@ -31,10 +31,7 @@ public class StockMarketDataHandler extends DataPersistence {
 
     public StockMarketDataHandler() {
         super(JsonFormat.PRETTY, NbtFormat.COMPRESSED, Path.of("Finance/StockMarket"));
-        setLogger((msg)->{error(msg);},
-                (msg,e)->{error(msg, e);},
-                (msg)->{info(msg);},
-                (msg)->{warn(msg);});
+        setLogger(this::error, this::error, this::info, this::warn);
     }
 
     public static void setBackend(StockMarketModBackend.Instances backend) {
@@ -336,61 +333,6 @@ public class StockMarketDataHandler extends DataPersistence {
         }
         return fileNames;
     }
-    /*public HashMap<String, HashMap<ItemID, ServerTradingBotFactory.DefaultBotSettings>> loadDefaultBotSettings()
-    {
-        if(!folderExists(getDefaultMarketSetupDataFolderPath())) {
-            error("Default bot settings folder does not exist: " + getDefaultMarketSetupDataFolderPath());
-            return new HashMap<>();
-        }
-        List<String> jsonFiles = getDefaultBotSettingsFileNames();
-        HashMap<String, HashMap<ItemID, ServerTradingBotFactory.DefaultBotSettings>> settings = new HashMap<>();
-        for(String file : jsonFiles)
-        {
-            HashMap<ItemID, ServerTradingBotFactory.DefaultBotSettings> map = loadDefaultBotSettings(file);
-            settings.put(file, map);
-        }
-        return settings;
-    }
-    public HashMap<ItemID, ServerTradingBotFactory.DefaultBotSettings> loadDefaultBotSettings(String fileName)
-    {
-        if(!fileName.contains(".json"))
-            fileName += ".json";
-        HashMap<ItemID, ServerTradingBotFactory.DefaultBotSettings> settings = new HashMap<>();
-        Path filePath = getDefaultMarketSetupDataFolderPath().resolve(fileName);
-        if(!fileExists(filePath)) {
-            error("Default bot settings file does not exist: " + fileName);
-            return settings;
-        }
-        JsonElement jsonElement = loadJson(filePath);
-        if(jsonElement == null || !jsonElement.isJsonArray()) {
-            error("Failed to load default bot settings from file: " + fileName);
-            return settings;
-        }
-        JsonArray jsonArray = jsonElement.getAsJsonArray();
-        for(JsonElement element : jsonArray) {
-            if(element.isJsonObject()) {
-                JsonObject jsonObject = element.getAsJsonObject();
-                ServerTradingBotFactory.BotBuilderContainer container = new ServerTradingBotFactory.BotBuilderContainer();
-                if(container.fromJson(jsonObject) && container.itemData != null && container.defaultSettings != null) {
-                    settings.put(container.itemData.getItemID(), container.defaultSettings);
-                } else {
-                    error("Invalid BotBuilderContainer in file: " + fileName);
-                }
-            } else {
-                error("Invalid JSON element in file: " + fileName);
-            }
-        }
-        return settings;
-    }*/
-
-    /*public boolean saveDefaultBotSettings(ArrayList<ServerTradingBotFactory.BotBuilderContainer> settings, String fileName)
-    {
-        JsonArray jsonArray = new JsonArray();
-        for(ServerTradingBotFactory.BotBuilderContainer container : settings) {
-            jsonArray.add(container.toJson());
-        }
-        return saveJson(jsonArray, getDefaultBotSettingsFolderPath().resolve(fileName));
-    }*/
     
     public boolean saveDefaultMarketSetupDataGroup(MarketFactory.DefaultMarketSetupDataGroup category)
     {
@@ -457,26 +399,7 @@ public class StockMarketDataHandler extends DataPersistence {
     
 
 
-    protected void info(String msg)
-    {
-        BACKEND_INSTANCES.LOGGER.info("[StockMarketDataHandler] " + msg);
-    }
-    protected void error(String msg)
-    {
-        BACKEND_INSTANCES.LOGGER.error("[StockMarketDataHandler] " + msg);
-    }
-    protected void error(String msg, Throwable e)
-    {
-        BACKEND_INSTANCES.LOGGER.error("[MarketFactory] " + msg, e);
-    }
-    protected void warn(String msg)
-    {
-        BACKEND_INSTANCES.LOGGER.warn("[StockMarketDataHandler] " + msg);
-    }
-    protected void debug(String msg)
-    {
-        BACKEND_INSTANCES.LOGGER.debug("[StockMarketDataHandler] " + msg);
-    }
+
 
 
     public static void copyFolder(Path source, Path target) throws IOException {
@@ -518,5 +441,28 @@ public class StockMarketDataHandler extends DataPersistence {
                 return FileVisitResult.CONTINUE;
             }
         });
+    }
+
+
+
+    protected void info(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.info("[StockMarketDataHandler] " + msg);
+    }
+    protected void error(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.error("[StockMarketDataHandler] " + msg);
+    }
+    protected void error(String msg, Throwable e)
+    {
+        BACKEND_INSTANCES.LOGGER.error("[StockMarketDataHandler] " + msg, e);
+    }
+    protected void warn(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.warn("[StockMarketDataHandler] " + msg);
+    }
+    protected void debug(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.debug("[StockMarketDataHandler] " + msg);
     }
 }

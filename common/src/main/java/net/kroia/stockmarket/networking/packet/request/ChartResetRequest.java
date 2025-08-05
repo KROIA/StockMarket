@@ -1,7 +1,7 @@
 package net.kroia.stockmarket.networking.packet.request;
 
+import net.kroia.stockmarket.api.IServerMarket;
 import net.kroia.stockmarket.market.TradingPair;
-import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
@@ -27,7 +27,7 @@ public class ChartResetRequest extends StockMarketGenericRequest<List<TradingPai
             // Reset the chart for each trading pair in the input list
             List<Boolean> results = new java.util.ArrayList<>(input.size());
             for (TradingPair tradingPair : input) {
-                ServerMarket market = BACKEND_INSTANCES.SERVER_MARKET_MANAGER.getMarket(tradingPair);
+                IServerMarket market = BACKEND_INSTANCES.SERVER_MARKET_MANAGER.getMarket(tradingPair);
                 if (market != null) {
                     market.resetHistoricalMarketData();
                     results.add(true);

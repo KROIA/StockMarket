@@ -139,4 +139,31 @@ public class LimitOrder extends Order implements ServerSaveable {
         json.addProperty("price", price);
         return json;
     }
+
+
+    @Override
+    protected void info(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.info("[LimitOrder] " + msg);
+    }
+    @Override
+    protected void error(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.error("[LimitOrder] " + msg);
+    }
+    @Override
+    protected void error(String msg, Throwable e)
+    {
+        BACKEND_INSTANCES.LOGGER.error("[LimitOrder] " + msg, e);
+    }
+    @Override
+    protected void warn(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.warn("[LimitOrder] " + msg);
+    }
+    @Override
+    protected void debug(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.debug("[LimitOrder] " + msg);
+    }
 }

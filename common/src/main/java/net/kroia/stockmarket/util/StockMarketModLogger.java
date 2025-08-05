@@ -6,9 +6,7 @@ import org.slf4j.Logger;
 
 public class StockMarketModLogger {
     private static final Logger LOGGER = LogUtils.getLogger();
-
     private static StockMarketModBackend.Instances INSTANCES;
-
     public StockMarketModLogger(StockMarketModBackend.Instances instances) {
         INSTANCES = instances;
     }

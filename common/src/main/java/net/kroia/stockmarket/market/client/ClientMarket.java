@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.market.client;
 
 import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.api.IClientMarket;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.clientdata.*;
 import net.kroia.stockmarket.market.server.MarketFactory;
@@ -13,7 +14,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.function.Consumer;
 
-public class ClientMarket {
+public class ClientMarket implements IClientMarket {
     private static StockMarketModBackend.Instances BACKEND_INSTANCES;
     public static void setBackend(StockMarketModBackend.Instances backend) {
         BACKEND_INSTANCES = backend;
@@ -25,22 +26,27 @@ public class ClientMarket {
     ClientMarket(TradingPair tradingPair) {
         this.tradingPair = tradingPair;
     }
+    @Override
     public TradingPair getTradingPair() {
         return tradingPair;
     }
+    @Override
     public boolean isAlive() {
         return isAlive;
     }
+    @Override
     public void setDead() {
         isAlive = false;
     }
 
+    @Override
     public void requestBotSettingsData(Consumer<BotSettingsData> callback)
     {
         if(checkDeadAndDebug())
             return;
         StockMarketNetworking.BOT_SETTINGS_REQUEST.sendRequestToServer(tradingPair, callback);
     }
+    @Override
     public void requestOrderBookVolume(int maxHistoryPointCount, int minimalVisiblePrice, int maximalVisiblePrice, int tileCount, boolean requestBotTargetPrice,
                                        Consumer<OrderBookVolumeData> callback)
     {
@@ -49,6 +55,7 @@ public class ClientMarket {
         TradingViewDataRequest.Input input = new TradingViewDataRequest.Input(tradingPair,maxHistoryPointCount, minimalVisiblePrice, maximalVisiblePrice, tileCount, requestBotTargetPrice);
         StockMarketNetworking.ORDER_BOOK_VOLUME_REQUEST.sendRequestToServer(input, callback);
     }
+    @Override
     public void requestOrderBookVolume(Consumer<OrderBookVolumeData> callback)
     {
         if(checkDeadAndDebug())
@@ -56,6 +63,7 @@ public class ClientMarket {
         TradingViewDataRequest.Input input = new TradingViewDataRequest.Input(tradingPair, false);
         StockMarketNetworking.ORDER_BOOK_VOLUME_REQUEST.sendRequestToServer(input, callback);
     }
+    @Override
     public void requestCancelOrder(long orderID,
                                    Consumer<Boolean> callback)
     {
@@ -64,6 +72,7 @@ public class ClientMarket {
         OrderCancelData cancelData = new OrderCancelData(tradingPair, orderID);
         StockMarketNetworking.ORDER_CANCEL_REQUEST.sendRequestToServer(cancelData, callback);
     }
+    @Override
     public void requestChangeOrder(long orderID, int newPrice,
                                    Consumer<Boolean> callback)
     {
@@ -72,6 +81,7 @@ public class ClientMarket {
         OrderChangeData changeData = new OrderChangeData(tradingPair, orderID, newPrice);
         StockMarketNetworking.ORDER_CHANGE_REQUEST.sendRequestToServer(changeData, callback);
     }
+    @Override
     public void requestCreateMarketOrder(int volume,
                                          Consumer<Boolean> callback)
     {
@@ -79,6 +89,7 @@ public class ClientMarket {
             return;
         requestCreateMarketOrder(getPlayerUUID(), volume, callback);
     }
+    @Override
     public void requestCreateMarketOrder(UUID orderOwnerPlayerUUID, int volume,
                                          Consumer<Boolean> callback)
     {
@@ -87,6 +98,7 @@ public class ClientMarket {
         OrderCreateData createData = new OrderCreateData(orderOwnerPlayerUUID, tradingPair, volume);
         StockMarketNetworking.ORDER_CREATE_REQUEST.sendRequestToServer(createData, callback);
     }
+    @Override
     public void requestCreateLimitOrder(int volume, int limitPrice,
                                         Consumer<Boolean> callback)
     {
@@ -95,6 +107,7 @@ public class ClientMarket {
         requestCreateLimitOrder(getPlayerUUID(), volume, limitPrice, callback);
     }
 
+    @Override
     public void requestCreateLimitOrder(UUID orderOwnerPlayerUUID, int volume, int limitPrice,
                                         Consumer<Boolean> callback)
     {
@@ -104,11 +117,13 @@ public class ClientMarket {
         StockMarketNetworking.ORDER_CREATE_REQUEST.sendRequestToServer(createData, callback);
     }
 
+    @Override
     public void requestPlayerOrderReadDataList(Consumer<OrderReadListData> callback) {
         if(checkDeadAndDebug())
             return;
         requestPlayerOrderReadDataList(getPlayerUUID(), callback);
     }
+    @Override
     public void requestPlayerOrderReadDataList(UUID orderOwnerPlayerUUID,
                                                Consumer<OrderReadListData> callback) {
         if(checkDeadAndDebug())
@@ -117,16 +132,19 @@ public class ClientMarket {
         StockMarketNetworking.PLAYER_ORDER_READ_DATA_LIST_REQUEST.sendRequestToServer(inputData, callback);
     }
 
+    @Override
     public void requestPriceHistory(int maxHistoryPointCount, Consumer<PriceHistoryData> callback) {
         if(checkDeadAndDebug())
             return;
         StockMarketNetworking.PRICE_HISTORY_REQUEST.sendRequestToServer(new PriceHistoryRequest.Input(tradingPair, maxHistoryPointCount), callback);
     }
+    @Override
     public void requestGetMarketSettings(Consumer<ServerMarketSettingsData> callback) {
         if(checkDeadAndDebug())
             return;
         StockMarketNetworking.GET_SERVER_MARKET_SETTINGS_REQUEST.sendRequestToServer(new TradingPairData(tradingPair), callback);
     }
+    @Override
     public void requestSetMarketSettings(ServerMarketSettingsData settings, Consumer<Boolean> callback) {
         if(checkDeadAndDebug())
             return;
@@ -137,6 +155,7 @@ public class ClientMarket {
         StockMarketNetworking.SET_SERVER_MARKET_SETTINGS_REQUEST.sendRequestToServer(settings, callback);
     }
 
+    @Override
     public void requestTradingViewData(int maxHistoryPointCount, int minimalVisiblePrice, int maximalVisiblePrice, int tileCount, boolean requestBotTargetPrice,
                                        Consumer<TradingViewData> callback) {
         if(checkDeadAndDebug())
@@ -144,12 +163,14 @@ public class ClientMarket {
         TradingViewDataRequest.Input input = new TradingViewDataRequest.Input(tradingPair, maxHistoryPointCount, minimalVisiblePrice, maximalVisiblePrice, tileCount, requestBotTargetPrice);
         StockMarketNetworking.TRADING_VIEW_DATA_REQUEST.sendRequestToServer(input, callback);
     }
+    @Override
     public void requestTradingViewData(Consumer<TradingViewData> callback, boolean requestBotTargetPrice) {
         if(checkDeadAndDebug())
             return;
         TradingViewDataRequest.Input input = new TradingViewDataRequest.Input(tradingPair, requestBotTargetPrice);
         StockMarketNetworking.TRADING_VIEW_DATA_REQUEST.sendRequestToServer(input, callback);
     }
+    @Override
     public void requestTradingViewData(Consumer<TradingViewData> callback) {
         if(checkDeadAndDebug())
             return;
@@ -157,32 +178,32 @@ public class ClientMarket {
         StockMarketNetworking.TRADING_VIEW_DATA_REQUEST.sendRequestToServer(input, callback);
     }
 
-
+    @Override
     public void requestBotTargetPrice(Consumer<Integer> callback) {
         if(checkDeadAndDebug())
             return;
         StockMarketNetworking.BOT_TARGET_PRICE_REQUEST.sendRequestToServer(new TradingPairData(tradingPair), callback);
     }
 
-
+    @Override
     public void requestDefaultMarketSetupDataGroups(Consumer<List<MarketFactory.DefaultMarketSetupDataGroup>> callback) {
         if(checkDeadAndDebug())
             return;
         StockMarketNetworking.DEFAULT_MARKET_SETUP_DATA_GROUPS_REQUEST.sendRequestToServer(true, callback);
     }
-
+    @Override
     public void requestDefaultMarketSetupDataGroup(String groupName, Consumer<MarketFactory.DefaultMarketSetupDataGroup> callback) {
         if(checkDeadAndDebug())
             return;
         StockMarketNetworking.DEFAULT_MARKET_SETUP_DATA_GROUP_REQUEST.sendRequestToServer(groupName, callback);
     }
-
+    @Override
     public void requestDefaultMarketSetupData(Consumer<MarketFactory.DefaultMarketSetupData> callback) {
         if(checkDeadAndDebug())
             return;
         StockMarketNetworking.DEFAULT_MARKET_SETUP_DATA_REQUEST.sendRequestToServer(new TradingPairData(tradingPair), callback);
     }
-
+    @Override
     public void requestChartReset(Consumer<Boolean> callback) {
         if(checkDeadAndDebug())
             return;
@@ -195,6 +216,7 @@ public class ClientMarket {
             callback.accept(results.get(0));
         });
     }
+    @Override
     public void requestMarketOpen(boolean open, Consumer<Boolean> callback) {
         if(checkDeadAndDebug())
             return;

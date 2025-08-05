@@ -190,13 +190,13 @@ public abstract class Order implements ServerSaveable, INetworkPayloadConverter 
 
     public void markAsProcessed() {
         if(!isBot())
-            BACKEND_INSTANCES.LOGGER.debug("Order processed:\n" + toString());
+            debug("Order processed:\n" + toString());
         setStatus(Status.PROCESSED);
     }
     public void markAsInvalid(String reason) {
         invalidReason = reason;
         if(!isBot()) {
-            BACKEND_INSTANCES.LOGGER.debug("Order invalid:\n" + toString());
+            debug("Order invalid:\n" + toString());
 
             PlayerUtilities.printToClientConsole(getPlayerUUID(), StockMarketTextMessages.getOrderInvalidMessage(reason));
         }
@@ -204,7 +204,7 @@ public abstract class Order implements ServerSaveable, INetworkPayloadConverter 
     }
     public void markAsCancelled() {
         if(!isBot())
-            BACKEND_INSTANCES.LOGGER.debug("Order canceled:\n" + toString());
+            debug("Order canceled:\n" + toString());
         setStatus(Status.CANCELLED);
     }
 
@@ -343,4 +343,12 @@ public abstract class Order implements ServerSaveable, INetworkPayloadConverter 
     public String toString() {
         return toJsonString();
     }
+
+
+
+    protected abstract void info(String msg);
+    protected abstract void error(String msg);
+    protected abstract void error(String msg, Throwable e);
+    protected abstract void warn(String msg);
+    protected abstract void debug(String msg);
 }

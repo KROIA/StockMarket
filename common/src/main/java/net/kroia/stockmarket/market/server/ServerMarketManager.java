@@ -3,8 +3,9 @@ package net.kroia.stockmarket.market.server;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.PlayerUtilities;
-import net.kroia.modutilities.ServerSaveable;
 import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.api.IServerMarket;
+import net.kroia.stockmarket.api.IServerMarketManager;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.clientdata.*;
 import net.kroia.stockmarket.market.server.order.Order;
@@ -19,7 +20,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 
-public class ServerMarketManager implements ServerSaveable
+public class ServerMarketManager implements IServerMarketManager
 {
     private static StockMarketModBackend.Instances BACKEND_INSTANCES;
     public static void setBackend(StockMarketModBackend.Instances backend) {
@@ -34,14 +35,11 @@ public class ServerMarketManager implements ServerSaveable
 
     public ServerMarketManager()
     {
-        /*for(var item : BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.INITIAL_TRADABLE_ITEMS.get().entrySet())
-        {
-            addTradeItem(item.getKey(), item.getValue(), item.getValue()
-        }
-        rebuildTradeItemsChunks();*/
+
     }
 
 
+    @Override
     public @Nullable BotSettingsData getBotSettingsData(@NotNull TradingPair pair)
     {
         ServerMarket market = markets.get(pair);
@@ -49,6 +47,7 @@ public class ServerMarketManager implements ServerSaveable
             return null;
         return market.getBotSettingsData();
     }
+    @Override
     public @Nullable TradingPairData getTradingPairData(@NotNull TradingPair pair)
     {
         ServerMarket market = markets.get(pair);
@@ -56,6 +55,7 @@ public class ServerMarketManager implements ServerSaveable
             return null;
         return market.getTradingPairData();
     }
+    @Override
     public @Nullable OrderBookVolumeData getOrderBookVolumeData(@NotNull TradingPair pair, int historyViewCount, int minPrice, int maxPrice, int tileCount)
     {
         ServerMarket market = markets.get(pair);
@@ -63,6 +63,7 @@ public class ServerMarketManager implements ServerSaveable
             return null;
         return market.getOrderBookVolumeData(historyViewCount, minPrice, maxPrice, tileCount);
     }
+    @Override
     public @Nullable OrderBookVolumeData getOrderBookVolumeData(@NotNull TradingPair pair)
     {
         ServerMarket market = markets.get(pair);
@@ -70,6 +71,7 @@ public class ServerMarketManager implements ServerSaveable
             return null;
         return market.getOrderBookVolumeData();
     }
+    @Override
     public @Nullable OrderReadData getOrderReadData(@NotNull TradingPair pair, long orderID)
     {
         ServerMarket market = markets.get(pair);
@@ -77,6 +79,7 @@ public class ServerMarketManager implements ServerSaveable
             return null;
         return market.getOrderReadData(orderID);
     }
+    @Override
     public @Nullable OrderReadListData getOrderReadListData(@NotNull TradingPair pair, List<Long> orderIDs)
     {
         ServerMarket market = markets.get(pair);
@@ -84,6 +87,7 @@ public class ServerMarketManager implements ServerSaveable
             return null;
         return market.getOrderReadListData(orderIDs);
     }
+    @Override
     public @Nullable OrderReadListData getOrderReadListData(@NotNull TradingPair pair, UUID playerUUID)
     {
         ServerMarket market = markets.get(pair);
@@ -91,6 +95,7 @@ public class ServerMarketManager implements ServerSaveable
             return null;
         return market.getOrderReadListData(playerUUID);
     }
+    @Override
     public @Nullable PriceHistoryData getPriceHistoryData(@NotNull TradingPair pair, int maxHistoryPointCount)
     {
         ServerMarket market = markets.get(pair);
@@ -98,6 +103,7 @@ public class ServerMarketManager implements ServerSaveable
             return null;
         return market.getPriceHistoryData(maxHistoryPointCount);
     }
+    @Override
     public @Nullable TradingViewData getTradingViewData(@NotNull TradingPair pair, UUID player,
                                                         int maxHistoryPointCount,
                                                         int minVisiblePrice,
@@ -110,6 +116,7 @@ public class ServerMarketManager implements ServerSaveable
             return null;
         return market.getTradingViewData(player, maxHistoryPointCount, minVisiblePrice, maxVisiblePrice, orderBookTileCount, requestBotTargetPrice);
     }
+    @Override
     public @Nullable TradingViewData getTradingViewData(@NotNull TradingPair pair, UUID player)
     {
         ServerMarket market = markets.get(pair);
@@ -117,6 +124,7 @@ public class ServerMarketManager implements ServerSaveable
             return null;
         return market.getTradingViewData(player);
     }
+    @Override
     public @Nullable ServerMarketSettingsData getMarketSettingsData(@NotNull TradingPair pair)
     {
         ServerMarket market = markets.get(pair);
@@ -124,10 +132,12 @@ public class ServerMarketManager implements ServerSaveable
             return null;
         return market.getMarketSettingsData();
     }
+    @Override
     public @NotNull TradingPairListData getTradingPairListData()
     {
         return new TradingPairListData(getTradingPairs());
     }
+    @Override
     public boolean setMarketSettingsData(@NotNull TradingPair pair, @Nullable ServerMarketSettingsData settingsData)
     {
         ServerMarket market = markets.get(pair);
@@ -135,6 +145,7 @@ public class ServerMarketManager implements ServerSaveable
             return false;
         return market.setMarketSettingsData(settingsData);
     }
+    @Override
     public boolean setBotSettingsData(@NotNull TradingPair pair, @Nullable BotSettingsData botSettingsData)
     {
         ServerMarket market = markets.get(pair);
@@ -143,7 +154,7 @@ public class ServerMarketManager implements ServerSaveable
         return market.setBotSettingsData(botSettingsData);
     }
 
-
+    @Override
     public boolean handleOrderCreateData(@NotNull OrderCreateData orderCreateData, ServerPlayer sender)
     {
         if(orderCreateData.owner.compareTo(sender.getUUID()) != 0) {
@@ -184,6 +195,7 @@ public class ServerMarketManager implements ServerSaveable
         }
         return false;
     }
+    @Override
     public boolean handleOrderChangeData(@NotNull OrderChangeData orderChangeData, ServerPlayer sender)
     {
         TradingPair pair = orderChangeData.tradingPair.toTradingPair();
@@ -213,6 +225,7 @@ public class ServerMarketManager implements ServerSaveable
         }
         return market.changeOrderPrice(orderChangeData.orderID, orderChangeData.newPrice);
     }
+    @Override
     public boolean handleOrderCancelData(@NotNull OrderCancelData orderCancelData, ServerPlayer sender)
     {
         TradingPair pair = orderCancelData.tradingPair.toTradingPair();
@@ -245,21 +258,15 @@ public class ServerMarketManager implements ServerSaveable
         return market.cancelOrder(orderCancelData.orderID);
     }
 
-
+    @Override
     public void setShiftPriceCandleIntervalMS(long shiftPriceCandleIntervalMS) {
         for(ServerMarket market : markets.values())
         {
             market.setShiftPriceCandleIntervalMS(shiftPriceCandleIntervalMS);
         }
     }
-    /*public void setNotifySubscriberIntervalMS(long notifySubscriberIntervalMS) {
-        for(ServerMarket market : markets.values())
-        {
-            market.setNotifySubscriberIntervalMS(notifySubscriberIntervalMS);
-        }
-    }*/
 
-
+    @Override
     public void setAllMarketsOpen(boolean open)
     {
         for(ServerMarket market : markets.values())
@@ -267,6 +274,7 @@ public class ServerMarketManager implements ServerSaveable
             market.setMarketOpen(open);
         }
     }
+    @Override
     public boolean setMarketOpen(@NotNull TradingPair pair, boolean open)
     {
         ServerMarket market = markets.get(pair);
@@ -278,6 +286,7 @@ public class ServerMarketManager implements ServerSaveable
         market.setMarketOpen(open);
         return true;
     }
+    @Override
     public List<Boolean> setMarketOpen(List<Tuple<TradingPair, Boolean>> pairsAndOpenStates)
     {
         List<Boolean> results = new ArrayList<>(pairsAndOpenStates.size());
@@ -291,32 +300,39 @@ public class ServerMarketManager implements ServerSaveable
         return results;
     }
 
+    @Override
     public ItemID getDefaultCurrencyItemID()
     {
         return new ItemID(BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.getCurrencyItem());
     }
+    @Override
     public boolean isItemAllowedForTrading(ItemID item)
     {
         return !getNotTradableItems().containsKey(item);
     }
+    @Override
     public Map<ItemID, Boolean> getNotTradableItems()
     {
         return BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.getNotTradableItems();
     }
+    @Override
     public boolean isTradingPairAllowedForTrading(TradingPair pair)
     {
         pair.checkValidity(BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.getNotTradableItems());
         return pair.isValid();
     }
 
-    public ServerMarket getMarket(@NotNull TradingPair pair)
+    @Override
+    public IServerMarket getMarket(@NotNull TradingPair pair)
     {
         return markets.get(pair);
     }
+    @Override
     public List<TradingPair> getTradingPairs()
     {
         return new ArrayList<>(markets.keySet());
     }
+    @Override
     public List<ItemID> getPotentialTradingItems(String searchQuery)
     {
         List<ItemID> items = new ArrayList<>();
@@ -325,12 +341,6 @@ public class ServerMarketManager implements ServerSaveable
         for(ItemStack itemStack : allItemStacks)
         {
             ItemID itemID = new ItemID(itemStack);
-            /*String itemName = itemStack.getDisplayName().getString();
-            if(itemName.contains("Dollar"))
-            {
-                // Skip items that are not allowed for trading, like money items
-                debug("Skipping item: " + itemName + " because it is not allowed for trading");
-            }*/
             if(itemID.isValid() && !blackList.containsKey(itemID))
             {
                 items.add(itemID);
@@ -338,17 +348,19 @@ public class ServerMarketManager implements ServerSaveable
         }
         return items;
     }
+    @Override
     public boolean marketExists(@NotNull TradingPair pair)
     {
         return markets.containsKey(pair);
     }
 
+    @Override
     public int getRecommendedPrice(TradingPair pair)
     {
         return 10;
     }
 
-
+    @Override
     public void onServerTick(MinecraftServer server)
     {
         if(tradeItemsChunks.isEmpty())
@@ -370,11 +382,11 @@ public class ServerMarketManager implements ServerSaveable
 
         long currentTime2 = System.currentTimeMillis();
         if(currentTime2-currentTime > 5)
-            BACKEND_INSTANCES.LOGGER.info("Market update time: " + (currentTime2-currentTime)+"ms");
+            info("Market update time: " + (currentTime2-currentTime)+"ms");
     }
 
 
-
+    @Override
     public boolean createMarket(MarketFactory.DefaultMarketSetupData defaultMarketSetupData)
     {
         if(defaultMarketSetupData == null)
@@ -408,6 +420,8 @@ public class ServerMarketManager implements ServerSaveable
         }
         return false;
     }
+
+    @Override
     public boolean createMarket(MarketFactory.DefaultMarketSetupDataGroup category)
     {
         if(category == null || category.marketSetupDataList.isEmpty())
@@ -448,6 +462,7 @@ public class ServerMarketManager implements ServerSaveable
         return success;
     }
 
+    @Override
     public boolean createMarket(@NotNull TradingPair pair, int startPrice)
     {
         if(markets.containsKey(pair))
@@ -465,16 +480,19 @@ public class ServerMarketManager implements ServerSaveable
         }
         return false;
     }
+    @Override
     public boolean createMarket(@NotNull ItemID itemID, @NotNull ItemID currency, int startPrice)
     {
         TradingPair tradingPair = new TradingPair(itemID, currency);
         return createMarket(tradingPair, startPrice);
     }
+    @Override
     public boolean createMarket(@NotNull ItemID itemID, int startPrice)
     {
         TradingPair tradingPair = new TradingPair(itemID, getDefaultCurrencyItemID());
         return createMarket(tradingPair, startPrice);
     }
+    @Override
     public boolean createMarket(@NotNull ServerMarketSettingsData settingsData)
     {
         TradingPair pair = settingsData.tradingPairData.toTradingPair();
@@ -493,37 +511,7 @@ public class ServerMarketManager implements ServerSaveable
         }
         return false;
     }
-
-    /*public boolean createMarkets(@NotNull List<ServerMarketSettingsData> settingsDataList)
-    {
-        List<ServerMarketSettingsData> cpy = new ArrayList<>(settingsDataList.size());
-        boolean success = true;
-        for(ServerMarketSettingsData settingsData : settingsDataList)
-        {
-            if(settingsData == null)
-            {
-                warn("Invalid market settings data: " + settingsData);
-                success = false;
-                continue;
-            }
-            if(markets.containsKey(settingsData.tradingPairData.toTradingPair()))
-            {
-                warn("Trading pair already exists: " + settingsData.tradingPairData.toTradingPair().getShortDescription());
-                success = false;
-                continue;
-            }
-            cpy.add(settingsData);
-        }
-        List<ServerMarket> markets = MarketFactory.createMarkets(cpy);
-        for(ServerMarket market : markets)
-        {
-            this.markets.put(market.getTradingPair(), market);
-            onMarketAdded(market);
-        }
-        success &= markets.size() == cpy.size();
-        rebuildTradeItemsChunks();
-        return success;
-    }*/
+    @Override
     public List<Boolean> createMarkets(@NotNull List<MarketFactory.DefaultMarketSetupData> defaultMarketSetupDataList)
     {
         List<Boolean> results = new ArrayList<>(defaultMarketSetupDataList.size());
@@ -541,6 +529,7 @@ public class ServerMarketManager implements ServerSaveable
         return results;
     }
 
+    @Override
     public boolean removeTradeItem(@NotNull TradingPair pair)
     {
         if(!pair.isValid())
@@ -559,6 +548,8 @@ public class ServerMarketManager implements ServerSaveable
         rebuildTradeItemsChunks();
         return true;
     }
+
+    @Override
     public boolean removeTradeItem(@NotNull ItemID itemID, @NotNull ItemID currency)
     {
         TradingPair pair = new TradingPair(itemID, currency);
@@ -573,37 +564,10 @@ public class ServerMarketManager implements ServerSaveable
     }
     protected void onMarketRemoved(ServerMarket market)
     {
-        //market.cleanup();
+
     }
 
 
-
-
-
-    /*private boolean addTradeItem_internal(TradingPair pair, int startPrice)
-    {
-        ItemID item = pair.getItem();
-        ItemID currency = pair.getCurrency();
-        IServerBankManager bankManager = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager();
-        if(!bankManager.isItemIDAllowed(item))
-        {
-            if(!bankManager.allowItemID(item)){
-                error("Pair: " + pair + " can't be allowed for trading because the item: "+ item +" is not allowed in the bank system");
-                return false;
-            }
-        }
-        if(!bankManager.isItemIDAllowed(currency))
-        {
-            if(!bankManager.allowItemID(currency)){
-                error("Pair: " + pair + " can't be allowed for trading because the currency: "+ currency+" is not allowed in the bank system");
-                return false;
-            }
-        }
-        ServerMarket market = new ServerMarket(pair, startPrice);
-        markets.put(pair, market);
-        onMarketAdded(market);
-        return true;
-    }*/
 
     private void rebuildTradeItemsChunks()
     {

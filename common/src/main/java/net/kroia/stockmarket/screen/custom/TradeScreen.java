@@ -242,11 +242,11 @@ public class TradeScreen extends StockMarketGuiScreen {
             getSelectedMarket().requestCreateMarketOrder(-amount, (success) -> {
                 if(success)
                 {
-                    BACKEND_INSTANCES.LOGGER.debug("Market sell order created successfully.");
+                    debug("Market sell order created successfully.");
                 }
                 else
                 {
-                    BACKEND_INSTANCES.LOGGER.warn("Failed to create market sell order.");
+                    warn("Failed to create market sell order.");
                 }
             });
     }
@@ -257,11 +257,11 @@ public class TradeScreen extends StockMarketGuiScreen {
             getSelectedMarket().requestCreateMarketOrder(amount, (success) -> {
                 if(success)
                 {
-                    BACKEND_INSTANCES.LOGGER.debug("Market buy order created successfully.");
+                    debug("Market buy order created successfully.");
                 }
                 else
                 {
-                    BACKEND_INSTANCES.LOGGER.warn("Failed to create market buy order.");
+                    warn("Failed to create market buy order.");
                 }
             });
     }
@@ -273,11 +273,11 @@ public class TradeScreen extends StockMarketGuiScreen {
             getSelectedMarket().requestCreateLimitOrder(-amount, price, (success) -> {
                 if(success)
                 {
-                    BACKEND_INSTANCES.LOGGER.debug("Limit sell order created successfully.");
+                    debug("Limit sell order created successfully.");
                 }
                 else
                 {
-                    BACKEND_INSTANCES.LOGGER.warn("Failed to create limit sell order.");
+                    warn("Failed to create limit sell order.");
                 }
             });
     }
@@ -289,11 +289,11 @@ public class TradeScreen extends StockMarketGuiScreen {
             getSelectedMarket().requestCreateLimitOrder(amount, price, (success) -> {
                 if(success)
                 {
-                    BACKEND_INSTANCES.LOGGER.debug("Limit buy order created successfully.");
+                    debug("Limit buy order created successfully.");
                 }
                 else
                 {
-                    BACKEND_INSTANCES.LOGGER.warn("Failed to create limit buy order.");
+                    warn("Failed to create limit buy order.");
                 }
             });
     }
@@ -361,11 +361,11 @@ public class TradeScreen extends StockMarketGuiScreen {
         getSelectedMarket().requestCancelOrder(order.orderID, (success) -> {
             if(success)
             {
-                BACKEND_INSTANCES.LOGGER.debug("Order cancelled: " + order.orderID);
+                debug("Order cancelled: " + order.orderID);
             }
             else
             {
-                BACKEND_INSTANCES.LOGGER.warn("Failed to cancel order: " + order.orderID);
+                warn("Failed to cancel order: " + order.orderID);
             }
         });
     }
@@ -376,17 +376,17 @@ public class TradeScreen extends StockMarketGuiScreen {
             getSelectedMarket().requestChangeOrder(order.orderID, newPrice, (success) -> {
                 if(success)
                 {
-                    BACKEND_INSTANCES.LOGGER.debug("Order price changed successfully: " + order.orderID + " to " + newPrice);
+                    debug("Order price changed successfully: " + order.orderID + " to " + newPrice);
                 }
                 else
                 {
-                    BACKEND_INSTANCES.LOGGER.warn("Failed to change order: " + order.orderID+ " to " + newPrice);
+                    warn("Failed to change order: " + order.orderID+ " to " + newPrice);
                 }
             });
         }
         else
         {
-            BACKEND_INSTANCES.LOGGER.warn("Invalid new price for order: " + order.orderID);
+            warn("Invalid new price for order: " + order.orderID);
         }
     }
     

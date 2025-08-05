@@ -2,15 +2,15 @@ package net.kroia.stockmarket.util;
 
 import net.kroia.modutilities.gui.GuiScreen;
 import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.api.IClientMarket;
 import net.kroia.stockmarket.market.TradingPair;
-import net.kroia.stockmarket.market.client.ClientMarket;
 import net.kroia.stockmarket.market.client.ClientMarketManager;
 import net.minecraft.network.chat.Component;
 
 public abstract class StockMarketGuiScreen extends GuiScreen {
 
     protected static StockMarketModBackend.Instances BACKEND_INSTANCES;
-    protected ClientMarket selectedMarket;
+    protected IClientMarket selectedMarket;
     public static final float guiScale = 0.8f;
 
     protected StockMarketGuiScreen(Component pTitle) {
@@ -28,7 +28,29 @@ public abstract class StockMarketGuiScreen extends GuiScreen {
     protected void selectMarket(TradingPair tradingPair) {
         this.selectedMarket = getMarketManager().getClientMarket(tradingPair);
     }
-    protected ClientMarket getSelectedMarket() {
+    protected IClientMarket getSelectedMarket() {
         return selectedMarket;
+    }
+
+
+    protected void info(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.info("[StockMarketGuiScreen] " + msg);
+    }
+    protected void error(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.error("[StockMarketGuiScreen] " + msg);
+    }
+    protected void error(String msg, Throwable e)
+    {
+        BACKEND_INSTANCES.LOGGER.error("[StockMarketGuiScreen] " + msg, e);
+    }
+    protected void warn(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.warn("[StockMarketGuiScreen] " + msg);
+    }
+    protected void debug(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.debug("[StockMarketGuiScreen] " + msg);
     }
 }

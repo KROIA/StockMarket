@@ -36,7 +36,7 @@ public class TransactionEngine {
         if(fillAmount1 < 0)
             fillAmount = -fillVolume;
 
-        long money = (long)fillVolume * (long)currentPrice;
+        long money = fillVolume * (long)currentPrice;
 
         UUID playerUUID1 = o1.getPlayerUUID();
         UUID playerUUID2 = o2.getPlayerUUID();
@@ -69,7 +69,7 @@ public class TransactionEngine {
         {
             if(receiverMoneyBank.getTotalBalance() + money < receiverMoneyBank.getTotalBalance())
             {
-                BACKEND_INSTANCES.LOGGER.error("Overflow while filling order from player: " + receiverUUID.toString() +
+                error("Overflow while filling order from player: " + receiverUUID.toString() +
                         " Order1: " + senderOrder + " Order2: " + receiverOrder +
                         " Can't fill order");
                 receiverOrder.markAsInvalid("Would lead to an variable overflow");
@@ -80,7 +80,7 @@ public class TransactionEngine {
         {
             if(receiverItemBank.getTotalBalance() + fillVolume < receiverItemBank.getTotalBalance())
             {
-                BACKEND_INSTANCES.LOGGER.error("Overflow while filling order from player: " + senderUUID.toString() +
+                error("Overflow while filling order from player: " + senderUUID.toString() +
                         " Order1: " + senderOrder + " Order2: " + receiverOrder +
                         " Can't fill order");
                 receiverOrder.markAsInvalid("Would lead to an variable overflow");
@@ -95,7 +95,7 @@ public class TransactionEngine {
                 Bank.Status status = receiverItemBank.deposit(fillVolume);
                 if(status != Bank.Status.SUCCESS)
                 {
-                    BACKEND_INSTANCES.LOGGER.error("Failed to deposit item for bot: " + receiverUUID.toString() +
+                    error("Failed to deposit item for bot: " + receiverUUID.toString() +
                             " Order1: " + senderOrder + " Order2: " + receiverOrder +
                             " Can't fill order");
                     receiverOrder.markAsInvalid("");
@@ -107,7 +107,7 @@ public class TransactionEngine {
                 Bank.Status status = receiverMoneyBank.deposit(money);
                 if(status != Bank.Status.SUCCESS)
                 {
-                    BACKEND_INSTANCES.LOGGER.error("Failed to deposit money for bot: " + receiverUUID.toString() +
+                    error("Failed to deposit money for bot: " + receiverUUID.toString() +
                             " Order1: " + senderOrder + " Order2: " + receiverOrder +
                             " Can't fill order");
                     receiverOrder.markAsInvalid("");
@@ -119,7 +119,7 @@ public class TransactionEngine {
                 Bank.Status status = senderItemBank.withdrawLockedPrefered(fillVolume);
                 if(status != Bank.Status.SUCCESS)
                 {
-                    BACKEND_INSTANCES.LOGGER.error("Failed to withdraw item for bot: " + senderUUID.toString() +
+                    error("Failed to withdraw item for bot: " + senderUUID.toString() +
                             " Order1: " + senderOrder + " Order2: " + receiverOrder +
                             " Can't fill order");
                     receiverOrder.markAsInvalid("");
@@ -131,7 +131,7 @@ public class TransactionEngine {
                 Bank.Status status = senderMoneyBank.withdrawLockedPrefered(money);
                 if(status != Bank.Status.SUCCESS)
                 {
-                    BACKEND_INSTANCES.LOGGER.error("Failed to withdraw money for bot: " + senderUUID.toString() +
+                    error("Failed to withdraw money for bot: " + senderUUID.toString() +
                             " Order1: " + senderOrder + " Order2: " + receiverOrder +
                             " Can't fill order");
                     receiverOrder.markAsInvalid("");
@@ -161,7 +161,7 @@ public class TransactionEngine {
             switch(status) {
                 case FAILED_OVERFLOW:
                 {
-                    BACKEND_INSTANCES.LOGGER.error("Overflow while filling order from player: " + senderUUID.toString() +
+                    error("Overflow while filling order from player: " + senderUUID.toString() +
                             " Order1: " + senderOrder + " Order2: " + receiverOrder +
                             " Can't fill order");
                     PlayerUtilities.printToClientConsole(senderMoneyBank.getPlayerUUID(), status.toString());
@@ -171,7 +171,7 @@ public class TransactionEngine {
                 case FAILED_NOT_ENOUGH_FUNDS: {
                     long missingMoney = (money - senderMoneyBank.getBalance() - senderMoneyBank.getLockedBalance());
                     long missingItems = (fillVolume - senderItemBank.getBalance() - senderItemBank.getLockedBalance());
-                    BACKEND_INSTANCES.LOGGER.error("Insufficient funds from player: " + senderUUID.toString() +
+                    error("Insufficient funds from player: " + senderUUID.toString() +
                             " Order1: " + senderOrder + " Order2: " + receiverOrder +
                             " Can't fill order");
                     senderOrder.markAsInvalid(StockMarketTextMessages.getInsufficientFundMessage());
@@ -250,13 +250,13 @@ public class TransactionEngine {
             if(moneyToTransfer > 0) {
                 Bank.Status status = moneyBank1.withdrawLockedPrefered(moneyToTransfer);
                 if (status != Bank.Status.SUCCESS) {
-                    BACKEND_INSTANCES.LOGGER.error("Failed to withdraw money for virtual fill: " + o1 + " Status: " + status);
+                    error("Failed to withdraw money for virtual fill: " + o1 + " Status: " + status);
                     o1.markAsInvalid("");
                     return 0;
                 }
                 status = itemBank1.deposit(fillVolume);
                 if (status != Bank.Status.SUCCESS) {
-                    BACKEND_INSTANCES.LOGGER.error("Failed to deposit item for virtual fill: " + o1 + " Status: " + status);
+                    error("Failed to deposit item for virtual fill: " + o1 + " Status: " + status);
                     moneyBank1.deposit(moneyToTransfer);
                     o1.markAsInvalid("");
                     return 0;
@@ -270,7 +270,7 @@ public class TransactionEngine {
             Bank.Status status = itemBank1.withdrawLockedPrefered(fillVolume);
             if(status != Bank.Status.SUCCESS)
             {
-                BACKEND_INSTANCES.LOGGER.error("Failed to withdraw item for virtual fill: " + o1 + " Status: " + status);
+                error("Failed to withdraw item for virtual fill: " + o1 + " Status: " + status);
                 o1.markAsInvalid("");
                 return 0;
             }
@@ -278,7 +278,7 @@ public class TransactionEngine {
             status = moneyBank1.deposit(moneyToTransfer);
             if(status != Bank.Status.SUCCESS)
             {
-                BACKEND_INSTANCES.LOGGER.error("Failed to deposit money for virtual fill: " + o1 + " Status: " + status);
+                error("Failed to deposit money for virtual fill: " + o1 + " Status: " + status);
                 itemBank1.deposit(fillVolume);
                 itemBank1.lockAmount(fillVolume);
                 o1.markAsInvalid("Would lead to an variable overflow");
@@ -292,5 +292,27 @@ public class TransactionEngine {
         else if(o1.getStatus() == Order.Status.PENDING)
             o1.setStatus(Order.Status.PARTIAL);
         return fillVolume;
+    }
+
+
+    private static void info(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.info("[TransactionEngine] " + msg);
+    }
+    private static void error(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.error("[TransactionEngine] " + msg);
+    }
+    private static void error(String msg, Throwable e)
+    {
+        BACKEND_INSTANCES.LOGGER.error("[TransactionEngine] " + msg, e);
+    }
+    private static void warn(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.warn("[TransactionEngine] " + msg);
+    }
+    private static void debug(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.debug("[TransactionEngine] " + msg);
     }
 }

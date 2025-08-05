@@ -1,7 +1,7 @@
 package net.kroia.stockmarket.networking.packet.request;
 
+import net.kroia.stockmarket.api.IServerMarket;
 import net.kroia.stockmarket.market.clientdata.TradingPairData;
-import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
@@ -22,7 +22,7 @@ public class BotTargetPriceRequest extends StockMarketGenericRequest<TradingPair
         if(playerIsAdmin(sender)) {
             if(input != null) {
                 // Get the target price for the trading pair
-                ServerMarket market = BACKEND_INSTANCES.SERVER_MARKET_MANAGER.getMarket(input.toTradingPair());
+                IServerMarket market = BACKEND_INSTANCES.SERVER_MARKET_MANAGER.getMarket(input.toTradingPair());
                 if(market != null)
                     return market.getBotTargetPrice();
             }

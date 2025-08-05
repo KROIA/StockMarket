@@ -80,4 +80,31 @@ public class MarketOrder extends Order {
         json.addProperty("type", Type.MARKET.toString());
         return json;
     }
+
+
+    @Override
+    protected void info(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.info("[MarketOrder] " + msg);
+    }
+    @Override
+    protected void error(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.error("[MarketOrder] " + msg);
+    }
+    @Override
+    protected void error(String msg, Throwable e)
+    {
+        BACKEND_INSTANCES.LOGGER.error("[MarketOrder] " + msg, e);
+    }
+    @Override
+    protected void warn(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.warn("[MarketOrder] " + msg);
+    }
+    @Override
+    protected void debug(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.debug("[MarketOrder] " + msg);
+    }
 }

@@ -828,7 +828,7 @@ public class StockMarketTextMessages {
     {
         if(!message.contains(variable))
         {
-            BACKEND_INSTANCES.LOGGER.error("Message: \""+message+"\" does not contain variable: \""+variable+"\" which should be replaced with: \""+replacement+"\"");
+            BACKEND_INSTANCES.LOGGER.error("[StockMarketTextMessages] Message: \""+message+"\" does not contain variable: \""+variable+"\" which should be replaced with: \""+replacement+"\"");
             return message;
             //throw new IllegalArgumentException("Message: \""+message+"\" does not contain variable: \""+variable+"\" which should be replaced with: \""+replacement+"\"");
         }

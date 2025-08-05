@@ -385,9 +385,9 @@ public class ManagementScreen extends StockMarketGuiScreen {
                 currentMarketSettingsData.marketOpen = isOpen;
                 getSelectedMarket().requestMarketOpen(isOpen, (success) -> {
                     if (success) {
-                        BACKEND_INSTANCES.LOGGER.debug("Market open status updated for trading pair: " + tradingPair.getShortDescription() + " to " + isOpen);
+                        debug("Market open status updated for trading pair: " + tradingPair.getShortDescription() + " to " + isOpen);
                     } else {
-                        BACKEND_INSTANCES.LOGGER.warn("Failed to update market open status for trading pair: " + tradingPair.getShortDescription());
+                        warn("Failed to update market open status for trading pair: " + tradingPair.getShortDescription());
                     }
                 });
             }

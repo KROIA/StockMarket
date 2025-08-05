@@ -6,6 +6,8 @@ import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.api.BankSystemAPI;
 import net.kroia.banksystem.util.BankSystemDataHandler;
 import net.kroia.modutilities.UtilitiesPlatform;
+import net.kroia.stockmarket.api.IClientMarketManager;
+import net.kroia.stockmarket.api.IServerMarketManager;
 import net.kroia.stockmarket.api.StockMarketAPI;
 import net.kroia.stockmarket.block.StockMarketBlocks;
 import net.kroia.stockmarket.command.StockMarketCommands;
@@ -30,6 +32,8 @@ import java.io.File;
 
 
 public class StockMarketModBackend implements StockMarketAPI {
+
+
 
     public static class Instances
     {
@@ -115,7 +119,7 @@ public class StockMarketModBackend implements StockMarketAPI {
     // Called from the server side
     public static void onServerStart(MinecraftServer server) {
         INSTANCES.SERVER_SETTINGS = new StockMarketModSettings();
-        INSTANCES.SERVER_SETTINGS.setLogger((msg)->{INSTANCES.LOGGER.error(msg);}, (msg, e)->{INSTANCES.LOGGER.error(msg, e);}, (msg)->{INSTANCES.LOGGER.info(msg);});
+        INSTANCES.SERVER_SETTINGS.setLogger(INSTANCES.LOGGER::error, INSTANCES.LOGGER::error, INSTANCES.LOGGER::info);
         INSTANCES.SERVER_DEFAULT_PRICES = new DefaultMarketSettings.DefaultPrices();
 
         INSTANCES.SERVER_DATA_HANDLER = new StockMarketDataHandler();
@@ -186,6 +190,28 @@ public class StockMarketModBackend implements StockMarketAPI {
         // Load data from the root save folder
         INSTANCES.SERVER_DATA_HANDLER.setLevelSavePath(rootSaveFolder.toPath());
         INSTANCES.SERVER_DATA_HANDLER.saveAll();
+    }
+
+
+
+    @Override
+    public String getModID() {
+        return StockMarketMod.MOD_ID;
+    }
+
+    @Override
+    public String getModVersion() {
+        return StockMarketMod.VERSION;
+    }
+
+    @Override
+    public IServerMarketManager getServerMarketManager() {
+        return INSTANCES.SERVER_MARKET_MANAGER;
+    }
+
+    @Override
+    public IClientMarketManager getClientMarketManager() {
+        return INSTANCES.CLIENT_MARKET_MANAGER;
     }
 }
 
