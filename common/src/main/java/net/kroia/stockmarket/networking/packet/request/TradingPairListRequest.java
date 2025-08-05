@@ -19,7 +19,7 @@ public class TradingPairListRequest extends StockMarketGenericRequest<Boolean, T
 
     @Override
     public TradingPairListData handleOnServer(Boolean input, ServerPlayer sender) {
-        return BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getTradingPairListData();
+        return BACKEND_INSTANCES.SERVER_MARKET_MANAGER.getTradingPairListData();
     }
 
     @Override

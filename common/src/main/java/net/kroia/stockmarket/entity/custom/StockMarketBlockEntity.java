@@ -102,7 +102,7 @@ public class StockMarketBlockEntity extends BlockEntity{
             tradingPair = new TradingPair();
             tradingPair.load(itemTag);
         } else {
-            tradingPair = new TradingPair(new ItemID("minecraft:diamond"), BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getDefaultCurrencyItemID());
+            tradingPair = new TradingPair(new ItemID("minecraft:diamond"), BACKEND_INSTANCES.SERVER_MARKET_MANAGER.getDefaultCurrencyItemID());
         }
 
         amount = dataTag.getInt("amount");

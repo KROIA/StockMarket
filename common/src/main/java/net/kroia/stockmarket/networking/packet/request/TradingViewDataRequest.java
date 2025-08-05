@@ -83,7 +83,7 @@ public class TradingViewDataRequest extends StockMarketGenericRequest<TradingVie
     @Override
     public TradingViewData handleOnServer(Input input, ServerPlayer sender) {
         boolean requestBotTargetPrice = input.requestBotTargetPrice && playerIsAdmin(sender);
-        return BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getTradingViewData(
+        return BACKEND_INSTANCES.SERVER_MARKET_MANAGER.getTradingViewData(
                 input.tradingPairData.toTradingPair(),
                 sender.getUUID(),
                 input.maxHistoryPointCount,

@@ -23,7 +23,7 @@ public class PotentialTradingItemsRequest extends StockMarketGenericRequest<Stri
     public List<ItemID> handleOnServer(String input, ServerPlayer sender) {
         if(playerIsAdmin(sender)) {
             // Fetch the list of tradable items based on the input string
-            return BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getPotentialTradingItems(input);
+            return BACKEND_INSTANCES.SERVER_MARKET_MANAGER.getPotentialTradingItems(input);
         }
         return List.of(); // Return an empty list if the player is not an admin
     }

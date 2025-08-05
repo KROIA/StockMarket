@@ -4,7 +4,7 @@ import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.client.ClientMarket;
-import net.kroia.stockmarket.market.client.ClientStockMarketManager;
+import net.kroia.stockmarket.market.client.ClientMarketManager;
 
 public abstract class StockMarketGuiElement extends GuiElement {
     protected static StockMarketModBackend.Instances BACKEND_INSTANCES;
@@ -26,8 +26,8 @@ public abstract class StockMarketGuiElement extends GuiElement {
         super(x, y, width, height);
     }
 
-    public ClientStockMarketManager getMarketManager() {
-        return BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER;
+    public ClientMarketManager getMarketManager() {
+        return BACKEND_INSTANCES.CLIENT_MARKET_MANAGER;
     }
     public void selectMarket(TradingPair tradingPair) {
         this.selectedMarket = getMarketManager().getClientMarket(tradingPair);

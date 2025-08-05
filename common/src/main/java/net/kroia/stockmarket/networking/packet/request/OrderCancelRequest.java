@@ -18,7 +18,7 @@ public class OrderCancelRequest extends StockMarketGenericRequest<OrderCancelDat
 
     @Override
     public Boolean handleOnServer(OrderCancelData input, ServerPlayer sender) {
-        return BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.handleOrderCancelData(input, sender);
+        return BACKEND_INSTANCES.SERVER_MARKET_MANAGER.handleOrderCancelData(input, sender);
     }
 
     @Override

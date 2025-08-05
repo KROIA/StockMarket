@@ -21,7 +21,7 @@ public class GetServerMarketSettingsRequest extends StockMarketGenericRequest<Tr
     public ServerMarketSettingsData handleOnServer(TradingPairData input, ServerPlayer sender) {
         if(playerIsAdmin(sender)) {
             // If the player has admin permissions, return the market settings data
-            return BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getMarketSettingsData(input.toTradingPair());
+            return BACKEND_INSTANCES.SERVER_MARKET_MANAGER.getMarketSettingsData(input.toTradingPair());
         }
         return null; // If not, return null or handle accordingly
     }

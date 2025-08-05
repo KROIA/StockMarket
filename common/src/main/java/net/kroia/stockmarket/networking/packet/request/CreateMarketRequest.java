@@ -20,7 +20,7 @@ public class CreateMarketRequest extends StockMarketGenericRequest<TradingPairDa
     public Boolean handleOnServer(TradingPairData input, ServerPlayer sender) {
         if(playerIsAdmin(sender)) {
             // If the player has admin permissions, create the market with the provided settings
-            return BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.createMarket(input.toTradingPair(), 0);
+            return BACKEND_INSTANCES.SERVER_MARKET_MANAGER.createMarket(input.toTradingPair(), 0);
         }
         // If the player does not have admin permissions, return false
         return false;

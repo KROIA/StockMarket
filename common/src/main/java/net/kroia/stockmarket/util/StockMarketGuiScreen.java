@@ -4,7 +4,7 @@ import net.kroia.modutilities.gui.GuiScreen;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.client.ClientMarket;
-import net.kroia.stockmarket.market.client.ClientStockMarketManager;
+import net.kroia.stockmarket.market.client.ClientMarketManager;
 import net.minecraft.network.chat.Component;
 
 public abstract class StockMarketGuiScreen extends GuiScreen {
@@ -22,8 +22,8 @@ public abstract class StockMarketGuiScreen extends GuiScreen {
         BACKEND_INSTANCES = backend;
     }
 
-    protected ClientStockMarketManager getMarketManager() {
-        return BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER;
+    protected ClientMarketManager getMarketManager() {
+        return BACKEND_INSTANCES.CLIENT_MARKET_MANAGER;
     }
     protected void selectMarket(TradingPair tradingPair) {
         this.selectedMarket = getMarketManager().getClientMarket(tradingPair);

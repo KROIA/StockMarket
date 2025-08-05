@@ -19,7 +19,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 
-public class ServerStockMarketManager implements ServerSaveable
+public class ServerMarketManager implements ServerSaveable
 {
     private static StockMarketModBackend.Instances BACKEND_INSTANCES;
     public static void setBackend(StockMarketModBackend.Instances backend) {
@@ -32,7 +32,7 @@ public class ServerStockMarketManager implements ServerSaveable
     private final ArrayList<ArrayList<ServerMarket>> tradeItemsChunks = new ArrayList<>(); // For processing trade items in chunks
     private int tradeItemUpdateCallCounter = 0;
 
-    public ServerStockMarketManager()
+    public ServerMarketManager()
     {
         /*for(var item : BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.INITIAL_TRADABLE_ITEMS.get().entrySet())
         {
@@ -648,7 +648,7 @@ public class ServerStockMarketManager implements ServerSaveable
         }
         tag.put("markets", tradeItems);
         long endMillis = System.currentTimeMillis();
-        info("Saving ServerStockMarketManager took "+(endMillis-startMillis)+"ms");
+        info("Saving ServerMarketManager took "+(endMillis-startMillis)+"ms");
 
         return success;
     }
@@ -680,7 +680,7 @@ public class ServerStockMarketManager implements ServerSaveable
             this.markets.putAll(tradeItemsMap);
             rebuildTradeItemsChunks();
         } catch (Exception e) {
-            error("Error loading ServerStockMarketManager from NBT", e);
+            error("Error loading ServerMarketManager from NBT", e);
             return false;
         }
         return loadSuccess;
@@ -689,23 +689,23 @@ public class ServerStockMarketManager implements ServerSaveable
 
     protected void info(String msg)
     {
-        BACKEND_INSTANCES.LOGGER.info("[ServerStockMarketManager] " + msg);
+        BACKEND_INSTANCES.LOGGER.info("[ServerMarketManager] " + msg);
     }
     protected void error(String msg)
     {
-        BACKEND_INSTANCES.LOGGER.error("[ServerStockMarketManager] " + msg);
+        BACKEND_INSTANCES.LOGGER.error("[ServerMarketManager] " + msg);
     }
     protected void error(String msg, Throwable e)
     {
-        BACKEND_INSTANCES.LOGGER.error("[ServerStockMarketManager] " + msg, e);
+        BACKEND_INSTANCES.LOGGER.error("[ServerMarketManager] " + msg, e);
     }
     protected void warn(String msg)
     {
-        BACKEND_INSTANCES.LOGGER.warn("[ServerStockMarketManager] " + msg);
+        BACKEND_INSTANCES.LOGGER.warn("[ServerMarketManager] " + msg);
     }
     protected void debug(String msg)
     {
-        BACKEND_INSTANCES.LOGGER.debug("[ServerStockMarketManager] " + msg);
+        BACKEND_INSTANCES.LOGGER.debug("[ServerMarketManager] " + msg);
     }
 
 

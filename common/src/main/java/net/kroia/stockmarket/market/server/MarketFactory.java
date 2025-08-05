@@ -49,13 +49,13 @@ public class MarketFactory
         public boolean enableRandomWalk = true;
 
         public DefaultMarketSetupGeneratorData(ItemStack itemStack, int defaultPrice, float rarity, float volatility) {
-            this.tradingPair = new TradingPair(new ItemID(itemStack), BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getDefaultCurrencyItemID());
+            this.tradingPair = new TradingPair(new ItemID(itemStack), BACKEND_INSTANCES.SERVER_MARKET_MANAGER.getDefaultCurrencyItemID());
             this.defaultPrice = defaultPrice;
             this.rarity = rarity;
             this.volatility = volatility;
         }
         public DefaultMarketSetupGeneratorData(Item item, int defaultPrice, float rarity, float volatility) {
-            this.tradingPair = new TradingPair(new ItemID(item.getDefaultInstance()), BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getDefaultCurrencyItemID());
+            this.tradingPair = new TradingPair(new ItemID(item.getDefaultInstance()), BACKEND_INSTANCES.SERVER_MARKET_MANAGER.getDefaultCurrencyItemID());
             this.defaultPrice = defaultPrice;
             this.rarity = rarity;
             this.volatility = volatility;
@@ -329,8 +329,8 @@ public class MarketFactory
 
                 ItemID currency = null;
                 if(currencyElement == null) {
-                    if(BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER != null)
-                        currency = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getDefaultCurrencyItemID();
+                    if(BACKEND_INSTANCES.SERVER_MARKET_MANAGER != null)
+                        currency = BACKEND_INSTANCES.SERVER_MARKET_MANAGER.getDefaultCurrencyItemID();
                     else
                         currency = new ItemID(BankSystemItems.MONEY.get().getDefaultInstance());
                 }
@@ -844,7 +844,7 @@ public class MarketFactory
     }
     public static @Nullable ServerMarket createMarket(@NotNull ItemID itemID, int startPrice)
     {
-        TradingPair tradingPair = new TradingPair(itemID, BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getDefaultCurrencyItemID());
+        TradingPair tradingPair = new TradingPair(itemID, BACKEND_INSTANCES.SERVER_MARKET_MANAGER.getDefaultCurrencyItemID());
         return createMarket(tradingPair, startPrice);
     }
     public static @Nullable ServerMarket createMarket(@NotNull ServerMarketSettingsData settingsData)

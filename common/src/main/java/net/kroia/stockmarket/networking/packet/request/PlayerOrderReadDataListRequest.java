@@ -63,7 +63,7 @@ public class PlayerOrderReadDataListRequest extends StockMarketGenericRequest<Pl
         if(!pair.isValid())
             return null; // If the trading pair is invalid, return null
 
-        return BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getOrderReadListData(pair, input.playerUUID);
+        return BACKEND_INSTANCES.SERVER_MARKET_MANAGER.getOrderReadListData(pair, input.playerUUID);
     }
 
     @Override

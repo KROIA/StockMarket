@@ -18,7 +18,7 @@ public class OrderCreateRequest extends StockMarketGenericRequest<OrderCreateDat
 
     @Override
     public Boolean handleOnServer(OrderCreateData input, ServerPlayer sender) {
-        return BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.handleOrderCreateData(input, sender);
+        return BACKEND_INSTANCES.SERVER_MARKET_MANAGER.handleOrderCreateData(input, sender);
     }
 
     @Override

@@ -19,7 +19,7 @@ public class OrderBookVolumeRequest extends StockMarketGenericRequest<TradingVie
 
     @Override
     public OrderBookVolumeData handleOnServer(TradingViewDataRequest.Input input, ServerPlayer sender) {
-        return BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getOrderBookVolumeData(input.tradingPairData.toTradingPair(),
+        return BACKEND_INSTANCES.SERVER_MARKET_MANAGER.getOrderBookVolumeData(input.tradingPairData.toTradingPair(),
                     input.maxHistoryPointCount, input.minVisiblePrice, input.maxVisiblePrice, input.orderBookTileCount);
     }
 

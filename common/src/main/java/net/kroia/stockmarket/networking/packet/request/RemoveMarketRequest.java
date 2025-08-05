@@ -25,7 +25,7 @@ public class RemoveMarketRequest extends StockMarketGenericRequest<List<TradingP
         if(playerIsAdmin(sender)) {
             for (TradingPair data : input) {
                 // Attempt to remove the trading pair from the market
-                results.add(BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.removeTradeItem(data));
+                results.add(BACKEND_INSTANCES.SERVER_MARKET_MANAGER.removeTradeItem(data));
             }
             return results;
         }

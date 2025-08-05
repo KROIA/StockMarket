@@ -18,7 +18,7 @@ public class IsTradingPairAllowedRequest extends StockMarketGenericRequest<Tradi
 
     @Override
     public Boolean handleOnServer(TradingPair input, ServerPlayer sender) {
-        return BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.isTradingPairAllowedForTrading(input);
+        return BACKEND_INSTANCES.SERVER_MARKET_MANAGER.isTradingPairAllowedForTrading(input);
     }
 
     @Override

@@ -80,7 +80,7 @@ public class TradeScreen extends StockMarketGuiScreen {
         super(TITLE);
         this.updateTimer = new TimerMillis(true); // Update every second
         updateTimer.start(100);
-        BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.init();
+        BACKEND_INSTANCES.CLIENT_MARKET_MANAGER.init();
         blockEntity = null;
         instance = this;
 

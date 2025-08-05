@@ -76,7 +76,7 @@ public class StockMarketCommands {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
 
-                                    BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.setAllMarketsOpen(false);
+                                    BACKEND_INSTANCES.SERVER_MARKET_MANAGER.setAllMarketsOpen(false);
                                     // Notify all serverPlayers
                                     PlayerUtilities.printToClientConsole(StockMarketTextMessages.getMarketplaceIsNowClosedAllMessage());
 
@@ -89,7 +89,7 @@ public class StockMarketCommands {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
 
-                                    BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.setAllMarketsOpen(true);
+                                    BACKEND_INSTANCES.SERVER_MARKET_MANAGER.setAllMarketsOpen(true);
                                     // Notify all serverPlayers
                                     PlayerUtilities.printToClientConsole(StockMarketTextMessages.getMarketplaceIsNowOpenAllMessage());
 

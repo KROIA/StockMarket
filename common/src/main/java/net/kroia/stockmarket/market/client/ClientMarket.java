@@ -198,7 +198,7 @@ public class ClientMarket {
     public void requestMarketOpen(boolean open, Consumer<Boolean> callback) {
         if(checkDeadAndDebug())
             return;
-        BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.requestSetMarketOpen(tradingPair, open, callback);
+        BACKEND_INSTANCES.CLIENT_MARKET_MANAGER.requestSetMarketOpen(tradingPair, open, callback);
     }
 
 
@@ -238,6 +238,6 @@ public class ClientMarket {
         return BACKEND_INSTANCES.NETWORKING;
     }
     private UUID getPlayerUUID() {
-        return ClientStockMarketManager.getLocalPlayerUUID();
+        return ClientMarketManager.getLocalPlayerUUID();
     }
 }

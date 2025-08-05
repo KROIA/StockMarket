@@ -23,7 +23,7 @@ public class SetMarketOpenRequest extends StockMarketGenericRequest<List<Tuple<T
     @Override
     public List<Boolean> handleOnServer(List<Tuple<TradingPair, Boolean>> input, ServerPlayer sender) {
         if(playerIsAdmin(sender)) {
-            return BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.setMarketOpen(input);
+            return BACKEND_INSTANCES.SERVER_MARKET_MANAGER.setMarketOpen(input);
         }
         List<Boolean> result = new ArrayList<>(input.size());
         for (Tuple<TradingPair, Boolean> pair : input) {

@@ -27,7 +27,7 @@ public class ChartResetRequest extends StockMarketGenericRequest<List<TradingPai
             // Reset the chart for each trading pair in the input list
             List<Boolean> results = new java.util.ArrayList<>(input.size());
             for (TradingPair tradingPair : input) {
-                ServerMarket market = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getMarket(tradingPair);
+                ServerMarket market = BACKEND_INSTANCES.SERVER_MARKET_MANAGER.getMarket(tradingPair);
                 if (market != null) {
                     market.resetHistoricalMarketData();
                     results.add(true);

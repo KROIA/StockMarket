@@ -20,7 +20,7 @@ public class SetServerMarketSettingsRequest extends StockMarketGenericRequest<Se
     public Boolean handleOnServer(ServerMarketSettingsData input, ServerPlayer sender) {
         if(playerIsAdmin(sender)) {
             // If the player has admin permissions, set the market settings
-            return BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.setMarketSettingsData(input.tradingPairData.toTradingPair(), input);
+            return BACKEND_INSTANCES.SERVER_MARKET_MANAGER.setMarketSettingsData(input.tradingPairData.toTradingPair(), input);
         }
         return false;
     }

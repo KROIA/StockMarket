@@ -196,8 +196,8 @@ public class TradingPair implements ServerSaveable, INetworkPayloadConverter {
 
         if(currencyElement == null)
         {
-            if(BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER != null)
-                currency = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getDefaultCurrencyItemID();
+            if(BACKEND_INSTANCES.SERVER_MARKET_MANAGER != null)
+                currency = BACKEND_INSTANCES.SERVER_MARKET_MANAGER.getDefaultCurrencyItemID();
             else
                 currency = new ItemID(BankSystemItems.MONEY.get().getDefaultInstance());
         }

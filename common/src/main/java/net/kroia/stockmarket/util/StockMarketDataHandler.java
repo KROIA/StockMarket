@@ -76,7 +76,7 @@ public class StockMarketDataHandler extends DataPersistence {
         success &= save_globalSettings();
         success &= save_defaultPrices();
         success &= save_player();
-        if(BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER != null)
+        if(BACKEND_INSTANCES.SERVER_MARKET_MANAGER != null)
             success &= save_market();
 
         if(success)
@@ -93,7 +93,7 @@ public class StockMarketDataHandler extends DataPersistence {
         CompletableFuture<Boolean> fut2;
         CompletableFuture<Boolean> fut3 = save_globalSettingsAsync();
         CompletableFuture<Boolean> fut4 = CompletableFuture.supplyAsync(this::save_defaultPrices);
-        if(BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER != null)
+        if(BACKEND_INSTANCES.SERVER_MARKET_MANAGER != null)
             fut2 = save_marketAsync();
         else
             fut2 = CompletableFuture.completedFuture(false);
@@ -125,7 +125,7 @@ public class StockMarketDataHandler extends DataPersistence {
         Path basePricesFilePath = getBasePricesFilePath();
         if(!fileExists(basePricesFilePath)) {
             warn("Base prices file not found, creating default base prices file.");
-            BACKEND_INSTANCES.DEFAULT_PRICES.balancePrices(); // Ensure default prices are balanced
+            BACKEND_INSTANCES.SERVER_DEFAULT_PRICES.balancePrices(); // Ensure default prices are balanced
             success &= save_defaultPrices(basePricesFilePath);
         }
         else
@@ -172,7 +172,7 @@ public class StockMarketDataHandler extends DataPersistence {
         boolean success = true;
         CompoundTag data = new CompoundTag();
         CompoundTag marketData = new CompoundTag();
-        success = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.save(marketData);
+        success = BACKEND_INSTANCES.SERVER_MARKET_MANAGER.save(marketData);
         data.put("market", marketData);
         data.putString("version", StockMarketMod.VERSION);
 
@@ -186,7 +186,7 @@ public class StockMarketDataHandler extends DataPersistence {
         CompoundTag marketData = new CompoundTag();
 
         CompletableFuture<Boolean> future;
-        if(BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.save(marketData)) {
+        if(BACKEND_INSTANCES.SERVER_MARKET_MANAGER.save(marketData)) {
             data.put("market", marketData);
             data.putString("version", StockMarketMod.VERSION);
 
@@ -247,7 +247,7 @@ public class StockMarketDataHandler extends DataPersistence {
             return false;
         }
         CompoundTag marketData = data.getCompound("market");
-        return BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.load(marketData);
+        return BACKEND_INSTANCES.SERVER_MARKET_MANAGER.load(marketData);
     }
 
     public Path getGlobalSettingsFilePath()
@@ -302,7 +302,7 @@ public class StockMarketDataHandler extends DataPersistence {
 
     public boolean save_defaultPrices(Path filePath)
     {
-        return BACKEND_INSTANCES.DEFAULT_PRICES.saveSettings(filePath.toString());
+        return BACKEND_INSTANCES.SERVER_DEFAULT_PRICES.saveSettings(filePath.toString());
     }
     public boolean save_defaultPrices()
     {
@@ -310,7 +310,7 @@ public class StockMarketDataHandler extends DataPersistence {
     }
     public boolean load_defaultPrices(Path filePath)
     {
-        return BACKEND_INSTANCES.DEFAULT_PRICES.loadSettings(filePath.toString());
+        return BACKEND_INSTANCES.SERVER_DEFAULT_PRICES.loadSettings(filePath.toString());
     }
     public boolean load_defaultPrices()
     {

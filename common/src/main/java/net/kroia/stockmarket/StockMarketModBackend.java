@@ -14,7 +14,7 @@ import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
 import net.kroia.stockmarket.item.StockMarketCreativeModeTab;
 import net.kroia.stockmarket.item.StockMarketItems;
 import net.kroia.stockmarket.market.TradingPair;
-import net.kroia.stockmarket.market.client.ClientStockMarketManager;
+import net.kroia.stockmarket.market.client.ClientMarketManager;
 import net.kroia.stockmarket.market.server.*;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
 import net.kroia.stockmarket.market.server.order.Order;
@@ -35,10 +35,10 @@ public class StockMarketModBackend implements StockMarketAPI {
     {
         public BankSystemAPI BANK_SYSTEM_API;
         public StockMarketModSettings SERVER_SETTINGS;
-        public DefaultMarketSettings.DefaultPrices DEFAULT_PRICES;
+        public DefaultMarketSettings.DefaultPrices SERVER_DEFAULT_PRICES;
         public StockMarketDataHandler SERVER_DATA_HANDLER;
-        public ServerStockMarketManager SERVER_STOCKMARKET_MANAGER;
-        public ClientStockMarketManager CLIENT_STOCKMARKET_MANAGER;
+        public ServerMarketManager SERVER_MARKET_MANAGER;
+        public ClientMarketManager CLIENT_MARKET_MANAGER;
         public StockMarketEvents SERVER_EVENTS;
 
         public StockMarketNetworking NETWORKING;
@@ -54,7 +54,7 @@ public class StockMarketModBackend implements StockMarketAPI {
     {
         INSTANCES.LOGGER = new StockMarketModLogger(INSTANCES);
         StockMarketDataHandler.setBackend(INSTANCES);
-        ServerStockMarketManager.setBackend(INSTANCES);
+        ServerMarketManager.setBackend(INSTANCES);
         StockMarketModSettings.setBackend(INSTANCES);
         StockMarketCommands.setBackend(INSTANCES);
         StockMarketBlockEntity.setBackend(INSTANCES);
@@ -88,7 +88,7 @@ public class StockMarketModBackend implements StockMarketAPI {
     public static void onClientSetup()
     {
         StockMarketMenus.setupScreens();
-        INSTANCES.CLIENT_STOCKMARKET_MANAGER = new ClientStockMarketManager(INSTANCES);
+        INSTANCES.CLIENT_MARKET_MANAGER = new ClientMarketManager(INSTANCES);
 
         StockMarketGuiElement.setBackend(INSTANCES);
         StockMarketGuiScreen.setBackend(INSTANCES);
@@ -116,10 +116,10 @@ public class StockMarketModBackend implements StockMarketAPI {
     public static void onServerStart(MinecraftServer server) {
         INSTANCES.SERVER_SETTINGS = new StockMarketModSettings();
         INSTANCES.SERVER_SETTINGS.setLogger((msg)->{INSTANCES.LOGGER.error(msg);}, (msg, e)->{INSTANCES.LOGGER.error(msg, e);}, (msg)->{INSTANCES.LOGGER.info(msg);});
-        INSTANCES.DEFAULT_PRICES = new DefaultMarketSettings.DefaultPrices();
+        INSTANCES.SERVER_DEFAULT_PRICES = new DefaultMarketSettings.DefaultPrices();
 
         INSTANCES.SERVER_DATA_HANDLER = new StockMarketDataHandler();
-        INSTANCES.SERVER_STOCKMARKET_MANAGER = new ServerStockMarketManager();
+        INSTANCES.SERVER_MARKET_MANAGER = new ServerMarketManager();
 
 
 
@@ -142,7 +142,7 @@ public class StockMarketModBackend implements StockMarketAPI {
         saveDataToFiles(server);
         INSTANCES.SERVER_SETTINGS = null;
         INSTANCES.SERVER_DATA_HANDLER = null;
-        INSTANCES.SERVER_STOCKMARKET_MANAGER = null;
+        INSTANCES.SERVER_MARKET_MANAGER = null;
         INSTANCES.SERVER_EVENTS.removeListeners();
     }
 
@@ -169,7 +169,7 @@ public class StockMarketModBackend implements StockMarketAPI {
     // Called from the server side
     private static void onServerTick(MinecraftServer server)
     {
-        INSTANCES.SERVER_STOCKMARKET_MANAGER.onServerTick(server);
+        INSTANCES.SERVER_MARKET_MANAGER.onServerTick(server);
         INSTANCES.SERVER_DATA_HANDLER.tickUpdate();
     }
 

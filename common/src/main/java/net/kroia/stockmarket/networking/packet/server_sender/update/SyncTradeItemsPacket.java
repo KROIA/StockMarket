@@ -54,13 +54,13 @@ public class SyncTradeItemsPacket extends StockMarketNetworkPacket {
             new SyncTradeItemsPacket(new SyncPricePacket(item.getItemID(), player.getUUID()), BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getCurrencyItem()).sendToClient(player);
         }*/
 
-        List<TradingPair> tradingPairs = BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getTradingPairs();
+        List<TradingPair> tradingPairs = BACKEND_INSTANCES.SERVER_MARKET_MANAGER.getTradingPairs();
         SyncTradeItemsPacket packet = new SyncTradeItemsPacket(tradingPairs);
         packet.sendToClient(player);
     }
 
     @Override
     protected void handleOnClient() {
-        BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.handlePacket(this);
+        BACKEND_INSTANCES.CLIENT_MARKET_MANAGER.handlePacket(this);
     }
 }

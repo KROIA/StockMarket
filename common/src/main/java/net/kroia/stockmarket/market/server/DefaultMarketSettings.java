@@ -375,7 +375,7 @@ public class DefaultMarketSettings {
     }
 
     public static DefaultPrices getDefaultPrices() {
-        return BACKEND_INSTANCES.DEFAULT_PRICES;
+        return BACKEND_INSTANCES.SERVER_DEFAULT_PRICES;
     }
 
 

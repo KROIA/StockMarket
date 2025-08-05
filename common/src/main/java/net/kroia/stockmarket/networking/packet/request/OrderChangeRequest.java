@@ -18,7 +18,7 @@ public class OrderChangeRequest extends StockMarketGenericRequest<OrderChangeDat
 
     @Override
     public Boolean handleOnServer(OrderChangeData input, ServerPlayer sender) {
-        return BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.handleOrderChangeData(input, sender);
+        return BACKEND_INSTANCES.SERVER_MARKET_MANAGER.handleOrderChangeData(input, sender);
     }
 
     @Override

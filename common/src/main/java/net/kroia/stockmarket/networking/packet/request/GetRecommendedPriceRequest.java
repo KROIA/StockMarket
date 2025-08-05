@@ -20,7 +20,7 @@ public class GetRecommendedPriceRequest extends StockMarketGenericRequest<Tradin
     public Integer handleOnServer(TradingPair input, ServerPlayer sender) {
         if(playerIsAdmin(sender))
         {
-            return BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getRecommendedPrice(input);
+            return BACKEND_INSTANCES.SERVER_MARKET_MANAGER.getRecommendedPrice(input);
         }
         return 0;
     }

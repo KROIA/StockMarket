@@ -49,7 +49,7 @@ public class PriceHistoryRequest extends StockMarketGenericRequest<PriceHistoryR
 
     @Override
     public PriceHistoryData handleOnServer(Input input, ServerPlayer sender) {
-        return BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getPriceHistoryData(input.tradingPairData.toTradingPair(), input.maxHistoryPointCount);
+        return BACKEND_INSTANCES.SERVER_MARKET_MANAGER.getPriceHistoryData(input.tradingPairData.toTradingPair(), input.maxHistoryPointCount);
     }
 
     @Override

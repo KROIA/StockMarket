@@ -24,7 +24,7 @@ public class CreateMarketsRequest extends StockMarketGenericRequest<List<MarketF
         if(!playerIsAdmin(sender)) {
             return null; // Only allow admins to create markets
         }
-        return BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.createMarkets(input);
+        return BACKEND_INSTANCES.SERVER_MARKET_MANAGER.createMarkets(input);
     }
 
     @Override

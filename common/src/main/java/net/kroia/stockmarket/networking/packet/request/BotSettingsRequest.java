@@ -21,7 +21,7 @@ public class BotSettingsRequest extends StockMarketGenericRequest<TradingPair, B
     @Override
     public BotSettingsData handleOnServer(TradingPair input, ServerPlayer sender) {
         if(playerIsAdmin(sender)) {
-            return BACKEND_INSTANCES.SERVER_STOCKMARKET_MANAGER.getBotSettingsData(input);
+            return BACKEND_INSTANCES.SERVER_MARKET_MANAGER.getBotSettingsData(input);
         }
         return null; // If the player is not an admin, return null
     }
