@@ -25,7 +25,7 @@ StockMarket is a Minecraft mod that brings a better way for trading to the game.
     * [For admins / single player](#for-admins--single-player)
 * [Commands](#commands)
 * [Stock Market Bot](#stock-market-bot)
-
+* [Discord to help me improve the mod](https://discord.gg/qHNVaDGAyB)
 
 ---
 ## Features
