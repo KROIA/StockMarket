@@ -1,6 +1,6 @@
 package net.kroia.stockmarket.networking.packet.server_sender.update;
 
-import net.kroia.modutilities.PlayerUtilities;
+import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.stockmarket.util.StockMarketClientHooks;
 import net.kroia.stockmarket.util.StockMarketNetworkPacket;
 import net.kroia.stockmarket.util.StockMarketTextMessages;
@@ -35,7 +35,7 @@ public class OpenScreenPacket extends StockMarketNetworkPacket {
             // check if player is in creative mode
             if(!player.isCreative())
             {
-                PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getNeedCreativeModeForThisScreenMessage());
+                ServerPlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getNeedCreativeModeForThisScreenMessage());
                 return;
             }
         }

@@ -4,7 +4,6 @@ import net.kroia.modutilities.networking.INetworkPayloadEncoder;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.server.VirtualOrderBook;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
-import net.kroia.stockmarket.networking.packet.request.VirtualOrderBookSettingsData;
 import net.minecraft.network.FriendlyByteBuf;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;

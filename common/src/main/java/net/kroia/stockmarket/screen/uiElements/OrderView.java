@@ -3,7 +3,6 @@ package net.kroia.stockmarket.screen.uiElements;
 import net.kroia.banksystem.banking.bank.MoneyBank;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.Label;
-import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.clientdata.OrderReadData;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
@@ -12,11 +11,6 @@ import net.kroia.stockmarket.util.StockMarketGuiElement;
 import java.util.function.Consumer;
 
 public class OrderView extends StockMarketGuiElement {
-    protected static StockMarketModBackend.Instances BACKEND_INSTANCES;
-    public static void setBackend(StockMarketModBackend.Instances backend) {
-        BACKEND_INSTANCES = backend;
-    }
-
     public static final int padding = 0;
     public static final int dirWidthRatio = 20;
     public static final int amountWidthRatio = 20;

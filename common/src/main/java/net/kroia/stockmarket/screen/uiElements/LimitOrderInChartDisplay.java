@@ -3,7 +3,6 @@ package net.kroia.stockmarket.screen.uiElements;
 import net.kroia.modutilities.ClientPlayerUtilities;
 import net.kroia.modutilities.ColorUtilities;
 import net.kroia.modutilities.gui.elements.Button;
-import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.clientdata.OrderReadData;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
@@ -15,10 +14,6 @@ import java.util.function.Function;
 
 public class LimitOrderInChartDisplay extends StockMarketGuiElement {
 
-    protected static StockMarketModBackend.Instances BACKEND_INSTANCES;
-    public static void setBackend(StockMarketModBackend.Instances backend) {
-        BACKEND_INSTANCES = backend;
-    }
     private static final int buyColor = ColorUtilities.getRGB(ColorUtilities.setBrightness(TradeScreen.colorGreen, 0.4f), 255);
     private static final int sellColor = ColorUtilities.getRGB(ColorUtilities.setBrightness(TradeScreen.colorRed, 0.4f), 255);
     private int color;

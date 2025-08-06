@@ -3,7 +3,7 @@ package net.kroia.stockmarket.util;
 
 import com.google.gson.JsonElement;
 import net.kroia.modutilities.DataPersistence;
-import net.kroia.modutilities.PlayerUtilities;
+import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.server.MarketFactory;
@@ -46,7 +46,7 @@ public class StockMarketDataHandler extends DataPersistence {
         {
             tickCounter = 0;
             // Check if any player is online
-            int playerCount = PlayerUtilities.getOnlinePlayers().size();
+            int playerCount = ServerPlayerUtilities.getOnlinePlayers().size();
             if(playerCount > 0 || lastPlayerCount > 0) {
                 lastPlayerCount = playerCount;
                 saveAllAsync();

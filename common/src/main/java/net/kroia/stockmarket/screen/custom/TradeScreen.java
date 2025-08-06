@@ -80,7 +80,7 @@ public class TradeScreen extends StockMarketGuiScreen {
         super(TITLE);
         this.updateTimer = new TimerMillis(true); // Update every second
         updateTimer.start(100);
-        BACKEND_INSTANCES.CLIENT_MARKET_MANAGER.init();
+        getMarketManager().init();
         blockEntity = null;
         instance = this;
 
@@ -348,7 +348,7 @@ public class TradeScreen extends StockMarketGuiScreen {
 
 
         int size = tradingPairsCarusel.size();
-        currentTradingPairCaruselIndex = currentTradingPairCaruselIndex % size;
+        currentTradingPairCaruselIndex = (size+currentTradingPairCaruselIndex) % size;
         TradingPair previousPair = tradingPairsCarusel.get(currentTradingPairCaruselIndex);
         TradingPair nextPair = tradingPairsCarusel.get((currentTradingPairCaruselIndex + 2) % size);
         tradingPanel.setPreviousTradingPair(previousPair);

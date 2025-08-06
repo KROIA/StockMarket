@@ -72,7 +72,9 @@ public class TradingPairSelectionView extends StockMarketGuiElement {
         tradingPairListView.setLayout(layout);
 
         itemSelectionView = new ItemSelectionView(this::onItemSelected);
+        itemSelectionView.clearItems();
         currencySelectionView = new ItemSelectionView(this::onCurrencySelected);
+        currencySelectionView.clearItems();
 
 
         addChild(filterLabel);

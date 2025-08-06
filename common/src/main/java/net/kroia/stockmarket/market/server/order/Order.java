@@ -3,7 +3,7 @@ package net.kroia.stockmarket.market.server.order;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.kroia.modutilities.JsonUtilities;
-import net.kroia.modutilities.PlayerUtilities;
+import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.ServerSaveable;
 import net.kroia.modutilities.networking.INetworkPayloadConverter;
 import net.kroia.stockmarket.StockMarketModBackend;
@@ -198,7 +198,7 @@ public abstract class Order implements ServerSaveable, INetworkPayloadConverter 
         if(!isBot()) {
             debug("Order invalid:\n" + toString());
 
-            PlayerUtilities.printToClientConsole(getPlayerUUID(), StockMarketTextMessages.getOrderInvalidMessage(reason));
+            ServerPlayerUtilities.printToClientConsole(getPlayerUUID(), StockMarketTextMessages.getOrderInvalidMessage(reason));
         }
         setStatus(Status.INVALID);
     }

@@ -2,7 +2,7 @@ package net.kroia.stockmarket.command;
 
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
-import net.kroia.modutilities.PlayerUtilities;
+import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.networking.packet.server_sender.update.OpenScreenPacket;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncTradeItemsPacket;
@@ -47,9 +47,9 @@ public class StockMarketCommands {
 
                                     BACKEND_INSTANCES.SERVER_DATA_HANDLER.saveAllAsync().thenAccept(success -> {
                                         if(success)
-                                            PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getStockMarketDataSavedMessage());
+                                            ServerPlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getStockMarketDataSavedMessage());
                                         else
-                                            PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getStockMarketDataSaveFailedMessage());
+                                            ServerPlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getStockMarketDataSaveFailedMessage());
                                     });
 
 
@@ -63,9 +63,9 @@ public class StockMarketCommands {
                                     ServerPlayer player = source.getPlayerOrException();
 
                                     if(BACKEND_INSTANCES.SERVER_DATA_HANDLER.loadAll())
-                                        PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getStockMarketDataLoadedMessage());
+                                        ServerPlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getStockMarketDataLoadedMessage());
                                     else
-                                        PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getStockMarketDataLoadFailedMessage());
+                                        ServerPlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getStockMarketDataLoadFailedMessage());
 
                                     return Command.SINGLE_SUCCESS;
                                 })
@@ -78,7 +78,7 @@ public class StockMarketCommands {
 
                                     BACKEND_INSTANCES.SERVER_MARKET_MANAGER.setAllMarketsOpen(false);
                                     // Notify all serverPlayers
-                                    PlayerUtilities.printToClientConsole(StockMarketTextMessages.getMarketplaceIsNowClosedAllMessage());
+                                    ServerPlayerUtilities.printToClientConsole(StockMarketTextMessages.getMarketplaceIsNowClosedAllMessage());
 
                                     return Command.SINGLE_SUCCESS;
                                 })
@@ -91,7 +91,7 @@ public class StockMarketCommands {
 
                                     BACKEND_INSTANCES.SERVER_MARKET_MANAGER.setAllMarketsOpen(true);
                                     // Notify all serverPlayers
-                                    PlayerUtilities.printToClientConsole(StockMarketTextMessages.getMarketplaceIsNowOpenAllMessage());
+                                    ServerPlayerUtilities.printToClientConsole(StockMarketTextMessages.getMarketplaceIsNowOpenAllMessage());
 
                                     return Command.SINGLE_SUCCESS;
                                 })

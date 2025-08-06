@@ -3,7 +3,7 @@ package net.kroia.stockmarket.screen.custom;
 
 import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.screen.uiElements.AskPopupScreen;
-import net.kroia.modutilities.PlayerUtilities;
+import net.kroia.modutilities.ClientPlayerUtilities;
 import net.kroia.modutilities.TimerMillis;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.elements.Button;
@@ -157,7 +157,7 @@ public class ManagementScreen extends StockMarketGuiScreen {
                     for(int i=0; i<success.size(); i++)
                     {
                         if(!success.get(i)) {
-                            PlayerUtilities.printToClientConsole("Failed to close market " + tradingPairs.get(i).getShortDescription() + ".");
+                            ClientPlayerUtilities.printToConsole("Failed to close market " + tradingPairs.get(i).getShortDescription() + ".");
                         }
                     }
                     parentScreen.updateLoadCurrentSettings();
@@ -172,7 +172,7 @@ public class ManagementScreen extends StockMarketGuiScreen {
                     for(int i=0; i<success.size(); i++)
                     {
                         if(!success.get(i)) {
-                            PlayerUtilities.printToClientConsole("Failed to open market " + tradingPairs.get(i).getShortDescription() + ".");
+                            ClientPlayerUtilities.printToConsole("Failed to open market " + tradingPairs.get(i).getShortDescription() + ".");
                         }
                     }
                     parentScreen.updateLoadCurrentSettings();
@@ -202,7 +202,7 @@ public class ManagementScreen extends StockMarketGuiScreen {
                         if(notResetted > 0) {
                             msg += " Failed to reset " + notResetted + " markets.";
                         }
-                        PlayerUtilities.printToClientConsole(msg);
+                        ClientPlayerUtilities.printToConsole(msg);
                     });
                 }, () -> {}, TEXT.GENERAL_RESET_ALL_MARKETS_PRICE_CHART_POPUP_ASK.getString(), TEXT.GENERAL_RESET_ALL_MARKETS_PRICE_CHART_POPUP_MSG.getString());
                 popup.setSize(400,100);
@@ -233,7 +233,7 @@ public class ManagementScreen extends StockMarketGuiScreen {
                         if(notRemovedCount > 0) {
                             msg += " Failed to remove " + notRemovedCount + " markets.";
                         }
-                        PlayerUtilities.printToClientConsole(msg);
+                        ClientPlayerUtilities.printToConsole(msg);
                         setCurrentTradingPair(null);
                         updateTradingItems();
                     });

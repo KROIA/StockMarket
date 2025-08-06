@@ -12,7 +12,6 @@ import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.MarketOrder;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.market.server.order.OrderFactory;
-import net.kroia.stockmarket.networking.packet.request.VirtualOrderBookSettingsData;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
 import org.jetbrains.annotations.NotNull;

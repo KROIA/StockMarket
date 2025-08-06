@@ -51,7 +51,7 @@ public class StockMarketModBackend implements StockMarketAPI {
         public StockMarketModLogger LOGGER;
     }
 
-    private static final Instances INSTANCES = new Instances();
+    protected static final Instances INSTANCES = new Instances();
 
 
     StockMarketModBackend()

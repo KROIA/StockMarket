@@ -1,7 +1,7 @@
 package net.kroia.stockmarket.screen.custom;
 
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.PlayerUtilities;
+import net.kroia.modutilities.ClientPlayerUtilities;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.ItemView;
@@ -417,7 +417,7 @@ public class MarketCreationByCategoryScreen extends StockMarketGuiScreen {
 
         getMarketManager().requestCreateMarkets(selectedMarkets, (result) -> {
             for(int i=0; i< result.size(); i++) {
-                PlayerUtilities.printToClientConsole("["+i+1+"] Market creation result for " + selectedMarkets.get(i).tradingPair.getShortDescription() + ": " + (result.get(i) ? "Success" : "Failed"));
+                ClientPlayerUtilities.printToConsole("["+i+1+"] Market creation result for " + selectedMarkets.get(i).tradingPair.getShortDescription() + ": " + (result.get(i) ? "Success" : "Failed"));
             }
         });
     }

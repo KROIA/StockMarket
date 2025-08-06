@@ -4,7 +4,7 @@ import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.api.IBankUser;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.PlayerUtilities;
+import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.server.order.Order;
@@ -164,8 +164,8 @@ public class TransactionEngine {
                     error("Overflow while filling order from player: " + senderUUID.toString() +
                             " Order1: " + senderOrder + " Order2: " + receiverOrder +
                             " Can't fill order");
-                    PlayerUtilities.printToClientConsole(senderMoneyBank.getPlayerUUID(), status.toString());
-                    PlayerUtilities.printToClientConsole(receiverItemBank.getPlayerUUID(), status.toString());
+                    ServerPlayerUtilities.printToClientConsole(senderMoneyBank.getPlayerUUID(), status.toString());
+                    ServerPlayerUtilities.printToClientConsole(receiverItemBank.getPlayerUUID(), status.toString());
                     return 0;
                 }
                 case FAILED_NOT_ENOUGH_FUNDS: {
@@ -181,7 +181,7 @@ public class TransactionEngine {
                     if (missingItems > 0)
                         missingText += "\n  " + StockMarketTextMessages.getMissingItemsMessage(senderItemID.getName(), missingItems);
 
-                    PlayerUtilities.printToClientConsole(senderMoneyBank.getPlayerUUID(), StockMarketTextMessages.getInsufficientFundToConsumeMessage(receiverOrder.toString(), currentPrice, fillVolume, money) + missingText);
+                    ServerPlayerUtilities.printToClientConsole(senderMoneyBank.getPlayerUUID(), StockMarketTextMessages.getInsufficientFundToConsumeMessage(receiverOrder.toString(), currentPrice, fillVolume, money) + missingText);
 
                     return 0;
                 }

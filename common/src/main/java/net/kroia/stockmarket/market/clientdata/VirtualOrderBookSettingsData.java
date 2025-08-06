@@ -1,8 +1,7 @@
-package net.kroia.stockmarket.networking.packet.request;
+package net.kroia.stockmarket.market.clientdata;
 
 import net.kroia.modutilities.networking.INetworkPayloadEncoder;
 import net.kroia.stockmarket.market.TradingPair;
-import net.kroia.stockmarket.market.clientdata.TradingPairData;
 import net.kroia.stockmarket.market.server.VirtualOrderBook;
 import net.minecraft.network.FriendlyByteBuf;
 import org.jetbrains.annotations.NotNull;

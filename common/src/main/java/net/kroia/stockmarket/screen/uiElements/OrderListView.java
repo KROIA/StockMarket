@@ -4,7 +4,6 @@ import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.VerticalListView;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
-import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.clientdata.OrderReadData;
 import net.kroia.stockmarket.market.clientdata.OrderReadListData;
 import net.kroia.stockmarket.screen.custom.TradeScreen;
@@ -16,10 +15,6 @@ import java.util.List;
 import java.util.function.Consumer;
 
 public class OrderListView extends StockMarketGuiElement {
-    protected static StockMarketModBackend.Instances BACKEND_INSTANCES;
-    public static void setBackend(StockMarketModBackend.Instances backend) {
-        BACKEND_INSTANCES = backend;
-    }
 
     private final Label directionLabel;
     private final Label amountLabel;

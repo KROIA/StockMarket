@@ -2,7 +2,7 @@ package net.kroia.stockmarket.market.server;
 
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
-import net.kroia.modutilities.PlayerUtilities;
+import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.IServerMarket;
 import net.kroia.stockmarket.api.IServerMarketManager;
@@ -159,7 +159,7 @@ public class ServerMarketManager implements IServerMarketManager
     {
         if(orderCreateData.owner.compareTo(sender.getUUID()) != 0) {
             if(!playerIsAdmin(sender)) {
-                String ownerName = PlayerUtilities.getUUIDToNameMap().get(orderCreateData.owner);
+                String ownerName = ServerPlayerUtilities.getUUIDToNameMap().get(orderCreateData.owner);
                 if(ownerName == null)
                     ownerName = orderCreateData.owner.toString();
                 error("Player " + sender.getName().getString() + " tried to create order for " + ownerName + " but is not the owner or admin.");
