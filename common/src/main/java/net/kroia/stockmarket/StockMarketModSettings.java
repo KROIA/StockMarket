@@ -66,7 +66,7 @@ public class StockMarketModSettings extends ModSettings {
          * Size of the price history for the candle stick chart
          * Needs restart to take effect
          */
-        public final Setting<Integer> PRICE_HISTORY_SIZE = registerSetting("PRICE_HISTORY_SIZE", 100, Integer.class);
+        public final Setting<Integer> PRICE_HISTORY_SIZE = registerSetting("PRICE_HISTORY_SIZE", 200, Integer.class);
 
         /**
          * Maximum number of tiles used to visualize the order book for the price chart
@@ -155,7 +155,7 @@ public class StockMarketModSettings extends ModSettings {
 
     public static final class MarketBot extends SettingsGroup
     {
-        public final Setting<Boolean> ENABLED = registerSetting("MARKET_BOT_ENABLED", true, Boolean.class);
+        //public final Setting<Boolean> ENABLED = registerSetting("MARKET_BOT_ENABLED", true, Boolean.class);
 
         public final Setting<Long> UPDATE_TIMER_INTERVAL_MS = registerSetting("MARKET_BOT_UPDATE_TIMER_INTERVAL_MS", 500L, Long.class); // 1 second
         public final Setting<Float> ORDER_BOOK_VOLUME_SCALE = registerSetting("MARKET_BOT_ORDER_BOOK_VOLUME_SCALE", 100f, Float.class); // Scale for the order book volume visualization
