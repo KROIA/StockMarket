@@ -229,8 +229,21 @@
    "gui.stockmarket.market_creation_by_category_screen.create_selected_markets_button": "Ausgewählte Märkte erstellen",
    "gui.stockmarket.market_creation_by_category_screen.create_selected_markets_button.tooltip": "Erzeugt alle Märkte, die sich in der List oben befinden.",
    "gui.stockmarket.market_creation_by_category_screen.add_market_button.tooltip": "Fügt den Markt zur Liste der zu erstellenden Märkte hinzu.",
-   "gui.stockmarket.market_creation_by_category_screen.remove_market_button.tooltip": "Enrfert den Markt aus der Liste der zu erstellenden Märkte."
+   "gui.stockmarket.market_creation_by_category_screen.remove_market_button.tooltip": "Enrfert den Markt aus der Liste der zu erstellenden Märkte.",
+
+   "gui.stockmarket.default_price_ajustment_widget.factor_linear_label": "Linear",
+   "gui.stockmarket.default_price_ajustment_widget.factor_linear_label.tooltip": "Skaliert dä original Pris mit me linearä Faktor.",
+   "gui.stockmarket.default_price_ajustment_widget.factor_quadratic_label": "Quadratisch",
+   "gui.stockmarket.default_price_ajustment_widget.factor_quadratic_label.tooltip": "Skaliert dä original Pris mit me quadratische Faktor.",
+   "gui.stockmarket.default_price_ajustment_widget.factor_exponential_label": "Exponentiell",
+   "gui.stockmarket.default_price_ajustment_widget.factor_exponential_label.tooltip": "Skaliert dä original Pris mit me exponentielle Faktor.",
+   "gui.stockmarket.default_price_ajustment_widget.cancel_button": "Abbrechä",
+   "gui.stockmarket.default_price_ajustment_widget.apply_button": "Anwendä",
+   "gui.stockmarket.default_price_ajustment_widget.old_price_axis_label": "Altä Standardpris",
+   "gui.stockmarket.default_price_ajustment_widget.new_price_axis_label": "Neuä Standardpris",
+   "gui.stockmarket.ajusted_default_price.tooltip": "{item_name} wör normalerwis\nfür {price} {currency} pro stuck ghandlet werdä.\nMit de aktuelle Istellige wird s Item für\n{value} {currency} pro stuck ghandlet."
 
 
 
-}
+
+ }

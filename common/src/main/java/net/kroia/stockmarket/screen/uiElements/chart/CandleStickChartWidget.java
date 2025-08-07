@@ -84,6 +84,11 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
             {
                 yAxisLabelIncrement = (int)Math.ceil((priceRange)/10.0);
             }
+            else
+            {
+                int maxLableCount = getHeight()/getTextHeight();
+                yAxisLabelIncrement = (int)Math.ceil((priceRange)/Math.min(maxLableCount, 20.0));
+            }
         }
 
         int x = getChartRightEndPos();

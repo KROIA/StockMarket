@@ -33,6 +33,22 @@ public class ServerVolatilityBot extends ServerTradingBot {
             super();
         }
 
+        public Settings(Settings other)
+        {
+            super(other);
+            if(other != null && other instanceof ServerVolatilityBot.Settings)
+            {
+                ServerVolatilityBot.Settings st = (ServerVolatilityBot.Settings)other;
+                this.volumeScale = st.volumeScale;
+                this.enableTargetPrice = st.enableTargetPrice;
+                this.targetPriceSteeringFactor = st.targetPriceSteeringFactor;
+                this.enableVolumeTracking = st.enableVolumeTracking;
+                this.volumeSteeringFactor = st.volumeSteeringFactor;
+                this.enableRandomWalk = st.enableRandomWalk;
+                this.volatility = st.volatility;
+            }
+        }
+
         @Override
         public boolean save(CompoundTag tag) {
             boolean success = super.save(tag);

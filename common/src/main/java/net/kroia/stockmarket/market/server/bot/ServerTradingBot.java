@@ -37,6 +37,13 @@ public class ServerTradingBot implements ServerSaveable {
             else
                 updateTimerIntervallMS = 500; // Default to 1 second if not set
         }
+
+        public Settings(Settings other)
+        {
+            this.enabled = other.enabled;
+            this.defaultPrice = other.defaultPrice;
+            this.updateTimerIntervallMS = other.updateTimerIntervallMS;
+        }
         @Override
         public boolean save(CompoundTag tag) {
             tag.putBoolean("enabled", enabled);

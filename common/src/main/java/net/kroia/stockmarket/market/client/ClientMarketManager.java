@@ -5,6 +5,7 @@ import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.IClientMarket;
 import net.kroia.stockmarket.api.IClientMarketManager;
 import net.kroia.stockmarket.market.TradingPair;
+import net.kroia.stockmarket.market.clientdata.DefaultPriceAjustmentFactorsData;
 import net.kroia.stockmarket.market.clientdata.TradingPairData;
 import net.kroia.stockmarket.market.server.MarketFactory;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
@@ -191,7 +192,16 @@ public class ClientMarketManager implements IClientMarketManager {
         StockMarketNetworking.POTENTIAL_TRADING_ITEMS_REQUEST.sendRequestToServer(searchText, callback);
     }
 
-
+    @Override
+    public void requestDefaultPriceAjustmentFactors(Consumer<DefaultPriceAjustmentFactorsData> callback)
+    {
+        StockMarketNetworking.DEFAULT_PRICE_AJUSTMENT_FACTORS_REQUEST.sendRequestToServer(null, callback);
+    }
+    @Override
+    public void updateDefaultPriceAjustmentFactors(DefaultPriceAjustmentFactorsData data, Consumer<DefaultPriceAjustmentFactorsData> callback)
+    {
+        StockMarketNetworking.DEFAULT_PRICE_AJUSTMENT_FACTORS_REQUEST.sendRequestToServer(data, callback);
+    }
 
 
 

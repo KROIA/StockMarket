@@ -431,7 +431,7 @@ public class MarketCreationScreen extends StockMarketGuiScreen {
 
         setupData.isMarketOpen = marketOpen;
         setupData.candleTimeMin = candleTimeMinutes;
-        setupData.defaultPrice = data.defaultPrice;
+        setupData.setDefaultPrice(data.defaultPrice);
 
         getMarketManager().requestCreateMarket(setupData, (success)->{
             if(success)

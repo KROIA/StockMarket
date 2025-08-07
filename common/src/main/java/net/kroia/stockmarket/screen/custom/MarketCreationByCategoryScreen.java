@@ -3,17 +3,16 @@ package net.kroia.stockmarket.screen.custom;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ClientPlayerUtilities;
 import net.kroia.modutilities.gui.Gui;
-import net.kroia.modutilities.gui.elements.Button;
-import net.kroia.modutilities.gui.elements.ItemView;
-import net.kroia.modutilities.gui.elements.Label;
-import net.kroia.modutilities.gui.elements.VerticalListView;
+import net.kroia.modutilities.gui.elements.*;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.gui.elements.base.ListView;
 import net.kroia.modutilities.gui.layout.Layout;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.TradingPair;
+import net.kroia.stockmarket.market.clientdata.DefaultPriceAjustmentFactorsData;
 import net.kroia.stockmarket.market.server.MarketFactory;
+import net.kroia.stockmarket.screen.uiElements.DefaultPriceAjustmentWidget;
 import net.kroia.stockmarket.screen.uiElements.TradingPairView;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.kroia.stockmarket.util.StockMarketGuiScreen;
@@ -32,6 +31,7 @@ public class MarketCreationByCategoryScreen extends StockMarketGuiScreen {
 
         public static final Component CATEGORIES_LABEL = Component.translatable(PREFIX + "categories_label");
         public static final Component MARKETS_LABEL = Component.translatable(PREFIX + "markets_label");
+        public static final Component AJUST_DEFAULT_PRICES_LABEL = Component.translatable(PREFIX + "adjust_default_prices_label");
         public static final Component ADD_ALL_MARKETS_LABEL = Component.translatable(PREFIX + "add_all_markets_label");
         public static final Component SELECTED_MARKETS_LABEL = Component.translatable(PREFIX + "selected_markets_label");
         public static final Component REMOVE_SELECTED_MARKTS_BUTTON = Component.translatable(PREFIX + "remove_selected_markets_button");
@@ -230,12 +230,24 @@ public class MarketCreationByCategoryScreen extends StockMarketGuiScreen {
     private final Label selectedMarketsLabel;
     private final ListView selectedMarketsListView;
     private final Button removeAllMarketsButton;
+    private final Button ajustDefaultPricesButton;
     private final Button createSelectedMarketsButton;
+
+    private final Frame defaultContents;
+
+
+
+    private final DefaultPriceAjustmentWidget defaultPriceAjustmentWidget;
+    private boolean useAjustedPrices = false;
 
     private final ManagementScreen parentScreen;
     public MarketCreationByCategoryScreen(ManagementScreen parentScreen) {
         super(TEXT.TITLE);
         this.parentScreen = parentScreen;
+
+        defaultContents = new Frame();
+        defaultContents.setEnableBackground(false);
+        defaultContents.setEnableOutline(false);
 
         this.categoriesLabel = new Label(TEXT.CATEGORIES_LABEL.getString());
         categoriesLabel.setAlignment(GuiElement.Alignment.CENTER);
@@ -274,21 +286,45 @@ public class MarketCreationByCategoryScreen extends StockMarketGuiScreen {
                 removeElementsLater.add(el.getTradingPair());
             }
         });
+
+
+        defaultPriceAjustmentWidget = new DefaultPriceAjustmentWidget(this::onApplyPriceAjustments, this::onCancelPriceAjustments);
+        defaultPriceAjustmentWidget.setEnabled(false);
+        ajustDefaultPricesButton = new Button(TEXT.AJUST_DEFAULT_PRICES_LABEL.getString());
+        ajustDefaultPricesButton.setOnFallingEdge(()->{
+            getMarketManager().requestDefaultPriceAjustmentFactors((factorsData) -> {
+                defaultPriceAjustmentWidget.setFactors(factorsData);
+                defaultPriceAjustmentWidget.setDefaultMarketSetupDataList(getSelectedMarkets());
+                //removeElement(defaultContents);
+                //addElement(defaultPriceAjustmentWidget);
+                defaultPriceAjustmentWidget.setEnabled(true);
+                defaultContents.setEnabled(false);
+                updateLayout(this.getGui());
+            });
+
+        });
+
+
+
         createSelectedMarketsButton = new Button(TEXT.CREATE_SELECTED_MARKTS_BUTTON.getString());
         createSelectedMarketsButton.setOnFallingEdge(this::createSelectedMarkets);
         createSelectedMarketsButton.setHoverTooltipSupplier(TEXT.CREATE_SELECTED_MARKTS_BUTTON_TOOLTIP::getString);
         createSelectedMarketsButton.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.BOTTOM_RIGHT);
         createSelectedMarketsButton.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
 
-        addElement(categoriesLabel);
-        addElement(categoriesListView);
-        addElement(marketsLabel);
-        addElement(marketsListView);
-        addElement(addAllMarketsButton);
-        addElement(selectedMarketsLabel);
-        addElement(selectedMarketsListView);
-        addElement(removeAllMarketsButton);
-        addElement(createSelectedMarketsButton);
+        defaultContents.addChild(categoriesLabel);
+        defaultContents.addChild(categoriesListView);
+        defaultContents.addChild(marketsLabel);
+        defaultContents.addChild(marketsListView);
+        defaultContents.addChild(addAllMarketsButton);
+        defaultContents.addChild(selectedMarketsLabel);
+        defaultContents.addChild(selectedMarketsListView);
+        defaultContents.addChild(removeAllMarketsButton);
+        defaultContents.addChild(ajustDefaultPricesButton);
+        defaultContents.addChild(createSelectedMarketsButton);
+
+        addElement(defaultContents);
+        addElement(defaultPriceAjustmentWidget);
 
         getMarketManager().requestMarketCategories(this::setCategories);
     }
@@ -310,17 +346,21 @@ public class MarketCreationByCategoryScreen extends StockMarketGuiScreen {
         int width = getWidth() - padding * 2;
         int height = getHeight() - padding * 2;
 
+        defaultContents.setBounds(0,0,getWidth(),getHeight());
+        defaultPriceAjustmentWidget.setBounds(0,0,getWidth(),getHeight());
+
         categoriesLabel.setBounds(padding, padding, width/3-spacing, 15);
-        categoriesListView.setBounds(padding, categoriesLabel.getBottom() + spacing, categoriesLabel.getWidth(), height - categoriesLabel.getBottom() - spacing);
+        categoriesListView.setBounds(padding, categoriesLabel.getBottom() + spacing, categoriesLabel.getWidth(), height - categoriesLabel.getBottom() - spacing + padding);
 
         marketsLabel.setBounds(categoriesListView.getRight() + spacing, padding, categoriesLabel.getWidth(), categoriesLabel.getHeight());
         marketsListView.setBounds(marketsLabel.getLeft(), categoriesListView.getTop(), marketsLabel.getWidth(), categoriesListView.getHeight()-20-spacing);
         addAllMarketsButton.setBounds(marketsListView.getLeft(), marketsListView.getBottom() + spacing, marketsListView.getWidth(), 20);
 
         selectedMarketsLabel.setBounds(marketsListView.getRight() + spacing, padding, width - marketsLabel.getRight(), marketsLabel.getHeight());
-        selectedMarketsListView.setBounds(selectedMarketsLabel.getLeft(), selectedMarketsLabel.getBottom() + spacing, selectedMarketsLabel.getWidth(), categoriesListView.getHeight() - 2*(spacing + 20));
+        selectedMarketsListView.setBounds(selectedMarketsLabel.getLeft(), selectedMarketsLabel.getBottom() + spacing, selectedMarketsLabel.getWidth(), categoriesListView.getHeight() - 3*(spacing + 20));
         removeAllMarketsButton.setBounds(selectedMarketsListView.getLeft(), selectedMarketsListView.getBottom() + spacing, selectedMarketsListView.getWidth(), 20);
-        createSelectedMarketsButton.setBounds(removeAllMarketsButton.getLeft(), removeAllMarketsButton.getBottom() + spacing, removeAllMarketsButton.getWidth(), 20);
+        ajustDefaultPricesButton.setBounds(removeAllMarketsButton.getLeft(), removeAllMarketsButton.getBottom() + spacing, removeAllMarketsButton.getWidth(), 20);
+        createSelectedMarketsButton.setBounds(ajustDefaultPricesButton.getLeft(), ajustDefaultPricesButton.getBottom() + spacing, ajustDefaultPricesButton.getWidth(), 20);
     }
 
     @Override
@@ -396,6 +436,28 @@ public class MarketCreationByCategoryScreen extends StockMarketGuiScreen {
     }
     private void createSelectedMarkets()
     {
+        List<MarketFactory.DefaultMarketSetupData> selectedMarkets = getSelectedMarkets();
+
+
+        List<MarketFactory.DefaultMarketSetupData> finalSelectedMarkets;
+        if(useAjustedPrices) {
+            defaultPriceAjustmentWidget.setDefaultMarketSetupDataList(selectedMarkets);
+            finalSelectedMarkets = defaultPriceAjustmentWidget.getAjustedDefaultMarketSetupDataList();
+        } else {
+            finalSelectedMarkets = selectedMarkets;
+        }
+
+        if(finalSelectedMarkets.isEmpty())
+            return;
+
+        getMarketManager().requestCreateMarkets(finalSelectedMarkets, (result) -> {
+            for(int i=0; i< result.size(); i++) {
+                ClientPlayerUtilities.printToConsole("["+i+1+"] Market creation result for " + finalSelectedMarkets.get(i).tradingPair.getShortDescription() + ": " + (result.get(i) ? "Success" : "Failed"));
+            }
+        });
+    }
+    private List<MarketFactory.DefaultMarketSetupData> getSelectedMarkets()
+    {
         List<MarketFactory.DefaultMarketSetupData> selectedMarkets = new ArrayList<>();
         for (CategoryElement category : categories) {
             for(MarketElement marketElement : category.getMarketElementList()) {
@@ -407,18 +469,31 @@ public class MarketCreationByCategoryScreen extends StockMarketGuiScreen {
                 }
             }
         }
+        return selectedMarkets;
+    }
 
-        if (selectedMarkets.isEmpty()) {
-            // Show a message or handle the case where no markets are selected
-            return;
-        }
+    private void onApplyPriceAjustments()
+    {
+        useAjustedPrices = true;
+        defaultPriceAjustmentWidget.setEnabled(false);
+        defaultContents.setEnabled(true);
 
-
-
-        getMarketManager().requestCreateMarkets(selectedMarkets, (result) -> {
-            for(int i=0; i< result.size(); i++) {
-                ClientPlayerUtilities.printToConsole("["+i+1+"] Market creation result for " + selectedMarkets.get(i).tradingPair.getShortDescription() + ": " + (result.get(i) ? "Success" : "Failed"));
-            }
+        // Save the factors on the server
+        DefaultPriceAjustmentFactorsData factorsData = defaultPriceAjustmentWidget.getFactors();
+        getMarketManager().updateDefaultPriceAjustmentFactors(factorsData, (r)->{
+            defaultPriceAjustmentWidget.setFactors(factorsData);
         });
+        //removeElement(defaultPriceAjustmentWidget);
+        //addElement(defaultContents);
+        updateLayout(this.getGui());
+    }
+    private void onCancelPriceAjustments()
+    {
+        useAjustedPrices = false;
+        defaultPriceAjustmentWidget.setEnabled(false);
+        defaultContents.setEnabled(true);
+        //removeElement(defaultPriceAjustmentWidget);
+        //addElement(defaultContents);
+        updateLayout(this.getGui());
     }
 }

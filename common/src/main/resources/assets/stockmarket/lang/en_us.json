@@ -224,11 +224,25 @@
   "gui.stockmarket.market_creation_by_category_screen.categories_label": "Categories",
   "gui.stockmarket.market_creation_by_category_screen.markets_label": "Markets in the category",
   "gui.stockmarket.market_creation_by_category_screen.add_all_markets_label": "Select all",
+  "gui.stockmarket.market_creation_by_category_screen.adjust_default_prices_label": "Ajust default prices",
   "gui.stockmarket.market_creation_by_category_screen.selected_markets_label": "Selected Markets",
   "gui.stockmarket.market_creation_by_category_screen.remove_selected_markets_button": "Remove selected markets",
   "gui.stockmarket.market_creation_by_category_screen.create_selected_markets_button": "Create selected markets",
   "gui.stockmarket.market_creation_by_category_screen.create_selected_markets_button.tooltip": "Creates all markets in the list above",
   "gui.stockmarket.market_creation_by_category_screen.add_market_button.tooltip": "Add the market to the list of markets to create.",
-  "gui.stockmarket.market_creation_by_category_screen.remove_market_button.tooltip": "Remove the market from the list of markets to create."
+  "gui.stockmarket.market_creation_by_category_screen.remove_market_button.tooltip": "Remove the market from the list of markets to create.",
+
+  "gui.stockmarket.default_price_ajustment_widget.factor_linear_label": "Linear",
+  "gui.stockmarket.default_price_ajustment_widget.factor_linear_label.tooltip": "Scales the original default price by a linear factor.",
+  "gui.stockmarket.default_price_ajustment_widget.factor_quadratic_label": "Quadratic",
+  "gui.stockmarket.default_price_ajustment_widget.factor_quadratic_label.tooltip": "Scales the original default price by a quadratic factor.",
+  "gui.stockmarket.default_price_ajustment_widget.factor_exponential_label": "Exponential",
+  "gui.stockmarket.default_price_ajustment_widget.factor_exponential_label.tooltip": "Scales the original default price by an exponential factor.",
+  "gui.stockmarket.default_price_ajustment_widget.cancel_button": "Cancel",
+  "gui.stockmarket.default_price_ajustment_widget.apply_button": "Apply",
+  "gui.stockmarket.default_price_ajustment_widget.old_price_axis_label": "Old Default Price",
+  "gui.stockmarket.default_price_ajustment_widget.new_price_axis_label": "New Default Price",
+  "gui.stockmarket.ajusted_default_price.tooltip": "{item_name} would originally be\ntraded for {price} {currency} each.\nWith the current settings, it will be traded for\n{value} {currency} each."
+
 
 }

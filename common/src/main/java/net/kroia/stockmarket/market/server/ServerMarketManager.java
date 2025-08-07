@@ -308,10 +308,10 @@ public class ServerMarketManager implements IServerMarketManager
     @Override
     public boolean isItemAllowedForTrading(ItemID item)
     {
-        return !getNotTradableItems().containsKey(item);
+        return !getNotTradableItems().contains(item);
     }
     @Override
-    public Map<ItemID, Boolean> getNotTradableItems()
+    public Set<ItemID> getNotTradableItems()
     {
         return BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.getNotTradableItems();
     }
@@ -337,11 +337,11 @@ public class ServerMarketManager implements IServerMarketManager
     {
         List<ItemID> items = new ArrayList<>();
         List<ItemStack> allItemStacks = ItemUtilities.getSearchCreativeItems(searchQuery);
-        Map<ItemID, Boolean> blackList = getNotTradableItems();
+        Set<ItemID> blackList = getNotTradableItems();
         for(ItemStack itemStack : allItemStacks)
         {
             ItemID itemID = new ItemID(itemStack);
-            if(itemID.isValid() && !blackList.containsKey(itemID))
+            if(itemID.isValid() && !blackList.contains(itemID))
             {
                 items.add(itemID);
             }

@@ -1458,6 +1458,8 @@ public class DefaultMarketSettings {
         int ghastTearPrice = getDefaultPrices().MISC.GHAST_TEAR.get();
         int netherStarPrice = getDefaultPrices().MISC.NETHER_STAR.get();
         int glowstoneDustPrice = getDefaultPrices().MISC.GLOWSTONE_DUST.get();
+        int bookPrice = getDefaultPrices().MISC.BOOK.get();
+        int flintPrice = getDefaultPrices().MISC.FLINT.get();
 
 
         miscItems.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.ENDER_PEARL, enderPearlPrice, 0.02f, 0.1f));
@@ -1469,6 +1471,8 @@ public class DefaultMarketSettings {
         miscItems.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.SLIME_BALL, getDefaultPrices().MISC.SLIME_BALL.get(), 0.02f, 0.1f));
         miscItems.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.STRING, getDefaultPrices().MISC.STRING.get(), 0.02f, 0.1f));
         miscItems.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.ENDER_EYE, enderPearlPrice+blazePowderPrice, 0.02f, 0.1f));
+        miscItems.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.BOOK, bookPrice, 0.02f, 0.1f));
+        miscItems.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.FLINT, flintPrice, 0.02f, 0.1f));
 
 
 

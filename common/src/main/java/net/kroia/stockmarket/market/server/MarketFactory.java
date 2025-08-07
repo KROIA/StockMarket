@@ -195,7 +195,7 @@ public class MarketFactory
         public VirtualOrderBook.Settings virtualOrderBookSettings;
         public boolean isMarketOpen = false;
         public long candleTimeMin = 5;
-        public int defaultPrice;
+        private int defaultPrice;
 
 
         public DefaultMarketSetupData(TradingPair pair) {
@@ -220,11 +220,41 @@ public class MarketFactory
             this.virtualOrderBookSettings = null; // Default to no virtual order book settings
         }
 
+        public DefaultMarketSetupData(DefaultMarketSetupData other)
+        {
+            this.tradingPair = new TradingPair(other.tradingPair);
+            if(other.botSettings != null)
+                this.botSettings = new ServerVolatilityBot.Settings(other.botSettings);
+            else
+                this.botSettings = null; // No bot settings provided
+            if(other.virtualOrderBookSettings != null)
+                this.virtualOrderBookSettings = new VirtualOrderBook.Settings(other.virtualOrderBookSettings);
+            else
+                this.virtualOrderBookSettings = null; // No virtual order book settings provided
+
+            this.isMarketOpen = other.isMarketOpen; // Copy market open status
+            this.candleTimeMin = other.candleTimeMin; // Copy candle time in minutes, default to 1 minute
+            this.defaultPrice = other.defaultPrice; // Copy default price, if needed
+        }
+
         public static DefaultMarketSetupData create(FriendlyByteBuf buf) {
             DefaultMarketSetupData data = new DefaultMarketSetupData();
             data.decode(buf);
 
             return data;
+        }
+
+        public void setDefaultPrice(int defaultPrice) {
+            this.defaultPrice = defaultPrice;
+            if (this.botSettings != null) {
+                this.botSettings.defaultPrice = defaultPrice; // Update bot settings default price if available
+            }
+        }
+        public int getDefaultPrice() {
+            if (this.botSettings != null) {
+                return this.botSettings.defaultPrice;
+            }
+            return this.defaultPrice;
         }
 
 
@@ -749,6 +779,27 @@ public class MarketFactory
         {
             return JsonUtilities.toPrettyString(toJson());
         }
+    }
+
+
+    /**
+     * Calculates a new default price, given its old default price.
+     * The factors can change the function of the price calculation.
+     * @param inputPrice        The old default price, which is >= 0
+     * @param linearFactor      A factor that is multiplied with the input price
+     * @param quadraticFactor   A factor that is multiplied with the square of the input price
+     * @param exponentialFactor A factor that is used in an exponential function with the input price
+     * @return The adjusted price, which is always >= 0
+     */
+    public static int getAjustedPrice(int inputPrice, float linearFactor, float quadraticFactor, float exponentialFactor)
+    {
+        return Math.round(getAjustedPriceF((float)inputPrice, linearFactor, quadraticFactor, exponentialFactor));
+    }
+    public static float getAjustedPriceF(float inputPrice, float linearFactor, float quadraticFactor, float exponentialFactor)
+    {
+        float inpFloat = Math.max(0.f, inputPrice);
+        float adjustedPrice = inpFloat * linearFactor + inpFloat * inpFloat * quadraticFactor + (float) Math.exp(inpFloat * exponentialFactor)-1.f;
+        return Math.max(0, adjustedPrice);
     }
 
 

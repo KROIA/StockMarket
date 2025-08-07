@@ -10,9 +10,7 @@ import net.kroia.modutilities.setting.parser.ItemStackJsonParser;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class StockMarketModSettings extends ModSettings {
     private static StockMarketModBackend.Instances BACKEND_INSTANCES;
@@ -20,6 +18,7 @@ public class StockMarketModSettings extends ModSettings {
     public final UISettings UI = createGroup(new UISettings());
     public final Market MARKET = createGroup(new Market());
     public final MarketBot MARKET_BOT = createGroup(new MarketBot());
+    public final DefaultMarketSetupDataSettings DEFAULT_MARKET_SETUP_DATA = createGroup(new DefaultMarketSetupDataSettings());
 
     public static void setBackend(StockMarketModBackend.Instances backend) {
         BACKEND_INSTANCES = backend;
@@ -75,7 +74,6 @@ public class StockMarketModSettings extends ModSettings {
 
         public UISettings() { super("UISettings"); }
     }
-
     public static final class Market extends SettingsGroup
     {
         /**
@@ -130,15 +128,15 @@ public class StockMarketModSettings extends ModSettings {
         }
 
 
-        public Map<ItemID, Boolean> getNotTradableItems()
+        public Set<ItemID> getNotTradableItems()
         {
-            Map<ItemID, Boolean> items = new HashMap<>();
+            Set<ItemID> items = new HashSet<>();
             List<ItemStack> moneyItems = BankSystemItems.getMoneyItems();
             for(ItemStack moneyItem : moneyItems)
             {
                 if(moneyItem != null && !moneyItem.getItem().equals(BankSystemItems.MONEY.get()))
                 {
-                    items.put(new ItemID(moneyItem), true);
+                    items.add(new ItemID(moneyItem));
                 }
             }
 
@@ -148,15 +146,12 @@ public class StockMarketModSettings extends ModSettings {
             }*/
             List<ItemID> blacklisted = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getBlacklistedItemIDs();
             for(ItemID id : blacklisted)
-                items.put(id, true);
+                items.add(id);
             return items;
         }
     }
-
     public static final class MarketBot extends SettingsGroup
     {
-        //public final Setting<Boolean> ENABLED = registerSetting("MARKET_BOT_ENABLED", true, Boolean.class);
-
         public final Setting<Long> UPDATE_TIMER_INTERVAL_MS = registerSetting("MARKET_BOT_UPDATE_TIMER_INTERVAL_MS", 500L, Long.class); // 1 second
         public final Setting<Float> ORDER_BOOK_VOLUME_SCALE = registerSetting("MARKET_BOT_ORDER_BOOK_VOLUME_SCALE", 100f, Float.class); // Scale for the order book volume visualization
         public final Setting<Float> NEAR_MARKET_VOLUME_SCALE = registerSetting("MARKET_BOT_NEAR_MARKET_VOLUME_SCALE", 2f, Float.class); // Scale for the near market volume visualization
@@ -168,7 +163,17 @@ public class StockMarketModSettings extends ModSettings {
         public MarketBot() { super("MarketBot"); }
 
     }
+    public static final class DefaultMarketSetupDataSettings extends SettingsGroup
+    {
+        public final Setting<Float> PRICE_AJUSTMENT_LINEAR_PARAMETER = registerSetting("PRICE_AJUSTMENT_LINEAR_PARAMETER", 1f, Float.class);
+        public final Setting<Float> PRICE_AJUSTMENT_QUADRATIC_PARAMETER = registerSetting("PRICE_AJUSTMENT_QUADRATIC_PARAMETER", 0f, Float.class);
+        public final Setting<Float> PRICE_AJUSTMENT_EXPONENTIAL_PARAMETER = registerSetting("PRICE_AJUSTMENT_EXPONENTIAL_PARAMETER", 0f, Float.class);
 
+
+        public DefaultMarketSetupDataSettings() {
+            super("DefaultMarketSetupDataSettings");
+        }
+    }
 
     /**
      * ---------------------------------------------------------------------------------------

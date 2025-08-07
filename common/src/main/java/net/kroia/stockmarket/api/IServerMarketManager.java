@@ -13,7 +13,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
-import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 public interface IServerMarketManager extends ServerSaveable {
@@ -53,7 +53,7 @@ public interface IServerMarketManager extends ServerSaveable {
 
     ItemID getDefaultCurrencyItemID();
     boolean isItemAllowedForTrading(ItemID item);
-    Map<ItemID, Boolean> getNotTradableItems();
+    Set<ItemID> getNotTradableItems();
     boolean isTradingPairAllowedForTrading(TradingPair pair);
 
     IServerMarket getMarket(@NotNull TradingPair pair);

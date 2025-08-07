@@ -47,6 +47,15 @@ public class VirtualOrderBook implements ServerSaveable {
                 volumeDecumulationRate = 0.0001f;
             }
         }
+
+        public Settings(Settings other) {
+            this.volumeScale = other.volumeScale;
+            this.nearMarketVolumeScale = other.nearMarketVolumeScale;
+            this.volumeAccumulationRate = other.volumeAccumulationRate;
+            this.volumeFastAccumulationRate = other.volumeFastAccumulationRate;
+            this.volumeDecumulationRate = other.volumeDecumulationRate;
+        }
+
         @Override
         public boolean save(CompoundTag tag) {
             tag.putFloat("volumeScale", volumeScale);

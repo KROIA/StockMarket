@@ -4,14 +4,17 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.*;
+import net.kroia.modutilities.ClientPlayerUtilities;
+import net.kroia.modutilities.JsonUtilities;
+import net.kroia.modutilities.ServerSaveable;
+import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.networking.INetworkPayloadConverter;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.item.Items;
 
-import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 public class TradingPair implements ServerSaveable, INetworkPayloadConverter {
@@ -56,6 +59,14 @@ public class TradingPair implements ServerSaveable, INetworkPayloadConverter {
             isValid = false;
         }
     }
+
+    public TradingPair(TradingPair other)
+    {
+        this.item = new ItemID(other.item.getStack());
+        this.currency = new ItemID(other.currency.getStack());
+        this.pairUUID = other.pairUUID;
+        this.isValid = other.isValid;
+    }
     public TradingPair(CompoundTag tag) {
         this();
         load(tag);
@@ -93,14 +104,14 @@ public class TradingPair implements ServerSaveable, INetworkPayloadConverter {
     public void setInvalid() {
         this.isValid = false;
     }
-    public void checkValidity(Map<ItemID, Boolean> blacklistedItems)
+    public void checkValidity(Set<ItemID> blacklistedItems)
     {
         if(item == null || currency == null || item.isAir() || currency.isAir()) {
             isValid = false;
             return;
         }
 
-        if(blacklistedItems != null && (blacklistedItems.containsKey(item)) || blacklistedItems.containsKey(currency)) {
+        if(blacklistedItems != null && (blacklistedItems.contains(item)) || blacklistedItems.contains(currency)) {
             isValid = false;
             return;
         }
