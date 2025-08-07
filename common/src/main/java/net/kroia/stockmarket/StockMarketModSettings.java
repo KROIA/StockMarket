@@ -10,8 +10,8 @@ import net.kroia.modutilities.setting.parser.ItemStackJsonParser;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 
-import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class StockMarketModSettings extends ModSettings {
@@ -133,7 +133,7 @@ public class StockMarketModSettings extends ModSettings {
         public Map<ItemID, Boolean> getNotTradableItems()
         {
             Map<ItemID, Boolean> items = new HashMap<>();
-            ArrayList<ItemStack> moneyItems = BankSystemItems.getMoneyItems();
+            List<ItemStack> moneyItems = BankSystemItems.getMoneyItems();
             for(ItemStack moneyItem : moneyItems)
             {
                 if(moneyItem != null && !moneyItem.getItem().equals(BankSystemItems.MONEY.get()))
@@ -146,7 +146,7 @@ public class StockMarketModSettings extends ModSettings {
             {
                 items.add(new ItemID(getCurrencyItem().getItem().getDefaultInstance()));
             }*/
-            ArrayList<ItemID> blacklisted = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getBlacklistedItemIDs();
+            List<ItemID> blacklisted = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getBlacklistedItemIDs();
             for(ItemID id : blacklisted)
                 items.put(id, true);
             return items;
