@@ -144,11 +144,11 @@ public class TradingChartWidget extends StockMarketGuiElement {
         return start2 + (float)((stop2 - start2) * ((value - start1)) / (float)(stop1 - start1));
     }
 
-    public int getChartYPos(int price)
+    public int getChartYPos(float price)
     {
-        return map(price, chartViewMinPrice, chartViewMaxPrice, candleStickChart.getHeight()-yPadding, yPadding);
+        return Math.round(mapF(price, (float)chartViewMinPrice, (float)chartViewMaxPrice, (float)(candleStickChart.getHeight()-yPadding), (float)yPadding));
     }
-    public int getPriceFromYPos(int y)
+    public float getPriceFromYPos(int y)
     {
         return Math.round(mapF(y, candleStickChart.getHeight()-yPadding, yPadding, chartViewMinPrice, chartViewMaxPrice));
     }

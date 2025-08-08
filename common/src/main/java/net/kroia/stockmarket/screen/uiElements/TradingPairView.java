@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.screen.uiElements;
 
+import net.kroia.modutilities.ColorUtilities;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.ItemView;
 import net.kroia.modutilities.gui.elements.Label;
@@ -17,6 +18,10 @@ public class TradingPairView extends Button {
     private final ItemView itemView;
     //private final Label arrowLabel;
     private final ItemView currencyItemView;
+    private boolean isToggleable = false;
+    private boolean isToggled = false;
+    public int toggledBackgroundColor = ColorUtilities.getRGB(0x00AA00, 0.5f); // Default green color for toggled state
+    public int defaultBackgroundColor = 0xff000000; // Default black color for untoggled state
 
     public TradingPairView() {
         this(null);
@@ -24,6 +29,8 @@ public class TradingPairView extends Button {
     public TradingPairView(TradingPair tradingPair) {
         super("<->");
         arrowLabel = (Label)super.getChilds().get(0);
+        defaultBackgroundColor = getIdleColor();
+
 
         this.setLayoutType(Alignment.CENTER);
 
@@ -54,6 +61,52 @@ public class TradingPairView extends Button {
         });
     }
 
+    public void setIsToggleable(boolean isToggleable) {
+        this.isToggleable = isToggleable;
+        if(this.isToggleable)
+        {
+            setHoverColor(ColorUtilities.getRGB(toggledBackgroundColor, 0.2f));
+            setPressedColor(ColorUtilities.getRGB(toggledBackgroundColor, 0.4f));
+        }
+        if(this.isToggleable && isToggled)
+        {
+            super.setIdleColor(toggledBackgroundColor);
+        }
+        else
+        {
+            super.setIdleColor(defaultBackgroundColor);
+        }
+    }
+    public void setToggled(boolean isToggled) {
+        this.isToggled = isToggled;
+        if(this.isToggleable && isToggled)
+        {
+            super.setIdleColor(toggledBackgroundColor);
+        }
+        else
+        {
+            super.setIdleColor(defaultBackgroundColor);
+        }
+    }
+    public boolean isToggled() {
+        return isToggled;
+    }
+    public boolean isToggleable() {
+        return isToggleable;
+    }
+    public void setToggledBackgroundColor(int toggledBackgroundColor) {
+        this.toggledBackgroundColor = toggledBackgroundColor;
+
+        setHoverColor(ColorUtilities.getRGB(toggledBackgroundColor, 0.2f));
+        setPressedColor(ColorUtilities.getRGB(toggledBackgroundColor, 0.4f));
+        if(isToggleable && isToggled)
+        {
+            super.setIdleColor(toggledBackgroundColor);
+        }
+    }
+    public int getToggledBackgroundColor() {
+        return toggledBackgroundColor;
+    }
 
     @Override
     protected void render() {
@@ -63,14 +116,11 @@ public class TradingPairView extends Button {
     @Override
     protected void layoutChanged() {
         int height = getHeight();
-        itemView.setPosition(0, 0);
-        itemView.setSize(height,height);
-
-        arrowLabel.setPosition(height,0);
-        arrowLabel.setSize(getWidth()-height*2,height);
-
-        currencyItemView.setPosition(getWidth() - height, 0);
-        currencyItemView.setSize(height, height);
+        int padding = 1;
+        int iconSize = height - 2 * padding;
+        itemView.setBounds(padding, padding, iconSize, iconSize);
+        currencyItemView.setBounds(getWidth() - iconSize - padding, padding, iconSize, iconSize);
+        arrowLabel.setBounds(itemView.getRight(), itemView.getTop() ,  currencyItemView.getLeft()-itemView.getRight(), iconSize);
 
     }
 
@@ -92,5 +142,27 @@ public class TradingPairView extends Button {
         return tradingPair;
     }
 
+    @Override
+    public void setOnFallingEdge(Runnable onFallingEdge)
+    {
+        super.setOnFallingEdge(()->{
+            if(isToggleable)
+            {
+                isToggled = !isToggled;
+                if(isToggled)
+                {
+                    super.setIdleColor(toggledBackgroundColor);
+                }
+                else
+                {
+                    super.setIdleColor(defaultBackgroundColor);
+                }
+            }
+            if(onFallingEdge != null)
+            {
+                onFallingEdge.run();
+            }
+        });
+    }
 
 }

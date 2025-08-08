@@ -44,8 +44,10 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
         public static final Component GENERAL_CHART_RESET = Component.translatable(PREFIX + "general.chart_reset");
         public static final Component GENERAL_IS_MARKET_OPEN = Component.translatable(PREFIX + "general.is_market_open");
         public static final Component GENERAL_CANDLE_TIME = Component.translatable(PREFIX + "general.candle_time_min");
+        public static final Component ITEM_IMBALANCE = Component.translatable(PREFIX + "general.item_imbalance");
         // GeneralGui Tooltips
         public static final Component GENERAL_IS_MARKET_OPEN_TOOLTIP = Component.translatable(PREFIX + "general.is_market_open.tooltip");
+        public static final Component ITEM_IMBALANCE_TOOLTIP = Component.translatable(PREFIX + "general.item_imbalance.tooltip");
 
 
 
@@ -101,6 +103,8 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
         public final CheckBox isMarketOpenCheckBox;
         public final Label candleTimeMinLabel;
         public final TextBox candleTimeMin;
+        public final Label itemImbalanceLabel;
+        public final TextBox itemImbalanceTextBox;
 
         public GeneralGuiElement() {
             super();
@@ -120,10 +124,20 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
             candleTimeMin = new TextBox();
             candleTimeMin.setAllowNumbers(true,false);
             candleTimeMin.setAllowLetters(false);
+            itemImbalanceLabel = new Label(TEXTS.ITEM_IMBALANCE.getString());
+            itemImbalanceLabel.setAlignment(Alignment.RIGHT);
+            itemImbalanceTextBox = new TextBox();
+            itemImbalanceTextBox.setAllowNumbers(true,false);
+            itemImbalanceTextBox.setAllowLetters(false);
+
+
+
 
             isMarketOpenCheckBox.setHoverTooltipSupplier(TEXTS.GENERAL_IS_MARKET_OPEN_TOOLTIP::getString);
             candleTimeMinLabel.setHoverTooltipSupplier(()-> StockMarketTextMessages.getMarketSettingsScreenCandleTimeTooltip(candleTimeMin.getInt()));
             candleTimeMin.setHoverTooltipSupplier(()-> StockMarketTextMessages.getMarketSettingsScreenCandleTimeTooltip(candleTimeMin.getInt()));
+            itemImbalanceLabel.setHoverTooltipSupplier(TEXTS.ITEM_IMBALANCE_TOOLTIP::getString);
+            itemImbalanceTextBox.setHoverTooltipSupplier(TEXTS.ITEM_IMBALANCE_TOOLTIP::getString);
 
 
             addChild(titleLabel);
@@ -131,6 +145,8 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
             addChild(isMarketOpenCheckBox);
             addChild(candleTimeMinLabel);
             addChild(candleTimeMin);
+            addChild(itemImbalanceLabel);
+            addChild(itemImbalanceTextBox);
 
             for(GuiElement child : getChilds())
             {
@@ -139,7 +155,7 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
                 child.setTextFontScale(textFontSize);
             }
 
-            int targetHeight = (elementHeight+spacing) * 4 + 5;
+            int targetHeight = (elementHeight+spacing) * 5 + 5;
             this.setHeight(targetHeight);
         }
         @Override
@@ -162,6 +178,8 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
             y += elementHeight + spacing;
             candleTimeMinLabel.setBounds(padding, y, width/2, elementHeight);
             candleTimeMin.setBounds(candleTimeMinLabel.getRight(), candleTimeMinLabel.getTop(), width - candleTimeMinLabel.getWidth(), candleTimeMinLabel.getHeight());
+            itemImbalanceLabel.setBounds(padding, y + elementHeight + spacing, width/2, elementHeight);
+            itemImbalanceTextBox.setBounds(itemImbalanceLabel.getRight(), itemImbalanceLabel.getTop(), width - itemImbalanceLabel.getWidth(), itemImbalanceLabel.getHeight());
         }
 
 
@@ -186,6 +204,15 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
             if(value < 1)
                 value = 1;
             return value * 60000; // Convert minutes to milliseconds
+        }
+        public void setItemImbalance(long itemImbalance) {
+            itemImbalanceTextBox.setText(String.valueOf(itemImbalance));
+        }
+        public long getItemImbalance() {
+            if(itemImbalanceTextBox.getText().isEmpty())
+                return 0;
+            long value = itemImbalanceTextBox.getLong();
+            return value;
         }
     }
 
@@ -611,6 +638,7 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
     GuiScreen parentScreen;
     private static MarketSettingsScreen instance = null;
     //private ServerMarketSettingsData serverMarketSettingsData;
+    private long oldItemImbalance = 0;
     private final TradingChartWidget tradingChart;
     private final TradingPairView tradingPairView;
     private final Button saveButton;
@@ -711,24 +739,32 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
                 virtualOrderBookGuiElement.selectMarket(tradingPair);
                 botGuiElement.selectMarket(tradingPair);
             }
+            generalGuiElement.setShiftPriceCandleIntervalMS(settings.shiftPriceCandleIntervalMS);
+            generalGuiElement.setMarketOpen(settings.marketOpen);
+
+            if(settings.botSettingsData != null)
+                botGuiElement.setBotSettings(settings.botSettingsData.settings);
+            else
+                botGuiElement.setBotSettings(null);
+
+            if(settings.virtualOrderBookSettingsData != null)
+                virtualOrderBookGuiElement.setVirtualOrderBookSettings(settings.virtualOrderBookSettingsData.settings);
+            else
+                virtualOrderBookGuiElement.setVirtualOrderBookSettings(null);
+            oldItemImbalance = settings.itemImbalance;
+            generalGuiElement.setItemImbalance(settings.itemImbalance);
         }
         else {
             tradingPairView.setTradingPair(null);
+            generalGuiElement.setShiftPriceCandleIntervalMS(0);
+            generalGuiElement.setMarketOpen(false);
+            botGuiElement.setBotSettings(null);
+            virtualOrderBookGuiElement.setVirtualOrderBookSettings(null);
+            oldItemImbalance = 0;
         }
 
 
-        generalGuiElement.setShiftPriceCandleIntervalMS(settings.shiftPriceCandleIntervalMS);
-        generalGuiElement.setMarketOpen(settings.marketOpen);
 
-        if(settings.botSettingsData != null)
-            botGuiElement.setBotSettings(settings.botSettingsData.settings);
-        else
-            botGuiElement.setBotSettings(null);
-
-        if(settings.virtualOrderBookSettingsData != null)
-            virtualOrderBookGuiElement.setVirtualOrderBookSettings(settings.virtualOrderBookSettingsData.settings);
-        else
-            virtualOrderBookGuiElement.setVirtualOrderBookSettings(null);
 
 
     }
@@ -744,6 +780,15 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
                 0,
                 generalGuiElement.getShiftPriceCandleIntervalMS()
         );
+
+        long newItemImbalance = generalGuiElement.getItemImbalance();
+        if(oldItemImbalance != newItemImbalance)
+        {
+            settings.itemImbalance = newItemImbalance;
+            settings.overwriteItemImbalance = true;
+        }
+
+
         settings.doCreateBotIfNotExists = settings.botSettingsData != null;
         settings.doDestroyBotIfExists = settings.botSettingsData == null;
         settings.doCreateVirtualOrderBookIfNotExists = settings.virtualOrderBookSettingsData != null;

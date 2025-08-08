@@ -14,7 +14,8 @@ public class  ServerMarketSettingsData implements INetworkPayloadEncoder {
     public @Nullable BotSettingsData botSettingsData = null;   // Can be null if no bot is created or settings of bot should not be applyed by the server
     public @Nullable VirtualOrderBookSettingsData virtualOrderBookSettingsData = null;
     public boolean marketOpen;                // Can be changed by the client
-    public long itemImbalance;                // Read only
+    public long itemImbalance;                //
+    public boolean overwriteItemImbalance = false; // If true, the server will overwrite the item imbalance with the value from the client
     public long shiftPriceCandleIntervalMS;   // Can be changed by the client
     //public long notifySubscriberIntervalMS;   // Can be changed by the client
 
@@ -73,6 +74,7 @@ public class  ServerMarketSettingsData implements INetworkPayloadEncoder {
             virtualOrderBookSettingsData.encode(buf);
         }
         buf.writeBoolean(marketOpen);
+        buf.writeBoolean(overwriteItemImbalance);
         buf.writeLong(itemImbalance);
         buf.writeLong(shiftPriceCandleIntervalMS);
         //buf.writeLong(notifySubscriberIntervalMS);
@@ -94,6 +96,7 @@ public class  ServerMarketSettingsData implements INetworkPayloadEncoder {
             virtualOrderBookSettingsData = VirtualOrderBookSettingsData.decode(buf);
         }
         boolean marketOpen = buf.readBoolean();
+        boolean overwriteItemImbalance = buf.readBoolean();
         long itemImbalance = buf.readLong();
         long shiftPriceCandleIntervalMS = buf.readLong();
         //long notifySubscriberIntervalMS = buf.readLong();
@@ -106,6 +109,7 @@ public class  ServerMarketSettingsData implements INetworkPayloadEncoder {
         data.doDestroyBotIfExists = buf.readBoolean();
         data.doCreateVirtualOrderBookIfNotExists = buf.readBoolean();
         data.doDestroyVirtualOrderBookIfExists = buf.readBoolean();
+        data.overwriteItemImbalance = overwriteItemImbalance;
         return data;
     }
 }

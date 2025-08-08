@@ -811,9 +811,9 @@ public class StockMarketTextMessages {
 
 
 
-    private static final Component TOOLTIP_AJUSTED_DEFAULT_PRICE = Component.translatable("gui."+StockMarketMod.MOD_ID+".ajusted_default_price.tooltip");
-    public static String getAjustedDefaultPriceTooltip(String itemName, String currencyName, int oldDefaultPrice, int newDefaultPrice) {
-        String msg = TOOLTIP_AJUSTED_DEFAULT_PRICE.getString();
+    private static final Component TOOLTIP_ADJUSTED_DEFAULT_PRICE = Component.translatable("gui."+StockMarketMod.MOD_ID+".adjusted_default_price.tooltip");
+    public static String getAdjustedDefaultPriceTooltip(String itemName, String currencyName, int oldDefaultPrice, int newDefaultPrice) {
+        String msg = TOOLTIP_ADJUSTED_DEFAULT_PRICE.getString();
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
         msg = replaceVariable(msg, Variables.CURRENCY, currencyName);
         msg = replaceVariable(msg, Variables.CURRENCY, currencyName);
@@ -822,13 +822,9 @@ public class StockMarketTextMessages {
         return msg;
     }
 
-    /*private static final Component TOOLTIP_TRADING_PAIR_CREATION_VOLATILITY = Component.translatable("gui."+StockMarketMod.MOD_ID+".trading_pair_creation_screen.tooltip_volatility");
-    public static String getTradingPairCreationScreenVolatilityTooltip(int minutes) {
-        String msg = TOOLTIP_TRADING_PAIR_CREATION_VOLATILITY.getString();
-        msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(minutes));
-        return msg;
-    }*/
 
+
+    private static final Component TOOLTIP_PAIR_ALREADY_SELECTED = Component.translatable("gui."+StockMarketMod.MOD_ID+".trading_pair_already_selected.tooltip");
 
 
     //--------------------------------------------------------------------------------------------------------

@@ -20,9 +20,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 public class MarketFactory
 {
@@ -511,14 +509,14 @@ public class MarketFactory
         {
             if(data != null)
             {
-                for(DefaultMarketSetupData existingData : this.marketSetupDataList)
+                /*for(DefaultMarketSetupData existingData : this.marketSetupDataList)
                 {
                     if(existingData.tradingPair.equals(data.tradingPair))
                     {
                         warn("Trading pair " + data.tradingPair + " already exists in group " + this.groupName + ", skipping addition.");
                         return;
                     }
-                }
+                }*/
                 this.marketSetupDataList.add(data);
             }
         }
@@ -526,14 +524,14 @@ public class MarketFactory
         {
             if(generatorData != null)
             {
-                for(DefaultMarketSetupData data : this.marketSetupDataList)
+                /*for(DefaultMarketSetupData data : this.marketSetupDataList)
                 {
                     if(data.tradingPair.equals(generatorData.tradingPair))
                     {
                         warn("Trading pair " + generatorData.tradingPair + " already exists in group " + this.groupName + ", skipping addition.");
                         return;
                     }
-                }
+                }*/
                 DefaultMarketSetupData data = generatorData.generateDefaultMarketSetupData();
                 if(data != null)
                 {
@@ -542,16 +540,17 @@ public class MarketFactory
             }
         }
 
-        public @Nullable DefaultMarketSetupData get(TradingPair pair)
+        public List<DefaultMarketSetupData> get(TradingPair pair)
         {
+            List<DefaultMarketSetupData> matchingData = new ArrayList<>();
             for(DefaultMarketSetupData data : this.marketSetupDataList)
             {
                 if(data.tradingPair.equals(pair))
                 {
-                    return data;
+                    matchingData.add(data);
                 }
             }
-            return null;
+            return matchingData;
         }
 
         public void remove(TradingPair pair)
@@ -562,7 +561,6 @@ public class MarketFactory
                 if(data.tradingPair.equals(pair))
                 {
                     this.marketSetupDataList.remove(i);
-                    return;
                 }
             }
         }
@@ -621,7 +619,6 @@ public class MarketFactory
         }
         public static List<DefaultMarketSetupDataGroup> loadAll()
         {
-            Map<TradingPair, Boolean> alreadyInList = new HashMap<>();
             List<DefaultMarketSetupDataGroup> groups = new ArrayList<>();
             List<String> groupNames = BACKEND_INSTANCES.SERVER_DATA_HANDLER.getDefaultMarketSetupDataFileNames();
             for(String groupName : groupNames)
@@ -629,22 +626,6 @@ public class MarketFactory
                 DefaultMarketSetupDataGroup group = DefaultMarketSetupDataGroup.load(groupName);
                 if(group != null)
                 {
-                    List<TradingPair> toRemove = new ArrayList<>();
-                    for(DefaultMarketSetupData data : group.marketSetupDataList)
-                    {
-                        if(!alreadyInList.containsKey(data.tradingPair))
-                        {
-                            alreadyInList.put(data.tradingPair, true);
-                        }
-                        else
-                        {
-                            toRemove.add(data.tradingPair);
-                        }
-                    }
-                    for(TradingPair pair : toRemove)
-                    {
-                        group.remove(pair);
-                    }
                     groups.add(group);
                 }
             }
@@ -680,18 +661,7 @@ public class MarketFactory
             int size = buf.readInt(); // Read the size of the market setup data list
             for(int i = 0; i < size; i++) {
                 DefaultMarketSetupData data = DefaultMarketSetupData.decode(buf);
-                // Check if the trading pair already exists in the list
-                boolean pairExists = false;
-                for(DefaultMarketSetupData existingData : group.marketSetupDataList)
-                {
-                    if(existingData.tradingPair.equals(data.tradingPair))
-                    {
-                        pairExists = true;
-                        break;
-                    }
-                }
-                if(!pairExists)
-                    group.marketSetupDataList.add(data);
+                group.marketSetupDataList.add(data);
             }
             return group;
         }
@@ -752,18 +722,7 @@ public class MarketFactory
                     DefaultMarketSetupData data = new DefaultMarketSetupData();
                     if(data.fromJson(marketJson))
                     {
-                        // Check if pair already exists in the list
-                        boolean pairExists = false;
-                        for(DefaultMarketSetupData existingData : this.marketSetupDataList)
-                        {
-                            if(existingData.tradingPair.equals(data.tradingPair))
-                            {
-                                pairExists = true;
-                                break;
-                            }
-                        }
-                        if(!pairExists)
-                            this.marketSetupDataList.add(data);
+                        this.marketSetupDataList.add(data);
                     }
                 }
             }

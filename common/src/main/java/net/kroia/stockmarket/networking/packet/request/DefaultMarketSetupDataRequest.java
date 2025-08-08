@@ -9,19 +9,19 @@ import net.minecraft.server.level.ServerPlayer;
 
 import java.util.List;
 
-public class DefaultMarketSetupDataRequest extends StockMarketGenericRequest<TradingPairData, MarketFactory.DefaultMarketSetupData> {
+public class DefaultMarketSetupDataRequest extends StockMarketGenericRequest<TradingPairData, List<MarketFactory.DefaultMarketSetupData>> {
     @Override
     public String getRequestTypeID() {
         return DefaultMarketSetupDataRequest.class.getSimpleName();
     }
 
     @Override
-    public MarketFactory.DefaultMarketSetupData handleOnClient(TradingPairData input) {
+    public List<MarketFactory.DefaultMarketSetupData> handleOnClient(TradingPairData input) {
         return null;
     }
 
     @Override
-    public MarketFactory.DefaultMarketSetupData handleOnServer(TradingPairData input, ServerPlayer sender) {
+    public List<MarketFactory.DefaultMarketSetupData> handleOnServer(TradingPairData input, ServerPlayer sender) {
         if(!playerIsAdmin(sender)) {
             return null; // Only allow admins to request default market setup data
         }
@@ -32,10 +32,8 @@ public class DefaultMarketSetupDataRequest extends StockMarketGenericRequest<Tra
         TradingPair targetTradingPair = input.toTradingPair();
 
         for(MarketFactory.DefaultMarketSetupDataGroup category : categories) {
-            MarketFactory.DefaultMarketSetupData defaultData = category.get(targetTradingPair);
-            if (defaultData != null) {
-                return defaultData; // Return the first matching default data found
-            }
+            List<MarketFactory.DefaultMarketSetupData> defaultDataList = category.get(targetTradingPair);
+            return defaultDataList;
         }
         return null; // No matching default data found
     }
@@ -46,10 +44,13 @@ public class DefaultMarketSetupDataRequest extends StockMarketGenericRequest<Tra
     }
 
     @Override
-    public void encodeOutput(FriendlyByteBuf buf, MarketFactory.DefaultMarketSetupData output) {
+    public void encodeOutput(FriendlyByteBuf buf, List<MarketFactory.DefaultMarketSetupData> output) {
         buf.writeBoolean(output != null);
+        buf.writeInt(output != null ? output.size() : 0);
         if (output != null) {
-            output.encode(buf);
+            for (MarketFactory.DefaultMarketSetupData data : output) {
+                data.encode(buf);
+            }
         }
     }
 
@@ -59,10 +60,16 @@ public class DefaultMarketSetupDataRequest extends StockMarketGenericRequest<Tra
     }
 
     @Override
-    public MarketFactory.DefaultMarketSetupData decodeOutput(FriendlyByteBuf buf) {
+    public List<MarketFactory.DefaultMarketSetupData> decodeOutput(FriendlyByteBuf buf) {
         if (!buf.readBoolean()) {
             return null;
         }
-        return MarketFactory.DefaultMarketSetupData.decode(buf);
+        int size = buf.readInt();
+        List<MarketFactory.DefaultMarketSetupData> output = new java.util.ArrayList<>(size);
+        for (int i = 0; i < size; i++) {
+            MarketFactory.DefaultMarketSetupData data = MarketFactory.DefaultMarketSetupData.decode(buf);
+            output.add(data);
+        }
+        return output;
     }
 }

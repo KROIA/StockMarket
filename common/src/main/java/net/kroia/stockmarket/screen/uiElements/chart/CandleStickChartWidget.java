@@ -18,8 +18,8 @@ import java.util.function.Function;
 
 public class CandleStickChartWidget extends StockMarketGuiElement {
     private static final Component BOT_TARGET_PRICE = Component.translatable("gui."+ StockMarketMod.MOD_ID + ".candle_stick_chart.bot_target_price");
-    private final Function<Integer, Integer> priceToYPosFunc;
-    private final Function<Integer, Integer> yPosToPriceFunc;
+    private final Function<Float, Integer> priceToYPosFunc;
+    private final Function<Integer, Float> yPosToPriceFunc;
     private final int colorSell;
     private final int colorBuy;
     private final int minCandleWidth = 3; // Minimum width of a candle in pixels
@@ -30,12 +30,12 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
     private int chartWidth = 0;
     private int candleWidth = 0;
     private boolean enableBotTargetPriceDisplay = false;
-    private int botTargetPrice = -1;
+    private float botTargetPrice = -1;
     private PriceHistory priceHistory = null;
     private HashMap<Long, LimitOrderInChartDisplay> limitOrderDisplays = new HashMap<>();
     private BiConsumer<OrderReadData, Integer> priceChangeCallback;
-    public CandleStickChartWidget(Function<Integer, Integer> priceToYPosFunc,
-                                  Function<Integer, Integer> yPosToPriceFunc,
+    public CandleStickChartWidget(Function<Float, Integer> priceToYPosFunc,
+                                  Function<Integer, Float> yPosToPriceFunc,
                                   BiConsumer<OrderReadData, Integer> priceChangeCallback,
                                   int colorBuy, int colorSell) {
         super();
@@ -45,8 +45,8 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
         this.colorBuy = colorBuy;
         this.colorSell = colorSell;
     }
-    public CandleStickChartWidget(Function<Integer, Integer> priceToYPosFunc,
-                                  Function<Integer, Integer> yPosToPriceFunc,
+    public CandleStickChartWidget(Function<Float, Integer> priceToYPosFunc,
+                                  Function<Integer, Float> yPosToPriceFunc,
                                   int colorBuy, int colorSell) {
         super();
         this.priceToYPosFunc = priceToYPosFunc;
@@ -140,12 +140,14 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
                 break;
         }
 
-        if(enableBotTargetPriceDisplay && botTargetPrice > 0)
+        if(enableBotTargetPriceDisplay && botTargetPrice >= 0)
         {
             int tooltipWidth = getTextWidth(labelText);
             int yPos = priceToYPosFunc(botTargetPrice);
             drawRect(currentPriceLineLeftPos - tooltipWidth-10, yPos, tooltipWidth + currentPriceLineWidth+13, 1, 0xFF0000FF);
-            drawText(BOT_TARGET_PRICE.getString() + botTargetPrice, currentPriceLineLeftPos - tooltipWidth-10, yPos, Alignment.RIGHT);
+
+            String priceString = String.format("%.2f", botTargetPrice);
+            drawText(BOT_TARGET_PRICE.getString() + priceString, currentPriceLineLeftPos - tooltipWidth-10, yPos, Alignment.RIGHT);
         }
         drawRect(currentPriceLineLeftPos, currentPriceYPos, currentPriceLineWidth, 1, 0xFF555555);
         //getGraphics().popPose();
@@ -188,7 +190,7 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
     public void enableBotTargetPriceDisplay(boolean enabled) {
         enableBotTargetPriceDisplay = enabled;
     }
-    public void setBotTargetPrice(int botTargetPrice) {
+    public void setBotTargetPrice(float botTargetPrice) {
         this.botTargetPrice = botTargetPrice;
     }
     public int getMaxCandleCount()
@@ -333,7 +335,7 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
                 candleWidth, bodyYMax-bodyYMin, color);
     }
 
-    private int priceToYPosFunc(int price) {
+    private int priceToYPosFunc(float price) {
         return priceToYPosFunc.apply(price);
     }
 }

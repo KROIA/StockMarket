@@ -179,7 +179,7 @@ public class ClientMarket implements IClientMarket {
     }
 
     @Override
-    public void requestBotTargetPrice(Consumer<Integer> callback) {
+    public void requestBotTargetPrice(Consumer<Float> callback) {
         if(checkDeadAndDebug())
             return;
         StockMarketNetworking.BOT_TARGET_PRICE_REQUEST.sendRequestToServer(new TradingPairData(tradingPair), callback);
@@ -198,7 +198,7 @@ public class ClientMarket implements IClientMarket {
         StockMarketNetworking.DEFAULT_MARKET_SETUP_DATA_GROUP_REQUEST.sendRequestToServer(groupName, callback);
     }
     @Override
-    public void requestDefaultMarketSetupData(Consumer<MarketFactory.DefaultMarketSetupData> callback) {
+    public void requestDefaultMarketSetupData(Consumer<List<MarketFactory.DefaultMarketSetupData>> callback) {
         if(checkDeadAndDebug())
             return;
         StockMarketNetworking.DEFAULT_MARKET_SETUP_DATA_REQUEST.sendRequestToServer(new TradingPairData(tradingPair), callback);

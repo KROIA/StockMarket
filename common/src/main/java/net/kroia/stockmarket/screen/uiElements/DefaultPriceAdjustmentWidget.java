@@ -22,11 +22,11 @@ import java.util.List;
  * This widget takes a list of "MarketFactory.DefaultMarketSetupData" and lets the player ajust the default prices
  * for each market using a mathematical function.
  */
-public class DefaultPriceAjustmentWidget extends Frame {
+public class DefaultPriceAdjustmentWidget extends Frame {
 
 
     public static final class TEXT {
-        private static final String NAME = "default_price_ajustment_widget";
+        private static final String NAME = "default_price_adjustment_widget";
         public static final String PREFIX = "gui." + StockMarketMod.MOD_ID + "." + NAME + ".";
         public static final Component FACTOR_LINEAR_LABEL = Component.translatable(PREFIX + "factor_linear_label");
         public static final Component FACTOR_LINEAR_LABEL_TOOLTIP = Component.translatable(PREFIX + "factor_linear_label.tooltip");
@@ -182,12 +182,11 @@ public class DefaultPriceAjustmentWidget extends Frame {
     private final Plot plot;
     private final Plot.PlotData plotData = new Plot.PlotData();
     private final Runnable onCancel;
-
-    public DefaultPriceAjustmentWidget(Runnable onApply, Runnable onCancel)
+    public DefaultPriceAdjustmentWidget(Runnable onApply, Runnable onCancel)
     {
         this(onApply, onCancel, null, null);
     }
-    public DefaultPriceAjustmentWidget(Runnable onApply, Runnable onCancel, DefaultPriceAjustmentFactorsData factors, List<MarketFactory.DefaultMarketSetupData> defaultMarketSetupDataList)
+    public DefaultPriceAdjustmentWidget(Runnable onApply, Runnable onCancel, DefaultPriceAjustmentFactorsData factors, List<MarketFactory.DefaultMarketSetupData> defaultMarketSetupDataList)
     {
         super();
         this.onCancel = onCancel;
@@ -267,9 +266,16 @@ public class DefaultPriceAjustmentWidget extends Frame {
                 String currencyText = data.tradingPair.getCurrency().getName();
                 int defaultPrice = data.getDefaultPrice();
                 int newDefaultPrice = getAjustedPrice(defaultPrice);
-                return StockMarketTextMessages.getAjustedDefaultPriceTooltip(itemText, currencyText, defaultPrice, newDefaultPrice);
+                return StockMarketTextMessages.getAdjustedDefaultPriceTooltip(itemText, currencyText, defaultPrice, newDefaultPrice);
             });
             tradingPairView.setHoverTooltipMousePositionAlignment(Label.Alignment.LEFT);
+            tradingPairView.setIsToggleable(true);
+            tradingPairView.setToggled(true);
+            tradingPairView.setOnFallingEdge(()->
+            {
+                boolean isToggled = tradingPairView.isToggled();
+                itemView.setEnabled(isToggled); // Disable the item view if the trading pair is toggled off
+            });
             marketsListView.addChild(tradingPairView);
         }
         updatePlot();
@@ -301,7 +307,7 @@ public class DefaultPriceAjustmentWidget extends Frame {
             return;
 
         graphicsPosePush();
-        graphicsTranslate(0,0,1);
+        graphicsTranslate(0,0,160);
         int lastGuiX = 0;
         int yOffset = 0;
         int xOffset = 0;
@@ -318,31 +324,30 @@ public class DefaultPriceAjustmentWidget extends Frame {
 
 
             ItemView itemView = inPlotItemViews.get(i);
-            int absPosX = plotPos.x+plot.getX()-itemViewWidth2;
-            int absPosY = plotPos.y+plot.getY()-itemViewWidth2;
+            if(itemView.isEnabled()) {
+                int absPosX = plotPos.x + plot.getX() - itemViewWidth2;
+                int absPosY = plotPos.y + plot.getY() - itemViewWidth2;
 
-            if(lastGuiX >= absPosX)
-            {
-                yOffset+=itemView.getHeight();
-                if(absPosY - yOffset < itemViewWidth2) // Is on top of the chart
-                {
-                    yOffset = 0; // Reset yOffset if we exceed the plot height
-                    xOffset += itemViewWidth;
+                if (lastGuiX >= absPosX) {
+                    yOffset += itemView.getHeight();
+                    if (absPosY - yOffset < itemViewWidth2) // Is on top of the chart
+                    {
+                        yOffset = 0; // Reset yOffset if we exceed the plot height
+                        xOffset += itemViewWidth;
+                    }
+                } else {
+                    yOffset = 0; // Reset yOffset if we are moving to a new column
+                    xOffset = 0; // Reset xOffset if we are moving to a new column
                 }
-            }
-            else
-            {
-                yOffset = 0; // Reset yOffset if we are moving to a new column
-                xOffset = 0; // Reset xOffset if we are moving to a new column
-            }
-            //itemView.setItemStack(data.tradingPair.getItem().getStack());
-            itemView.setPosition(absPosX + xOffset, absPosY - yOffset);
-            if(yOffset > 0 || xOffset > 0) {
-                drawLine(itemView.getX() + itemViewWidth2, itemView.getY()+itemViewWidth2,
-                        absPosX+itemViewWidth2, absPosY+itemViewWidth2, 0.5f, 0xFF03fce3); // Draw a line from the item icon to the ajusted price position
-            }
+                //itemView.setItemStack(data.tradingPair.getItem().getStack());
+                itemView.setPosition(absPosX + xOffset, absPosY - yOffset);
+                if (yOffset > 0 || xOffset > 0) {
+                    drawLine(itemView.getX() + itemViewWidth2, itemView.getY() + itemViewWidth2,
+                            absPosX + itemViewWidth2, absPosY + itemViewWidth2, 0.5f, 0xFF03fce3); // Draw a line from the item icon to the ajusted price position
+                }
 
-            lastGuiX = absPosX + itemViewWidth2;
+                lastGuiX = absPosX + itemViewWidth2;
+            }
 
             //itemView.renderInternal(); // Render the item icon at the ajusted price position
 
@@ -369,16 +374,16 @@ public class DefaultPriceAjustmentWidget extends Frame {
                             int ajustedPrice = getAjustedPrice(defaultPrice);
                             Point plotPos = plot.getGuiPosFromXValue(defaultPrice, ajustedPrice);
                             graphicsPosePush();
-                            graphicsTranslate(0,0,2);
+                            graphicsTranslate(0,0,170);
 
                             int absPosX = plotPos.x+plot.getX();
                             int absPosY = plotPos.y+plot.getY();
                             //drawCross(crossX, crossY, 5, 0xFFFF0000); // Draw a red cross at the ajusted price position
                             drawLine(getMouseX(), getMouseY(), absPosX, absPosY, 1.0f, 0xFFFF0000); // Draw a line from the mouse position to the ajusted price position
-                            if(plotPos.y > plot.getY()+plot.getHeight()/2)
-                                drawText(defaultPrice + "->"+ ajustedPrice, absPosX, absPosY-20, 0xFF88ff8c, Alignment.BOTTOM_LEFT); // Draw the price text at the ajusted price position
-                            else
-                                drawText(defaultPrice + "->"+ ajustedPrice, absPosX, absPosY+20, 0xFF88ff8c, Alignment.TOP_RIGHT); // Draw the price text at the ajusted price position
+                            //if(plotPos.y > plot.getY()+plot.getHeight()/2)
+                                drawText(defaultPrice + "->"+ ajustedPrice, absPosX, absPosY+20, 0xFF88ff8c, Alignment.TOP); // Draw the price text at the ajusted price position
+                            //else
+                            //    drawText(defaultPrice + "->"+ ajustedPrice, absPosX, absPosY+20, 0xFF88ff8c, Alignment.TOP); // Draw the price text at the ajusted price position
 
                             graphicsPosePop();
                             return;
@@ -405,7 +410,7 @@ public class DefaultPriceAjustmentWidget extends Frame {
         cancelButton.setBounds(factorEditorWidget.getLeft(), marketsListView.getBottom() + spacing, leftSectionWidth/2-spacing/2, 20);
         applyButton.setBounds(cancelButton.getRight()+spacing, marketsListView.getBottom() + spacing, leftSectionWidth - cancelButton.getWidth()-spacing, 20);
 
-        plot.setBounds(factorEditorWidget.getRight()+spacing, padding, width - factorEditorWidget.getRight() - spacing, height-2*padding);
+        plot.setBounds(factorEditorWidget.getRight()+spacing, padding, width - factorEditorWidget.getRight() - spacing - padding, height-2*padding);
 
     }
 

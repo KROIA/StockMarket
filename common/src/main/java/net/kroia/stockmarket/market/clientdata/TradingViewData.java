@@ -15,7 +15,7 @@ public class TradingViewData implements INetworkPayloadEncoder {
     public final MinimalBankData itemBankData;
     public final MinimalBankData currencyBankData;
     public final boolean marketIsOpen;
-    public final int botTargetPrice;
+    public final float botTargetPrice;
 
     public TradingViewData(@NotNull TradingPairData pair,
                            @NotNull PriceHistoryData history,
@@ -24,7 +24,7 @@ public class TradingViewData implements INetworkPayloadEncoder {
                            @NotNull OrderBookVolumeData orderBookVolumeData,
                            @NotNull OrderReadListData openOrders,
                            boolean marketIsOpen,
-                           int botTargetPrice) {
+                           float botTargetPrice) {
         this.tradingPairData = pair;
         this.priceHistoryData = history;
 
@@ -44,7 +44,7 @@ public class TradingViewData implements INetworkPayloadEncoder {
                             @NotNull MinimalBankData itemBankData,
                             @NotNull MinimalBankData currencyBankData,
                             boolean marketIsOpen,
-                            int botTargetPrice) {
+                            float botTargetPrice) {
         this.tradingPairData = tradingPairData;
         this.priceHistoryData = priceHistoryData;
         this.orderBookVolumeData = orderBookVolumeData;
@@ -64,7 +64,7 @@ public class TradingViewData implements INetworkPayloadEncoder {
         itemBankData.encode(buf);
         currencyBankData.encode(buf);
         buf.writeBoolean(marketIsOpen);
-        buf.writeInt(botTargetPrice);
+        buf.writeFloat(botTargetPrice);
     }
 
 
@@ -76,7 +76,7 @@ public class TradingViewData implements INetworkPayloadEncoder {
         MinimalBankData itemBankData = MinimalBankData.decode(buf);
         MinimalBankData currencyBankData = MinimalBankData.decode(buf);
         boolean marketIsOpen = buf.readBoolean();
-        int botTargetPrice = buf.readInt();
+        float botTargetPrice = buf.readFloat();
         return new TradingViewData(tradingPairData, priceHistoryData, orderBookVolumeData,
                 openOrdersData, itemBankData, currencyBankData, marketIsOpen, botTargetPrice);
     }

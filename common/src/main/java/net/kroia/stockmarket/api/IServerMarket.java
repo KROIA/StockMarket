@@ -40,6 +40,7 @@ public interface IServerMarket extends ServerSaveable {
 
 
     int getBotTargetPrice();
+    float getBotTargetPriceF();
     void resetHistoricalMarketData();
 
 

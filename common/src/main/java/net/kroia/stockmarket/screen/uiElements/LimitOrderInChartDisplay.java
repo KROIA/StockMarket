@@ -24,10 +24,10 @@ public class LimitOrderInChartDisplay extends StockMarketGuiElement {
     private int clickPosYOffset;
     private boolean isDragging = false;
     private final TradingPair pair;
-    private final Function<Integer, Integer> yPosToPriceFunc;
+    private final Function<Integer, Float> yPosToPriceFunc;
     private final BiConsumer<OrderReadData, Integer> onOrderReplacedToNewPrice;
 
-    public LimitOrderInChartDisplay(Function<Integer, Integer> yPosToPriceFunc,
+    public LimitOrderInChartDisplay(Function<Integer, Float> yPosToPriceFunc,
                                     OrderReadData order,
                                     TradingPair pair,
                                     BiConsumer<OrderReadData, Integer> onOrderReplacedToNewPrice) {
@@ -117,7 +117,7 @@ public class LimitOrderInChartDisplay extends StockMarketGuiElement {
     }
     public int getCurrentPrice()
     {
-        return yPosToPriceFunc.apply(getY() + getHeight()/2);
+        return Math.round(yPosToPriceFunc.apply(getY() + getHeight()/2));
     }
 
 

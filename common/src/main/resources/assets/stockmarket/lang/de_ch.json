@@ -182,9 +182,10 @@
   "gui.stockmarket.market_settings_screen.general.chart_reset": "Chart zurücksetzen",
   "gui.stockmarket.market_settings_screen.general.is_market_open": "Markt geöffnet",
   "gui.stockmarket.market_settings_screen.general.candle_time_min": "Candle Zit",
+  "gui.stockmarket.market_settings_screen.general.item_imbalance": "Item Unglichgwicht",
   "gui.stockmarket.market_settings_screen.virtual_order_book.title": "Virtual Order Book",
   "gui.stockmarket.market_settings_screen.virtual_order_book.enable": "Aktivieren",
-   "gui.stockmarket.market_settings_screen.virtual_order_book.volume_scale": "Volumä",
+  "gui.stockmarket.market_settings_screen.virtual_order_book.volume_scale": "Volumä",
   "gui.stockmarket.market_settings_screen.virtual_order_book.near_market_volume_scale": "Noh Markt Volume",
   "gui.stockmarket.market_settings_screen.virtual_order_book.volume_accumulation_rate": "Akkumulationsratä",
   "gui.stockmarket.market_settings_screen.virtual_order_book.volume_fast_accumulation_rate": "Schnelli Akkumul.",
@@ -204,6 +205,7 @@
    "gui.stockmarket.market_settings_screen.general.is_market_open.tooltip": "Wenn das Feld gesetzt ist, können Spieler auf diesem Markt handeln.\nDas ist sinnvoll wenn Änderungen am Markt vorgenommen werden.\nDadurch wird verhindert, dass Spieler starke Preisschwankungen ausnutzen können.\nOder falls irgendwas mit dem Markt schief läuft und der Handel pausiert werden muss.",
    "gui.stockmarket.market_settings_screen.general.candle_time_min.tooltip": "Jede Kerze im Diagramm entspricht einer Zeit von {amount} Minuten.",
    "gui.stockmarket.market_settings_screen.virtual_order_book.enable.tooltip": "Das virtuelle Order Buch fügt realistische Liquidität\ndem Markt hinzu und sollte verwendet werden.\nOhne dies können Spieler vileicht nicht handeln,\nweil nicht genügend Liquidität vorhanden ist.",
+   "gui.stockmarket.market_settings_screen.general.item_imbalance.tooltip": "Der Wert des Artikelungleichgewichts gibt den Nettozufluss/-abfluss\neines Artikels durch Spieler auf den Markt an.\nEin positiver Wert bedeutet, dass die Spieler mehr Artikel verkauft haben.\nEin negativer Wert bedeutet, dass die Spieler überwiegend Artikel auf dem Markt gekauft haben.",
    "gui.stockmarket.market_settings_screen.virtual_order_book.volume_scale.tooltip": "Faktor für die skalierung des Volumens im Order Buch.\nGrosse Werte erzielen einen stabileren markt,\nbeidem Spieler mehr Kapital aufwenden müssen um eine Preisbewegung erziehlen zu können.",
    "gui.stockmarket.market_settings_screen.virtual_order_book.near_market_volume_scale.tooltip": "Factor to scale the volume distribution in\nthe order book close around the current market price.\nLarge values will result in a more robust market where a player\nneeds more capital to move the price.",
    "gui.stockmarket.market_settings_screen.virtual_order_book.volume_accumulation_rate.tooltip": "Bestimmt, wie schnell das Order Buch Volumen aufbaut,\nnachdem das Volumen durch Orders konsumiert wurde.",
@@ -231,18 +233,18 @@
    "gui.stockmarket.market_creation_by_category_screen.add_market_button.tooltip": "Fügt den Markt zur Liste der zu erstellenden Märkte hinzu.",
    "gui.stockmarket.market_creation_by_category_screen.remove_market_button.tooltip": "Enrfert den Markt aus der Liste der zu erstellenden Märkte.",
 
-   "gui.stockmarket.default_price_ajustment_widget.factor_linear_label": "Linear",
-   "gui.stockmarket.default_price_ajustment_widget.factor_linear_label.tooltip": "Skaliert dä original Pris mit me linearä Faktor.",
-   "gui.stockmarket.default_price_ajustment_widget.factor_quadratic_label": "Quadratisch",
-   "gui.stockmarket.default_price_ajustment_widget.factor_quadratic_label.tooltip": "Skaliert dä original Pris mit me quadratische Faktor.",
-   "gui.stockmarket.default_price_ajustment_widget.factor_exponential_label": "Exponentiell",
-   "gui.stockmarket.default_price_ajustment_widget.factor_exponential_label.tooltip": "Skaliert dä original Pris mit me exponentielle Faktor.",
-   "gui.stockmarket.default_price_ajustment_widget.cancel_button": "Abbrechä",
-   "gui.stockmarket.default_price_ajustment_widget.apply_button": "Anwendä",
-   "gui.stockmarket.default_price_ajustment_widget.old_price_axis_label": "Altä Standardpris",
-   "gui.stockmarket.default_price_ajustment_widget.new_price_axis_label": "Neuä Standardpris",
-   "gui.stockmarket.ajusted_default_price.tooltip": "{item_name} wör normalerwis\nfür {price} {currency} pro stuck ghandlet werdä.\nMit de aktuelle Istellige wird s Item für\n{value} {currency} pro stuck ghandlet."
-
+   "gui.stockmarket.default_price_adjustment_widget.factor_linear_label": "Linear",
+   "gui.stockmarket.default_price_adjustment_widget.factor_linear_label.tooltip": "Skaliert dä original Pris mit me linearä Faktor.",
+   "gui.stockmarket.default_price_adjustment_widget.factor_quadratic_label": "Quadratisch",
+   "gui.stockmarket.default_price_adjustment_widget.factor_quadratic_label.tooltip": "Skaliert dä original Pris mit me quadratische Faktor.",
+   "gui.stockmarket.default_price_adjustment_widget.factor_exponential_label": "Exponentiell",
+   "gui.stockmarket.default_price_adjustment_widget.factor_exponential_label.tooltip": "Skaliert dä original Pris mit me exponentielle Faktor.",
+   "gui.stockmarket.default_price_adjustment_widget.cancel_button": "Abbrechä",
+   "gui.stockmarket.default_price_adjustment_widget.apply_button": "Anwendä",
+   "gui.stockmarket.default_price_adjustment_widget.old_price_axis_label": "Altä Standardpris",
+   "gui.stockmarket.default_price_adjustment_widget.new_price_axis_label": "Neuä Standardpris",
+   "gui.stockmarket.adjusted_default_price.tooltip": "{item_name} wör normalerwis\nfür {price} {currency} pro stuck ghandlet werdä.\nMit de aktuelle Istellige wird s Item für\n{value} {currency} pro stuck ghandlet.",
+   "gui.stockmarket.trading_pair_already_selected.tooltip": "Handelspaar: {value} isch bereits usgwählt.\nDu chasch es nöd namal uswähle."
 
 
 

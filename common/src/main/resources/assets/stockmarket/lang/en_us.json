@@ -182,6 +182,7 @@
   "gui.stockmarket.market_settings_screen.general.chart_reset": "Reset Price chart",
   "gui.stockmarket.market_settings_screen.general.is_market_open": "Market Open",
   "gui.stockmarket.market_settings_screen.general.candle_time_min": "Candle time",
+  "gui.stockmarket.market_settings_screen.general.item_imbalance": "Item Imbalance",
   "gui.stockmarket.market_settings_screen.virtual_order_book.title": "Virtual Order Book Settings",
   "gui.stockmarket.market_settings_screen.virtual_order_book.enable": "Enabled",
   "gui.stockmarket.market_settings_screen.virtual_order_book.volume_scale": "Volume",
@@ -203,6 +204,7 @@
 
   "gui.stockmarket.market_settings_screen.general.is_market_open.tooltip": "If set, players are allowed to trade on the market.\nThis is useful when you want to change settings of the market and\nprevent players from exploiting strong changes in price due to changing settings.\nOr if things get out of hand and you need a quick way to close all markets.",
   "gui.stockmarket.market_settings_screen.general.candle_time_min.tooltip": "Each candlestick in the diagram represents a time span of {amount} minutes.",
+  "gui.stockmarket.market_settings_screen.general.item_imbalance.tooltip": "The item imbalance value is the net inflow/outflow of an item into the market by players.\nA positive value means that more volume was sold by players.\nA negative value means that players predominantly purchased items from the market.",
   "gui.stockmarket.market_settings_screen.virtual_order_book.enable.tooltip": "The virtual order book adds realistic liquidity to\nthe market and is strongly recommended.\nWithout it, players may not be able to buy/sell items\nbecause there may not be enough liquidity available.",
   "gui.stockmarket.market_settings_screen.virtual_order_book.volume_scale.tooltip": "Factor to scale the volume distribution in the order book.\nLarge values will result in a more robust market where a player\nneeds more capital to move the price.",
   "gui.stockmarket.market_settings_screen.virtual_order_book.near_market_volume_scale.tooltip": "Factor to scale the volume distribution in\nthe order book close around the current market price.\nLarge values will result in a more robust market where a player\nneeds more capital to move the price.",
@@ -224,7 +226,7 @@
   "gui.stockmarket.market_creation_by_category_screen.categories_label": "Categories",
   "gui.stockmarket.market_creation_by_category_screen.markets_label": "Markets in the category",
   "gui.stockmarket.market_creation_by_category_screen.add_all_markets_label": "Select all",
-  "gui.stockmarket.market_creation_by_category_screen.adjust_default_prices_label": "Ajust default prices",
+  "gui.stockmarket.market_creation_by_category_screen.adjust_default_prices_label": "Adjust default prices",
   "gui.stockmarket.market_creation_by_category_screen.selected_markets_label": "Selected Markets",
   "gui.stockmarket.market_creation_by_category_screen.remove_selected_markets_button": "Remove selected markets",
   "gui.stockmarket.market_creation_by_category_screen.create_selected_markets_button": "Create selected markets",
@@ -232,17 +234,18 @@
   "gui.stockmarket.market_creation_by_category_screen.add_market_button.tooltip": "Add the market to the list of markets to create.",
   "gui.stockmarket.market_creation_by_category_screen.remove_market_button.tooltip": "Remove the market from the list of markets to create.",
 
-  "gui.stockmarket.default_price_ajustment_widget.factor_linear_label": "Linear",
-  "gui.stockmarket.default_price_ajustment_widget.factor_linear_label.tooltip": "Scales the original default price by a linear factor.",
-  "gui.stockmarket.default_price_ajustment_widget.factor_quadratic_label": "Quadratic",
-  "gui.stockmarket.default_price_ajustment_widget.factor_quadratic_label.tooltip": "Scales the original default price by a quadratic factor.",
-  "gui.stockmarket.default_price_ajustment_widget.factor_exponential_label": "Exponential",
-  "gui.stockmarket.default_price_ajustment_widget.factor_exponential_label.tooltip": "Scales the original default price by an exponential factor.",
-  "gui.stockmarket.default_price_ajustment_widget.cancel_button": "Cancel",
-  "gui.stockmarket.default_price_ajustment_widget.apply_button": "Apply",
-  "gui.stockmarket.default_price_ajustment_widget.old_price_axis_label": "Old Default Price",
-  "gui.stockmarket.default_price_ajustment_widget.new_price_axis_label": "New Default Price",
-  "gui.stockmarket.ajusted_default_price.tooltip": "{item_name} would originally be\ntraded for {price} {currency} each.\nWith the current settings, it will be traded for\n{value} {currency} each."
+  "gui.stockmarket.default_price_adjustment_widget.factor_linear_label": "Linear",
+  "gui.stockmarket.default_price_adjustment_widget.factor_linear_label.tooltip": "Scales the original default price by a linear factor.",
+  "gui.stockmarket.default_price_adjustment_widget.factor_quadratic_label": "Quadratic",
+  "gui.stockmarket.default_price_adjustment_widget.factor_quadratic_label.tooltip": "Scales the original default price by a quadratic factor.",
+  "gui.stockmarket.default_price_adjustment_widget.factor_exponential_label": "Exponential",
+  "gui.stockmarket.default_price_adjustment_widget.factor_exponential_label.tooltip": "Scales the original default price by an exponential factor.",
+  "gui.stockmarket.default_price_adjustment_widget.cancel_button": "Cancel",
+  "gui.stockmarket.default_price_adjustment_widget.apply_button": "Apply",
+  "gui.stockmarket.default_price_adjustment_widget.old_price_axis_label": "Old Default Price",
+  "gui.stockmarket.default_price_adjustment_widget.new_price_axis_label": "New Default Price",
+  "gui.stockmarket.adjusted_default_price.tooltip": "{item_name} would originally be\ntraded for {price} {currency} each.\nWith the current settings, it will be traded for\n{value} {currency} each.",
+  "gui.stockmarket.trading_pair_already_selected.tooltip": "Trading pair: {value} is already selected.\nYou can not select the same trading pair multiple times."
 
 
 }

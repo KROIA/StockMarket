@@ -218,6 +218,9 @@ public class ServerVolatilityBot extends ServerTradingBot {
     public int getTargetPrice() {
         return Math.round(targetPriceF);
     }
+    public float getTargetPriceF() {
+        return targetPriceF;
+    }
     @Override
     public void update()
     {
@@ -275,13 +278,13 @@ public class ServerVolatilityBot extends ServerTradingBot {
 
         if(marketOrderAmountF > 0)
         {
-            long amount = getOrderBookVolume(getCurrentPrice()+2);
+            long amount = getOrderBookVolume(getCurrentPrice()+1);
             if(-amount < marketOrderAmountF)
                 marketOrderAmountF = -amount;
         }
         else if(marketOrderAmountF < 0)
         {
-            long amount = getOrderBookVolume(getCurrentPrice()-2);
+            long amount = getOrderBookVolume(getCurrentPrice()-1);
             if(amount < -marketOrderAmountF)
                 marketOrderAmountF = -amount;
         }

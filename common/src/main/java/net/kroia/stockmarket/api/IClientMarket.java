@@ -52,12 +52,12 @@ public interface IClientMarket {
     void requestTradingViewData(Consumer<TradingViewData> callback, boolean requestBotTargetPrice);
     void requestTradingViewData(Consumer<TradingViewData> callback);
 
-    void requestBotTargetPrice(Consumer<Integer> callback);
+    void requestBotTargetPrice(Consumer<Float> callback);
 
     void requestDefaultMarketSetupDataGroups(Consumer<List<MarketFactory.DefaultMarketSetupDataGroup>> callback);
 
     void requestDefaultMarketSetupDataGroup(String groupName, Consumer<MarketFactory.DefaultMarketSetupDataGroup> callback);
-    void requestDefaultMarketSetupData(Consumer<MarketFactory.DefaultMarketSetupData> callback);
+    void requestDefaultMarketSetupData(Consumer<List<MarketFactory.DefaultMarketSetupData>> callback);
 
     void requestChartReset(Consumer<Boolean> callback);
     void requestMarketOpen(boolean open, Consumer<Boolean> callback);

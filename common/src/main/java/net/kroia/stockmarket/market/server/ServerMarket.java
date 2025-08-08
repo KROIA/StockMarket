@@ -196,10 +196,10 @@ public class ServerMarket implements IServerMarket {
             return null;
 
         List<Order> orders = new ArrayList<>(orderBook.getOrders(player));
-        int botTargetPrice = -1;
+        float botTargetPrice = -1;
         if(requestBotTargetPrice && volatilityBot != null)
         {
-            botTargetPrice = volatilityBot.getTargetPrice();
+            botTargetPrice = volatilityBot.getTargetPriceF();
         }
 
         return new TradingViewData(new TradingPairData(tradingPair), new PriceHistoryData(historicalMarketData.getHistory(), maxHistoryPointCount),
@@ -265,6 +265,10 @@ public class ServerMarket implements IServerMarket {
         }
 
         marketOpen = settingsData.marketOpen;
+        if(settingsData.overwriteItemImbalance)
+        {
+            itemImbalance = settingsData.itemImbalance;
+        }
         //itemImbalance = settingsData.itemImbalance;
         setShiftPriceCandleIntervalMS(settingsData.shiftPriceCandleIntervalMS);
         //setNotifySubscriberIntervalMS(settingsData.notifySubscriberIntervalMS);
@@ -312,6 +316,12 @@ public class ServerMarket implements IServerMarket {
         if(volatilityBot == null)
             return 0;
         return volatilityBot.getTargetPrice();
+    }
+    @Override
+    public float getBotTargetPriceF() {
+        if(volatilityBot == null)
+            return 0;
+        return volatilityBot.getTargetPriceF();
     }
     @Override
     public void resetHistoricalMarketData()
