@@ -226,13 +226,13 @@ public class TradePanel extends StockMarketGuiElement {
         currentItemView.setItemStack(pair.getItem().getStack());
         moneyItemView.setItemStack(pair.getCurrency().getStack());
     }
-    public void setCurrentItemBalance(long balance)
+    public void setCurrentItemBalance(long balance, long centScaleFactor)
     {
-        currentItemBalanceLabel.setText(MoneyBank.getNormalizedAmount(balance));
+        currentItemBalanceLabel.setText(MoneyBank.getNormalizedAmount(balance, centScaleFactor));
     }
-    public void setCurrentMoneyBalance(long balance)
+    public void setCurrentMoneyBalance(long balance, long centScaleFactor)
     {
-        currentMoneyBalanceLabel.setText(MoneyBank.getNormalizedAmount(balance));
+        currentMoneyBalanceLabel.setText(MoneyBank.getNormalizedAmount(balance, centScaleFactor));
     }
     public void setCurrentPrice(int price)
     {

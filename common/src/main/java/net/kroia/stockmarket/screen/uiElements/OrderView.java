@@ -79,7 +79,7 @@ public class OrderView extends StockMarketGuiElement {
             directionLabel.setText(TradeScreen.SELL.getString());
             setBackgroundColor(TradeScreen.colorRed);
         }
-        amountLabel.setText(MoneyBank.getNormalizedAmount(Math.abs(order.amount)));
+        amountLabel.setText(MoneyBank.getNormalizedAmount(Math.abs(order.amount), 1));
         if(order.type == Order.Type.LIMIT) {
             priceLabel.setText(String.valueOf(order.limitPrice));
         }
@@ -111,7 +111,7 @@ public class OrderView extends StockMarketGuiElement {
 
     @Override
     protected void render() {
-        filledLabel.setText(MoneyBank.getNormalizedAmount(Math.abs(order.filledAmount)));
+        filledLabel.setText(MoneyBank.getNormalizedAmount(Math.abs(order.filledAmount),1));
     }
 
 }

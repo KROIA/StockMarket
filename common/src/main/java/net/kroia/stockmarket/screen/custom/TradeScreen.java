@@ -212,8 +212,8 @@ public class TradeScreen extends StockMarketGuiScreen {
         PriceHistory history = data.priceHistoryData.toHistory();
         //candleStickChart.setPriceHistory(history);
         //orderbookVolumeChart.setOrderBookVolume(data.orderBookVolumeData);
-        tradingPanel.setCurrentItemBalance(data.itemBankData.balance);
-        tradingPanel.setCurrentMoneyBalance(data.currencyBankData.balance);
+        tradingPanel.setCurrentItemBalance(data.itemBankData.balance, data.itemBankData.centScaleFactor);
+        tradingPanel.setCurrentMoneyBalance(data.currencyBankData.balance, data.currencyBankData.centScaleFactor);
 
 
         tradingPanel.setCurrentPrice(history.getCurrentPrice());
