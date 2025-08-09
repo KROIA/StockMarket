@@ -12,7 +12,7 @@ public class SyncStockMarketBlockEntityPacket extends StockMarketNetworkPacket {
     private BlockPos pos;
     private TradingPair tradingPair;
     private int amount;
-    private int price;
+    private float price;
 
 
 
@@ -41,7 +41,7 @@ public class SyncStockMarketBlockEntityPacket extends StockMarketNetworkPacket {
         return amount;
     }
 
-    public int getPrice() {
+    public float getPrice() {
         return price;
     }
 
@@ -55,7 +55,7 @@ public class SyncStockMarketBlockEntityPacket extends StockMarketNetworkPacket {
         buf.writeBlockPos(pos);
         tradingPair.encode(buf);
         buf.writeInt(amount);
-        buf.writeInt(price);
+        buf.writeFloat(price);
     }
     @Override
     public void decode(FriendlyByteBuf buf)
@@ -65,7 +65,7 @@ public class SyncStockMarketBlockEntityPacket extends StockMarketNetworkPacket {
             this.tradingPair = new TradingPair();
         this.tradingPair.decode(buf);
         this.amount = buf.readInt();
-        this.price = buf.readInt();
+        this.price = buf.readFloat();
     }
 
     @Override

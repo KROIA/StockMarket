@@ -5,6 +5,7 @@ import net.kroia.banksystem.api.IBankUser;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.TradingPair;
+import net.kroia.stockmarket.market.server.ServerMarketManager;
 
 import java.util.UUID;
 
@@ -15,18 +16,20 @@ public class OrderFactory {
     }
 
 
-    public static LimitOrder createLimitOrder(UUID playerUUID, TradingPair pair, long amount, int price)
+    public static LimitOrder createLimitOrder(UUID playerUUID, TradingPair pair, long amount, int price, int priceScaleFactor)
     {
-        long lockedMoney = (amount>0? amount * price : 0);
+        //long lockedMoney = (amount>0? amount * price : 0);
+        long lockedMoney = ServerMarketManager.scaleToBankSystemMoneyAmount((amount>0? amount * price : 0), priceScaleFactor);
         long lockedItem = (amount<0? -amount : 0);
 
         if(tryReserveItem(playerUUID, pair, lockedMoney, lockedItem, amount > 0))
             return new LimitOrder(playerUUID, amount, price, lockedMoney);
         return null;
     }
-    public static LimitOrder createLimitOrder(UUID playerUUID, TradingPair pair, long amount, int price, long alreadyFilledAmount)
+    public static LimitOrder createLimitOrder(UUID playerUUID, TradingPair pair, long amount, int price, int priceScaleFactor, long alreadyFilledAmount)
     {
-        long lockedMoney = (amount>0? (amount-alreadyFilledAmount) * price : 0);
+        //long lockedMoney = (amount>0? (amount-alreadyFilledAmount) * price : 0);
+        long lockedMoney = ServerMarketManager.scaleToBankSystemMoneyAmount((amount>0? (amount-alreadyFilledAmount) * price : 0), priceScaleFactor);
 
         if(tryReserveItem(playerUUID, pair, lockedMoney, price, amount > 0))
             return new LimitOrder(playerUUID, amount, price, lockedMoney, alreadyFilledAmount);
@@ -38,9 +41,10 @@ public class OrderFactory {
     }
 
 
-    public static MarketOrder createMarketOrder(UUID playerUUID, TradingPair pair, long amount, int currentMarketPrice)
+    public static MarketOrder createMarketOrder(UUID playerUUID, TradingPair pair, long amount, int currentMarketPrice, int priceScaleFactor)
     {
-        long lockedMoney = (amount>0? amount * currentMarketPrice : 0);
+        //long lockedMoney = (amount>0? amount * currentMarketPrice : 0);
+        long lockedMoney = ServerMarketManager.scaleToBankSystemMoneyAmount((amount>0? amount * currentMarketPrice : 0), priceScaleFactor);
         long lockedItem = (amount<0? -amount : 0);
 
         if(tryReserveItem(playerUUID, pair, lockedMoney, lockedItem, amount > 0)) {

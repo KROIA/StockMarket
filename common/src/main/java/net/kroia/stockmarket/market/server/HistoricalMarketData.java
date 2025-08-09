@@ -27,9 +27,9 @@ public class HistoricalMarketData implements ServerSaveable {
     public int getCurrentPrice() {
         return currentPrice;
     }
-    public void setCurrentPrice(int currentPrice) {
+    public void setCurrentRawPrice(int currentPrice) {
         this.currentPrice = currentPrice;
-        history.setCurrentPrice(currentPrice);
+        history.setCurrentRawPrice(currentPrice);
     }
     public void addVolume(long volume)
     {
@@ -58,7 +58,7 @@ public class HistoricalMarketData implements ServerSaveable {
             return false;
         if(history.load(tag))
         {
-            currentPrice = history.getCurrentPrice();
+            currentPrice = history.getCurrentRawPrice();
             return true;
         }
         return false;

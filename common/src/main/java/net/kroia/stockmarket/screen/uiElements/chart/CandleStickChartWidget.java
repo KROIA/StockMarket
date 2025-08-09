@@ -4,6 +4,7 @@ import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.clientdata.OrderReadData;
 import net.kroia.stockmarket.market.clientdata.OrderReadListData;
+import net.kroia.stockmarket.market.server.ServerMarketManager;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.screen.uiElements.LimitOrderInChartDisplay;
 import net.kroia.stockmarket.util.PriceHistory;
@@ -23,20 +24,21 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
     private final int colorSell;
     private final int colorBuy;
     private final int minCandleWidth = 3; // Minimum width of a candle in pixels
-    private int chartViewMinPrice;
-    private int chartViewMaxPrice;
+    private float chartViewMinPrice;
+    private float chartViewMaxPrice;
     private int maxLabelWidth = 0;
     private double scrollValue = 1;
     private int chartWidth = 0;
     private int candleWidth = 0;
     private boolean enableBotTargetPriceDisplay = false;
     private float botTargetPrice = -1;
+    private int priceScaleFactor = 1;
     private PriceHistory priceHistory = null;
     private HashMap<Long, LimitOrderInChartDisplay> limitOrderDisplays = new HashMap<>();
-    private BiConsumer<OrderReadData, Integer> priceChangeCallback;
+    private BiConsumer<OrderReadData, Float> priceChangeCallback;
     public CandleStickChartWidget(Function<Float, Integer> priceToYPosFunc,
                                   Function<Integer, Float> yPosToPriceFunc,
-                                  BiConsumer<OrderReadData, Integer> priceChangeCallback,
+                                  BiConsumer<OrderReadData, Float> priceChangeCallback,
                                   int colorBuy, int colorSell) {
         super();
         this.priceToYPosFunc = priceToYPosFunc;
@@ -63,7 +65,7 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
         super.renderBackground();
         if(priceHistory == null)
             return;
-        int yAxisLabelIncrement = 1;
+        float yAxisLabelIncrement = 0.1f;
         int labelWidth = 0;
 
 
@@ -73,49 +75,68 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
             candleWidth = minCandleWidth;
 
 
-        int priceRange = chartViewMaxPrice - chartViewMinPrice;
-        if(priceRange > 10)
+        float priceRange = chartViewMaxPrice - chartViewMinPrice;
+        /*if(priceRange > 1)
         {
-            if(priceRange < 100)
+            if(priceRange < 5)
             {
-                yAxisLabelIncrement = (int)Math.ceil((priceRange)/5.0);
+                yAxisLabelIncrement = 0.2f;
+            }
+            if(priceRange < 10)
+            {
+                yAxisLabelIncrement = 1;
+            }
+            else if(priceRange < 100)
+            {
+                yAxisLabelIncrement = (float)Math.ceil((priceRange)/5.0);
             }
             else if(priceRange < 1000)
             {
-                yAxisLabelIncrement = (int)Math.ceil((priceRange)/10.0);
+                yAxisLabelIncrement = (float)Math.ceil((priceRange)/10.0);
             }
             else
-            {
+            {*/
                 int maxLableCount = getHeight()/getTextHeight();
-                yAxisLabelIncrement = (int)Math.ceil((priceRange)/Math.min(maxLableCount, 20.0));
-            }
+                yAxisLabelIncrement = (priceRange)/(float)Math.min(maxLableCount, 20.0);
+           // }
+       // }
+        if(yAxisLabelIncrement < ServerMarketManager.rawToRealPrice(1 ,priceScaleFactor))
+        {
+            yAxisLabelIncrement = ServerMarketManager.rawToRealPrice(1 ,priceScaleFactor);
         }
 
         int x = getChartRightEndPos();
         int labelXPos = x + 5;
 
-        //getGraphics().pushPose();
-        //getGraphics().scale(0.5f,0.5f,1);
+        float startLabelPrice = chartViewMinPrice;
+        float endLabelPrice = chartViewMaxPrice;
+
+        /*if(startLabelPrice < 10)
+        {
+            startLabelPrice = (float)Math.floor(startLabelPrice / yAxisLabelIncrement) * yAxisLabelIncrement;
+        }
+        else
+        {
+            startLabelPrice = (float)Math.ceil(startLabelPrice / yAxisLabelIncrement) * yAxisLabelIncrement;
+        }*/
+
 
         // Draw yAxis
-        for(int i=chartViewMaxPrice; i>=chartViewMinPrice; i-=yAxisLabelIncrement)
-        {
-            int y = priceToYPosFunc(i);
-            String label = String.valueOf(i);
-            drawText(label, labelXPos, y, 0xFFFFFFFF, Alignment.LEFT);
+        if(yAxisLabelIncrement > 0) {
+            for (float i = startLabelPrice; i <= endLabelPrice; i += yAxisLabelIncrement) {
+                int y = priceToYPosFunc(i);
+                String label = priceHistory.getRealPriceString(i);
+                drawText(label, labelXPos, y, 0xFFFFFFFF, Alignment.LEFT);
 
-            drawRect(1,  y, x, 1, 0xFF808080);
+                drawRect(1, y, x, 1, 0xFF808080);
+            }
         }
 
 
         long maxVolume = priceHistory.getMaxVolume();
         int lastIndex = priceHistory.size()-1;
-        //volumeDisplayRect.x = 0;
-        //volumeDisplayRect.y = getHeight() - PADDING - getHeight()/10;
-        //volumeDisplayRect.width = chartWidth;
-        //volumeDisplayRect.height = getHeight() / 11 + PADDING - 2;
-        int currentPrice = priceHistory.getCurrentPrice();
-        String labelText = String.valueOf(currentPrice);
+        float currentPrice = priceHistory.getCurrentRealPrice();
+        String labelText = priceHistory.getRealPriceString(currentPrice);
         int currentPriceYPos = priceToYPosFunc(currentPrice);
         drawText(labelText, x-candleWidth-3 ,currentPriceYPos,  Alignment.RIGHT);
 
@@ -130,10 +151,10 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
             //long volume = priceHistory.getVolume(lastIndex-i);
             //drawRect(x, getHeight()-1, candleWidth, (int)-map(volume, 0, maxVolume, 0, (float) getHeight() /11+PADDING-2), 0xFF91a9b8);
 
-            int low = priceHistory.getLowPrice(lastIndex-i);
-            int high = priceHistory.getHighPrice(lastIndex-i);
-            int close = priceHistory.getClosePrice(lastIndex-i);
-            int open = priceHistory.getOpenPrice(lastIndex-i);
+            float low = priceHistory.getLowRealPrice(lastIndex-i);
+            float high = priceHistory.getHighRealPrice(lastIndex-i);
+            float close = priceHistory.getCloseRealPrice(lastIndex-i);
+            float open = priceHistory.getOpenRealPrice(lastIndex-i);
             renderCandle(x, candleWidth, 0, 0, open, close, high, low);
 
             if(x <= candleWidth)
@@ -146,7 +167,7 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
             int yPos = priceToYPosFunc(botTargetPrice);
             drawRect(currentPriceLineLeftPos - tooltipWidth-10, yPos, tooltipWidth + currentPriceLineWidth+13, 1, 0xFF0000FF);
 
-            String priceString = String.format("%.2f", botTargetPrice);
+            String priceString = priceHistory.getRealPriceString(botTargetPrice);
             drawText(BOT_TARGET_PRICE.getString() + priceString, currentPriceLineLeftPos - tooltipWidth-10, yPos, Alignment.RIGHT);
         }
         drawRect(currentPriceLineLeftPos, currentPriceYPos, currentPriceLineWidth, 1, 0xFF555555);
@@ -177,7 +198,7 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
         this.priceHistory = priceHistory;
     }
 
-    public void setMinMaxPrice(int minPrice, int maxPrice)
+    public void setMinMaxPrice(float minPrice, float maxPrice)
     {
         this.chartViewMinPrice = minPrice;
         this.chartViewMaxPrice = maxPrice;
@@ -193,6 +214,9 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
     public void setBotTargetPrice(float botTargetPrice) {
         this.botTargetPrice = botTargetPrice;
     }
+    public void setPriceScaleFactor(int priceScaleFactor) {
+        this.priceScaleFactor = priceScaleFactor;
+    }
     public int getMaxCandleCount()
     {
         return Math.max((int)(chartWidth*scrollValue*2) / minCandleWidth,10);
@@ -203,11 +227,18 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
     }
     public int getChartRightEndPos()
     {
-        maxLabelWidth = getFont().width(String.valueOf(chartViewMaxPrice)) + 5;
+        if(priceHistory == null)
+            maxLabelWidth = 0;
+        else
+            maxLabelWidth = getTextWidth(String.valueOf((int)chartViewMaxPrice) + priceHistory.getPriceScaleFactor());
         int labelXPos = getWidth() - maxLabelWidth;
         return labelXPos-5;
     }
 
+    /*private String getPriceString(int rawPrice)
+    {
+        return Bank.getFormattedAmount(rawPrice, currencyCentScaleFactor);
+    }*/
 
     @Override
     protected void mouseScrolled(double delta) {
@@ -261,7 +292,7 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
                 int case_ = stillActiveOrderIds.get(orderID);
                 if(case_ == 1)
                 {
-                    LimitOrderInChartDisplay orderView = new LimitOrderInChartDisplay(yPosToPriceFunc, order, pair, priceChangeCallback);
+                    LimitOrderInChartDisplay orderView = new LimitOrderInChartDisplay(yPosToPriceFunc, order, pair, priceChangeCallback, priceScaleFactor);
                     orderView.setWidth(getWidth()/2-5);
                     orderView.setPosition(getWidth()-orderView.getWidth(), priceToYPosFunc(order.limitPrice));
                     limitOrderDisplays.put(orderID, orderView);
@@ -281,7 +312,7 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
     }
 
     private void renderCandle(int x,int candleWidth, int xOffset, int yOffset,
-                             int open, int close, int high, int low)
+                             float open, float close, float high, float low)
     {
         int color = open > close ? colorSell : colorBuy;
 

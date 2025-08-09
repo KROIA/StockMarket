@@ -72,8 +72,6 @@ public class MarketCreationScreen extends StockMarketGuiScreen {
 
 
     private final Button createMarketButton;
-
-
     private final ManagementScreen parent;
     public MarketCreationScreen(ManagementScreen parent)
     {
@@ -101,7 +99,9 @@ public class MarketCreationScreen extends StockMarketGuiScreen {
         //initialPriceLabel = new Label(INITIAL_PRICE_LABEL.getString());
         initialPriceTextBox = new TextBox();
         initialPriceTextBox.setAllowLetters(false);
-        initialPriceTextBox.setAllowNumbers(true, false);
+        initialPriceTextBox.setAllowNumbers(true, true);
+        initialPriceTextBox.setAllowNegativeNumbers(false);
+        initialPriceTextBox.setMaxDecimalChar(2);
         initialPriceTextBox.setOnTextChanged(this::onInitialPriceChanged);
         candleTimeTextBoxMinutes = new TextBox();
         candleTimeTextBoxMinutes.setAllowLetters(false);
@@ -316,7 +316,7 @@ public class MarketCreationScreen extends StockMarketGuiScreen {
     {
         String itemName;
         String currencyName;
-        int price = initialPriceTextBox.getInt();
+        float price = Math.max(0, (float)initialPriceTextBox.getDouble());
         if(selectedItem != null && !selectedItem.isEmpty())
             itemName = selectedItem.getHoverName().getString();
         else
@@ -325,7 +325,7 @@ public class MarketCreationScreen extends StockMarketGuiScreen {
             currencyName = selectedCurrency.getHoverName().getString();
         else
             currencyName = "Unknown Currency";
-        return StockMarketTextMessages.getTradingPairCreationScreenInitialPriceTooltip(itemName, currencyName, price);
+        return StockMarketTextMessages.getTradingPairCreationScreenInitialPriceTooltip(itemName, currencyName, String.format("%.2f", price));
     }
     private void updatePotentialTradingItems()
     {
@@ -396,7 +396,7 @@ public class MarketCreationScreen extends StockMarketGuiScreen {
         currentPairView.setEnabled(true);
         getMarketManager().requestIsTradingPairAllowed(tradingPair, (success)->{
             getMarketManager().requestRecommendedPrice(tradingPair, (price) -> {
-                initialPriceTextBox.setText(String.valueOf(price));
+                initialPriceTextBox.setText(String.format("%.2f", price));
             });
             createMarketButton.setEnabled(success);
         });
@@ -411,7 +411,7 @@ public class MarketCreationScreen extends StockMarketGuiScreen {
         boolean useMarketBot = enableMarketBot.isChecked();
 
         MarketFactory.DefaultMarketSetupGeneratorData data = new MarketFactory.DefaultMarketSetupGeneratorData();
-        data.defaultPrice = initialPriceTextBox.getInt();
+        data.defaultPrice = Math.max(0, (float)initialPriceTextBox.getDouble());
         data.updateIntervalMS = getMarketSpeedMS();
         data.volatility = (float)volatilitySlider.getSliderValue();
         data.rarity = (float)raritySlider.getSliderValue();

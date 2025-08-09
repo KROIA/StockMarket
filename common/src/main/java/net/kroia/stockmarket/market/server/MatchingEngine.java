@@ -27,6 +27,7 @@ public class MatchingEngine implements ServerSaveable {
     private final HistoricalMarketData historicalMarketData;    // Owned by the ServerMarket
     private final OrderBook orderBook;  // Owned by the ServerMarket
     private final TradingPair tradingPair;  // Owned by the ServerMarket
+    private int priceScaleFactor = 1;
     public MatchingEngine(ServerMarket market,
                           HistoricalMarketData historicalMarketData,
                           OrderBook orderBook,
@@ -38,6 +39,9 @@ public class MatchingEngine implements ServerSaveable {
         this.tradingPair = tradingPair;
     }
 
+    public void setPriceScaleFactor(int priceScaleFactor) {
+        this.priceScaleFactor = priceScaleFactor;
+    }
     public void processIncommingOrders(List<Order> orders)
     {
         if(orders == null || orders.isEmpty())
@@ -109,7 +113,7 @@ public class MatchingEngine implements ServerSaveable {
                         break;
                     }
                     long virtualVolume = virtualOrderBook.getAmount(newPrice);
-                    long transferedVolume = TransactionEngine.virtualFill(tradingPair, marketOrder, virtualVolume, newPrice);
+                    long transferedVolume = TransactionEngine.virtualFill(tradingPair, marketOrder, virtualVolume, newPrice, priceScaleFactor);
                     filledVolume += transferedVolume;
                     if (transferedVolume > 0) {
                         if (marketOrder.isBuy()) {
@@ -139,7 +143,7 @@ public class MatchingEngine implements ServerSaveable {
             }
 
 
-            long transferedVolume = TransactionEngine.fill(tradingPair ,marketOrder, limitOrder, limitOrder.getPrice());
+            long transferedVolume = TransactionEngine.fill(tradingPair ,marketOrder, limitOrder, limitOrder.getPrice(), priceScaleFactor);
             filledVolume += transferedVolume;
 
             if(limitOrder.isFilled() || limitOrder.getStatus() == Order.Status.CANCELLED || limitOrder.getStatus() == Order.Status.INVALID)
@@ -186,7 +190,7 @@ public class MatchingEngine implements ServerSaveable {
                 }
                 // Fill the remaining volume with virtual orders
                 long virtualVolume = virtualOrderBook.getAmount(newPrice);
-                long transferedVolume = TransactionEngine.virtualFill(tradingPair, marketOrder, virtualVolume, newPrice);
+                long transferedVolume = TransactionEngine.virtualFill(tradingPair, marketOrder, virtualVolume, newPrice, priceScaleFactor);
                 fillVolume -= transferedVolume;
 
                 if (transferedVolume > 0) {
@@ -258,7 +262,7 @@ public class MatchingEngine implements ServerSaveable {
                         break;
                     }
                     long virtualVolume = virtualOrderBook.getAmount(newPrice);
-                    long transferedVolume = TransactionEngine.virtualFill(tradingPair, limitOrder, virtualVolume, newPrice);
+                    long transferedVolume = TransactionEngine.virtualFill(tradingPair, limitOrder, virtualVolume, newPrice, priceScaleFactor);
                     //filledVolume += transferedVolume;
                     fillVolume -= transferedVolume;
                     if (transferedVolume > 0) {
@@ -300,7 +304,7 @@ public class MatchingEngine implements ServerSaveable {
             if(fillWith == null)
                 continue;
 
-            long transferedVolume = TransactionEngine.fill(tradingPair ,limitOrder, fillWith, fillWith.getPrice());
+            long transferedVolume = TransactionEngine.fill(tradingPair ,limitOrder, fillWith, fillWith.getPrice(), priceScaleFactor);
             if(fillWith.isFilled() || fillWith.getStatus() == Order.Status.CANCELLED || fillWith.getStatus() == Order.Status.INVALID)
                 toRemove.add(fillWith);
             if(transferedVolume != 0)
@@ -341,7 +345,7 @@ public class MatchingEngine implements ServerSaveable {
                     break;
                 }
                 long virtualVolume = virtualOrderBook.getAmount(newPrice);
-                long transferedVolume = TransactionEngine.virtualFill(tradingPair, limitOrder, virtualVolume, newPrice);
+                long transferedVolume = TransactionEngine.virtualFill(tradingPair, limitOrder, virtualVolume, newPrice, priceScaleFactor);
                 fillVolume -= transferedVolume;
                 if (transferedVolume > 0) {
                     if (limitOrder.isBuy()) {
@@ -377,7 +381,7 @@ public class MatchingEngine implements ServerSaveable {
 
     private void setPrice(int price)
     {
-        historicalMarketData.setCurrentPrice(price);
+        historicalMarketData.setCurrentRawPrice(price);
 
         VirtualOrderBook virtualOrderBook = orderBook.getVirtualOrderBook();
         if(virtualOrderBook != null)

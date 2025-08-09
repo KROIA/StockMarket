@@ -12,6 +12,7 @@ import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.clientdata.ServerMarketSettingsData;
+import net.kroia.stockmarket.market.server.ServerMarketManager;
 import net.kroia.stockmarket.market.server.VirtualOrderBook;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import net.kroia.stockmarket.screen.uiElements.TradingPairView;
@@ -105,6 +106,7 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
         public final TextBox candleTimeMin;
         public final Label itemImbalanceLabel;
         public final TextBox itemImbalanceTextBox;
+
 
         public GeneralGuiElement() {
             super();
@@ -426,8 +428,10 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
             defaultPriceLabel = new Label(TEXTS.BOT_SETTINGS_DEFAULT_PRICE.getString());
             defaultPriceLabel.setAlignment(Alignment.RIGHT);
             defaultPriceTextBox = new TextBox();
-            defaultPriceTextBox.setAllowNumbers(true,false);
+            defaultPriceTextBox.setAllowNumbers(true,true);
             defaultPriceTextBox.setAllowLetters(false);
+            defaultPriceTextBox.setAllowNegativeNumbers(false);
+            defaultPriceTextBox.setMaxDecimalChar(0);
             updateTimerInvervalMSLabel = new Label(TEXTS.BOT_SETTINGS_UPDATE_INTERVAL_MS.getString());
             updateTimerInvervalMSLabel.setAlignment(Alignment.RIGHT);
             updateTimerInvervalMSTextBox = new TextBox();
@@ -552,6 +556,7 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
             else
             {
                 enableCheckBox.setChecked(botSettings.enabled);
+                defaultPriceTextBox.setMaxDecimalChar(ServerMarketManager.getDecimalCharCount(priceScaleFactor));
                 defaultPriceTextBox.setText(String.valueOf(botSettings.defaultPrice));
                 updateTimerInvervalMSTextBox.setText(String.valueOf(botSettings.updateTimerIntervallMS));
                 volumeScaleTextBox.setText(String.valueOf(botSettings.volumeScale));
@@ -572,7 +577,7 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
                 botSettings = null;
             if(botSettings != null) {
                 botSettings.enabled = enableCheckBox.isChecked();
-                botSettings.defaultPrice = getInRange(defaultPriceTextBox.getInt(), 0, Integer.MAX_VALUE);
+                botSettings.defaultPrice = getInRange((float)defaultPriceTextBox.getDouble(), 0.f, (float)Integer.MAX_VALUE);
                 defaultPriceTextBox.setText(String.valueOf(botSettings.defaultPrice));
                 botSettings.updateTimerIntervallMS = getInRange(updateTimerInvervalMSTextBox.getLong(), 10, Long.MAX_VALUE);
                 updateTimerInvervalMSTextBox.setText(String.valueOf(botSettings.updateTimerIntervallMS));
@@ -590,6 +595,8 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
             }
             return botSettings;
         }
+
+
 
         @Override
         protected void render() {
@@ -649,6 +656,7 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
     private final BotGuiElement botGuiElement;
 
     private final TimerMillis updateTimer;
+    public int priceScaleFactor = 1;
     public MarketSettingsScreen(GuiScreen parent, Consumer<ServerMarketSettingsData> onSave) {
         super(TEXTS.TITLE);
         this.parentScreen = parent;
@@ -731,6 +739,7 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
         //this.serverMarketSettingsData = settings;
         if(settings != null)
         {
+            priceScaleFactor = settings.priceScaleFactor;
             if(settings.tradingPairData != null) {
                 TradingPair tradingPair = settings.tradingPairData.toTradingPair();
                 selectMarket(tradingPair);
@@ -753,6 +762,7 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
                 virtualOrderBookGuiElement.setVirtualOrderBookSettings(null);
             oldItemImbalance = settings.itemImbalance;
             generalGuiElement.setItemImbalance(settings.itemImbalance);
+
         }
         else {
             tradingPairView.setTradingPair(null);
@@ -778,7 +788,8 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
                 virtualOrderBookGuiElement.getVirtualOrderBookSettings(),
                 generalGuiElement.isMarketOpen(),
                 0,
-                generalGuiElement.getShiftPriceCandleIntervalMS()
+                generalGuiElement.getShiftPriceCandleIntervalMS(),
+                priceScaleFactor
         );
 
         long newItemImbalance = generalGuiElement.getItemImbalance();

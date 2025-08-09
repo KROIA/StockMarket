@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.market.server;
 
+import net.kroia.banksystem.banking.bank.MoneyBank;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.ServerPlayerUtilities;
@@ -38,6 +39,29 @@ public class ServerMarketManager implements IServerMarketManager
 
     }
 
+    public static long scaleToBankSystemMoneyAmount(long amount, int centScaleFactor)
+    {
+        return amount * MoneyBank.getCentScaleFactorStatic() / centScaleFactor;
+        /*// Scale the amount to the bank system money amount
+        if(centScaleFactor == 1)
+            return amount * 100; // No scaling needed for item banks
+        if(centScaleFactor == 10)
+            return amount * 10; // Invalid scale factor, return the amount as is
+        return amount;*/
+    }
+    public static long realToRawPrice(float realPrice, int centScaleFactor)
+    {
+        return (long) (realPrice * centScaleFactor);
+    }
+    public static float rawToRealPrice(long rawPrice, int centScaleFactor)
+    {
+        return (float) rawPrice / centScaleFactor;
+    }
+    public static int getDecimalCharCount(int centScaleFactor)
+    {
+        return (int)Math.log10(centScaleFactor);
+    }
+
 
     @Override
     public @Nullable BotSettingsData getBotSettingsData(@NotNull TradingPair pair)
@@ -56,7 +80,7 @@ public class ServerMarketManager implements IServerMarketManager
         return market.getTradingPairData();
     }
     @Override
-    public @Nullable OrderBookVolumeData getOrderBookVolumeData(@NotNull TradingPair pair, int historyViewCount, int minPrice, int maxPrice, int tileCount)
+    public @Nullable OrderBookVolumeData getOrderBookVolumeData(@NotNull TradingPair pair, int historyViewCount, float minPrice, float maxPrice, int tileCount)
     {
         ServerMarket market = markets.get(pair);
         if(market == null)
@@ -106,8 +130,8 @@ public class ServerMarketManager implements IServerMarketManager
     @Override
     public @Nullable TradingViewData getTradingViewData(@NotNull TradingPair pair, UUID player,
                                                         int maxHistoryPointCount,
-                                                        int minVisiblePrice,
-                                                        int maxVisiblePrice,
+                                                        float minVisiblePrice,
+                                                        float maxVisiblePrice,
                                                         int orderBookTileCount,
                                                         boolean requestBotTargetPrice)
     {
@@ -355,9 +379,9 @@ public class ServerMarketManager implements IServerMarketManager
     }
 
     @Override
-    public int getRecommendedPrice(TradingPair pair)
+    public float getRecommendedPrice(TradingPair pair)
     {
-        return 10;
+        return 10.f;
     }
 
     @Override

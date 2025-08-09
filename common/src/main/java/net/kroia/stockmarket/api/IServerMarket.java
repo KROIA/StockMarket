@@ -22,13 +22,13 @@ public interface IServerMarket extends ServerSaveable {
     @Nullable BotSettingsData getBotSettingsData();
     @Nullable VirtualOrderBookSettingsData getVirtualOrderBookSettingsData();
     TradingPairData getTradingPairData();
-    OrderBookVolumeData getOrderBookVolumeData(int historyViewCount, int minPrice, int maxPrice, int tileCount);
+    OrderBookVolumeData getOrderBookVolumeData(int historyViewCount, float minPrice, float maxPrice, int tileCount);
     OrderBookVolumeData getOrderBookVolumeData();
     OrderReadData getOrderReadData(long orderID);
     OrderReadListData getOrderReadListData(List<Long> orderIDs);
     OrderReadListData getOrderReadListData(UUID playerUUID);
     PriceHistoryData getPriceHistoryData(int maxHistoryPointCount);
-    TradingViewData getTradingViewData(UUID player,int maxHistoryPointCount, int minVisiblePrice, int maxVisiblePrice, int orderBookTileCount, boolean requestBotTargetPrice);
+    TradingViewData getTradingViewData(UUID player,int maxHistoryPointCount, float minVisiblePrice, float maxVisiblePrice, int orderBookTileCount, boolean requestBotTargetPrice);
     TradingViewData getTradingViewData(UUID player);
     ServerMarketSettingsData getMarketSettingsData();
     boolean setMarketSettingsData(@Nullable ServerMarketSettingsData settingsData);
@@ -38,6 +38,7 @@ public interface IServerMarket extends ServerSaveable {
     boolean setVirtualOrderBookSettingsData(@Nullable VirtualOrderBookSettingsData virtualOrderBookSettingsData);
     boolean setVirtualOrderBookSettings(VirtualOrderBook.Settings settings);
 
+    int getPriceScaleFactor();
 
     int getBotTargetPrice();
     float getBotTargetPriceF();
@@ -65,7 +66,10 @@ public interface IServerMarket extends ServerSaveable {
 
     TradingPair getTradingPair();
     OrderBook getOrderBook();
-    int getCurrentPrice();
+    int getCurrentRawPrice();
+    float getCurrentRealPrice();
+    int mapToRawPrice(float realPrice);
+    float mapToRealPrice(int rawPrice);
     boolean isMarketOpen();
     void openMarket();
     void closeMarket();
@@ -74,9 +78,9 @@ public interface IServerMarket extends ServerSaveable {
 
 
 
-    boolean createLimitOrder(UUID playerUUID, long amount, int price);
+    boolean createLimitOrder(UUID playerUUID, long amount, float price);
     boolean createMarketOrder(UUID playerUUID, long amount);
-    boolean createBotLimitOrder(long amount, int price);
+    boolean createBotLimitOrder(long amount, float price);
     boolean createBotMarketOrder(long amount);
 
 

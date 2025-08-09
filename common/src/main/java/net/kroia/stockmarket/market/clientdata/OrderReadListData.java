@@ -13,9 +13,9 @@ public class OrderReadListData implements INetworkPayloadEncoder {
 
     public final List<OrderReadData> orders = new ArrayList<>();
 
-    public OrderReadListData(@NotNull List<@NotNull Order> orders) {
+    public OrderReadListData(@NotNull List<@NotNull Order> orders, int priceScaleFactor) {
         for (Order order : orders) {
-            this.orders.add(new OrderReadData(order));
+            this.orders.add(new OrderReadData(order, priceScaleFactor));
         }
     }
     private OrderReadListData() {

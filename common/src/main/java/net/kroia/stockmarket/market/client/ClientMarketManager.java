@@ -183,7 +183,7 @@ public class ClientMarketManager implements IClientMarketManager {
         StockMarketNetworking.IS_TRADING_PAIR_ALLOWED_REQUEST.sendRequestToServer(pair, callback);
     }
     @Override
-    public void requestRecommendedPrice(TradingPair pair, Consumer<Integer> callback )
+    public void requestRecommendedPrice(TradingPair pair, Consumer<Float> callback )
     {
         StockMarketNetworking.GET_RECOMMENDED_PRICE_REQUEST.sendRequestToServer(pair, callback);
     }

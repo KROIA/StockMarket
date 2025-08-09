@@ -19,6 +19,14 @@ public class DynamicIndexedArray implements ServerSaveable {
         indexOffset = 0;
     }
 
+    public void resetToDefaultValues()
+    {
+        for(int i = 0; i < array.length; i++)
+        {
+            array[i] = defaultValueProvider.apply(i + indexOffset);
+        }
+    }
+
     public int getSize()
     {
         return array.length;

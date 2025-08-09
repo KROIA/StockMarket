@@ -14,12 +14,12 @@ public class OrderbookVolumeChartWidget extends StockMarketGuiElement {
 
     private int yPadding = 0;
     private int xPadding = 5;
-    int chartViewMinPrice = 0;
-    int chartViewMaxPrice = 1000;
-    private Function<Integer, Integer> priceToYPosFunc;
+    float chartViewMinPrice = 0;
+    float chartViewMaxPrice = 1000;
+    private Function<Float, Integer> priceToYPosFunc;
 
 
-    public OrderbookVolumeChartWidget(Function<Integer, Integer> priceToYPosFunc, int colorBuy, int colorSell) {
+    public OrderbookVolumeChartWidget(Function<Float, Integer> priceToYPosFunc, int colorBuy, int colorSell) {
         super();
         this.priceToYPosFunc = priceToYPosFunc;
         this.colorBuy = colorBuy;
@@ -36,7 +36,7 @@ public class OrderbookVolumeChartWidget extends StockMarketGuiElement {
     public void setXPadding(int xPadding) {
         this.xPadding = xPadding;
     }
-    public void setMinMaxPrice(int minPrice, int maxPrice)
+    public void setMinMaxPrice(float minPrice, float maxPrice)
     {
         this.chartViewMinPrice = minPrice;
         this.chartViewMaxPrice = maxPrice;
@@ -54,17 +54,21 @@ public class OrderbookVolumeChartWidget extends StockMarketGuiElement {
         int chartViewHeight = miny - maxy;
         int chartViewWidth = getWidth() - xPadding*2;
 
-        float barHeight = (float)chartViewHeight/ orderBookVolume.tiles;
+        float barHeight = (float)chartViewHeight;
+        if(orderBookVolume.volume.length > 1)
+        {
+            barHeight = (float)chartViewHeight / (orderBookVolume.volume.length - 1);
+        }
 
         long[] volume = orderBookVolume.volume;
         // Get max volume of volume
         long maxVolume = orderBookVolume.getMaxVolume();
         int i = 1;
-        int y = (int)(maxy + chartViewHeight+barHeight/2);
+        int y = miny;
         int lastY = y;
         for (long vol : volume) {
             lastY = y;
-            y = (int)(maxy + chartViewHeight+barHeight/2 - barHeight*i);
+            y = Math.max((int)(maxy + chartViewHeight+barHeight/2 - barHeight*i), maxy);
             long absVol = Math.abs(vol);
             if (absVol > 0) {
                 int color = vol > 0 ? colorBuy : colorSell;

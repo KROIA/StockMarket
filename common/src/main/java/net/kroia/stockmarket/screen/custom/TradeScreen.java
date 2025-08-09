@@ -16,7 +16,6 @@ import net.kroia.stockmarket.networking.packet.server_sender.update.entity.SyncS
 import net.kroia.stockmarket.screen.uiElements.OrderListView;
 import net.kroia.stockmarket.screen.uiElements.TradePanel;
 import net.kroia.stockmarket.screen.uiElements.chart.TradingChartWidget;
-import net.kroia.stockmarket.util.PriceHistory;
 import net.kroia.stockmarket.util.StockMarketGuiScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
@@ -76,7 +75,7 @@ public class TradeScreen extends StockMarketGuiScreen {
 
 
     }
-    public TradeScreen(TradingPair currentPair, int currentAmount, int currentPrice) {
+    public TradeScreen(TradingPair currentPair, int currentAmount, float currentPrice) {
         super(TITLE);
         this.updateTimer = new TimerMillis(true); // Update every second
         updateTimer.start(100);
@@ -120,7 +119,7 @@ public class TradeScreen extends StockMarketGuiScreen {
         TickEvent.PLAYER_POST.register(TradeScreen::onClientTick);
     }
     public TradeScreen() {
-        this(new TradingPair(new ItemID("minecraft:diamond"), new ItemID(BankSystemItems.MONEY.get().getDefaultInstance())), 0, 0);
+        this(new TradingPair(new ItemID("minecraft:diamond"), new ItemID(BankSystemItems.MONEY.get().getDefaultInstance())), 0, 0.f);
 
 
     }
@@ -209,14 +208,12 @@ public class TradeScreen extends StockMarketGuiScreen {
 
         tradingChart.updateView(data);
         //candleStickChart.setMinMaxPrice(data.orderBookVolumeData.minPrice, data.orderBookVolumeData.maxPrice);
-        PriceHistory history = data.priceHistoryData.toHistory();
+
         //candleStickChart.setPriceHistory(history);
         //orderbookVolumeChart.setOrderBookVolume(data.orderBookVolumeData);
-        tradingPanel.setCurrentItemBalance(data.itemBankData.balance, data.itemBankData.centScaleFactor);
-        tradingPanel.setCurrentMoneyBalance(data.currencyBankData.balance, data.currencyBankData.centScaleFactor);
+        tradingPanel.updateView(data);
 
 
-        tradingPanel.setCurrentPrice(history.getCurrentPrice());
         activeOrderListView.updateActiveOrders(data.openOrdersData);
         //candleStickChart.updateOrderDisplay(data.openOrdersData);
 
@@ -268,7 +265,7 @@ public class TradeScreen extends StockMarketGuiScreen {
 
     private void onSellLimitButtonPressed() {
         int amount = tradingPanel.getAmount();
-        int price = tradingPanel.getLimitPrice();
+        float price = tradingPanel.getLimitPrice();
         if(amount > 0 && price >= 0)
             getSelectedMarket().requestCreateLimitOrder(-amount, price, (success) -> {
                 if(success)
@@ -284,7 +281,7 @@ public class TradeScreen extends StockMarketGuiScreen {
 
     private void onBuyLimitButtonPressed() {
         int amount = tradingPanel.getAmount();
-        int price = tradingPanel.getLimitPrice();
+        float price = tradingPanel.getLimitPrice();
         if(amount > 0 && price >= 0)
             getSelectedMarket().requestCreateLimitOrder(amount, price, (success) -> {
                 if(success)
@@ -369,7 +366,7 @@ public class TradeScreen extends StockMarketGuiScreen {
             }
         });
     }
-    private void onOrderChange(OrderReadData order, Integer newPrice)
+    private void onOrderChange(OrderReadData order, Float newPrice)
     {
         if(newPrice != null && newPrice >= 0)
         {

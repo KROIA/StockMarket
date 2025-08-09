@@ -24,13 +24,16 @@ public class  ServerMarketSettingsData implements INetworkPayloadEncoder {
     public boolean doDestroyBotIfExists = false;    // Client set only, Server read only
     public boolean doCreateVirtualOrderBookIfNotExists = false; // Client set only, Server read only
     public boolean doDestroyVirtualOrderBookIfExists = false; // Client set only, Server read only
+    public int priceScaleFactor = 1;
 
 
     public ServerMarketSettingsData(@NotNull TradingPair pair, @Nullable ServerVolatilityBot.Settings settings,
                                     @Nullable VirtualOrderBook.Settings virtualOrderBookSettings,
                                     boolean marketOpen, long itemImbalance,
-                                    long shiftPriceCandleIntervalMS/*, long notifySubscriberIntervalMS*/) {
+                                    long shiftPriceCandleIntervalMS,
+                                    int priceScaleFactor) {
         this.tradingPairData = new TradingPairData(pair);
+
 
         if(settings != null) {
             this.botSettingsData = new BotSettingsData(pair, settings);
@@ -44,13 +47,13 @@ public class  ServerMarketSettingsData implements INetworkPayloadEncoder {
         this.marketOpen = marketOpen;
         this.itemImbalance = itemImbalance;
         this.shiftPriceCandleIntervalMS = shiftPriceCandleIntervalMS;
-        //this.notifySubscriberIntervalMS = notifySubscriberIntervalMS;
+        this.priceScaleFactor = priceScaleFactor;
     }
 
     private ServerMarketSettingsData(TradingPairData pair, BotSettingsData settingsData,
                                      VirtualOrderBookSettingsData virtualOrderBookSettingsData,
                                      boolean marketOpen, long itemImbalance,
-                                     long shiftPriceCandleIntervalMS/*, long notifySubscriberIntervalMS*/) {
+                                     long shiftPriceCandleIntervalMS) {
         this.tradingPairData = pair;
         this.botSettingsData = settingsData;
         this.virtualOrderBookSettingsData = virtualOrderBookSettingsData;
@@ -58,7 +61,6 @@ public class  ServerMarketSettingsData implements INetworkPayloadEncoder {
         this.marketOpen = marketOpen;
         this.itemImbalance = itemImbalance;
         this.shiftPriceCandleIntervalMS = shiftPriceCandleIntervalMS;
-        //this.notifySubscriberIntervalMS = notifySubscriberIntervalMS;
     }
 
 
@@ -82,6 +84,7 @@ public class  ServerMarketSettingsData implements INetworkPayloadEncoder {
         buf.writeBoolean(doDestroyBotIfExists);
         buf.writeBoolean(doCreateVirtualOrderBookIfNotExists);
         buf.writeBoolean(doDestroyVirtualOrderBookIfExists);
+        buf.writeInt(priceScaleFactor);
     }
 
     public static ServerMarketSettingsData decode(FriendlyByteBuf buf) {
@@ -109,6 +112,7 @@ public class  ServerMarketSettingsData implements INetworkPayloadEncoder {
         data.doDestroyBotIfExists = buf.readBoolean();
         data.doCreateVirtualOrderBookIfNotExists = buf.readBoolean();
         data.doDestroyVirtualOrderBookIfExists = buf.readBoolean();
+        data.priceScaleFactor = buf.readInt();
         data.overwriteItemImbalance = overwriteItemImbalance;
         return data;
     }

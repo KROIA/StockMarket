@@ -80,7 +80,6 @@ public class StockMarketModSettings extends ModSettings {
          * Defines the time for one candle stick in milliseconds
          */
         public final Setting<Long> SHIFT_PRICE_CANDLE_INTERVAL_MS = registerSetting("SHIFT_PRICE_CANDLE_INTERVAL_MS", 60000L, Long.class); // 1 minute
-        //public final Setting<Long> NOTIFY_SUBSCRIBER_INTERVAL_MS = registerSetting("NOTIFY_SUBSCRIBER_INTERVAL_MS", 100L, Long.class); // 1 minute
 
         /**
          * If true, the market will be open directly after creation
@@ -93,6 +92,8 @@ public class StockMarketModSettings extends ModSettings {
          * Default is the MoneyItem from BankSystemMod
          */
         private final Setting<ItemStack> CURRENCY_ITEM = registerSetting("CURRENCY_ITEM", BankSystemItems.MONEY.get().getDefaultInstance(), ItemStack.class, new ItemStackJsonParser());
+
+
 
         /**
          * List of items that are tradable without creating them manually
@@ -108,6 +109,25 @@ public class StockMarketModSettings extends ModSettings {
          * Defines the size of the virtual order book array which is used as virtual order liquidity
          */
         public final Setting<Integer> VIRTUAL_ORDERBOOK_ARRAY_SIZE = registerSetting("VIRTUAL_ORDERBOOK_ARRAY_SIZE", 100, Integer.class);
+
+
+        /**
+         * When nothing is set, the default price scale is 1
+         */
+        public final Setting<Integer> DEFAULT_PRICE_SCALE = registerSetting("DEFAULT_PRICE_SCALE", 1, Integer.class);
+
+        /**
+         * If the default price is below this threshold, a price scale of 10 is used
+         */
+        public final Setting<Integer> PRICE_SCALE_10_DEFAULT_PRICE_THRESHOLD = registerSetting("PRICE_SCALE_10_DEFAULT_PRICE_THRESHOLD", 200, Integer.class);
+
+        /**
+         * If the default price is below this threshold, a price scale of 100 is used
+         * This overrides the PRICE_SCALE_10_DEFAULT_PRICE_THRESHOLD
+         */
+        public final Setting<Integer> PRICE_SCALE_100_DEFAULT_PRICE_THRESHOLD = registerSetting("PRICE_SCALE_100_DEFAULT_PRICE_THRESHOLD", 20, Integer.class);
+
+
 
 
         public Market() { super("Market"); }

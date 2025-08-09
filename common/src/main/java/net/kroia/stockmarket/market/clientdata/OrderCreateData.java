@@ -22,10 +22,10 @@ public class OrderCreateData implements INetworkPayloadEncoder {
      * The limit price for the order.
      * For market orders, this is 0.
      */
-    public final int limitPrice;
+    public final float limitPrice;
 
 
-    public OrderCreateData(@NotNull UUID owner, @NotNull TradingPair pair, long volume, int limitPrice)
+    public OrderCreateData(@NotNull UUID owner, @NotNull TradingPair pair, long volume, float limitPrice)
     {
         this.owner = owner;
         this.type = Order.Type.LIMIT;
@@ -34,7 +34,7 @@ public class OrderCreateData implements INetworkPayloadEncoder {
         this.limitPrice = limitPrice;
     }
 
-    private OrderCreateData(@NotNull UUID owner, Order.Type type, @NotNull TradingPairData pair, long volume, int limitPrice) {
+    private OrderCreateData(@NotNull UUID owner, Order.Type type, @NotNull TradingPairData pair, long volume, float limitPrice) {
         this.owner = owner;
         this.type = type;
         this.tradingPair = pair;
@@ -56,7 +56,7 @@ public class OrderCreateData implements INetworkPayloadEncoder {
         buf.writeUtf(type.name(), 16); // Write the order type
         tradingPair.encode(buf);
         buf.writeLong(volume);
-        buf.writeInt(limitPrice);
+        buf.writeFloat(limitPrice);
     }
 
     public static OrderCreateData decode(FriendlyByteBuf buf) {
@@ -64,7 +64,7 @@ public class OrderCreateData implements INetworkPayloadEncoder {
         Order.Type type = Order.Type.valueOf(buf.readUtf(16));
         TradingPairData tradingPair = TradingPairData.decode(buf);
         long volume = buf.readLong();
-        int limitPrice = buf.readInt();
+        float limitPrice = buf.readFloat();
 
         return new OrderCreateData(owner, type, tradingPair, volume, limitPrice);
     }

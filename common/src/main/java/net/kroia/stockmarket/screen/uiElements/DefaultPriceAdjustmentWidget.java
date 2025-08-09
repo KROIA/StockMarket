@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.screen.uiElements;
 
 
+import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.modutilities.gui.elements.*;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.gui.elements.base.ListView;
@@ -215,6 +216,8 @@ public class DefaultPriceAdjustmentWidget extends Frame {
         plot.addPlotData(plotData);
         plot.setXAxisLabel(TEXT.OLD_PRICE_AXIS_LABEL.getString());
         plot.setYAxisLabel(TEXT.NEW_PRICE_AXIS_LABEL.getString());
+        plot.setxAxisValueConversion("%.1f");
+        plot.setyAxisValueConversion("%.1f");
 
 
         addChild(factorEditorWidget);
@@ -250,7 +253,7 @@ public class DefaultPriceAdjustmentWidget extends Frame {
 
         // Insert sorted by default price
         this.defaultMarketSetupDataList.addAll(defaultMarketSetupDataList);
-        this.defaultMarketSetupDataList.sort(Comparator.comparingInt(MarketFactory.DefaultMarketSetupData::getDefaultPrice));
+        this.defaultMarketSetupDataList.sort(Comparator.comparingDouble(MarketFactory.DefaultMarketSetupData::getDefaultPrice));
 
 
         for(MarketFactory.DefaultMarketSetupData data : this.defaultMarketSetupDataList)
@@ -264,9 +267,9 @@ public class DefaultPriceAdjustmentWidget extends Frame {
             tradingPairView.setHoverTooltipSupplier(()->{
                 String itemText = data.tradingPair.getItem().getName();
                 String currencyText = data.tradingPair.getCurrency().getName();
-                int defaultPrice = data.getDefaultPrice();
-                int newDefaultPrice = getAjustedPrice(defaultPrice);
-                return StockMarketTextMessages.getAdjustedDefaultPriceTooltip(itemText, currencyText, defaultPrice, newDefaultPrice);
+                float defaultPrice = data.getDefaultPrice();
+                float newDefaultPrice = getAjustedPrice(defaultPrice);
+                return StockMarketTextMessages.getAdjustedDefaultPriceTooltip(itemText, currencyText, Bank.getFormattedAmount(defaultPrice, data.priceScaleFactor), Bank.getFormattedAmount(newDefaultPrice, data.priceScaleFactor));
             });
             tradingPairView.setHoverTooltipMousePositionAlignment(Label.Alignment.LEFT);
             tradingPairView.setIsToggleable(true);
@@ -370,8 +373,8 @@ public class DefaultPriceAdjustmentWidget extends Frame {
                         MarketFactory.DefaultMarketSetupData data = defaultMarketSetupDataList.get(j);
                         if(data.tradingPair.equals(tradingPairView.getTradingPair()))
                         {
-                            int defaultPrice = data.getDefaultPrice();
-                            int ajustedPrice = getAjustedPrice(defaultPrice);
+                            float defaultPrice = data.getDefaultPrice();
+                            float ajustedPrice = getAjustedPrice(defaultPrice);
                             Point plotPos = plot.getGuiPosFromXValue(defaultPrice, ajustedPrice);
                             graphicsPosePush();
                             graphicsTranslate(0,0,170);
@@ -427,11 +430,11 @@ public class DefaultPriceAdjustmentWidget extends Frame {
     }
 
 
-    private int getAjustedPrice(int inputPrice)
+    private float getAjustedPrice(float inputPrice)
     {
         if(factors == null)
             return inputPrice; // No factors defined, return original price
-        return MarketFactory.getAjustedPrice(inputPrice, factors.linearFactor, factors.quadraticFactor, factors.exponentialFactor);
+        return MarketFactory.getAjustedPriceF(inputPrice, factors.linearFactor, factors.quadraticFactor, factors.exponentialFactor);
     }
 
     private void updatePlot()
@@ -455,9 +458,9 @@ public class DefaultPriceAdjustmentWidget extends Frame {
 
     }
 
-    private int getXMaxPrice()
+    private float getXMaxPrice()
     {
-        int maxPrice = 0;
+        float maxPrice = 0;
         for(MarketFactory.DefaultMarketSetupData data : defaultMarketSetupDataList)
         {
             maxPrice = Math.max(maxPrice, data.getDefaultPrice());

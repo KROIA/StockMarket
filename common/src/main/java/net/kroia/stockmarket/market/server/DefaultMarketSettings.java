@@ -1496,7 +1496,7 @@ public class DefaultMarketSettings {
 
     public static MarketFactory.DefaultMarketSetupDataGroup getMiscItems()
     {
-        MarketFactory.DefaultMarketSetupDataGroup miscItems = new MarketFactory.DefaultMarketSetupDataGroup("MiscItems",Items.ENDER_PEARL);
+        MarketFactory.DefaultMarketSetupDataGroup miscItems = new MarketFactory.DefaultMarketSetupDataGroup("MiscItems",Items.GLOWSTONE_DUST);
 
         int blazePowderPrice = getDefaultPrices().MISC.BLAZE_POWDER.get();
 

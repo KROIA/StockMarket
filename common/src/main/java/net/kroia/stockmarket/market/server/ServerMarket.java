@@ -42,23 +42,45 @@ public class ServerMarket implements IServerMarket {
      */
     private long itemImbalance;
     private long shiftPriceCandleIntervalMS = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.SHIFT_PRICE_CANDLE_INTERVAL_MS.get();
-    //private long notifySubscriberIntervalMS = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.NOTIFY_SUBSCRIBER_INTERVAL_MS.get();
-
-
-    //private final ArrayList<ServerPlayer> subscribers = new ArrayList<>();
     protected TimerMillis shiftPriceTimer = new TimerMillis(true);
-    //protected TimerMillis notifySubscriberTimer = new TimerMillis(true);
+
+    private int priceScaleFactor = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.DEFAULT_PRICE_SCALE.get();
 
     public ServerMarket(TradingPair pair, int virtualOrderBookArraySize, int historySize)
     {
-        this(pair, 0, virtualOrderBookArraySize, historySize);
+        this(pair, 0, virtualOrderBookArraySize, historySize, 1);
     }
-    public ServerMarket(TradingPair pair, int initialPrice, int virtualOrderBookArraySize, int historySize)
+    public ServerMarket(TradingPair pair, float initialPrice, int virtualOrderBookArraySize, int historySize, int priceScaleFactor)
     {
         this.tradingPair = pair;
-        this.orderBook = new OrderBook(virtualOrderBookArraySize, initialPrice);
-        this.historicalMarketData = new HistoricalMarketData(initialPrice, historySize);
+        if(tradingPair == null)
+        {
+            throw new IllegalArgumentException("Trading pair cannot be null");
+        }
+
+        // Price scale is only possible for money currencies, not for items.
+        if(tradingPair.isMoneyCurrency()) {
+            this.priceScaleFactor = priceScaleFactor;
+
+            if(this.priceScaleFactor <= 0) {
+                if (initialPrice < BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.PRICE_SCALE_100_DEFAULT_PRICE_THRESHOLD.get())
+                    priceScaleFactor = 100; // Use cents for prices below 20
+                else if (initialPrice < BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.PRICE_SCALE_10_DEFAULT_PRICE_THRESHOLD.get())
+                    priceScaleFactor = 10; // Use deci for prices below 200
+                else
+                    priceScaleFactor = 1; // Use whole units for prices above 200
+            }
+        }
+
+
+
+        int rawInitialPrice = mapToRawPrice(initialPrice);
+        this.orderBook = new OrderBook(virtualOrderBookArraySize, rawInitialPrice);
+        this.historicalMarketData = new HistoricalMarketData(rawInitialPrice, historySize);
+        this.historicalMarketData.getHistory().setPriceScaleFactor(priceScaleFactor);
+        this.orderBook.setPriceScaleFactor(priceScaleFactor);
         this.matchingEngine = new MatchingEngine(this, historicalMarketData, orderBook, tradingPair);
+        this.matchingEngine.setPriceScaleFactor(priceScaleFactor);
 
         this.volatilityBot = null;
 
@@ -70,7 +92,10 @@ public class ServerMarket implements IServerMarket {
         this.tradingPair = new TradingPair();
         this.orderBook = new OrderBook(virtualOrderBookArraySize);
         this.historicalMarketData = new HistoricalMarketData(historySize);
+        this.historicalMarketData.getHistory().setPriceScaleFactor(priceScaleFactor);
+        this.orderBook.setPriceScaleFactor(priceScaleFactor);
         this.matchingEngine = new MatchingEngine(this ,historicalMarketData, orderBook, tradingPair);
+        this.matchingEngine.setPriceScaleFactor(priceScaleFactor);
 
         this.volatilityBot = null;
 
@@ -84,7 +109,7 @@ public class ServerMarket implements IServerMarket {
             volatilityBot.update(server);
         }
         matchingEngine.processIncommingOrders(orderBook.getAndClearIncommingOrders());
-        orderBook.updateVirtualOrderBookVolume(historicalMarketData.getCurrentPrice());
+        orderBook.updateVirtualOrderBookVolume(getCurrentRawPrice());
 
         if(shiftPriceTimer.check()) {
             shiftPriceHistory();
@@ -114,35 +139,51 @@ public class ServerMarket implements IServerMarket {
     }
 
     @Override
-    public OrderBookVolumeData getOrderBookVolumeData(int historyViewCount, int minPrice, int maxPrice, int tileCount)
+    public OrderBookVolumeData getOrderBookVolumeData(int historyViewCount, float minPrice, float maxPrice, int tileCount)
     {
-        if(minPrice == 0 && maxPrice == 0)
-        {
-            minPrice = historicalMarketData.getHistory().getLowestPrice(historyViewCount);
-            maxPrice = historicalMarketData.getHistory().getHighestPrice(historyViewCount);
-            int range = (maxPrice - minPrice)/2;
-            if(range < 10)
-            {
-                range = 10;
-            }
-            minPrice -= range;
-            maxPrice += range;
-
-            // Fllor to next 5
-            minPrice = (minPrice / 5) * 5;
-            maxPrice = (maxPrice / 5) * 5;
-
-            minPrice = Math.max(0, minPrice);
-        }
         if(tileCount == 0)
         {
             tileCount = BACKEND_INSTANCES.SERVER_SETTINGS.UI.MAX_ORDERBOOK_TILES.get();
-            if(maxPrice-minPrice < tileCount)
+        }
+        if(minPrice == 0 && maxPrice == 0)
+        {
+            minPrice = historicalMarketData.getHistory().getLowestRealPrice(historyViewCount);
+            maxPrice = historicalMarketData.getHistory().getHighestRealPrice(historyViewCount);
+            float range = (maxPrice - minPrice)/2;
+
+            int minTileCount = 10;
+
+
+
+            if(tileCount < minTileCount)
             {
-                tileCount = maxPrice-minPrice;
+                tileCount = minTileCount;
+            }
+
+            if(range < 1)
+            {
+                range = 1;
+            }
+
+            float pricePerMinTile = mapToRealPrice(1);
+            /*if(range < pricePerMinTile * tileCount)
+            {
+                range = pricePerMinTile * tileCount;
+            }*/
+            minPrice -= range;
+            maxPrice += range;
+
+            minPrice = Math.max(0, Math.round(minPrice * priceScaleFactor) / (float)priceScaleFactor);
+            maxPrice = Math.round(maxPrice * priceScaleFactor) / (float)priceScaleFactor;
+
+            int minRawPrice = mapToRawPrice(minPrice);
+            int maxRawPrice = mapToRawPrice(maxPrice);
+            if(tileCount > maxRawPrice- minRawPrice)
+            {
+                tileCount = maxRawPrice - minRawPrice;
             }
         }
-        return new OrderBookVolumeData(minPrice, maxPrice, tileCount, orderBook);
+        return orderBook.getOrderBookVolumeData(minPrice, maxPrice, tileCount);
     }
 
     @Override
@@ -157,19 +198,19 @@ public class ServerMarket implements IServerMarket {
         LimitOrder order = orderBook.getOrder(orderID);
         if(order == null)
             return null;
-        return new OrderReadData(order);
+        return new OrderReadData(order, priceScaleFactor);
     }
     @Override
     public OrderReadListData getOrderReadListData(List<Long> orderIDs)
     {
         List<LimitOrder> orders = orderBook.getOrders(orderIDs);
-        return new OrderReadListData(new ArrayList<>(orders));
+        return new OrderReadListData(new ArrayList<>(orders), priceScaleFactor);
     }
     @Override
     public OrderReadListData getOrderReadListData(UUID playerUUID)
     {
         List<LimitOrder> orders = orderBook.getOrders(playerUUID);
-        return new OrderReadListData(new ArrayList<>(orders));
+        return new OrderReadListData(new ArrayList<>(orders), priceScaleFactor);
     }
     @Override
     public PriceHistoryData getPriceHistoryData(int maxHistoryPointCount)
@@ -177,7 +218,7 @@ public class ServerMarket implements IServerMarket {
         return new PriceHistoryData(historicalMarketData.getHistory(), maxHistoryPointCount);
     }
     @Override
-    public TradingViewData getTradingViewData(UUID player,int maxHistoryPointCount, int minVisiblePrice, int maxVisiblePrice, int orderBookTileCount, boolean requestBotTargetPrice)
+    public TradingViewData getTradingViewData(UUID player, int maxHistoryPointCount, float minVisiblePrice, float maxVisiblePrice, int orderBookTileCount, boolean requestBotTargetPrice)
     {
         IBankUser bankUser = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getUser(player);
         if(bankUser == null)
@@ -204,7 +245,7 @@ public class ServerMarket implements IServerMarket {
 
         return new TradingViewData(new TradingPairData(tradingPair), new PriceHistoryData(historicalMarketData.getHistory(), maxHistoryPointCount),
                 itemBank, moneyBank, getOrderBookVolumeData(maxHistoryPointCount, minVisiblePrice, maxVisiblePrice, orderBookTileCount),
-                new OrderReadListData(orders), marketOpen, botTargetPrice);
+                new OrderReadListData(orders, priceScaleFactor), marketOpen, botTargetPrice);
     }
     @Override
     public TradingViewData getTradingViewData(UUID player)
@@ -226,7 +267,7 @@ public class ServerMarket implements IServerMarket {
         }
         return new ServerMarketSettingsData(tradingPair, botSettings, virtualOrderBookSettings,
                                             marketOpen, itemImbalance,
-                                            shiftPriceCandleIntervalMS/*, notifySubscriberIntervalMS*/);
+                                            shiftPriceCandleIntervalMS, priceScaleFactor);
     }
     @Override
     public boolean setMarketSettingsData(@Nullable ServerMarketSettingsData settingsData)
@@ -310,6 +351,10 @@ public class ServerMarket implements IServerMarket {
         return true;
     }
 
+    @Override
+    public int getPriceScaleFactor() {
+        return priceScaleFactor;
+    }
 
     @Override
     public int getBotTargetPrice() {
@@ -326,7 +371,7 @@ public class ServerMarket implements IServerMarket {
     @Override
     public void resetHistoricalMarketData()
     {
-        historicalMarketData.clear(historicalMarketData.getCurrentPrice());
+        historicalMarketData.clear(getCurrentRawPrice());
     }
 
 
@@ -374,8 +419,7 @@ public class ServerMarket implements IServerMarket {
     {
         if(orderBook.getVirtualOrderBook() == null)
         {
-            orderBook.createVirtualOrderBook(realVolumeBookSize, historicalMarketData.getCurrentPrice() ,settings);
-            //orderBook.getVirtualOrderBook().setCurrentPrice(historicalMarketData.getCurrentPrice());
+            orderBook.createVirtualOrderBook(realVolumeBookSize, getCurrentRawPrice() ,settings);
         }else {
             orderBook.getVirtualOrderBook().setSettings(settings);
         }
@@ -412,8 +456,26 @@ public class ServerMarket implements IServerMarket {
     //    return historicalMarketData;
     //}
     @Override
-    public int getCurrentPrice() {
+    public int getCurrentRawPrice() {
         return historicalMarketData.getCurrentPrice();
+    }
+
+    @Override
+    public float getCurrentRealPrice()
+    {
+        return mapToRealPrice(getCurrentRawPrice());
+    }
+
+    @Override
+    public int mapToRawPrice(float realPrice)
+    {
+        return (int)ServerMarketManager.realToRawPrice(realPrice, priceScaleFactor);
+    }
+
+    @Override
+    public float mapToRealPrice(int rawPrice)
+    {
+        return (int)ServerMarketManager.rawToRealPrice(rawPrice, priceScaleFactor);
     }
     @Override
     public boolean isMarketOpen() {
@@ -437,12 +499,13 @@ public class ServerMarket implements IServerMarket {
 
 
     @Override
-    public boolean createLimitOrder(UUID playerUUID, long amount, int price)
+    public boolean createLimitOrder(UUID playerUUID, long amount, float price)
     {
         if(!marketOpen)
             return false;
 
-        LimitOrder order = OrderFactory.createLimitOrder(playerUUID, tradingPair, amount, price);
+        int rawPrice = mapToRawPrice(price);
+        LimitOrder order = OrderFactory.createLimitOrder(playerUUID, tradingPair, amount, rawPrice, priceScaleFactor);
         if(order == null)
             return false;
 
@@ -455,8 +518,8 @@ public class ServerMarket implements IServerMarket {
         if(!marketOpen)
             return false;
 
-        int currentPrice = historicalMarketData.getCurrentPrice();
-        MarketOrder order = OrderFactory.createMarketOrder(playerUUID, tradingPair, amount, currentPrice);
+        int currentPrice = getCurrentRawPrice();
+        MarketOrder order = OrderFactory.createMarketOrder(playerUUID, tradingPair, amount, currentPrice, priceScaleFactor);
         if(order == null)
             return false;
 
@@ -465,9 +528,10 @@ public class ServerMarket implements IServerMarket {
     }
 
     @Override
-    public boolean createBotLimitOrder(long amount, int price)
+    public boolean createBotLimitOrder(long amount, float price)
     {
-        LimitOrder order = OrderFactory.createBotLimitOrder(amount, price);
+        int rawPrice = mapToRawPrice(price);
+        LimitOrder order = OrderFactory.createBotLimitOrder(amount, rawPrice);
         addOrder(order);
         return true;
     }
@@ -531,10 +595,11 @@ public class ServerMarket implements IServerMarket {
         orderBook.addIncommingOrder(order);
     }
 
-    protected boolean changeOrderPrice(long orderID, int newPrice)
+    protected boolean changeOrderPrice(long orderID, float newPrice)
     {
-        if(newPrice < 0)
-            newPrice = 0;
+        int newRawPrice = mapToRawPrice(newPrice);
+        if(newRawPrice < 0)
+            newRawPrice = 0;
         Order order = orderBook.getOrder(orderID);
         if(order == null)
             return false;
@@ -545,7 +610,7 @@ public class ServerMarket implements IServerMarket {
             boolean canBeMoved = false;
             if (limitOrder.isBuy()) {
                 long toFreeAmount = toFillAmount * limitOrder.getPrice();
-                long toLockAmount = toFillAmount * newPrice;
+                long toLockAmount = toFillAmount * newRawPrice;
                 IBank moneyBank = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getUser(limitOrder.getPlayerUUID()).getBank(tradingPair.getCurrency());
                 if (moneyBank == null)
                     return false;
@@ -564,7 +629,7 @@ public class ServerMarket implements IServerMarket {
                         return false;
                     }
                     if(orderBook.removeOrder(limitOrder)) {
-                        limitOrder.setPrice(newPrice);
+                        limitOrder.setPrice(newRawPrice);
                         orderBook.addIncommingOrder(limitOrder);
                         return true;
                     }
@@ -572,7 +637,7 @@ public class ServerMarket implements IServerMarket {
             }
             else {
                 if(orderBook.removeOrder(limitOrder)) {
-                    limitOrder.setPrice(newPrice);
+                    limitOrder.setPrice(newRawPrice);
                     orderBook.addIncommingOrder(limitOrder);
                     return true;
                 }
@@ -663,6 +728,7 @@ public class ServerMarket implements IServerMarket {
         tag.putBoolean("marketOpen", marketOpen);
         tag.putLong("itemImbalance", itemImbalance);
         tag.putLong("shiftPriceCandleIntervalMS", shiftPriceCandleIntervalMS);
+        tag.putInt("priceScaleFactor", priceScaleFactor);
         //tag.putLong("notifySubscriberIntervalMS", notifySubscriberIntervalMS);
 
         return true;
@@ -712,7 +778,17 @@ public class ServerMarket implements IServerMarket {
 
         var virtual = orderBook.getVirtualOrderBook();
         if(virtual != null)
-            virtual.setCurrentPrice(historicalMarketData.getCurrentPrice());
+            virtual.setCurrentPrice(getCurrentRawPrice());
+
+
+        if(tag.contains("priceScaleFactor"))
+            priceScaleFactor = tag.getInt("priceScaleFactor");
+        else
+            priceScaleFactor = 1;
+
+        this.historicalMarketData.getHistory().setPriceScaleFactor(priceScaleFactor);
+        this.orderBook.setPriceScaleFactor(priceScaleFactor);
+        this.matchingEngine.setPriceScaleFactor(priceScaleFactor);
         return success;
     }
 

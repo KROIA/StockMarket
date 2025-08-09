@@ -3,6 +3,7 @@ package net.kroia.stockmarket.market;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.kroia.banksystem.item.BankSystemItems;
+import net.kroia.banksystem.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ClientPlayerUtilities;
 import net.kroia.modutilities.JsonUtilities;
@@ -125,6 +126,12 @@ public class TradingPair implements ServerSaveable, INetworkPayloadConverter {
 
         pairUUID = UUID.nameUUIDFromBytes((itemUUID.toString() + currencyUUID.toString()).getBytes());
         isValid = true;
+    }
+    public boolean isMoneyCurrency()
+    {
+        if(currency == null)
+            return false;
+        return MoneyItem.isMoney(currency);
     }
 
 

@@ -278,13 +278,13 @@ public class ServerVolatilityBot extends ServerTradingBot {
 
         if(marketOrderAmountF > 0)
         {
-            long amount = getOrderBookVolume(getCurrentPrice()+1);
+            long amount = getOrderBookVolumeAtRawPrice(getCurrentRawPrice()+1);
             if(-amount < marketOrderAmountF)
                 marketOrderAmountF = -amount;
         }
         else if(marketOrderAmountF < 0)
         {
-            long amount = getOrderBookVolume(getCurrentPrice()-1);
+            long amount = getOrderBookVolumeAtRawPrice(getCurrentRawPrice()-1);
             if(amount < -marketOrderAmountF)
                 marketOrderAmountF = -amount;
         }

@@ -8,15 +8,15 @@ import org.jetbrains.annotations.NotNull;
 public class OrderChangeData implements INetworkPayloadEncoder {
     public final TradingPairData tradingPair;
     public final long orderID;
-    public final int newPrice;
+    public final float newPrice;
 
-    public OrderChangeData(@NotNull TradingPair pair, long orderID, int newPrice)
+    public OrderChangeData(@NotNull TradingPair pair, long orderID, float newPrice)
     {
         this.tradingPair = new TradingPairData(pair);
         this.orderID = orderID;
         this.newPrice = newPrice;
     }
-    private OrderChangeData(@NotNull TradingPairData tradingPair, long orderID, int newPrice) {
+    private OrderChangeData(@NotNull TradingPairData tradingPair, long orderID, float newPrice) {
         this.tradingPair = tradingPair;
         this.orderID = orderID;
         this.newPrice = newPrice;
@@ -26,14 +26,14 @@ public class OrderChangeData implements INetworkPayloadEncoder {
     public void encode(FriendlyByteBuf buf) {
         tradingPair.encode(buf);
         buf.writeLong(orderID);
-        buf.writeInt(newPrice);
+        buf.writeFloat(newPrice);
     }
 
 
     public static OrderChangeData decode(FriendlyByteBuf buf) {
         TradingPairData tradingPair = TradingPairData.decode(buf);
         long orderID = buf.readLong();
-        int newPrice = buf.readInt();
+        float newPrice = buf.readFloat();
         return new OrderChangeData(tradingPair, orderID, newPrice);
     }
 }

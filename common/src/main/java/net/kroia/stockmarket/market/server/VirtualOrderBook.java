@@ -154,7 +154,8 @@ public class VirtualOrderBook implements ServerSaveable {
         virtualOrderVolumeDistribution = new DynamicIndexedArray(realVolumeBookSize, this::getTargetAmount);
         lastMillis = System.currentTimeMillis()-1000;
         setCurrentPrice(initialPrice);
-        updateVolume(initialPrice);
+        //updateVolume(initialPrice);
+        virtualOrderVolumeDistribution.resetToDefaultValues();
     }
 
     public void cleanup() {
@@ -257,6 +258,7 @@ public class VirtualOrderBook implements ServerSaveable {
     public void setSettings(Settings settings)
     {
         this.settings = settings;
+        virtualOrderVolumeDistribution.resetToDefaultValues();
     }
     public Settings getSettings() {
         return settings;

@@ -4,9 +4,9 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.kroia.modutilities.JsonUtilities;
 import net.kroia.modutilities.ServerSaveable;
+import net.kroia.stockmarket.market.clientdata.OrderBookVolumeData;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.Order;
-import net.kroia.stockmarket.util.OrderbookVolume;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import org.jetbrains.annotations.Nullable;
@@ -21,6 +21,7 @@ public class OrderBook implements ServerSaveable {
     private final List<Order> incommingOrders = new ArrayList<>();
 
     private VirtualOrderBook virtualOrderBook;
+    private int priceScaleFactor = 1; // Scale factor for prices, used to handle floating point precision issues.
 
     public OrderBook()
     {
@@ -35,6 +36,10 @@ public class OrderBook implements ServerSaveable {
     {
         if(realVolumeBookSize > 0)
             this.virtualOrderBook = new VirtualOrderBook(realVolumeBookSize, initialPrice);
+    }
+    public void setPriceScaleFactor(int priceScaleFactor)
+    {
+        this.priceScaleFactor = priceScaleFactor;
     }
 
     public void createVirtualOrderBook(int realVolumeBookSize, int initialPrice, VirtualOrderBook.Settings settings)
@@ -250,7 +255,7 @@ public class OrderBook implements ServerSaveable {
      * @param maxPrice The maximum price of the heatmap.
      * @return An array of integers representing the volume in each tile.
      */
-    public OrderbookVolume getOrderBookVolume(int tiles, int minPrice, int maxPrice)
+    /*public OrderbookVolume getOrderBookVolume(int tiles, int minPrice, int maxPrice)
     {
         OrderbookVolume orderbookVolume = new OrderbookVolume(tiles, minPrice, maxPrice);
         int priceRange = maxPrice - minPrice;
@@ -279,16 +284,50 @@ public class OrderBook implements ServerSaveable {
 
         orderbookVolume.setVolume(volume);
         return orderbookVolume;
+    }*/
+    public OrderBookVolumeData getOrderBookVolumeData(float minPrice, float maxPrice, int tileCount)
+    {
+        int rawMinPrice = (int)ServerMarketManager.realToRawPrice(minPrice, priceScaleFactor);
+        int rawMaxPrice = (int)ServerMarketManager.realToRawPrice(maxPrice, priceScaleFactor);
+        int maxTiles = rawMaxPrice - rawMinPrice;
+        /*if(tileCount > maxTiles)
+            tileCount = maxTiles;
+        if(tileCount <= 0)
+            tileCount = 1; // Ensure at least one tile is created.*/
+        int stepSize = maxTiles / Math.max(tileCount,1);
+        if(maxTiles % tileCount != 0) {
+            stepSize++;
+            tileCount = maxTiles / stepSize;
+        }
+
+        if(tileCount <= 0)
+            tileCount = 1; // Ensure at least one tile is created.
+        long[] volume = new long[tileCount];
+
+        for(int i = 0; i < tileCount; i++) {
+            int lowerBound = rawMinPrice + i * stepSize;
+            int upperBound = lowerBound + stepSize - 1;
+            //int upperBound = (i == tileCount - 1) ? maxPrice : lowerBound + stepSize;
+            volume[i] = getVolumeInRawRange(lowerBound, upperBound);
+        }
+        return new OrderBookVolumeData(minPrice, maxPrice, volume);
     }
 
-    public long getVolume(int price, int currentMarketPrice)
+
+    public long getVolumeRealPrice(float price, float currentRealMarketPrice)
+    {
+        int rawPrice = (int)ServerMarketManager.realToRawPrice(price, priceScaleFactor);
+        int currentRawMarketPrice = (int)ServerMarketManager.realToRawPrice(currentRealMarketPrice, priceScaleFactor);
+        return getVolumeRawPrice(rawPrice, currentRawMarketPrice);
+    }
+    public long getVolumeRawPrice(int rawPrice, int currentRawMarketPrice)
     {
         long volume = 0;
-        if(price < currentMarketPrice)
+        if(rawPrice < currentRawMarketPrice)
         {
             for(LimitOrder order : limitBuyOrders)
             {
-                if(order.getPrice() == price)
+                if(order.getPrice() == rawPrice)
                     volume += order.getPendingAmount();
             }
         }
@@ -296,18 +335,18 @@ public class OrderBook implements ServerSaveable {
         {
             for(LimitOrder order : limitSellOrders)
             {
-                if(order.getPrice() == price)
+                if(order.getPrice() == rawPrice)
                     volume += order.getPendingAmount();
             }
         }
         if(virtualOrderBook != null)
-            volume += virtualOrderBook.getAmount(price);
+            volume += virtualOrderBook.getAmount(rawPrice);
 
         return volume;
     }
 
 
-    public long getVolumeInRange(int minPrice, int maxPrice)
+    public long getVolumeInRawRange(int minPrice, int maxPrice)
     {
         long volume = 0;
         for(LimitOrder order : limitBuyOrders)
@@ -327,6 +366,22 @@ public class OrderBook implements ServerSaveable {
         }
         return volume;
     }
+    public long getVolumeInRealRange(float minPrice, float maxPrice)
+    {
+        int rawMinPrice = (int)ServerMarketManager.realToRawPrice(minPrice, priceScaleFactor);
+        int rawMaxPrice = (int)ServerMarketManager.realToRawPrice(maxPrice, priceScaleFactor);
+        return getVolumeInRawRange(rawMinPrice, rawMaxPrice);
+    }
+
+    /*private int getRawPrice(float price)
+    {
+        return (int)ServerMarketManager.realToRawPrice(price, priceScaleFactor);
+    }
+    private float getRealPrice(int rawPrice)
+    {
+        return (float)rawPrice / (float)priceScaleFactor;
+    }*/
+
 
 
 

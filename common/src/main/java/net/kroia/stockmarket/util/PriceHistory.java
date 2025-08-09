@@ -1,7 +1,9 @@
 package net.kroia.stockmarket.util;
 
+import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.modutilities.ServerSaveable;
 import net.kroia.modutilities.networking.INetworkPayloadConverter;
+import net.kroia.stockmarket.market.server.ServerMarketManager;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.network.FriendlyByteBuf;
@@ -16,6 +18,7 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
     private long[] volume;
     private int oldestClosePrice = 0;
     private Timestamp[] timeStamps;// = new Timestamp[maxHistorySize];
+    private int priceScaleFactor = 1;
 
     public PriceHistory(int maxHistorySize) {
         if(maxHistorySize<1)
@@ -50,20 +53,33 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
             timeStamps[i] = new Timestamp();
         }
     }
+
+    public void setPriceScaleFactor(int priceScaleFactor)
+    {
+        this.priceScaleFactor = priceScaleFactor;
+    }
+    public int getPriceScaleFactor()
+    {
+        return priceScaleFactor;
+    }
+
+
     public static PriceHistory copy(PriceHistory org, int maxHistorySize)
     {
         if(org == null)
             return null;
         int oldestPrice = org.oldestClosePrice;
+
         if(org.maxHistorySize < maxHistorySize || maxHistorySize < 1) {
             maxHistorySize = org.maxHistorySize;
         }
         else {
-            oldestPrice = org.getOpenPrice(maxHistorySize - 1);
+            oldestPrice = org.getOpenRawPrice(maxHistorySize - 1);
         }
 
         PriceHistory copy = new PriceHistory(maxHistorySize);
         copy.oldestClosePrice = oldestPrice;
+        copy.priceScaleFactor = org.priceScaleFactor;
 
         for (int i = 0; i < maxHistorySize; i++) {
             copy.lowPrice[i] = org.lowPrice[i];
@@ -129,7 +145,8 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
 
 
 
-    public void setCurrentPrice(int close)
+
+    public void setCurrentRawPrice(int close)
     {
         closePrice[0] = close;
         lowPrice[0] = Math.min(lowPrice[0], close);
@@ -143,7 +160,7 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
     {
         this.volume[0] += volume;
     }
-    public int getCurrentPrice()
+    public int getCurrentRawPrice()
     {
         return closePrice[0];
     }
@@ -152,29 +169,29 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
         return volume[0];
     }
 
-    public int getLowPrice(int index)
+    public int getLowRawPrice(int index)
     {
         return lowPrice[index];
     }
-    public int getLowPrice()
+    public int getLowRawPrice()
     {
         return lowPrice[0];
     }
 
-    public int getHighPrice(int index)
+    public int getHighRawPrice(int index)
     {
         return highPrice[index];
     }
-    public int getHighPrice()
+    public int getHighRawPrice()
     {
         return highPrice[0];
     }
 
-    public int getClosePrice(int index)
+    public int getCloseRawPrice(int index)
     {
         return closePrice[index];
     }
-    public int getClosePrice()
+    public int getCloseRawPrice()
     {
         return closePrice[0];
     }
@@ -200,7 +217,7 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
     }
 
 
-    public int getOpenPrice(int index)
+    public int getOpenRawPrice(int index)
     {
         if(index == maxHistorySize-1)
         {
@@ -209,11 +226,11 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
         return closePrice[index+1];
     }
 
-    public int getLowestPrice()
+    public int getLowestRawPrice()
     {
-        return getLowestPrice(-1);
+        return getLowestRawPrice(-1);
     }
-    public int getLowestPrice(int lastIndex)
+    public int getLowestRawPrice(int lastIndex)
     {
         if(lastIndex <= 0 || lastIndex > maxHistorySize)
             lastIndex = maxHistorySize;
@@ -224,11 +241,11 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
         return min;
     }
 
-    public int getHighestPrice()
+    public int getHighestRawPrice()
     {
-        return getHighestPrice(-1);
+        return getHighestRawPrice(-1);
     }
-    public int getHighestPrice(int lastIndex)
+    public int getHighestRawPrice(int lastIndex)
     {
         if(lastIndex <= 0 || lastIndex > maxHistorySize)
             lastIndex = maxHistorySize;
@@ -251,9 +268,63 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
     }
 
 
+    public float getOpenRealPrice(int index) {
+        return getRealPrice(getOpenRawPrice(index));
+    }
+    public float getOpenRealPrice() {
+        return getRealPrice(getOpenRawPrice(0));
+    }
+    public float getLowRealPrice(int index) {
+        return getRealPrice(getLowRawPrice(index));
+    }
+    public float getLowRealPrice() {
+        return getRealPrice(getLowRawPrice(0));
+    }
+    public float getHighRealPrice(int index) {
+        return getRealPrice(getHighRawPrice(index));
+    }
+    public float getHighRealPrice() {
+        return getRealPrice(getHighRawPrice(0));
+    }
+    public float getCloseRealPrice(int index) {
+        return getRealPrice(getCloseRawPrice(index));
+    }
+    public float getCloseRealPrice() {
+        return getRealPrice(getCloseRawPrice(0));
+    }
+    public float getLowestRealPrice() {
+        return getRealPrice(getLowestRawPrice());
+    }
+    public float getLowestRealPrice(int lastIndex) {
+        return getRealPrice(getLowestRawPrice(lastIndex));
+    }
+    public float getHighestRealPrice() {
+        return getRealPrice(getHighestRawPrice());
+    }
+    public float getHighestRealPrice(int lastIndex) {
+        return getRealPrice(getHighestRawPrice(lastIndex));
+    }
+    public float getCurrentRealPrice() {
+        return getRealPrice(getCurrentRawPrice());
+    }
+
+
+    private float getRealPrice(int price) {
+        return ServerMarketManager.rawToRealPrice(price, priceScaleFactor);
+    }
+    public String getRealPriceString(int rawPrice)
+    {
+        return Bank.getFormattedAmount(rawPrice, priceScaleFactor);
+    }
+    public String getRealPriceString(float realPrice)
+    {
+        return Bank.getFormattedAmount(realPrice, priceScaleFactor);
+    }
+
     @Override
     public void encode(FriendlyByteBuf buf) {
         buf.writeInt(oldestClosePrice);
+        buf.writeInt(priceScaleFactor);
         buf.writeInt(maxHistorySize);
         for (int i = 0; i < maxHistorySize; i++) {
             buf.writeInt(lowPrice[i]);
@@ -267,6 +338,7 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
     @Override
     public void decode(FriendlyByteBuf buf) {
         oldestClosePrice = buf.readInt();
+        priceScaleFactor = buf.readInt();
         maxHistorySize = buf.readInt();
         lowPrice = new int[maxHistorySize];
         highPrice = new int[maxHistorySize];
@@ -291,6 +363,7 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
         tag.putIntArray("closePrice", closePrice);
         tag.putLongArray("volume", volume);
         tag.putInt("oldestClosePrice", oldestClosePrice);
+        tag.putInt("priceScaleFactor", priceScaleFactor);
 
         ListTag times = new ListTag();
         for (int i = 0; i < maxHistorySize; i++) {
@@ -311,7 +384,9 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
            !tag.contains("highPrice") ||
            !tag.contains("closePrice") ||
            !tag.contains("oldestClosePrice") ||
-           !tag.contains("timeStamps"))
+           !tag.contains("timeStamps") ||
+           !tag.contains("volume") ||
+           !tag.contains("priceScaleFactor"))
             return false;
         boolean success = true;
 
@@ -341,6 +416,15 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
             closePrice[i] = tmpClosePrice[i];
             volume[i] = tmpVolume[i];
             timeStamps[i] = tmpTimeStamps[i].copy();
+        }
+
+        if(tag.contains("priceScaleFactor"))
+        {
+            priceScaleFactor = tag.getInt("priceScaleFactor");
+        }
+        else
+        {
+            priceScaleFactor = 1; // Default scale factor
         }
 
 

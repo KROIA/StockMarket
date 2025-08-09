@@ -14,12 +14,12 @@ public class TradingViewDataRequest extends StockMarketGenericRequest<TradingVie
     {
         public final TradingPairData tradingPairData;
         public final int maxHistoryPointCount;
-        public final int minVisiblePrice;
-        public final int maxVisiblePrice;
+        public final float minVisiblePrice;
+        public final float maxVisiblePrice;
         public final int orderBookTileCount;
         public final boolean requestBotTargetPrice;
 
-        public Input(TradingPair pair, int maxHistoryPointCount, int minVisiblePrice, int maxVisiblePrice, int orderBookTileCount, boolean requestBotTargetPrice) {
+        public Input(TradingPair pair, int maxHistoryPointCount, float minVisiblePrice, float maxVisiblePrice, int orderBookTileCount, boolean requestBotTargetPrice) {
             this.tradingPairData = new TradingPairData(pair);
             this.maxHistoryPointCount = maxHistoryPointCount;
             this.minVisiblePrice = minVisiblePrice;
@@ -35,7 +35,7 @@ public class TradingViewDataRequest extends StockMarketGenericRequest<TradingVie
             this.orderBookTileCount = 0;
             this.requestBotTargetPrice = requestBotTargetPrice; // Default value, can be set later
         }
-        private Input(TradingPairData tradingPairData, int maxHistoryPointCount, int minVisiblePrice, int maxVisiblePrice, int orderBookTileCount, boolean requestBotTargetPrice) {
+        private Input(TradingPairData tradingPairData, int maxHistoryPointCount, float minVisiblePrice, float maxVisiblePrice, int orderBookTileCount, boolean requestBotTargetPrice) {
             this.tradingPairData = tradingPairData;
             this.maxHistoryPointCount = maxHistoryPointCount;
             this.minVisiblePrice = minVisiblePrice;
@@ -52,8 +52,8 @@ public class TradingViewDataRequest extends StockMarketGenericRequest<TradingVie
         public void encode(FriendlyByteBuf buf) {
             tradingPairData.encode(buf);
             buf.writeInt(maxHistoryPointCount);
-            buf.writeInt(minVisiblePrice);
-            buf.writeInt(maxVisiblePrice);
+            buf.writeFloat(minVisiblePrice);
+            buf.writeFloat(maxVisiblePrice);
             buf.writeInt(orderBookTileCount);
             buf.writeBoolean(requestBotTargetPrice);
         }
@@ -61,8 +61,8 @@ public class TradingViewDataRequest extends StockMarketGenericRequest<TradingVie
         public static Input decode(FriendlyByteBuf buf) {
             TradingPairData tradingPairData = TradingPairData.decode(buf);
             int maxHistoryPointCount = buf.readInt();
-            int minVisiblePrice = buf.readInt();
-            int maxVisiblePrice = buf.readInt();
+            float minVisiblePrice = buf.readFloat();
+            float maxVisiblePrice = buf.readFloat();
             int orderBookTileCount = buf.readInt();
             boolean requestBotTargetPrice = buf.readBoolean();
             return new Input(tradingPairData, maxHistoryPointCount, minVisiblePrice, maxVisiblePrice, orderBookTileCount, requestBotTargetPrice);

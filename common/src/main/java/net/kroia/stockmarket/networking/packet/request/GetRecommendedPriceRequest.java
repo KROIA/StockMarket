@@ -5,24 +5,24 @@ import net.kroia.stockmarket.util.StockMarketGenericRequest;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
-public class GetRecommendedPriceRequest extends StockMarketGenericRequest<TradingPair, Integer> {
+public class GetRecommendedPriceRequest extends StockMarketGenericRequest<TradingPair, Float> {
     @Override
     public String getRequestTypeID() {
         return GetRecommendedPriceRequest.class.getName();
     }
 
     @Override
-    public Integer handleOnClient(TradingPair input) {
+    public Float handleOnClient(TradingPair input) {
         return null;
     }
 
     @Override
-    public Integer handleOnServer(TradingPair input, ServerPlayer sender) {
+    public Float handleOnServer(TradingPair input, ServerPlayer sender) {
         if(playerIsAdmin(sender))
         {
             return BACKEND_INSTANCES.SERVER_MARKET_MANAGER.getRecommendedPrice(input);
         }
-        return 0;
+        return 0.f;
     }
 
     @Override
@@ -31,8 +31,8 @@ public class GetRecommendedPriceRequest extends StockMarketGenericRequest<Tradin
     }
 
     @Override
-    public void encodeOutput(FriendlyByteBuf buf, Integer output) {
-        buf.writeInt(output != null ? output : 0); // Encode the Integer output, defaulting to 0 if null
+    public void encodeOutput(FriendlyByteBuf buf, Float output) {
+        buf.writeFloat(output != null ? output : 0); // Encode the Integer output, defaulting to 0 if null
     }
 
     @Override
@@ -43,7 +43,7 @@ public class GetRecommendedPriceRequest extends StockMarketGenericRequest<Tradin
     }
 
     @Override
-    public Integer decodeOutput(FriendlyByteBuf buf) {
-        return buf.readInt(); // Decode the Integer output
+    public Float decodeOutput(FriendlyByteBuf buf) {
+        return buf.readFloat(); // Decode the Integer output
     }
 }

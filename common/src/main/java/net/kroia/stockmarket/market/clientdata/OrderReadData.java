@@ -24,9 +24,10 @@ public class OrderReadData implements INetworkPayloadEncoder {
 
 
     // Only for limit orders
-    public final int limitPrice;
+    public final int limitRawPrice;
+    public final float limitPrice;
 
-    public OrderReadData(@NotNull Order order)
+    public OrderReadData(@NotNull Order order, int priceScaleFactor)
     {
         this.orderID = order.getOrderID();
         this.playerUUID = order.getPlayerUUID();
@@ -40,10 +41,12 @@ public class OrderReadData implements INetworkPayloadEncoder {
 
         if(order instanceof LimitOrder limitOrder)
         {
-            this.limitPrice = limitOrder.getPrice();
+            this.limitRawPrice = limitOrder.getPrice();
+            this.limitPrice = limitOrder.getPrice() / (float) priceScaleFactor; // Convert to float for client-side representation
         }
         else
         {
+            this.limitRawPrice = 0; // Default value if not a LimitOrder
             this.limitPrice = 0; // Default value if not a LimitOrder
         }
     }
@@ -57,7 +60,8 @@ public class OrderReadData implements INetworkPayloadEncoder {
                          long lockedMoney,
                          Order.Status status,
                          Order.Type type,
-                         int limitPrice) {
+                         int limitRawPrice,
+                         float limitPrice) {
         this.orderID = orderID;
         this.playerUUID = playerUUID;
         this.amount = amount;
@@ -67,6 +71,7 @@ public class OrderReadData implements INetworkPayloadEncoder {
         this.lockedMoney = lockedMoney;
         this.status = status;
         this.type = type;
+        this.limitRawPrice = limitRawPrice;
         this.limitPrice = limitPrice;
     }
 
@@ -81,7 +86,8 @@ public class OrderReadData implements INetworkPayloadEncoder {
         buf.writeLong(lockedMoney);
         buf.writeEnum(status);
         buf.writeEnum(type);
-        buf.writeInt(limitPrice); // Write limit price, 0 if not a LimitOrder
+        buf.writeInt(limitRawPrice); // Write limit price, 0 if not a LimitOrder
+        buf.writeFloat(limitPrice); // Write limit price, 0 if not a LimitOrder
     }
 
     public static OrderReadData decode(FriendlyByteBuf buf) {
@@ -94,9 +100,10 @@ public class OrderReadData implements INetworkPayloadEncoder {
         long lockedMoney = buf.readLong();
         Order.Status status = buf.readEnum(Order.Status.class);
         Order.Type type = buf.readEnum(Order.Type.class);
-        int limitPrice = buf.readInt(); // Read limit price, 0 if not a LimitOrder
+        int limitRawPrice = buf.readInt(); // Read limit price, 0 if not a LimitOrder
+        float limitPrice = buf.readFloat(); // Read limit price, 0 if not a LimitOrder
 
-        return new OrderReadData(orderID, playerUUID, amount, filledAmount, transferedMoney, invalidReason, lockedMoney, status, type, limitPrice);
+        return new OrderReadData(orderID, playerUUID, amount, filledAmount, transferedMoney, invalidReason, lockedMoney, status, type, limitRawPrice, limitPrice);
     }
 
 

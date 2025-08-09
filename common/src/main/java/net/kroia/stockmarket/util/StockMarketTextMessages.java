@@ -334,25 +334,25 @@ public class StockMarketTextMessages {
 
 
     private static final Component INSUFFICIENT_FUND_TO_CONSUME= Component.translatable(prefix+"insufficient_fund_to_consume");
-    public static String getInsufficientFundToConsumeMessage(String orderText, int price, long amount, long totalCost)
+    public static String getInsufficientFundToConsumeMessage(String orderText, String price, long amount, String totalCost)
     {
         String msg = INSUFFICIENT_FUND_TO_CONSUME.getString();
         msg = replaceVariable(msg, Variables.ORDER_TEXT, orderText);
-        msg = replaceVariable(msg, Variables.PRICE, String.valueOf(price));
+        msg = replaceVariable(msg, Variables.PRICE, price);
         msg = replaceVariable(msg, Variables.CURRENCY, getCurrencyName());
         msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(amount));
-        msg = replaceVariable(msg, Variables.COST, String.valueOf(totalCost));
+        msg = replaceVariable(msg, Variables.COST, totalCost);
         msg = replaceVariable(msg, Variables.CURRENCY, getCurrencyName());
         return msg;
     }
 
     private static final Component INSUFFICIENT_FUND_TO_BUY = Component.translatable(prefix+"insufficient_fund_to_buy");
-    public static String getInsufficientFundToBuyMessage(String itemName, long amount, int price)
+    public static String getInsufficientFundToBuyMessage(String itemName, long amount, String price)
     {
         String msg = INSUFFICIENT_FUND_TO_BUY.getString();
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
         msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(amount));
-        msg = replaceVariable(msg, Variables.PRICE, String.valueOf(price));
+        msg = replaceVariable(msg, Variables.PRICE, price);
         msg = replaceVariable(msg, Variables.CURRENCY, getCurrencyName());
         return msg;
     }
@@ -421,18 +421,18 @@ public class StockMarketTextMessages {
         return msg;
     }
     private static final Component ORDER_LIMIT_PRICE = Component.translatable(prefix+"order_limit_price");
-    public static String getOrderLimitPriceMessage(int price)
+    public static String getOrderLimitPriceMessage(String price)
     {
         String msg = ORDER_LIMIT_PRICE.getString();
-        msg = replaceVariable(msg, Variables.PRICE, String.valueOf(price));
+        msg = replaceVariable(msg, Variables.PRICE, price);
         msg = replaceVariable(msg, Variables.CURRENCY, getCurrencyName());
         return msg;
     }
     private static final Component ORDER_AVERAGE_PRICE = Component.translatable(prefix+"order_average_price");
-    public static String getOrderAveragePriceMessage(int price)
+    public static String getOrderAveragePriceMessage(String price)
     {
         String msg = ORDER_AVERAGE_PRICE.getString();
-        msg = replaceVariable(msg, Variables.PRICE, String.valueOf(price));
+        msg = replaceVariable(msg, Variables.PRICE, price);
         msg = replaceVariable(msg, Variables.CURRENCY, getCurrencyName());
         return msg;
     }
@@ -587,38 +587,38 @@ public class StockMarketTextMessages {
 
 
     private static final Component TRADE_PANEL_TOOLTIP_MARKET_BUY = Component.translatable("gui."+StockMarketMod.MOD_ID+".trade_panel.tooltip_market_buy");
-    public static String getTradePanelTooltipMarketBuy(long amount, String itemName, long cost, String currency) {
+    public static String getTradePanelTooltipMarketBuy(long amount, String itemName, String cost, String currency) {
         String msg = TRADE_PANEL_TOOLTIP_MARKET_BUY.getString();
         msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(amount));
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
-        msg = replaceVariable(msg, Variables.COST, String.valueOf(cost));
+        msg = replaceVariable(msg, Variables.COST, cost);
         msg = replaceVariable(msg, Variables.CURRENCY, currency);
         return msg;
     }
     private static final Component TRADE_PANEL_TOOLTIP_MARKET_SELL = Component.translatable("gui."+StockMarketMod.MOD_ID+".trade_panel.tooltip_market_sell");
-    public static String getTradePanelTooltipMarketSell(long amount, String itemName, long payment, String currency) {
+    public static String getTradePanelTooltipMarketSell(long amount, String itemName, String  payment, String currency) {
         String msg = TRADE_PANEL_TOOLTIP_MARKET_SELL.getString();
         msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(amount));
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
-        msg = replaceVariable(msg, Variables.COST, String.valueOf(payment));
+        msg = replaceVariable(msg, Variables.COST, payment);
         msg = replaceVariable(msg, Variables.CURRENCY, currency);
         return msg;
     }
     private static final Component TRADE_PANEL_TOOLTIP_LIMIT_BUY = Component.translatable("gui."+StockMarketMod.MOD_ID+".trade_panel.tooltip_limit_buy");
-    public static String getTradePanelTooltipLimitBuy(long amount, String itemName, long price, String currency) {
+    public static String getTradePanelTooltipLimitBuy(long amount, String itemName, String price, String currency) {
         String msg = TRADE_PANEL_TOOLTIP_LIMIT_BUY.getString();
         msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(amount));
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
-        msg = replaceVariable(msg, Variables.PRICE, String.valueOf(price));
+        msg = replaceVariable(msg, Variables.PRICE, price);
         msg = replaceVariable(msg, Variables.CURRENCY, currency);
         return msg;
     }
     private static final Component TRADE_PANEL_TOOLTIP_LIMIT_SELL = Component.translatable("gui."+StockMarketMod.MOD_ID+".trade_panel.tooltip_limit_sell");
-    public static String getTradePanelTooltipLimitSell(long amount, String itemName, long price, String currency) {
+    public static String getTradePanelTooltipLimitSell(long amount, String itemName, String price, String currency) {
         String msg = TRADE_PANEL_TOOLTIP_LIMIT_SELL.getString();
         msg = replaceVariable(msg, Variables.AMOUNT, String.valueOf(amount));
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
-        msg = replaceVariable(msg, Variables.PRICE, String.valueOf(price));
+        msg = replaceVariable(msg, Variables.PRICE, price);
         msg = replaceVariable(msg, Variables.CURRENCY, currency);
         return msg;
     }
@@ -638,9 +638,9 @@ public class StockMarketTextMessages {
         return msg;
     }
     private static final Component TRADE_PANEL_TOOLTIP_CURRENT_PRICE = Component.translatable("gui."+StockMarketMod.MOD_ID+".trade_panel.tooltip_current_price");
-    public static String getTradePanelTooltipCurrentPrice(long price, String itemName, String currency) {
+    public static String getTradePanelTooltipCurrentPrice(String price, String itemName, String currency) {
         String msg = TRADE_PANEL_TOOLTIP_CURRENT_PRICE.getString();
-        msg = replaceVariable(msg, Variables.PRICE, String.valueOf(price));
+        msg = replaceVariable(msg, Variables.PRICE, price);
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
         msg = replaceVariable(msg, Variables.CURRENCY, currency);
         return msg;
@@ -685,7 +685,7 @@ public class StockMarketTextMessages {
 
     private static final Component LIMIT_ORDER_IN_CHART_DISPLAY_MOVE_BUTTON_MOVING = Component.translatable("gui."+StockMarketMod.MOD_ID+".limit_order_in_chart_display.move_button_moving");
 
-    public static String getLimitOrderInChartDisplayMoveButtonMoving(int price, String currencyName) {
+    public static String getLimitOrderInChartDisplayMoveButtonMoving(String price, String currencyName) {
         String msg = LIMIT_ORDER_IN_CHART_DISPLAY_MOVE_BUTTON_MOVING.getString();
         msg = replaceVariable(msg, Variables.PRICE, String.valueOf(price));
         msg = replaceVariable(msg, Variables.CURRENCY, currencyName);
@@ -702,10 +702,10 @@ public class StockMarketTextMessages {
     }
 
     private static final Component TOOLTIP_TRADING_PAIR_CREATION_INITIAL_PRICE = Component.translatable("gui."+StockMarketMod.MOD_ID+".trading_pair_creation_screen.tooltip_initial_price");
-    public static String getTradingPairCreationScreenInitialPriceTooltip(String itemName, String currencyName, int initialPrice) {
+    public static String getTradingPairCreationScreenInitialPriceTooltip(String itemName, String currencyName, String initialPrice) {
         String msg = TOOLTIP_TRADING_PAIR_CREATION_INITIAL_PRICE.getString();
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
-        msg = replaceVariable(msg, Variables.PRICE, String.valueOf(initialPrice));
+        msg = replaceVariable(msg, Variables.PRICE, initialPrice);
         msg = replaceVariable(msg, Variables.CURRENCY, currencyName);
         return msg;
     }
@@ -812,13 +812,13 @@ public class StockMarketTextMessages {
 
 
     private static final Component TOOLTIP_ADJUSTED_DEFAULT_PRICE = Component.translatable("gui."+StockMarketMod.MOD_ID+".adjusted_default_price.tooltip");
-    public static String getAdjustedDefaultPriceTooltip(String itemName, String currencyName, int oldDefaultPrice, int newDefaultPrice) {
+    public static String getAdjustedDefaultPriceTooltip(String itemName, String currencyName, String oldDefaultPrice, String newDefaultPrice) {
         String msg = TOOLTIP_ADJUSTED_DEFAULT_PRICE.getString();
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
         msg = replaceVariable(msg, Variables.CURRENCY, currencyName);
         msg = replaceVariable(msg, Variables.CURRENCY, currencyName);
-        msg = replaceVariable(msg, Variables.PRICE, String.valueOf(oldDefaultPrice));
-        msg = replaceVariable(msg, Variables.VALUE, String.valueOf(newDefaultPrice));
+        msg = replaceVariable(msg, Variables.PRICE, oldDefaultPrice);
+        msg = replaceVariable(msg, Variables.VALUE, newDefaultPrice);
         return msg;
     }
 

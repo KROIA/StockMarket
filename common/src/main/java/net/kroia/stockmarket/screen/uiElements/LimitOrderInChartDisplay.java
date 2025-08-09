@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.screen.uiElements;
 
+import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.modutilities.ClientPlayerUtilities;
 import net.kroia.modutilities.ColorUtilities;
 import net.kroia.modutilities.gui.elements.Button;
@@ -25,13 +26,16 @@ public class LimitOrderInChartDisplay extends StockMarketGuiElement {
     private boolean isDragging = false;
     private final TradingPair pair;
     private final Function<Integer, Float> yPosToPriceFunc;
-    private final BiConsumer<OrderReadData, Integer> onOrderReplacedToNewPrice;
+    private final BiConsumer<OrderReadData, Float> onOrderReplacedToNewPrice;
+    private final int priceScaleFactor; // Scale factor for price to avoid floating point precision issues
 
     public LimitOrderInChartDisplay(Function<Integer, Float> yPosToPriceFunc,
                                     OrderReadData order,
                                     TradingPair pair,
-                                    BiConsumer<OrderReadData, Integer> onOrderReplacedToNewPrice) {
+                                    BiConsumer<OrderReadData, Float> onOrderReplacedToNewPrice,
+                                    int priceScaleFactor) {
         super();
+        this.priceScaleFactor = priceScaleFactor;
         this.yPosToPriceFunc = yPosToPriceFunc;
         this.onOrderReplacedToNewPrice = onOrderReplacedToNewPrice;
         this.pair = pair;
@@ -115,9 +119,9 @@ public class LimitOrderInChartDisplay extends StockMarketGuiElement {
     {
         return isDragging;
     }
-    public int getCurrentPrice()
+    public float getCurrentPrice()
     {
-        return Math.round(yPosToPriceFunc.apply(getY() + getHeight()/2));
+        return yPosToPriceFunc.apply(getY() + getHeight()/2);
     }
 
 
@@ -138,7 +142,7 @@ public class LimitOrderInChartDisplay extends StockMarketGuiElement {
     private void onButtonRising()
     {
         isDragging = false;
-        int newPrice = getCurrentPrice();
+        float newPrice = getCurrentPrice();
         if(onOrderReplacedToNewPrice != null)
             onOrderReplacedToNewPrice.accept(order, newPrice);
         moveButton.setHoverTooltipSupplier(this::getButtonTooltip);
@@ -150,7 +154,7 @@ public class LimitOrderInChartDisplay extends StockMarketGuiElement {
         String displayName = ClientPlayerUtilities.getItemDisplayText(pair.getCurrency().getStack());
         if(isDragging)
         {
-            return StockMarketTextMessages.getLimitOrderInChartDisplayMoveButtonMoving(getCurrentPrice(), displayName);
+            return StockMarketTextMessages.getLimitOrderInChartDisplayMoveButtonMoving(Bank.getNormalizedAmount(getCurrentPrice(),priceScaleFactor), displayName);
         }
         return StockMarketTextMessages.getLimitOrderInChartDisplayMoveButton();
     }

@@ -29,7 +29,7 @@ public class ServerTradingBot implements ServerSaveable {
     {
         public boolean enabled = true;
         public long updateTimerIntervallMS;
-        public int defaultPrice;
+        public float defaultPrice;
         public Settings()
         {
             if(BACKEND_INSTANCES.SERVER_SETTINGS != null)
@@ -47,7 +47,7 @@ public class ServerTradingBot implements ServerSaveable {
         @Override
         public boolean save(CompoundTag tag) {
             tag.putBoolean("enabled", enabled);
-            tag.putInt("defaultPrice", defaultPrice);
+            tag.putFloat("defaultPrice", defaultPrice);
             tag.putLong("updateTimerIntervallMS", updateTimerIntervallMS);
             return false;
         }
@@ -62,7 +62,7 @@ public class ServerTradingBot implements ServerSaveable {
                 return false;
 
             enabled = tag.getBoolean("enabled");
-            defaultPrice = tag.getInt("defaultPrice");
+            defaultPrice = tag.getFloat("defaultPrice");
             updateTimerIntervallMS = tag.getLong("updateTimerIntervallMS");
             return true;
         }
@@ -78,13 +78,13 @@ public class ServerTradingBot implements ServerSaveable {
         @Override
         public void encode(FriendlyByteBuf buf) {
             buf.writeBoolean(this.enabled);
-            buf.writeInt(this.defaultPrice);
+            buf.writeFloat(this.defaultPrice);
             buf.writeLong(this.updateTimerIntervallMS);
         }
         @Override
         public void decode(FriendlyByteBuf buf) {
             this.enabled = buf.readBoolean();
-            this.defaultPrice = buf.readInt();
+            this.defaultPrice = buf.readFloat();
             this.updateTimerIntervallMS = buf.readLong();
         }
 
@@ -108,7 +108,7 @@ public class ServerTradingBot implements ServerSaveable {
 
             element = jsonObject.get("defaultPrice");
             if(element != null && element.isJsonPrimitive()) {
-                this.defaultPrice = element.getAsInt();
+                this.defaultPrice = element.getAsFloat();
                 if(this.defaultPrice < 0) {
                     this.defaultPrice = 0; // Ensure default price is non-negative
                 }
@@ -188,18 +188,26 @@ public class ServerTradingBot implements ServerSaveable {
 
     }
 
-    protected long getOrderBookVolume(int price)
+    protected long getOrderBookVolumeAtRawPrice(int rawPrice)
     {
-        return serverMarket.getOrderBook().getVolume(price, serverMarket.getCurrentPrice());
+        return serverMarket.getOrderBook().getVolumeRawPrice(rawPrice, serverMarket.getCurrentRawPrice());
     }
-    protected long getOrderBookVolume(int minPrice, int maxPrice)
+    protected long getOrderBookVolume(float realPrice)
     {
-        return serverMarket.getOrderBook().getVolumeInRange(minPrice, maxPrice);
+        return serverMarket.getOrderBook().getVolumeRawPrice(serverMarket.mapToRawPrice(realPrice), serverMarket.getCurrentRawPrice());
+    }
+    protected long getOrderBookVolume(float minRealPrice, float maxRealPrice)
+    {
+        return serverMarket.getOrderBook().getVolumeInRawRange(serverMarket.mapToRawPrice(minRealPrice), serverMarket.mapToRawPrice(maxRealPrice));
     }
 
-    protected int getCurrentPrice()
+    protected float getCurrentPrice()
     {
-        return serverMarket.getCurrentPrice();
+        return serverMarket.getCurrentRealPrice();
+    }
+    protected int getCurrentRawPrice()
+    {
+        return serverMarket.getCurrentRawPrice();
     }
     protected long getItemImbalance()
     {

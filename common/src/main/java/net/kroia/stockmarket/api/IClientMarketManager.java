@@ -28,7 +28,7 @@ public interface IClientMarketManager {
     void requestTradingPairs(Consumer<List<TradingPair>> callback );
     void requestMarketCategories(Consumer<List<MarketFactory.DefaultMarketSetupDataGroup>> callback);
     void requestIsTradingPairAllowed(TradingPair pair, Consumer<Boolean> callback );
-    void requestRecommendedPrice(TradingPair pair, Consumer<Integer> callback );
+    void requestRecommendedPrice(TradingPair pair, Consumer<Float> callback );
     void requestPotentialTradeItems(String searchText, Consumer<List<ItemID>> callback);
 
     void requestDefaultPriceAjustmentFactors(Consumer<DefaultPriceAjustmentFactorsData> callback);

@@ -20,7 +20,7 @@ public class StockMarketBlockEntity extends BlockEntity{
     // Current Item that the chart is displaying
     private TradingPair tradingPair;
     private int amount;
-    private int price;
+    private float price;
 
     public static void setBackend(StockMarketModBackend.Instances backend) {
         BACKEND_INSTANCES = backend;
@@ -45,7 +45,7 @@ public class StockMarketBlockEntity extends BlockEntity{
     {
         return amount;
     }
-    public int getPrice()
+    public float getPrice()
     {
         return price;
     }
@@ -53,7 +53,7 @@ public class StockMarketBlockEntity extends BlockEntity{
     {
         this.amount = amount;
     }
-    public void setPrice(int price)
+    public void setPrice(float price)
     {
         this.price = price;
     }
@@ -82,7 +82,7 @@ public class StockMarketBlockEntity extends BlockEntity{
         tradingPair.save(itemTag);
         dataTag.put("tradingPair", itemTag);
         dataTag.putInt("amount", amount);
-        dataTag.putInt("price", price);
+        dataTag.putFloat("price", price);
         tag.put(StockMarketMod.MOD_ID, dataTag);
     }
 
@@ -106,6 +106,6 @@ public class StockMarketBlockEntity extends BlockEntity{
         }
 
         amount = dataTag.getInt("amount");
-        price = dataTag.getInt("price");
+        price = dataTag.getFloat("price");
     }
 }

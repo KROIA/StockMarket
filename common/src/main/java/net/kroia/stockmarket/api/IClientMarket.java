@@ -23,16 +23,16 @@ public interface IClientMarket {
     void requestOrderBookVolume(Consumer<OrderBookVolumeData> callback);
     void requestCancelOrder(long orderID,
                             Consumer<Boolean> callback);
-    void requestChangeOrder(long orderID, int newPrice,
+    void requestChangeOrder(long orderID, float newPrice,
                             Consumer<Boolean> callback);
     void requestCreateMarketOrder(int volume,
                                   Consumer<Boolean> callback);
     void requestCreateMarketOrder(UUID orderOwnerPlayerUUID, int volume,
                                   Consumer<Boolean> callback);
-    void requestCreateLimitOrder(int volume, int limitPrice,
+    void requestCreateLimitOrder(int volume, float limitPrice,
                                  Consumer<Boolean> callback);
 
-    void requestCreateLimitOrder(UUID orderOwnerPlayerUUID, int volume, int limitPrice,
+    void requestCreateLimitOrder(UUID orderOwnerPlayerUUID, int volume, float limitPrice,
                                  Consumer<Boolean> callback);
 
     void requestPlayerOrderReadDataList(Consumer<OrderReadListData> callback);
@@ -44,8 +44,8 @@ public interface IClientMarket {
     void requestSetMarketSettings(ServerMarketSettingsData settings, Consumer<Boolean> callback);
 
     void requestTradingViewData(int maxHistoryPointCount,
-                                int minimalVisiblePrice,
-                                int maximalVisiblePrice,
+                                float minimalVisiblePrice,
+                                float maximalVisiblePrice,
                                 int tileCount,
                                 boolean requestBotTargetPrice,
                                 Consumer<TradingViewData> callback);

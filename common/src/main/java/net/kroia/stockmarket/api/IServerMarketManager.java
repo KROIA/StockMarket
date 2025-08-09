@@ -21,7 +21,7 @@ public interface IServerMarketManager extends ServerSaveable {
 
     @Nullable BotSettingsData getBotSettingsData(@NotNull TradingPair pair);
     @Nullable TradingPairData getTradingPairData(@NotNull TradingPair pair);
-    @Nullable OrderBookVolumeData getOrderBookVolumeData(@NotNull TradingPair pair, int historyViewCount, int minPrice, int maxPrice, int tileCount);
+    @Nullable OrderBookVolumeData getOrderBookVolumeData(@NotNull TradingPair pair, int historyViewCount, float minPrice, float maxPrice, int tileCount);
     @Nullable OrderBookVolumeData getOrderBookVolumeData(@NotNull TradingPair pair);
     @Nullable OrderReadData getOrderReadData(@NotNull TradingPair pair, long orderID);
     @Nullable OrderReadListData getOrderReadListData(@NotNull TradingPair pair, List<Long> orderIDs);
@@ -29,8 +29,8 @@ public interface IServerMarketManager extends ServerSaveable {
     @Nullable PriceHistoryData getPriceHistoryData(@NotNull TradingPair pair, int maxHistoryPointCount);
     @Nullable TradingViewData getTradingViewData(@NotNull TradingPair pair, UUID player,
                                                         int maxHistoryPointCount,
-                                                        int minVisiblePrice,
-                                                        int maxVisiblePrice,
+                                                        float minVisiblePrice,
+                                                        float maxVisiblePrice,
                                                         int orderBookTileCount,
                                                         boolean requestBotTargetPrice);
     @Nullable TradingViewData getTradingViewData(@NotNull TradingPair pair, UUID player);
@@ -60,7 +60,7 @@ public interface IServerMarketManager extends ServerSaveable {
     List<TradingPair> getTradingPairs();
     List<ItemID> getPotentialTradingItems(String searchQuery);
     boolean marketExists(@NotNull TradingPair pair);
-    int getRecommendedPrice(TradingPair pair);
+    float getRecommendedPrice(TradingPair pair);
 
 
     void onServerTick(MinecraftServer server);

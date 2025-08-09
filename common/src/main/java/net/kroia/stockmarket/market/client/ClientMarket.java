@@ -73,7 +73,7 @@ public class ClientMarket implements IClientMarket {
         StockMarketNetworking.ORDER_CANCEL_REQUEST.sendRequestToServer(cancelData, callback);
     }
     @Override
-    public void requestChangeOrder(long orderID, int newPrice,
+    public void requestChangeOrder(long orderID, float newPrice,
                                    Consumer<Boolean> callback)
     {
         if(checkDeadAndDebug())
@@ -99,7 +99,7 @@ public class ClientMarket implements IClientMarket {
         StockMarketNetworking.ORDER_CREATE_REQUEST.sendRequestToServer(createData, callback);
     }
     @Override
-    public void requestCreateLimitOrder(int volume, int limitPrice,
+    public void requestCreateLimitOrder(int volume, float limitPrice,
                                         Consumer<Boolean> callback)
     {
         if(checkDeadAndDebug())
@@ -108,7 +108,7 @@ public class ClientMarket implements IClientMarket {
     }
 
     @Override
-    public void requestCreateLimitOrder(UUID orderOwnerPlayerUUID, int volume, int limitPrice,
+    public void requestCreateLimitOrder(UUID orderOwnerPlayerUUID, int volume, float limitPrice,
                                         Consumer<Boolean> callback)
     {
         if(checkDeadAndDebug())
@@ -156,7 +156,7 @@ public class ClientMarket implements IClientMarket {
     }
 
     @Override
-    public void requestTradingViewData(int maxHistoryPointCount, int minimalVisiblePrice, int maximalVisiblePrice, int tileCount, boolean requestBotTargetPrice,
+    public void requestTradingViewData(int maxHistoryPointCount, float minimalVisiblePrice, float maximalVisiblePrice, int tileCount, boolean requestBotTargetPrice,
                                        Consumer<TradingViewData> callback) {
         if(checkDeadAndDebug())
             return;

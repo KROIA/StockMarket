@@ -14,8 +14,8 @@ public class TradingChartWidget extends StockMarketGuiElement {
 
     public static final int colorGreen = 0x7F00FF00;
     public static final int colorRed = 0x7FFF0000;
-    int chartViewMinPrice = 0;
-    int chartViewMaxPrice = 1000;
+    float chartViewMinPrice = 0;
+    float chartViewMaxPrice = 1000;
     private int yPadding = 5;
     //private int xPadding = 0;
 
@@ -23,7 +23,7 @@ public class TradingChartWidget extends StockMarketGuiElement {
     private final CandleStickChartWidget candleStickChart;
     private final TradingVolumeHistoryChart tradingVolumeHistoryChart;
     private final OrderbookVolumeChartWidget orderbookVolumeChart;
-    public TradingChartWidget(BiConsumer<OrderReadData, Integer> priceChangeCallback) {
+    public TradingChartWidget(BiConsumer<OrderReadData, Float> priceChangeCallback) {
         super();
 
         if(priceChangeCallback == null)
@@ -82,7 +82,7 @@ public class TradingChartWidget extends StockMarketGuiElement {
     }
 
 
-    private void setMinMaxPrice(int minPrice, int maxPrice)
+    private void setMinMaxPrice(float minPrice, float maxPrice)
     {
         this.chartViewMinPrice = minPrice;
         this.chartViewMaxPrice = maxPrice;
@@ -111,6 +111,7 @@ public class TradingChartWidget extends StockMarketGuiElement {
         tradingVolumeHistoryChart.setPriceHistory(history);
         orderbookVolumeChart.setOrderBookVolume(data.orderBookVolumeData);
         candleStickChart.setBotTargetPrice(data.botTargetPrice);
+        candleStickChart.setPriceScaleFactor(history.getPriceScaleFactor());
         candleStickChart.updateOrderDisplay(data.openOrdersData, data.tradingPairData.toTradingPair());
     }
 
@@ -146,11 +147,11 @@ public class TradingChartWidget extends StockMarketGuiElement {
 
     public int getChartYPos(float price)
     {
-        return Math.round(mapF(price, (float)chartViewMinPrice, (float)chartViewMaxPrice, (float)(candleStickChart.getHeight()-yPadding), (float)yPadding));
+        return Math.round(mapF(price, chartViewMinPrice, chartViewMaxPrice, (float)(candleStickChart.getHeight()-yPadding), (float)yPadding));
     }
     public float getPriceFromYPos(int y)
     {
-        return Math.round(mapF(y, candleStickChart.getHeight()-yPadding, yPadding, chartViewMinPrice, chartViewMaxPrice));
+        return mapF(y, candleStickChart.getHeight()-yPadding, yPadding, chartViewMinPrice, chartViewMaxPrice);
     }
 
 
