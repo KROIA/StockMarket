@@ -65,7 +65,7 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
         super.renderBackground();
         if(priceHistory == null)
             return;
-        float yAxisLabelIncrement = 0.1f;
+       // float yAxisLabelIncrement = 0.1f;
         int labelWidth = 0;
 
 
@@ -75,7 +75,7 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
             candleWidth = minCandleWidth;
 
 
-        float priceRange = chartViewMaxPrice - chartViewMinPrice;
+
         /*if(priceRange > 1)
         {
             if(priceRange < 5)
@@ -96,20 +96,23 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
             }
             else
             {*/
-                int maxLableCount = getHeight()/getTextHeight();
-                yAxisLabelIncrement = (priceRange)/(float)Math.min(maxLableCount, 20.0);
+
            // }
        // }
+        int maxLableCount = Math.min(getHeight()/getTextHeight(), 10);
+        float priceRange = niceNumber(chartViewMaxPrice - chartViewMinPrice, false);
+        float yAxisLabelIncrement = niceNumber(priceRange/(maxLableCount-1), true);
+
+
         if(yAxisLabelIncrement < ServerMarketManager.rawToRealPrice(1 ,priceScaleFactor))
         {
             yAxisLabelIncrement = ServerMarketManager.rawToRealPrice(1 ,priceScaleFactor);
         }
+        float startLabelPrice = (float)Math.ceil(chartViewMinPrice/yAxisLabelIncrement)*yAxisLabelIncrement;
+        float endLabelPrice = (float)Math.floor(chartViewMaxPrice/yAxisLabelIncrement)*yAxisLabelIncrement;
 
         int x = getChartRightEndPos();
         int labelXPos = x + 5;
-
-        float startLabelPrice = chartViewMinPrice;
-        float endLabelPrice = chartViewMaxPrice;
 
         /*if(startLabelPrice < 10)
         {
@@ -133,7 +136,6 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
         }
 
 
-        long maxVolume = priceHistory.getMaxVolume();
         int lastIndex = priceHistory.size()-1;
         float currentPrice = priceHistory.getCurrentRealPrice();
         String labelText = priceHistory.getRealPriceString(currentPrice);
@@ -229,8 +231,10 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
     {
         if(priceHistory == null)
             maxLabelWidth = 0;
-        else
-            maxLabelWidth = getTextWidth(String.valueOf((int)chartViewMaxPrice) + priceHistory.getPriceScaleFactor());
+        else {
+            String dummyPriceText = priceHistory.getRealPriceString(chartViewMaxPrice + 0.11111111f);
+            maxLabelWidth = getTextWidth(dummyPriceText)+5;
+        }
         int labelXPos = getWidth() - maxLabelWidth;
         return labelXPos-5;
     }
@@ -292,7 +296,7 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
                 int case_ = stillActiveOrderIds.get(orderID);
                 if(case_ == 1)
                 {
-                    LimitOrderInChartDisplay orderView = new LimitOrderInChartDisplay(yPosToPriceFunc, order, pair, priceChangeCallback, priceScaleFactor);
+                    LimitOrderInChartDisplay orderView = new LimitOrderInChartDisplay(yPosToPriceFunc, order, pair, priceChangeCallback, priceHistory.getCurrencyItemFractionScaleFactor());
                     orderView.setWidth(getWidth()/2-5);
                     orderView.setPosition(getWidth()-orderView.getWidth(), priceToYPosFunc(order.limitPrice));
                     limitOrderDisplays.put(orderID, orderView);
@@ -368,5 +372,38 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
 
     private int priceToYPosFunc(float price) {
         return priceToYPosFunc.apply(price);
+    }
+
+    private float niceNumber(float x, boolean round) {
+        double exp = Math.floor(Math.log10(x));
+        double f   = x / Math.pow(10, exp);
+        double nf;
+
+        // Allow finer steps
+        if (round) {
+            if      (f < 1.25) nf = 1;
+            else if (f < 1.5)  nf = 1.25;
+            else if (f < 2)    nf = 1.5;
+            else if (f < 2.5)  nf = 2;
+            else if (f < 3)    nf = 2.5;
+            else if (f < 4)    nf = 3;
+            else if (f < 5)    nf = 4;
+            else if (f < 6)    nf = 5;
+            else if (f < 8)    nf = 6;
+            else nf = 8;
+        } else {
+            if      (f <= 1)   nf = 1;
+            else if (f <= 1.25) nf = 1.25;
+            else if (f <= 1.5)  nf = 1.5;
+            else if (f <= 2)    nf = 2;
+            else if (f <= 2.5)  nf = 2.5;
+            else if (f <= 3)    nf = 3;
+            else if (f <= 4)    nf = 4;
+            else if (f <= 5)    nf = 5;
+            else if (f <= 6)    nf = 6;
+            else if (f <= 8)    nf = 8;
+            else nf = 10;
+        }
+        return (float)(nf * Math.pow(10, exp));
     }
 }

@@ -20,7 +20,7 @@ public class NormalizedRandomPriceGenerator implements ServerSaveable {
         double sumCoeff = 0;
         for (int i = 0; i < order; i++) {
             // Initialize each random walk with a step size and mean reversion strength
-            randomWalk[i] = new MeanRevertingRandomWalk(0.1, 0.05);
+            randomWalk[i] = new MeanRevertingRandomWalk(0.05, 0.05);
             coefficients[i] = i+1; // Equal coefficients for normalization
             sumCoeff += coefficients[i];
         }

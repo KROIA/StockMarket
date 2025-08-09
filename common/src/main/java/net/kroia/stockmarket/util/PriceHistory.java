@@ -19,6 +19,7 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
     private int oldestClosePrice = 0;
     private Timestamp[] timeStamps;// = new Timestamp[maxHistorySize];
     private int priceScaleFactor = 1;
+    private int currencyItemFractionScaleFactor = 1; // Default scale factor for currency items
 
     public PriceHistory(int maxHistorySize) {
         if(maxHistorySize<1)
@@ -54,13 +55,18 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
         }
     }
 
-    public void setPriceScaleFactor(int priceScaleFactor)
+    public void setScaleFactors(int priceScaleFactor, int currencyItemFractionScaleFactor)
     {
         this.priceScaleFactor = priceScaleFactor;
+        this.currencyItemFractionScaleFactor = currencyItemFractionScaleFactor;
     }
     public int getPriceScaleFactor()
     {
         return priceScaleFactor;
+    }
+    public int getCurrencyItemFractionScaleFactor()
+    {
+        return currencyItemFractionScaleFactor;
     }
 
 
@@ -80,6 +86,7 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
         PriceHistory copy = new PriceHistory(maxHistorySize);
         copy.oldestClosePrice = oldestPrice;
         copy.priceScaleFactor = org.priceScaleFactor;
+        copy.currencyItemFractionScaleFactor = org.currencyItemFractionScaleFactor;
 
         for (int i = 0; i < maxHistorySize; i++) {
             copy.lowPrice[i] = org.lowPrice[i];
@@ -314,17 +321,18 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
     }
     public String getRealPriceString(int rawPrice)
     {
-        return Bank.getFormattedAmount(rawPrice, priceScaleFactor);
+        return Bank.getFormattedAmount(getRealPrice(rawPrice), currencyItemFractionScaleFactor);
     }
     public String getRealPriceString(float realPrice)
     {
-        return Bank.getFormattedAmount(realPrice, priceScaleFactor);
+        return Bank.getFormattedAmount(realPrice, currencyItemFractionScaleFactor);
     }
 
     @Override
     public void encode(FriendlyByteBuf buf) {
         buf.writeInt(oldestClosePrice);
         buf.writeInt(priceScaleFactor);
+        buf.writeInt(currencyItemFractionScaleFactor); // Write the currency item fraction scale factor
         buf.writeInt(maxHistorySize);
         for (int i = 0; i < maxHistorySize; i++) {
             buf.writeInt(lowPrice[i]);
@@ -339,6 +347,7 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
     public void decode(FriendlyByteBuf buf) {
         oldestClosePrice = buf.readInt();
         priceScaleFactor = buf.readInt();
+        currencyItemFractionScaleFactor = buf.readInt(); // Read the currency item fraction scale factor
         maxHistorySize = buf.readInt();
         lowPrice = new int[maxHistorySize];
         highPrice = new int[maxHistorySize];
@@ -364,6 +373,7 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
         tag.putLongArray("volume", volume);
         tag.putInt("oldestClosePrice", oldestClosePrice);
         tag.putInt("priceScaleFactor", priceScaleFactor);
+        tag.putInt("currencyItemFractionScaleFactor", currencyItemFractionScaleFactor);
 
         ListTag times = new ListTag();
         for (int i = 0; i < maxHistorySize; i++) {
@@ -386,7 +396,8 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
            !tag.contains("oldestClosePrice") ||
            !tag.contains("timeStamps") ||
            !tag.contains("volume") ||
-           !tag.contains("priceScaleFactor"))
+           !tag.contains("priceScaleFactor") ||
+           !tag.contains("currencyItemFractionScaleFactor"))
             return false;
         boolean success = true;
 
@@ -425,6 +436,14 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
         else
         {
             priceScaleFactor = 1; // Default scale factor
+        }
+        if(tag.contains("currencyItemFractionScaleFactor"))
+        {
+            currencyItemFractionScaleFactor = tag.getInt("currencyItemFractionScaleFactor");
+        }
+        else
+        {
+            currencyItemFractionScaleFactor = 1; // Default scale factor for currency items
         }
 
 

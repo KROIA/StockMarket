@@ -90,6 +90,9 @@ public class MarketFactory
             botSettings.volatility = Math.abs(1000.f * volatility / Math.max(defaultPrice, 1000));
 
             virtualOrderBookSettings.volumeScale = 100f/(0.01f+Math.abs(rarity));
+            virtualOrderBookSettings.volumeAccumulationRate = 0.00001f * Math.max(0.01f, 1/(Math.max(rarity, 0.01f)));
+            virtualOrderBookSettings.volumeFastAccumulationRate = virtualOrderBookSettings.volumeAccumulationRate * 10f;
+            virtualOrderBookSettings.volumeDecumulationRate = virtualOrderBookSettings.volumeFastAccumulationRate * 0.1f;
             botSettings.volumeScale = virtualOrderBookSettings.volumeScale * this.volatility/10;
 
             int priceScaleFactor = 1;
@@ -109,7 +112,13 @@ public class MarketFactory
                 priceScaleFactor = 0; // This will automgenerate the price scale factor based on the default price on the server side again.
             }
 
-            return new DefaultMarketSetupData(this.tradingPair, botSettings, virtualOrderBookSettings, false, 5, priceScaleFactor);
+            long candleTimeMin = 1;
+            if(BACKEND_INSTANCES.SERVER_SETTINGS != null)
+            {
+                candleTimeMin = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.SHIFT_PRICE_CANDLE_INTERVAL_MS.get() / 60000; // Convert milliseconds to minutes
+            }
+            DefaultMarketSetupData setupData = new DefaultMarketSetupData(this.tradingPair, botSettings, virtualOrderBookSettings, false, candleTimeMin, priceScaleFactor);
+            return setupData;
         }
 
         @Override
@@ -211,7 +220,7 @@ public class MarketFactory
         public ServerVolatilityBot.Settings botSettings;
         public VirtualOrderBook.Settings virtualOrderBookSettings;
         public boolean isMarketOpen = false;
-        public long candleTimeMin = 5;
+        public long candleTimeMin = 1;
         public float defaultPrice;
         public int priceScaleFactor = 1;
 
@@ -823,8 +832,10 @@ public class MarketFactory
         if(market != null) {
             if(data.botSettings != null)
                 market.createVolatilityBot(data.botSettings);
-            if(data.virtualOrderBookSettings != null)
+            if(data.virtualOrderBookSettings != null) {
                 market.setVirtualOrderBookSettings(data.virtualOrderBookSettings);
+                market.resetVirtualOrderBookVolumeDistribution(); // Reset the volume distribution to ensure it starts fresh
+            }
             market.setShiftPriceCandleIntervalMS(data.candleTimeMin * 60 * 1000); // Convert minutes to milliseconds
             market.setMarketOpen(data.isMarketOpen);
         }

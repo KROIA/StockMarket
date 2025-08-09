@@ -6,7 +6,6 @@ import net.kroia.modutilities.gui.elements.*;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.clientdata.TradingViewData;
-import net.kroia.stockmarket.market.server.ServerMarketManager;
 import net.kroia.stockmarket.util.PriceHistory;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.kroia.stockmarket.util.StockMarketTextMessages;
@@ -57,9 +56,9 @@ public class TradePanel extends StockMarketGuiElement {
     private final Label marketClosedLabel;
 
     private int amount = 0;
-    private int limitPriceRaw = 0;
-    private int currentMarketPriceRaw = 0;
-    private int currencyCentScaleFactor = 1;
+    private float limitPrice = 0;
+    private float currentMarketPrice = 0;
+    private int currencyFractionScaleFactor = 1;
 
     public TradePanel(Runnable onItemChangeButtonClicked,
                       Runnable onMarketBuyButtonClicked,
@@ -144,7 +143,7 @@ public class TradePanel extends StockMarketGuiElement {
         limitPriceTextBox.setAllowNegativeNumbers(false);
         limitPriceTextBox.setAllowLetters(false);
         limitPriceTextBox.setOnTextChanged((text) -> {
-            limitPriceRaw = (int) ServerMarketManager.realToRawPrice((float)limitPriceTextBox.getDouble(), currencyCentScaleFactor);
+            limitPrice = (float)limitPriceTextBox.getDouble();
         });
 
         limitBuyButton = new Button(BUY.getString(), onLimitBuyButtonClicked);
@@ -178,16 +177,16 @@ public class TradePanel extends StockMarketGuiElement {
 
 
         // Set hover tooltip texts
-        currentPriceLabel.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipCurrentPrice(getPriceString(currentMarketPriceRaw), getItemName(), getCurrencyName()));
-        currentPriceTextLabel.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipCurrentPrice(getPriceString(currentMarketPriceRaw), getItemName(), getCurrencyName()));
+        currentPriceLabel.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipCurrentPrice(getPriceString(currentMarketPrice), getItemName(), getCurrencyName()));
+        currentPriceTextLabel.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipCurrentPrice(getPriceString(currentMarketPrice), getItemName(), getCurrencyName()));
         amountLabel.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipAmount(getItemName()));
         marketOrderLabel.setHoverTooltipSupplier(StockMarketTextMessages::getTradePanelTooltipMarketOrder);
-        marketBuyButton.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipMarketBuy(amount, getItemName(), getPriceString(limitPriceRaw), getCurrencyName()));
-        marketSellButton.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipMarketSell(amount, getItemName(), getPriceString(limitPriceRaw), getCurrencyName()));
+        marketBuyButton.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipMarketBuy(amount, getItemName(), getPriceString(currentMarketPrice * amount), getCurrencyName()));
+        marketSellButton.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipMarketSell(amount, getItemName(), getPriceString(currentMarketPrice * amount), getCurrencyName()));
         limitOrderLabel.setHoverTooltipSupplier(StockMarketTextMessages::getTradePanelTooltipLimitOrder);
         limitPriceLabel.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipLimitPrice(getItemName()));
-        limitBuyButton.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipLimitBuy(amount, getItemName(), getPriceString(limitPriceRaw), getCurrencyName()));
-        limitSellButton.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipLimitSell(amount, getItemName(), getPriceString(limitPriceRaw), getCurrencyName()));
+        limitBuyButton.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipLimitBuy(amount, getItemName(), getPriceString(limitPrice), getCurrencyName()));
+        limitSellButton.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipLimitSell(amount, getItemName(), getPriceString(limitPrice), getCurrencyName()));
 
 
 
@@ -232,15 +231,15 @@ public class TradePanel extends StockMarketGuiElement {
     public void updateView(TradingViewData data)
     {
         PriceHistory history = data.priceHistoryData.toHistory();
-        int centScaleFactor = history.getPriceScaleFactor();
+        int priceScaleFactor = history.getPriceScaleFactor();
         setCurrentItemBalance(data.itemBankData.balance, data.itemBankData.centScaleFactor);
         setCurrentMoneyBalance(data.currencyBankData.balance, data.currencyBankData.centScaleFactor);
-        setCurrentPrice(history.getCurrentRawPrice(), centScaleFactor);
+        setCurrentPrice(history.getCurrentRealPrice(), history.getCurrencyItemFractionScaleFactor());
 
-        if(centScaleFactor > 1)
+        if(priceScaleFactor > 1)
         {
             limitPriceTextBox.setAllowNumbers(true, true);
-            limitPriceTextBox.setMaxDecimalChar((int)Math.log10(centScaleFactor));
+            limitPriceTextBox.setMaxDecimalChar((int)Math.log10(priceScaleFactor));
         }else {
             limitPriceTextBox.setAllowNumbers(true, false);
         }
@@ -255,11 +254,11 @@ public class TradePanel extends StockMarketGuiElement {
     {
         currentMoneyBalanceLabel.setText(MoneyBank.getNormalizedAmount(balance, centScaleFactor));
     }
-    public void setCurrentPrice(int priceRaw, int currencyCentScaleFactor)
+    public void setCurrentPrice(float price, int currencyFractionScaleFactor)
     {
-        currentMarketPriceRaw = priceRaw;
-        this.currencyCentScaleFactor = currencyCentScaleFactor;
-        currentPriceLabel.setText(MoneyBank.getNormalizedAmount(priceRaw, currencyCentScaleFactor));
+        currentMarketPrice = price;
+        this.currencyFractionScaleFactor = currencyFractionScaleFactor;
+        currentPriceLabel.setText(MoneyBank.getNormalizedAmount(price, currencyFractionScaleFactor));
     }
 
     public void setAmount(int amount)
@@ -273,12 +272,12 @@ public class TradePanel extends StockMarketGuiElement {
 
     public void setLimitPrice(float price)
     {
-        this.limitPriceRaw = (int)ServerMarketManager.realToRawPrice(price, currencyCentScaleFactor);
-        limitPriceTextBox.setText(ServerMarketManager.realToRawPrice(limitPriceRaw,currencyCentScaleFactor));
+        this.limitPrice = price;
+        limitPriceTextBox.setText(getPriceString(price));
     }
     public float getLimitPrice()
     {
-        return ServerMarketManager.realToRawPrice(limitPriceRaw,currencyCentScaleFactor);
+        return limitPrice;
     }
 
     @Override
@@ -403,9 +402,9 @@ public class TradePanel extends StockMarketGuiElement {
     }
 
 
-    private String getPriceString(int rawPrice)
+    private String getPriceString(float realPrice)
     {
-        return Bank.getFormattedAmount(rawPrice, currencyCentScaleFactor);
+        return Bank.getFormattedAmount(realPrice, currencyFractionScaleFactor);
     }
 
 }

@@ -27,13 +27,19 @@ public class DefaultMarketSettings {
     {
         public static class PriceGroup extends SettingsGroup
         {
-            public static class Price extends Setting<Integer>
+            public static class Price extends Setting<Float>
             {
+                public Price(String settingName, float defaultValue) {
+                    super(settingName, defaultValue, Float.class);
+                }
+                public Price(String settingName, float defaultValue, Type type) {
+                    super(settingName, defaultValue, type);
+                }
                 public Price(String settingName, int defaultValue) {
-                    super(settingName, defaultValue, Integer.class);
+                    super(settingName, (float)defaultValue, Float.class);
                 }
                 public Price(String settingName, int defaultValue, Type type) {
-                    super(settingName, defaultValue, type);
+                    super(settingName, (float)defaultValue, type);
                 }
 
                 @Override
@@ -46,6 +52,11 @@ public class DefaultMarketSettings {
                 super(groupName);
             }
             protected Price registerSetting(String settingName, int defaultValue) {
+                Price setting = new Price(settingName, defaultValue);
+                getAllSettings().add(setting);
+                return setting;
+            }
+            protected Price registerSetting(String settingName, float defaultValue) {
                 Price setting = new Price(settingName, defaultValue);
                 getAllSettings().add(setting);
                 return setting;
@@ -83,11 +94,11 @@ public class DefaultMarketSettings {
             public final Price LOG = registerSetting("log", 8);
             public final Price PLANK = registerSetting("plank", Math.max(1, LOG.get()/4));
             //public final Price STICK = registerSetting("stick", Math.max(1, LOG.get()/8));
-            public final Price STONE = registerSetting("stone", 2);
+            public final Price STONE = registerSetting("stone", 1);
             public final Price COBBLESTONE = registerSetting("cobblestone", Math.max(1, STONE.get()/2)); // Cobblestone is generally cheaper than stone
-            public final Price SAND = registerSetting("sand", 3);
-            public final Price DIRT = registerSetting("dirt", 1); // Dirt is generally cheaper than sand
-            public final Price GRAVEL = registerSetting("gravel", 3);
+            public final Price SAND = registerSetting("sand", 2);
+            public final Price DIRT = registerSetting("dirt", 0.3f); // Dirt is generally cheaper than sand
+            public final Price GRAVEL = registerSetting("gravel", 2);
 
             public final Price WOOL = registerSetting("wool", 6);
             public final Price GLASS = registerSetting("glass", SAND.get());
@@ -508,7 +519,7 @@ public class DefaultMarketSettings {
 
     private static MarketFactory.DefaultMarketSetupDataGroup getLogs()
     {
-        int logPrice = getDefaultPrices().COMMON_BLOCK.LOG.get();
+        float logPrice = getDefaultPrices().COMMON_BLOCK.LOG.get();
         MarketFactory.DefaultMarketSetupDataGroup logsCategory = new MarketFactory.DefaultMarketSetupDataGroup("Logs", Items.OAK_LOG);
         logsCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.OAK_LOG, logPrice, 0.01f, 0.1f));
         logsCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.SPRUCE_LOG, logPrice, 0.01f, 0.1f));
@@ -536,8 +547,8 @@ public class DefaultMarketSettings {
     private static MarketFactory.DefaultMarketSetupDataGroup getPlanks()
     {
         MarketFactory.DefaultMarketSetupDataGroup planksCategory = new MarketFactory.DefaultMarketSetupDataGroup("Planks", Items.OAK_PLANKS);
-        int plankPrice = getDefaultPrices().COMMON_BLOCK.PLANK.get();
-        int bambooPrice = getDefaultPrices().GARDENING.BAMBOO.get();
+        float plankPrice = getDefaultPrices().COMMON_BLOCK.PLANK.get();
+        float bambooPrice = getDefaultPrices().GARDENING.BAMBOO.get();
         planksCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.OAK_PLANKS, plankPrice, 0.01f, 0.1f));
         planksCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.SPRUCE_PLANKS, plankPrice, 0.01f, 0.1f));
         planksCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.BIRCH_PLANKS, plankPrice, 0.01f, 0.1f));
@@ -555,11 +566,11 @@ public class DefaultMarketSettings {
     private static MarketFactory.DefaultMarketSetupDataGroup getFences()
     {
         MarketFactory.DefaultMarketSetupDataGroup fencesCategory = new MarketFactory.DefaultMarketSetupDataGroup("Fences", Items.OAK_FENCE);
-        int plankPrice = getDefaultPrices().COMMON_BLOCK.PLANK.get();
-        int stickPrice = plankPrice/2;
-        int fencePrice = (plankPrice*4 + stickPrice*2)/3;
-        int fenceDoorPrice = plankPrice*2+stickPrice*4;
-        int bambooPrice = getDefaultPrices().GARDENING.BAMBOO.get();
+        float plankPrice = getDefaultPrices().COMMON_BLOCK.PLANK.get();
+        float stickPrice = plankPrice/2;
+        float fencePrice = (plankPrice*4 + stickPrice*2)/3;
+        float fenceDoorPrice = plankPrice*2+stickPrice*4;
+        float bambooPrice = getDefaultPrices().GARDENING.BAMBOO.get();
         fencesCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.OAK_FENCE, fencePrice, 0.01f, 0.1f));
         fencesCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.SPRUCE_FENCE, fencePrice, 0.01f, 0.1f));
         fencesCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.BIRCH_FENCE, fencePrice, 0.01f, 0.1f));
@@ -586,10 +597,10 @@ public class DefaultMarketSettings {
     private static MarketFactory.DefaultMarketSetupDataGroup getDoors()
     {
         MarketFactory.DefaultMarketSetupDataGroup doorsCategory = new MarketFactory.DefaultMarketSetupDataGroup("Doors", Items.OAK_DOOR);
-        int plankPrice = getDefaultPrices().COMMON_BLOCK.PLANK.get();
-        int bambooPrice = getDefaultPrices().GARDENING.BAMBOO.get();
-        int ironPrice = getDefaultPrices().ORE.IRON.get();
-        int doorPrice = (plankPrice*6)/3;
+        float plankPrice = getDefaultPrices().COMMON_BLOCK.PLANK.get();
+        float bambooPrice = getDefaultPrices().GARDENING.BAMBOO.get();
+        float ironPrice = getDefaultPrices().ORE.IRON.get();
+        float doorPrice = (plankPrice*6)/3;
         doorsCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.IRON_DOOR, ironPrice *2, 0.01f, 0.1f));
         doorsCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.OAK_DOOR, doorPrice, 0.01f, 0.1f));
         doorsCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.SPRUCE_DOOR, doorPrice, 0.01f, 0.1f));
@@ -607,10 +618,10 @@ public class DefaultMarketSettings {
     private static MarketFactory.DefaultMarketSetupDataGroup getTrapDoors()
     {
         MarketFactory.DefaultMarketSetupDataGroup trapDoorsCategory = new MarketFactory.DefaultMarketSetupDataGroup("TrapDoors", Items.OAK_TRAPDOOR);
-        int plankPrice = getDefaultPrices().COMMON_BLOCK.PLANK.get();
-        int bambooPrice = getDefaultPrices().GARDENING.BAMBOO.get();
-        int ironPrice = getDefaultPrices().ORE.IRON.get();
-        int trapDoorPrice = (plankPrice*6)/2;
+        float plankPrice = getDefaultPrices().COMMON_BLOCK.PLANK.get();
+        float bambooPrice = getDefaultPrices().GARDENING.BAMBOO.get();
+        float ironPrice = getDefaultPrices().ORE.IRON.get();
+        float trapDoorPrice = (plankPrice*6)/2;
         trapDoorsCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.IRON_TRAPDOOR, ironPrice *4, 0.01f, 0.1f));
         trapDoorsCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.OAK_TRAPDOOR, trapDoorPrice, 0.01f, 0.1f));
         trapDoorsCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.SPRUCE_TRAPDOOR, trapDoorPrice, 0.01f, 0.1f));
@@ -628,12 +639,12 @@ public class DefaultMarketSettings {
     private static MarketFactory.DefaultMarketSetupDataGroup getPressurePlates()
     {
         MarketFactory.DefaultMarketSetupDataGroup pressurePlatesCategory = new MarketFactory.DefaultMarketSetupDataGroup("PressurePlates",Items.OAK_PRESSURE_PLATE);
-        int plankPrice = getDefaultPrices().COMMON_BLOCK.PLANK.get();
-        int bambooPrice = getDefaultPrices().GARDENING.BAMBOO.get();
-        int stonePrice = getDefaultPrices().COMMON_BLOCK.STONE.get();
-        int ironPrice = getDefaultPrices().ORE.IRON.get();
-        int goldPrice = getDefaultPrices().ORE.GOLD.get();
-        int pressurePlatePrice = plankPrice*2;
+        float plankPrice = getDefaultPrices().COMMON_BLOCK.PLANK.get();
+        float bambooPrice = getDefaultPrices().GARDENING.BAMBOO.get();
+        float stonePrice = getDefaultPrices().COMMON_BLOCK.STONE.get();
+        float ironPrice = getDefaultPrices().ORE.IRON.get();
+        float goldPrice = getDefaultPrices().ORE.GOLD.get();
+        float pressurePlatePrice = plankPrice*2;
         pressurePlatesCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.OAK_PRESSURE_PLATE, pressurePlatePrice, 0.01f, 0.1f));
         pressurePlatesCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.SPRUCE_PRESSURE_PLATE, pressurePlatePrice, 0.01f, 0.1f));
         pressurePlatesCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.BIRCH_PRESSURE_PLATE, pressurePlatePrice, 0.01f, 0.1f));
@@ -656,18 +667,18 @@ public class DefaultMarketSettings {
     private static MarketFactory.DefaultMarketSetupDataGroup getStairs()
     {
         MarketFactory.DefaultMarketSetupDataGroup stairsCategory = new MarketFactory.DefaultMarketSetupDataGroup("Stairs", Items.OAK_STAIRS);
-        int plankPrice = getDefaultPrices().COMMON_BLOCK.PLANK.get();
-        int bambooPrice = getDefaultPrices().GARDENING.BAMBOO.get();
-        int stonePrice = getDefaultPrices().COMMON_BLOCK.STONE.get();
-        int clayBrickettePrice = getDefaultPrices().MISC.CLAY_BRICKETTE.get();
-        int sandPrice = getDefaultPrices().COMMON_BLOCK.SAND.get();
-        int prismarineShardPrice = getDefaultPrices().ORE.PRISMARINE_SHARD.get();
-        int chorusFruitPrice = getDefaultPrices().GARDENING.CHORUS_FRUIT.get();
-        int quartzPrice = getDefaultPrices().ORE.NETHER_QUARTZ.get();
-        int copperPrice = getDefaultPrices().ORE.COPPER.get();
-        int honeycombPrice = getDefaultPrices().ANIMAL_LOOT.HONEYCOMB.get();
-        int woodStairsPrice = plankPrice*6/4;
-        int stoneStairsPrice = stonePrice;
+        float plankPrice = getDefaultPrices().COMMON_BLOCK.PLANK.get();
+        float bambooPrice = getDefaultPrices().GARDENING.BAMBOO.get();
+        float stonePrice = getDefaultPrices().COMMON_BLOCK.STONE.get();
+        float clayBrickettePrice = getDefaultPrices().MISC.CLAY_BRICKETTE.get();
+        float sandPrice = getDefaultPrices().COMMON_BLOCK.SAND.get();
+        float prismarineShardPrice = getDefaultPrices().ORE.PRISMARINE_SHARD.get();
+        float chorusFruitPrice = getDefaultPrices().GARDENING.CHORUS_FRUIT.get();
+        float quartzPrice = getDefaultPrices().ORE.NETHER_QUARTZ.get();
+        float copperPrice = getDefaultPrices().ORE.COPPER.get();
+        float honeycombPrice = getDefaultPrices().ANIMAL_LOOT.HONEYCOMB.get();
+        float woodStairsPrice = plankPrice*6/4;
+        float stoneStairsPrice = stonePrice;
         stairsCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.OAK_STAIRS, woodStairsPrice, 0.01f, 0.1f));
         stairsCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.SPRUCE_STAIRS, woodStairsPrice, 0.01f, 0.1f));
         stairsCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.BIRCH_STAIRS, woodStairsPrice, 0.01f, 0.1f));
@@ -726,18 +737,18 @@ public class DefaultMarketSettings {
     private static MarketFactory.DefaultMarketSetupDataGroup getSlaps()
     {
         MarketFactory.DefaultMarketSetupDataGroup slapsCategory = new MarketFactory.DefaultMarketSetupDataGroup("Slabs", Items.OAK_SLAB);
-        int plankPrice = getDefaultPrices().COMMON_BLOCK.PLANK.get();
-        int bambooPrice = getDefaultPrices().GARDENING.BAMBOO.get();
-        int stonePrice = getDefaultPrices().COMMON_BLOCK.STONE.get();
-        int clayBricklettePrice = getDefaultPrices().MISC.CLAY_BRICKETTE.get();
-        int sandPrice = getDefaultPrices().COMMON_BLOCK.SAND.get();
-        int prismarineShardPrice = getDefaultPrices().ORE.PRISMARINE_SHARD.get();
-        int chorusFruitPrice = getDefaultPrices().GARDENING.CHORUS_FRUIT.get();
-        int quartzPrice = getDefaultPrices().ORE.NETHER_QUARTZ.get();
-        int copperPrice = getDefaultPrices().ORE.COPPER.get();
-        int honeycombPrice = getDefaultPrices().ANIMAL_LOOT.HONEYCOMB.get();
-        int woodStairsPrice = plankPrice*6/4;
-        int stoneStairsPrice = stonePrice;
+        float plankPrice = getDefaultPrices().COMMON_BLOCK.PLANK.get();
+        float bambooPrice = getDefaultPrices().GARDENING.BAMBOO.get();
+        float stonePrice = getDefaultPrices().COMMON_BLOCK.STONE.get();
+        float clayBricklettePrice = getDefaultPrices().MISC.CLAY_BRICKETTE.get();
+        float sandPrice = getDefaultPrices().COMMON_BLOCK.SAND.get();
+        float prismarineShardPrice = getDefaultPrices().ORE.PRISMARINE_SHARD.get();
+        float chorusFruitPrice = getDefaultPrices().GARDENING.CHORUS_FRUIT.get();
+        float quartzPrice = getDefaultPrices().ORE.NETHER_QUARTZ.get();
+        float copperPrice = getDefaultPrices().ORE.COPPER.get();
+        float honeycombPrice = getDefaultPrices().ANIMAL_LOOT.HONEYCOMB.get();
+        float woodStairsPrice = plankPrice*6/4;
+        float stoneStairsPrice = stonePrice;
         slapsCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.OAK_SLAB, woodStairsPrice, 0.01f, 0.1f));
         slapsCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.SPRUCE_SLAB, woodStairsPrice, 0.01f, 0.1f));
         slapsCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.BIRCH_SLAB, woodStairsPrice, 0.01f, 0.1f));
@@ -799,10 +810,10 @@ public class DefaultMarketSettings {
     private static MarketFactory.DefaultMarketSetupDataGroup getWalls()
     {
         MarketFactory.DefaultMarketSetupDataGroup wallsCategory = new MarketFactory.DefaultMarketSetupDataGroup("Walls",Items.COBBLESTONE_WALL);
-        int wallPrice = getDefaultPrices().COMMON_BLOCK.STONE.get();
-        int clayBricklettePrice = getDefaultPrices().MISC.CLAY_BRICKETTE.get();
-        int sandPrice = getDefaultPrices().COMMON_BLOCK.SAND.get();
-        int prismarineShardPrice = getDefaultPrices().ORE.PRISMARINE_SHARD.get();
+        float wallPrice = getDefaultPrices().COMMON_BLOCK.STONE.get();
+        float clayBricklettePrice = getDefaultPrices().MISC.CLAY_BRICKETTE.get();
+        float sandPrice = getDefaultPrices().COMMON_BLOCK.SAND.get();
+        float prismarineShardPrice = getDefaultPrices().ORE.PRISMARINE_SHARD.get();
         wallsCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.COBBLESTONE_WALL, wallPrice, 0.01f, 0.1f));
         wallsCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.MOSSY_COBBLESTONE_WALL, wallPrice, 0.01f, 0.1f));
         wallsCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.STONE_BRICK_WALL, wallPrice, 0.01f, 0.1f));
@@ -837,8 +848,8 @@ public class DefaultMarketSettings {
         oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.GOLD_INGOT,        ORE.GOLD.get(),           0.05f, 0.1f));
         oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.REDSTONE,          ORE.REDSTONE_DUST.get(),  0.08f, 0.1f));
         oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.LAPIS_LAZULI,      ORE.LAPIS_LAZULI.get(),   0.08f, 0.1f));
-        oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.DIAMOND,           ORE.DIAMOND.get(),        0.1f, 0.2f));
-        oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.EMERALD,           ORE.EMERALD.get(),        0.2f, 0.2f));
+        oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.DIAMOND,           ORE.DIAMOND.get(),        0.1f, 0.1f));
+        oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.EMERALD,           ORE.EMERALD.get(),        0.2f, 0.1f));
         oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.QUARTZ,            ORE.NETHER_QUARTZ.get(),        0.03f, 0.1f));
         oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.ANCIENT_DEBRIS,    ORE.ANCIENT_DEBRIS.get(), 0.5f, 0.1f));
         oresCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.NETHERITE_INGOT,   ORE.NETHERITE_SCRAP.get()*4+ORE.GOLD.get()*4, 0.5f, 0.1f));
@@ -865,7 +876,7 @@ public class DefaultMarketSettings {
     }
     private static MarketFactory.DefaultMarketSetupDataGroup getWool()
     {
-        int woolPrice = getDefaultPrices().COMMON_BLOCK.WOOL.get();
+        float woolPrice = getDefaultPrices().COMMON_BLOCK.WOOL.get();
         MarketFactory.DefaultMarketSetupDataGroup woolCategory = new MarketFactory.DefaultMarketSetupDataGroup("Wool",Items.ORANGE_WOOL);
         woolCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.WHITE_WOOL, woolPrice, 0.01f, 0.1f));
         woolCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.ORANGE_WOOL, woolPrice, 0.01f, 0.1f));
@@ -888,8 +899,8 @@ public class DefaultMarketSettings {
     private static MarketFactory.DefaultMarketSetupDataGroup getCarpet()
     {
         MarketFactory.DefaultMarketSetupDataGroup carpetCategory = new MarketFactory.DefaultMarketSetupDataGroup("Carpet",Items.ORANGE_CARPET);
-        int woolPrice = getDefaultPrices().COMMON_BLOCK.WOOL.get();
-        int carpetPrice = Math.max(1, woolPrice*2/3);
+        float woolPrice = getDefaultPrices().COMMON_BLOCK.WOOL.get();
+        float carpetPrice = Math.max(1, woolPrice*2/3);
         carpetCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.WHITE_CARPET, carpetPrice, 0.01f, 0.1f));
         carpetCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.ORANGE_CARPET, carpetPrice, 0.01f, 0.1f));
         carpetCategory.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.MAGENTA_CARPET, carpetPrice, 0.01f, 0.1f));
@@ -911,7 +922,7 @@ public class DefaultMarketSettings {
     private static MarketFactory.DefaultMarketSetupDataGroup getTerracotta()
     {
         MarketFactory.DefaultMarketSetupDataGroup terracotta = new MarketFactory.DefaultMarketSetupDataGroup("Terracotta",Items.MAGENTA_TERRACOTTA);
-        int terraCottaPrice = getDefaultPrices().MISC.CLAY_BALL.get()*4;
+        float terraCottaPrice = getDefaultPrices().MISC.CLAY_BALL.get()*4;
         terracotta.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.WHITE_TERRACOTTA, terraCottaPrice, 0.02f, 0.1f));
         terracotta.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.ORANGE_TERRACOTTA, terraCottaPrice, 0.02f, 0.1f));
         terracotta.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.MAGENTA_TERRACOTTA, terraCottaPrice, 0.02f, 0.1f));
@@ -934,7 +945,7 @@ public class DefaultMarketSettings {
     private static MarketFactory.DefaultMarketSetupDataGroup getGlazedTerracotta()
     {
         MarketFactory.DefaultMarketSetupDataGroup terracotta = new MarketFactory.DefaultMarketSetupDataGroup("GlazedTerracotta",Items.MAGENTA_GLAZED_TERRACOTTA);
-        int terraCottaPrice = getDefaultPrices().MISC.CLAY_BALL.get()*4;
+        float terraCottaPrice = getDefaultPrices().MISC.CLAY_BALL.get()*4;
         terracotta.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.WHITE_GLAZED_TERRACOTTA, terraCottaPrice, 0.02f, 0.1f));
         terracotta.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.ORANGE_GLAZED_TERRACOTTA, terraCottaPrice, 0.02f, 0.1f));
         terracotta.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.MAGENTA_GLAZED_TERRACOTTA, terraCottaPrice, 0.02f, 0.1f));
@@ -956,10 +967,10 @@ public class DefaultMarketSettings {
     private static MarketFactory.DefaultMarketSetupDataGroup getConcrete()
     {
         MarketFactory.DefaultMarketSetupDataGroup concrete = new MarketFactory.DefaultMarketSetupDataGroup("Concrete",Items.CYAN_CONCRETE);
-        int gravelPrice = getDefaultPrices().COMMON_BLOCK.GRAVEL.get();
-        int sandPrice = getDefaultPrices().COMMON_BLOCK.SAND.get();
-        int dyePrice = getDefaultPrices().GARDENING.DYE.get();
-        int concretePrice = gravelPrice*4+ sandPrice*4+ dyePrice;
+        float gravelPrice = getDefaultPrices().COMMON_BLOCK.GRAVEL.get();
+        float sandPrice = getDefaultPrices().COMMON_BLOCK.SAND.get();
+        float dyePrice = getDefaultPrices().GARDENING.DYE.get();
+        float concretePrice = gravelPrice*4+ sandPrice*4+ dyePrice;
         concrete.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.WHITE_CONCRETE, concretePrice, 0.02f, 0.1f));
         concrete.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.ORANGE_CONCRETE, concretePrice, 0.02f, 0.1f));
         concrete.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.MAGENTA_CONCRETE, concretePrice, 0.02f, 0.1f));
@@ -981,10 +992,10 @@ public class DefaultMarketSettings {
     private static MarketFactory.DefaultMarketSetupDataGroup getConcretePowder()
     {
         MarketFactory.DefaultMarketSetupDataGroup concretePowder = new MarketFactory.DefaultMarketSetupDataGroup("ConcretePowder",Items.CYAN_CONCRETE_POWDER);
-        int gravelPrice = getDefaultPrices().COMMON_BLOCK.GRAVEL.get();
-        int sandPrice = getDefaultPrices().COMMON_BLOCK.SAND.get();
-        int dyePrice = getDefaultPrices().GARDENING.DYE.get();
-        int concretePowderPrice = gravelPrice*4+ sandPrice*4+ dyePrice;
+        float gravelPrice = getDefaultPrices().COMMON_BLOCK.GRAVEL.get();
+        float sandPrice = getDefaultPrices().COMMON_BLOCK.SAND.get();
+        float dyePrice = getDefaultPrices().GARDENING.DYE.get();
+        float concretePowderPrice = gravelPrice*4+ sandPrice*4+ dyePrice;
         concretePowder.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.WHITE_CONCRETE_POWDER, concretePowderPrice, 0.02f, 0.1f));
         concretePowder.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.ORANGE_CONCRETE_POWDER, concretePowderPrice, 0.02f, 0.1f));
         concretePowder.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.MAGENTA_CONCRETE_POWDER, concretePowderPrice, 0.02f, 0.1f));
@@ -1019,7 +1030,7 @@ public class DefaultMarketSettings {
     public static MarketFactory.DefaultMarketSetupDataGroup getGlassBlocks()
     {
         MarketFactory.DefaultMarketSetupDataGroup glassCategory = new MarketFactory.DefaultMarketSetupDataGroup("GlassBlocks",Items.BLUE_STAINED_GLASS);
-        int glassPrice = getDefaultPrices().COMMON_BLOCK.GLASS.get();
+        float glassPrice = getDefaultPrices().COMMON_BLOCK.GLASS.get();
         float rarity = 0.02f;
         float volatility = 0.1f;
 
@@ -1048,7 +1059,7 @@ public class DefaultMarketSettings {
     public static MarketFactory.DefaultMarketSetupDataGroup getGlassPlanes()
     {
         MarketFactory.DefaultMarketSetupDataGroup glassCategory = new MarketFactory.DefaultMarketSetupDataGroup("GlassPlanes",Items.BLUE_STAINED_GLASS_PANE);
-        int glassPrice = (getDefaultPrices().COMMON_BLOCK.GLASS.get()*6)/16;
+        float glassPrice = (getDefaultPrices().COMMON_BLOCK.GLASS.get()*6)/16;
         float rarity = 0.02f;
         float volatility = 0.1f;
 
@@ -1200,17 +1211,17 @@ public class DefaultMarketSettings {
     {
         MarketFactory.DefaultMarketSetupDataGroup miscBlocks = new MarketFactory.DefaultMarketSetupDataGroup("MiscBlocks", Items.GRAVEL);
 
-        int obsidianPrice = getDefaultPrices().COMMON_BLOCK.OBSIDIAN.get();
-        int dirtPrice = getDefaultPrices().COMMON_BLOCK.DIRT.get();
+        float obsidianPrice = getDefaultPrices().COMMON_BLOCK.OBSIDIAN.get();
+        float dirtPrice = getDefaultPrices().COMMON_BLOCK.DIRT.get();
 
-        int clayBrickettePrice = getDefaultPrices().MISC.CLAY_BRICKETTE.get();
-        int cobblestonePrice = getDefaultPrices().COMMON_BLOCK.COBBLESTONE.get();
-        int gravelPrice = getDefaultPrices().COMMON_BLOCK.GRAVEL.get();
-        int sandPrice = getDefaultPrices().COMMON_BLOCK.SAND.get();
+        float clayBrickettePrice = getDefaultPrices().MISC.CLAY_BRICKETTE.get();
+        float cobblestonePrice = getDefaultPrices().COMMON_BLOCK.COBBLESTONE.get();
+        float gravelPrice = getDefaultPrices().COMMON_BLOCK.GRAVEL.get();
+        float sandPrice = getDefaultPrices().COMMON_BLOCK.SAND.get();
 
-        int stonePrice = getDefaultPrices().COMMON_BLOCK.STONE.get();
-        int netherBrickPrice = getDefaultPrices().MISC.NETHER_BRICK.get();
-        int netherrackPrice = getDefaultPrices().COMMON_BLOCK.NETHERRACK.get();
+        float stonePrice = getDefaultPrices().COMMON_BLOCK.STONE.get();
+        float netherBrickPrice = getDefaultPrices().MISC.NETHER_BRICK.get();
+        float netherrackPrice = getDefaultPrices().COMMON_BLOCK.NETHERRACK.get();
 
 
 
@@ -1269,19 +1280,19 @@ public class DefaultMarketSettings {
     public static MarketFactory.DefaultMarketSetupDataGroup getGardeningItems()
     {
         MarketFactory.DefaultMarketSetupDataGroup gardeningItems = new MarketFactory.DefaultMarketSetupDataGroup("GardeningItems", Items.WHEAT);
-        int samplingPrice = getDefaultPrices().GARDENING.SAPLING.get();
-        int pumpkinPrice = getDefaultPrices().GARDENING.PUMPKIN.get();
-        int beeHivePrice = getDefaultPrices().GARDENING.BEEHIVE.get();
-        int beeNestPrice = getDefaultPrices().GARDENING.BEE_NEST.get();
-        int seedPrice = getDefaultPrices().GARDENING.SEED.get();
-        int potatoPrice = getDefaultPrices().GARDENING.POTATO.get();
-        int carrotPrice = getDefaultPrices().FOOD.CARROT.get();
-        int sugarCanePrice = getDefaultPrices().GARDENING.SUGAR_CANE.get();
-        int cocoaBeansPrice = getDefaultPrices().GARDENING.COCOA_BEANS.get();
-        int wheatPrice = getDefaultPrices().GARDENING.WHEAT.get();
-        int sweetBerriesPrice = getDefaultPrices().GARDENING.SWEET_BERRIES.get();
-        int beetrootPrice = getDefaultPrices().GARDENING.BEETROOT.get();
-        int glowBerriesPrice = getDefaultPrices().GARDENING.GLOW_BERRIES.get();
+        float samplingPrice = getDefaultPrices().GARDENING.SAPLING.get();
+        float pumpkinPrice = getDefaultPrices().GARDENING.PUMPKIN.get();
+        float beeHivePrice = getDefaultPrices().GARDENING.BEEHIVE.get();
+        float beeNestPrice = getDefaultPrices().GARDENING.BEE_NEST.get();
+        float seedPrice = getDefaultPrices().GARDENING.SEED.get();
+        float potatoPrice = getDefaultPrices().GARDENING.POTATO.get();
+        float carrotPrice = getDefaultPrices().FOOD.CARROT.get();
+        float sugarCanePrice = getDefaultPrices().GARDENING.SUGAR_CANE.get();
+        float cocoaBeansPrice = getDefaultPrices().GARDENING.COCOA_BEANS.get();
+        float wheatPrice = getDefaultPrices().GARDENING.WHEAT.get();
+        float sweetBerriesPrice = getDefaultPrices().GARDENING.SWEET_BERRIES.get();
+        float beetrootPrice = getDefaultPrices().GARDENING.BEETROOT.get();
+        float glowBerriesPrice = getDefaultPrices().GARDENING.GLOW_BERRIES.get();
 
 
         gardeningItems.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.OAK_SAPLING, samplingPrice, 0.02f, 0.1f));
@@ -1354,29 +1365,29 @@ public class DefaultMarketSettings {
     public static MarketFactory.DefaultMarketSetupDataGroup getAnimalLootItems()
     {
         MarketFactory.DefaultMarketSetupDataGroup animalLootItems = new MarketFactory.DefaultMarketSetupDataGroup("AnimalLootItems", Items.BONE);
-        int leatherPrice = getDefaultPrices().ANIMAL_LOOT.LEATHER.get();
-        int rabbitHidePrice = getDefaultPrices().ANIMAL_LOOT.RABBIT_HIDE.get();
-        int rawRabbitPrice = getDefaultPrices().ANIMAL_LOOT.RAW_RABBIT.get();
-        int porkchopPrice = getDefaultPrices().ANIMAL_LOOT.RAW_PORKCHOP.get();
-        int beefPrice = getDefaultPrices().ANIMAL_LOOT.RAW_BEEF.get();
-        int chickenPrice = getDefaultPrices().ANIMAL_LOOT.RAW_CHICKEN.get();
-        int muttonPrice = getDefaultPrices().ANIMAL_LOOT.RAW_MUTTON.get();
-        int featherPrice = getDefaultPrices().ANIMAL_LOOT.FEATHER.get();
-        int eggPrice = getDefaultPrices().ANIMAL_LOOT.EGG.get();
-        int bonePrice = getDefaultPrices().ANIMAL_LOOT.BONE.get();
-        int salmonPrice = getDefaultPrices().ANIMAL_LOOT.RAW_SALMON.get();
-        int codPrice = getDefaultPrices().ANIMAL_LOOT.COD.get();
-        int tropicalFishPrice = getDefaultPrices().ANIMAL_LOOT.TROPICAL_FISH.get();
-        int pufferfishPrice = getDefaultPrices().ANIMAL_LOOT.PUFFER_FISH.get();
-        int honeycombPrice = getDefaultPrices().ANIMAL_LOOT.HONEYCOMB.get();
-        int honeyBottlePrice = getDefaultPrices().ANIMAL_LOOT.HONEY_BOTTLE.get();
-        int inkSacPrice = getDefaultPrices().ANIMAL_LOOT.INK_SAC.get();
-        int spiderEyePrice = getDefaultPrices().ANIMAL_LOOT.SPIDER_EYE.get();
-        int stringPrice = getDefaultPrices().ANIMAL_LOOT.STRING.get();
-        int enderPearlPrice = getDefaultPrices().ANIMAL_LOOT.ENDER_PEARL.get();
-        int ghastTearPrice = getDefaultPrices().ANIMAL_LOOT.GHAST_TEAR.get();
-        int netherStarPrice = getDefaultPrices().ANIMAL_LOOT.NETHER_STAR.get();
-        int slimeBallPrice = getDefaultPrices().ANIMAL_LOOT.SLIME_BALL.get();
+        float leatherPrice = getDefaultPrices().ANIMAL_LOOT.LEATHER.get();
+        float rabbitHidePrice = getDefaultPrices().ANIMAL_LOOT.RABBIT_HIDE.get();
+        float rawRabbitPrice = getDefaultPrices().ANIMAL_LOOT.RAW_RABBIT.get();
+        float porkchopPrice = getDefaultPrices().ANIMAL_LOOT.RAW_PORKCHOP.get();
+        float beefPrice = getDefaultPrices().ANIMAL_LOOT.RAW_BEEF.get();
+        float chickenPrice = getDefaultPrices().ANIMAL_LOOT.RAW_CHICKEN.get();
+        float muttonPrice = getDefaultPrices().ANIMAL_LOOT.RAW_MUTTON.get();
+        float featherPrice = getDefaultPrices().ANIMAL_LOOT.FEATHER.get();
+        float eggPrice = getDefaultPrices().ANIMAL_LOOT.EGG.get();
+        float bonePrice = getDefaultPrices().ANIMAL_LOOT.BONE.get();
+        float salmonPrice = getDefaultPrices().ANIMAL_LOOT.RAW_SALMON.get();
+        float codPrice = getDefaultPrices().ANIMAL_LOOT.COD.get();
+        float tropicalFishPrice = getDefaultPrices().ANIMAL_LOOT.TROPICAL_FISH.get();
+        float pufferfishPrice = getDefaultPrices().ANIMAL_LOOT.PUFFER_FISH.get();
+        float honeycombPrice = getDefaultPrices().ANIMAL_LOOT.HONEYCOMB.get();
+        float honeyBottlePrice = getDefaultPrices().ANIMAL_LOOT.HONEY_BOTTLE.get();
+        float inkSacPrice = getDefaultPrices().ANIMAL_LOOT.INK_SAC.get();
+        float spiderEyePrice = getDefaultPrices().ANIMAL_LOOT.SPIDER_EYE.get();
+        float stringPrice = getDefaultPrices().ANIMAL_LOOT.STRING.get();
+        float enderPearlPrice = getDefaultPrices().ANIMAL_LOOT.ENDER_PEARL.get();
+        float ghastTearPrice = getDefaultPrices().ANIMAL_LOOT.GHAST_TEAR.get();
+        float netherStarPrice = getDefaultPrices().ANIMAL_LOOT.NETHER_STAR.get();
+        float slimeBallPrice = getDefaultPrices().ANIMAL_LOOT.SLIME_BALL.get();
 
 
         animalLootItems.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.LEATHER, leatherPrice, 0.02f, 0.1f));
@@ -1410,22 +1421,22 @@ public class DefaultMarketSettings {
     public static MarketFactory.DefaultMarketSetupDataGroup getFood() {
         MarketFactory.DefaultMarketSetupDataGroup foodItems = new MarketFactory.DefaultMarketSetupDataGroup("FoodItems", Items.BREAD);
 
-        int applePrice = getDefaultPrices().FOOD.APPLE.get();
-        int goldenApplePrice = getDefaultPrices().FOOD.GOLDEN_APPLE.get();
-        int enchantedGoldenApplePrice = getDefaultPrices().FOOD.ENCHANTED_GOLDEN_APPLE.get();
-        int breadPrice = getDefaultPrices().FOOD.BREAD.get();
-        int cookiePrice = getDefaultPrices().FOOD.COOKIE.get();
-        int cakePrice = getDefaultPrices().FOOD.CAKE.get();
-        int pumpkinPiePrice = getDefaultPrices().FOOD.PUMPKIN_PIE.get();
-        int suspiciousStewPrice = getDefaultPrices().FOOD.SUSPICIOUS_STEW.get();
-        int mushroomStewPrice = getDefaultPrices().FOOD.MUSHROOM_STEW.get();
-        int rabbitStewPrice = getDefaultPrices().FOOD.RABBIT_STEW.get();
-        int goldenCarrotPrice = getDefaultPrices().FOOD.GOLDEN_CARROT.get();
-        int beetrootSoupPrice = getDefaultPrices().FOOD.BEETROOT_SOUP.get();
-        int bakedPotatoPrice = getDefaultPrices().FOOD.BAKED_POTATO.get();
-        int sugarPrice = getDefaultPrices().FOOD.SUGAR.get();
-        int meloneSlicePrice = getDefaultPrices().FOOD.MELON_SLICE.get();
-        int mushroomPrice = getDefaultPrices().FOOD.MUSHROOM.get();
+        float applePrice = getDefaultPrices().FOOD.APPLE.get();
+        float goldenApplePrice = getDefaultPrices().FOOD.GOLDEN_APPLE.get();
+        float enchantedGoldenApplePrice = getDefaultPrices().FOOD.ENCHANTED_GOLDEN_APPLE.get();
+        float breadPrice = getDefaultPrices().FOOD.BREAD.get();
+        float cookiePrice = getDefaultPrices().FOOD.COOKIE.get();
+        float cakePrice = getDefaultPrices().FOOD.CAKE.get();
+        float pumpkinPiePrice = getDefaultPrices().FOOD.PUMPKIN_PIE.get();
+        float suspiciousStewPrice = getDefaultPrices().FOOD.SUSPICIOUS_STEW.get();
+        float mushroomStewPrice = getDefaultPrices().FOOD.MUSHROOM_STEW.get();
+        float rabbitStewPrice = getDefaultPrices().FOOD.RABBIT_STEW.get();
+        float goldenCarrotPrice = getDefaultPrices().FOOD.GOLDEN_CARROT.get();
+        float beetrootSoupPrice = getDefaultPrices().FOOD.BEETROOT_SOUP.get();
+        float bakedPotatoPrice = getDefaultPrices().FOOD.BAKED_POTATO.get();
+        float sugarPrice = getDefaultPrices().FOOD.SUGAR.get();
+        float meloneSlicePrice = getDefaultPrices().FOOD.MELON_SLICE.get();
+        float mushroomPrice = getDefaultPrices().FOOD.MUSHROOM.get();
 
 
 
@@ -1449,13 +1460,13 @@ public class DefaultMarketSettings {
 
 
         // cooked meets
-        int cookedBeefPrice = getDefaultPrices().FOOD.COOKED_BEEF.get();
-        int cookedChickenPrice = getDefaultPrices().FOOD.COOKED_CHICKEN.get();
-        int cookedMuttonPrice = getDefaultPrices().FOOD.COOKED_MUTTON.get();
-        int cookedPorkchopPrice = getDefaultPrices().FOOD.COOKED_PORKCHOP.get();
-        int cookedRabbitPrice = getDefaultPrices().FOOD.COOKED_RABBIT.get();
-        int cookedSalmonPrice = getDefaultPrices().FOOD.COOKED_SALMON.get();
-        int cookedCodPrice = getDefaultPrices().FOOD.COOKED_COD.get();
+        float cookedBeefPrice = getDefaultPrices().FOOD.COOKED_BEEF.get();
+        float cookedChickenPrice = getDefaultPrices().FOOD.COOKED_CHICKEN.get();
+        float cookedMuttonPrice = getDefaultPrices().FOOD.COOKED_MUTTON.get();
+        float cookedPorkchopPrice = getDefaultPrices().FOOD.COOKED_PORKCHOP.get();
+        float cookedRabbitPrice = getDefaultPrices().FOOD.COOKED_RABBIT.get();
+        float cookedSalmonPrice = getDefaultPrices().FOOD.COOKED_SALMON.get();
+        float cookedCodPrice = getDefaultPrices().FOOD.COOKED_COD.get();
         foodItems.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.COOKED_BEEF, cookedBeefPrice, 0.02f, 0.1f));
         foodItems.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.COOKED_CHICKEN, cookedChickenPrice, 0.02f, 0.1f));
         foodItems.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.COOKED_MUTTON, cookedMuttonPrice, 0.02f, 0.1f));
@@ -1471,7 +1482,7 @@ public class DefaultMarketSettings {
     {
         MarketFactory.DefaultMarketSetupDataGroup dyeItems = new MarketFactory.DefaultMarketSetupDataGroup("Dyes",Items.LIGHT_BLUE_DYE);
 
-        int dyePrice = getDefaultPrices().DYE.DYE.get();
+        float dyePrice = getDefaultPrices().DYE.DYE.get();
         dyeItems.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.WHITE_DYE, dyePrice, 0.02f, 0.1f));
         dyeItems.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.ORANGE_DYE, dyePrice, 0.02f, 0.1f));
         dyeItems.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.MAGENTA_DYE, dyePrice, 0.02f, 0.1f));
@@ -1498,14 +1509,14 @@ public class DefaultMarketSettings {
     {
         MarketFactory.DefaultMarketSetupDataGroup miscItems = new MarketFactory.DefaultMarketSetupDataGroup("MiscItems",Items.GLOWSTONE_DUST);
 
-        int blazePowderPrice = getDefaultPrices().MISC.BLAZE_POWDER.get();
+        float blazePowderPrice = getDefaultPrices().MISC.BLAZE_POWDER.get();
 
-        int glowstoneDustPrice = getDefaultPrices().MISC.GLOWSTONE_DUST.get();
-        int bookPrice = getDefaultPrices().MISC.BOOK.get();
-        int flintPrice = getDefaultPrices().MISC.FLINT.get();
-        int enderPearlPrice = getDefaultPrices().ANIMAL_LOOT.ENDER_PEARL.get();
-        int clayBallPrice = getDefaultPrices().MISC.CLAY_BALL.get();
-        int netherBrickPrice = getDefaultPrices().MISC.NETHER_BRICK.get();
+        float glowstoneDustPrice = getDefaultPrices().MISC.GLOWSTONE_DUST.get();
+        float bookPrice = getDefaultPrices().MISC.BOOK.get();
+        float flintPrice = getDefaultPrices().MISC.FLINT.get();
+        float enderPearlPrice = getDefaultPrices().ANIMAL_LOOT.ENDER_PEARL.get();
+        float clayBallPrice = getDefaultPrices().MISC.CLAY_BALL.get();
+        float netherBrickPrice = getDefaultPrices().MISC.NETHER_BRICK.get();
 
 
         miscItems.add(new MarketFactory.DefaultMarketSetupGeneratorData(Items.CLAY_BALL, clayBallPrice, 0.02f, 0.1f));

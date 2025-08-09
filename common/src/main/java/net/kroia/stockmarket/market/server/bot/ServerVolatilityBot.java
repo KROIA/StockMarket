@@ -203,7 +203,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
     private MeanRevertingRandomWalk randomWalk;
     private static Random random = new Random();
     TimerMillis randomWalkTimer = new TimerMillis(false);
-    private final PID pid = new PID(0.1f, 0.1f, 0, 1);
+    private final PID pid = new PID(0.1f, 0.01f, 0, 0.1f);
 
     private float targetPriceF;
     Settings settings;
@@ -256,11 +256,11 @@ public class ServerVolatilityBot extends ServerTradingBot {
         {
             if(randomWalkTimer.check())
             {
-                randomWalkTimer.start(100+random.nextInt(900));
+                randomWalkTimer.start(100+random.nextLong(settings.updateTimerIntervallMS * 2));
                 priceGenerator.getNextValue();
             }
             double randomWalkValue = (priceGenerator.getCurrentValue() * (double)settings.volatility * (double)settings.defaultPrice);
-            randomWalkDeltaTargetPriceF = (int)Math.round(randomWalkValue);
+            randomWalkDeltaTargetPriceF = (float)randomWalkValue;
             targetPriceF += randomWalkDeltaTargetPriceF;
             marketOrderAmountF +=  (float)randomWalk.nextValue() * settings.volatility * settings.volumeScale;
         }

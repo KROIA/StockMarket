@@ -22,7 +22,7 @@ public class TransactionEngine {
         BACKEND_INSTANCES = backend;
     }
 
-    public static long fill(TradingPair pair, Order o1, Order o2, int currentPrice, int priceScaleFactor)
+    public static long fill(TradingPair pair, Order o1, Order o2, int currentPrice, int priceScaleFactor, int currencyScaleFactor)
     {
         long fillAmount1 = o1.getPendingAmount();
         long fillAmount2 = o2.getPendingAmount();
@@ -36,7 +36,7 @@ public class TransactionEngine {
         if(fillAmount1 < 0)
             fillAmount = -fillVolume;
 
-        long money = fillVolume * ServerMarketManager.scaleToBankSystemMoneyAmount(currentPrice, priceScaleFactor);
+        long money = fillVolume * ServerMarketManager.scaleToBankSystemMoneyAmount(currentPrice, priceScaleFactor, currencyScaleFactor);
 
         UUID playerUUID1 = o1.getPlayerUUID();
         UUID playerUUID2 = o2.getPlayerUUID();
@@ -208,7 +208,7 @@ public class TransactionEngine {
         }
         return fillVolume;
     }
-    public static long virtualFill(TradingPair pair, Order o1, long virtualAmount, int currentPrice, int priceScaleFactor)
+    public static long virtualFill(TradingPair pair, Order o1, long virtualAmount, int currentPrice, int priceScaleFactor, int currencyScaleFactor)
     {
         if(virtualAmount == 0 || o1.getAmount()-o1.getFilledAmount() == 0)
             return 0;
@@ -241,7 +241,7 @@ public class TransactionEngine {
         IBank moneyBank1 = user1.getBank(pair.getCurrency());
         IBank itemBank1 = user1.getBank(pair.getItem());
 
-        long moneyToTransfer = fillVolume * ServerMarketManager.scaleToBankSystemMoneyAmount(currentPrice, priceScaleFactor);
+        long moneyToTransfer = fillVolume * ServerMarketManager.scaleToBankSystemMoneyAmount(currentPrice, priceScaleFactor, currencyScaleFactor);
         if(o1.isBuy())
         {
             if(moneyBank1.getBalance()+(o1.getLockedMoney() + o1.getTransferedMoney()) < moneyToTransfer)

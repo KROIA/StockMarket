@@ -1,6 +1,5 @@
 package net.kroia.stockmarket.market.server;
 
-import net.kroia.banksystem.banking.bank.MoneyBank;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.ServerPlayerUtilities;
@@ -39,9 +38,9 @@ public class ServerMarketManager implements IServerMarketManager
 
     }
 
-    public static long scaleToBankSystemMoneyAmount(long amount, int centScaleFactor)
+    public static long scaleToBankSystemMoneyAmount(long amount, int marketPriceScale, int moneyScaleFactor)
     {
-        return amount * MoneyBank.getCentScaleFactorStatic() / centScaleFactor;
+        return amount * moneyScaleFactor / marketPriceScale;
         /*// Scale the amount to the bank system money amount
         if(centScaleFactor == 1)
             return amount * 100; // No scaling needed for item banks
@@ -49,13 +48,13 @@ public class ServerMarketManager implements IServerMarketManager
             return amount * 10; // Invalid scale factor, return the amount as is
         return amount;*/
     }
-    public static long realToRawPrice(float realPrice, int centScaleFactor)
+    public static long realToRawPrice(float realPrice, int marketPriceScale)
     {
-        return (long) (realPrice * centScaleFactor);
+        return (long) (realPrice * marketPriceScale);
     }
-    public static float rawToRealPrice(long rawPrice, int centScaleFactor)
+    public static float rawToRealPrice(long rawPrice, int marketPriceScale)
     {
-        return (float) rawPrice / centScaleFactor;
+        return (float) rawPrice / marketPriceScale;
     }
     public static int getDecimalCharCount(int centScaleFactor)
     {

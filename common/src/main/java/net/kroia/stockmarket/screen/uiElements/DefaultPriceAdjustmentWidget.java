@@ -384,7 +384,7 @@ public class DefaultPriceAdjustmentWidget extends Frame {
                             //drawCross(crossX, crossY, 5, 0xFFFF0000); // Draw a red cross at the ajusted price position
                             drawLine(getMouseX(), getMouseY(), absPosX, absPosY, 1.0f, 0xFFFF0000); // Draw a line from the mouse position to the ajusted price position
                             //if(plotPos.y > plot.getY()+plot.getHeight()/2)
-                                drawText(defaultPrice + "->"+ ajustedPrice, absPosX, absPosY+20, 0xFF88ff8c, Alignment.TOP); // Draw the price text at the ajusted price position
+                                drawText(defaultPrice + "->"+ ajustedPrice, absPosX, absPosY, 0xFF88ff8c, Alignment.CENTER); // Draw the price text at the ajusted price position
                             //else
                             //    drawText(defaultPrice + "->"+ ajustedPrice, absPosX, absPosY+20, 0xFF88ff8c, Alignment.TOP); // Draw the price text at the ajusted price position
 

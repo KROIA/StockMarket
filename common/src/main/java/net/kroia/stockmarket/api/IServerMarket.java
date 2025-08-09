@@ -38,6 +38,8 @@ public interface IServerMarket extends ServerSaveable {
     boolean setVirtualOrderBookSettingsData(@Nullable VirtualOrderBookSettingsData virtualOrderBookSettingsData);
     boolean setVirtualOrderBookSettings(VirtualOrderBook.Settings settings);
 
+    void resetVirtualOrderBookVolumeDistribution();
+
     int getPriceScaleFactor();
 
     int getBotTargetPrice();

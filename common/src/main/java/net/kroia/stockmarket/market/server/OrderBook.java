@@ -48,6 +48,7 @@ public class OrderBook implements ServerSaveable {
             return; // Virtual order book already exists.
         this.virtualOrderBook = new VirtualOrderBook(realVolumeBookSize, initialPrice);
         this.virtualOrderBook.setSettings(settings); // Set the settings for the virtual order book.
+        this.virtualOrderBook.resetVolumeDistribution();
     }
     public void destroyVirtualOrderBook()
     {

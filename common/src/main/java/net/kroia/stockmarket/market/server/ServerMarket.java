@@ -45,6 +45,7 @@ public class ServerMarket implements IServerMarket {
     protected TimerMillis shiftPriceTimer = new TimerMillis(true);
 
     private int priceScaleFactor = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.DEFAULT_PRICE_SCALE.get();
+    private int currencyItemFractionScaleFactor = 1;
 
     public ServerMarket(TradingPair pair, int virtualOrderBookArraySize, int historySize)
     {
@@ -72,19 +73,20 @@ public class ServerMarket implements IServerMarket {
             }
         }
 
-
+        currencyItemFractionScaleFactor = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getItemFractionScaleFactor(tradingPair.getCurrency());
 
         int rawInitialPrice = mapToRawPrice(initialPrice);
         this.orderBook = new OrderBook(virtualOrderBookArraySize, rawInitialPrice);
         this.historicalMarketData = new HistoricalMarketData(rawInitialPrice, historySize);
-        this.historicalMarketData.getHistory().setPriceScaleFactor(priceScaleFactor);
+        this.historicalMarketData.getHistory().setScaleFactors(priceScaleFactor, currencyItemFractionScaleFactor);
         this.orderBook.setPriceScaleFactor(priceScaleFactor);
         this.matchingEngine = new MatchingEngine(this, historicalMarketData, orderBook, tradingPair);
-        this.matchingEngine.setPriceScaleFactor(priceScaleFactor);
+        this.matchingEngine.setScaleFactors(priceScaleFactor, currencyItemFractionScaleFactor);
 
         this.volatilityBot = null;
 
         shiftPriceTimer.start(shiftPriceCandleIntervalMS);
+        this.resetVirtualOrderBookVolumeDistribution();
         //notifySubscriberTimer.start(notifySubscriberIntervalMS);
     }
     public ServerMarket(int virtualOrderBookArraySize, int historySize)
@@ -92,10 +94,10 @@ public class ServerMarket implements IServerMarket {
         this.tradingPair = new TradingPair();
         this.orderBook = new OrderBook(virtualOrderBookArraySize);
         this.historicalMarketData = new HistoricalMarketData(historySize);
-        this.historicalMarketData.getHistory().setPriceScaleFactor(priceScaleFactor);
+        this.historicalMarketData.getHistory().setScaleFactors(priceScaleFactor, currencyItemFractionScaleFactor);
         this.orderBook.setPriceScaleFactor(priceScaleFactor);
         this.matchingEngine = new MatchingEngine(this ,historicalMarketData, orderBook, tradingPair);
-        this.matchingEngine.setPriceScaleFactor(priceScaleFactor);
+        this.matchingEngine.setScaleFactors(priceScaleFactor, currencyItemFractionScaleFactor);
 
         this.volatilityBot = null;
 
@@ -352,6 +354,15 @@ public class ServerMarket implements IServerMarket {
     }
 
     @Override
+    public void resetVirtualOrderBookVolumeDistribution()
+    {
+        if(orderBook.getVirtualOrderBook() != null)
+        {
+            orderBook.getVirtualOrderBook().resetVolumeDistribution();
+        }
+    }
+
+    @Override
     public int getPriceScaleFactor() {
         return priceScaleFactor;
     }
@@ -505,7 +516,7 @@ public class ServerMarket implements IServerMarket {
             return false;
 
         int rawPrice = mapToRawPrice(price);
-        LimitOrder order = OrderFactory.createLimitOrder(playerUUID, tradingPair, amount, rawPrice, priceScaleFactor);
+        LimitOrder order = OrderFactory.createLimitOrder(playerUUID, tradingPair, amount, rawPrice, priceScaleFactor, currencyItemFractionScaleFactor);
         if(order == null)
             return false;
 
@@ -519,7 +530,7 @@ public class ServerMarket implements IServerMarket {
             return false;
 
         int currentPrice = getCurrentRawPrice();
-        MarketOrder order = OrderFactory.createMarketOrder(playerUUID, tradingPair, amount, currentPrice, priceScaleFactor);
+        MarketOrder order = OrderFactory.createMarketOrder(playerUUID, tradingPair, amount, currentPrice, priceScaleFactor, currencyItemFractionScaleFactor);
         if(order == null)
             return false;
 
@@ -609,8 +620,9 @@ public class ServerMarket implements IServerMarket {
            // ServerPlayer player = PlayerUtilities.getOnlinePlayer(limitOrder.getPlayerUUID());
             boolean canBeMoved = false;
             if (limitOrder.isBuy()) {
-                long toFreeAmount = toFillAmount * limitOrder.getPrice();
-                long toLockAmount = toFillAmount * newRawPrice;
+                long toFreeAmount = ServerMarketManager.scaleToBankSystemMoneyAmount(toFillAmount * limitOrder.getPrice(),
+                        priceScaleFactor, currencyItemFractionScaleFactor);
+                long toLockAmount = ServerMarketManager.scaleToBankSystemMoneyAmount(toFillAmount * newRawPrice, priceScaleFactor, currencyItemFractionScaleFactor);
                 IBank moneyBank = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getUser(limitOrder.getPlayerUUID()).getBank(tradingPair.getCurrency());
                 if (moneyBank == null)
                     return false;
@@ -729,6 +741,7 @@ public class ServerMarket implements IServerMarket {
         tag.putLong("itemImbalance", itemImbalance);
         tag.putLong("shiftPriceCandleIntervalMS", shiftPriceCandleIntervalMS);
         tag.putInt("priceScaleFactor", priceScaleFactor);
+        tag.putInt("currencyItemFractionScaleFactor", currencyItemFractionScaleFactor);
         //tag.putLong("notifySubscriberIntervalMS", notifySubscriberIntervalMS);
 
         return true;
@@ -785,10 +798,14 @@ public class ServerMarket implements IServerMarket {
             priceScaleFactor = tag.getInt("priceScaleFactor");
         else
             priceScaleFactor = 1;
+        if(tag.contains("currencyItemFractionScaleFactor"))
+            currencyItemFractionScaleFactor = tag.getInt("currencyItemFractionScaleFactor");
+        else
+            currencyItemFractionScaleFactor = 1;
 
-        this.historicalMarketData.getHistory().setPriceScaleFactor(priceScaleFactor);
+        this.historicalMarketData.getHistory().setScaleFactors(priceScaleFactor, currencyItemFractionScaleFactor);
         this.orderBook.setPriceScaleFactor(priceScaleFactor);
-        this.matchingEngine.setPriceScaleFactor(priceScaleFactor);
+        this.matchingEngine.setScaleFactors(priceScaleFactor, currencyItemFractionScaleFactor);
         return success;
     }
 

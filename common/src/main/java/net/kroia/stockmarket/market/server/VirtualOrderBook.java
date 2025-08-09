@@ -258,6 +258,9 @@ public class VirtualOrderBook implements ServerSaveable {
     public void setSettings(Settings settings)
     {
         this.settings = settings;
+    }
+    public void resetVolumeDistribution()
+    {
         virtualOrderVolumeDistribution.resetToDefaultValues();
     }
     public Settings getSettings() {

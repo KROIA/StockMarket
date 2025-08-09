@@ -27,15 +27,15 @@ public class LimitOrderInChartDisplay extends StockMarketGuiElement {
     private final TradingPair pair;
     private final Function<Integer, Float> yPosToPriceFunc;
     private final BiConsumer<OrderReadData, Float> onOrderReplacedToNewPrice;
-    private final int priceScaleFactor; // Scale factor for price to avoid floating point precision issues
+    private final int currencyFractionScaleFactor;
 
     public LimitOrderInChartDisplay(Function<Integer, Float> yPosToPriceFunc,
                                     OrderReadData order,
                                     TradingPair pair,
                                     BiConsumer<OrderReadData, Float> onOrderReplacedToNewPrice,
-                                    int priceScaleFactor) {
+                                    int currencyFractionScaleFactor) {
         super();
-        this.priceScaleFactor = priceScaleFactor;
+        this.currencyFractionScaleFactor = currencyFractionScaleFactor;
         this.yPosToPriceFunc = yPosToPriceFunc;
         this.onOrderReplacedToNewPrice = onOrderReplacedToNewPrice;
         this.pair = pair;
@@ -154,7 +154,7 @@ public class LimitOrderInChartDisplay extends StockMarketGuiElement {
         String displayName = ClientPlayerUtilities.getItemDisplayText(pair.getCurrency().getStack());
         if(isDragging)
         {
-            return StockMarketTextMessages.getLimitOrderInChartDisplayMoveButtonMoving(Bank.getNormalizedAmount(getCurrentPrice(),priceScaleFactor), displayName);
+            return StockMarketTextMessages.getLimitOrderInChartDisplayMoveButtonMoving(Bank.getNormalizedAmount(getCurrentPrice(),currencyFractionScaleFactor), displayName);
         }
         return StockMarketTextMessages.getLimitOrderInChartDisplayMoveButton();
     }
