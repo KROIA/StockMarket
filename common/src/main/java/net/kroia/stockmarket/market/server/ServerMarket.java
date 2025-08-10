@@ -2,6 +2,7 @@ package net.kroia.stockmarket.market.server;
 
 import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.api.IBankUser;
+import net.kroia.modutilities.ServerSaveable;
 import net.kroia.modutilities.TimerMillis;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.IServerMarket;
@@ -21,7 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-public class ServerMarket implements IServerMarket {
+public class ServerMarket implements IServerMarket, ServerSaveable {
 
     protected static StockMarketModBackend.Instances BACKEND_INSTANCES;
     public static void setBackend(StockMarketModBackend.Instances backend) {
@@ -103,7 +104,7 @@ public class ServerMarket implements IServerMarket {
 
     }
 
-    @Override
+
     public void update(MinecraftServer server)
     {
         if(volatilityBot != null)
@@ -220,7 +221,7 @@ public class ServerMarket implements IServerMarket {
         return new PriceHistoryData(historicalMarketData.getHistory(), maxHistoryPointCount);
     }
     @Override
-    public TradingViewData getTradingViewData(UUID player, int maxHistoryPointCount, float minVisiblePrice, float maxVisiblePrice, int orderBookTileCount, boolean requestBotTargetPrice)
+    public TradingViewData getTradingViewData(@NotNull UUID player, int maxHistoryPointCount, float minVisiblePrice, float maxVisiblePrice, int orderBookTileCount, boolean requestBotTargetPrice)
     {
         IBankUser bankUser = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getUser(player);
         if(bankUser == null)
@@ -250,7 +251,7 @@ public class ServerMarket implements IServerMarket {
                 new OrderReadListData(orders, priceScaleFactor), marketOpen, botTargetPrice);
     }
     @Override
-    public TradingViewData getTradingViewData(UUID player)
+    public TradingViewData getTradingViewData(@NotNull UUID player)
     {
         return getTradingViewData(player, -1,0, 0, 0, false);
     }
@@ -310,7 +311,7 @@ public class ServerMarket implements IServerMarket {
         marketOpen = settingsData.marketOpen;
         if(settingsData.overwriteItemImbalance)
         {
-            itemImbalance = settingsData.itemImbalance;
+            setItemImbalance(settingsData.itemImbalance);
         }
         //itemImbalance = settingsData.itemImbalance;
         setShiftPriceCandleIntervalMS(settingsData.shiftPriceCandleIntervalMS);
@@ -363,26 +364,22 @@ public class ServerMarket implements IServerMarket {
     }
 
     @Override
+    public void resetHistoricalMarketData()
+    {
+        historicalMarketData.clear(getCurrentRawPrice());
+    }
+
+
+    @Override
     public int getPriceScaleFactor() {
         return priceScaleFactor;
     }
 
     @Override
-    public int getBotTargetPrice() {
-        if(volatilityBot == null)
-            return 0;
-        return volatilityBot.getTargetPrice();
-    }
-    @Override
-    public float getBotTargetPriceF() {
+    public float getBotTargetPrice() {
         if(volatilityBot == null)
             return 0;
         return volatilityBot.getTargetPriceF();
-    }
-    @Override
-    public void resetHistoricalMarketData()
-    {
-        historicalMarketData.clear(getCurrentRawPrice());
     }
 
 
@@ -657,24 +654,6 @@ public class ServerMarket implements IServerMarket {
         }
         return false;
     }
-    /*protected void orderInvalid(Order order, String reason)
-    {
-        cancelOrder(order.getOrderID());
-        order.markAsInvalid(reason);
-    }
-    protected void orderFilled(Order order)
-    {
-        order.markAsProcessed();
-        unlockLockedAmount(order);
-        if(order instanceof LimitOrder limitOrder)
-        {
-            orderBook.removeOrder(limitOrder);
-        }else if(order instanceof MarketOrder marketOrder)
-        {
-            
-        }
-    }*/
-
     protected void shiftPriceHistory()
     {
         historicalMarketData.createNewCandle();

@@ -215,10 +215,10 @@ public class MarketFactory
 
     public static class DefaultMarketSetupData implements INetworkPayloadEncoder
     {
-        public TradingPair tradingPair;
+        @NotNull public TradingPair tradingPair;
 
-        public ServerVolatilityBot.Settings botSettings;
-        public VirtualOrderBook.Settings virtualOrderBookSettings;
+        @Nullable public ServerVolatilityBot.Settings botSettings;
+        @Nullable public VirtualOrderBook.Settings virtualOrderBookSettings;
         public boolean isMarketOpen = false;
         public long candleTimeMin = 1;
         public float defaultPrice;

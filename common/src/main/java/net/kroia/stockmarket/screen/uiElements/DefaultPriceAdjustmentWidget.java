@@ -9,7 +9,7 @@ import net.kroia.modutilities.gui.geometry.Point;
 import net.kroia.modutilities.gui.layout.Layout;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.market.clientdata.DefaultPriceAjustmentFactorsData;
+import net.kroia.stockmarket.market.clientdata.DefaultPriceAdjustmentFactorsData;
 import net.kroia.stockmarket.market.server.MarketFactory;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.kroia.stockmarket.util.StockMarketTextMessages;
@@ -58,8 +58,8 @@ public class DefaultPriceAdjustmentWidget extends Frame {
         private final Label exponentialLabel;
         private final TextBox exponentialFactorTextBox;
 
-        private DefaultPriceAjustmentFactorsData factors;
-        public FactorEditorWidget(DefaultPriceAjustmentFactorsData factors)
+        private DefaultPriceAdjustmentFactorsData factors;
+        public FactorEditorWidget(DefaultPriceAdjustmentFactorsData factors)
         {
             super();
             this.factors = factors;
@@ -135,7 +135,7 @@ public class DefaultPriceAdjustmentWidget extends Frame {
             addChild(exponentialFactorTextBox);
         }
 
-        public void setFactors(DefaultPriceAjustmentFactorsData factors) {
+        public void setFactors(DefaultPriceAdjustmentFactorsData factors) {
             this.factors = factors;
             if(factors == null)
                 return;
@@ -174,7 +174,7 @@ public class DefaultPriceAdjustmentWidget extends Frame {
     private final List<MarketFactory.DefaultMarketSetupData> defaultMarketSetupDataList = new ArrayList<>();
     private final List<ItemView> inPlotItemViews = new ArrayList<>();
     private final int itemViewWidth = 12; // Width of the item icon in the plot
-    private DefaultPriceAjustmentFactorsData factors;
+    private DefaultPriceAdjustmentFactorsData factors;
 
     private final FactorEditorWidget factorEditorWidget;
     private final ListView marketsListView;
@@ -187,7 +187,7 @@ public class DefaultPriceAdjustmentWidget extends Frame {
     {
         this(onApply, onCancel, null, null);
     }
-    public DefaultPriceAdjustmentWidget(Runnable onApply, Runnable onCancel, DefaultPriceAjustmentFactorsData factors, List<MarketFactory.DefaultMarketSetupData> defaultMarketSetupDataList)
+    public DefaultPriceAdjustmentWidget(Runnable onApply, Runnable onCancel, DefaultPriceAdjustmentFactorsData factors, List<MarketFactory.DefaultMarketSetupData> defaultMarketSetupDataList)
     {
         super();
         this.onCancel = onCancel;
@@ -227,7 +227,7 @@ public class DefaultPriceAdjustmentWidget extends Frame {
         addChild(plot);
     }
 
-    public void setFactors(DefaultPriceAjustmentFactorsData factors)
+    public void setFactors(DefaultPriceAdjustmentFactorsData factors)
     {
         this.factors = factors;
         if(factors == null)
@@ -235,7 +235,7 @@ public class DefaultPriceAdjustmentWidget extends Frame {
 
         factorEditorWidget.setFactors(factors);
     }
-    public DefaultPriceAjustmentFactorsData getFactors() {
+    public DefaultPriceAdjustmentFactorsData getFactors() {
         return factors;
     }
     public void setDefaultMarketSetupDataList(List<MarketFactory.DefaultMarketSetupData> defaultMarketSetupDataList) {

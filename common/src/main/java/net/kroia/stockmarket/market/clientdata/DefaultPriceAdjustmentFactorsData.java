@@ -3,18 +3,18 @@ package net.kroia.stockmarket.market.clientdata;
 import net.kroia.modutilities.networking.INetworkPayloadEncoder;
 import net.minecraft.network.FriendlyByteBuf;
 
-public class DefaultPriceAjustmentFactorsData implements INetworkPayloadEncoder {
+public class DefaultPriceAdjustmentFactorsData implements INetworkPayloadEncoder {
 
     public float linearFactor;
     public float quadraticFactor;
     public float exponentialFactor;
 
-    public DefaultPriceAjustmentFactorsData() {
+    public DefaultPriceAdjustmentFactorsData() {
         linearFactor = 1.0f; // Default linear factor
         quadraticFactor = 0.0f; // Default quadratic factor
         exponentialFactor = 0.0f; // Default exponential factor
     }
-    public DefaultPriceAjustmentFactorsData(float linearFactor, float quadraticFactor, float exponentialFactor) {
+    public DefaultPriceAdjustmentFactorsData(float linearFactor, float quadraticFactor, float exponentialFactor) {
         this.linearFactor = linearFactor;
         this.quadraticFactor = quadraticFactor;
         this.exponentialFactor = exponentialFactor;
@@ -27,8 +27,8 @@ public class DefaultPriceAjustmentFactorsData implements INetworkPayloadEncoder 
         buf.writeFloat(exponentialFactor);
     }
 
-    public static DefaultPriceAjustmentFactorsData decode(FriendlyByteBuf buf) {
-        DefaultPriceAjustmentFactorsData data = new DefaultPriceAjustmentFactorsData();
+    public static DefaultPriceAdjustmentFactorsData decode(FriendlyByteBuf buf) {
+        DefaultPriceAdjustmentFactorsData data = new DefaultPriceAdjustmentFactorsData();
         data.linearFactor = buf.readFloat();
         data.quadraticFactor = buf.readFloat();
         data.exponentialFactor = buf.readFloat();

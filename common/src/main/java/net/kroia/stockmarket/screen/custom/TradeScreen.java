@@ -79,18 +79,14 @@ public class TradeScreen extends StockMarketGuiScreen {
         super(TITLE);
         this.updateTimer = new TimerMillis(true); // Update every second
         updateTimer.start(100);
-        getMarketManager().init();
+        //getMarketManager().init();
         blockEntity = null;
         instance = this;
 
         this.tradingPair = currentPair;
 
         // Create Gui Elements
-        //this.candleStickChart = new CandleStickChartOld(this::onOrderChange);
         tradingChart = new TradingChartWidget(this::onOrderChange);
-        //this.orderbookVolumeChart = new OrderbookVolumeChartWidget();
-        //this.orderbookVolumeChart.setTooltipMousePositionAlignment(GuiElement.Alignment.TOP);
-        //this.orderbookVolumeChart.setHoverTooltipSupplier(StockMarketTextMessages::getCandlestickChartTooltipOrderBookVolume);
         this.activeOrderListView = new OrderListView(this::cancelOrder);
         this.tradingPanel = new TradePanel(this::onSelectItemButtonPressed,
                 this::onBuyMarketButtonPressed,

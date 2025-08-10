@@ -30,7 +30,7 @@ public class RemoveMarketRequest extends StockMarketGenericRequest<List<TradingP
             return results;
         }
         // If the player is not an admin, return a list of false values
-        for (TradingPair data : input) {
+        for (TradingPair ignored : input) {
             results.add(false); // Indicate failure for each item
         }
         return results;

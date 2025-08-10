@@ -34,7 +34,7 @@ public class ClientMarket implements IClientMarket {
     public boolean isAlive() {
         return isAlive;
     }
-    @Override
+
     public void setDead() {
         isAlive = false;
     }
@@ -47,7 +47,7 @@ public class ClientMarket implements IClientMarket {
         StockMarketNetworking.BOT_SETTINGS_REQUEST.sendRequestToServer(tradingPair, callback);
     }
     @Override
-    public void requestOrderBookVolume(int maxHistoryPointCount, int minimalVisiblePrice, int maximalVisiblePrice, int tileCount, boolean requestBotTargetPrice,
+    public void requestOrderBookVolume(int maxHistoryPointCount, float minimalVisiblePrice, float maximalVisiblePrice, int tileCount, boolean requestBotTargetPrice,
                                        Consumer<OrderBookVolumeData> callback)
     {
         if(checkDeadAndDebug())

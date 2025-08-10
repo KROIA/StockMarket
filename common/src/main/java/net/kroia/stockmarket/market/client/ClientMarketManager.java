@@ -5,13 +5,15 @@ import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.IClientMarket;
 import net.kroia.stockmarket.api.IClientMarketManager;
 import net.kroia.stockmarket.market.TradingPair;
-import net.kroia.stockmarket.market.clientdata.DefaultPriceAjustmentFactorsData;
+import net.kroia.stockmarket.market.clientdata.DefaultPriceAdjustmentFactorsData;
 import net.kroia.stockmarket.market.clientdata.TradingPairData;
 import net.kroia.stockmarket.market.server.MarketFactory;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncTradeItemsPacket;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.Tuple;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -29,8 +31,8 @@ public class ClientMarketManager implements IClientMarketManager {
 
     private final List<ClientMarket> clientMarkets = new ArrayList<>();
     private boolean initialized = false;
-    @Override
-    public void init()
+    //@Override
+    private void init()
     {
         if(!initialized)
         {
@@ -43,7 +45,7 @@ public class ClientMarketManager implements IClientMarketManager {
         }
     }
     @Override
-    public IClientMarket getClientMarket(TradingPair pair)
+    public @Nullable IClientMarket getClientMarket(TradingPair pair)
     {
         if(pair == null)
             return null;
@@ -62,7 +64,7 @@ public class ClientMarketManager implements IClientMarketManager {
     }
 
     @Override
-    public void requestCreateMarket(TradingPair pair, Consumer<Boolean> callback )
+    public void requestCreateMarket(@NotNull TradingPair pair, @NotNull Consumer<Boolean> callback )
     {
         StockMarketNetworking.CREATE_MARKET_REQUEST.sendRequestToServer(new TradingPairData(pair), (result) -> {
             if(result)
@@ -73,7 +75,7 @@ public class ClientMarketManager implements IClientMarketManager {
         });
     }
     @Override
-    public void requestCreateMarket(MarketFactory.DefaultMarketSetupData setupData, Consumer<Boolean> callback )
+    public void requestCreateMarket(@NotNull MarketFactory.DefaultMarketSetupData setupData, @NotNull Consumer<Boolean> callback )
     {
         StockMarketNetworking.CREATE_MARKETS_REQUEST.sendRequestToServer(List.of(setupData), (result) -> {
             if(result.size() == 1 && result.get(0)) // Check if the market was successfully created
@@ -84,7 +86,7 @@ public class ClientMarketManager implements IClientMarketManager {
         });
     }
     @Override
-    public void requestCreateMarkets(List<MarketFactory.DefaultMarketSetupData> setupDataList, Consumer<List<Boolean>> callback)
+    public void requestCreateMarkets(@NotNull List<MarketFactory.DefaultMarketSetupData> setupDataList, @NotNull Consumer<List<Boolean>> callback)
     {
         StockMarketNetworking.CREATE_MARKETS_REQUEST.sendRequestToServer(setupDataList, (result) -> {
             for(int i=0; i<setupDataList.size(); i++)
@@ -98,7 +100,7 @@ public class ClientMarketManager implements IClientMarketManager {
         });
     }
     @Override
-    public void requestRemoveMarket(TradingPair pair, Consumer<Boolean> callback)
+    public void requestRemoveMarket(@NotNull TradingPair pair, @NotNull Consumer<Boolean> callback)
     {
         StockMarketNetworking.REMOVE_MARKET_REQUEST.sendRequestToServer(List.of(pair), (result) -> {
             if(result.size() == 1)
@@ -113,7 +115,7 @@ public class ClientMarketManager implements IClientMarketManager {
         });
     }
     @Override
-    public void requestRemoveMarket(List<TradingPair> pairs, Consumer<List<Boolean>> callback )
+    public void requestRemoveMarket(@NotNull List<TradingPair> pairs, @NotNull Consumer<List<Boolean>> callback )
     {
         StockMarketNetworking.REMOVE_MARKET_REQUEST.sendRequestToServer(pairs, (result) -> {
             if(pairs.size() == result.size()) {
@@ -129,7 +131,7 @@ public class ClientMarketManager implements IClientMarketManager {
     }
 
     @Override
-    public void requestChartReset(List<TradingPair> pairs, Consumer<List<Boolean>> callback) {
+    public void requestChartReset(@NotNull List<TradingPair> pairs, @NotNull Consumer<List<Boolean>> callback) {
         StockMarketNetworking.CHART_RESET_REQUEST.sendRequestToServer(pairs, callback);
     }
     @Override
@@ -143,12 +145,12 @@ public class ClientMarketManager implements IClientMarketManager {
         });
     }
     @Override
-    public void requestSetMarketOpen(List<Tuple<TradingPair, Boolean>> pairs, Consumer<List<Boolean>> callback)
+    public void requestSetMarketOpen(@NotNull List<Tuple<TradingPair, Boolean>> pairs, @NotNull Consumer<List<Boolean>> callback)
     {
         StockMarketNetworking.SET_MARKET_OPEN_REQUEST.sendRequestToServer(pairs, callback);
     }
     @Override
-    public void requestSetMarketOpen(List<TradingPair> pairs, boolean allOpen, Consumer<List<Boolean>> callback)
+    public void requestSetMarketOpen(@NotNull List<TradingPair> pairs, boolean allOpen, @NotNull Consumer<List<Boolean>> callback)
     {
         List<Tuple<TradingPair, Boolean>> pairsTuples = new ArrayList<>();
         for(TradingPair pair : pairs)
@@ -160,7 +162,7 @@ public class ClientMarketManager implements IClientMarketManager {
 
 
     @Override
-    public void requestTradingPairs(Consumer<List<TradingPair>> callback )
+    public void requestTradingPairs(@NotNull Consumer<List<TradingPair>> callback )
     {
         StockMarketNetworking.TRADING_PAIR_LIST_REQUEST.sendRequestToServer(false, (result)->{
             List<TradingPair> receivedPairs = new ArrayList<>();
@@ -173,34 +175,34 @@ public class ClientMarketManager implements IClientMarketManager {
         });
     }
     @Override
-    public void requestMarketCategories(Consumer<List<MarketFactory.DefaultMarketSetupDataGroup>> callback)
+    public void requestMarketCategories(@NotNull Consumer<List<MarketFactory.DefaultMarketSetupDataGroup>> callback)
     {
         StockMarketNetworking.DEFAULT_MARKET_SETUP_DATA_GROUPS_REQUEST.sendRequestToServer(false, callback);
     }
     @Override
-    public void requestIsTradingPairAllowed(TradingPair pair, Consumer<Boolean> callback )
+    public void requestIsTradingPairAllowed(@NotNull TradingPair pair, @NotNull Consumer<Boolean> callback )
     {
         StockMarketNetworking.IS_TRADING_PAIR_ALLOWED_REQUEST.sendRequestToServer(pair, callback);
     }
     @Override
-    public void requestRecommendedPrice(TradingPair pair, Consumer<Float> callback )
+    public void requestRecommendedPrice(@NotNull TradingPair pair, @NotNull Consumer<Float> callback )
     {
         StockMarketNetworking.GET_RECOMMENDED_PRICE_REQUEST.sendRequestToServer(pair, callback);
     }
     @Override
-    public void requestPotentialTradeItems(String searchText, Consumer<List<ItemID>> callback) {
+    public void requestPotentialTradeItems(@NotNull String searchText, @NotNull Consumer<List<ItemID>> callback) {
         StockMarketNetworking.POTENTIAL_TRADING_ITEMS_REQUEST.sendRequestToServer(searchText, callback);
     }
 
     @Override
-    public void requestDefaultPriceAjustmentFactors(Consumer<DefaultPriceAjustmentFactorsData> callback)
+    public void requestDefaultPriceAdjustmentFactors(@NotNull Consumer<DefaultPriceAdjustmentFactorsData> callback)
     {
-        StockMarketNetworking.DEFAULT_PRICE_AJUSTMENT_FACTORS_REQUEST.sendRequestToServer(null, callback);
+        StockMarketNetworking.DEFAULT_PRICE_ADJUSTMENT_FACTORS_REQUEST.sendRequestToServer(null, callback);
     }
     @Override
-    public void updateDefaultPriceAjustmentFactors(DefaultPriceAjustmentFactorsData data, Consumer<DefaultPriceAjustmentFactorsData> callback)
+    public void updateDefaultPriceAdjustmentFactors(@NotNull DefaultPriceAdjustmentFactorsData data, @NotNull Consumer<DefaultPriceAdjustmentFactorsData> callback)
     {
-        StockMarketNetworking.DEFAULT_PRICE_AJUSTMENT_FACTORS_REQUEST.sendRequestToServer(data, callback);
+        StockMarketNetworking.DEFAULT_PRICE_ADJUSTMENT_FACTORS_REQUEST.sendRequestToServer(data, callback);
     }
 
 

@@ -22,7 +22,11 @@ public class CreateMarketsRequest extends StockMarketGenericRequest<List<MarketF
     @Override
     public List<Boolean> handleOnServer(List<MarketFactory.DefaultMarketSetupData> input, ServerPlayer sender) {
         if(!playerIsAdmin(sender)) {
-            return null; // Only allow admins to create markets
+            List<Boolean> unauthorizedResponse = new ArrayList<>();
+            for (int i = 0; i < input.size(); i++) {
+                unauthorizedResponse.add(false); // Return false for each market creation attempt
+            }
+            return unauthorizedResponse; // Return a list of false values if the player is not an admin
         }
         return BACKEND_INSTANCES.SERVER_MARKET_MANAGER.createMarkets(input);
     }

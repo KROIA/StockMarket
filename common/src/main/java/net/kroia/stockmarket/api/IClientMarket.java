@@ -9,14 +9,23 @@ import java.util.UUID;
 import java.util.function.Consumer;
 
 public interface IClientMarket {
+
+    /**
+     * @return the TradingPair associated with this market.
+     */
     TradingPair getTradingPair();
+
+    /**
+     * @return true if this client market instance is alive,
+     * Do not use it if it returns false, as it means the market may be destroyed.
+     */
     boolean isAlive();
-    void setDead();
+
 
     void requestBotSettingsData(Consumer<BotSettingsData> callback);
     void requestOrderBookVolume(int maxHistoryPointCount,
-                                int minimalVisiblePrice,
-                                int maximalVisiblePrice,
+                                float minimalVisiblePrice,
+                                float maximalVisiblePrice,
                                 int tileCount,
                                 boolean requestBotTargetPrice,
                                 Consumer<OrderBookVolumeData> callback);

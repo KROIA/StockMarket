@@ -22,12 +22,12 @@ public class DefaultMarketSetupDataGroupsRequest extends StockMarketGenericReque
     @Override
     public List<MarketFactory.DefaultMarketSetupDataGroup> handleOnServer(Boolean input, ServerPlayer sender) {
         if(!playerIsAdmin(sender)) {
-            return null; // Only allow admins to request default market setup data groups
+            return List.of(); // Only allow admins to request default market setup data groups
         }
 
         List<MarketFactory.DefaultMarketSetupDataGroup> groups = MarketFactory.DefaultMarketSetupDataGroup.loadAll();
         if (groups.isEmpty()) {
-            return null; // No groups found, return null
+            return List.of(); // No groups found, return null
         }
         return groups; // Return the list of DefaultMarketSetupDataGroups
     }

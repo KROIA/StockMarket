@@ -24,7 +24,7 @@ public class BotTargetPriceRequest extends StockMarketGenericRequest<TradingPair
                 // Get the target price for the trading pair
                 IServerMarket market = BACKEND_INSTANCES.SERVER_MARKET_MANAGER.getMarket(input.toTradingPair());
                 if(market != null)
-                    return market.getBotTargetPriceF();
+                    return market.getBotTargetPrice();
             }
         }
         return 0.f;

@@ -15,7 +15,7 @@ import net.kroia.modutilities.gui.layout.LayoutGrid;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.TradingPair;
-import net.kroia.stockmarket.market.clientdata.DefaultPriceAjustmentFactorsData;
+import net.kroia.stockmarket.market.clientdata.DefaultPriceAdjustmentFactorsData;
 import net.kroia.stockmarket.market.server.MarketFactory;
 import net.kroia.stockmarket.screen.uiElements.DefaultPriceAdjustmentWidget;
 import net.kroia.stockmarket.screen.uiElements.TradingPairView;
@@ -564,8 +564,8 @@ public class MarketCreationByCategoryScreen extends StockMarketGuiScreen {
         defaultContents.setEnabled(true);
 
         // Save the factors on the server
-        DefaultPriceAjustmentFactorsData factorsData = defaultPriceAdjustmentWidget.getFactors();
-        getMarketManager().updateDefaultPriceAjustmentFactors(factorsData, (r)->{
+        DefaultPriceAdjustmentFactorsData factorsData = defaultPriceAdjustmentWidget.getFactors();
+        getMarketManager().updateDefaultPriceAdjustmentFactors(factorsData, (r)->{
             defaultPriceAdjustmentWidget.setFactors(factorsData);
         });
         //removeElement(defaultPriceAdjustmentWidget);
@@ -605,7 +605,7 @@ public class MarketCreationByCategoryScreen extends StockMarketGuiScreen {
     }
     private void onAjustPricesButtonClicked()
     {
-        getMarketManager().requestDefaultPriceAjustmentFactors((factorsData) -> {
+        getMarketManager().requestDefaultPriceAdjustmentFactors((factorsData) -> {
             defaultPriceAdjustmentWidget.setFactors(factorsData);
             defaultPriceAdjustmentWidget.setDefaultMarketSetupDataList(defaultContents.getSelectedMarkets());
             //removeElement(defaultContents);

@@ -16,7 +16,20 @@ public interface StockMarketAPI {
      */
     String getModVersion();
 
+    /**
+     * Returns the server market manager instance.
+     * This is only available on the server side.
+     *
+     * @return An instance of IServerMarketManager.
+     */
     IServerMarketManager getServerMarketManager();
+
+    /**
+     * Returns the client market manager instance.
+     * This is only available on the client side.
+     *
+     * @return An instance of IClientMarketManager.
+     */
     IClientMarketManager getClientMarketManager();
 
 
