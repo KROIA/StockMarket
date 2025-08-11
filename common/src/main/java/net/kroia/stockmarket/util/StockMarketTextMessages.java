@@ -586,7 +586,28 @@ public class StockMarketTextMessages {
 
 
 
-    private static final Component TRADE_PANEL_TOOLTIP_MARKET_BUY = Component.translatable("gui."+StockMarketMod.MOD_ID+".trade_panel.tooltip_market_buy");
+    private static final Component TRADE_PANEL_TOOLTIP_TO_LESS_AMOUNT = Component.translatable("gui."+StockMarketMod.MOD_ID+".trade_panel.to_less_amount.tooltip");
+    public static String getTradePanelTooltipToLessAmount(String minimumAmount) {
+        String msg = TRADE_PANEL_TOOLTIP_TO_LESS_AMOUNT.getString();
+        msg = replaceVariable(msg, Variables.AMOUNT, minimumAmount);
+        return msg;
+    }
+    private static final Component TRADE_PANEL_TOOLTIP_BUY_NO_MONEY = Component.translatable("gui."+StockMarketMod.MOD_ID+".trade_panel.buy.no_money.tooltip");
+    public static String getTradePanelTooltipBuyNoMoney(String currencyName, String amount, String itemName) {
+        String msg = TRADE_PANEL_TOOLTIP_BUY_NO_MONEY.getString();
+        msg = replaceVariable(msg, Variables.CURRENCY, currencyName);
+        msg = replaceVariable(msg, Variables.AMOUNT, amount);
+        msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
+        return msg;
+    }
+    private static final Component TRADE_PANEL_TOOLTIP_SELL_NO_ITEM = Component.translatable("gui."+StockMarketMod.MOD_ID+".trade_panel.sell.no_item.tooltip");
+    public static String getTradePanelTooltipSellNoItem(String itemName, String amount) {
+        String msg = TRADE_PANEL_TOOLTIP_SELL_NO_ITEM.getString();
+        msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
+        msg = replaceVariable(msg, Variables.AMOUNT, amount);
+        return msg;
+    }
+    private static final Component TRADE_PANEL_TOOLTIP_MARKET_BUY = Component.translatable("gui."+StockMarketMod.MOD_ID+".trade_panel.market_buy.tooltip");
     public static String getTradePanelTooltipMarketBuy(String amount, String itemName, String cost, String currency) {
         String msg = TRADE_PANEL_TOOLTIP_MARKET_BUY.getString();
         msg = replaceVariable(msg, Variables.AMOUNT, amount);
@@ -595,7 +616,10 @@ public class StockMarketTextMessages {
         msg = replaceVariable(msg, Variables.CURRENCY, currency);
         return msg;
     }
-    private static final Component TRADE_PANEL_TOOLTIP_MARKET_SELL = Component.translatable("gui."+StockMarketMod.MOD_ID+".trade_panel.tooltip_market_sell");
+
+
+
+    private static final Component TRADE_PANEL_TOOLTIP_MARKET_SELL = Component.translatable("gui."+StockMarketMod.MOD_ID+".trade_panel.market_sell.tooltip");
     public static String getTradePanelTooltipMarketSell(String amount, String itemName, String  payment, String currency) {
         String msg = TRADE_PANEL_TOOLTIP_MARKET_SELL.getString();
         msg = replaceVariable(msg, Variables.AMOUNT, amount);
@@ -604,7 +628,7 @@ public class StockMarketTextMessages {
         msg = replaceVariable(msg, Variables.CURRENCY, currency);
         return msg;
     }
-    private static final Component TRADE_PANEL_TOOLTIP_LIMIT_BUY = Component.translatable("gui."+StockMarketMod.MOD_ID+".trade_panel.tooltip_limit_buy");
+    private static final Component TRADE_PANEL_TOOLTIP_LIMIT_BUY = Component.translatable("gui."+StockMarketMod.MOD_ID+".trade_panel.limit_buy.tooltip");
     public static String getTradePanelTooltipLimitBuy(String amount, String itemName, String price, String currency) {
         String msg = TRADE_PANEL_TOOLTIP_LIMIT_BUY.getString();
         msg = replaceVariable(msg, Variables.AMOUNT, amount);
@@ -613,7 +637,7 @@ public class StockMarketTextMessages {
         msg = replaceVariable(msg, Variables.CURRENCY, currency);
         return msg;
     }
-    private static final Component TRADE_PANEL_TOOLTIP_LIMIT_SELL = Component.translatable("gui."+StockMarketMod.MOD_ID+".trade_panel.tooltip_limit_sell");
+    private static final Component TRADE_PANEL_TOOLTIP_LIMIT_SELL = Component.translatable("gui."+StockMarketMod.MOD_ID+".trade_panel.limit_sell.tooltip");
     public static String getTradePanelTooltipLimitSell(String amount, String itemName, String price, String currency) {
         String msg = TRADE_PANEL_TOOLTIP_LIMIT_SELL.getString();
         msg = replaceVariable(msg, Variables.AMOUNT, amount);
@@ -624,20 +648,20 @@ public class StockMarketTextMessages {
     }
 
 
-
-    private static final Component TRADE_PANEL_TOOLTIP_AMOUNT = Component.translatable("gui."+StockMarketMod.MOD_ID+".trade_panel.amount");
-    public static String getTradePanelTooltipAmount(String itemName) {
+    private static final Component TRADE_PANEL_TOOLTIP_AMOUNT = Component.translatable("gui."+StockMarketMod.MOD_ID+".trade_panel.amount.tooltip");
+    public static String getTradePanelTooltipAmount(String itemName, String minimumAmount) {
         String msg = TRADE_PANEL_TOOLTIP_AMOUNT.getString();
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
+        msg = replaceVariable(msg, Variables.AMOUNT, minimumAmount);
         return msg;
     }
-    private static final Component TRADE_PANEL_TOOLTIP_LIMIT_PRICE = Component.translatable("gui."+StockMarketMod.MOD_ID+".trade_panel.limit_price");
+    private static final Component TRADE_PANEL_TOOLTIP_LIMIT_PRICE = Component.translatable("gui."+StockMarketMod.MOD_ID+".trade_panel.limit_price.tooltip");
     public static String getTradePanelTooltipLimitPrice(String itemName) {
         String msg = TRADE_PANEL_TOOLTIP_LIMIT_PRICE.getString();
         msg = replaceVariable(msg, Variables.ITEM_NAME, itemName);
         return msg;
     }
-    private static final Component TRADE_PANEL_TOOLTIP_CURRENT_PRICE = Component.translatable("gui."+StockMarketMod.MOD_ID+".trade_panel.tooltip_current_price");
+    private static final Component TRADE_PANEL_TOOLTIP_CURRENT_PRICE = Component.translatable("gui."+StockMarketMod.MOD_ID+".trade_panel.current_price.tooltip");
     public static String getTradePanelTooltipCurrentPrice(String price, String itemName, String currency) {
         String msg = TRADE_PANEL_TOOLTIP_CURRENT_PRICE.getString();
         msg = replaceVariable(msg, Variables.PRICE, price);
@@ -646,24 +670,24 @@ public class StockMarketTextMessages {
         return msg;
     }
 
-    private static final Component TRADE_PANEL_TOOLTIP_MARKET_ORDER = Component.translatable("gui."+StockMarketMod.MOD_ID+".trade_panel.tooltip_market_order");
+    private static final Component TRADE_PANEL_TOOLTIP_MARKET_ORDER = Component.translatable("gui."+StockMarketMod.MOD_ID+".trade_panel.market_order.tooltip");
     public static String getTradePanelTooltipMarketOrder() {
         String msg = TRADE_PANEL_TOOLTIP_MARKET_ORDER.getString();
         return msg;
     }
-    private static final Component TRADE_PANEL_TOOLTIP_LIMIT_ORDER = Component.translatable("gui."+StockMarketMod.MOD_ID+".trade_panel.tooltip_limit_order");
+    private static final Component TRADE_PANEL_TOOLTIP_LIMIT_ORDER = Component.translatable("gui."+StockMarketMod.MOD_ID+".trade_panel.limit_order.tooltip");
     public static String getTradePanelTooltipLimitOrder() {
         String msg = TRADE_PANEL_TOOLTIP_LIMIT_ORDER.getString();
         return msg;
     }
 
-    private static final Component CANDLESTICKCHART_ORDERBOOKVOLUME = Component.translatable("gui."+StockMarketMod.MOD_ID+".trading_chart_widget.tooltip_orderbookvolume");
+    private static final Component CANDLESTICKCHART_ORDERBOOKVOLUME = Component.translatable("gui."+StockMarketMod.MOD_ID+".trading_chart_widget.orderbookvolume.tooltip");
     public static String getCandlestickChartTooltipOrderBookVolume() {
         String msg = CANDLESTICKCHART_ORDERBOOKVOLUME.getString();
         return msg;
     }
 
-    private static final Component CANDLESTICKCHART_TRADEVOLUME = Component.translatable("gui."+StockMarketMod.MOD_ID+".trading_chart_widget.tooltip_tradevolume");
+    private static final Component CANDLESTICKCHART_TRADEVOLUME = Component.translatable("gui."+StockMarketMod.MOD_ID+".trading_chart_widget.tradevolume.tooltip");
     public static String getCandlestickChartTooltipTradeVolume() {
         String msg = CANDLESTICKCHART_TRADEVOLUME.getString();
         return msg;

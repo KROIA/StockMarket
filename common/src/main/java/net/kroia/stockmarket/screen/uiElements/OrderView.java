@@ -33,10 +33,12 @@ public class OrderView extends StockMarketGuiElement {
     private final int cancelDownColor = 0xFFd6370b; // Dark Orange
 
     private OrderReadData order;
+    private int itemFractionScaleFactor;
 
     public OrderView(OrderReadData order, Consumer<OrderReadData> onCancelOrder, int itemFractionScaleFactor) {
         super(0,0,0,20);
         this.order = order;
+        this.itemFractionScaleFactor = itemFractionScaleFactor;
         directionLabel = new Label();
         amountLabel = new Label();
         filledLabel = new Label();
@@ -69,6 +71,7 @@ public class OrderView extends StockMarketGuiElement {
 
     public void setOrder(OrderReadData order, int itemFractionScaleFactor) {
         this.order = order;
+        this.itemFractionScaleFactor = itemFractionScaleFactor;
 
         if(order.isBuy())
         {
@@ -112,7 +115,7 @@ public class OrderView extends StockMarketGuiElement {
 
     @Override
     protected void render() {
-        filledLabel.setText(MoneyBank.getNormalizedAmount(Math.abs(order.filledAmount),1));
+        filledLabel.setText(MoneyBank.getNormalizedAmount(Math.abs(order.filledAmount),itemFractionScaleFactor));
     }
 
 }

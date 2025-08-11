@@ -2,6 +2,7 @@ package net.kroia.stockmarket.screen.uiElements;
 
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.banking.bank.MoneyBank;
+import net.kroia.modutilities.ColorUtilities;
 import net.kroia.modutilities.gui.elements.*;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.stockmarket.market.TradingPair;
@@ -60,7 +61,9 @@ public class TradePanel extends StockMarketGuiElement {
     private float currentMarketPrice = 0;
     private int currencyFractionScaleFactor = 1;
     private int itemFractionScaleFactor = 1;
-
+    private float smallestTradableVolume = 1;
+    private float currentItemBalance = 0;
+    private float currentMoneyBalance = 0;
     public TradePanel(Runnable onItemChangeButtonClicked,
                       Runnable onMarketBuyButtonClicked,
                       Runnable onMarketSellButtonClicked,
@@ -115,7 +118,7 @@ public class TradePanel extends StockMarketGuiElement {
         amountTextBox.setAllowLetters(false);
         amountTextBox.setAllowNegativeNumbers(false);
         amountTextBox.setOnTextChanged((text) -> {
-            this.amount = (float)amountTextBox.getDouble();
+            setAmountInternal((float)amountTextBox.getDouble());
             //this.amount = Math.max(am, 0);
             //amountTextBox.setText(""+amount);
         });
@@ -181,14 +184,68 @@ public class TradePanel extends StockMarketGuiElement {
         // Set hover tooltip texts
         currentPriceLabel.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipCurrentPrice(getPriceString(currentMarketPrice), getItemName(), getCurrencyName()));
         currentPriceTextLabel.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipCurrentPrice(getPriceString(currentMarketPrice), getItemName(), getCurrencyName()));
-        amountLabel.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipAmount(getItemName()));
+        amountLabel.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipAmount(getItemName(), Bank.getFormattedAmount(smallestTradableVolume, itemFractionScaleFactor)));
         marketOrderLabel.setHoverTooltipSupplier(StockMarketTextMessages::getTradePanelTooltipMarketOrder);
-        marketBuyButton.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipMarketBuy(Bank.getFormattedAmount(amount, itemFractionScaleFactor), getItemName(), getPriceString(currentMarketPrice * amount), getCurrencyName()));
-        marketSellButton.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipMarketSell(Bank.getFormattedAmount(amount, itemFractionScaleFactor), getItemName(), getPriceString(currentMarketPrice * amount), getCurrencyName()));
         limitOrderLabel.setHoverTooltipSupplier(StockMarketTextMessages::getTradePanelTooltipLimitOrder);
         limitPriceLabel.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipLimitPrice(getItemName()));
-        limitBuyButton.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipLimitBuy(Bank.getFormattedAmount(amount, itemFractionScaleFactor), getItemName(), getPriceString(limitPrice), getCurrencyName()));
-        limitSellButton.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipLimitSell(Bank.getFormattedAmount(amount, itemFractionScaleFactor), getItemName(), getPriceString(limitPrice), getCurrencyName()));
+
+
+        marketBuyButton.setHoverTooltipSupplier(() ->
+        {
+            boolean toLessAmount = amount < smallestTradableVolume;
+            boolean toLessMoneyForMarket = currentMoneyBalance < (currentMarketPrice * amount);
+            if(toLessMoneyForMarket)
+            {
+                return StockMarketTextMessages.getTradePanelTooltipBuyNoMoney(getCurrencyName(), Bank.getFormattedAmount(amount, itemFractionScaleFactor), getItemName());
+            }
+            if (toLessAmount)
+            {
+                return StockMarketTextMessages.getTradePanelTooltipToLessAmount(Bank.getFormattedAmount(smallestTradableVolume, itemFractionScaleFactor));
+            }
+            return StockMarketTextMessages.getTradePanelTooltipMarketBuy(Bank.getFormattedAmount(amount, itemFractionScaleFactor), getItemName(), getPriceString(currentMarketPrice * amount), getCurrencyName());
+        });
+        marketSellButton.setHoverTooltipSupplier(() -> {
+            boolean toLessAmount = amount < smallestTradableVolume;
+            boolean toLessItemForMarket = currentItemBalance < amount;
+            if(toLessItemForMarket)
+            {
+                return StockMarketTextMessages.getTradePanelTooltipSellNoItem(getItemName(), Bank.getFormattedAmount(amount, itemFractionScaleFactor));
+            }
+            else
+            if (toLessAmount)
+            {
+                return StockMarketTextMessages.getTradePanelTooltipToLessAmount(Bank.getFormattedAmount(smallestTradableVolume, itemFractionScaleFactor));
+            }
+            return StockMarketTextMessages.getTradePanelTooltipMarketSell(Bank.getFormattedAmount(amount, itemFractionScaleFactor), getItemName(), getPriceString(currentMarketPrice * amount), getCurrencyName());
+        });
+        limitBuyButton.setHoverTooltipSupplier(() ->
+        {
+            boolean toLessAmount = amount < smallestTradableVolume;
+            boolean toLessMoneyForLimit = currentMoneyBalance < limitPrice * amount;
+            if(toLessMoneyForLimit)
+            {
+                return StockMarketTextMessages.getTradePanelTooltipBuyNoMoney(getCurrencyName(), Bank.getFormattedAmount(amount, itemFractionScaleFactor), getItemName());
+            }
+            if (toLessAmount)
+            {
+                return StockMarketTextMessages.getTradePanelTooltipToLessAmount(Bank.getFormattedAmount(smallestTradableVolume, itemFractionScaleFactor));
+            }
+            return StockMarketTextMessages.getTradePanelTooltipLimitBuy(Bank.getFormattedAmount(amount, itemFractionScaleFactor), getItemName(), getPriceString(limitPrice), getCurrencyName());
+        });
+        limitSellButton.setHoverTooltipSupplier(() -> {
+            boolean toLessAmount = amount < smallestTradableVolume;
+            boolean toLessItemForLimit = currentItemBalance < amount;
+            if(toLessItemForLimit)
+            {
+                return StockMarketTextMessages.getTradePanelTooltipSellNoItem(getItemName(), Bank.getFormattedAmount(amount, itemFractionScaleFactor));
+            }
+            else
+            if (toLessAmount)
+            {
+                return StockMarketTextMessages.getTradePanelTooltipToLessAmount(Bank.getFormattedAmount(smallestTradableVolume, itemFractionScaleFactor));
+            }
+            return StockMarketTextMessages.getTradePanelTooltipLimitSell(Bank.getFormattedAmount(amount, itemFractionScaleFactor), getItemName(), getPriceString(limitPrice), getCurrencyName());
+        });
 
 
 
@@ -242,6 +299,9 @@ public class TradePanel extends StockMarketGuiElement {
         //currentPriceLabel.setText(MoneyBank.getNormalizedAmount(currentMarketPrice, currencyFractionScaleFactor));
         currentPriceLabel.setText(MoneyBank.getNormalizedAmount(currentMarketPrice, priceScaleFactor));
 
+        currentItemBalance = (float)data.itemBankData.balance/ data.itemBankData.itemFractionScaleFactor;
+        currentMoneyBalance = (float)data.currencyBankData.balance / data.currencyBankData.itemFractionScaleFactor;
+
         if(priceScaleFactor > 1)
         {
             limitPriceTextBox.setAllowNumbers(true, true);
@@ -257,16 +317,26 @@ public class TradePanel extends StockMarketGuiElement {
         else {
             amountTextBox.setAllowNumbers(true, false);
         }
-
+        smallestTradableVolume = data.smalestTradableVolume;
+        updateButtonEnableState();
 
     }
     public void setAmount(float amount)
     {
-        this.amount = amount;
-        amountTextBox.setText(amount);
+        setAmountInternal(amount);
+        amountTextBox.setText(this.amount);
+    }
+    private void setAmountInternal(float amount)
+    {
+        if(amount < 0)
+            amount = 0;
+        this.amount = (float)Math.floor(amount / smallestTradableVolume) * smallestTradableVolume;
+        //this.amount = Math.round(amount / smallestTradableVolume) * smallestTradableVolume;
+        //updateButtonEnableState();
     }
     public float getAmount() {
-        return amount;
+        setAmountInternal((float)amountTextBox.getDouble());
+        return this.amount;
     }
 
     public void setLimitPrice(float price)
@@ -401,6 +471,45 @@ public class TradePanel extends StockMarketGuiElement {
         return nextTradingPairView.getTradingPair();
     }
 
+    private void updateButtonEnableState() {
+        boolean toLessAmount = amount < smallestTradableVolume;
+        boolean toLessMoneyForMarket = currentMoneyBalance < (currentMarketPrice * amount);
+        boolean toLessItemForMarket = currentItemBalance < amount;
+        boolean toLessMoneyForLimit = currentMoneyBalance < limitPrice * amount;
+        boolean toLessItemForLimit = currentItemBalance < amount;
+        if (toLessAmount || toLessMoneyForMarket) {
+            marketBuyButton.setClickable(false);
+            marketBuyButton.setIdleColor(ColorUtilities.setAlpha(buyButtonNormalColor, 0.3f));
+        } else {
+            marketBuyButton.setClickable(true);
+            marketBuyButton.setIdleColor(buyButtonNormalColor);
+        }
+
+        if (toLessAmount || toLessItemForMarket) {
+            marketSellButton.setClickable(false);
+            marketSellButton.setIdleColor(ColorUtilities.setAlpha(sellButtonNormalColor, 0.3f));
+        } else {
+            marketSellButton.setClickable(true);
+            marketSellButton.setIdleColor(sellButtonNormalColor);
+        }
+
+        if (toLessAmount || toLessMoneyForLimit) {
+            limitBuyButton.setClickable(false);
+            limitBuyButton.setIdleColor(ColorUtilities.setAlpha(buyButtonNormalColor, 0.3f));
+        } else {
+            limitBuyButton.setClickable(true);
+            limitBuyButton.setIdleColor(buyButtonNormalColor);
+        }
+
+        if (toLessAmount || toLessItemForLimit) {
+            limitSellButton.setClickable(false);
+            limitSellButton.setIdleColor(ColorUtilities.setAlpha(sellButtonNormalColor, 0.3f));
+        } else
+        {
+            limitSellButton.setClickable(true);
+            limitSellButton.setIdleColor(sellButtonNormalColor);
+        }
+    }
 
     private String getPriceString(float realPrice)
     {

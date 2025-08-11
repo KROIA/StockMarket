@@ -48,6 +48,7 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
     private int priceScaleFactor = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.DEFAULT_PRICE_SCALE.get();
     private int currencyItemFractionScaleFactor = 1;
     private int itemFractionScaleFactor = 1;
+    private int smallesTradableVolume = 1;
 
     public ServerMarket(TradingPair pair, int virtualOrderBookArraySize, int historySize)
     {
@@ -62,7 +63,7 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
         }
 
 
-        if(priceScaleFactor <= 0)
+        if(priceScaleFactor != 1 && priceScaleFactor != 10 && priceScaleFactor != 100)
         {
             // Auto set the price scale factor based on the initial price
             if (initialPrice < BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.PRICE_SCALE_100_DEFAULT_PRICE_THRESHOLD.get())
@@ -77,7 +78,42 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
         }
         // Check if the price scale is larger than the currency scale, if so, reset the price scale to the currency scale.
         currencyItemFractionScaleFactor = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getItemFractionScaleFactor(tradingPair.getCurrency());
-        if(this.priceScaleFactor > currencyItemFractionScaleFactor)
+        itemFractionScaleFactor = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getItemFractionScaleFactor(tradingPair.getItem());
+        /*if(this.priceScaleFactor * itemFractionScaleFactor > currencyItemFractionScaleFactor)
+        {
+            this.priceScaleFactor = ggt(currencyItemFractionScaleFactor, itemFractionScaleFactor);
+            //this.priceScaleFactor = currencyItemFractionScaleFactor / itemFractionScaleFactor;
+            if(this.priceScaleFactor <= 0)
+            {
+                this.priceScaleFactor = 1; // Fallback to 1 if the scale factor is zero or negative
+            }
+        }*/
+        if(this.priceScaleFactor < itemFractionScaleFactor * currencyItemFractionScaleFactor)
+        {
+            switch(itemFractionScaleFactor)
+            {
+                case 1 -> {
+                    this.priceScaleFactor = currencyItemFractionScaleFactor;
+                }
+                case 10 -> {
+                    //if(currencyItemFractionScaleFactor % 10 == 0)
+                    //    this.priceScaleFactor = currencyItemFractionScaleFactor / 10;
+                    //else
+                        this.priceScaleFactor = currencyItemFractionScaleFactor;
+                }
+                case 100 -> {
+                    /*if(currencyItemFractionScaleFactor % 100 == 0)
+                        this.priceScaleFactor = currencyItemFractionScaleFactor / 100;
+                    else */if(currencyItemFractionScaleFactor % 10 == 0)
+                        this.priceScaleFactor = currencyItemFractionScaleFactor / 10;
+                    else
+                        this.priceScaleFactor = currencyItemFractionScaleFactor;
+                }
+            }
+        }
+        smallesTradableVolume = Math.min(currencyItemFractionScaleFactor / this.priceScaleFactor, itemFractionScaleFactor);
+
+        /*if(this.priceScaleFactor > currencyItemFractionScaleFactor)
             this.priceScaleFactor = currencyItemFractionScaleFactor;
         else {
             // Check if the currency scale is not a multiple of the price scale, if so, set the price scale to the nearest divisor of the currency scale.
@@ -91,7 +127,7 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
             // Check if the currency scale is not a multiple of the price scale, if so, set the price scale to the nearest divisor of the currency scale.
         if(itemFractionScaleFactor % this.priceScaleFactor != 0) {
             this.priceScaleFactor = findNearestDivisor(itemFractionScaleFactor, this.priceScaleFactor);
-        }
+        }*/
 
 
         int rawInitialPrice = mapToRawPrice(initialPrice);
@@ -266,7 +302,7 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
 
         return new TradingViewData(new TradingPairData(tradingPair), new PriceHistoryData(historicalMarketData.getHistory(), maxHistoryPointCount),
                 bankUser, getOrderBookVolumeData(maxHistoryPointCount, minVisiblePrice, maxVisiblePrice, orderBookTileCount),
-                new OrderReadListData(orders, priceScaleFactor), marketOpen, botTargetPrice);
+                new OrderReadListData(orders, priceScaleFactor), marketOpen, botTargetPrice, (float)smallesTradableVolume/(float)itemFractionScaleFactor);
     }
     @Override
     public TradingViewData getTradingViewData(@NotNull UUID player)
@@ -531,8 +567,7 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
             return false;
 
         int rawPrice = mapToRawPrice(price);
-        long rawAmount = (long)(amount*itemFractionScaleFactor);
-        LimitOrder order = OrderFactory.createLimitOrder(playerUUID, tradingPair, rawAmount, rawPrice, priceScaleFactor, currencyItemFractionScaleFactor, itemFractionScaleFactor);
+        LimitOrder order = OrderFactory.createLimitOrder(playerUUID, tradingPair, amount, rawPrice, priceScaleFactor, currencyItemFractionScaleFactor, itemFractionScaleFactor);
         if(order == null)
             return false;
 
@@ -546,8 +581,7 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
             return false;
 
         int currentPrice = getCurrentRawPrice();
-        long rawAmount = (long)(amount*itemFractionScaleFactor);
-        MarketOrder order = OrderFactory.createMarketOrder(playerUUID, tradingPair, rawAmount, currentPrice, priceScaleFactor, currencyItemFractionScaleFactor, itemFractionScaleFactor);
+        MarketOrder order = OrderFactory.createMarketOrder(playerUUID, tradingPair, amount, currentPrice, priceScaleFactor, currencyItemFractionScaleFactor, itemFractionScaleFactor);
         if(order == null)
             return false;
 
@@ -815,6 +849,7 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
         this.historicalMarketData.getHistory().setScaleFactors(priceScaleFactor, currencyItemFractionScaleFactor);
         this.orderBook.setScaleFactors(priceScaleFactor, itemFractionScaleFactor);
         this.matchingEngine.setScaleFactors(priceScaleFactor, currencyItemFractionScaleFactor);
+        this.smallesTradableVolume = Math.min(currencyItemFractionScaleFactor / this.priceScaleFactor, itemFractionScaleFactor);
         return success;
     }
 
@@ -856,6 +891,18 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
         }
     }
 
+    public static int ggt(int a, int b) {
+        a = Math.abs(a);
+        b = Math.abs(b);
+
+        while (b != 0) {
+            int temp = b;
+            b = a % b;
+            a = temp;
+        }
+
+        return a;
+    }
 
     protected void info(String msg)
     {

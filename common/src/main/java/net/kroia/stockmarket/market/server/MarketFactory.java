@@ -91,7 +91,7 @@ public class MarketFactory
             botSettings.volatility = Math.abs(1000.f * volatility / Math.max(defaultPrice, 1000));
 
             virtualOrderBookSettings.volumeScale = 100f/(0.01f+Math.abs(rarity));
-            virtualOrderBookSettings.volumeAccumulationRate = 0.00001f * Math.max(0.01f, 1/(Math.max(rarity, 0.01f)));
+            virtualOrderBookSettings.volumeAccumulationRate = 0.0001f * Math.max(0.01f, 1/(Math.max(rarity, 0.01f)));
             virtualOrderBookSettings.volumeFastAccumulationRate = virtualOrderBookSettings.volumeAccumulationRate * 10f;
             virtualOrderBookSettings.volumeDecumulationRate = virtualOrderBookSettings.volumeFastAccumulationRate * 0.1f;
             botSettings.volumeScale = virtualOrderBookSettings.volumeScale * this.volatility/10;

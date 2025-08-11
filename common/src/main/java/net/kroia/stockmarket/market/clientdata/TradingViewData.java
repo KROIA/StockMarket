@@ -16,6 +16,7 @@ public class TradingViewData implements INetworkPayloadEncoder {
     public final MinimalBankData currencyBankData;
     public final boolean marketIsOpen;
     public final float botTargetPrice;
+    public final float smalestTradableVolume;
 
     public TradingViewData(@NotNull TradingPairData pair,
                            @NotNull PriceHistoryData history,
@@ -23,7 +24,8 @@ public class TradingViewData implements INetworkPayloadEncoder {
                            @NotNull OrderBookVolumeData orderBookVolumeData,
                            @NotNull OrderReadListData openOrders,
                            boolean marketIsOpen,
-                           float botTargetPrice) {
+                           float botTargetPrice,
+                           float smalestTradableVolume) {
         this.tradingPairData = pair;
         this.priceHistoryData = history;
 
@@ -35,6 +37,7 @@ public class TradingViewData implements INetworkPayloadEncoder {
 
         this.marketIsOpen = marketIsOpen;
         this.botTargetPrice = botTargetPrice;
+        this.smalestTradableVolume = smalestTradableVolume;
     }
     private TradingViewData(@NotNull TradingPairData tradingPairData,
                             @NotNull PriceHistoryData priceHistoryData,
@@ -43,7 +46,8 @@ public class TradingViewData implements INetworkPayloadEncoder {
                             @NotNull MinimalBankData itemBankData,
                             @NotNull MinimalBankData currencyBankData,
                             boolean marketIsOpen,
-                            float botTargetPrice) {
+                            float botTargetPrice,
+                            float smalestTradableVolume) {
         this.tradingPairData = tradingPairData;
         this.priceHistoryData = priceHistoryData;
         this.orderBookVolumeData = orderBookVolumeData;
@@ -52,6 +56,7 @@ public class TradingViewData implements INetworkPayloadEncoder {
         this.currencyBankData = currencyBankData;
         this.marketIsOpen = marketIsOpen;
         this.botTargetPrice = botTargetPrice;
+        this.smalestTradableVolume = smalestTradableVolume;
     }
 
     @Override
@@ -64,6 +69,7 @@ public class TradingViewData implements INetworkPayloadEncoder {
         currencyBankData.encode(buf);
         buf.writeBoolean(marketIsOpen);
         buf.writeFloat(botTargetPrice);
+        buf.writeFloat(smalestTradableVolume);
     }
 
 
@@ -76,7 +82,8 @@ public class TradingViewData implements INetworkPayloadEncoder {
         MinimalBankData currencyBankData = MinimalBankData.decode(buf);
         boolean marketIsOpen = buf.readBoolean();
         float botTargetPrice = buf.readFloat();
+        float smalestTradableVolume = buf.readFloat();
         return new TradingViewData(tradingPairData, priceHistoryData, orderBookVolumeData,
-                openOrdersData, itemBankData, currencyBankData, marketIsOpen, botTargetPrice);
+                openOrdersData, itemBankData, currencyBankData, marketIsOpen, botTargetPrice, smalestTradableVolume);
     }
 }

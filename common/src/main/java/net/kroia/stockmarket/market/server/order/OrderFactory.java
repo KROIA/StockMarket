@@ -16,13 +16,14 @@ public class OrderFactory {
     }
 
 
-    public static LimitOrder createLimitOrder(UUID playerUUID, TradingPair pair, long amount, int price, int priceScaleFactor, int currencyItemFractionScaleFactor, int itemFractionScaleFactor)
+    public static LimitOrder createLimitOrder(UUID playerUUID, TradingPair pair, float amount, int price, int priceScaleFactor, int currencyItemFractionScaleFactor, int itemFractionScaleFactor)
     {
-        long lockedMoney = ServerMarketManager.scaleToBankSystemMoneyAmount((long)(amount>0? amount * price : 0), priceScaleFactor, currencyItemFractionScaleFactor) / itemFractionScaleFactor;
-        long lockedItem = (long)((amount<0? -amount : 0));
+        long rawAmount = ((long)(amount * priceScaleFactor)*itemFractionScaleFactor/priceScaleFactor);
+        long lockedMoney = ServerMarketManager.scaleToBankSystemMoneyAmount((long)(rawAmount>0? rawAmount * price : 0), priceScaleFactor, currencyItemFractionScaleFactor) / itemFractionScaleFactor;
+        long lockedItem = (long)((rawAmount<0? -rawAmount : 0));
 
-        if(tryReserveItem(playerUUID, pair, lockedMoney, lockedItem, amount > 0))
-            return new LimitOrder(playerUUID, (long)(amount), price, lockedMoney);
+        if(tryReserveItem(playerUUID, pair, lockedMoney, lockedItem, rawAmount > 0))
+            return new LimitOrder(playerUUID, (long)(rawAmount), price, lockedMoney);
         return null;
     }
     /*public static LimitOrder createLimitOrder(UUID playerUUID, TradingPair pair, long amount, int price, int priceScaleFactor, int currencyItemFractionScaleFactor, int itemFractionScaleFactor, long alreadyFilledAmount)
@@ -40,14 +41,14 @@ public class OrderFactory {
     }
 
 
-    public static MarketOrder createMarketOrder(UUID playerUUID, TradingPair pair, long amount, int currentMarketPrice, int priceScaleFactor, int currencyItemFractionScaleFactor, int itemFractionScaleFactor)
+    public static MarketOrder createMarketOrder(UUID playerUUID, TradingPair pair, float amount, int currentMarketPrice, int priceScaleFactor, int currencyItemFractionScaleFactor, int itemFractionScaleFactor)
     {
-        //long lockedMoney = (amount>0? amount * currentMarketPrice : 0);
-        long lockedMoney = ServerMarketManager.scaleToBankSystemMoneyAmount((long)(amount>0? amount * currentMarketPrice : 0), priceScaleFactor, currencyItemFractionScaleFactor) / itemFractionScaleFactor;
-        long lockedItem = (long)((amount<0? -amount : 0));
+        long rawAmount = ((long)(amount * priceScaleFactor)*itemFractionScaleFactor/priceScaleFactor);
+        long lockedMoney = ServerMarketManager.scaleToBankSystemMoneyAmount((long)(rawAmount>0? rawAmount * currentMarketPrice : 0), priceScaleFactor, currencyItemFractionScaleFactor) / itemFractionScaleFactor;
+        long lockedItem = (long)((rawAmount<0? -rawAmount : 0));
 
-        if(tryReserveItem(playerUUID, pair, lockedMoney, lockedItem, amount > 0)) {
-            return new MarketOrder(playerUUID, (long)(amount), lockedMoney);
+        if(tryReserveItem(playerUUID, pair, lockedMoney, lockedItem, rawAmount > 0)) {
+            return new MarketOrder(playerUUID, (long)(rawAmount), lockedMoney);
         }
         return null;
     }
