@@ -29,7 +29,7 @@
     "java": ">=17",
     "architectury": ">=9.2.14",
     "fabric-api": "*",
-    "banksystem": "~1.5.0"
+    "banksystem": "~1.5.0_ALPHA"
   },
   "suggests": {
     "another-mod": "*"
