@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.screen.uiElements;
 
+import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.banking.bank.MoneyBank;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.Label;
@@ -33,7 +34,7 @@ public class OrderView extends StockMarketGuiElement {
 
     private OrderReadData order;
 
-    public OrderView(OrderReadData order, Consumer<OrderReadData> onCancelOrder) {
+    public OrderView(OrderReadData order, Consumer<OrderReadData> onCancelOrder, int itemFractionScaleFactor) {
         super(0,0,0,20);
         this.order = order;
         directionLabel = new Label();
@@ -62,11 +63,11 @@ public class OrderView extends StockMarketGuiElement {
         addChild(priceLabel);
         addChild(cancelButton);
 
-        setOrder(order);
+        setOrder(order, itemFractionScaleFactor);
     }
 
 
-    public void setOrder(OrderReadData order) {
+    public void setOrder(OrderReadData order, int itemFractionScaleFactor) {
         this.order = order;
 
         if(order.isBuy())
@@ -79,7 +80,7 @@ public class OrderView extends StockMarketGuiElement {
             directionLabel.setText(TradeScreen.SELL.getString());
             setBackgroundColor(TradeScreen.colorRed);
         }
-        amountLabel.setText(MoneyBank.getNormalizedAmount(Math.abs(order.amount), 1));
+        amountLabel.setText(Bank.getNormalizedAmount(Math.abs(order.amount),itemFractionScaleFactor));
         if(order.type == Order.Type.LIMIT) {
             priceLabel.setText(String.valueOf(order.limitPrice));
         }

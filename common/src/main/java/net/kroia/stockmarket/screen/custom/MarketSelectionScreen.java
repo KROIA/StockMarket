@@ -4,7 +4,7 @@ import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.GuiScreen;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.TradingPair;
-import net.kroia.stockmarket.screen.uiElements.TradingPairSelectionView;
+import net.kroia.stockmarket.screen.uiElements.MarketSelectionView;
 import net.kroia.stockmarket.util.StockMarketGuiScreen;
 import net.minecraft.network.chat.Component;
 
@@ -21,15 +21,15 @@ public class MarketSelectionScreen extends StockMarketGuiScreen {
 
 
 
-    private final TradingPairSelectionView tradingPairSelectionView;
+    private final MarketSelectionView marketSelectionView;
     private final GuiScreen parentScreen;
 
     public MarketSelectionScreen(GuiScreen parent, Consumer<TradingPair> onSelected){
         super(TITLE);
         parentScreen = parent;
-        tradingPairSelectionView = new TradingPairSelectionView(onSelected);
+        marketSelectionView = new MarketSelectionView(onSelected);
 
-        addElement(tradingPairSelectionView);
+        addElement(marketSelectionView);
     }
 
     @Override
@@ -48,16 +48,16 @@ public class MarketSelectionScreen extends StockMarketGuiScreen {
     @Override
     protected void updateLayout(Gui gui) {
         int padding = 5;
-        tradingPairSelectionView.setSize(getWidth()-2*padding, getHeight()-2*padding);
-        tradingPairSelectionView.setPosition(padding, padding);
+        marketSelectionView.setSize(getWidth()-2*padding, getHeight()-2*padding);
+        marketSelectionView.setPosition(padding, padding);
     }
 
     public TradingPair getSelectedTradingPair() {
-        return tradingPairSelectionView.getSelectedTradingPair();
+        return marketSelectionView.getSelectedTradingPair();
     }
     public void setAvailableTradingPairs(List<TradingPair> tradingPairs)
     {
-        tradingPairSelectionView.setAvailableTradingPairs(tradingPairs);
+        marketSelectionView.setAvailableTradingPairs(tradingPairs);
     }
 
 

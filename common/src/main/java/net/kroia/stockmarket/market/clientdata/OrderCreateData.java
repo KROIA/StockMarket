@@ -15,7 +15,7 @@ public class OrderCreateData implements INetworkPayloadEncoder {
     public final Order.Type type;
     public final TradingPairData tradingPair;
 
-    public final long volume;
+    public final float volume;
 
 
     /**
@@ -25,7 +25,7 @@ public class OrderCreateData implements INetworkPayloadEncoder {
     public final float limitPrice;
 
 
-    public OrderCreateData(@NotNull UUID owner, @NotNull TradingPair pair, long volume, float limitPrice)
+    public OrderCreateData(@NotNull UUID owner, @NotNull TradingPair pair, float volume, float limitPrice)
     {
         this.owner = owner;
         this.type = Order.Type.LIMIT;
@@ -34,7 +34,7 @@ public class OrderCreateData implements INetworkPayloadEncoder {
         this.limitPrice = limitPrice;
     }
 
-    private OrderCreateData(@NotNull UUID owner, Order.Type type, @NotNull TradingPairData pair, long volume, float limitPrice) {
+    private OrderCreateData(@NotNull UUID owner, Order.Type type, @NotNull TradingPairData pair, float volume, float limitPrice) {
         this.owner = owner;
         this.type = type;
         this.tradingPair = pair;
@@ -42,7 +42,7 @@ public class OrderCreateData implements INetworkPayloadEncoder {
         this.limitPrice = limitPrice;
     }
 
-    public OrderCreateData(@NotNull UUID owner, @NotNull TradingPair pair, long volume) {
+    public OrderCreateData(@NotNull UUID owner, @NotNull TradingPair pair, float volume) {
         this.owner = owner;
         this.type = Order.Type.MARKET;
         this.tradingPair = new TradingPairData(pair);
@@ -55,7 +55,7 @@ public class OrderCreateData implements INetworkPayloadEncoder {
         buf.writeUUID(owner); // Write the owner UUID
         buf.writeUtf(type.name(), 16); // Write the order type
         tradingPair.encode(buf);
-        buf.writeLong(volume);
+        buf.writeFloat(volume);
         buf.writeFloat(limitPrice);
     }
 
@@ -63,7 +63,7 @@ public class OrderCreateData implements INetworkPayloadEncoder {
         UUID owner = buf.readUUID(); // Read the owner UUID
         Order.Type type = Order.Type.valueOf(buf.readUtf(16));
         TradingPairData tradingPair = TradingPairData.decode(buf);
-        long volume = buf.readLong();
+        float volume = buf.readFloat();
         float limitPrice = buf.readFloat();
 
         return new OrderCreateData(owner, type, tradingPair, volume, limitPrice);

@@ -79,10 +79,9 @@ public class ClientMarketManager implements IClientMarketManager {
     {
         StockMarketNetworking.CREATE_MARKETS_REQUEST.sendRequestToServer(List.of(setupData), (result) -> {
             if(result.size() == 1 && result.get(0)) // Check if the market was successfully created
-            {
                 callback.accept(true);
-            }
-            callback.accept(false);
+            else
+                callback.accept(false);
         });
     }
     @Override

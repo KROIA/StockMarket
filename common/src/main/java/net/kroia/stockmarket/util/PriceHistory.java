@@ -20,7 +20,6 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
     private Timestamp[] timeStamps;// = new Timestamp[maxHistorySize];
     private int priceScaleFactor = 1;
     private int currencyItemFractionScaleFactor = 1; // Default scale factor for currency items
-
     public PriceHistory(int maxHistorySize) {
         if(maxHistorySize<1)
             maxHistorySize = 1;
@@ -68,6 +67,7 @@ public class PriceHistory implements ServerSaveable, INetworkPayloadConverter {
     {
         return currencyItemFractionScaleFactor;
     }
+
 
 
     public static PriceHistory copy(PriceHistory org, int maxHistorySize)

@@ -75,7 +75,7 @@ public class TradeScreen extends StockMarketGuiScreen {
 
 
     }
-    public TradeScreen(TradingPair currentPair, int currentAmount, float currentPrice) {
+    public TradeScreen(TradingPair currentPair, float currentAmount, float currentPrice) {
         super(TITLE);
         this.updateTimer = new TimerMillis(true); // Update every second
         updateTimer.start(100);
@@ -210,7 +210,7 @@ public class TradeScreen extends StockMarketGuiScreen {
         tradingPanel.updateView(data);
 
 
-        activeOrderListView.updateActiveOrders(data.openOrdersData);
+        activeOrderListView.updateActiveOrders(data.openOrdersData, data.itemBankData.itemFractionScaleFactor);
         //candleStickChart.updateOrderDisplay(data.openOrdersData);
 
         if(marketWasOpen != data.marketIsOpen)
@@ -230,7 +230,7 @@ public class TradeScreen extends StockMarketGuiScreen {
 
 
     private void onSellMarketButtonPressed() {
-        int amount = tradingPanel.getAmount();
+        float amount = tradingPanel.getAmount();
         if(amount > 0)
             getSelectedMarket().requestCreateMarketOrder(-amount, (success) -> {
                 if(success)
@@ -245,7 +245,7 @@ public class TradeScreen extends StockMarketGuiScreen {
     }
 
     private void onBuyMarketButtonPressed() {
-        int amount = tradingPanel.getAmount();
+        float amount = tradingPanel.getAmount();
         if(amount > 0)
             getSelectedMarket().requestCreateMarketOrder(amount, (success) -> {
                 if(success)
@@ -260,7 +260,7 @@ public class TradeScreen extends StockMarketGuiScreen {
     }
 
     private void onSellLimitButtonPressed() {
-        int amount = tradingPanel.getAmount();
+        float amount = tradingPanel.getAmount();
         float price = tradingPanel.getLimitPrice();
         if(amount > 0 && price >= 0)
             getSelectedMarket().requestCreateLimitOrder(-amount, price, (success) -> {
@@ -276,7 +276,7 @@ public class TradeScreen extends StockMarketGuiScreen {
     }
 
     private void onBuyLimitButtonPressed() {
-        int amount = tradingPanel.getAmount();
+        float amount = tradingPanel.getAmount();
         float price = tradingPanel.getLimitPrice();
         if(amount > 0 && price >= 0)
             getSelectedMarket().requestCreateLimitOrder(amount, price, (success) -> {

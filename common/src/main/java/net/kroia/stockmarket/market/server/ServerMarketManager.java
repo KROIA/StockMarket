@@ -57,10 +57,6 @@ public class ServerMarketManager implements IServerMarketManager, ServerSaveable
     {
         return (float) rawPrice / marketPriceScale;
     }
-    public static int getDecimalCharCount(int centScaleFactor)
-    {
-        return (int)Math.log10(centScaleFactor);
-    }
 
 
     @Override

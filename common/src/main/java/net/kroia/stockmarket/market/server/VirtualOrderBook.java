@@ -147,6 +147,8 @@ public class VirtualOrderBook implements ServerSaveable {
     private final DynamicIndexedArray virtualOrderVolumeDistribution;
     private long lastMillis;
     private Settings settings = new Settings();
+    private int itemFractionScaleFactor = 1; // Scale factor for item fractions, used to handle fractional item amounts.
+
 
     //private boolean dbgSavedToFile = false;
 
@@ -156,6 +158,10 @@ public class VirtualOrderBook implements ServerSaveable {
         setCurrentPrice(initialPrice);
         //updateVolume(initialPrice);
         virtualOrderVolumeDistribution.resetToDefaultValues();
+    }
+
+    public void setItemFractionScaleFactor(int itemFractionScaleFactor) {
+        this.itemFractionScaleFactor = itemFractionScaleFactor;
     }
 
     public void cleanup() {
@@ -316,9 +322,9 @@ public class VirtualOrderBook implements ServerSaveable {
     {
         if(virtualOrderVolumeDistribution.isInRange(price))
         {
-            return (long)virtualOrderVolumeDistribution.get(price);
+            return (long)virtualOrderVolumeDistribution.get(price) * itemFractionScaleFactor;
         }
-        return (long)getTargetAmount(price);
+        return (long)getTargetAmount(price) * itemFractionScaleFactor;
     }
     public void removeAmount(int price, long amount)
     {
@@ -326,11 +332,11 @@ public class VirtualOrderBook implements ServerSaveable {
         {
             if(virtualOrderVolumeDistribution.get(price) > 0)
             {
-                virtualOrderVolumeDistribution.add(price, -Math.abs(amount));
+                virtualOrderVolumeDistribution.add(price, -Math.abs(amount/(float)itemFractionScaleFactor));
             }
             else if(virtualOrderVolumeDistribution.get(price) < 0)
             {
-                virtualOrderVolumeDistribution.add(price, Math.abs(amount));
+                virtualOrderVolumeDistribution.add(price, Math.abs(amount/(float)itemFractionScaleFactor));
             }
         }
     }

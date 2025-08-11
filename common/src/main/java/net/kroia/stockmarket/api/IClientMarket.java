@@ -34,14 +34,14 @@ public interface IClientMarket {
                             Consumer<Boolean> callback);
     void requestChangeOrder(long orderID, float newPrice,
                             Consumer<Boolean> callback);
-    void requestCreateMarketOrder(int volume,
+    void requestCreateMarketOrder(float volume,
                                   Consumer<Boolean> callback);
-    void requestCreateMarketOrder(UUID orderOwnerPlayerUUID, int volume,
+    void requestCreateMarketOrder(UUID orderOwnerPlayerUUID, float volume,
                                   Consumer<Boolean> callback);
-    void requestCreateLimitOrder(int volume, float limitPrice,
+    void requestCreateLimitOrder(float volume, float limitPrice,
                                  Consumer<Boolean> callback);
 
-    void requestCreateLimitOrder(UUID orderOwnerPlayerUUID, int volume, float limitPrice,
+    void requestCreateLimitOrder(UUID orderOwnerPlayerUUID, float volume, float limitPrice,
                                  Consumer<Boolean> callback);
 
     void requestPlayerOrderReadDataList(Consumer<OrderReadListData> callback);

@@ -55,10 +55,11 @@ public class TradePanel extends StockMarketGuiElement {
 
     private final Label marketClosedLabel;
 
-    private int amount = 0;
+    private float amount = 0;
     private float limitPrice = 0;
     private float currentMarketPrice = 0;
     private int currencyFractionScaleFactor = 1;
+    private int itemFractionScaleFactor = 1;
 
     public TradePanel(Runnable onItemChangeButtonClicked,
                       Runnable onMarketBuyButtonClicked,
@@ -112,10 +113,11 @@ public class TradePanel extends StockMarketGuiElement {
         amountTextBox = new TextBox(0,0,0);
         amountTextBox.setText(""+amount);
         amountTextBox.setAllowLetters(false);
+        amountTextBox.setAllowNegativeNumbers(false);
         amountTextBox.setOnTextChanged((text) -> {
-            int am = amountTextBox.getInt();
-            amount = Math.max(am, 0);
-            amountTextBox.setText(""+amount);
+            this.amount = (float)amountTextBox.getDouble();
+            //this.amount = Math.max(am, 0);
+            //amountTextBox.setText(""+amount);
         });
 
         marketOrderLabel = new Label(MARKET_ORDER_LABEL.getString());
@@ -181,12 +183,12 @@ public class TradePanel extends StockMarketGuiElement {
         currentPriceTextLabel.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipCurrentPrice(getPriceString(currentMarketPrice), getItemName(), getCurrencyName()));
         amountLabel.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipAmount(getItemName()));
         marketOrderLabel.setHoverTooltipSupplier(StockMarketTextMessages::getTradePanelTooltipMarketOrder);
-        marketBuyButton.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipMarketBuy(amount, getItemName(), getPriceString(currentMarketPrice * amount), getCurrencyName()));
-        marketSellButton.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipMarketSell(amount, getItemName(), getPriceString(currentMarketPrice * amount), getCurrencyName()));
+        marketBuyButton.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipMarketBuy(Bank.getFormattedAmount(amount, itemFractionScaleFactor), getItemName(), getPriceString(currentMarketPrice * amount), getCurrencyName()));
+        marketSellButton.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipMarketSell(Bank.getFormattedAmount(amount, itemFractionScaleFactor), getItemName(), getPriceString(currentMarketPrice * amount), getCurrencyName()));
         limitOrderLabel.setHoverTooltipSupplier(StockMarketTextMessages::getTradePanelTooltipLimitOrder);
         limitPriceLabel.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipLimitPrice(getItemName()));
-        limitBuyButton.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipLimitBuy(amount, getItemName(), getPriceString(limitPrice), getCurrencyName()));
-        limitSellButton.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipLimitSell(amount, getItemName(), getPriceString(limitPrice), getCurrencyName()));
+        limitBuyButton.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipLimitBuy(Bank.getFormattedAmount(amount, itemFractionScaleFactor), getItemName(), getPriceString(limitPrice), getCurrencyName()));
+        limitSellButton.setHoverTooltipSupplier(() -> StockMarketTextMessages.getTradePanelTooltipLimitSell(Bank.getFormattedAmount(amount, itemFractionScaleFactor), getItemName(), getPriceString(limitPrice), getCurrencyName()));
 
 
 
@@ -232,41 +234,38 @@ public class TradePanel extends StockMarketGuiElement {
     {
         PriceHistory history = data.priceHistoryData.toHistory();
         int priceScaleFactor = history.getPriceScaleFactor();
-        setCurrentItemBalance(data.itemBankData.balance, data.itemBankData.centScaleFactor);
-        setCurrentMoneyBalance(data.currencyBankData.balance, data.currencyBankData.centScaleFactor);
-        setCurrentPrice(history.getCurrentRealPrice(), history.getCurrencyItemFractionScaleFactor());
+        currentItemBalanceLabel.setText(MoneyBank.getNormalizedAmount(data.itemBankData.balance, data.itemBankData.itemFractionScaleFactor));
+        currentMoneyBalanceLabel.setText(MoneyBank.getNormalizedAmount(data.currencyBankData.balance, data.currencyBankData.itemFractionScaleFactor));
+        currentMarketPrice = history.getCurrentRealPrice();
+        this.currencyFractionScaleFactor = history.getCurrencyItemFractionScaleFactor();
+        this.itemFractionScaleFactor = data.itemBankData.itemFractionScaleFactor;
+        //currentPriceLabel.setText(MoneyBank.getNormalizedAmount(currentMarketPrice, currencyFractionScaleFactor));
+        currentPriceLabel.setText(MoneyBank.getNormalizedAmount(currentMarketPrice, priceScaleFactor));
 
         if(priceScaleFactor > 1)
         {
             limitPriceTextBox.setAllowNumbers(true, true);
-            limitPriceTextBox.setMaxDecimalChar((int)Math.log10(priceScaleFactor));
+            limitPriceTextBox.setMaxDecimalChar(Bank.getMaxDecimalDigitsCount(priceScaleFactor));
         }else {
             limitPriceTextBox.setAllowNumbers(true, false);
+        }
+        if(data.itemBankData.itemFractionScaleFactor > 1)
+        {
+            amountTextBox.setAllowNumbers(true, true);
+            amountTextBox.setMaxDecimalChar(Bank.getMaxDecimalDigitsCount(data.itemBankData.itemFractionScaleFactor));
+        }
+        else {
+            amountTextBox.setAllowNumbers(true, false);
         }
 
 
     }
-    public void setCurrentItemBalance(long balance, int centScaleFactor)
-    {
-        currentItemBalanceLabel.setText(MoneyBank.getNormalizedAmount(balance, centScaleFactor));
-    }
-    public void setCurrentMoneyBalance(long balance, int centScaleFactor)
-    {
-        currentMoneyBalanceLabel.setText(MoneyBank.getNormalizedAmount(balance, centScaleFactor));
-    }
-    public void setCurrentPrice(float price, int currencyFractionScaleFactor)
-    {
-        currentMarketPrice = price;
-        this.currencyFractionScaleFactor = currencyFractionScaleFactor;
-        currentPriceLabel.setText(MoneyBank.getNormalizedAmount(price, currencyFractionScaleFactor));
-    }
-
-    public void setAmount(int amount)
+    public void setAmount(float amount)
     {
         this.amount = amount;
-        amountTextBox.setText(""+amount);
+        amountTextBox.setText(amount);
     }
-    public int getAmount() {
+    public float getAmount() {
         return amount;
     }
 
@@ -277,6 +276,7 @@ public class TradePanel extends StockMarketGuiElement {
     }
     public float getLimitPrice()
     {
+        limitPrice = (float)limitPriceTextBox.getDouble();
         return limitPrice;
     }
 

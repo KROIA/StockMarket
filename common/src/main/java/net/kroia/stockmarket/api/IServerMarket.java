@@ -362,7 +362,7 @@ public interface IServerMarket {
      * @param price the price per item in real currency.
      * @return true if the order was successfully created, false otherwise.
      */
-    boolean createLimitOrder(UUID playerUUID, long amount, float price);
+    boolean createLimitOrder(UUID playerUUID, float amount, float price);
 
     /**
      * Creates a market order for the player.
@@ -371,7 +371,7 @@ public interface IServerMarket {
      *               Positive values indicate a buy order, negative values indicate a sell order.
      * @return true if the order was successfully created, false otherwise.
      */
-    boolean createMarketOrder(UUID playerUUID, long amount);
+    boolean createMarketOrder(UUID playerUUID, float amount);
 
     /**
      * Creates a limit order for the bot.
@@ -382,7 +382,7 @@ public interface IServerMarket {
      * @param price the price per item in real currency.
      * @return true if the order was successfully created, false otherwise.
      */
-    boolean createBotLimitOrder(long amount, float price);
+    boolean createBotLimitOrder(float amount, float price);
 
     /**
      * Creates a market order for the bot.
@@ -392,7 +392,7 @@ public interface IServerMarket {
      *               Positive values indicate a buy order, negative values indicate a sell order.
      * @return true if the order was successfully created, false otherwise.
      */
-    boolean createBotMarketOrder(long amount);
+    boolean createBotMarketOrder(float amount);
 
 
 

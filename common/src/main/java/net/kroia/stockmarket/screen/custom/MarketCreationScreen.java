@@ -22,11 +22,12 @@ import java.util.List;
 
 public class MarketCreationScreen extends StockMarketGuiScreen {
 
-    private static final String PREFIX = "gui."+StockMarketMod.MOD_ID+".trading_pair_creation_screen.";
+    private static final String PREFIX = "gui."+StockMarketMod.MOD_ID+".market_creation_screen.";
     private static final Component TITLE = Component.translatable(PREFIX + "title");
     private static final Component ITEM_SELECTION_VIEW_TITLE = Component.translatable(PREFIX + "item_selection_title");
     private static final Component CURRENCY_SELECTION_VIEW_TITLE = Component.translatable(PREFIX + "currency_selection_title");
     private static final Component CREATE_MARKET_BUTTON = Component.translatable(PREFIX + "create_market_button");
+
 
     public static final Component MARKET_OPEN = Component.translatable(PREFIX+"market_open");
     public static final Component ENABLE_VIRTUAL_ORDER_BOOK = Component.translatable(PREFIX+"enable_virtual_order_book");
@@ -36,8 +37,9 @@ public class MarketCreationScreen extends StockMarketGuiScreen {
     public static final Component ENABLE_RANDOM_WALK = Component.translatable(PREFIX+"enable_random_walk");
 
 
-    public static final Component TOOLTIP_OPEN_MARKET_CHECKBOX = Component.translatable(PREFIX+"tooltip_open_market_checkbox");
-    public static final Component TOOLTIP_CREATE_MARKET_BUTTON = Component.translatable(PREFIX+"tooltip_create_market_button");
+    public static final Component TOOLTIP_MARKET_MINIMAL_PRICE_INCREMENT = Component.translatable(PREFIX+"minimal_price_increment.tooltip");
+    public static final Component TOOLTIP_OPEN_MARKET_CHECKBOX = Component.translatable(PREFIX+"open_market_checkbox.tooltip");
+    public static final Component TOOLTIP_CREATE_MARKET_BUTTON = Component.translatable(PREFIX+"create_market_button.tooltip");
 
     private final List<ItemStack> potentialTradingItems = new ArrayList<>();
     private ItemStack selectedItem = ItemStack.EMPTY;
@@ -57,6 +59,7 @@ public class MarketCreationScreen extends StockMarketGuiScreen {
     private final ListView settingsListView;
     private final TradingPairView currentPairView;
     private final CheckBox openMarketCheckBox;
+    private final TextBox minimalPriceIncrementTextBox;
     private final TextBox initialPriceTextBox;
     private final TextBox candleTimeTextBoxMinutes;
 
@@ -97,6 +100,15 @@ public class MarketCreationScreen extends StockMarketGuiScreen {
         currentPairView = new TradingPairView();
         currentPairView.setEnabled(false); // Initially disabled until an item and currency are selected
         //initialPriceLabel = new Label(INITIAL_PRICE_LABEL.getString());
+
+        minimalPriceIncrementTextBox = new TextBox();
+        minimalPriceIncrementTextBox.setAllowLetters(false);
+        minimalPriceIncrementTextBox.setAllowNumbers(true, true);
+        minimalPriceIncrementTextBox.setAllowNegativeNumbers(false);
+        minimalPriceIncrementTextBox.setMaxDecimalChar(2);
+        minimalPriceIncrementTextBox.setOnTextChanged(this::onMinimalPriceIncrementChanged);
+        minimalPriceIncrementTextBox.setText("1");
+
         initialPriceTextBox = new TextBox();
         initialPriceTextBox.setAllowLetters(false);
         initialPriceTextBox.setAllowNumbers(true, true);
@@ -160,6 +172,7 @@ public class MarketCreationScreen extends StockMarketGuiScreen {
 
         currentPairView.setHoverTooltipSupplier(this::getInitialPriceTooltip);
         currentPairView.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.TOP_RIGHT);
+        minimalPriceIncrementTextBox.setHoverTooltipSupplier(TOOLTIP_MARKET_MINIMAL_PRICE_INCREMENT::getString);
         initialPriceTextBox.setHoverTooltipSupplier(this::getInitialPriceTooltip);
         candleTimeTextBoxMinutes.setHoverTooltipSupplier(()->{
             int minutes = candleTimeTextBoxMinutes.getInt();
@@ -180,6 +193,7 @@ public class MarketCreationScreen extends StockMarketGuiScreen {
 
 
 
+        minimalPriceIncrementTextBox.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.RIGHT);
         initialPriceTextBox.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.RIGHT);
         candleTimeTextBoxMinutes.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.RIGHT);
         volatilitySlider.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.RIGHT);
@@ -206,6 +220,7 @@ public class MarketCreationScreen extends StockMarketGuiScreen {
         addElement(settingsListView);
         addElement(currentPairView);
         addElement(createMarketButton);
+        settingsListView.addChild(minimalPriceIncrementTextBox);
         settingsListView.addChild(initialPriceTextBox);
         settingsListView.addChild(candleTimeTextBoxMinutes);
         settingsListView.addChild(openMarketCheckBox);
@@ -312,6 +327,7 @@ public class MarketCreationScreen extends StockMarketGuiScreen {
 
     }
 
+
     private String getInitialPriceTooltip()
     {
         String itemName;
@@ -366,6 +382,10 @@ public class MarketCreationScreen extends StockMarketGuiScreen {
         onNewPairCombinationSelected();
     }
 
+    private void onMinimalPriceIncrementChanged(String newText)
+    {
+
+    }
     private void onInitialPriceChanged(String newText) {
         if (newText.isEmpty()) {
             createMarketButton.setEnabled(false);
@@ -411,6 +431,9 @@ public class MarketCreationScreen extends StockMarketGuiScreen {
         boolean useMarketBot = enableMarketBot.isChecked();
 
         MarketFactory.DefaultMarketSetupGeneratorData data = new MarketFactory.DefaultMarketSetupGeneratorData();
+        double minimalPriceIncrement = Math.max(0.01, Math.min(1, minimalPriceIncrementTextBox.getDouble()));
+
+        data.priceScaleFactor = (int)(1.0/minimalPriceIncrement);
         data.defaultPrice = Math.max(0, (float)initialPriceTextBox.getDouble());
         data.updateIntervalMS = getMarketSpeedMS();
         data.volatility = (float)volatilitySlider.getSliderValue();

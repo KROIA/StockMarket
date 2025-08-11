@@ -22,6 +22,7 @@ public class OrderBook implements ServerSaveable {
 
     private VirtualOrderBook virtualOrderBook;
     private int priceScaleFactor = 1; // Scale factor for prices, used to handle floating point precision issues.
+    private int itemFractionScaleFactor = 1; // Scale factor for item fractions, used to handle fractional item amounts.
 
     public OrderBook()
     {
@@ -37,9 +38,14 @@ public class OrderBook implements ServerSaveable {
         if(realVolumeBookSize > 0)
             this.virtualOrderBook = new VirtualOrderBook(realVolumeBookSize, initialPrice);
     }
-    public void setPriceScaleFactor(int priceScaleFactor)
+    public void setScaleFactors(int priceScaleFactor, int itemFractionScaleFactor)
     {
         this.priceScaleFactor = priceScaleFactor;
+        this.itemFractionScaleFactor = itemFractionScaleFactor;
+        if(virtualOrderBook != null)
+        {
+            virtualOrderBook.setItemFractionScaleFactor(itemFractionScaleFactor);
+        }
     }
 
     public void createVirtualOrderBook(int realVolumeBookSize, int initialPrice, VirtualOrderBook.Settings settings)
@@ -49,6 +55,7 @@ public class OrderBook implements ServerSaveable {
         this.virtualOrderBook = new VirtualOrderBook(realVolumeBookSize, initialPrice);
         this.virtualOrderBook.setSettings(settings); // Set the settings for the virtual order book.
         this.virtualOrderBook.resetVolumeDistribution();
+        this.virtualOrderBook.setItemFractionScaleFactor(itemFractionScaleFactor); // Set the item fraction scale factor for the virtual order book.
     }
     public void destroyVirtualOrderBook()
     {

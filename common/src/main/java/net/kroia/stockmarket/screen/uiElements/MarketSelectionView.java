@@ -17,12 +17,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
-public class TradingPairSelectionView extends StockMarketGuiElement {
+public class MarketSelectionView extends StockMarketGuiElement {
 
-    public static final Component FILTER = Component.translatable("gui."+ StockMarketMod.MOD_ID + ".trading_pair_selection_view.filter");
-    public static final Component CLEAR_ITEM = Component.translatable("gui."+ StockMarketMod.MOD_ID + ".trading_pair_selection_view.clear_item");
-    public static final Component CLEAR_CURRENCY = Component.translatable("gui."+ StockMarketMod.MOD_ID + ".trading_pair_selection_view.clear_currency");
-    public static final Component SELECT_MARKET = Component.translatable("gui."+ StockMarketMod.MOD_ID + ".trading_pair_selection_view.select_market");
+    public static final Component FILTER = Component.translatable("gui."+ StockMarketMod.MOD_ID + ".market_selection_view.filter");
+    public static final Component CLEAR_ITEM = Component.translatable("gui."+ StockMarketMod.MOD_ID + ".market_selection_view.clear_item");
+    public static final Component CLEAR_CURRENCY = Component.translatable("gui."+ StockMarketMod.MOD_ID + ".market_selection_view.clear_currency");
+    public static final Component SELECT_MARKET = Component.translatable("gui."+ StockMarketMod.MOD_ID + ".market_selection_view.select_market");
 
     private final Consumer<TradingPair> onSelected;
     private TradingPair selectedPair;
@@ -42,7 +42,7 @@ public class TradingPairSelectionView extends StockMarketGuiElement {
     private final VerticalListView tradingPairListView;
     private final ItemSelectionView itemSelectionView;
     private final ItemSelectionView currencySelectionView;
-    public TradingPairSelectionView(Consumer<TradingPair> onSelected)
+    public MarketSelectionView(Consumer<TradingPair> onSelected)
     {
         super(0, 0, 100, 100); // Example dimensions, adjust as needed
         this.onSelected = onSelected;

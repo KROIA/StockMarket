@@ -71,8 +71,6 @@ public class StockMarketModBackend implements StockMarketAPI {
             StockMarketCommands.register(dispatcher);
         });
 
-
-
         StockMarketBlocks.init();
         StockMarketItems.init();
         StockMarketEntities.init();

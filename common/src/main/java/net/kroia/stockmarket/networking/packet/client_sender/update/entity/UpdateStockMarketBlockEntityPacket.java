@@ -10,7 +10,7 @@ import net.minecraft.server.level.ServerPlayer;
 public class UpdateStockMarketBlockEntityPacket extends StockMarketNetworkPacket {
     private BlockPos pos;
     private TradingPair tradingPair;
-    private int amount;
+    private float amount;
     private float price;
 
 
@@ -36,7 +36,7 @@ public class UpdateStockMarketBlockEntityPacket extends StockMarketNetworkPacket
         return tradingPair;
     }
 
-    public int getAmount() {
+    public float getAmount() {
         return amount;
     }
 
@@ -53,7 +53,7 @@ public class UpdateStockMarketBlockEntityPacket extends StockMarketNetworkPacket
     {
         buf.writeBlockPos(pos);
         tradingPair.encode(buf);
-        buf.writeInt(amount);
+        buf.writeFloat(amount);
         buf.writeFloat(price);
     }
 
@@ -66,7 +66,7 @@ public class UpdateStockMarketBlockEntityPacket extends StockMarketNetworkPacket
             this.tradingPair = new TradingPair();
         }
         this.tradingPair.decode(buf);
-        this.amount = buf.readInt();
+        this.amount = buf.readFloat();
         this.price = buf.readFloat();
     }
 

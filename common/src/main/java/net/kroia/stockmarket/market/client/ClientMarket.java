@@ -82,7 +82,7 @@ public class ClientMarket implements IClientMarket {
         StockMarketNetworking.ORDER_CHANGE_REQUEST.sendRequestToServer(changeData, callback);
     }
     @Override
-    public void requestCreateMarketOrder(int volume,
+    public void requestCreateMarketOrder(float volume,
                                          Consumer<Boolean> callback)
     {
         if(checkDeadAndDebug())
@@ -90,7 +90,7 @@ public class ClientMarket implements IClientMarket {
         requestCreateMarketOrder(getPlayerUUID(), volume, callback);
     }
     @Override
-    public void requestCreateMarketOrder(UUID orderOwnerPlayerUUID, int volume,
+    public void requestCreateMarketOrder(UUID orderOwnerPlayerUUID, float volume,
                                          Consumer<Boolean> callback)
     {
         if(checkDeadAndDebug())
@@ -99,7 +99,7 @@ public class ClientMarket implements IClientMarket {
         StockMarketNetworking.ORDER_CREATE_REQUEST.sendRequestToServer(createData, callback);
     }
     @Override
-    public void requestCreateLimitOrder(int volume, float limitPrice,
+    public void requestCreateLimitOrder(float volume, float limitPrice,
                                         Consumer<Boolean> callback)
     {
         if(checkDeadAndDebug())
@@ -108,7 +108,7 @@ public class ClientMarket implements IClientMarket {
     }
 
     @Override
-    public void requestCreateLimitOrder(UUID orderOwnerPlayerUUID, int volume, float limitPrice,
+    public void requestCreateLimitOrder(UUID orderOwnerPlayerUUID, float volume, float limitPrice,
                                         Consumer<Boolean> callback)
     {
         if(checkDeadAndDebug())

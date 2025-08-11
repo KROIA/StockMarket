@@ -19,7 +19,7 @@ public class StockMarketBlockEntity extends BlockEntity{
 
     // Current Item that the chart is displaying
     private TradingPair tradingPair;
-    private int amount;
+    private float amount;
     private float price;
 
     public static void setBackend(StockMarketModBackend.Instances backend) {
@@ -41,7 +41,7 @@ public class StockMarketBlockEntity extends BlockEntity{
         return tradingPair;
     }
 
-    public int getAmount()
+    public float getAmount()
     {
         return amount;
     }
@@ -49,7 +49,7 @@ public class StockMarketBlockEntity extends BlockEntity{
     {
         return price;
     }
-    public void setAmount(int amount)
+    public void setAmount(float amount)
     {
         this.amount = amount;
     }
@@ -81,7 +81,7 @@ public class StockMarketBlockEntity extends BlockEntity{
         CompoundTag itemTag = new CompoundTag();
         tradingPair.save(itemTag);
         dataTag.put("tradingPair", itemTag);
-        dataTag.putInt("amount", amount);
+        dataTag.putFloat("amount", amount);
         dataTag.putFloat("price", price);
         tag.put(StockMarketMod.MOD_ID, dataTag);
     }
@@ -105,7 +105,7 @@ public class StockMarketBlockEntity extends BlockEntity{
             tradingPair = new TradingPair(new ItemID("minecraft:diamond"), BACKEND_INSTANCES.SERVER_MARKET_MANAGER.getDefaultCurrencyItemID());
         }
 
-        amount = dataTag.getInt("amount");
+        amount = dataTag.getFloat("amount");
         price = dataTag.getFloat("price");
     }
 }

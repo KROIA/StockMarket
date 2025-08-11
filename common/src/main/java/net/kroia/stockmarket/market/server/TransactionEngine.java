@@ -36,7 +36,6 @@ public class TransactionEngine {
         if(fillAmount1 < 0)
             fillAmount = -fillVolume;
 
-        long money = fillVolume * ServerMarketManager.scaleToBankSystemMoneyAmount(currentPrice, priceScaleFactor, currencyScaleFactor);
 
         UUID playerUUID1 = o1.getPlayerUUID();
         UUID playerUUID2 = o2.getPlayerUUID();
@@ -57,12 +56,17 @@ public class TransactionEngine {
         Order receiverOrder = fillAmount > 0 ? o2 : o1;
         ItemID senderItemID = fillAmount > 0 ? pair.getItem() : pair.getCurrency();
 
+
+
         if(senderOrder.isBot() && receiverOrder.isBot())
         {
             senderOrder.addFilledAmount(fillVolume);
             receiverOrder.addFilledAmount(-fillVolume);
             return fillVolume;
         }
+
+        int itemFractionScaleFactor = senderItemBank != null ? senderItemBank.getItemFractionScaleFactor() : BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getItemFractionScaleFactor(senderItemID);
+        long money = fillVolume * ServerMarketManager.scaleToBankSystemMoneyAmount(currentPrice, priceScaleFactor, currencyScaleFactor) / itemFractionScaleFactor;
 
         // Overflow check
         if(receiverMoneyBank != null)
@@ -241,7 +245,7 @@ public class TransactionEngine {
         IBank moneyBank1 = user1.getBank(pair.getCurrency());
         IBank itemBank1 = user1.getBank(pair.getItem());
 
-        long moneyToTransfer = fillVolume * ServerMarketManager.scaleToBankSystemMoneyAmount(currentPrice, priceScaleFactor, currencyScaleFactor);
+        long moneyToTransfer = fillVolume * ServerMarketManager.scaleToBankSystemMoneyAmount(currentPrice, priceScaleFactor, currencyScaleFactor) / itemBank1.getItemFractionScaleFactor();
         if(o1.isBuy())
         {
             if(moneyBank1.getBalance()+(o1.getLockedMoney() + o1.getTransferedMoney()) < moneyToTransfer)

@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.screen.custom;
 
 import dev.architectury.event.events.common.TickEvent;
+import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.modutilities.TimerMillis;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.GuiScreen;
@@ -12,7 +13,6 @@ import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.clientdata.ServerMarketSettingsData;
-import net.kroia.stockmarket.market.server.ServerMarketManager;
 import net.kroia.stockmarket.market.server.VirtualOrderBook;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import net.kroia.stockmarket.screen.uiElements.TradingPairView;
@@ -556,7 +556,7 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
             else
             {
                 enableCheckBox.setChecked(botSettings.enabled);
-                defaultPriceTextBox.setMaxDecimalChar(ServerMarketManager.getDecimalCharCount(priceScaleFactor));
+                defaultPriceTextBox.setMaxDecimalChar(Bank.getMaxDecimalDigitsCount(priceScaleFactor));
                 defaultPriceTextBox.setText(String.valueOf(botSettings.defaultPrice));
                 updateTimerInvervalMSTextBox.setText(String.valueOf(botSettings.updateTimerIntervallMS));
                 volumeScaleTextBox.setText(String.valueOf(botSettings.volumeScale));

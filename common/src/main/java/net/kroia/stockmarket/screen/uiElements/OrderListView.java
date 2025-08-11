@@ -78,7 +78,7 @@ public class OrderListView extends StockMarketGuiElement {
     }
 
 
-    public void updateActiveOrders(OrderReadListData orderList)
+    public void updateActiveOrders(OrderReadListData orderList, int itemFractionScaleFactor)
     {
         List<OrderReadData> orders = orderList.orders;
         //ArrayList<Order> orders = BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.getOrders(TradeScreen.getItemID());
@@ -100,7 +100,7 @@ public class OrderListView extends StockMarketGuiElement {
                 else {
                     for (OrderReadData value : orders) {
                         if (value.orderID == order.orderID) {
-                            view.setOrder(value);
+                            view.setOrder(value, itemFractionScaleFactor);
                             break;
                         }
                     }
@@ -110,7 +110,7 @@ public class OrderListView extends StockMarketGuiElement {
         }
         for (OrderReadData order : orders) {
             if (stillActiveOrderIds.get(order.orderID) == 1) {
-                OrderView orderView = new OrderView(order, onCancelOrder);
+                OrderView orderView = new OrderView(order, onCancelOrder, itemFractionScaleFactor);
                 activeOrderListView.addChild(orderView);
             }
         }

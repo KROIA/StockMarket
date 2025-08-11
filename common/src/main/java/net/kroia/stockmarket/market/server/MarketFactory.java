@@ -45,6 +45,7 @@ public class MarketFactory
         public boolean enableTargetPrice = true;
         public boolean enableVolumeTracking = true;
         public boolean enableRandomWalk = true;
+        public int priceScaleFactor = 1;
 
         public DefaultMarketSetupGeneratorData(ItemStack itemStack, float defaultPrice, float rarity, float volatility) {
             this.tradingPair = new TradingPair(new ItemID(itemStack), BACKEND_INSTANCES.SERVER_MARKET_MANAGER.getDefaultCurrencyItemID());
@@ -95,29 +96,14 @@ public class MarketFactory
             virtualOrderBookSettings.volumeDecumulationRate = virtualOrderBookSettings.volumeFastAccumulationRate * 0.1f;
             botSettings.volumeScale = virtualOrderBookSettings.volumeScale * this.volatility/10;
 
-            int priceScaleFactor = 1;
-            if(BACKEND_INSTANCES.SERVER_SETTINGS != null) {
-                if (this.tradingPair.isMoneyCurrency()) {
-                    //priceScaleFactor = MoneyBank.getCentScaleFactorStatic();
-                    // Automatic ajustment for money currency
-                    if (defaultPrice < BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.PRICE_SCALE_100_DEFAULT_PRICE_THRESHOLD.get())
-                        priceScaleFactor = 100; // Use cents for prices below 20
-                    else if (defaultPrice < BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.PRICE_SCALE_10_DEFAULT_PRICE_THRESHOLD.get())
-                        priceScaleFactor = 10; // Use deci for prices below 200
-                    else
-                        priceScaleFactor = 1; // Use whole units for prices above 200
-                }
-            }
-            else {
-                priceScaleFactor = 0; // This will automgenerate the price scale factor based on the default price on the server side again.
-            }
+
 
             long candleTimeMin = 1;
             if(BACKEND_INSTANCES.SERVER_SETTINGS != null)
             {
                 candleTimeMin = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.SHIFT_PRICE_CANDLE_INTERVAL_MS.get() / 60000; // Convert milliseconds to minutes
             }
-            DefaultMarketSetupData setupData = new DefaultMarketSetupData(this.tradingPair, botSettings, virtualOrderBookSettings, false, candleTimeMin, priceScaleFactor);
+            DefaultMarketSetupData setupData = new DefaultMarketSetupData(this.tradingPair, botSettings, virtualOrderBookSettings, false, candleTimeMin, this.priceScaleFactor);
             return setupData;
         }
 
@@ -127,6 +113,13 @@ public class MarketFactory
             this.defaultPrice = buf.readFloat();
             this.rarity = buf.readFloat();
             this.volatility = buf.readFloat();
+            this.updateIntervalMS = buf.readLong(); // Read update interval in milliseconds
+            this.enableTargetPrice = buf.readBoolean(); // Read enable target price flag
+            this.enableVolumeTracking = buf.readBoolean(); // Read enable volume tracking flag
+            this.enableRandomWalk = buf.readBoolean(); // Read enable random walk flag
+            this.priceScaleFactor = buf.readInt(); // Read price scale factor
+
+
         }
 
         @Override
@@ -135,6 +128,12 @@ public class MarketFactory
             buf.writeFloat(this.defaultPrice);
             buf.writeFloat(this.rarity);
             buf.writeFloat(this.volatility);
+            buf.writeLong(this.updateIntervalMS); // Write update interval in milliseconds
+            buf.writeBoolean(this.enableTargetPrice); // Write enable target price flag
+            buf.writeBoolean(this.enableVolumeTracking); // Write enable volume tracking flag
+            buf.writeBoolean(this.enableRandomWalk); // Write enable random walk flag
+            buf.writeInt(this.priceScaleFactor); // Write price scale factor
+
         }
 
         public JsonElement toJson()
@@ -154,6 +153,11 @@ public class MarketFactory
             jsonObject.addProperty("defaultPrice", this.defaultPrice);
             jsonObject.addProperty("rarity", this.rarity);
             jsonObject.addProperty("volatility", this.volatility);
+            jsonObject.addProperty("updateIntervalMS", this.updateIntervalMS); // Add update interval in milliseconds
+            jsonObject.addProperty("enableTargetPrice", this.enableTargetPrice); // Add enable target price flag
+            jsonObject.addProperty("enableVolumeTracking", this.enableVolumeTracking); // Add enable volume tracking flag
+            jsonObject.addProperty("enableRandomWalk", this.enableRandomWalk); // Add enable random walk flag
+            jsonObject.addProperty("priceScaleFactor", this.priceScaleFactor); // Add price scale factor
             return jsonObject;
         }
         public boolean fromJson(JsonElement json) {
@@ -202,6 +206,37 @@ public class MarketFactory
                 this.volatility = Math.max(0, element.getAsFloat());
             } else {
                 this.volatility = 0.0f; // Default value if not present
+            }
+
+            element = jsonObject.get("updateIntervalMS");
+            if (element != null && element.isJsonPrimitive() && element.getAsJsonPrimitive().isNumber()) {
+                this.updateIntervalMS = Math.max(100, element.getAsLong()); // Default to 500ms if not specified
+            } else {
+                this.updateIntervalMS = 500; // Default value if not present
+            }
+            element = jsonObject.get("enableTargetPrice");
+            if (element != null && element.isJsonPrimitive() && element.getAsJsonPrimitive().isBoolean()) {
+                this.enableTargetPrice = element.getAsBoolean(); // Default to true if not specified
+            } else {
+                this.enableTargetPrice = true; // Default value if not present
+            }
+            element = jsonObject.get("enableVolumeTracking");
+            if (element != null && element.isJsonPrimitive() && element.getAsJsonPrimitive().isBoolean()) {
+                this.enableVolumeTracking = element.getAsBoolean(); // Default to true if not specified
+            } else {
+                this.enableVolumeTracking = true; // Default value if not present
+            }
+            element = jsonObject.get("enableRandomWalk");
+            if (element != null && element.isJsonPrimitive() && element.getAsJsonPrimitive().isBoolean()) {
+                this.enableRandomWalk = element.getAsBoolean(); // Default to true if not specified
+            } else {
+                this.enableRandomWalk = true; // Default value if not present
+            }
+            element = jsonObject.get("priceScaleFactor");
+            if (element != null && element.isJsonPrimitive() && element.getAsJsonPrimitive().isNumber()) {
+                this.priceScaleFactor = Math.max(1, element.getAsInt()); // Default to 1 if not specified
+            } else {
+                this.priceScaleFactor = 1; // Default value if not present
             }
             return true;
         }
@@ -927,18 +962,28 @@ public class MarketFactory
         IServerBankManager bankManager = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager();
         if(!bankManager.isItemIDAllowed(item))
         {
-            if(!bankManager.allowItemID(item)){
+            if(!bankManager.allowItemID(item, 1)){
                 error("Pair: " + pair + " can't be allowed for trading because the item: "+ item +" is not allowed in the bank system");
                 return null;
             }
         }
         if(!bankManager.isItemIDAllowed(currency))
         {
-            if(!bankManager.allowItemID(currency)){
+            if(!bankManager.allowItemID(currency, priceScaleFactor)){
                 error("Pair: " + pair + " can't be allowed for trading because the currency: "+ currency+" is not allowed in the bank system");
                 return null;
             }
         }
+
+        // Adjust the priceScaleFactor to match the minimum of the bank system's scale factor and the provided scale factor
+        int currencyItemScaleFactor = bankManager.getItemFractionScaleFactor(currency);
+        if(priceScaleFactor > currencyItemScaleFactor)
+        {
+            warn("The provided price scale factor " + priceScaleFactor + " is greater than the bank system's scale factor " + currencyItemScaleFactor +
+                    " for currency " + currency + ". Adjusting to match the bank system's scale factor.");
+            priceScaleFactor = currencyItemScaleFactor;
+        }
+
         return new ServerMarket(pair,
                 startPrice,
                 virtualOrderBookSize,

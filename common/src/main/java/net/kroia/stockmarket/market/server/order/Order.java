@@ -108,6 +108,9 @@ public abstract class Order implements ServerSaveable, INetworkPayloadConverter 
         return lockedMoney;
     }
 
+    public void setLockedMoney(long lockedMoney) {
+        this.lockedMoney = lockedMoney;
+    }
 
     public static long uniqueOrderID()
     {

@@ -1,6 +1,6 @@
 package net.kroia.stockmarket.market.clientdata;
 
-import net.kroia.banksystem.api.IBank;
+import net.kroia.banksystem.api.IBankUser;
 import net.kroia.banksystem.banking.clientdata.MinimalBankData;
 import net.kroia.modutilities.networking.INetworkPayloadEncoder;
 import net.minecraft.network.FriendlyByteBuf;
@@ -19,8 +19,7 @@ public class TradingViewData implements INetworkPayloadEncoder {
 
     public TradingViewData(@NotNull TradingPairData pair,
                            @NotNull PriceHistoryData history,
-                           @NotNull IBank itemBank,
-                           @NotNull IBank currencyBank,
+                           @NotNull IBankUser bankUser,
                            @NotNull OrderBookVolumeData orderBookVolumeData,
                            @NotNull OrderReadListData openOrders,
                            boolean marketIsOpen,
@@ -31,8 +30,8 @@ public class TradingViewData implements INetworkPayloadEncoder {
         this.orderBookVolumeData = orderBookVolumeData;
         this.openOrdersData = openOrders;
 
-        this.itemBankData = itemBank.getMinimalData();
-        this.currencyBankData = currencyBank.getMinimalData();
+        this.itemBankData = bankUser.getMinimalBankData(pair.getItem());
+        this.currencyBankData = bankUser.getMinimalBankData(pair.getCurrency());
 
         this.marketIsOpen = marketIsOpen;
         this.botTargetPrice = botTargetPrice;

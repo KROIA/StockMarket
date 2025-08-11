@@ -17,7 +17,7 @@ import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.clientdata.ServerMarketSettingsData;
-import net.kroia.stockmarket.screen.uiElements.TradingPairSelectionView;
+import net.kroia.stockmarket.screen.uiElements.MarketSelectionView;
 import net.kroia.stockmarket.screen.uiElements.TradingPairView;
 import net.kroia.stockmarket.screen.uiElements.chart.TradingChartWidget;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
@@ -462,7 +462,7 @@ public class ManagementScreen extends StockMarketGuiScreen {
     private final NewMarketWidget newMarketWidget;
 
 
-    private final TradingPairSelectionView tradableItemsView;
+    private final MarketSelectionView tradableItemsView;
 
 
 
@@ -483,7 +483,7 @@ public class ManagementScreen extends StockMarketGuiScreen {
         updateTimer = new TimerMillis(true);
         updateTimer.start(500);
         this.parentScreen = parent;
-        tradableItemsView = new TradingPairSelectionView(this::setCurrentTradingPair);
+        tradableItemsView = new MarketSelectionView(this::setCurrentTradingPair);
         updateTradingItems();
 
         tradingChart = new TradingChartWidget();
