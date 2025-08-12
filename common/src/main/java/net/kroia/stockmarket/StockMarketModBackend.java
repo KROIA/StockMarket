@@ -1,6 +1,7 @@
 package net.kroia.stockmarket;
 
 import dev.architectury.event.events.common.CommandRegistrationEvent;
+import dev.architectury.event.events.common.LifecycleEvent;
 import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.api.BankSystemAPI;
@@ -11,6 +12,7 @@ import net.kroia.stockmarket.api.IServerMarketManager;
 import net.kroia.stockmarket.api.StockMarketAPI;
 import net.kroia.stockmarket.block.StockMarketBlocks;
 import net.kroia.stockmarket.command.StockMarketCommands;
+import net.kroia.stockmarket.compat.NEZNAMY_TAB_Placeholders;
 import net.kroia.stockmarket.entity.StockMarketEntities;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
 import net.kroia.stockmarket.item.StockMarketCreativeModeTab;
@@ -25,7 +27,9 @@ import net.kroia.stockmarket.menu.StockMarketMenus;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.kroia.stockmarket.util.*;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.LevelResource;
 
 import java.io.File;
@@ -123,6 +127,8 @@ public class StockMarketModBackend implements StockMarketAPI {
         INSTANCES.SERVER_DATA_HANDLER = new StockMarketDataHandler();
         INSTANCES.SERVER_MARKET_MANAGER = new ServerMarketManager();
 
+        NEZNAMY_TAB_Placeholders.setBackend(INSTANCES);
+
 
 
         TickEvent.SERVER_POST.register(StockMarketModBackend::onServerTick);
@@ -136,6 +142,13 @@ public class StockMarketModBackend implements StockMarketAPI {
         {
             INSTANCES.BANK_SYSTEM_API.getEvents().getBankDataLoadedFromFileSignal().addListener(StockMarketModBackend::onPostBankSystemDataLoaded, 1);
         }
+
+        // Save the data when the game saves the world
+        LifecycleEvent.SERVER_LEVEL_SAVE.register((ServerLevel level) -> {
+            if (level.dimension() == Level.OVERWORLD) {
+                INSTANCES.SERVER_DATA_HANDLER.saveAll();
+            }
+        });
     }
 
     // Called from the server side

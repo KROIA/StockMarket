@@ -42,8 +42,8 @@ subprojects {
         //    dir "../../BankSystem/mc_${minecraft_version}_BankSystem/common/build/libs"
         //}
 
-        //maven { url 'https://jitpack.io' }
-        //mavenLocal()
+        // https://github.com/NEZNAMY/TAB API
+        maven { url 'https://jitpack.io' }
     }
 
     dependencies {
@@ -55,10 +55,8 @@ subprojects {
             parchment("org.parchmentmc.data:parchment-${rootProject.minecraft_version}:${rootProject.mapping_version}")
         }
 
-        //modImplementation "banksystem:1.1.0"
-        //implementation 'banksystem:common:1.1.0'
-
-        //compileOnly 'banksystem:common:1.1.0-sources'
+        // https://github.com/NEZNAMY/TAB API
+        compileOnly 'com.github.NEZNAMY:TAB-API:5.2.5'
     }
 
     java {

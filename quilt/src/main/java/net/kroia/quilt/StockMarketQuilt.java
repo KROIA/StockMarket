@@ -1,8 +1,10 @@
 package net.kroia.quilt;
 
+import dev.architectury.platform.Platform;
 import net.fabricmc.api.EnvType;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.compat.NEZNAMY_TAB_Placeholders;
 import org.quiltmc.loader.api.ModContainer;
 import org.quiltmc.loader.api.minecraft.MinecraftQuiltLoader;
 import org.quiltmc.qsl.base.api.entrypoint.ModInitializer;
@@ -27,7 +29,14 @@ public final class StockMarketQuilt implements ModInitializer {
             StockMarketModBackend.onServerSetup(); // Handle world load (start)
         });
 
-        ServerLifecycleEvents.READY.register(StockMarketModBackend::onServerStart);
+        ServerLifecycleEvents.READY.register((server)->
+        {
+            StockMarketModBackend.onServerStart(server);
+            // Check if NEZNAMY/TAB is present and register placeholders
+            if (Platform.isModLoaded("tab")) {
+                NEZNAMY_TAB_Placeholders.register();
+            }
+        });
 
         // World save event
         // Handle world save (stop)

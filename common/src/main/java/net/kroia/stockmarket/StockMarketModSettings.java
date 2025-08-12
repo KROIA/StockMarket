@@ -1,11 +1,14 @@
 package net.kroia.stockmarket;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
 import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.setting.ModSettings;
 import net.kroia.modutilities.setting.Setting;
 import net.kroia.modutilities.setting.SettingsGroup;
+import net.kroia.modutilities.setting.parser.CustomJsonParser;
 import net.kroia.modutilities.setting.parser.ItemStackJsonParser;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
@@ -193,6 +196,58 @@ public class StockMarketModSettings extends ModSettings {
         public DefaultMarketSetupDataSettings() {
             super("DefaultMarketSetupDataSettings");
         }
+    }
+
+
+
+    public static final class Placeholder extends SettingsGroup
+    {
+        public static final class PlaceholderSettingParser implements CustomJsonParser<PlaceholderSettingData> {
+
+            @Override
+            public JsonElement toJson(PlaceholderSettingData value) {
+                JsonObject jsonObject = new JsonObject();
+                jsonObject.addProperty("identifier", value.getIdentifier());
+                jsonObject.addProperty("refreshRate", value.getRefreshRate());
+                return jsonObject;
+            }
+
+            @Override
+            public PlaceholderSettingData fromJson(JsonElement json) {
+                if (json.isJsonObject()) {
+                    JsonObject jsonObject = json.getAsJsonObject();
+                    String identifier = jsonObject.has("identifier") ? jsonObject.get("identifier").getAsString() : "";
+                    int refreshRate = jsonObject.has("refreshRate") ? jsonObject.get("refreshRate").getAsInt() : 0;
+                    return new PlaceholderSettingData(identifier, refreshRate);
+                }
+                return null; // or throw an exception if invalid format
+            }
+        }
+        public static final class PlaceholderSettingData
+        {
+            private String identifier;
+            private int refreshRate;
+
+            public PlaceholderSettingData(String identifier, int refreshRate) {
+                this.identifier = identifier;
+                this.refreshRate = refreshRate;
+            }
+            public String getIdentifier() {
+                return identifier;
+            }
+            public int getRefreshRate() {
+                return refreshRate;
+            }
+        }
+        private static final PlaceholderSettingParser parser = new PlaceholderSettingParser();
+        public final Setting<PlaceholderSettingData> PLAYER_BALANCE = registerSetting("PLAYER_BALANCE",new PlaceholderSettingData("%banksystem_player_balance%", 1000), PlaceholderSettingData.class, parser);
+        public final Setting<PlaceholderSettingData> PLAYER_LOCKED_BALANCE = registerSetting("PLAYER_LOCKED_BALANCE",new PlaceholderSettingData("%banksystem_player_locked_balance%", 1000), PlaceholderSettingData.class, parser);
+        public final Setting<PlaceholderSettingData> PLAYER_TOTAL_BALANCE = registerSetting("PLAYER_TOTAL_BALANCE",new PlaceholderSettingData("%banksystem_player_total_balance%", 1000), PlaceholderSettingData.class, parser);
+        public final Setting<PlaceholderSettingData> PLAYER_BANKUSER_JSON = registerSetting("PLAYER_BANKUSER_JSON",new PlaceholderSettingData("%banksystem_bankuser_json%", 10000), PlaceholderSettingData.class, parser);
+        public final Setting<PlaceholderSettingData> SERVER_CIRCULATION_JSON = registerSetting("SERVER_CIRCULATION_JSON",new PlaceholderSettingData("%banksystem_server_circulation_json%", 10000), PlaceholderSettingData.class, parser);
+
+
+        public Placeholder() { super("Placeholder"); }
     }
 
     /**
