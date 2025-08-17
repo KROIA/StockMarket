@@ -133,7 +133,8 @@ public class ServerMarketManager implements IServerMarketManager, ServerSaveable
         return market.getPriceHistoryData(maxHistoryPointCount);
     }
     @Override
-    public @Nullable TradingViewData getTradingViewData(@NotNull TradingPair pair, @NotNull UUID player,
+    public @Nullable TradingViewData getTradingViewData(@NotNull TradingPair pair,
+                                                        int bankAccountNumber,
                                                         int maxHistoryPointCount,
                                                         float minVisiblePrice,
                                                         float maxVisiblePrice,
@@ -143,15 +144,15 @@ public class ServerMarketManager implements IServerMarketManager, ServerSaveable
         ServerMarket market = markets.get(pair);
         if(market == null)
             return null;
-        return market.getTradingViewData(player, maxHistoryPointCount, minVisiblePrice, maxVisiblePrice, orderBookTileCount, requestBotTargetPrice);
+        return market.getTradingViewData(bankAccountNumber, maxHistoryPointCount, minVisiblePrice, maxVisiblePrice, orderBookTileCount, requestBotTargetPrice);
     }
     @Override
-    public @Nullable TradingViewData getTradingViewData(@NotNull TradingPair pair, @NotNull UUID player)
+    public @Nullable TradingViewData getTradingViewData(@NotNull TradingPair pair, int bankAccountNumber)
     {
         ServerMarket market = markets.get(pair);
         if(market == null)
             return null;
-        return market.getTradingViewData(player);
+        return market.getTradingViewData(bankAccountNumber);
     }
     @Override
     public @Nullable ServerMarketSettingsData getMarketSettingsData(@NotNull TradingPair pair)
@@ -221,11 +222,11 @@ public class ServerMarketManager implements IServerMarketManager, ServerSaveable
 
         if(orderCreateData.type == Order.Type.LIMIT)
         {
-            return market.createLimitOrder(orderCreateData.owner, orderCreateData.volume, orderCreateData.limitPrice);
+            return market.createLimitOrder(orderCreateData.owner, orderCreateData.bankAccountNumber, orderCreateData.volume, orderCreateData.limitPrice);
         }
         else if(orderCreateData.type == Order.Type.MARKET)
         {
-            return market.createMarketOrder(orderCreateData.owner, orderCreateData.volume);
+            return market.createMarketOrder(orderCreateData.owner, orderCreateData.bankAccountNumber, orderCreateData.volume);
         }
         else
         {

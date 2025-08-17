@@ -6,7 +6,7 @@
   "gui.stockmarket.trade_screen.previous_pair.tooltip": "Wähle vorherigen Markt",
   "gui.stockmarket.trade_screen.next_pair.tooltip": "Wähle nächsten Markt",
   "gui.stockmarket.trade_screen.your_balance": "Dein Guthaben",
-  "gui.stockmarket.trade_screen.change_item": "Item ändern",
+  "gui.stockmarket.trade_screen.change_market": "Markt wechseln",
   "gui.stockmarket.trade_screen.amount": "Mänge",
   "gui.stockmarket.trade_screen.market_order": "Market Order",
   "gui.stockmarket.trade_screen.limit_order": "Limit Order",

@@ -34,14 +34,14 @@ public interface IClientMarket {
                             Consumer<Boolean> callback);
     void requestChangeOrder(long orderID, float newPrice,
                             Consumer<Boolean> callback);
-    void requestCreateMarketOrder(float volume,
+    void requestCreateMarketOrder(int bankAccountNumber, float volume,
                                   Consumer<Boolean> callback);
-    void requestCreateMarketOrder(UUID orderOwnerPlayerUUID, float volume,
+    void requestCreateMarketOrder(UUID orderOwnerPlayerUUID, int bankAccountNumber, float volume,
                                   Consumer<Boolean> callback);
-    void requestCreateLimitOrder(float volume, float limitPrice,
+    void requestCreateLimitOrder(int bankAccountNumber, float volume, float limitPrice,
                                  Consumer<Boolean> callback);
 
-    void requestCreateLimitOrder(UUID orderOwnerPlayerUUID, float volume, float limitPrice,
+    void requestCreateLimitOrder(UUID orderOwnerPlayerUUID, int bankAccountNumber, float volume, float limitPrice,
                                  Consumer<Boolean> callback);
 
     void requestPlayerOrderReadDataList(Consumer<OrderReadListData> callback);
@@ -52,14 +52,15 @@ public interface IClientMarket {
     void requestGetMarketSettings(Consumer<ServerMarketSettingsData> callback);
     void requestSetMarketSettings(ServerMarketSettingsData settings, Consumer<Boolean> callback);
 
-    void requestTradingViewData(int maxHistoryPointCount,
+    void requestTradingViewData(int bankAccountNumber,
+                                int maxHistoryPointCount,
                                 float minimalVisiblePrice,
                                 float maximalVisiblePrice,
                                 int tileCount,
                                 boolean requestBotTargetPrice,
                                 Consumer<TradingViewData> callback);
-    void requestTradingViewData(Consumer<TradingViewData> callback, boolean requestBotTargetPrice);
-    void requestTradingViewData(Consumer<TradingViewData> callback);
+    void requestTradingViewData(int bankAccountNumber, Consumer<TradingViewData> callback, boolean requestBotTargetPrice);
+    void requestTradingViewData(int bankAccountNumber, Consumer<TradingViewData> callback);
 
     void requestBotTargetPrice(Consumer<Float> callback);
 

@@ -16,12 +16,12 @@ public class LimitOrder extends Order implements ServerSaveable {
     private int price;
 
 
-    LimitOrder(UUID playerUUID, long amount, int price, long lockedMoney) {
-        super(playerUUID, amount, lockedMoney);
+    LimitOrder(UUID playerUUID, int bankAccountNumber, long amount, int price, long lockedMoney) {
+        super(playerUUID, bankAccountNumber, amount, lockedMoney);
         this.price = price;
     }
-    LimitOrder(UUID playerUUID, long amount, int price, long lockedMoney, long alreadyFilledAmount) {
-        super(playerUUID, amount, lockedMoney);
+    LimitOrder(UUID playerUUID, int bankAccountNumber, long amount, int price, long lockedMoney, long alreadyFilledAmount) {
+        super(playerUUID, bankAccountNumber, amount, lockedMoney);
         this.price = price;
         this.filledAmount = alreadyFilledAmount;
     }

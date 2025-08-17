@@ -19,6 +19,7 @@ public class StockMarketBlockEntity extends BlockEntity{
 
     // Current Item that the chart is displaying
     private TradingPair tradingPair;
+    private int selectedBankAccountNumber;
     private float amount;
     private float price;
 
@@ -39,6 +40,13 @@ public class StockMarketBlockEntity extends BlockEntity{
 
     public TradingPair getTradringPair() {
         return tradingPair;
+    }
+
+    public void setSelectedBankAccountNumber(int selectedBankAccountNumber) {
+        this.selectedBankAccountNumber = selectedBankAccountNumber;
+    }
+    public int getSelectedBankAccountNumber() {
+        return selectedBankAccountNumber;
     }
 
     public float getAmount()
@@ -81,6 +89,7 @@ public class StockMarketBlockEntity extends BlockEntity{
         CompoundTag itemTag = new CompoundTag();
         tradingPair.save(itemTag);
         dataTag.put("tradingPair", itemTag);
+        dataTag.putInt("selectedBankAccountNumber", selectedBankAccountNumber);
         dataTag.putFloat("amount", amount);
         dataTag.putFloat("price", price);
         tag.put(StockMarketMod.MOD_ID, dataTag);
@@ -104,6 +113,10 @@ public class StockMarketBlockEntity extends BlockEntity{
         } else {
             tradingPair = new TradingPair(new ItemID("minecraft:diamond"), BACKEND_INSTANCES.SERVER_MARKET_MANAGER.getDefaultCurrencyItemID());
         }
+        if(dataTag.contains("selectedBankAccountNumber"))
+            selectedBankAccountNumber = dataTag.getInt("selectedBankAccountNumber");
+        else
+            selectedBankAccountNumber = 0;
 
         amount = dataTag.getFloat("amount");
         price = dataTag.getFloat("price");

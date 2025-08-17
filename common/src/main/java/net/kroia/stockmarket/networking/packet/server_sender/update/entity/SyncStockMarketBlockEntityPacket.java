@@ -11,6 +11,7 @@ import net.minecraft.server.level.ServerPlayer;
 public class SyncStockMarketBlockEntityPacket extends StockMarketNetworkPacket {
     private BlockPos pos;
     private TradingPair tradingPair;
+    private int selectedBankAccountNumber;
     private float amount;
     private float price;
 
@@ -22,6 +23,7 @@ public class SyncStockMarketBlockEntityPacket extends StockMarketNetworkPacket {
         this.tradingPair = blockEntity.getTradringPair();
         this.amount = blockEntity.getAmount();
         this.price = blockEntity.getPrice();
+        this.selectedBankAccountNumber = blockEntity.getSelectedBankAccountNumber();
     }
 
 
@@ -44,6 +46,9 @@ public class SyncStockMarketBlockEntityPacket extends StockMarketNetworkPacket {
     public float getPrice() {
         return price;
     }
+    public int getSelectedBankAccountNumber() {
+        return selectedBankAccountNumber;
+    }
 
     public static void sendPacketToClient(BlockPos pos, StockMarketBlockEntity blockEntity, ServerPlayer player) {
         new SyncStockMarketBlockEntityPacket(pos, blockEntity).sendToClient(player);
@@ -56,6 +61,7 @@ public class SyncStockMarketBlockEntityPacket extends StockMarketNetworkPacket {
         tradingPair.encode(buf);
         buf.writeFloat(amount);
         buf.writeFloat(price);
+        buf.writeInt(selectedBankAccountNumber);
     }
     @Override
     public void decode(FriendlyByteBuf buf)
@@ -66,6 +72,7 @@ public class SyncStockMarketBlockEntityPacket extends StockMarketNetworkPacket {
         this.tradingPair.decode(buf);
         this.amount = buf.readFloat();
         this.price = buf.readFloat();
+        this.selectedBankAccountNumber = buf.readInt();
     }
 
     @Override

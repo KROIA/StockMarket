@@ -1,7 +1,7 @@
 package net.kroia.stockmarket.market.server;
 
 import net.kroia.banksystem.api.IBank;
-import net.kroia.banksystem.api.IBankUser;
+import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.modutilities.ServerSaveable;
 import net.kroia.modutilities.TimerMillis;
 import net.kroia.stockmarket.StockMarketModBackend;
@@ -275,10 +275,10 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
         return new PriceHistoryData(historicalMarketData.getHistory(), maxHistoryPointCount);
     }
     @Override
-    public TradingViewData getTradingViewData(@NotNull UUID player, int maxHistoryPointCount, float minVisiblePrice, float maxVisiblePrice, int orderBookTileCount, boolean requestBotTargetPrice)
+    public TradingViewData getTradingViewData(int bankAccountNumber, int maxHistoryPointCount, float minVisiblePrice, float maxVisiblePrice, int orderBookTileCount, boolean requestBotTargetPrice)
     {
-        IBankUser bankUser = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getUser(player);
-        if(bankUser == null)
+        IBankAccount bankAccount = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getBankAccount(bankAccountNumber);
+        if(bankAccount == null)
             return null;
 
         //IBank itemBank = bankUser.getBank(tradingPair.getItem());
@@ -293,7 +293,7 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
         //if(itemBank == null || moneyBank == null)
         //    return null;
 
-        List<Order> orders = new ArrayList<>(orderBook.getOrders(player));
+        List<Order> orders = new ArrayList<>(orderBook.getOrders(bankAccountNumber));
         float botTargetPrice = -1;
         if(requestBotTargetPrice && volatilityBot != null)
         {
@@ -301,13 +301,13 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
         }
 
         return new TradingViewData(new TradingPairData(tradingPair), new PriceHistoryData(historicalMarketData.getHistory(), maxHistoryPointCount),
-                bankUser, getOrderBookVolumeData(maxHistoryPointCount, minVisiblePrice, maxVisiblePrice, orderBookTileCount),
+                bankAccount, getOrderBookVolumeData(maxHistoryPointCount, minVisiblePrice, maxVisiblePrice, orderBookTileCount),
                 new OrderReadListData(orders, priceScaleFactor), marketOpen, botTargetPrice, (float)smallesTradableVolume/(float)itemFractionScaleFactor);
     }
     @Override
-    public TradingViewData getTradingViewData(@NotNull UUID player)
+    public TradingViewData getTradingViewData(int bankAccountNumber)
     {
-        return getTradingViewData(player, -1,0, 0, 0, false);
+        return getTradingViewData(bankAccountNumber, -1,0, 0, 0, false);
     }
     @Override
     public ServerMarketSettingsData getMarketSettingsData()
@@ -561,13 +561,13 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
 
 
     @Override
-    public boolean createLimitOrder(UUID playerUUID, float amount, float price)
+    public boolean createLimitOrder(UUID playerUUID, int bankAccountNumber, float amount, float price)
     {
         if(!marketOpen)
             return false;
 
         int rawPrice = mapToRawPrice(price);
-        LimitOrder order = OrderFactory.createLimitOrder(playerUUID, tradingPair, amount, rawPrice, priceScaleFactor, currencyItemFractionScaleFactor, itemFractionScaleFactor);
+        LimitOrder order = OrderFactory.createLimitOrder(playerUUID, bankAccountNumber, tradingPair, amount, rawPrice, priceScaleFactor, currencyItemFractionScaleFactor, itemFractionScaleFactor);
         if(order == null)
             return false;
 
@@ -575,13 +575,13 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
         return true;
     }
     @Override
-    public boolean createMarketOrder(UUID playerUUID, float amount)
+    public boolean createMarketOrder(UUID playerUUID, int bankAccountNumber, float amount)
     {
         if(!marketOpen)
             return false;
 
         int currentPrice = getCurrentRawPrice();
-        MarketOrder order = OrderFactory.createMarketOrder(playerUUID, tradingPair, amount, currentPrice, priceScaleFactor, currencyItemFractionScaleFactor, itemFractionScaleFactor);
+        MarketOrder order = OrderFactory.createMarketOrder(playerUUID, bankAccountNumber, tradingPair, amount, currentPrice, priceScaleFactor, currencyItemFractionScaleFactor, itemFractionScaleFactor);
         if(order == null)
             return false;
 
@@ -676,7 +676,13 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
                 long toFreeAmount = ServerMarketManager.scaleToBankSystemMoneyAmount(toFillAmount * limitOrder.getPrice(),
                         priceScaleFactor, currencyItemFractionScaleFactor) / itemFractionScaleFactor;
                 long toLockAmount = ServerMarketManager.scaleToBankSystemMoneyAmount(toFillAmount * newRawPrice, priceScaleFactor, currencyItemFractionScaleFactor) / itemFractionScaleFactor;
-                IBank moneyBank = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getUser(limitOrder.getPlayerUUID()).getBank(tradingPair.getCurrency());
+                IBankAccount account = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getBankAccount(limitOrder.getBankAccountNumber());
+                if(account == null)
+                {
+                    cancelOrder(limitOrder);
+                    return false;
+                }
+                IBank moneyBank = account.getBank(tradingPair.getCurrency());
                 if (moneyBank == null)
                     return false;
 
@@ -721,13 +727,13 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
         if(order.isBot())
             return false;
 
-        IBankUser user = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getUser(order.getPlayerUUID());
-        if(user == null)
+        IBankAccount account = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getBankAccount(order.getBankAccountNumber());
+        if(account == null)
             return false;
         if(order.isBuy()) {
             long toUnlockMoney = order.getLockedMoney() + order.getTransferedMoney();
             if(toUnlockMoney > 0) {
-                IBank moneyBank = user.getBank(tradingPair.getCurrency());
+                IBank moneyBank = account.getBank(tradingPair.getCurrency());
                 if(moneyBank == null)
                     return false;
                 moneyBank.unlockAmount(toUnlockMoney);
@@ -736,7 +742,7 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
         }else {
             long toUnlockItem = -(order.getAmount() - order.getFilledAmount());
             if(toUnlockItem > 0) {
-                IBank itemBank = user.getBank(tradingPair.getItem());
+                IBank itemBank = account.getBank(tradingPair.getItem());
                 if(itemBank == null)
                     return false;
                 itemBank.unlockAmount(toUnlockItem);

@@ -612,7 +612,7 @@ public class ManagementScreen extends StockMarketGuiScreen {
 
         if(instance.updateTimer.check() && instance.getSelectedMarket() != null)
         {
-            instance.getSelectedMarket().requestTradingViewData(instance.tradingChart.getMaxCandleCount(),
+            instance.getSelectedMarket().requestTradingViewData(0, instance.tradingChart.getMaxCandleCount(),
                     0,0,500, true ,instance.tradingChart::updateView);
         }
     }

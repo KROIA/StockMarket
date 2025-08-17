@@ -11,8 +11,8 @@ public class MarketOrder extends Order {
 
 
 
-    MarketOrder(UUID playerUUID, long amount, long lockedMoney) {
-        super(playerUUID, amount, lockedMoney);
+    MarketOrder(UUID playerUUID, int bankAccountNumber, long amount, long lockedMoney) {
+        super(playerUUID, bankAccountNumber, amount, lockedMoney);
     }
     MarketOrder(long amount) {
         super(amount);

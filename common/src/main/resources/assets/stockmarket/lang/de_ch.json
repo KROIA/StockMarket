@@ -6,7 +6,7 @@
   "gui.stockmarket.trade_screen.previous_pair.tooltip": "Wähl vorherigä Markt",
   "gui.stockmarket.trade_screen.next_pair.tooltip": "Wähl nächst Markt",
   "gui.stockmarket.trade_screen.your_balance": "Dis Guethabe",
-  "gui.stockmarket.trade_screen.change_item": "Item ändere",
+  "gui.stockmarket.trade_screen.change_market": "Markt wächsle",
   "gui.stockmarket.trade_screen.amount": "Mängi",
   "gui.stockmarket.trade_screen.market_order": "Market Order",
   "gui.stockmarket.trade_screen.limit_order": "Limit Order",

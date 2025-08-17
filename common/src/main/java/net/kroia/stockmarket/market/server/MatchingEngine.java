@@ -78,7 +78,12 @@ public class MatchingEngine implements ServerSaveable {
         {
             if(!processLimitOrder(limitOrder))
             {
-                orderBook.placeLimitOrder(limitOrder);
+                if(limitOrder.getStatus() == Order.Status.PENDING || limitOrder.getStatus() == Order.Status.PARTIAL)
+                    orderBook.placeLimitOrder(limitOrder);
+                else
+                {
+                    serverMarket.cancelOrder(limitOrder);
+                }
             }
         } else if (order instanceof MarketOrder marketOrder) {
             processMarketOrder(marketOrder);

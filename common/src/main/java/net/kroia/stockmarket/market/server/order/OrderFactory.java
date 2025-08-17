@@ -1,7 +1,7 @@
 package net.kroia.stockmarket.market.server.order;
 
 import net.kroia.banksystem.api.IBank;
-import net.kroia.banksystem.api.IBankUser;
+import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.TradingPair;
@@ -16,14 +16,14 @@ public class OrderFactory {
     }
 
 
-    public static LimitOrder createLimitOrder(UUID playerUUID, TradingPair pair, float amount, int price, int priceScaleFactor, int currencyItemFractionScaleFactor, int itemFractionScaleFactor)
+    public static LimitOrder createLimitOrder(UUID playerUUID, int bankAccountNumber, TradingPair pair, float amount, int price, int priceScaleFactor, int currencyItemFractionScaleFactor, int itemFractionScaleFactor)
     {
         long rawAmount = ((long)(amount * priceScaleFactor)*itemFractionScaleFactor/priceScaleFactor);
         long lockedMoney = ServerMarketManager.scaleToBankSystemMoneyAmount((long)(rawAmount>0? rawAmount * price : 0), priceScaleFactor, currencyItemFractionScaleFactor) / itemFractionScaleFactor;
         long lockedItem = (long)((rawAmount<0? -rawAmount : 0));
 
-        if(tryReserveItem(playerUUID, pair, lockedMoney, lockedItem, rawAmount > 0))
-            return new LimitOrder(playerUUID, (long)(rawAmount), price, lockedMoney);
+        if(tryReserveItem(bankAccountNumber, pair, lockedMoney, lockedItem, rawAmount > 0))
+            return new LimitOrder(playerUUID, bankAccountNumber, (long)(rawAmount), price, lockedMoney);
         return null;
     }
     /*public static LimitOrder createLimitOrder(UUID playerUUID, TradingPair pair, long amount, int price, int priceScaleFactor, int currencyItemFractionScaleFactor, int itemFractionScaleFactor, long alreadyFilledAmount)
@@ -41,14 +41,14 @@ public class OrderFactory {
     }
 
 
-    public static MarketOrder createMarketOrder(UUID playerUUID, TradingPair pair, float amount, int currentMarketPrice, int priceScaleFactor, int currencyItemFractionScaleFactor, int itemFractionScaleFactor)
+    public static MarketOrder createMarketOrder(UUID playerUUID, int bankAccountNumber, TradingPair pair, float amount, int currentMarketPrice, int priceScaleFactor, int currencyItemFractionScaleFactor, int itemFractionScaleFactor)
     {
         long rawAmount = ((long)(amount * priceScaleFactor)*itemFractionScaleFactor/priceScaleFactor);
         long lockedMoney = ServerMarketManager.scaleToBankSystemMoneyAmount((long)(rawAmount>0? rawAmount * currentMarketPrice : 0), priceScaleFactor, currencyItemFractionScaleFactor) / itemFractionScaleFactor;
         long lockedItem = (long)((rawAmount<0? -rawAmount : 0));
 
-        if(tryReserveItem(playerUUID, pair, lockedMoney, lockedItem, rawAmount > 0)) {
-            return new MarketOrder(playerUUID, (long)(rawAmount), lockedMoney);
+        if(tryReserveItem(bankAccountNumber, pair, lockedMoney, lockedItem, rawAmount > 0)) {
+            return new MarketOrder(playerUUID, bankAccountNumber, (long)(rawAmount), lockedMoney);
         }
         return null;
     }
@@ -58,25 +58,25 @@ public class OrderFactory {
     }
 
 
-    public static boolean tryReserveItem(UUID playerUUID, TradingPair pair, long moneyAmount, long itemAmount, boolean isBuy)
+    public static boolean tryReserveItem(int bankAccountNumber, TradingPair pair, long moneyAmount, long itemAmount, boolean isBuy)
     {
         if(pair == null || !pair.isValid())
             return false;
 
 
-        IBankUser bankUser = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getUser(playerUUID);
-        if(bankUser == null)
+        IBankAccount account = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getBankAccount(bankAccountNumber);
+        if(account == null)
         {
             //PlayerUtilities.printToClientConsole(player, BankSystemTextMessages.getBankNotFoundMessage(player.getName().getString(), pair.getItem().getName()));
             return false;
         }
 
-        IBank moneyBank = bankUser.getBank(pair.getCurrency());
-        IBank itemBank = bankUser.getBank(pair.getItem());
+        IBank moneyBank = account.getBank(pair.getCurrency());
+        IBank itemBank = account.getBank(pair.getItem());
         if(itemBank == null)
-            itemBank = bankUser.createItemBank(pair.getItem(), 0, true);
+            itemBank = account.createBank(pair.getItem(), 0);
         if(moneyBank == null)
-            moneyBank = bankUser.createItemBank(pair.getCurrency(), 0, true);
+            moneyBank = account.createBank(pair.getCurrency(), 0);
         if(itemBank == null || moneyBank == null)
             return false;
 

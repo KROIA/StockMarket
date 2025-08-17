@@ -10,6 +10,7 @@ import net.minecraft.server.level.ServerPlayer;
 public class UpdateStockMarketBlockEntityPacket extends StockMarketNetworkPacket {
     private BlockPos pos;
     private TradingPair tradingPair;
+    private int selectedBankAccountNumber;
     private float amount;
     private float price;
 
@@ -21,6 +22,7 @@ public class UpdateStockMarketBlockEntityPacket extends StockMarketNetworkPacket
         this.tradingPair = blockEntity.getTradringPair();
         this.amount = blockEntity.getAmount();
         this.price = blockEntity.getPrice();
+        this.selectedBankAccountNumber = blockEntity.getSelectedBankAccountNumber();
     }
 
 
@@ -43,6 +45,9 @@ public class UpdateStockMarketBlockEntityPacket extends StockMarketNetworkPacket
     public float getPrice() {
         return price;
     }
+    public int getSelectedBankAccountNumber() {
+        return selectedBankAccountNumber;
+    }
 
     public static void sendPacketToServer(BlockPos pos, StockMarketBlockEntity blockEntity) {
         new UpdateStockMarketBlockEntityPacket(pos, blockEntity).sendToServer();
@@ -55,6 +60,7 @@ public class UpdateStockMarketBlockEntityPacket extends StockMarketNetworkPacket
         tradingPair.encode(buf);
         buf.writeFloat(amount);
         buf.writeFloat(price);
+        buf.writeInt(selectedBankAccountNumber);
     }
 
     @Override
@@ -68,6 +74,7 @@ public class UpdateStockMarketBlockEntityPacket extends StockMarketNetworkPacket
         this.tradingPair.decode(buf);
         this.amount = buf.readFloat();
         this.price = buf.readFloat();
+        this.selectedBankAccountNumber = buf.readInt();
     }
 
     @Override
@@ -84,6 +91,7 @@ public class UpdateStockMarketBlockEntityPacket extends StockMarketNetworkPacket
         blockEntity.setAmount(this.amount);
         blockEntity.setPrice(this.price);
         blockEntity.setChanged();
+        blockEntity.setSelectedBankAccountNumber(this.selectedBankAccountNumber);
         sender.level().getChunkAt(this.pos).setUnsaved(true);
     }
 }

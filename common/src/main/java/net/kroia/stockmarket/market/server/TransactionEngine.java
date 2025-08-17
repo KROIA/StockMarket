@@ -1,7 +1,8 @@
 package net.kroia.stockmarket.market.server;
 
 import net.kroia.banksystem.api.IBank;
-import net.kroia.banksystem.api.IBankUser;
+import net.kroia.banksystem.api.IBankAccount;
+import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ServerPlayerUtilities;
@@ -39,12 +40,14 @@ public class TransactionEngine {
 
         UUID playerUUID1 = o1.getPlayerUUID();
         UUID playerUUID2 = o2.getPlayerUUID();
-        IBankUser user1 = (playerUUID1!=null?BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getUser(playerUUID1):null);
-        IBankUser user2 = (playerUUID2!=null?BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getUser(playerUUID2):null);
-        IBank moneyBank1 = (user1!=null?user1.getBank(pair.getCurrency()):null);
-        IBank moneyBank2 = (user2!=null?user2.getBank(pair.getCurrency()):null);
-        IBank itemBank1 = (user1!=null?user1.getBank(pair.getItem()):null);
-        IBank itemBank2 = (user2!=null?user2.getBank(pair.getItem()):null);
+        int o1BankAccountNumber = o1.getBankAccountNumber();
+        int o2BankAccountNumber = o2.getBankAccountNumber();
+        IBankAccount account1 = (playerUUID1!=null?BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getBankAccount(o1BankAccountNumber):null);
+        IBankAccount account2 = (playerUUID2!=null?BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getBankAccount(o2BankAccountNumber):null);
+        IBank moneyBank1 = (account1!=null?account1.getBank(pair.getCurrency()):null);
+        IBank moneyBank2 = (account2!=null?account2.getBank(pair.getCurrency()):null);
+        IBank itemBank1 = (account1!=null?account1.getBank(pair.getItem()):null);
+        IBank itemBank2 = (account2!=null?account2.getBank(pair.getItem()):null);
 
         UUID senderUUID = fillAmount > 0 ? playerUUID1 : playerUUID2;
         UUID receiverUUID = fillAmount > 0 ? playerUUID2 : playerUUID1;
@@ -168,8 +171,8 @@ public class TransactionEngine {
                     error("Overflow while filling order from player: " + senderUUID.toString() +
                             " Order1: " + senderOrder + " Order2: " + receiverOrder +
                             " Can't fill order");
-                    ServerPlayerUtilities.printToClientConsole(senderMoneyBank.getPlayerUUID(), status.toString());
-                    ServerPlayerUtilities.printToClientConsole(receiverItemBank.getPlayerUUID(), status.toString());
+                    ServerPlayerUtilities.printToClientConsole(senderUUID, status.toString());
+                    ServerPlayerUtilities.printToClientConsole(receiverUUID, status.toString());
                     return 0;
                 }
                 case FAILED_NOT_ENOUGH_FUNDS: {
@@ -185,7 +188,7 @@ public class TransactionEngine {
                     if (missingItems > 0)
                         missingText += "\n  " + StockMarketTextMessages.getMissingItemsMessage(senderItemID.getName(), missingItems);
 
-                    ServerPlayerUtilities.printToClientConsole(senderMoneyBank.getPlayerUUID(),
+                    ServerPlayerUtilities.printToClientConsole(senderUUID,
                             StockMarketTextMessages.getInsufficientFundToConsumeMessage(receiverOrder.toString(), Bank.getFormattedAmount(currentPrice, priceScaleFactor),
                                     fillVolume,
                                     Bank.getFormattedAmount(money, priceScaleFactor)) + missingText);
@@ -241,9 +244,21 @@ public class TransactionEngine {
             fillAmount = -fillVolume;
 
         UUID playerUUID1 = o1.getPlayerUUID();
-        IBankUser user1 = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getUser(playerUUID1);
-        IBank moneyBank1 = user1.getBank(pair.getCurrency());
-        IBank itemBank1 = user1.getBank(pair.getItem());
+        int bankAccountNumber1 = o1.getBankAccountNumber();
+        IBankAccount bankAccount1 = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getBankAccount(bankAccountNumber1);
+        if(bankAccount1 == null || !bankAccount1.hasPermission(playerUUID1, BankPermission.DEPOSIT.getValue() | BankPermission.WITHDRAW.getValue()))
+        {
+            o1.markAsInvalid("You don't have permission to fill this order");
+            return 0;
+        }
+        IBank moneyBank1 = bankAccount1.getBank(pair.getCurrency());
+        IBank itemBank1 = bankAccount1.getBank(pair.getItem());
+
+        if(moneyBank1 == null || itemBank1 == null)
+        {
+            o1.markAsInvalid("Missing bank for item or currency");
+            return 0;
+        }
 
         long moneyToTransfer = fillVolume * ServerMarketManager.scaleToBankSystemMoneyAmount(currentPrice, priceScaleFactor, currencyScaleFactor) / itemBank1.getItemFractionScaleFactor();
         if(o1.isBuy())

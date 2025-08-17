@@ -43,6 +43,7 @@ public abstract class Order implements ServerSaveable, INetworkPayloadConverter 
 
     protected long orderID;
     protected UUID playerUUID;
+    protected int bankAccountNumber = 0;
     protected long amount;
     protected long filledAmount = 0;
     protected long transferedMoney = 0;
@@ -50,9 +51,10 @@ public abstract class Order implements ServerSaveable, INetworkPayloadConverter 
     protected long lockedMoney = 0;
     protected Status status = Status.PENDING;
 
-    protected Order(UUID playerUUID, long amount, long lockedMoney) {
+    protected Order(UUID playerUUID, int bankAccountNumber, long amount, long lockedMoney) {
         this.orderID = uniqueOrderID();
         this.playerUUID = playerUUID;
+        this.bankAccountNumber = bankAccountNumber;
         this.amount = amount;
         this.lockedMoney = lockedMoney;
     }
@@ -95,6 +97,7 @@ public abstract class Order implements ServerSaveable, INetworkPayloadConverter 
         transferedMoney = other.transferedMoney;
         status = other.status;
         invalidReason = other.invalidReason;
+        bankAccountNumber = other.bankAccountNumber;
     }
 
     public void markAsBot() {
@@ -144,7 +147,8 @@ public abstract class Order implements ServerSaveable, INetworkPayloadConverter 
                 filledAmount == other.filledAmount &&
                 lockedMoney == other.lockedMoney &&
                 transferedMoney == other.transferedMoney &&
-                status == other.status;
+                status == other.status &&
+                bankAccountNumber == other.bankAccountNumber;
     }
 
     public boolean isOwner(@NotNull ServerPlayer player)
@@ -161,6 +165,9 @@ public abstract class Order implements ServerSaveable, INetworkPayloadConverter 
     }
     public @Nullable UUID getPlayerUUID() {
         return playerUUID;
+    }
+    public int getBankAccountNumber() {
+        return bankAccountNumber;
     }
     public long getOrderID() {
         return orderID;
@@ -256,6 +263,7 @@ public abstract class Order implements ServerSaveable, INetworkPayloadConverter 
     @Override
     public void encode(FriendlyByteBuf buf) {
         buf.writeLong(orderID);
+        buf.writeInt(bankAccountNumber);
         buf.writeLong(amount);
         buf.writeLong(filledAmount);
         buf.writeLong(lockedMoney);
@@ -271,6 +279,7 @@ public abstract class Order implements ServerSaveable, INetworkPayloadConverter 
     public void decode(FriendlyByteBuf buf)
     {
         orderID = buf.readLong();
+        bankAccountNumber = buf.readInt();
         amount = buf.readLong();
         filledAmount = buf.readLong();
         lockedMoney = buf.readLong();
@@ -295,6 +304,7 @@ public abstract class Order implements ServerSaveable, INetworkPayloadConverter 
         tag.putLong("transferedMoney", transferedMoney);
         tag.putString("status", status.toString());
         tag.putString("invalidReason", invalidReason);
+        tag.putInt("bankAccountNumber", bankAccountNumber);
 
         return true;
     }
@@ -323,6 +333,10 @@ public abstract class Order implements ServerSaveable, INetworkPayloadConverter 
         transferedMoney = tag.getLong("transferedMoney");
         status = Status.valueOf(tag.getString("status"));
         invalidReason = tag.getString("invalidReason");
+        if(tag.contains("bankAccountNumber"))
+            bankAccountNumber = tag.getInt("bankAccountNumber");
+        else
+            return false;
         return true;
     }
 
@@ -336,6 +350,7 @@ public abstract class Order implements ServerSaveable, INetworkPayloadConverter 
         jsonObject.addProperty("transferedMoney", transferedMoney);
         jsonObject.addProperty("invalidReason", invalidReason);
         jsonObject.addProperty("status", status.toString());
+        jsonObject.addProperty("bankAccountNumber", bankAccountNumber);
         return jsonObject;
     }
 

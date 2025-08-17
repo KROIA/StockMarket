@@ -52,7 +52,7 @@ public class ClientMarket implements IClientMarket {
     {
         if(checkDeadAndDebug())
             return;
-        TradingViewDataRequest.Input input = new TradingViewDataRequest.Input(tradingPair,maxHistoryPointCount, minimalVisiblePrice, maximalVisiblePrice, tileCount, requestBotTargetPrice);
+        TradingViewDataRequest.Input input = new TradingViewDataRequest.Input(tradingPair,0, maxHistoryPointCount, minimalVisiblePrice, maximalVisiblePrice, tileCount, requestBotTargetPrice);
         StockMarketNetworking.ORDER_BOOK_VOLUME_REQUEST.sendRequestToServer(input, callback);
     }
     @Override
@@ -60,7 +60,7 @@ public class ClientMarket implements IClientMarket {
     {
         if(checkDeadAndDebug())
             return;
-        TradingViewDataRequest.Input input = new TradingViewDataRequest.Input(tradingPair, false);
+        TradingViewDataRequest.Input input = new TradingViewDataRequest.Input(tradingPair, 0, false);
         StockMarketNetworking.ORDER_BOOK_VOLUME_REQUEST.sendRequestToServer(input, callback);
     }
     @Override
@@ -82,38 +82,38 @@ public class ClientMarket implements IClientMarket {
         StockMarketNetworking.ORDER_CHANGE_REQUEST.sendRequestToServer(changeData, callback);
     }
     @Override
-    public void requestCreateMarketOrder(float volume,
+    public void requestCreateMarketOrder(int bankAccountNumber, float volume,
                                          Consumer<Boolean> callback)
     {
         if(checkDeadAndDebug())
             return;
-        requestCreateMarketOrder(getPlayerUUID(), volume, callback);
+        requestCreateMarketOrder(getPlayerUUID(), bankAccountNumber, volume, callback);
     }
     @Override
-    public void requestCreateMarketOrder(UUID orderOwnerPlayerUUID, float volume,
+    public void requestCreateMarketOrder(UUID orderOwnerPlayerUUID, int bankAccountNumber, float volume,
                                          Consumer<Boolean> callback)
     {
         if(checkDeadAndDebug())
             return;
-        OrderCreateData createData = new OrderCreateData(orderOwnerPlayerUUID, tradingPair, volume);
+        OrderCreateData createData = new OrderCreateData(orderOwnerPlayerUUID, bankAccountNumber, tradingPair, volume);
         StockMarketNetworking.ORDER_CREATE_REQUEST.sendRequestToServer(createData, callback);
     }
     @Override
-    public void requestCreateLimitOrder(float volume, float limitPrice,
+    public void requestCreateLimitOrder(int bankAccountNumber, float volume, float limitPrice,
                                         Consumer<Boolean> callback)
     {
         if(checkDeadAndDebug())
             return;
-        requestCreateLimitOrder(getPlayerUUID(), volume, limitPrice, callback);
+        requestCreateLimitOrder(getPlayerUUID(), bankAccountNumber, volume, limitPrice, callback);
     }
 
     @Override
-    public void requestCreateLimitOrder(UUID orderOwnerPlayerUUID, float volume, float limitPrice,
+    public void requestCreateLimitOrder(UUID orderOwnerPlayerUUID, int bankAccountNumber, float volume, float limitPrice,
                                         Consumer<Boolean> callback)
     {
         if(checkDeadAndDebug())
             return;
-        OrderCreateData createData = new OrderCreateData(orderOwnerPlayerUUID, tradingPair, volume, limitPrice);
+        OrderCreateData createData = new OrderCreateData(orderOwnerPlayerUUID, bankAccountNumber, tradingPair, volume, limitPrice);
         StockMarketNetworking.ORDER_CREATE_REQUEST.sendRequestToServer(createData, callback);
     }
 
@@ -156,25 +156,25 @@ public class ClientMarket implements IClientMarket {
     }
 
     @Override
-    public void requestTradingViewData(int maxHistoryPointCount, float minimalVisiblePrice, float maximalVisiblePrice, int tileCount, boolean requestBotTargetPrice,
+    public void requestTradingViewData(int bankAccountNumber, int maxHistoryPointCount, float minimalVisiblePrice, float maximalVisiblePrice, int tileCount, boolean requestBotTargetPrice,
                                        Consumer<TradingViewData> callback) {
         if(checkDeadAndDebug())
             return;
-        TradingViewDataRequest.Input input = new TradingViewDataRequest.Input(tradingPair, maxHistoryPointCount, minimalVisiblePrice, maximalVisiblePrice, tileCount, requestBotTargetPrice);
+        TradingViewDataRequest.Input input = new TradingViewDataRequest.Input(tradingPair, bankAccountNumber, maxHistoryPointCount, minimalVisiblePrice, maximalVisiblePrice, tileCount, requestBotTargetPrice);
         StockMarketNetworking.TRADING_VIEW_DATA_REQUEST.sendRequestToServer(input, callback);
     }
     @Override
-    public void requestTradingViewData(Consumer<TradingViewData> callback, boolean requestBotTargetPrice) {
+    public void requestTradingViewData(int bankAccountNumber, Consumer<TradingViewData> callback, boolean requestBotTargetPrice) {
         if(checkDeadAndDebug())
             return;
-        TradingViewDataRequest.Input input = new TradingViewDataRequest.Input(tradingPair, requestBotTargetPrice);
+        TradingViewDataRequest.Input input = new TradingViewDataRequest.Input(tradingPair, bankAccountNumber, requestBotTargetPrice);
         StockMarketNetworking.TRADING_VIEW_DATA_REQUEST.sendRequestToServer(input, callback);
     }
     @Override
-    public void requestTradingViewData(Consumer<TradingViewData> callback) {
+    public void requestTradingViewData(int bankAccountNumber, Consumer<TradingViewData> callback) {
         if(checkDeadAndDebug())
             return;
-        TradingViewDataRequest.Input input = new TradingViewDataRequest.Input(tradingPair, false);
+        TradingViewDataRequest.Input input = new TradingViewDataRequest.Input(tradingPair, bankAccountNumber, false);
         StockMarketNetworking.TRADING_VIEW_DATA_REQUEST.sendRequestToServer(input, callback);
     }
 

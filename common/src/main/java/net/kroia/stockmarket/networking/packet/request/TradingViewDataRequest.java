@@ -18,25 +18,29 @@ public class TradingViewDataRequest extends StockMarketGenericRequest<TradingVie
         public final float maxVisiblePrice;
         public final int orderBookTileCount;
         public final boolean requestBotTargetPrice;
+        public final int bankAccountNumber;
 
-        public Input(TradingPair pair, int maxHistoryPointCount, float minVisiblePrice, float maxVisiblePrice, int orderBookTileCount, boolean requestBotTargetPrice) {
+        public Input(TradingPair pair, int bankAccountNumber, int maxHistoryPointCount, float minVisiblePrice, float maxVisiblePrice, int orderBookTileCount, boolean requestBotTargetPrice) {
             this.tradingPairData = new TradingPairData(pair);
+            this.bankAccountNumber = bankAccountNumber;
             this.maxHistoryPointCount = maxHistoryPointCount;
             this.minVisiblePrice = minVisiblePrice;
             this.maxVisiblePrice = maxVisiblePrice;
             this.orderBookTileCount = orderBookTileCount;
             this.requestBotTargetPrice = requestBotTargetPrice;
         }
-        public Input(TradingPair pair, boolean requestBotTargetPrice) {
+        public Input(TradingPair pair, int bankAccountNumber, boolean requestBotTargetPrice) {
             this.tradingPairData = new TradingPairData(pair);
+            this.bankAccountNumber = bankAccountNumber;
             this.maxHistoryPointCount = -1; // Default value, can be set later
             this.minVisiblePrice = 0;
             this.maxVisiblePrice = 0;
             this.orderBookTileCount = 0;
             this.requestBotTargetPrice = requestBotTargetPrice; // Default value, can be set later
         }
-        private Input(TradingPairData tradingPairData, int maxHistoryPointCount, float minVisiblePrice, float maxVisiblePrice, int orderBookTileCount, boolean requestBotTargetPrice) {
+        private Input(TradingPairData tradingPairData, int bankAccountNumber, int maxHistoryPointCount, float minVisiblePrice, float maxVisiblePrice, int orderBookTileCount, boolean requestBotTargetPrice) {
             this.tradingPairData = tradingPairData;
+            this.bankAccountNumber = bankAccountNumber;
             this.maxHistoryPointCount = maxHistoryPointCount;
             this.minVisiblePrice = minVisiblePrice;
             this.maxVisiblePrice = maxVisiblePrice;
@@ -51,6 +55,7 @@ public class TradingViewDataRequest extends StockMarketGenericRequest<TradingVie
         @Override
         public void encode(FriendlyByteBuf buf) {
             tradingPairData.encode(buf);
+            buf.writeInt(bankAccountNumber);
             buf.writeInt(maxHistoryPointCount);
             buf.writeFloat(minVisiblePrice);
             buf.writeFloat(maxVisiblePrice);
@@ -60,12 +65,13 @@ public class TradingViewDataRequest extends StockMarketGenericRequest<TradingVie
 
         public static Input decode(FriendlyByteBuf buf) {
             TradingPairData tradingPairData = TradingPairData.decode(buf);
+            int bankAccountNumber = buf.readInt();
             int maxHistoryPointCount = buf.readInt();
             float minVisiblePrice = buf.readFloat();
             float maxVisiblePrice = buf.readFloat();
             int orderBookTileCount = buf.readInt();
             boolean requestBotTargetPrice = buf.readBoolean();
-            return new Input(tradingPairData, maxHistoryPointCount, minVisiblePrice, maxVisiblePrice, orderBookTileCount, requestBotTargetPrice);
+            return new Input(tradingPairData,bankAccountNumber, maxHistoryPointCount, minVisiblePrice, maxVisiblePrice, orderBookTileCount, requestBotTargetPrice);
         }
     }
 
@@ -85,7 +91,7 @@ public class TradingViewDataRequest extends StockMarketGenericRequest<TradingVie
         boolean requestBotTargetPrice = input.requestBotTargetPrice && playerIsAdmin(sender);
         return BACKEND_INSTANCES.SERVER_MARKET_MANAGER.getTradingViewData(
                 input.tradingPairData.toTradingPair(),
-                sender.getUUID(),
+                input.bankAccountNumber,
                 input.maxHistoryPointCount,
                 input.minVisiblePrice,
                 input.maxVisiblePrice,

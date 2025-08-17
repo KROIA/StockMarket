@@ -6,7 +6,6 @@ import net.kroia.stockmarket.market.server.OrderBook;
 import net.kroia.stockmarket.market.server.VirtualOrderBook;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
 import net.kroia.stockmarket.market.server.order.Order;
-import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -108,7 +107,7 @@ public interface IServerMarket {
      * Gets the trading view data for the market.
      * This data is used to visualize the trading view chart.
      * @Note The TradingViewData is used as payload for sending it to the client over the network.
-     * @param player the UUID for which the orders get requested to be visualized in the trading view.
+     * @param bankAccountNumber the bankAccountNumber for which the orders get requested to be visualized in the trading view.
      * @param maxHistoryPointCount the maximum number of history points to return.
      *                             If set to -1, all history points are returned.
      * @param minVisiblePrice minimum visible price for the chart. (can be 0)
@@ -118,7 +117,7 @@ public interface IServerMarket {
      *                              (Do not send this information to non admin players)
      * @return TradingViewData containing the trading view data.
      */
-    TradingViewData getTradingViewData(@NotNull UUID player,
+    TradingViewData getTradingViewData(int bankAccountNumber,
                                        int maxHistoryPointCount,
                                        float minVisiblePrice,
                                        float maxVisiblePrice,
@@ -128,10 +127,10 @@ public interface IServerMarket {
     /**
      * Gets the trading view data for the market.
      * @Note The TradingViewData is used as payload for sending it to the client over the network.
-     * @param player the UUID for which the orders get requested to be visualized in the trading view.
+     * @param bankAccountNumber the bankAccountNumber for which the orders get requested to be visualized in the trading view.
      * @return TradingViewData containing the trading view data.
      */
-    TradingViewData getTradingViewData(@NotNull UUID player);
+    TradingViewData getTradingViewData(int bankAccountNumber);
 
     /**
      * Gets the settings data for this market.
@@ -357,21 +356,23 @@ public interface IServerMarket {
     /**
      * Creates a limit order for the player.
      * @param playerUUID the UUID of the player for which the order is created.
+     * @param bankAccountNumber the bank account number used for the order.
      * @param amount the amount of items to buy or sell.
      *               Positive values indicate a buy order, negative values indicate a sell order.
      * @param price the price per item in real currency.
      * @return true if the order was successfully created, false otherwise.
      */
-    boolean createLimitOrder(UUID playerUUID, float amount, float price);
+    boolean createLimitOrder(UUID playerUUID, int bankAccountNumber, float amount, float price);
 
     /**
      * Creates a market order for the player.
      * @param playerUUID the UUID of the player for which the order is created.
+     * @param bankAccountNumber the bank account number used for the order.
      * @param amount the amount of items to buy or sell.
      *               Positive values indicate a buy order, negative values indicate a sell order.
      * @return true if the order was successfully created, false otherwise.
      */
-    boolean createMarketOrder(UUID playerUUID, float amount);
+    boolean createMarketOrder(UUID playerUUID, int bankAccountNumber, float amount);
 
     /**
      * Creates a limit order for the bot.

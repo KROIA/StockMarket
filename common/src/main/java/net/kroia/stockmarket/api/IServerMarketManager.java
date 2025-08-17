@@ -108,7 +108,7 @@ public interface IServerMarketManager  {
      * Gets the trading view data for the given market.
      * This data is used to visualize the trading view chart.
      * @Note The TradingViewData is used as payload for sending it to the client over the network.
-     * @param player the UUID for which the orders get requested to be visualized in the trading view.
+     * @param bankAccountNumber the bankAccountNumber for which the orders get requested to be visualized in the trading view.
      * @param maxHistoryPointCount the maximum number of history points to return.
      *                             If set to -1, all history points are returned.
      * @param minVisiblePrice minimum visible price for the chart. (can be 0)
@@ -119,7 +119,7 @@ public interface IServerMarketManager  {
      * @return TradingViewData containing the trading view data.
      */
     @Nullable TradingViewData getTradingViewData(@NotNull TradingPair pair,
-                                                 @NotNull UUID player,
+                                                 int bankAccountNumber,
                                                  int maxHistoryPointCount,
                                                  float minVisiblePrice,
                                                  float maxVisiblePrice,
@@ -129,10 +129,10 @@ public interface IServerMarketManager  {
     /**
      * Gets the trading view data for the given market.
      * @Note The TradingViewData is used as payload for sending it to the client over the network.
-     * @param player the UUID for which the orders get requested to be visualized in the trading view.
+     * @param bankAccountNumber the bankAccountNumber for which the orders get requested to be visualized in the trading view.
      * @return TradingViewData containing the trading view data.
      */
-    @Nullable TradingViewData getTradingViewData(@NotNull TradingPair pair, @NotNull UUID player);
+    @Nullable TradingViewData getTradingViewData(@NotNull TradingPair pair, int bankAccountNumber);
 
     /**
      * Gets the settings data for the given market.

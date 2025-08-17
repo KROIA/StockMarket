@@ -60,6 +60,14 @@ public class StockMarketModBackend implements StockMarketAPI {
 
     StockMarketModBackend()
     {
+        INSTANCES.BANK_SYSTEM_API = null;
+        INSTANCES.SERVER_SETTINGS = null;
+        INSTANCES.SERVER_DEFAULT_PRICES = null;
+        INSTANCES.SERVER_DATA_HANDLER = null;
+        INSTANCES.SERVER_MARKET_MANAGER = null;
+        INSTANCES.CLIENT_MARKET_MANAGER = null;
+        INSTANCES.SERVER_EVENTS = null;
+        INSTANCES.NETWORKING = null;
         INSTANCES.LOGGER = new StockMarketModLogger(INSTANCES);
         StockMarketDataHandler.setBackend(INSTANCES);
         ServerMarketManager.setBackend(INSTANCES);
@@ -155,9 +163,7 @@ public class StockMarketModBackend implements StockMarketAPI {
     public static void onServerStop(MinecraftServer server) {
         TickEvent.SERVER_POST.unregister(StockMarketModBackend::onServerTick);
         saveDataToFiles(server);
-        INSTANCES.SERVER_SETTINGS = null;
-        INSTANCES.SERVER_DATA_HANDLER = null;
-        INSTANCES.SERVER_MARKET_MANAGER = null;
+
         INSTANCES.SERVER_EVENTS.removeListeners();
     }
 

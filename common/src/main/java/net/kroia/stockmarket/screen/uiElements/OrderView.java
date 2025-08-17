@@ -1,7 +1,6 @@
 package net.kroia.stockmarket.screen.uiElements;
 
 import net.kroia.banksystem.banking.bank.Bank;
-import net.kroia.banksystem.banking.bank.MoneyBank;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.stockmarket.market.clientdata.OrderReadData;
@@ -115,7 +114,7 @@ public class OrderView extends StockMarketGuiElement {
 
     @Override
     protected void render() {
-        filledLabel.setText(MoneyBank.getNormalizedAmount(Math.abs(order.filledAmount),itemFractionScaleFactor));
+        filledLabel.setText(Bank.getNormalizedAmount(Math.abs(order.filledAmount),itemFractionScaleFactor));
     }
 
 }

@@ -245,6 +245,21 @@ public class OrderBook implements ServerSaveable {
         }
         return orders;
     }
+    public List<LimitOrder> getOrders(int bankAccountNumber)
+    {
+        ArrayList<LimitOrder> orders = new ArrayList<>();
+        for(LimitOrder order : limitBuyOrders)
+        {
+            if(order.getBankAccountNumber() == bankAccountNumber)
+                orders.add(order);
+        }
+        for(LimitOrder order : limitSellOrders)
+        {
+            if(order.getBankAccountNumber() == bankAccountNumber)
+                orders.add(order);
+        }
+        return orders;
+    }
     public PriorityQueue<LimitOrder> getBuyOrders()
     {
         return limitBuyOrders;

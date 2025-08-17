@@ -31,7 +31,7 @@ public class TradeScreen extends StockMarketGuiScreen {
     public static final Component PREVIOUS_PAIR_TOOLTIP = Component.translatable(PREFIX+"previous_pair.tooltip");
     public static final Component NEXT_PAIR_TOOLTIP  = Component.translatable(PREFIX+"next_pair.tooltip");
     public static final Component YOUR_BALANCE_LABEL = Component.translatable(PREFIX+"your_balance");
-    public static final Component CHANGE_ITEM_BUTTON = Component.translatable(PREFIX+"change_item");
+    public static final Component CHANGE_MARKET_BUTTON = Component.translatable(PREFIX+"change_market");
     public static final Component AMOUNT_LABEL = Component.translatable(PREFIX+"amount");
     public static final Component MARKET_ORDER_LABEL = Component.translatable(PREFIX+"market_order");
     public static final Component LIMIT_ORDER_LABEL = Component.translatable(PREFIX+"limit_order");
@@ -67,15 +67,16 @@ public class TradeScreen extends StockMarketGuiScreen {
     private final TimerMillis updateTimer;
     private List<TradingPair> tradingPairsCarusel;
     private int currentTradingPairCaruselIndex = 0;
+    private int selectedBankAccountNumber = 0;
 
     public TradeScreen(StockMarketBlockEntity blockEntity) {
-        this(blockEntity.getTradringPair(), blockEntity.getAmount(), blockEntity.getPrice());
+        this(blockEntity.getTradringPair(), blockEntity.getSelectedBankAccountNumber(), blockEntity.getAmount(), blockEntity.getPrice());
         this.blockEntity = blockEntity;
 
 
 
     }
-    public TradeScreen(TradingPair currentPair, float currentAmount, float currentPrice) {
+    public TradeScreen(TradingPair currentPair, int selectedBankAccountNumber, float currentAmount, float currentPrice) {
         super(TITLE);
         this.updateTimer = new TimerMillis(true); // Update every second
         updateTimer.start(100);
@@ -88,7 +89,9 @@ public class TradeScreen extends StockMarketGuiScreen {
         // Create Gui Elements
         tradingChart = new TradingChartWidget(this::onOrderChange);
         this.activeOrderListView = new OrderListView(this::cancelOrder);
-        this.tradingPanel = new TradePanel(this::onSelectItemButtonPressed,
+        this.tradingPanel = new TradePanel(this,
+                this::onSelectItemButtonPressed,
+                (bankAccountNr) -> this.selectedBankAccountNumber = bankAccountNr,
                 this::onBuyMarketButtonPressed,
                 this::onSellMarketButtonPressed,
                 this::onBuyLimitButtonPressed,
@@ -106,16 +109,29 @@ public class TradeScreen extends StockMarketGuiScreen {
         addElement(activeOrderListView);
         addElement(tradingPanel);
 
+        this.selectedBankAccountNumber = selectedBankAccountNumber;
+        if(selectedBankAccountNumber <= 0) {
+            getBankManager().requestPersonalBankAccountData(Minecraft.getInstance().player.getUUID(), (bankData) -> {
+                this.selectedBankAccountNumber = bankData.accountNumber;
+                getBankManager().requestBankAccountData(this.selectedBankAccountNumber, tradingPanel::setAccountData);
+            });
+        }
+        else
+        {
+            getBankManager().requestBankAccountData(this.selectedBankAccountNumber, tradingPanel::setAccountData);
+        }
+
         getMarketManager().requestTradingPairs(
                 (tradingPairs) -> {
                     tradingPairsCarusel = tradingPairs;
                     setPreviousNextMarket();
                 });
 
+
         TickEvent.PLAYER_POST.register(TradeScreen::onClientTick);
     }
     public TradeScreen() {
-        this(new TradingPair(new ItemID("minecraft:diamond"), new ItemID(BankSystemItems.MONEY.get().getDefaultInstance())), 0, 0.f);
+        this(new TradingPair(new ItemID("minecraft:diamond"), new ItemID(BankSystemItems.MONEY.get().getDefaultInstance())),0, 0, 0.f);
 
 
     }
@@ -164,6 +180,7 @@ public class TradeScreen extends StockMarketGuiScreen {
             blockEntity.setTradingPair(tradingPair);
             blockEntity.setAmount(tradingPanel.getAmount());
             blockEntity.setPrice(tradingPanel.getLimitPrice());
+            blockEntity.setSelectedBankAccountNumber(selectedBankAccountNumber);
             UpdateStockMarketBlockEntityPacket.sendPacketToServer(blockEntity.getBlockPos(), blockEntity);
         }
     }
@@ -176,6 +193,7 @@ public class TradeScreen extends StockMarketGuiScreen {
             instance.tradingPanel.setTradingPair(instance.tradingPair);
             instance.tradingPanel.setAmount(packet.getAmount());
             instance.tradingPanel.setLimitPrice(packet.getPrice());
+            instance.selectedBankAccountNumber = packet.getSelectedBankAccountNumber();
         }
     }
 
@@ -193,7 +211,7 @@ public class TradeScreen extends StockMarketGuiScreen {
 
         if(instance.updateTimer.check() && instance.getSelectedMarket() != null)
         {
-            instance.getSelectedMarket().requestTradingViewData(instance.tradingChart.getMaxCandleCount(), 0,0,500, false ,instance::updateView);
+            instance.getSelectedMarket().requestTradingViewData(instance.selectedBankAccountNumber, instance.tradingChart.getMaxCandleCount(), 0,0,500, false ,instance::updateView);
         }
     }
 
@@ -210,7 +228,8 @@ public class TradeScreen extends StockMarketGuiScreen {
         tradingPanel.updateView(data);
 
 
-        activeOrderListView.updateActiveOrders(data.openOrdersData, data.itemBankData.itemFractionScaleFactor);
+        if(data.itemBankData != null)
+            activeOrderListView.updateActiveOrders(data.openOrdersData, data.itemBankData.itemFractionScaleFactor);
         //candleStickChart.updateOrderDisplay(data.openOrdersData);
 
         if(marketWasOpen != data.marketIsOpen)
@@ -232,7 +251,7 @@ public class TradeScreen extends StockMarketGuiScreen {
     private void onSellMarketButtonPressed() {
         float amount = tradingPanel.getAmount();
         if(amount > 0)
-            getSelectedMarket().requestCreateMarketOrder(-amount, (success) -> {
+            getSelectedMarket().requestCreateMarketOrder(selectedBankAccountNumber, -amount, (success) -> {
                 if(success)
                 {
                     debug("Market sell order created successfully.");
@@ -247,7 +266,7 @@ public class TradeScreen extends StockMarketGuiScreen {
     private void onBuyMarketButtonPressed() {
         float amount = tradingPanel.getAmount();
         if(amount > 0)
-            getSelectedMarket().requestCreateMarketOrder(amount, (success) -> {
+            getSelectedMarket().requestCreateMarketOrder(selectedBankAccountNumber, amount, (success) -> {
                 if(success)
                 {
                     debug("Market buy order created successfully.");
@@ -263,7 +282,7 @@ public class TradeScreen extends StockMarketGuiScreen {
         float amount = tradingPanel.getAmount();
         float price = tradingPanel.getLimitPrice();
         if(amount > 0 && price >= 0)
-            getSelectedMarket().requestCreateLimitOrder(-amount, price, (success) -> {
+            getSelectedMarket().requestCreateLimitOrder(selectedBankAccountNumber, -amount, price, (success) -> {
                 if(success)
                 {
                     debug("Limit sell order created successfully.");
@@ -279,7 +298,7 @@ public class TradeScreen extends StockMarketGuiScreen {
         float amount = tradingPanel.getAmount();
         float price = tradingPanel.getLimitPrice();
         if(amount > 0 && price >= 0)
-            getSelectedMarket().requestCreateLimitOrder(amount, price, (success) -> {
+            getSelectedMarket().requestCreateLimitOrder(selectedBankAccountNumber, amount, price, (success) -> {
                 if(success)
                 {
                     debug("Limit buy order created successfully.");

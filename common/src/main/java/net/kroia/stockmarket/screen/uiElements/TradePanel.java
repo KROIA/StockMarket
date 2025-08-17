@@ -1,7 +1,8 @@
 package net.kroia.stockmarket.screen.uiElements;
 
 import net.kroia.banksystem.banking.bank.Bank;
-import net.kroia.banksystem.banking.bank.MoneyBank;
+import net.kroia.banksystem.banking.clientdata.BankAccountData;
+import net.kroia.banksystem.screen.custom.BankAccountSelectionScreen;
 import net.kroia.modutilities.ColorUtilities;
 import net.kroia.modutilities.gui.elements.*;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
@@ -10,6 +11,10 @@ import net.kroia.stockmarket.market.clientdata.TradingViewData;
 import net.kroia.stockmarket.util.PriceHistory;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.kroia.stockmarket.util.StockMarketTextMessages;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+
+import java.util.function.Consumer;
 
 import static net.kroia.stockmarket.screen.custom.TradeScreen.*;
 
@@ -26,10 +31,11 @@ public class TradePanel extends StockMarketGuiElement {
 
     private final TradingPairView previousTradingPairView;
     private final TradingPairView nextTradingPairView;
-    private final Button changeItemButton;
+    private final Button changeMarketButton;
 
 
     private final Frame balanceFrame;
+    private final BankAccountSelectionScreen.AccountButton selectAccountButton;
     private final Label yourItemBalanceLabel;
     private final ItemView currentItemView;
     private final Label currentItemBalanceLabel;
@@ -64,7 +70,9 @@ public class TradePanel extends StockMarketGuiElement {
     private float smallestTradableVolume = 1;
     private float currentItemBalance = 0;
     private float currentMoneyBalance = 0;
-    public TradePanel(Runnable onItemChangeButtonClicked,
+    public TradePanel(Screen parent,
+                      Runnable onItemChangeButtonClicked,
+                      Consumer<Integer> onBankAccountSelected,
                       Runnable onMarketBuyButtonClicked,
                       Runnable onMarketSellButtonClicked,
                       Runnable onLimitBuyButtonClicked,
@@ -82,13 +90,21 @@ public class TradePanel extends StockMarketGuiElement {
         nextTradingPairView.setHoverTooltipSupplier(NEXT_PAIR_TOOLTIP::getString);
         nextTradingPairView.setHoverTooltipMousePositionAlignment(Alignment.TOP_RIGHT);
 
-        changeItemButton = new Button(CHANGE_ITEM_BUTTON.getString());
-        changeItemButton.setOnFallingEdge(onItemChangeButtonClicked);
+        changeMarketButton = new Button(CHANGE_MARKET_BUTTON.getString());
+        changeMarketButton.setOnFallingEdge(onItemChangeButtonClicked);
         setPreviousTradingPair(null);
         setNextTradingPair(null);
 
         balanceFrame = new Frame();
         balanceFrame.setEnableBackground(false);
+        selectAccountButton = new BankAccountSelectionScreen.AccountButton();
+        selectAccountButton.setOnFallingEdge(() -> {
+            BankAccountSelectionScreen selectionScreen = new BankAccountSelectionScreen(parent, Minecraft.getInstance().player.getUUID(), (accountNumber) -> {
+                onBankAccountSelected.accept(accountNumber);
+                getBankManager().requestBankAccountData(accountNumber, this::setAccountData);
+            });
+            Minecraft.getInstance().setScreen(selectionScreen);
+        });
         yourItemBalanceLabel = new Label(YOUR_BALANCE_LABEL.getString());
         yourItemBalanceLabel.setAlignment(Alignment.CENTER);
         currentItemView = new ItemView();
@@ -97,6 +113,7 @@ public class TradePanel extends StockMarketGuiElement {
         moneyItemView = new ItemView();
         currentMoneyBalanceLabel = new Label();
         currentMoneyBalanceLabel.setAlignment(Alignment.LEFT);
+        balanceFrame.addChild(selectAccountButton);
         balanceFrame.addChild(yourItemBalanceLabel);
         balanceFrame.addChild(currentItemView);
         balanceFrame.addChild(currentItemBalanceLabel);
@@ -262,7 +279,7 @@ public class TradePanel extends StockMarketGuiElement {
         addChild(currentPriceTextLabel);
         addChild(currentPriceLabel);
         //addChild(currentMoneyBalanceLabel);
-        addChild(changeItemButton);
+        addChild(changeMarketButton);
         addChild(amountLabel);
         addChild(amountTextBox);
         addChild(marketOrderLabel);
@@ -281,6 +298,11 @@ public class TradePanel extends StockMarketGuiElement {
         }
     }
 
+    public void setAccountData(BankAccountData accountData)
+    {
+        selectAccountButton.setAccountData(accountData);
+    }
+
     public void setTradingPair(TradingPair pair)
     {
         currentItemView.setItemStack(pair.getItem().getStack());
@@ -291,16 +313,38 @@ public class TradePanel extends StockMarketGuiElement {
     {
         PriceHistory history = data.priceHistoryData.toHistory();
         int priceScaleFactor = history.getPriceScaleFactor();
-        currentItemBalanceLabel.setText(MoneyBank.getNormalizedAmount(data.itemBankData.balance, data.itemBankData.itemFractionScaleFactor));
-        currentMoneyBalanceLabel.setText(MoneyBank.getNormalizedAmount(data.currencyBankData.balance, data.currencyBankData.itemFractionScaleFactor));
+        if(data.itemBankData != null)
+        {
+            currentItemBalanceLabel.setText(data.itemBankData.getNormalizedBalance());
+            this.itemFractionScaleFactor = data.itemBankData.itemFractionScaleFactor;
+            currentItemBalance = (float)data.itemBankData.balance/ data.itemBankData.itemFractionScaleFactor;
+        }
+        else
+        {
+            currentItemBalanceLabel.setText("0");
+            this.itemFractionScaleFactor = 1;
+            currentItemBalance = 0;
+        }
+        if(data.currencyBankData != null)
+        {
+            currentMoneyBalanceLabel.setText(data.currencyBankData.getNormalizedBalance());
+            currentMoneyBalance = (float)data.currencyBankData.balance / data.currencyBankData.itemFractionScaleFactor;
+        }
+        else
+        {
+            currentMoneyBalanceLabel.setText("0");
+            currentMoneyBalance = 0;
+        }
+
+
         currentMarketPrice = history.getCurrentRealPrice();
         this.currencyFractionScaleFactor = history.getCurrencyItemFractionScaleFactor();
-        this.itemFractionScaleFactor = data.itemBankData.itemFractionScaleFactor;
-        //currentPriceLabel.setText(MoneyBank.getNormalizedAmount(currentMarketPrice, currencyFractionScaleFactor));
-        currentPriceLabel.setText(MoneyBank.getNormalizedAmount(currentMarketPrice, priceScaleFactor));
 
-        currentItemBalance = (float)data.itemBankData.balance/ data.itemBankData.itemFractionScaleFactor;
-        currentMoneyBalance = (float)data.currencyBankData.balance / data.currencyBankData.itemFractionScaleFactor;
+        //currentPriceLabel.setText(MoneyBank.getNormalizedAmount(currentMarketPrice, currencyFractionScaleFactor));
+        currentPriceLabel.setText(Bank.getNormalizedAmount(currentMarketPrice, priceScaleFactor));
+
+
+
 
         if(priceScaleFactor > 1)
         {
@@ -309,10 +353,10 @@ public class TradePanel extends StockMarketGuiElement {
         }else {
             limitPriceTextBox.setAllowNumbers(true, false);
         }
-        if(data.itemBankData.itemFractionScaleFactor > 1)
+        if(this.itemFractionScaleFactor > 1)
         {
             amountTextBox.setAllowNumbers(true, true);
-            amountTextBox.setMaxDecimalChar(Bank.getMaxDecimalDigitsCount(data.itemBankData.itemFractionScaleFactor));
+            amountTextBox.setMaxDecimalChar(Bank.getMaxDecimalDigitsCount(this.itemFractionScaleFactor));
         }
         else {
             amountTextBox.setAllowNumbers(true, false);
@@ -365,16 +409,17 @@ public class TradePanel extends StockMarketGuiElement {
 
         previousTradingPairView.setBounds(x, y, width/2-(spacing+1)/2, 20);
         nextTradingPairView.setBounds(previousTradingPairView.getRight()+spacing, y, width/2-(spacing+1)/2, 20);
-        changeItemButton.setBounds(x, previousTradingPairView.getBottom()+spacing, width, buttonHeight);
+        changeMarketButton.setBounds(x, previousTradingPairView.getBottom()+spacing, width, buttonHeight);
 
 
-        yourItemBalanceLabel.setBounds(0, spacing, width, labelHeight);
+        selectAccountButton.setBounds(padding, padding, width-2*padding, labelHeight);
+        yourItemBalanceLabel.setBounds(0, selectAccountButton.getBottom(), width, labelHeight);
         currentItemBalanceLabel.setBounds(0, yourItemBalanceLabel.getBottom(), width/2-(spacing+1)/2-currentItemView.getWidth(), currentItemView.getHeight());
         currentItemView.setPosition(currentItemBalanceLabel.getRight(), currentItemBalanceLabel.getTop());
         moneyItemView.setPosition(currentItemView.getRight()+spacing, currentItemBalanceLabel.getTop());
         currentMoneyBalanceLabel.setBounds(moneyItemView.getRight(),moneyItemView.getTop(), currentItemBalanceLabel.getWidth(), moneyItemView.getHeight());
-        balanceFrame.setBounds(x, changeItemButton.getBottom()+spacing,
-                width, currentMoneyBalanceLabel.getBottom() - yourItemBalanceLabel.getTop()+ spacing*2);
+        balanceFrame.setBounds(x, changeMarketButton.getBottom()+spacing,
+                width, currentMoneyBalanceLabel.getBottom() - selectAccountButton.getTop()+ spacing*2);
 
 
         currentPriceTextLabel.setBounds(x, balanceFrame.getBottom()+spacing, (width-spacing)/2, labelHeight);

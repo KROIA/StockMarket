@@ -1,10 +1,11 @@
 package net.kroia.stockmarket.market.clientdata;
 
-import net.kroia.banksystem.api.IBankUser;
-import net.kroia.banksystem.banking.clientdata.MinimalBankData;
+import net.kroia.banksystem.api.IBankAccount;
+import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.modutilities.networking.INetworkPayloadEncoder;
 import net.minecraft.network.FriendlyByteBuf;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 public class TradingViewData implements INetworkPayloadEncoder {
     public final TradingPairData tradingPairData;
@@ -12,15 +13,15 @@ public class TradingViewData implements INetworkPayloadEncoder {
     public final OrderBookVolumeData orderBookVolumeData;
     public final OrderReadListData openOrdersData;
 
-    public final MinimalBankData itemBankData;
-    public final MinimalBankData currencyBankData;
+    public final BankData itemBankData;
+    public final BankData currencyBankData;
     public final boolean marketIsOpen;
     public final float botTargetPrice;
     public final float smalestTradableVolume;
 
     public TradingViewData(@NotNull TradingPairData pair,
                            @NotNull PriceHistoryData history,
-                           @NotNull IBankUser bankUser,
+                           @Nullable IBankAccount bankAccount,
                            @NotNull OrderBookVolumeData orderBookVolumeData,
                            @NotNull OrderReadListData openOrders,
                            boolean marketIsOpen,
@@ -32,9 +33,14 @@ public class TradingViewData implements INetworkPayloadEncoder {
         this.orderBookVolumeData = orderBookVolumeData;
         this.openOrdersData = openOrders;
 
-        this.itemBankData = bankUser.getMinimalBankData(pair.getItem());
-        this.currencyBankData = bankUser.getMinimalBankData(pair.getCurrency());
-
+        if(bankAccount != null) {
+            this.itemBankData = bankAccount.getBankData(pair.getItem());
+            this.currencyBankData = bankAccount.getBankData(pair.getCurrency());
+        }
+        else {
+            this.itemBankData = null;
+            this.currencyBankData = null;
+        }
         this.marketIsOpen = marketIsOpen;
         this.botTargetPrice = botTargetPrice;
         this.smalestTradableVolume = smalestTradableVolume;
@@ -43,8 +49,8 @@ public class TradingViewData implements INetworkPayloadEncoder {
                             @NotNull PriceHistoryData priceHistoryData,
                             @NotNull OrderBookVolumeData orderBookVolumeData,
                             @NotNull OrderReadListData openOrdersData,
-                            @NotNull MinimalBankData itemBankData,
-                            @NotNull MinimalBankData currencyBankData,
+                            @Nullable BankData itemBankData,
+                            @Nullable BankData currencyBankData,
                             boolean marketIsOpen,
                             float botTargetPrice,
                             float smalestTradableVolume) {
@@ -65,8 +71,15 @@ public class TradingViewData implements INetworkPayloadEncoder {
         priceHistoryData.encode(buf);
         orderBookVolumeData.encode(buf);
         openOrdersData.encode(buf);
-        itemBankData.encode(buf);
-        currencyBankData.encode(buf);
+        buf.writeBoolean(itemBankData != null);
+        if (itemBankData != null) {
+            itemBankData.encode(buf);
+        }
+
+        buf.writeBoolean(currencyBankData != null);
+        if (currencyBankData != null) {
+            currencyBankData.encode(buf);
+        }
         buf.writeBoolean(marketIsOpen);
         buf.writeFloat(botTargetPrice);
         buf.writeFloat(smalestTradableVolume);
@@ -78,8 +91,14 @@ public class TradingViewData implements INetworkPayloadEncoder {
         PriceHistoryData priceHistoryData = PriceHistoryData.decode(buf);
         OrderBookVolumeData orderBookVolumeData = OrderBookVolumeData.decode(buf);
         OrderReadListData openOrdersData = OrderReadListData.decode(buf);
-        MinimalBankData itemBankData = MinimalBankData.decode(buf);
-        MinimalBankData currencyBankData = MinimalBankData.decode(buf);
+        BankData itemBankData = null;
+        if(buf.readBoolean()) {
+            itemBankData = BankData.decode(buf);
+        }
+        BankData currencyBankData = null;
+        if(buf.readBoolean()) {
+            currencyBankData = BankData.decode(buf);
+        }
         boolean marketIsOpen = buf.readBoolean();
         float botTargetPrice = buf.readFloat();
         float smalestTradableVolume = buf.readFloat();

@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.util;
 
+import net.kroia.banksystem.api.IClientBankManager;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.IClientMarket;
@@ -28,6 +29,9 @@ public abstract class StockMarketGuiElement extends GuiElement {
 
     public ClientMarketManager getMarketManager() {
         return BACKEND_INSTANCES.CLIENT_MARKET_MANAGER;
+    }
+    public IClientBankManager getBankManager() {
+        return BACKEND_INSTANCES.BANK_SYSTEM_API.getClientBankManager();
     }
     public void selectMarket(TradingPair tradingPair) {
         this.selectedMarket = getMarketManager().getClientMarket(tradingPair);
