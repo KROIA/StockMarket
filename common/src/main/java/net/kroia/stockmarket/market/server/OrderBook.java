@@ -452,20 +452,18 @@ public class OrderBook implements ServerSaveable {
         {
             CompoundTag orderTag = buyOrdersList.getCompound(i);
             LimitOrder order = LimitOrder.loadFromTag(orderTag);
-            if(order == null)
-                success = false;
-            else
+            if(order != null)
                 limitBuyOrders.add(order);
+
         }
 
         for(int i = 0; i < sellOrdersList.size(); i++)
         {
             CompoundTag orderTag = sellOrdersList.getCompound(i);
             LimitOrder order = LimitOrder.loadFromTag(orderTag);
-            if(order == null)
-                success = false;
-            else
+            if(order != null)
                 limitSellOrders.add(order);
+
         }
 
         if(tag.contains("virtual_order_book"))

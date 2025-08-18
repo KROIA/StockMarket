@@ -671,7 +671,7 @@ public class ServerMarketManager implements IServerMarketManager, ServerSaveable
                 ServerMarket tradeItem = new ServerMarket(0, BACKEND_INSTANCES.SERVER_SETTINGS.UI.PRICE_HISTORY_SIZE.get());
                 if(!tradeItem.load(tradeItemTag))
                 {
-                    error("Failed to load trade item from NBT: " + tradeItemTag);
+                    error("Failed to load market from NBT: " + tradeItemTag);
                     loadSuccess = false;
                     continue;
                 }
