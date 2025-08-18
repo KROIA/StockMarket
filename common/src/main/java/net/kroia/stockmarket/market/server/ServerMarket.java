@@ -88,7 +88,7 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
                 this.priceScaleFactor = 1; // Fallback to 1 if the scale factor is zero or negative
             }
         }*/
-        if(this.priceScaleFactor < itemFractionScaleFactor * currencyItemFractionScaleFactor)
+        if(this.priceScaleFactor > itemFractionScaleFactor * currencyItemFractionScaleFactor)
         {
             switch(itemFractionScaleFactor)
             {
@@ -278,8 +278,8 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
     public TradingViewData getTradingViewData(int bankAccountNumber, int maxHistoryPointCount, float minVisiblePrice, float maxVisiblePrice, int orderBookTileCount, boolean requestBotTargetPrice)
     {
         IBankAccount bankAccount = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getBankAccount(bankAccountNumber);
-        if(bankAccount == null)
-            return null;
+        //if(bankAccount == null)
+        //return null;
 
         //IBank itemBank = bankUser.getBank(tradingPair.getItem());
         //IBank moneyBank = bankUser.getBank(tradingPair.getCurrency());
@@ -537,7 +537,7 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
     @Override
     public float mapToRealPrice(int rawPrice)
     {
-        return (int)ServerMarketManager.rawToRealPrice(rawPrice, priceScaleFactor);
+        return ServerMarketManager.rawToRealPrice(rawPrice, priceScaleFactor);
     }
     @Override
     public boolean isMarketOpen() {

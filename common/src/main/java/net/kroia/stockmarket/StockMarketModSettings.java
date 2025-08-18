@@ -82,7 +82,7 @@ public class StockMarketModSettings extends ModSettings {
         /**
          * Defines the time for one candle stick in milliseconds
          */
-        public final Setting<Long> SHIFT_PRICE_CANDLE_INTERVAL_MS = registerSetting("SHIFT_PRICE_CANDLE_INTERVAL_MS", 60000L, Long.class); // 1 minute
+        public final Setting<Long> SHIFT_PRICE_CANDLE_INTERVAL_MS = registerSetting("SHIFT_PRICE_CANDLE_INTERVAL_MS", 60000L*10, Long.class); // 10 minute
 
         /**
          * If true, the market will be open directly after creation
@@ -240,12 +240,12 @@ public class StockMarketModSettings extends ModSettings {
             }
         }
         private static final PlaceholderSettingParser parser = new PlaceholderSettingParser();
-        public final Setting<PlaceholderSettingData> PLAYER_BALANCE = registerSetting("PLAYER_BALANCE",new PlaceholderSettingData("%banksystem_player_balance%", 1000), PlaceholderSettingData.class, parser);
+       /* public final Setting<PlaceholderSettingData> PLAYER_BALANCE = registerSetting("PLAYER_BALANCE",new PlaceholderSettingData("%banksystem_player_balance%", 1000), PlaceholderSettingData.class, parser);
         public final Setting<PlaceholderSettingData> PLAYER_LOCKED_BALANCE = registerSetting("PLAYER_LOCKED_BALANCE",new PlaceholderSettingData("%banksystem_player_locked_balance%", 1000), PlaceholderSettingData.class, parser);
         public final Setting<PlaceholderSettingData> PLAYER_TOTAL_BALANCE = registerSetting("PLAYER_TOTAL_BALANCE",new PlaceholderSettingData("%banksystem_player_total_balance%", 1000), PlaceholderSettingData.class, parser);
         public final Setting<PlaceholderSettingData> PLAYER_BANKUSER_JSON = registerSetting("PLAYER_BANKUSER_JSON",new PlaceholderSettingData("%banksystem_bankuser_json%", 10000), PlaceholderSettingData.class, parser);
         public final Setting<PlaceholderSettingData> SERVER_CIRCULATION_JSON = registerSetting("SERVER_CIRCULATION_JSON",new PlaceholderSettingData("%banksystem_server_circulation_json%", 10000), PlaceholderSettingData.class, parser);
-
+*/
 
         public Placeholder() { super("Placeholder"); }
     }

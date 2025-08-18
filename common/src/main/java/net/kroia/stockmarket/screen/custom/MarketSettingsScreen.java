@@ -176,7 +176,7 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
             y += elementHeight + spacing;
             chartResetButton.setBounds(padding, y, width, elementHeight);
             y += elementHeight + spacing;
-            isMarketOpenCheckBox.setBounds(width/2+padding, y, width/2, elementHeight);
+            isMarketOpenCheckBox.setBounds(width/2+padding, y, width-width/2, elementHeight);
             y += elementHeight + spacing;
             candleTimeMinLabel.setBounds(padding, y, width/2, elementHeight);
             candleTimeMin.setBounds(candleTimeMinLabel.getRight(), candleTimeMinLabel.getTop(), width - candleTimeMinLabel.getWidth(), candleTimeMinLabel.getHeight());
@@ -332,7 +332,7 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
             int y = padding;
             titleLabel.setBounds(padding, y, width, elementHeight);
             y += elementHeight + spacing;
-            enableCheckBox.setBounds(width/2+padding, y, width/2, elementHeight);
+            enableCheckBox.setBounds(width/2+padding, y, width-width/2, elementHeight);
             y += elementHeight + spacing;
             volumeScaleLabel.setBounds(padding, y, width/2, elementHeight);
             volumeScaleTextBox.setBounds(volumeScaleLabel.getRight(), volumeScaleLabel.getTop(), width-volumeScaleLabel.getWidth(), volumeScaleLabel.getHeight());
@@ -612,7 +612,7 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
             int y = padding;
             titleLabel.setBounds(padding, y, width, elementHeight);
             y += elementHeight + spacing;
-            enableCheckBox.setBounds(width/2+padding, y, width/2, elementHeight);
+            enableCheckBox.setBounds(width/2+padding, y, width-width/2, elementHeight);
             y += elementHeight + spacing;
             defaultPriceLabel.setBounds(padding, y, width/2, elementHeight);
             defaultPriceTextBox.setBounds(defaultPriceLabel.getRight(), defaultPriceLabel.getTop(), width - defaultPriceLabel.getWidth(), defaultPriceLabel.getHeight());
@@ -623,17 +623,17 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
             volumeScaleLabel.setBounds(padding, y, width/2, elementHeight);
             volumeScaleTextBox.setBounds(volumeScaleLabel.getRight(), volumeScaleLabel.getTop(), width - volumeScaleLabel.getWidth(), volumeScaleLabel.getHeight());
             y += elementHeight + spacing;
-            enableTargetPriceCheckBox.setBounds(width/2+padding, y, width/2, elementHeight);
+            enableTargetPriceCheckBox.setBounds(width/2+padding, y, width-width/2, elementHeight);
             y += elementHeight + spacing;
             targetPriceSteeringFactorLabel.setBounds(padding, y, width/2, elementHeight);
             targetPriceSteeringFactorTextBox.setBounds(targetPriceSteeringFactorLabel.getRight(), targetPriceSteeringFactorLabel.getTop(), width - targetPriceSteeringFactorLabel.getWidth(), targetPriceSteeringFactorLabel.getHeight());
             y += elementHeight + spacing;
-            enableVolumeTrackingCheckBox.setBounds(width/2+padding, y, width/2, elementHeight);
+            enableVolumeTrackingCheckBox.setBounds(width/2+padding, y, width-width/2, elementHeight);
             y += elementHeight + spacing;
             volumeSteeringFactorLabel.setBounds(padding, y, width/2, elementHeight);
             volumeSteeringFactorTextBox.setBounds(volumeSteeringFactorLabel.getRight(), volumeSteeringFactorLabel.getTop(), width - volumeSteeringFactorLabel.getWidth(), volumeSteeringFactorLabel.getHeight());
             y += elementHeight + spacing;
-            enableRandomWalkCheckBox.setBounds(width/2+padding, y, width/2, elementHeight);
+            enableRandomWalkCheckBox.setBounds(width/2+padding, y, width-width/2, elementHeight);
             y += elementHeight + spacing;
             volatilityLabel.setBounds(padding, y, width/2, elementHeight);
             volatilityTextBox.setBounds(volatilityLabel.getRight(), volatilityLabel.getTop(), width - volatilityLabel.getWidth(), volatilityLabel.getHeight());

@@ -129,7 +129,7 @@ public class StockMarketModBackend implements StockMarketAPI {
     // Called from the server side
     public static void onServerStart(MinecraftServer server) {
         INSTANCES.SERVER_SETTINGS = new StockMarketModSettings();
-        INSTANCES.SERVER_SETTINGS.setLogger(INSTANCES.LOGGER::error, INSTANCES.LOGGER::error, INSTANCES.LOGGER::info);
+        INSTANCES.SERVER_SETTINGS.setLogger(INSTANCES.LOGGER::error, INSTANCES.LOGGER::error, INSTANCES.LOGGER::debug);
         INSTANCES.SERVER_DEFAULT_PRICES = new DefaultMarketSettings.DefaultPrices();
 
         INSTANCES.SERVER_DATA_HANDLER = new StockMarketDataHandler();

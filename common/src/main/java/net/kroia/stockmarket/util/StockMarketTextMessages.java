@@ -96,6 +96,7 @@ public class StockMarketTextMessages {
     }
 
     private static final Component MARKETPLACE_IS_NOW_OPEN_ALL = Component.translatable(prefix+"marketplace_is_now_open_all");
+
     public static String getMarketplaceIsNowOpenAllMessage()
     {
         String msg = MARKETPLACE_IS_NOW_OPEN_ALL.getString();
@@ -103,6 +104,13 @@ public class StockMarketTextMessages {
     }
 
 
+    private static final Component CANDLESTICK_TIME_SET = Component.translatable(prefix+"candlestick_time_set");
+    public static String getCandlestickTimeSetMessage(int minutes)
+    {
+        String msg = CANDLESTICK_TIME_SET.getString();
+        msg = replaceVariable(msg, Variables.VALUE, String.valueOf(minutes));
+        return msg;
+    }
 
 
 

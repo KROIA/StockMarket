@@ -27,6 +27,7 @@
   "message.stockmarket.marketplace_is_now_closed_all": "Marketplace for all items is now closed",
   "message.stockmarket.marketplace_is_now_open": "Marketplace for {item_name} is now open for trading",
   "message.stockmarket.marketplace_is_now_open_all": "Marketplace for all tradable items is now open for trading",
+  "message.stockmarket.candlestick_time_set": "The candle stick time is set to {value} minutes",
   "message.stockmarket.marketplace_is_not_allowed": "Marketplace for {item_name} is not allowed",
   "message.stockmarket.marketplace_deleted": "{item_name} can no longer be traded on the stock market",
   "message.stockmarket.marketplace_created": "{item_name} can now be traded on the stock market",

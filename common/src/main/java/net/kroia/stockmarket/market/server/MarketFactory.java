@@ -94,7 +94,7 @@ public class MarketFactory
             virtualOrderBookSettings.volumeAccumulationRate = 0.0001f * Math.max(0.01f, 1/(Math.max(rarity, 0.01f)));
             virtualOrderBookSettings.volumeFastAccumulationRate = virtualOrderBookSettings.volumeAccumulationRate * 10f;
             virtualOrderBookSettings.volumeDecumulationRate = virtualOrderBookSettings.volumeFastAccumulationRate * 0.1f;
-            botSettings.volumeScale = virtualOrderBookSettings.volumeScale * this.volatility/10;
+            botSettings.volumeScale = virtualOrderBookSettings.volumeScale * this.volatility;
 
 
 
@@ -102,7 +102,15 @@ public class MarketFactory
             if(BACKEND_INSTANCES.SERVER_SETTINGS != null)
             {
                 candleTimeMin = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.SHIFT_PRICE_CANDLE_INTERVAL_MS.get() / 60000; // Convert milliseconds to minutes
+                // Auto set the price scale factor based on the initial price
+                if (botSettings.defaultPrice < BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.PRICE_SCALE_100_DEFAULT_PRICE_THRESHOLD.get())
+                    this.priceScaleFactor = 100; // Use cents for prices below 20
+                else if (botSettings.defaultPrice < BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.PRICE_SCALE_10_DEFAULT_PRICE_THRESHOLD.get())
+                    this.priceScaleFactor = 10; // Use deci for prices below 200
+                else
+                    this.priceScaleFactor = 1; // Use whole units for prices above 200
             }
+
             DefaultMarketSetupData setupData = new DefaultMarketSetupData(this.tradingPair, botSettings, virtualOrderBookSettings, false, candleTimeMin, this.priceScaleFactor);
             return setupData;
         }

@@ -2,6 +2,7 @@ package net.kroia.stockmarket.command;
 
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.networking.packet.server_sender.update.OpenScreenPacket;
@@ -95,6 +96,20 @@ public class StockMarketCommands {
 
                                     return Command.SINGLE_SUCCESS;
                                 })
+                        )
+                        .then(Commands.literal("setAllCandlestickTimeIntervalMinutes")
+                                .then(Commands.argument("minutes", IntegerArgumentType.integer(1, Integer.MAX_VALUE))
+                                    .requires(StockMarketCommands::isPlayerAdmin)
+                                    .executes(context -> {
+                                        CommandSourceStack source = context.getSource();
+                                        ServerPlayer player = source.getPlayerOrException();
+
+                                        int minutes = IntegerArgumentType.getInteger(context, "minutes");
+                                        BACKEND_INSTANCES.SERVER_MARKET_MANAGER.setShiftPriceCandleIntervalMS((long)minutes * 60 * 1000); // Convert minutes to milliseconds
+                                        ServerPlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getCandlestickTimeSetMessage(minutes));
+                                        return Command.SINGLE_SUCCESS;
+                                    })
+                                )
                         )
         );
     }
