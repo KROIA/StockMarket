@@ -25,6 +25,7 @@ But first have a look at [ManagementGUI](#managementgui) which is the most impor
 | /StockMarket load                      | Load the Stockamrket data                                  | :heavy_check_mark: |
 | /StockMarket closeAllMarkets           | Disables trading for all players on all markets            | :heavy_check_mark: |
 | /StockMarket openAllMarkets            | Enables trading for all players on all markets             | :heavy_check_mark: |
+| /StockMarket setAllCandlestickTimeIntervalMinutes [timeMinutes]  | Sets the candle stick time interval of all markets  | :heavy_check_mark: |
 
 
 
