@@ -114,6 +114,14 @@ public class ServerTradingBot implements ServerSaveable {
                 }
             }
 
+            element = jsonObject.get("updateTimerIntervallMS");
+            if(element != null && element.isJsonPrimitive()) {
+                this.updateTimerIntervallMS = element.getAsLong();
+                if(this.updateTimerIntervallMS < 0) {
+                    this.updateTimerIntervallMS = 0; // Ensure update interval is at least 100ms
+                }
+            }
+
 
             return true;
         }

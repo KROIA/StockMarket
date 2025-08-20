@@ -109,6 +109,7 @@ public class MarketFactory
                     this.priceScaleFactor = 10; // Use deci for prices below 200
                 else
                     this.priceScaleFactor = 1; // Use whole units for prices above 200
+                botSettings.updateTimerIntervallMS = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET_BOT.UPDATE_TIMER_INTERVAL_MS.get(); // Use server settings for update interval
             }
 
             DefaultMarketSetupData setupData = new DefaultMarketSetupData(this.tradingPair, botSettings, virtualOrderBookSettings, false, candleTimeMin, this.priceScaleFactor);

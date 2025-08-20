@@ -112,6 +112,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
             this.volatility = buf.readFloat();
         }
 
+        @Override
         public JsonElement toJson()
         {
             JsonObject jsonObject = super.toJson().getAsJsonObject();
@@ -125,6 +126,8 @@ public class ServerVolatilityBot extends ServerTradingBot {
             return jsonObject;
         }
 
+
+        @Override
         public boolean fromJson(JsonElement json) {
             if(!json.isJsonObject())
             {
@@ -256,7 +259,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
         {
             if(randomWalkTimer.check())
             {
-                randomWalkTimer.start(100+random.nextLong(settings.updateTimerIntervallMS * 10));
+                randomWalkTimer.start(100+random.nextLong(settings.updateTimerIntervallMS * 10 + 1));
                 priceGenerator.getNextValue();
             }
             double randomWalkValue = (priceGenerator.getCurrentValue() * (double)settings.volatility * (double)settings.defaultPrice);
