@@ -10,6 +10,7 @@ import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.server.ServerMarket;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBotFactory;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtAccounter;
 import net.minecraft.nbt.NbtIo;
 
@@ -21,10 +22,12 @@ import java.lang.reflect.Type;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 
 public class StockMarketDataHandler {
@@ -33,7 +36,7 @@ public class StockMarketDataHandler {
     private static final String FOLDER_NAME = "Finance/StockMarket";
 
     private static final String PLAYER_DATA_FILE_NAME = "Player_data.dat";
-    private static final String MARKET_DATA_FILE_NAME = "Market_data.dat";
+    private static final String MARKET_DATA_FILE_NAME = "Market_data";
     private static final boolean COMPRESSED = false;
     private static File saveFolder;
 
@@ -53,9 +56,12 @@ public class StockMarketDataHandler {
     }
 
 
+    public static void setSaveFolder(File folder){
+        setSaveFolder(folder, FOLDER_NAME);
 
-    public static void setSaveFolder(File folder) {
-        File rootFolder = new File(folder, FOLDER_NAME);
+    }
+    public static void setSaveFolder(File folder, String folderName) {
+        File rootFolder = new File(folder, folderName);
         // check if folder exists
         if (!rootFolder.exists()) {
             rootFolder.mkdirs();
@@ -123,21 +129,61 @@ public class StockMarketDataHandler {
         ServerMarket market = new ServerMarket();
         CompoundTag marketData = new CompoundTag();
         success = market.save(marketData);
-        data.put("market", marketData);
-        saveDataCompound(MARKET_DATA_FILE_NAME, data);
+        if(!success){
+            return false;
+        }
+        //Save market data shards
+        setSaveFolder(saveFolder, "shards");
+        clearDirectory(saveFolder.toString());
+        ListTag shards = (ListTag) marketData.get("tradeItems");
+        for(int i = 0; i < shards.size(); ++i){
+            CompoundTag tag = new CompoundTag();
+            tag.put("shard", shards.getList(i));
+            if(i == 0){
+                tag.putLong("shiftPriceHistoryInterval", marketData.getLong("shiftPriceHistoryInterval"));
+            }
+            saveDataCompound(MARKET_DATA_FILE_NAME + "_shard_" + i + ".dat", tag);
+        }
         return success;
     }
-    public static boolean load_market()
-    {
-        CompoundTag data = readDataCompound(MARKET_DATA_FILE_NAME);
-        if(data == null)
+    public static void clearDirectory(String directoryPath){
+        Path dir = Paths.get(directoryPath);
+        try {
+            if (Files.exists(dir)) {
+                Stream<Path> paths = Files.walk(dir)
+                        .filter(path -> !path.equals(dir));
+                for (Path f : paths.toList()){
+                    Files.delete(f);
+                }
+
+            }
+        }
+        catch(IOException e){//This likely only happens if the directories don't exist, which SHOULD NOT happen.
+            return;
+        }
+    }
+    public static boolean load_market() {
+        setSaveFolder(saveFolder, "shards");
+        try (Stream<Path> paths = Files.walk(saveFolder.toPath())) {
+            Stream<Path> files = paths.filter(Files::isRegularFile);
+            for(Path f : files.toList()) {
+                StockMarketMod.LOGGER.warn(f.toString());
+                CompoundTag data = readDataCompound(f.toString());
+                if (data == null)
+                    continue;
+                // Load server_sender market
+                ServerMarket market = new ServerMarket();
+                if (!data.contains("shard"))
+                    return false;
+                market.load(data);
+            }
+        }
+        catch(IOException e){
+            StockMarketMod.LOGGER.error("Failed to load Market Data.");
             return false;
-        // Load server_sender market
-        ServerMarket market = new ServerMarket();
-        if(!data.contains("market"))
-            return false;
-        CompoundTag marketData = data.getCompound("market");
-        return market.load(marketData);
+        }
+        return true;
+
     }
 
     public static Map<String, ServerTradingBotFactory.DefaultBotSettings> loadDefaultBotSettings()
@@ -179,7 +225,7 @@ public class StockMarketDataHandler {
     private static CompoundTag readDataCompound(String fileName)
     {
         CompoundTag dataOut = new CompoundTag();
-        File file = new File(saveFolder, fileName);
+        File file = new File(fileName);
         if (file.exists()) {
             try {
                 CompoundTag data;

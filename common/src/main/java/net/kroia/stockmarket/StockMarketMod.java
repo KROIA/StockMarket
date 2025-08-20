@@ -57,6 +57,7 @@ public final class StockMarketMod {
         // Load data from the root save folder
         StockMarketDataHandler.setSaveFolder(rootSaveFolder);
         StockMarketDataHandler.loadAll();
+        StockMarketDataHandler.setSaveFolder(rootSaveFolder);
     }
     public static void saveDataToFiles(MinecraftServer server)
     {
@@ -64,6 +65,7 @@ public final class StockMarketMod {
         // Load data from the root save folder
         StockMarketDataHandler.setSaveFolder(rootSaveFolder);
         StockMarketDataHandler.saveAll();
+        StockMarketDataHandler.setSaveFolder(rootSaveFolder);
     }
     public static boolean isDataLoaded() {
         return StockMarketDataHandler.isLoaded();

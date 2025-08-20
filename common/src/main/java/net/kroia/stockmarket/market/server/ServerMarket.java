@@ -538,14 +538,22 @@ public class ServerMarket implements ServerSaveable
         boolean success = true;
         tag.putLong("shiftPriceHistoryInterval", shiftPriceHistoryInterval);
 
+        ListTag shards = new ListTag();
         ListTag tradeItems = new ListTag();
         for(ServerTradeItem tradeItem : ServerMarket.tradeItems.values())
         {
             CompoundTag tradeItemTag = new CompoundTag();
             success &= tradeItem.save(tradeItemTag);
             tradeItems.add(tradeItemTag);
+            if(tradeItems.size() >= 8){
+                shards.add(tradeItems);
+                tradeItems = new ListTag();
+            }
         }
-        tag.put("tradeItems", tradeItems);
+        if(!tradeItems.isEmpty()){
+            shards.add(tradeItems);
+        }
+        tag.put("tradeItems", shards);
 
         return success;
     }
@@ -554,11 +562,12 @@ public class ServerMarket implements ServerSaveable
     public boolean load(CompoundTag tag) {
         boolean loadSuccess = true;
         try {
-            if(!tag.contains("shiftPriceHistoryInterval") || !tag.contains("tradeItems"))
+            if(!tag.contains("shiftPriceHistoryInterval") && !tag.contains("shard"))
                 return false;
-            shiftPriceHistoryInterval = tag.getLong("shiftPriceHistoryInterval");
+            if(tag.contains("shiftPriceHistoryInterval"))
+                shiftPriceHistoryInterval = tag.getLong("shiftPriceHistoryInterval");
 
-            ListTag tradeItems = tag.getList("tradeItems", 10);
+            ListTag tradeItems = tag.getList("shard", 10);
             Map<String, ServerTradeItem> tradeItemsMap = new HashMap<>();
             for(int i = 0; i < tradeItems.size(); i++)
             {
@@ -571,7 +580,6 @@ public class ServerMarket implements ServerSaveable
                 }
                 tradeItemsMap.put(tradeItem.getItemID(), tradeItem);
             }
-            ServerMarket.tradeItems.clear();
             ServerMarket.tradeItems.putAll(tradeItemsMap);
         } catch (Exception e) {
             StockMarketMod.LOGGER.error("[SERVER] Error loading ServerMarket from NBT");
