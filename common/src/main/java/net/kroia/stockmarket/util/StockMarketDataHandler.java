@@ -2,26 +2,30 @@ package net.kroia.stockmarket.util;
 
 
 import com.google.gson.JsonElement;
-import net.kroia.modutilities.DataPersistence;
 import net.kroia.modutilities.ServerPlayerUtilities;
+import net.kroia.modutilities.persistence.DataPersistence;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.server.MarketFactory;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 
 public class StockMarketDataHandler extends DataPersistence {
     private static StockMarketModBackend.Instances BACKEND_INSTANCES;
-    private final String PLAYER_DATA_FILE_NAME = "Player_data.dat";
-    private final String MARKET_DATA_FILE_NAME = "Market_data.dat";
+    private final String PLAYER_DATA_FILE_NAME = "Player_data.nbt";
+    private final String MARKET_DATA_FOLDER_NAME = "Market_data";
+    private final String META_DATA_FILE_NAME = "Meta_data.nbt";
     private final String MARKET_SETTINGS_FILE_NAME = "settings.json";
     private final String DEFAULT_MARKET_SETTINGS_DIRECTORY = "DefaultMarketSetupData";
     private final String DEFAULT_MARKET_PRICE_FILE_NAME = "base_prices.json";
@@ -70,6 +74,7 @@ public class StockMarketDataHandler extends DataPersistence {
     {
         info("Saving StockMarket Mod data...");
         boolean success = true;
+        success &= save_metadata();
         success &= save_globalSettings();
         success &= save_defaultPrices();
         success &= save_player();
@@ -86,6 +91,9 @@ public class StockMarketDataHandler extends DataPersistence {
     {
         info("Saving StockMarket Mod data...");
 
+        CompletableFuture<Boolean> fut5 = CompletableFuture.supplyAsync(() -> {
+            return save_metadata();
+        });
         CompletableFuture<Boolean> fut1 = save_playerAsync();
         CompletableFuture<Boolean> fut2;
         CompletableFuture<Boolean> fut3 = save_globalSettingsAsync();
@@ -97,7 +105,7 @@ public class StockMarketDataHandler extends DataPersistence {
 
         // Combine all futures to ensure all data is saved before returning
         return CompletableFuture.allOf(fut1, fut2, fut3, fut4).thenApply(v -> {
-            boolean allSuccess = fut1.join() && fut2.join() && fut3.join() && fut4.join();
+            boolean allSuccess = fut1.join() && fut2.join() && fut3.join() && fut4.join() && fut5.join();
             if(allSuccess)
                 info("StockMarket Mod data saved successfully.");
             else
@@ -112,9 +120,36 @@ public class StockMarketDataHandler extends DataPersistence {
         info("Loading StockMarket Mod data...");
         boolean success = true;
         Path settingsFilePath = getGlobalSettingsFilePath();
+        success &= load_metadata();
         if(!fileExists(settingsFilePath)) {
             warn("Market settings file not found, creating default settings file.");
             success &= save_globalSettings(settingsFilePath);
+
+            // Delete old unused files if they exist
+            Path defaultBotSettingsFolder = getAbsoluteSavePath("DefaultBotSettings");
+            if(folderExists(defaultBotSettingsFolder)) {
+                try {
+                    deleteFolderContents(defaultBotSettingsFolder);
+                } catch (IOException e) {
+                    error("Failed to delete old DefaultBotSettings folder.", e);
+                }
+            }
+            Path oldMarketDataFile = getAbsoluteSavePath("Market_data.dat");
+            if(fileExists(oldMarketDataFile)) {
+                try {
+                    Files.delete(oldMarketDataFile);
+                } catch (IOException e) {
+                    error("Failed to delete old Market_data.dat file.", e);
+                }
+            }
+            Path oldPlayerDataFile = getAbsoluteSavePath("Player_data.dat");
+            if(fileExists(oldPlayerDataFile)) {
+                try {
+                    Files.delete(oldPlayerDataFile);
+                } catch (IOException e) {
+                    error("Failed to delete old Player_data.dat file.", e);
+                }
+            }
         }
         else
             success &= load_globalSettings(settingsFilePath);
@@ -127,6 +162,7 @@ public class StockMarketDataHandler extends DataPersistence {
         }
         else
             success &= load_defaultPrices(basePricesFilePath);
+
 
 
         success &= load_player();
@@ -167,44 +203,50 @@ public class StockMarketDataHandler extends DataPersistence {
     public boolean save_market()
     {
         boolean success = true;
-        CompoundTag data = new CompoundTag();
-        CompoundTag marketData = new CompoundTag();
-        success = BACKEND_INSTANCES.SERVER_MARKET_MANAGER.save(marketData);
-        data.put("market", marketData);
-        data.putString("version", StockMarketMod.VERSION);
+        Map<String, ListTag> dataMapList = new HashMap<>();
+        success = BACKEND_INSTANCES.SERVER_MARKET_MANAGER.save(dataMapList);
 
         if(success)
-            success = saveDataCompound(getMarketDataFilePath(), data);
+            success = saveDataCompoundListMap(getMarketDataFolderPath(), dataMapList);
         return success;
     }
     public CompletableFuture<Boolean> save_marketAsync()
     {
-        CompoundTag data = new CompoundTag();
-        CompoundTag marketData = new CompoundTag();
+        Map<String, ListTag> dataMapList = new HashMap<>();
 
         CompletableFuture<Boolean> future;
-        if(BACKEND_INSTANCES.SERVER_MARKET_MANAGER.save(marketData)) {
-            data.put("market", marketData);
-            data.putString("version", StockMarketMod.VERSION);
+        if(BACKEND_INSTANCES.SERVER_MARKET_MANAGER.save(dataMapList)) {
 
             // Save market data async because it can take much time when there are many trading items
             future = CompletableFuture.supplyAsync(() -> {
-                return saveDataCompound(getMarketDataFilePath(), data);
+                return saveDataCompoundListMap(getMarketDataFolderPath(), dataMapList);
             });
         }
         else
             future = CompletableFuture.completedFuture(false);
         return future;
     }
+
     public boolean load_market()
     {
-        CompoundTag data = readDataCompound(getMarketDataFilePath());
+        Map<String, ListTag> dataListMap = readDataCompoundListMap(getMarketDataFolderPath());
+        if(dataListMap == null)
+            return false;
+        return BACKEND_INSTANCES.SERVER_MARKET_MANAGER.load(dataListMap);
+    }
+
+    public boolean save_metadata()
+    {
+        CompoundTag data = new CompoundTag();
+        data.putString("version", StockMarketMod.VERSION);
+        // Save metadata to a separate file
+        return saveDataCompound(getMetaDataFilePath(), data);
+    }
+    public boolean load_metadata()
+    {
+        CompoundTag data = readDataCompound(getMetaDataFilePath());
         if(data == null)
-            return false;
-        // Load server_sender market
-        if(!data.contains("market"))
-            return false;
-        if(!data.contains("version")) {
+        {
             boolean backupSuccess = true;
             // copy stockmarket folder to a backup folder
             Path backupPath = getAbsoluteSavePath("../StockMarketBackup_" + System.currentTimeMillis());
@@ -243,17 +285,20 @@ public class StockMarketDataHandler extends DataPersistence {
             }
             return false;
         }
-        CompoundTag marketData = data.getCompound("market");
-        return BACKEND_INSTANCES.SERVER_MARKET_MANAGER.load(marketData);
+        return true;
     }
 
     public Path getGlobalSettingsFilePath()
     {
         return getAbsoluteSavePath(MARKET_SETTINGS_FILE_NAME);
     }
-    public Path getMarketDataFilePath()
+    public Path getMarketDataFolderPath()
     {
-        return getAbsoluteSavePath(MARKET_DATA_FILE_NAME);
+        return getAbsoluteSavePath(MARKET_DATA_FOLDER_NAME);
+    }
+    public Path getMetaDataFilePath()
+    {
+        return getAbsoluteSavePath(META_DATA_FILE_NAME);
     }
     public Path getPlayerDataFilePath()
     {

@@ -1,9 +1,8 @@
 package net.kroia.stockmarket.block.custom;
 
 import net.kroia.banksystem.block.custom.TerminalBlock;
-import net.kroia.stockmarket.util.StockMarketClientHooks;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
-import net.kroia.stockmarket.networking.packet.server_sender.update.entity.SyncStockMarketBlockEntityPacket;
+import net.kroia.stockmarket.util.StockMarketClientHooks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
@@ -61,7 +60,7 @@ public class StockMarketBlock extends TerminalBlock implements EntityBlock {
     public void openGui(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
         if (!level.isClientSide && player instanceof ServerPlayer)
         {
-            SyncStockMarketBlockEntityPacket.sendPacketToClient(pos, (StockMarketBlockEntity) level.getBlockEntity(pos), (ServerPlayer) player);
+            //SyncStockMarketBlockEntityPacket.sendPacketToClient(pos, (StockMarketBlockEntity) level.getBlockEntity(pos), (ServerPlayer) player);
         } else if (level.isClientSide) {
             // On the client side, open the TradeScreen
             BlockEntity entity = level.getBlockEntity(pos);

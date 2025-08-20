@@ -1,6 +1,6 @@
 package net.kroia.stockmarket.util;
 
-import net.kroia.modutilities.ServerSaveable;
+import net.kroia.modutilities.persistence.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
 
 public class PID implements ServerSaveable {

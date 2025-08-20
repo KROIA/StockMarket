@@ -196,14 +196,14 @@ public class MarketSelectionView extends StockMarketGuiElement {
 
             if(itemStack != null)
             {
-                if(!pair.getItem().getStack().is(itemStack.getItem()))
+                if(!pair.getItem().getStack().equals(itemStack))
                 {
                     continue;
                 }
             }
             if(currencyStack != null)
             {
-                if(!pair.getCurrency().getStack().is(currencyStack.getItem()))
+                if(!pair.getCurrency().getStack().equals(currencyStack))
                 {
                     continue;
                 }

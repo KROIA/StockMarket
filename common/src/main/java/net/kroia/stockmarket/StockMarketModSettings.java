@@ -167,7 +167,7 @@ public class StockMarketModSettings extends ModSettings {
             {
                 items.add(new ItemID(getCurrencyItem().getItem().getDefaultInstance()));
             }*/
-            List<ItemID> blacklisted = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getBlacklistedItemIDs();
+            List<ItemID> blacklisted = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getBlacklistedItems();
             for(ItemID id : blacklisted)
                 items.add(id);
             return items;

@@ -3,6 +3,7 @@ package net.kroia.stockmarket.api;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.clientdata.*;
 import net.kroia.stockmarket.market.server.MarketFactory;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
 import java.util.UUID;
@@ -71,5 +72,19 @@ public interface IClientMarket {
 
     void requestChartReset(Consumer<Boolean> callback);
     void requestMarketOpen(boolean open, Consumer<Boolean> callback);
+
+    /**
+     * Requests a list of orders within the specified price range for this market.
+     * @param startPrice the starting real price of the range (inclusive).
+     * @param endPrice the ending real price of the range (inclusive).
+     * @param callback the callback to handle the list of orders.
+     */
+    void requestOrders(float startPrice, float endPrice, @NotNull Consumer<List<OrderReadData>> callback);
+
+    /**
+     * Requests all orders for this market.
+     * @param callback the callback to handle the list of orders.
+     */
+    void requestOrders(@NotNull Consumer<List<OrderReadData>> callback);
 
 }

@@ -276,7 +276,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
             marketOrderAmountF += normalized;
         }
 
-        if(marketOrderAmountF > 0)
+        /*if(marketOrderAmountF > 0)
         {
             long amount = getOrderBookVolumeAtRawPrice(getCurrentRawPrice()+1);
             if(-amount < marketOrderAmountF)
@@ -287,7 +287,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
             long amount = getOrderBookVolumeAtRawPrice(getCurrentRawPrice()-1);
             if(amount < -marketOrderAmountF)
                 marketOrderAmountF = -amount;
-        }
+        }*/
         long marketOrderAmount = Math.round(marketOrderAmountF);
         marketTrade(marketOrderAmount);
 

@@ -131,6 +131,7 @@ public class StockMarketModBackend implements StockMarketAPI {
         INSTANCES.SERVER_SETTINGS = new StockMarketModSettings();
         INSTANCES.SERVER_SETTINGS.setLogger(INSTANCES.LOGGER::error, INSTANCES.LOGGER::error, INSTANCES.LOGGER::debug);
         INSTANCES.SERVER_DEFAULT_PRICES = new DefaultMarketSettings.DefaultPrices();
+        INSTANCES.SERVER_DEFAULT_PRICES.setLogger(INSTANCES.LOGGER::error, INSTANCES.LOGGER::error, INSTANCES.LOGGER::debug);
 
         INSTANCES.SERVER_DATA_HANDLER = new StockMarketDataHandler();
         INSTANCES.SERVER_MARKET_MANAGER = new ServerMarketManager();
@@ -154,7 +155,7 @@ public class StockMarketModBackend implements StockMarketAPI {
         // Save the data when the game saves the world
         LifecycleEvent.SERVER_LEVEL_SAVE.register((ServerLevel level) -> {
             if (level.dimension() == Level.OVERWORLD) {
-                INSTANCES.SERVER_DATA_HANDLER.saveAll();
+                INSTANCES.SERVER_DATA_HANDLER.saveAllAsync();
             }
         });
     }

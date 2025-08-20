@@ -2,8 +2,8 @@ package net.kroia.stockmarket.market.server;
 
 import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.api.IBankAccount;
-import net.kroia.modutilities.ServerSaveable;
 import net.kroia.modutilities.TimerMillis;
+import net.kroia.modutilities.persistence.ServerSaveable;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.IServerMarket;
 import net.kroia.stockmarket.market.TradingPair;

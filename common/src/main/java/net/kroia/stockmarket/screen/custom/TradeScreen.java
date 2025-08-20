@@ -85,6 +85,11 @@ public class TradeScreen extends StockMarketGuiScreen {
         instance = this;
 
         this.tradingPair = currentPair;
+        getMarketManager().requestTradingPairs(
+                (tradingPairs) -> {
+                    selectMarket(this.tradingPair);
+                });
+
 
         // Create Gui Elements
         tradingChart = new TradingChartWidget(this::onOrderChange);

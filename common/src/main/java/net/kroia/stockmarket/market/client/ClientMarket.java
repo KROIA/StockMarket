@@ -6,9 +6,11 @@ import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.clientdata.*;
 import net.kroia.stockmarket.market.server.MarketFactory;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
+import net.kroia.stockmarket.networking.packet.request.OrderReadDataRequest;
 import net.kroia.stockmarket.networking.packet.request.PlayerOrderReadDataListRequest;
 import net.kroia.stockmarket.networking.packet.request.PriceHistoryRequest;
 import net.kroia.stockmarket.networking.packet.request.TradingViewDataRequest;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
 import java.util.UUID;
@@ -221,6 +223,24 @@ public class ClientMarket implements IClientMarket {
         if(checkDeadAndDebug())
             return;
         BACKEND_INSTANCES.CLIENT_MARKET_MANAGER.requestSetMarketOpen(tradingPair, open, callback);
+    }
+
+
+    @Override
+    public void requestOrders(float startPrice, float endPrice, @NotNull Consumer<List<OrderReadData>> callback)
+    {
+        if(checkDeadAndDebug())
+            return;
+        OrderReadDataRequest.Input input = new OrderReadDataRequest.Input(tradingPair, startPrice, endPrice);
+        StockMarketNetworking.ORDER_READ_DATA_REQUEST.sendRequestToServer(input, callback);
+    }
+    @Override
+    public void requestOrders(@NotNull Consumer<List<OrderReadData>> callback)
+    {
+        if(checkDeadAndDebug())
+            return;
+        OrderReadDataRequest.Input input = new OrderReadDataRequest.Input(tradingPair, -1, -1);
+        StockMarketNetworking.ORDER_READ_DATA_REQUEST.sendRequestToServer(input, callback);
     }
 
 

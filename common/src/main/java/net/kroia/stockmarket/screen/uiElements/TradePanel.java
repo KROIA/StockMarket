@@ -8,6 +8,7 @@ import net.kroia.modutilities.gui.elements.*;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.clientdata.TradingViewData;
+import net.kroia.stockmarket.screen.custom.PlayerTradesViewScreen;
 import net.kroia.stockmarket.util.PriceHistory;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.kroia.stockmarket.util.StockMarketTextMessages;
@@ -32,6 +33,7 @@ public class TradePanel extends StockMarketGuiElement {
     private final TradingPairView previousTradingPairView;
     private final TradingPairView nextTradingPairView;
     private final Button changeMarketButton;
+    private final Button temporarryOpenPlayerTradesViewScreenButton;
 
 
     private final Frame balanceFrame;
@@ -92,6 +94,14 @@ public class TradePanel extends StockMarketGuiElement {
 
         changeMarketButton = new Button(CHANGE_MARKET_BUTTON.getString());
         changeMarketButton.setOnFallingEdge(onItemChangeButtonClicked);
+
+
+        temporarryOpenPlayerTradesViewScreenButton = new Button("Open Player Trades Screen");
+        temporarryOpenPlayerTradesViewScreenButton.setTextFontScale(0.8f);
+        temporarryOpenPlayerTradesViewScreenButton.setOnFallingEdge(() -> {
+            Minecraft.getInstance().setScreen(new PlayerTradesViewScreen(parent));
+        });
+
         setPreviousTradingPair(null);
         setNextTradingPair(null);
 
@@ -280,6 +290,7 @@ public class TradePanel extends StockMarketGuiElement {
         addChild(currentPriceLabel);
         //addChild(currentMoneyBalanceLabel);
         addChild(changeMarketButton);
+        addChild(temporarryOpenPlayerTradesViewScreenButton);
         addChild(amountLabel);
         addChild(amountTextBox);
         addChild(marketOrderLabel);
@@ -410,6 +421,7 @@ public class TradePanel extends StockMarketGuiElement {
         previousTradingPairView.setBounds(x, y, width/2-(spacing+1)/2, 20);
         nextTradingPairView.setBounds(previousTradingPairView.getRight()+spacing, y, width/2-(spacing+1)/2, 20);
         changeMarketButton.setBounds(x, previousTradingPairView.getBottom()+spacing, width, buttonHeight);
+        temporarryOpenPlayerTradesViewScreenButton.setBounds(x, changeMarketButton.getBottom()+spacing, width, buttonHeight);
 
 
         selectAccountButton.setBounds(padding, padding, width-2*padding, labelHeight);
@@ -418,7 +430,7 @@ public class TradePanel extends StockMarketGuiElement {
         currentItemView.setPosition(currentItemBalanceLabel.getRight(), currentItemBalanceLabel.getTop());
         moneyItemView.setPosition(currentItemView.getRight()+spacing, currentItemBalanceLabel.getTop());
         currentMoneyBalanceLabel.setBounds(moneyItemView.getRight(),moneyItemView.getTop(), currentItemBalanceLabel.getWidth(), moneyItemView.getHeight());
-        balanceFrame.setBounds(x, changeMarketButton.getBottom()+spacing,
+        balanceFrame.setBounds(x, temporarryOpenPlayerTradesViewScreenButton.getBottom()+spacing,
                 width, currentMoneyBalanceLabel.getBottom() - selectAccountButton.getTop()+ spacing*2);
 
 

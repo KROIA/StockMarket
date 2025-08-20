@@ -66,16 +66,26 @@ public class OrderbookVolumeChartWidget extends StockMarketGuiElement {
         int i = 1;
         int y = miny;
         int lastY = y;
+        long currentVolume = 0L;
         for (long vol : volume) {
             lastY = y;
             y = Math.max((int)(maxy + chartViewHeight+barHeight/2 - barHeight*i), maxy);
-            long absVol = Math.abs(vol);
+           // long absVol = Math.abs(vol);
+            currentVolume += vol;
+            if(y == lastY)
+            {
+                // skip this bar since it is not getting displayed because the height is 0.
+                i++;
+                continue;
+            }
+            long absVol = Math.abs(currentVolume);
             if (absVol > 0) {
-                int color = vol > 0 ? colorBuy : colorSell;
-                int barWidth = (int)map(absVol, 0L, maxVolume, 0L, (long)chartViewWidth);
+                int color = currentVolume > 0 ? colorBuy : colorSell;
+                int barWidth = (int)map(Math.min(absVol, maxVolume), 0L, maxVolume, 0L, (long)chartViewWidth);
                 int xPos = x + chartViewWidth - barWidth;
                 int height = lastY-y;
                 drawRect(xPos, y, barWidth, height, color);
+                currentVolume = 0L; // Reset current volume after drawing the bar
             }
             i++;
         }

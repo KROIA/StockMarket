@@ -1,7 +1,7 @@
 package net.kroia.stockmarket.util;
 
 
-import net.kroia.modutilities.ServerSaveable;
+import net.kroia.modutilities.persistence.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
 
 import java.util.Random;

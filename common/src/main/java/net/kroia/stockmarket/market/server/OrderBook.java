@@ -3,7 +3,7 @@ package net.kroia.stockmarket.market.server;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.kroia.modutilities.JsonUtilities;
-import net.kroia.modutilities.ServerSaveable;
+import net.kroia.modutilities.persistence.ServerSaveable;
 import net.kroia.stockmarket.market.clientdata.OrderBookVolumeData;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.Order;
@@ -222,7 +222,7 @@ public class OrderBook implements ServerSaveable {
         return orders;
     }
 
-    public ArrayList<Order> getOrders()
+    public List<Order> getOrders()
     {
         ArrayList<Order> orders = new ArrayList<>();
         orders.addAll(limitBuyOrders);

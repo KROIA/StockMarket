@@ -3,7 +3,7 @@ package net.kroia.stockmarket.market.server;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.ServerPlayerUtilities;
-import net.kroia.modutilities.ServerSaveable;
+import net.kroia.modutilities.persistence.ServerSaveableChunked;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.IServerMarket;
 import net.kroia.stockmarket.api.IServerMarketManager;
@@ -21,7 +21,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 
-public class ServerMarketManager implements IServerMarketManager, ServerSaveable
+public class ServerMarketManager implements IServerMarketManager, ServerSaveableChunked
 {
     private static StockMarketModBackend.Instances BACKEND_INSTANCES;
     public static void setBackend(StockMarketModBackend.Instances backend) {
@@ -636,38 +636,41 @@ public class ServerMarketManager implements IServerMarketManager, ServerSaveable
     }
 
 
-
     @Override
-    public boolean save(CompoundTag tag) {
+    public boolean save(Map<String, ListTag> listTagMap) {
         boolean success = true;
         long startMillis = System.currentTimeMillis();
+        ListTag marketsListTag = new ListTag();
 
-        ListTag tradeItems = new ListTag();
+        //ListTag tradeItems = new ListTag();
         for(ServerMarket tradeItem : this.markets.values())
         {
             CompoundTag tradeItemTag = new CompoundTag();
             success &= tradeItem.save(tradeItemTag);
-            tradeItems.add(tradeItemTag);
+            marketsListTag.add(tradeItemTag);
         }
-        tag.put("markets", tradeItems);
+        listTagMap.put("markets", marketsListTag);
         long endMillis = System.currentTimeMillis();
-        info("Saving ServerMarketManager took "+(endMillis-startMillis)+"ms");
-
+        debug("Saving ServerMarketManager took "+(endMillis-startMillis)+"ms");
         return success;
     }
 
     @Override
-    public boolean load(CompoundTag tag) {
+    public boolean load(Map<String, ListTag> listTagMap) {
         boolean loadSuccess = true;
+        ListTag marketsListTag = listTagMap.get("markets");
+        if(marketsListTag == null)
+        {
+            warn("No markets found in NBT data, nothing to load.");
+            return true; // No markets to load, but not an error
+        }
         try {
-            if(!tag.contains("markets"))
-                return false;
 
-            ListTag tradeItems = tag.getList("markets", CompoundTag.TAG_COMPOUND);
+            //ListTag tradeItems = tag.getList("markets", CompoundTag.TAG_COMPOUND);
             Map<TradingPair, ServerMarket> tradeItemsMap = new HashMap<>();
-            for(int i = 0; i < tradeItems.size(); i++)
+            for(int i = 0; i < marketsListTag.size(); i++)
             {
-                CompoundTag tradeItemTag = tradeItems.getCompound(i);
+                CompoundTag tradeItemTag = marketsListTag.getCompound(i);
                 ServerMarket tradeItem = new ServerMarket(0, BACKEND_INSTANCES.SERVER_SETTINGS.UI.PRICE_HISTORY_SIZE.get());
                 if(!tradeItem.load(tradeItemTag))
                 {
@@ -716,4 +719,6 @@ public class ServerMarketManager implements IServerMarketManager, ServerSaveable
     {
         return BACKEND_INSTANCES.SERVER_SETTINGS.UTILITIES.playerIsAdmin(player);
     }
+
+
 }

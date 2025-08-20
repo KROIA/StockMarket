@@ -2,7 +2,7 @@ package net.kroia.stockmarket.market.server.order;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import net.kroia.modutilities.ServerSaveable;
+import net.kroia.modutilities.persistence.ServerSaveable;
 import net.kroia.stockmarket.util.ServerPlayerList;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
