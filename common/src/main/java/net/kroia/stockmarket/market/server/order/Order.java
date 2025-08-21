@@ -82,6 +82,23 @@ public abstract class Order implements ServerSaveable, INetworkPayloadConverter 
             default -> throw new IllegalArgumentException("Invalid order type");
         };
     }
+    public static Order loadFromTag(CompoundTag tag)
+    {
+        byte type = tag.getByte("type");
+        if(type == Type.LIMIT.ordinal())
+        {
+            LimitOrder order = new LimitOrder();
+            if(order.load(tag))
+                return order;
+        }
+        else if(type == Type.MARKET.ordinal())
+        {
+            MarketOrder order = new MarketOrder();
+            if(order.load(tag))
+                return order;
+        }
+        return null;
+    }
     protected Order(FriendlyByteBuf buf)
     {
         decode(buf);

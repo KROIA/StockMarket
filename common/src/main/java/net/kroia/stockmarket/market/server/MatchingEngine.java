@@ -78,6 +78,7 @@ public class MatchingEngine implements ServerSaveable {
         {
             if(!processLimitOrder(limitOrder))
             {
+
                 if(limitOrder.getStatus() == Order.Status.PENDING || limitOrder.getStatus() == Order.Status.PARTIAL)
                     orderBook.placeLimitOrder(limitOrder);
                 else
@@ -87,8 +88,15 @@ public class MatchingEngine implements ServerSaveable {
             }
         } else if (order instanceof MarketOrder marketOrder) {
             processMarketOrder(marketOrder);
+            if(marketOrder.isFilled())
+                marketOrder.markAsProcessed();
         } else {
             throw new IllegalArgumentException("Invalid order type");
+        }
+
+        if(order.getStatus() == Order.Status.PROCESSED)
+        {
+            BACKEND_INSTANCES.SERVER_MARKET_MANAGER.logNewOrderToHistory(tradingPair, order);
         }
     }
 
@@ -139,6 +147,9 @@ public class MatchingEngine implements ServerSaveable {
                     }
                     if (marketOrder.isFilled()) {
                         limitOrders.removeAll(toRemove);
+                        for(LimitOrder order : toRemove) {
+                            BACKEND_INSTANCES.SERVER_MARKET_MANAGER.logNewOrderToHistory(this.tradingPair, order);
+                        }
                         return true;
                     }
                     newPrice += deltaPrice;
@@ -178,7 +189,7 @@ public class MatchingEngine implements ServerSaveable {
             {
                 if(fillVolume<0)
                 {
-                    limitOrders.removeAll(toRemove);
+                    //limitOrders.removeAll(toRemove);
                     error("Market order overfilled: "+marketOrder);
                 }
                 break;
@@ -226,6 +237,9 @@ public class MatchingEngine implements ServerSaveable {
         }
 
         limitOrders.removeAll(toRemove);
+        for(LimitOrder order : toRemove) {
+            BACKEND_INSTANCES.SERVER_MARKET_MANAGER.logNewOrderToHistory(this.tradingPair, order);
+        }
 
         if(fillVolume != 0)
         {
@@ -383,6 +397,9 @@ public class MatchingEngine implements ServerSaveable {
 
 
         limitOrders.removeAll(toRemove);
+        for(LimitOrder order : toRemove) {
+            BACKEND_INSTANCES.SERVER_MARKET_MANAGER.logNewOrderToHistory(this.tradingPair, order);
+        }
         return fillVolume == 0;
     }
 

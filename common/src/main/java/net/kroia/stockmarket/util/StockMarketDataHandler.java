@@ -296,6 +296,10 @@ public class StockMarketDataHandler extends DataPersistence {
     {
         return getAbsoluteSavePath(MARKET_DATA_FOLDER_NAME);
     }
+    public Path getOrderHistoryFolderPath()
+    {
+        return getAbsoluteSavePath("OrderHistory");
+    }
     public Path getMetaDataFilePath()
     {
         return getAbsoluteSavePath(META_DATA_FILE_NAME);

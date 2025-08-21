@@ -134,7 +134,9 @@ public class StockMarketModBackend implements StockMarketAPI {
         INSTANCES.SERVER_DEFAULT_PRICES.setLogger(INSTANCES.LOGGER::error, INSTANCES.LOGGER::error, INSTANCES.LOGGER::debug);
 
         INSTANCES.SERVER_DATA_HANDLER = new StockMarketDataHandler();
-        INSTANCES.SERVER_MARKET_MANAGER = new ServerMarketManager();
+        File rootSaveFolder = server.getWorldPath(LevelResource.ROOT).toFile();
+        INSTANCES.SERVER_DATA_HANDLER.setLevelSavePath(rootSaveFolder.toPath());
+        INSTANCES.SERVER_MARKET_MANAGER = new ServerMarketManager(INSTANCES.SERVER_DATA_HANDLER.getOrderHistoryFolderPath());
 
         NEZNAMY_TAB_Placeholders.setBackend(INSTANCES);
 
