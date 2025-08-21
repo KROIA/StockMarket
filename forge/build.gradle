@@ -51,6 +51,7 @@ dependencies {
     shadowBundle project(path: ':common', configuration: 'transformProductionForge')
 
     modImplementation("net.kroia:modutilities-forge:$rootProject.modutilities_version")
+    modRuntimeOnly "curse.maven:spark-361579:4587309"
 }
 
 processResources {

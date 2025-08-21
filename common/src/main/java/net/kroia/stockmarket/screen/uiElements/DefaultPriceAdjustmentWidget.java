@@ -216,8 +216,8 @@ public class DefaultPriceAdjustmentWidget extends Frame {
         plot.addPlotData(plotData);
         plot.setXAxisLabel(TEXT.OLD_PRICE_AXIS_LABEL.getString());
         plot.setYAxisLabel(TEXT.NEW_PRICE_AXIS_LABEL.getString());
-        plot.setxAxisValueConversion("%.1f");
-        plot.setyAxisValueConversion("%.1f");
+        plot.setXAxisValueConversion("%.1f");
+        plot.setYAxisValueConversion("%.1f");
 
 
         addChild(factorEditorWidget);
