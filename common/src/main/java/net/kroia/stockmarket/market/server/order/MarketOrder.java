@@ -51,6 +51,22 @@ public class MarketOrder extends Order {
 
 
     @Override
+    public boolean save(CompoundTag tag) {
+        if(!super.save(tag))
+            return false;
+        tag.putByte("type", (byte) Type.MARKET.ordinal());
+        return true;
+    }
+
+    @Override
+    public boolean load(CompoundTag tag) {
+        if(!super.load(tag))
+            return false;
+        return true;
+    }
+
+
+    @Override
     public String toString() {
         String playerName;
         if(playerUUID == null)

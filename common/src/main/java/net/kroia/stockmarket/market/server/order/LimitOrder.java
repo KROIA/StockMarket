@@ -29,7 +29,7 @@ public class LimitOrder extends Order implements ServerSaveable {
         super(amount);
         this.price = price;
     }
-    private LimitOrder()
+    public LimitOrder()
     {
         super();
     }
@@ -113,6 +113,7 @@ public class LimitOrder extends Order implements ServerSaveable {
         if(!super.save(tag))
             return false;
         tag.putInt("price", price);
+        tag.putByte("type", (byte) Type.LIMIT.ordinal());
         return true;
     }
 

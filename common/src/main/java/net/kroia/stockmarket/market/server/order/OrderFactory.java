@@ -24,7 +24,7 @@ public class OrderFactory {
 
         if(tryReserveItem(bankAccountNumber, pair, lockedMoney, lockedItem, rawAmount > 0)){
             LimitOrder order = new LimitOrder(playerUUID, bankAccountNumber, (long)(rawAmount), price, lockedMoney);
-            BACKEND_INSTANCES.SERVER_MARKET_MANAGER.logNewOrderToHistory(pair, order);
+            return order;
 
         }
         return null;

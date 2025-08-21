@@ -69,7 +69,7 @@ public interface IServerMarketManager  {
      * @param pair The trading pair to retrieve history for
      * @return the order history for that trading pair (default implementation will return the most recent orders if pair is null.
      */
-    @Nullable Order[] getOrderHistoryForMarket(TradingPair pair);
+    @NotNull List<Order> getOrderHistoryForMarket(TradingPair pair);
 
 
     /**

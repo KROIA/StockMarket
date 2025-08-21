@@ -29,6 +29,7 @@ public class ClientMarketManager implements IClientMarketManager {
     {
         this.BACKEND_INSTANCES = backendInstances;
         ClientMarket.setBackend(backendInstances);
+        OrderHistory.setBackend(backendInstances);
     }
 
     private final List<ClientMarket> clientMarkets = new ArrayList<>();
@@ -208,7 +209,7 @@ public class ClientMarketManager implements IClientMarketManager {
     }
 
     @Override
-    public @Nullable Order[] getOrderHistoryForMarket(TradingPair pair) {
+    public @NotNull List<Order> getOrderHistoryForMarket(TradingPair pair) {
         return orderHistory.getOrderHistoryForMarket(pair);
     }
 

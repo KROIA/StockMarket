@@ -1,41 +1,214 @@
 package net.kroia.stockmarket.market.server.order;
 
-import net.kroia.modutilities.persistence.ServerSaveable;
-import net.kroia.modutilities.persistence.ServerSaveableChunked;
+import net.kroia.modutilities.persistence.NBTFileParser;
+import net.kroia.modutilities.persistence.archive.DataArchiveChunk;
+import net.kroia.modutilities.persistence.archive.DataArchiveManager;
+import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.TradingPair;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 
-import java.util.HashMap;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
-public class OrderHistory implements ServerSaveableChunked {
+public class OrderHistory /*implements ServerSaveableChunked*/ {
+    protected static StockMarketModBackend.Instances BACKEND_INSTANCES;
+    public static void setBackend(StockMarketModBackend.Instances backend) {
+        BACKEND_INSTANCES = backend;
+    }
 
-    static final int ORDER_CONTEXT = 50;
+
+
+    private static final class OrderHistoryDataArchiveChunk extends DataArchiveChunk {
+
+        public final Map<TradingPair, List<Order>> marketsOrdersMap= new java.util.HashMap<>();
+        public final List<Order> chronologicalOrderedOrderList = new java.util.ArrayList<>();
+
+        public OrderHistoryDataArchiveChunk() {
+            super();
+        }
+        public OrderHistoryDataArchiveChunk(long startTime) {
+            super(startTime);
+        }
+        @Override
+        protected boolean save(CompoundTag dataTag) {
+            CompoundTag marketsOrdersTag = new CompoundTag();
+            for (Map.Entry<TradingPair, List<Order>> entry : marketsOrdersMap.entrySet()) {
+                CompoundTag marketTag = new CompoundTag();
+                entry.getKey().save(marketTag);
+                ListTag ordersList = new ListTag();
+                for (Order order : entry.getValue()) {
+                    CompoundTag orderTag = new CompoundTag();
+                    order.save(orderTag);
+                    ordersList.add(orderTag);
+                }
+                marketTag.put("orders", ordersList);
+                marketsOrdersTag.put(entry.getKey().toString(), marketTag);
+            }
+            dataTag.put("marketsOrders", marketsOrdersTag);
+
+            ListTag chronologicalOrdersList = new ListTag();
+            for (Order order : chronologicalOrderedOrderList) {
+                CompoundTag orderTag = new CompoundTag();
+                order.save(orderTag);
+                chronologicalOrdersList.add(orderTag);
+            }
+            dataTag.put("chronologicalOrders", chronologicalOrdersList);
+            return true;
+        }
+
+        @Override
+        protected boolean load(CompoundTag dataTag) {
+            CompoundTag marketsOrdersTag = dataTag.getCompound("marketsOrders");
+            for (String marketKey : marketsOrdersTag.getAllKeys()) {
+                CompoundTag marketTag = marketsOrdersTag.getCompound(marketKey);
+                TradingPair pair = new TradingPair();
+                if (!pair.load(marketTag)) {
+                    continue; // Skip if loading the trading pair fails
+                }
+                ListTag ordersList = marketTag.getList("orders", 10);
+                List<Order> orders = new java.util.ArrayList<>();
+                for (int i = 0; i < ordersList.size(); i++) {
+                    CompoundTag orderTag = ordersList.getCompound(i);
+                    Order order = Order.loadFromTag(orderTag);
+                    if (order != null) {
+                        orders.add(order);
+                    }
+                }
+                marketsOrdersMap.put(pair, orders);
+            }
+
+            ListTag chronologicalOrdersList = dataTag.getList("chronologicalOrders", 10);
+            chronologicalOrderedOrderList.clear();
+            for (int i = 0; i < chronologicalOrdersList.size(); i++) {
+                CompoundTag orderTag = chronologicalOrdersList.getCompound(i);
+                Order order = Order.loadFromTag(orderTag);
+                if (order != null) {
+                    chronologicalOrderedOrderList.add(order);
+                }
+            }
+            return true;
+
+        }
+        // This class can be used to store order history data in a chunked manner if needed
+        // Currently, it is not implemented but can be extended in the future
+    }
+    private static final class OrderHistoryDataArchiveManager extends DataArchiveManager<OrderHistoryDataArchiveChunk>
+    {
+
+        private OrderHistoryDataArchiveChunk currentChunk;
+
+        // Server constructor
+        public OrderHistoryDataArchiveManager(Path archiveFolderPath) {
+            super(archiveFolderPath, NBTFileParser.NbtFormat.COMPRESSED, OrderHistoryDataArchiveChunk::new);
+            currentChunk = new OrderHistoryDataArchiveChunk();
+        }
+
+        public void hasChanged()
+        {
+            if(getChunkSizeUtilisationPercentage(currentChunk) > 80) {
+                long endTime = currentChunk.updateEndTime();
+                saveChunk(currentChunk);
+                currentChunk = new OrderHistoryDataArchiveChunk(endTime+1);
+            }
+        }
+
+        public OrderHistoryDataArchiveChunk getCurrentChunk() {
+            return currentChunk;
+        }
+
+        public boolean save()
+        {
+            currentChunk.updateEndTime();
+            return saveChunk(currentChunk);
+        }
+        public boolean load()
+        {
+            // load the most recent chunk
+            List<DataArchiveChunk.TimeInterval> chunkIntervals = getStoredIntervals();
+            if(!chunkIntervals.isEmpty())
+            {
+                var list = super.loadChunks(chunkIntervals.get(chunkIntervals.size()-1));
+                if(list != null && !list.isEmpty())
+                {
+                    currentChunk = list.get(0);
+                    return true;
+                }
+            }
+            return false;
+        }
+    }
+
+
+
+    /*static final int ORDER_CONTEXT = 50;
 
     protected Map<TradingPair, Order[]> orderData;
-    protected Order[] mostRecentOrders;
+    protected Order[] mostRecentOrders;*/
 
+    private final OrderHistoryDataArchiveManager orderHistoryDataArchiveManager;
+    private final OrderHistoryDataArchiveChunk clientChunkData;
+
+
+    // Server constructor
+    public OrderHistory(Path orderHistoryFolder){
+        orderHistoryDataArchiveManager = new OrderHistoryDataArchiveManager(orderHistoryFolder);
+        clientChunkData = null;
+        //orderData = new HashMap<>();
+        //mostRecentOrders = new Order[ORDER_CONTEXT];
+    }
+
+    // Client constructor
     public OrderHistory(){
-        orderData = new HashMap<>();
-        mostRecentOrders = new Order[ORDER_CONTEXT];
+        orderHistoryDataArchiveManager = null;
+        clientChunkData = new OrderHistoryDataArchiveChunk();
+        //orderData = new HashMap<>();
+        //mostRecentOrders = new Order[ORDER_CONTEXT];
     }
 
     public boolean putOrder(TradingPair pair, Order order){
-        if(orderData.containsKey(pair)){
-            logOrder(order, orderData.get(pair));
+
+        /*
+        if(order.isBot())
+        {
+            // Don't add bot orders
+            return false;
         }
-        else{
-            Order[] newOrderLog = new Order[ORDER_CONTEXT];
-            logOrder(order, newOrderLog);
-            orderData.put(pair, newOrderLog);
+        */
+
+
+        if(orderHistoryDataArchiveManager != null)
+        {
+            orderHistoryDataArchiveManager.currentChunk.chronologicalOrderedOrderList.add(order);
+            List<Order> orders = orderHistoryDataArchiveManager.currentChunk.marketsOrdersMap.computeIfAbsent(pair, k -> new java.util.ArrayList<>());
+            orders.add(order);
+            BACKEND_INSTANCES.LOGGER.info("[OrderHistory::putOrder()]: Order added to history, OrderID: " + order.getOrderID());
+            orderHistoryDataArchiveManager.hasChanged();
+            return true;
         }
-        logOrder(order, mostRecentOrders);
-        return true;
+
+        if(clientChunkData != null)
+        {
+            clientChunkData.chronologicalOrderedOrderList.add(order);
+            List<Order> orders = clientChunkData.marketsOrdersMap.computeIfAbsent(pair, k -> new java.util.ArrayList<>());
+            orders.add(order);
+            return true;
+        }
+        return false;
     }
 
-    public Order[] getOrderHistoryForMarket(TradingPair pair){
-        return orderData.getOrDefault(pair, mostRecentOrders);
+    public List<Order> getOrderHistoryForMarket(TradingPair pair){
+        if(orderHistoryDataArchiveManager != null)
+        {
+            return orderHistoryDataArchiveManager.currentChunk.marketsOrdersMap.computeIfAbsent(pair, k -> new java.util.ArrayList<>());
+        }
+        if(clientChunkData != null)
+        {
+            return clientChunkData.marketsOrdersMap.computeIfAbsent(pair, k -> new java.util.ArrayList<>());
+        }
+        return new ArrayList<>();
     }
 
     public void logOrder(Order order, Order[] orders){
@@ -50,7 +223,34 @@ public class OrderHistory implements ServerSaveableChunked {
         orders[orders.length-1] = order;
     }
 
-    @Override
+
+
+    public boolean save()
+    {
+        if(orderHistoryDataArchiveManager != null)
+        {
+            return orderHistoryDataArchiveManager.save();
+        }
+        if(clientChunkData != null)
+        {
+            return true; // Indicate success
+        }
+        return false;
+    }
+    public boolean load()
+    {
+        if(orderHistoryDataArchiveManager != null)
+        {
+            return orderHistoryDataArchiveManager.load();
+        }
+        if(clientChunkData != null)
+        {
+            return true; // Indicate success
+        }
+        return false;
+    }
+
+    /*@Override
     public boolean save(Map<String, ListTag> listTags) {
         boolean success = true;
         ListTag historyTag = new ListTag();
@@ -120,5 +320,5 @@ public class OrderHistory implements ServerSaveableChunked {
             }
         }
         return true;
-    }
+    }*/
 }

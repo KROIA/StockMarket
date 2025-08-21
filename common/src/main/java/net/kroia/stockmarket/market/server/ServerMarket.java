@@ -622,6 +622,10 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
             return false;
         order.markAsCancelled();
         unlockLockedAmount(order);
+        if(order.getFilledAmount() != 0)
+        {
+            BACKEND_INSTANCES.SERVER_MARKET_MANAGER.logNewOrderToHistory(this.tradingPair, order);
+        }
         if(order instanceof LimitOrder limitOrder)
         {
             orderBook.removeOrder(limitOrder);

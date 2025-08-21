@@ -104,6 +104,7 @@ public class OrderBook implements ServerSaveable {
     }
     public boolean removeOrder(LimitOrder order)
     {
+
         if(order.isBuy())
             return limitBuyOrders.remove(order);
         else

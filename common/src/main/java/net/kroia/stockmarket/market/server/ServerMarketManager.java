@@ -20,6 +20,7 @@ import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.nio.file.Path;
 import java.util.*;
 
 public class ServerMarketManager implements IServerMarketManager, ServerSaveableChunked
@@ -27,6 +28,7 @@ public class ServerMarketManager implements IServerMarketManager, ServerSaveable
     private static StockMarketModBackend.Instances BACKEND_INSTANCES;
     public static void setBackend(StockMarketModBackend.Instances backend) {
         BACKEND_INSTANCES = backend;
+        OrderHistory.setBackend(backend);
     }
 
 
@@ -34,10 +36,13 @@ public class ServerMarketManager implements IServerMarketManager, ServerSaveable
     private final Map<TradingPair, ServerMarket> markets = new HashMap<>();
     private final ArrayList<ArrayList<ServerMarket>> tradeItemsChunks = new ArrayList<>(); // For processing trade items in chunks
     private int tradeItemUpdateCallCounter = 0;
-    private final OrderHistory orderHistory = new OrderHistory();
+    private final OrderHistory orderHistory;
 
-    public ServerMarketManager()
+
+    // server constructor
+    public ServerMarketManager(Path orderHistoryPath)
     {
+        orderHistory = new OrderHistory(orderHistoryPath);
 
     }
 
@@ -58,6 +63,11 @@ public class ServerMarketManager implements IServerMarketManager, ServerSaveable
     public static float rawToRealPrice(long rawPrice, int marketPriceScale)
     {
         return (float) rawPrice / marketPriceScale;
+    }
+
+    public OrderHistory getOrderHistory()
+    {
+        return orderHistory;
     }
 
 
@@ -96,7 +106,7 @@ public class ServerMarketManager implements IServerMarketManager, ServerSaveable
     }
 
     @Override
-    public @Nullable Order[] getOrderHistoryForMarket(TradingPair pair) {
+    public @NotNull List<Order> getOrderHistoryForMarket(TradingPair pair) {
         return orderHistory.getOrderHistoryForMarket(pair);
     }
 
@@ -668,6 +678,7 @@ public class ServerMarketManager implements IServerMarketManager, ServerSaveable
         }
         listTagMap.put("markets", marketsListTag);
         long endMillis = System.currentTimeMillis();
+        success &= orderHistory.save();
         debug("Saving ServerMarketManager took "+(endMillis-startMillis)+"ms");
         return success;
     }
@@ -675,6 +686,7 @@ public class ServerMarketManager implements IServerMarketManager, ServerSaveable
     @Override
     public boolean load(Map<String, ListTag> listTagMap) {
         boolean loadSuccess = true;
+        loadSuccess &= orderHistory.load();
         ListTag marketsListTag = listTagMap.get("markets");
         if(marketsListTag == null)
         {
