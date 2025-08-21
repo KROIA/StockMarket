@@ -3,6 +3,7 @@ package net.kroia.stockmarket.market.server.order;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.kroia.stockmarket.util.ServerPlayerList;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 
 import java.util.UUID;
@@ -23,6 +24,10 @@ public class MarketOrder extends Order {
         super(buf);
     }
 
+    public MarketOrder(){
+        super();
+    }
+
 
 
 
@@ -34,6 +39,14 @@ public class MarketOrder extends Order {
             return super.isEqual(other);
         }
         return false;
+    }
+
+    public static MarketOrder loadFromTag(CompoundTag tag){
+        MarketOrder order = new MarketOrder();
+        if(order.load(tag)){
+            return order;
+        }
+        return null;
     }
 
 

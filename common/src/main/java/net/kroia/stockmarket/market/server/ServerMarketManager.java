@@ -10,6 +10,7 @@ import net.kroia.stockmarket.api.IServerMarketManager;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.clientdata.*;
 import net.kroia.stockmarket.market.server.order.Order;
+import net.kroia.stockmarket.market.server.order.OrderHistory;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.server.MinecraftServer;
@@ -33,6 +34,7 @@ public class ServerMarketManager implements IServerMarketManager, ServerSaveable
     private final Map<TradingPair, ServerMarket> markets = new HashMap<>();
     private final ArrayList<ArrayList<ServerMarket>> tradeItemsChunks = new ArrayList<>(); // For processing trade items in chunks
     private int tradeItemUpdateCallCounter = 0;
+    private final OrderHistory orderHistory = new OrderHistory();
 
     public ServerMarketManager()
     {
@@ -92,6 +94,21 @@ public class ServerMarketManager implements IServerMarketManager, ServerSaveable
             return null;
         return market.getOrderBookVolumeData(historyViewCount, minPrice, maxPrice, tileCount);
     }
+
+    @Override
+    public @Nullable Order[] getOrderHistoryForMarket(TradingPair pair) {
+        return orderHistory.getOrderHistoryForMarket(pair);
+    }
+
+    @Override
+    public boolean logNewOrderToHistory(TradingPair pair, Order order) {
+        if(pair == null || order == null){
+            return false;
+        }
+        orderHistory.putOrder(pair, order);
+        return true;
+    }
+
     @Override
     public @Nullable OrderBookVolumeData getOrderBookVolumeData(@NotNull TradingPair pair)
     {
