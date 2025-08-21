@@ -4,6 +4,7 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.clientdata.*;
 import net.kroia.stockmarket.market.server.MarketFactory;
+import net.kroia.stockmarket.market.server.order.Order;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Tuple;
 import org.jetbrains.annotations.NotNull;
@@ -61,6 +62,24 @@ public interface IServerMarketManager  {
      * @return OrderBookVolumeData containing the min and max price, and the volume array.
      */
     @Nullable OrderBookVolumeData getOrderBookVolumeData(@NotNull TradingPair pair, int historyViewCount, float minPrice, float maxPrice, int tileCount);
+
+
+    /**
+     * Retrieves the order history for the given pair
+     * @param pair The trading pair to retrieve history for
+     * @return the order history for that trading pair (default implementation will return the most recent orders if pair is null.
+     */
+    @Nullable Order[] getOrderHistoryForMarket(TradingPair pair);
+
+
+    /**
+     * puts a new order into the history
+     * @param pair the market to add the order to
+     * @param order the order to add to the market history
+     */
+    boolean logNewOrderToHistory(TradingPair pair, Order order);
+
+
 
     /**
      * Gets the histogram data of the order book in an optimal price range for a given market.
@@ -359,6 +378,8 @@ public interface IServerMarketManager  {
      * @return true if the market was successfully removed, false otherwise.
      */
     boolean removeTradeItem(@NotNull ItemID itemID, @NotNull ItemID currency);
+
+
 
 
 

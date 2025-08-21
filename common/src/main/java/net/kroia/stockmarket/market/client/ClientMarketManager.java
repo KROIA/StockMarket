@@ -8,6 +8,8 @@ import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.clientdata.DefaultPriceAdjustmentFactorsData;
 import net.kroia.stockmarket.market.clientdata.TradingPairData;
 import net.kroia.stockmarket.market.server.MarketFactory;
+import net.kroia.stockmarket.market.server.order.Order;
+import net.kroia.stockmarket.market.server.order.OrderHistory;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncTradeItemsPacket;
 import net.minecraft.client.Minecraft;
@@ -31,6 +33,7 @@ public class ClientMarketManager implements IClientMarketManager {
 
     private final List<ClientMarket> clientMarkets = new ArrayList<>();
     private boolean initialized = false;
+    private final OrderHistory orderHistory = new OrderHistory();
     //@Override
     private void init()
     {
@@ -204,9 +207,19 @@ public class ClientMarketManager implements IClientMarketManager {
         StockMarketNetworking.DEFAULT_PRICE_ADJUSTMENT_FACTORS_REQUEST.sendRequestToServer(data, callback);
     }
 
+    @Override
+    public @Nullable Order[] getOrderHistoryForMarket(TradingPair pair) {
+        return orderHistory.getOrderHistoryForMarket(pair);
+    }
 
-
-
+    @Override
+    public boolean logNewOrderToHistory(TradingPair pair, Order order) {
+        if(pair==null || order == null){
+            return false;
+        }
+        orderHistory.putOrder(pair, order);
+        return true;
+    }
 
 
     @Override

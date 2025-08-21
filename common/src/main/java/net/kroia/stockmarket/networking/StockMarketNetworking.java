@@ -8,6 +8,7 @@ import net.kroia.stockmarket.networking.packet.client_sender.update.entity.Updat
 import net.kroia.stockmarket.networking.packet.request.*;
 import net.kroia.stockmarket.networking.packet.server_sender.update.OpenScreenPacket;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncTradeItemsPacket;
+import net.kroia.stockmarket.networking.packet.server_sender.update.UpdateOrderHistoryPacket;
 import net.kroia.stockmarket.networking.packet.server_sender.update.entity.SyncStockMarketBlockEntityPacket;
 
 public class StockMarketNetworking extends NetworkManager {
@@ -57,6 +58,7 @@ public class StockMarketNetworking extends NetworkManager {
        register(OpenScreenPacket.class, OpenScreenPacket::encode, OpenScreenPacket::new, OpenScreenPacket::receive);
        //register(SyncBotSettingsPacket.class, SyncBotSettingsPacket::encode, SyncBotSettingsPacket::new, SyncBotSettingsPacket::receive);
        //register(SyncBotTargetPricePacket.class, SyncBotTargetPricePacket::encode, SyncBotTargetPricePacket::new, SyncBotTargetPricePacket::receive);
+        register(UpdateOrderHistoryPacket.class, UpdateOrderHistoryPacket::encode, UpdateOrderHistoryPacket::new, UpdateOrderHistoryPacket::receive);
 
     }
 
