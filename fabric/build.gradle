@@ -46,6 +46,7 @@ dependencies {
     shadowBundle project(path: ':common', configuration: 'transformProductionFabric')
 
     modImplementation("net.kroia:modutilities-fabric:$rootProject.modutilities_version")
+    modRuntimeOnly "maven.modrinth:spark:1.10.53-fabric"
 }
 
 processResources {

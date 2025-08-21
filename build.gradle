@@ -44,6 +44,18 @@ subprojects {
 
         // https://github.com/NEZNAMY/TAB API
         maven { url 'https://jitpack.io' }
+        maven {
+            name = "lucko"
+            url = "https://repo.lucko.me/"
+        }
+        maven {
+            name = "Modrinth"
+            url = "https://api.modrinth.com/maven"
+        }
+        maven {
+            name = "CurseMaven"
+            url = "https://cursemaven.com"
+        }
     }
 
     dependencies {
