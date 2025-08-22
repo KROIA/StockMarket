@@ -96,9 +96,9 @@ public class DefaultMarketSettings {
             //public final Price STICK = registerSetting("stick", Math.max(1, LOG.get()/8));
             public final Price STONE = registerSetting("stone", 1);
             public final Price COBBLESTONE = registerSetting("cobblestone", Math.max(1, STONE.get()/2)); // Cobblestone is generally cheaper than stone
-            public final Price SAND = registerSetting("sand", 2);
+            public final Price SAND = registerSetting("sand", 0.3f);
             public final Price DIRT = registerSetting("dirt", 0.3f); // Dirt is generally cheaper than sand
-            public final Price GRAVEL = registerSetting("gravel", 2);
+            public final Price GRAVEL = registerSetting("gravel", 1f);
 
             public final Price WOOL = registerSetting("wool", 6);
             public final Price GLASS = registerSetting("glass", SAND.get());
@@ -116,7 +116,7 @@ public class DefaultMarketSettings {
 
             public final Price COAL = registerSetting("coal", 8);
             public final Price IRON = registerSetting("iron", 15);
-            public final Price COPPER = registerSetting("copper", 20);
+            public final Price COPPER = registerSetting("copper", 9);
             public final Price GOLD = registerSetting("gold", 40);
             public final Price DIAMOND = registerSetting("diamond", 160);
             public final Price EMERALD = registerSetting("emerald", 100);

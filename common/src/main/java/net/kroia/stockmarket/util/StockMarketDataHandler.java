@@ -32,6 +32,7 @@ public class StockMarketDataHandler extends DataPersistence {
     private boolean isLoaded = false;
     private long tickCounter = 0;
     private int lastPlayerCount = 0;
+    private boolean isCurrentlyAsyncSaving = false;
 
     public StockMarketDataHandler() {
         super(JsonFormat.PRETTY, NbtFormat.COMPRESSED, Path.of("Finance/StockMarket"));
@@ -89,6 +90,12 @@ public class StockMarketDataHandler extends DataPersistence {
     }
     public CompletableFuture<Boolean> saveAllAsync()
     {
+        if(isCurrentlyAsyncSaving)
+        {
+            warn("StockMarket Mod data is already being saved asynchronously. Skipping this save operation.");
+            return CompletableFuture.completedFuture(false);
+        }
+        isCurrentlyAsyncSaving = true;
         info("Saving StockMarket Mod data...");
 
         CompletableFuture<Boolean> fut5 = CompletableFuture.supplyAsync(() -> {
@@ -110,6 +117,8 @@ public class StockMarketDataHandler extends DataPersistence {
                 info("StockMarket Mod data saved successfully.");
             else
                 error("Failed to save StockMarket Mod data.");
+
+            isCurrentlyAsyncSaving = false; // Reset the flag after saving
             return allSuccess;
         });
     }
