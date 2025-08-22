@@ -8,6 +8,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.util.UUID;
+
 public class SyncStockMarketBlockEntityPacket extends StockMarketNetworkPacket {
     private BlockPos pos;
     private TradingPair tradingPair;
@@ -17,13 +19,13 @@ public class SyncStockMarketBlockEntityPacket extends StockMarketNetworkPacket {
 
 
 
-    public SyncStockMarketBlockEntityPacket(BlockPos pos, StockMarketBlockEntity blockEntity) {
+    public SyncStockMarketBlockEntityPacket(UUID playerUUID, BlockPos pos, StockMarketBlockEntity blockEntity) {
         super();
         this.pos = pos;
-        this.tradingPair = blockEntity.getTradringPair();
-        this.amount = blockEntity.getAmount();
-        this.price = blockEntity.getPrice();
-        this.selectedBankAccountNumber = blockEntity.getSelectedBankAccountNumber();
+        this.tradingPair = blockEntity.getTradringPair(playerUUID);
+        this.amount = blockEntity.getAmount(playerUUID);
+        this.price = blockEntity.getPrice(playerUUID);
+        this.selectedBankAccountNumber = blockEntity.getSelectedBankAccountNumber(playerUUID);
     }
 
 
@@ -51,7 +53,7 @@ public class SyncStockMarketBlockEntityPacket extends StockMarketNetworkPacket {
     }
 
     public static void sendPacketToClient(BlockPos pos, StockMarketBlockEntity blockEntity, ServerPlayer player) {
-        new SyncStockMarketBlockEntityPacket(pos, blockEntity).sendToClient(player);
+        new SyncStockMarketBlockEntityPacket(player.getUUID(), pos, blockEntity).sendToClient(player);
     }
 
     @Override

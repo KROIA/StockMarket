@@ -1,6 +1,8 @@
 package net.kroia.stockmarket.networking.packet.request;
 
+import net.kroia.stockmarket.api.IServerMarket;
 import net.kroia.stockmarket.market.clientdata.OrderChangeData;
+import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
@@ -18,6 +20,18 @@ public class OrderChangeRequest extends StockMarketGenericRequest<OrderChangeDat
 
     @Override
     public Boolean handleOnServer(OrderChangeData input, ServerPlayer sender) {
+        IServerMarket market = BACKEND_INSTANCES.SERVER_MARKET_MANAGER.getMarket(input.tradingPair.toTradingPair());
+        if(market == null) {
+            return false; // Market not found
+        }
+        Order order = market.getOrderBook().getOrder(input.orderID);
+        if(order == null) {
+            return false; // Order not found
+        }
+        if(order.getPlayerUUID() != sender.getUUID() && !playerIsAdmin(sender)) {
+            return false; // Player does not own the order
+        }
+
         return BACKEND_INSTANCES.SERVER_MARKET_MANAGER.handleOrderChangeData(input, sender);
     }
 

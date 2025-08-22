@@ -3,9 +3,13 @@ package net.kroia.stockmarket.networking.packet.client_sender.update.entity;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.util.StockMarketNetworkPacket;
+import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
+
+import java.util.Map;
+import java.util.UUID;
 
 public class UpdateStockMarketBlockEntityPacket extends StockMarketNetworkPacket {
     private BlockPos pos;
@@ -16,13 +20,13 @@ public class UpdateStockMarketBlockEntityPacket extends StockMarketNetworkPacket
 
 
 
-    public UpdateStockMarketBlockEntityPacket(BlockPos pos, StockMarketBlockEntity blockEntity) {
+    public UpdateStockMarketBlockEntityPacket(UUID playerUUID, BlockPos pos, StockMarketBlockEntity blockEntity) {
         super();
         this.pos = pos;
-        this.tradingPair = blockEntity.getTradringPair();
-        this.amount = blockEntity.getAmount();
-        this.price = blockEntity.getPrice();
-        this.selectedBankAccountNumber = blockEntity.getSelectedBankAccountNumber();
+        this.tradingPair = blockEntity.getTradringPair(playerUUID);
+        this.amount = blockEntity.getAmount(playerUUID);
+        this.price = blockEntity.getPrice(playerUUID);
+        this.selectedBankAccountNumber = blockEntity.getSelectedBankAccountNumber(playerUUID);
     }
 
 
@@ -50,7 +54,7 @@ public class UpdateStockMarketBlockEntityPacket extends StockMarketNetworkPacket
     }
 
     public static void sendPacketToServer(BlockPos pos, StockMarketBlockEntity blockEntity) {
-        new UpdateStockMarketBlockEntityPacket(pos, blockEntity).sendToServer();
+        new UpdateStockMarketBlockEntityPacket(Minecraft.getInstance().player.getUUID(), pos, blockEntity).sendToServer();
     }
 
     @Override
@@ -87,11 +91,13 @@ public class UpdateStockMarketBlockEntityPacket extends StockMarketNetworkPacket
             error("BlockEntity not found at position "+this.pos);
             return;
         }
-        blockEntity.setTradingPair(this.tradingPair);
-        blockEntity.setAmount(this.amount);
-        blockEntity.setPrice(this.price);
-        blockEntity.setChanged();
-        blockEntity.setSelectedBankAccountNumber(this.selectedBankAccountNumber);
+        Map<UUID, StockMarketBlockEntity.UserData> userDataMap = blockEntity.getUserDataMap();
+        StockMarketBlockEntity.UserData userData = userDataMap.computeIfAbsent(sender.getUUID(), k -> new StockMarketBlockEntity.UserData());
+        userData.selectedBankAccountNumber = this.selectedBankAccountNumber;
+        userData.amount = this.amount;
+        userData.price = this.price;
+        userData.tradingPair = this.tradingPair;
+        blockEntity.set(userDataMap);
         sender.level().getChunkAt(this.pos).setUnsaved(true);
     }
 }

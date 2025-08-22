@@ -22,6 +22,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
 
 import java.util.List;
+import java.util.UUID;
 
 
 public class TradeScreen extends StockMarketGuiScreen {
@@ -70,7 +71,10 @@ public class TradeScreen extends StockMarketGuiScreen {
     private int selectedBankAccountNumber = 0;
 
     public TradeScreen(StockMarketBlockEntity blockEntity) {
-        this(blockEntity.getTradringPair(), blockEntity.getSelectedBankAccountNumber(), blockEntity.getAmount(), blockEntity.getPrice());
+        this(blockEntity.getTradringPair(Minecraft.getInstance().player.getUUID()),
+                blockEntity.getSelectedBankAccountNumber(Minecraft.getInstance().player.getUUID()),
+                blockEntity.getAmount(Minecraft.getInstance().player.getUUID()),
+                blockEntity.getPrice(Minecraft.getInstance().player.getUUID()));
         this.blockEntity = blockEntity;
 
 
@@ -182,10 +186,11 @@ public class TradeScreen extends StockMarketGuiScreen {
         TickEvent.PLAYER_POST.unregister(TradeScreen::onClientTick);
         if(blockEntity != null)
         {
-            blockEntity.setTradingPair(tradingPair);
-            blockEntity.setAmount(tradingPanel.getAmount());
-            blockEntity.setPrice(tradingPanel.getLimitPrice());
-            blockEntity.setSelectedBankAccountNumber(selectedBankAccountNumber);
+            UUID playerUUID = Minecraft.getInstance().player.getUUID();
+            blockEntity.setTradingPair(playerUUID, tradingPair);
+            blockEntity.setAmount(playerUUID, tradingPanel.getAmount());
+            blockEntity.setPrice(playerUUID, tradingPanel.getLimitPrice());
+            blockEntity.setSelectedBankAccountNumber(playerUUID, selectedBankAccountNumber);
             UpdateStockMarketBlockEntityPacket.sendPacketToServer(blockEntity.getBlockPos(), blockEntity);
         }
     }
