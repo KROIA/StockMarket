@@ -23,8 +23,8 @@ public class OrderHistory /*implements ServerSaveableChunked*/ {
 
     private static final class OrderHistoryDataArchiveChunk extends DataArchiveChunk {
 
-        public final Map<TradingPair, List<Order>> marketsOrdersMap= new java.util.HashMap<>();
-        public final List<Order> chronologicalOrderedOrderList = new java.util.ArrayList<>();
+        public final Map<TradingPair, List<OrderDataRecord>> marketsOrdersMap= new java.util.HashMap<>();
+        public final List<OrderDataRecord> chronologicalOrderedOrderList = new java.util.ArrayList<>();
 
         public OrderHistoryDataArchiveChunk() {
             super();
@@ -35,11 +35,11 @@ public class OrderHistory /*implements ServerSaveableChunked*/ {
         @Override
         protected boolean save(CompoundTag dataTag) {
             CompoundTag marketsOrdersTag = new CompoundTag();
-            for (Map.Entry<TradingPair, List<Order>> entry : marketsOrdersMap.entrySet()) {
+            for (Map.Entry<TradingPair, List<OrderDataRecord>> entry : marketsOrdersMap.entrySet()) {
                 CompoundTag marketTag = new CompoundTag();
                 entry.getKey().save(marketTag);
                 ListTag ordersList = new ListTag();
-                for (Order order : entry.getValue()) {
+                for (OrderDataRecord order : entry.getValue()) {
                     CompoundTag orderTag = new CompoundTag();
                     order.save(orderTag);
                     ordersList.add(orderTag);
@@ -50,7 +50,7 @@ public class OrderHistory /*implements ServerSaveableChunked*/ {
             dataTag.put("marketsOrders", marketsOrdersTag);
 
             ListTag chronologicalOrdersList = new ListTag();
-            for (Order order : chronologicalOrderedOrderList) {
+            for (OrderDataRecord order : chronologicalOrderedOrderList) {
                 CompoundTag orderTag = new CompoundTag();
                 order.save(orderTag);
                 chronologicalOrdersList.add(orderTag);
@@ -69,10 +69,11 @@ public class OrderHistory /*implements ServerSaveableChunked*/ {
                     continue; // Skip if loading the trading pair fails
                 }
                 ListTag ordersList = marketTag.getList("orders", 10);
-                List<Order> orders = new java.util.ArrayList<>();
+                List<OrderDataRecord> orders = new java.util.ArrayList<>();
                 for (int i = 0; i < ordersList.size(); i++) {
                     CompoundTag orderTag = ordersList.getCompound(i);
-                    Order order = Order.loadFromTag(orderTag);
+                    OrderDataRecord order = new OrderDataRecord();
+                    order.load(orderTag);
                     if (order != null) {
                         orders.add(order);
                     }
@@ -84,8 +85,8 @@ public class OrderHistory /*implements ServerSaveableChunked*/ {
             chronologicalOrderedOrderList.clear();
             for (int i = 0; i < chronologicalOrdersList.size(); i++) {
                 CompoundTag orderTag = chronologicalOrdersList.getCompound(i);
-                Order order = Order.loadFromTag(orderTag);
-                if (order != null) {
+                OrderDataRecord order = new OrderDataRecord();
+                if (order.load(orderTag)) {
                     chronologicalOrderedOrderList.add(order);
                 }
             }
@@ -181,9 +182,9 @@ public class OrderHistory /*implements ServerSaveableChunked*/ {
 
         if(orderHistoryDataArchiveManager != null)
         {
-            orderHistoryDataArchiveManager.currentChunk.chronologicalOrderedOrderList.add(order);
-            List<Order> orders = orderHistoryDataArchiveManager.currentChunk.marketsOrdersMap.computeIfAbsent(pair, k -> new java.util.ArrayList<>());
-            orders.add(order);
+            orderHistoryDataArchiveManager.currentChunk.chronologicalOrderedOrderList.add(OrderDataRecord.fromOrder(order));
+            List<OrderDataRecord> orders = orderHistoryDataArchiveManager.currentChunk.marketsOrdersMap.computeIfAbsent(pair, k -> new java.util.ArrayList<>());
+            orders.add(OrderDataRecord.fromOrder(order));
             BACKEND_INSTANCES.LOGGER.info("[OrderHistory::putOrder()]: Order added to history, OrderID: " + order.getOrderID());
             orderHistoryDataArchiveManager.hasChanged();
             return true;
@@ -191,15 +192,15 @@ public class OrderHistory /*implements ServerSaveableChunked*/ {
 
         if(clientChunkData != null)
         {
-            clientChunkData.chronologicalOrderedOrderList.add(order);
-            List<Order> orders = clientChunkData.marketsOrdersMap.computeIfAbsent(pair, k -> new java.util.ArrayList<>());
-            orders.add(order);
+            clientChunkData.chronologicalOrderedOrderList.add(OrderDataRecord.fromOrder(order));
+            List<OrderDataRecord> orders = clientChunkData.marketsOrdersMap.computeIfAbsent(pair, k -> new java.util.ArrayList<>());
+            orders.add(OrderDataRecord.fromOrder(order));
             return true;
         }
         return false;
     }
 
-    public List<Order> getOrderHistoryForMarket(TradingPair pair){
+    public List<OrderDataRecord> getOrderHistoryForMarket(TradingPair pair){
         if(orderHistoryDataArchiveManager != null)
         {
             return orderHistoryDataArchiveManager.currentChunk.marketsOrdersMap.computeIfAbsent(pair, k -> new java.util.ArrayList<>());

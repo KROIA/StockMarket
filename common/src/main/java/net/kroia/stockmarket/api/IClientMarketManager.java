@@ -5,6 +5,7 @@ import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.clientdata.DefaultPriceAdjustmentFactorsData;
 import net.kroia.stockmarket.market.server.MarketFactory;
 import net.kroia.stockmarket.market.server.order.Order;
+import net.kroia.stockmarket.market.server.order.OrderDataRecord;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncTradeItemsPacket;
 import net.minecraft.util.Tuple;
 import org.jetbrains.annotations.NotNull;
@@ -190,7 +191,7 @@ public interface IClientMarketManager {
      * @param pair The trading pair to retrieve history for
      * @return the order history for that trading pair (default implementation will return the most recent orders if pair is null.
      */
-    @NotNull List<Order> getOrderHistoryForMarket(TradingPair pair);
+    @NotNull List<OrderDataRecord> getOrderHistoryForMarket(TradingPair pair);
 
 
     /**

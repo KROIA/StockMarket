@@ -9,6 +9,7 @@ import net.kroia.stockmarket.market.clientdata.DefaultPriceAdjustmentFactorsData
 import net.kroia.stockmarket.market.clientdata.TradingPairData;
 import net.kroia.stockmarket.market.server.MarketFactory;
 import net.kroia.stockmarket.market.server.order.Order;
+import net.kroia.stockmarket.market.server.order.OrderDataRecord;
 import net.kroia.stockmarket.market.server.order.OrderHistory;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncTradeItemsPacket;
@@ -209,7 +210,7 @@ public class ClientMarketManager implements IClientMarketManager {
     }
 
     @Override
-    public @NotNull List<Order> getOrderHistoryForMarket(TradingPair pair) {
+    public @NotNull List<OrderDataRecord> getOrderHistoryForMarket(TradingPair pair) {
         return orderHistory.getOrderHistoryForMarket(pair);
     }
 

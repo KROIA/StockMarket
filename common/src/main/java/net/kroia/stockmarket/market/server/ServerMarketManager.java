@@ -10,6 +10,7 @@ import net.kroia.stockmarket.api.IServerMarketManager;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.clientdata.*;
 import net.kroia.stockmarket.market.server.order.Order;
+import net.kroia.stockmarket.market.server.order.OrderDataRecord;
 import net.kroia.stockmarket.market.server.order.OrderHistory;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -106,7 +107,7 @@ public class ServerMarketManager implements IServerMarketManager, ServerSaveable
     }
 
     @Override
-    public @NotNull List<Order> getOrderHistoryForMarket(TradingPair pair) {
+    public @NotNull List<OrderDataRecord> getOrderHistoryForMarket(TradingPair pair) {
         return orderHistory.getOrderHistoryForMarket(pair);
     }
 
