@@ -313,13 +313,15 @@ public class OrderHistory {
         If you enable this code section to remove the bot orders from being saved,
         you must also remove the TEST_DUMMY_UUID from the OrderDataRecord class because that was just a workaround for testing purposes.
 
+         */
+
 
         if(order.isBot())
         {
             // Don't add bot orders
             return false;
         }
-        */
+
 
 
         if(orderHistoryDataArchiveManager != null)
@@ -350,6 +352,10 @@ public class OrderHistory {
     public List<OrderDataRecord> getOrderHistoryForMarket(TradingPair pair){
         if(orderHistoryDataArchiveManager != null)
         {
+            if(pair==null){
+                return orderHistoryDataArchiveManager.currentChunk.chronologicalOrderedOrderList;
+            }
+
             return orderHistoryDataArchiveManager.currentChunk.marketsOrdersMap.computeIfAbsent(pair, k -> new java.util.ArrayList<>());
         }
         if(clientChunkData != null)

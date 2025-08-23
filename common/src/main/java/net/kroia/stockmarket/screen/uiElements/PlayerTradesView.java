@@ -1,11 +1,13 @@
 package net.kroia.stockmarket.screen.uiElements;
 
-import net.kroia.modutilities.gui.elements.Label;
-import net.kroia.modutilities.gui.elements.VerticalListView;
+import net.kroia.modutilities.gui.elements.*;
 import net.kroia.modutilities.gui.elements.base.ListView;
 import net.kroia.modutilities.gui.layout.Layout;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.market.TradingPair;
+import net.kroia.stockmarket.market.server.order.Order;
+import net.kroia.stockmarket.market.server.order.OrderDataRecord;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 
 public class PlayerTradesView extends StockMarketGuiElement {
@@ -18,15 +20,19 @@ public class PlayerTradesView extends StockMarketGuiElement {
 
     private static class PlayerTradeView extends StockMarketGuiElement
     {
-        private final Label nameLabel;
-        public PlayerTradeView(String playerName)
-        {
-            // Initialize the player trade view element
-            nameLabel = new Label(playerName);
-            nameLabel.setHoverTooltipSupplier(() -> "This is a tooltip for " + playerName);
-            nameLabel.setHoverTooltipMousePositionAlignment(Alignment.LEFT);
+        private final Label description;
 
-            addChild(nameLabel);
+        public PlayerTradeView(OrderDataRecord record, String playerName)
+        {
+
+           description = new Label(playerName + " executed a " +
+                   (record.type == Order.Type.LIMIT ? "LIMIT" : "MARKET") + " order to " + (record.amount > 0 ? "BUY " : "SELL " ) + Math.abs(record.amount));
+           description.setBounds(this.getX(), this.getY(), 200, 16);
+           description.setPadding(3);
+           ItemView tex = new ItemView(record.tradingPair.getItem().getStack());
+           tex.setBounds(description.getTextWidth(description.getText()) + 6, description.getY(), ItemView.DEFAULT_WIDTH, ItemView.DEFAULT_WIDTH);
+           addChild(description);
+           addChild(tex);
 
             // Set the height of this element to 20. The layout of the list view will not change the height,
             // only its width.
@@ -46,7 +52,7 @@ public class PlayerTradesView extends StockMarketGuiElement {
             int padding = 0;
             int spacing = StockMarketGuiElement.spacing;
 
-            nameLabel.setBounds(padding, padding, width - 2 * padding, height - 2 * padding);
+            description.setBounds(padding, padding, width - 2 * padding, height - 2 * padding);
         }
 
     }
@@ -64,34 +70,17 @@ public class PlayerTradesView extends StockMarketGuiElement {
         playersListView.setLayout(layout);
         addChild(playersListView);
 
+    }
 
-        // Populate the list with some example player elements
-        playersListView.addChild(new PlayerTradeView("Player1"));
-        playersListView.addChild(new PlayerTradeView("Player2"));
-        playersListView.addChild(new PlayerTradeView("Player3"));
-        playersListView.addChild(new PlayerTradeView("Player4"));
-        playersListView.addChild(new PlayerTradeView("Player5"));
+    public void addPlayerTrade(OrderDataRecord record, String name){
+        playersListView.addChild(new PlayerTradeView(record, name));
+    }
+    public void addPlayerTrade(OrderDataRecord record, String name, int index){
+        playersListView.getChilds().add(index, new PlayerTradeView(record, name));
+    }
 
-
-        // Requesting all markets that exist
-        getMarketManager().requestTradingPairs((pairs)->
-        {
-            if(!pairs.isEmpty())
-            {
-                // select a market to use the getSelectedMarket() methode
-                this.selectMarket(pairs.get(0));
-
-                // Request the orders in the price range from 0 to 1000 for the selected market
-                // Alternative use: getSelectedMarket().requestOrders((orders)->{}); to get all orders without a range
-                getSelectedMarket().requestOrders(0,1000.f, (orders)->
-                {
-                    // Handle the received orders for the selected market
-                    for (var order : orders) {
-                        info("Received order: " + order.orderID + " volume: " + order.amount + " price: " + order.limitPrice);
-                    }
-                });
-            }
-        });
+    public void clear(){
+        playersListView.removeChilds();
     }
 
 

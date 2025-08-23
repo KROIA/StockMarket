@@ -65,6 +65,8 @@ public interface IServerMarketManager  {
     @Nullable OrderBookVolumeData getOrderBookVolumeData(@NotNull TradingPair pair, int historyViewCount, float minPrice, float maxPrice, int tileCount);
 
 
+    List<OrderDataRecord> fetchOrderChunk(TradingPair pair, int offset);
+
     /**
      * Retrieves the order history for the given pair
      * @param pair The trading pair to retrieve history for

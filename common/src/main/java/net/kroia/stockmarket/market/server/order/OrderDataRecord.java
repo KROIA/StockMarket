@@ -21,14 +21,14 @@ public class OrderDataRecord implements ServerSaveable, INetworkPayloadConverter
         public static final String TRADING_PAIR = "t";
     }
 
-    long amount;
-    UUID player;
-    Order.Type type;
-    Order.Status status;
+    public long amount;
+    public UUID player;
+    public Order.Type type;
+    public Order.Status status;
 
 
     // The trading pair is not saved inside the save/load methods!
-    TradingPair tradingPair;
+    public TradingPair tradingPair;
 
     public OrderDataRecord(long amount, @NotNull UUID player, Order.Type type, Order.Status status, TradingPair tradingPair) {
         this.amount = amount;
@@ -60,6 +60,8 @@ public class OrderDataRecord implements ServerSaveable, INetworkPayloadConverter
         byte enumData = friendlyByteBuf.readByte();
         type = Order.Type.values()[enumData >> 4 & 0x0F];
         status = Order.Status.values()[enumData & 0x0F];
+        tradingPair = new TradingPair();
+        tradingPair.decode(friendlyByteBuf);
 
     }
 
@@ -68,6 +70,7 @@ public class OrderDataRecord implements ServerSaveable, INetworkPayloadConverter
         friendlyByteBuf.writeVarLong(amount);
         friendlyByteBuf.writeUUID(player);
         friendlyByteBuf.writeByte((byte)((type.ordinal() << 4) | status.ordinal()));
+        tradingPair.encode(friendlyByteBuf);
     }
 
     @Override
@@ -101,5 +104,11 @@ public class OrderDataRecord implements ServerSaveable, INetworkPayloadConverter
             // and is a bot order!
         }
         return new OrderDataRecord(order.amount, playerUUID, order instanceof MarketOrder ? Order.Type.MARKET : Order.Type.LIMIT ,order.status, pair);
+    }
+
+    public static OrderDataRecord fromBuf(FriendlyByteBuf buf){
+        OrderDataRecord rec = new OrderDataRecord();
+        rec.decode(buf);
+        return rec;
     }
 }
