@@ -235,6 +235,8 @@ public class TransactionEngine {
                 o1.addFilledAmount(fillVolume);
             else
                 o1.addFilledAmount(-fillVolume);
+            if(o1.isFilled())
+                o1.markAsProcessed();
             return fillVolume;
         }
 

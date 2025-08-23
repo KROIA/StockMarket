@@ -190,7 +190,8 @@ public class StockMarketDataHandler extends DataPersistence {
     {
         CompoundTag data = new CompoundTag();
         ServerPlayerList.saveToTag(data);
-        return saveDataCompound(getPlayerDataFilePath(), data);
+        return saveDataCompound(getPlayerDataFilePath(), data) &&
+                BACKEND_INSTANCES.SERVER_PLAYER_MANAGER.save();
     }
     public CompletableFuture<Boolean> save_playerAsync()
     {
@@ -198,15 +199,20 @@ public class StockMarketDataHandler extends DataPersistence {
         ServerPlayerList.saveToTag(data);
         // Save player data async because it can take much time when there are many players
         return CompletableFuture.supplyAsync(() -> {
-            return saveDataCompound(getPlayerDataFilePath(), data);
+            return saveDataCompound(getPlayerDataFilePath(), data) &&
+                    BACKEND_INSTANCES.SERVER_PLAYER_MANAGER.save();
         });
     }
     public boolean load_player()
     {
         CompoundTag data = readDataCompound(getPlayerDataFilePath());
+        boolean success = true;
         if(data != null)
-            return ServerPlayerList.loadFromTag(data);
-        return false;
+            success &= ServerPlayerList.loadFromTag(data);
+        else
+            success = false;
+        success &= BACKEND_INSTANCES.SERVER_PLAYER_MANAGER.load();
+        return success;
     }
 
     public boolean save_market()
@@ -308,6 +314,10 @@ public class StockMarketDataHandler extends DataPersistence {
     public Path getOrderHistoryFolderPath()
     {
         return getAbsoluteSavePath("OrderHistory");
+    }
+    public Path getPlayerManagerFolderPath()
+    {
+        return getAbsoluteSavePath("PlayerManager");
     }
     public Path getMetaDataFilePath()
     {

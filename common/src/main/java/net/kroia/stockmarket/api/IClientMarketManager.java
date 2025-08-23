@@ -203,6 +203,14 @@ public interface IClientMarketManager {
 
 
 
+    /**
+     * Gets the time in milliseconds when the server was started the first time using this mod.
+     * @return the absolute server first startup time in milliseconds.
+     */
+    long getAbsoluteServerFirstStartupTimeMillis();
+
+
+
 
 
 

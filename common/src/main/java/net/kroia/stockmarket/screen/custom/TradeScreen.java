@@ -66,7 +66,7 @@ public class TradeScreen extends StockMarketGuiScreen {
     private static TradeScreen instance;
 
     private final TimerMillis updateTimer;
-    private List<TradingPair> tradingPairsCarusel;
+    private List<TradingPair> tradingPairsCarousel;
     private int currentTradingPairCaruselIndex = 0;
     private int selectedBankAccountNumber = 0;
 
@@ -122,7 +122,8 @@ public class TradeScreen extends StockMarketGuiScreen {
         if(selectedBankAccountNumber <= 0) {
             getBankManager().requestPersonalBankAccountData(Minecraft.getInstance().player.getUUID(), (bankData) -> {
                 this.selectedBankAccountNumber = bankData.accountNumber;
-                getBankManager().requestBankAccountData(this.selectedBankAccountNumber, tradingPanel::setAccountData);
+                tradingPanel.setAccountData(bankData);
+                //getBankManager().requestBankAccountData(this.selectedBankAccountNumber, tradingPanel::setAccountData);
             });
         }
         else
@@ -132,7 +133,7 @@ public class TradeScreen extends StockMarketGuiScreen {
 
         getMarketManager().requestTradingPairs(
                 (tradingPairs) -> {
-                    tradingPairsCarusel = tradingPairs;
+                    tradingPairsCarousel = tradingPairs;
                     setPreviousNextMarket();
                 });
 
@@ -326,7 +327,7 @@ public class TradeScreen extends StockMarketGuiScreen {
         getMarketManager().requestTradingPairs(
                 (tradingPairs) -> {
                     screen.setAvailableTradingPairs(tradingPairs);
-                    tradingPairsCarusel = tradingPairs;
+                    tradingPairsCarousel = tradingPairs;
                     setPreviousNextMarket();
                 });
         Minecraft.getInstance().setScreen(screen);
@@ -349,30 +350,30 @@ public class TradeScreen extends StockMarketGuiScreen {
     }
     private void setPreviousNextMarket()
     {
-        if(tradingPairsCarusel == null || tradingPairsCarusel.isEmpty())
+        if(tradingPairsCarousel == null || tradingPairsCarousel.isEmpty())
         {
             tradingPanel.setPreviousTradingPair(null);
             tradingPanel.setNextTradingPair(null);
             return;
         }
-        if(tradingPairsCarusel.size() == 1)
+        if(tradingPairsCarousel.size() == 1)
         {
-            tradingPanel.setPreviousTradingPair(tradingPairsCarusel.get(0));
+            tradingPanel.setPreviousTradingPair(tradingPairsCarousel.get(0));
             tradingPanel.setNextTradingPair(null);
             return;
         }
-        if(tradingPairsCarusel.size() == 2)
+        if(tradingPairsCarousel.size() == 2)
         {
-            tradingPanel.setPreviousTradingPair(tradingPairsCarusel.get(0));
-            tradingPanel.setNextTradingPair(tradingPairsCarusel.get(1));
+            tradingPanel.setPreviousTradingPair(tradingPairsCarousel.get(0));
+            tradingPanel.setNextTradingPair(tradingPairsCarousel.get(1));
             return;
         }
 
 
-        int size = tradingPairsCarusel.size();
+        int size = tradingPairsCarousel.size();
         currentTradingPairCaruselIndex = (size+currentTradingPairCaruselIndex) % size;
-        TradingPair previousPair = tradingPairsCarusel.get(currentTradingPairCaruselIndex);
-        TradingPair nextPair = tradingPairsCarusel.get((currentTradingPairCaruselIndex + 2) % size);
+        TradingPair previousPair = tradingPairsCarousel.get(currentTradingPairCaruselIndex);
+        TradingPair nextPair = tradingPairsCarousel.get((currentTradingPairCaruselIndex + 2) % size);
         tradingPanel.setPreviousTradingPair(previousPair);
         tradingPanel.setNextTradingPair(nextPair);
     }

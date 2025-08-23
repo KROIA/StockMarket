@@ -97,7 +97,7 @@ public class UpdateStockMarketBlockEntityPacket extends StockMarketNetworkPacket
         userData.amount = this.amount;
         userData.price = this.price;
         userData.tradingPair = this.tradingPair;
-        blockEntity.set(userDataMap);
+        //blockEntity.set(userDataMap);
         sender.level().getChunkAt(this.pos).setUnsaved(true);
     }
 }

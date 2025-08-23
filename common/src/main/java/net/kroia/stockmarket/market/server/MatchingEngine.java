@@ -88,15 +88,15 @@ public class MatchingEngine implements ServerSaveable {
             }
         } else if (order instanceof MarketOrder marketOrder) {
             processMarketOrder(marketOrder);
-            if(marketOrder.isFilled())
-                marketOrder.markAsProcessed();
+            //if(marketOrder.isFilled())
+            //    marketOrder.markAsProcessed();
         } else {
             throw new IllegalArgumentException("Invalid order type");
         }
 
         if(order.getStatus() == Order.Status.PROCESSED)
         {
-            BACKEND_INSTANCES.SERVER_MARKET_MANAGER.logNewOrderToHistory(tradingPair, order);
+            serverMarket.onOrderFinished(order);
         }
     }
 
@@ -148,7 +148,7 @@ public class MatchingEngine implements ServerSaveable {
                     if (marketOrder.isFilled()) {
                         limitOrders.removeAll(toRemove);
                         for(LimitOrder order : toRemove) {
-                            BACKEND_INSTANCES.SERVER_MARKET_MANAGER.logNewOrderToHistory(this.tradingPair, order);
+                            serverMarket.onOrderFinished(order);
                         }
                         return true;
                     }
@@ -238,7 +238,7 @@ public class MatchingEngine implements ServerSaveable {
 
         limitOrders.removeAll(toRemove);
         for(LimitOrder order : toRemove) {
-            BACKEND_INSTANCES.SERVER_MARKET_MANAGER.logNewOrderToHistory(this.tradingPair, order);
+            serverMarket.onOrderFinished(order);
         }
 
         if(fillVolume != 0)
@@ -398,7 +398,7 @@ public class MatchingEngine implements ServerSaveable {
 
         limitOrders.removeAll(toRemove);
         for(LimitOrder order : toRemove) {
-            BACKEND_INSTANCES.SERVER_MARKET_MANAGER.logNewOrderToHistory(this.tradingPair, order);
+            serverMarket.onOrderFinished(order);
         }
         return fillVolume == 0;
     }

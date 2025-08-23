@@ -23,6 +23,7 @@ import net.kroia.stockmarket.market.server.*;
 import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.market.server.order.OrderFactory;
+import net.kroia.stockmarket.player.ServerPlayerManager;
 import net.kroia.stockmarket.menu.StockMarketMenus;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.kroia.stockmarket.util.*;
@@ -46,6 +47,7 @@ public class StockMarketModBackend implements StockMarketAPI {
         public DefaultMarketSettings.DefaultPrices SERVER_DEFAULT_PRICES;
         public StockMarketDataHandler SERVER_DATA_HANDLER;
         public ServerMarketManager SERVER_MARKET_MANAGER;
+        public ServerPlayerManager SERVER_PLAYER_MANAGER;
         public ClientMarketManager CLIENT_MARKET_MANAGER;
         public StockMarketEvents SERVER_EVENTS;
 
@@ -65,12 +67,14 @@ public class StockMarketModBackend implements StockMarketAPI {
         INSTANCES.SERVER_DEFAULT_PRICES = null;
         INSTANCES.SERVER_DATA_HANDLER = null;
         INSTANCES.SERVER_MARKET_MANAGER = null;
+        INSTANCES.SERVER_PLAYER_MANAGER = null;
         INSTANCES.CLIENT_MARKET_MANAGER = null;
         INSTANCES.SERVER_EVENTS = null;
         INSTANCES.NETWORKING = null;
         INSTANCES.LOGGER = new StockMarketModLogger(INSTANCES);
         StockMarketDataHandler.setBackend(INSTANCES);
         ServerMarketManager.setBackend(INSTANCES);
+        ServerPlayerManager.setBackend(INSTANCES);
         StockMarketModSettings.setBackend(INSTANCES);
         StockMarketCommands.setBackend(INSTANCES);
         StockMarketBlockEntity.setBackend(INSTANCES);
@@ -137,6 +141,7 @@ public class StockMarketModBackend implements StockMarketAPI {
         File rootSaveFolder = server.getWorldPath(LevelResource.ROOT).toFile();
         INSTANCES.SERVER_DATA_HANDLER.setLevelSavePath(rootSaveFolder.toPath());
         INSTANCES.SERVER_MARKET_MANAGER = new ServerMarketManager(INSTANCES.SERVER_DATA_HANDLER.getOrderHistoryFolderPath());
+        INSTANCES.SERVER_PLAYER_MANAGER = new ServerPlayerManager(INSTANCES.SERVER_DATA_HANDLER.getPlayerManagerFolderPath());
 
         NEZNAMY_TAB_Placeholders.setBackend(INSTANCES);
 
@@ -181,13 +186,14 @@ public class StockMarketModBackend implements StockMarketAPI {
     // Called from the server side
     public static void onPlayerJoin(ServerPlayer player)
     {
-        ServerPlayerList.addPlayer(player);
+        //ServerPlayerList.addPlayer(player);
+        INSTANCES.SERVER_PLAYER_MANAGER.onPlayerJoin(player);
     }
 
     // Called from the server side
     public static void onPlayerLeave(ServerPlayer player)
     {
-
+        INSTANCES.SERVER_PLAYER_MANAGER.onPlayerLeave(player);
     }
 
     // Called from the server side

@@ -6,6 +6,7 @@ import net.kroia.modutilities.networking.arrs.AsynchronousRequestResponseSystem;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.networking.packet.client_sender.update.entity.UpdateStockMarketBlockEntityPacket;
 import net.kroia.stockmarket.networking.packet.request.*;
+import net.kroia.stockmarket.networking.packet.server_sender.ClientServerManagerMetaDataPacket;
 import net.kroia.stockmarket.networking.packet.server_sender.update.OpenScreenPacket;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncTradeItemsPacket;
 import net.kroia.stockmarket.networking.packet.server_sender.update.entity.SyncStockMarketBlockEntityPacket;
@@ -37,7 +38,6 @@ public class StockMarketNetworking extends NetworkManager {
     public static SetMarketOpenRequest SET_MARKET_OPEN_REQUEST = (SetMarketOpenRequest) AsynchronousRequestResponseSystem.register(new SetMarketOpenRequest());
     public static DefaultPriceAjustmentFactorsDataRequest DEFAULT_PRICE_ADJUSTMENT_FACTORS_REQUEST = (DefaultPriceAjustmentFactorsDataRequest) AsynchronousRequestResponseSystem.register(new DefaultPriceAjustmentFactorsDataRequest());
     public static OrderReadDataRequest ORDER_READ_DATA_REQUEST = (OrderReadDataRequest) AsynchronousRequestResponseSystem.register(new OrderReadDataRequest());
-    public static FetchOrderHistoryRequest ORDER_HISTORY_REQUEST = (FetchOrderHistoryRequest) AsynchronousRequestResponseSystem.register(new FetchOrderHistoryRequest());
 
 
     public StockMarketNetworking()
@@ -51,13 +51,12 @@ public class StockMarketNetworking extends NetworkManager {
     @Override
     public void setupClientReceiverPackets()
     {
-       //register(SyncPricePacket.class, SyncPricePacket::encode, SyncPricePacket::new, SyncPricePacket::receive);
-       register(SyncStockMarketBlockEntityPacket.class, SyncStockMarketBlockEntityPacket::encode, SyncStockMarketBlockEntityPacket::new, SyncStockMarketBlockEntityPacket::receive);
-       register(SyncTradeItemsPacket.class, SyncTradeItemsPacket::encode, SyncTradeItemsPacket::new, SyncTradeItemsPacket::receive);
-       //register(SyncOrderPacket.class, SyncOrderPacket::encode, SyncOrderPacket::new, SyncOrderPacket::receive);
-       register(OpenScreenPacket.class, OpenScreenPacket::encode, OpenScreenPacket::new, OpenScreenPacket::receive);
-       //register(SyncBotSettingsPacket.class, SyncBotSettingsPacket::encode, SyncBotSettingsPacket::new, SyncBotSettingsPacket::receive);
-       //register(SyncBotTargetPricePacket.class, SyncBotTargetPricePacket::encode, SyncBotTargetPricePacket::new, SyncBotTargetPricePacket::receive);
+        register(SyncStockMarketBlockEntityPacket.class, SyncStockMarketBlockEntityPacket::encode, SyncStockMarketBlockEntityPacket::new, SyncStockMarketBlockEntityPacket::receive);
+        register(SyncTradeItemsPacket.class, SyncTradeItemsPacket::encode, SyncTradeItemsPacket::new, SyncTradeItemsPacket::receive);
+        register(OpenScreenPacket.class, OpenScreenPacket::encode, OpenScreenPacket::new, OpenScreenPacket::receive);
+        register(ClientServerManagerMetaDataPacket.class, ClientServerManagerMetaDataPacket::encode, ClientServerManagerMetaDataPacket::new, ClientServerManagerMetaDataPacket::receive);
+
+
 
     }
 

@@ -35,8 +35,11 @@ public class ServerMarketManager implements IServerMarketManager, ServerSaveable
 
 
     private final Map<TradingPair, ServerMarket> markets = new HashMap<>();
-    private final ArrayList<ArrayList<ServerMarket>> tradeItemsChunks = new ArrayList<>(); // For processing trade items in chunks
-    private int tradeItemUpdateCallCounter = 0;
+    private final ArrayList<ArrayList<ServerMarket>> tradeMarketChunks = new ArrayList<>(); // For processing trade items in chunks
+    private int marketUpdateChunkIndex = 0;
+
+
+    public long ABSOLUTE_SERVER_FIRST_STARTUP_TIME_MILLIS = System.currentTimeMillis();
     private final OrderHistory orderHistory;
 
 
@@ -333,6 +336,12 @@ public class ServerMarketManager implements IServerMarketManager, ServerSaveable
     }
 
     @Override
+    public long getAbsoluteServerFirstStartupTimeMillis()
+    {
+        return ABSOLUTE_SERVER_FIRST_STARTUP_TIME_MILLIS;
+    }
+
+    @Override
     public void setShiftPriceCandleIntervalMS(long shiftPriceCandleIntervalMS) {
         for(ServerMarket market : markets.values())
         {
@@ -437,7 +446,7 @@ public class ServerMarketManager implements IServerMarketManager, ServerSaveable
 
     public void onServerTick(MinecraftServer server)
     {
-        if(tradeItemsChunks.isEmpty())
+        if(tradeMarketChunks.isEmpty())
             return;
 
 
@@ -446,8 +455,8 @@ public class ServerMarketManager implements IServerMarketManager, ServerSaveable
         // For better performance when there are many trade items
         // The items are processed in chunks
         // Downside: The update rate is not every tick but every n't ticks depending on how many chunks there are
-        ArrayList<ServerMarket> chunk = tradeItemsChunks.get(tradeItemUpdateCallCounter);
-        tradeItemUpdateCallCounter = (tradeItemUpdateCallCounter + 1) % tradeItemsChunks.size();
+        ArrayList<ServerMarket> chunk = tradeMarketChunks.get(marketUpdateChunkIndex);
+        marketUpdateChunkIndex = (marketUpdateChunkIndex + 1) % tradeMarketChunks.size();
         for(ServerMarket market : chunk)
         {
             market.update(server);
@@ -645,8 +654,8 @@ public class ServerMarketManager implements IServerMarketManager, ServerSaveable
 
     private void rebuildTradeItemsChunks()
     {
-        tradeItemsChunks.clear();
-        tradeItemUpdateCallCounter = 0;
+        tradeMarketChunks.clear();
+        marketUpdateChunkIndex = 0;
         int tradeItemsChunkSize = BACKEND_INSTANCES.SERVER_SETTINGS.UTILITIES.TRADE_ITEM_CHUNK_SIZE.get();
 
         int chunks = markets.size() / tradeItemsChunkSize;
@@ -666,7 +675,7 @@ public class ServerMarketManager implements IServerMarketManager, ServerSaveable
                 }
                 index++;
             }
-            tradeItemsChunks.add(chunk);
+            tradeMarketChunks.add(chunk);
         }
     }
 
@@ -685,6 +694,13 @@ public class ServerMarketManager implements IServerMarketManager, ServerSaveable
             marketsListTag.add(tradeItemTag);
         }
         listTagMap.put("markets", marketsListTag);
+
+        ListTag metaDataListTag = new ListTag();
+        CompoundTag metaDataTag = new CompoundTag();
+        metaDataTag.putLong("ABSOLUTE_SERVER_FIRST_STARTUP_TIME_MILLIS", ABSOLUTE_SERVER_FIRST_STARTUP_TIME_MILLIS);
+        metaDataListTag.add(metaDataTag);
+        listTagMap.put("metaData", metaDataListTag);
+
         long endMillis = System.currentTimeMillis();
         success &= orderHistory.save();
         debug("Saving ServerMarketManager took "+(endMillis-startMillis)+"ms");
@@ -695,6 +711,24 @@ public class ServerMarketManager implements IServerMarketManager, ServerSaveable
     public boolean load(Map<String, ListTag> listTagMap) {
         boolean loadSuccess = true;
         loadSuccess &= orderHistory.load();
+
+        // Load metadata
+        if(listTagMap.containsKey("metaData"))
+        {
+            ListTag metaDataListTag = listTagMap.get("metaData");
+            if(metaDataListTag.size() > 0)
+            {
+                CompoundTag metaDataTag = metaDataListTag.getCompound(0);
+                if(metaDataTag.contains("ABSOLUTE_SERVER_FIRST_STARTUP_TIME_MILLIS"))
+                {
+                    ABSOLUTE_SERVER_FIRST_STARTUP_TIME_MILLIS = metaDataTag.getLong("ABSOLUTE_SERVER_FIRST_STARTUP_TIME_MILLIS");
+                    OrderDataRecord.setAbsoluteServerFirstStartupTimeSeconds(ABSOLUTE_SERVER_FIRST_STARTUP_TIME_MILLIS/1000);
+                }
+            }
+        }
+
+
+
         ListTag marketsListTag = listTagMap.get("markets");
         if(marketsListTag == null)
         {
