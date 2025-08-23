@@ -83,6 +83,8 @@ public class StockMarketBlockEntity extends BlockEntity{
     }
 
     public void set(Map<UUID, UserData> userDataMap) {
+        if(userDataMap == this.userDataMap)
+            return; // No need to update if the same map is set again
         this.userDataMap.clear();
         this.userDataMap.putAll(userDataMap);
     }
@@ -180,8 +182,7 @@ public class StockMarketBlockEntity extends BlockEntity{
     @Override
     public void load(CompoundTag tag) {
         super.load(tag);
-        CompoundTag dataTag = tag.getCompound(StockMarketMod.MOD_ID);
-        ListTag dataList = dataTag.getList(StockMarketMod.MOD_ID, 10); // 10 is the type for CompoundTag
+        ListTag dataList = tag.getList(StockMarketMod.MOD_ID, 10); // 10 is the type for CompoundTag
         for (int i = 0; i < dataList.size(); i++) {
             CompoundTag userTag = dataList.getCompound(i);
             UUID playerUUID = userTag.getUUID("playerUUID");

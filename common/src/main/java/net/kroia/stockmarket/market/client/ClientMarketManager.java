@@ -12,6 +12,7 @@ import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.market.server.order.OrderDataRecord;
 import net.kroia.stockmarket.market.server.order.OrderHistory;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
+import net.kroia.stockmarket.networking.packet.server_sender.ClientServerManagerMetaDataPacket;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncTradeItemsPacket;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.Tuple;
@@ -26,6 +27,7 @@ import java.util.function.Consumer;
 public class ClientMarketManager implements IClientMarketManager {
 
     protected StockMarketModBackend.Instances BACKEND_INSTANCES;
+    public long ABSOLUTE_SERVER_FIRST_STARTUP_TIME_MILLIS = 0;
     public ClientMarketManager(StockMarketModBackend.Instances backendInstances)
     {
         this.BACKEND_INSTANCES = backendInstances;
@@ -225,6 +227,13 @@ public class ClientMarketManager implements IClientMarketManager {
 
 
     @Override
+    public long getAbsoluteServerFirstStartupTimeMillis()
+    {
+        return ABSOLUTE_SERVER_FIRST_STARTUP_TIME_MILLIS;
+    }
+
+
+    @Override
     public void handlePacket(SyncTradeItemsPacket packet)
     {
         List<TradingPair> receivedPairs = new ArrayList<>();
@@ -233,6 +242,16 @@ public class ClientMarketManager implements IClientMarketManager {
             receivedPairs.add(tradingPairData.toTradingPair());
         }
         populateClientMarkets(receivedPairs);
+    }
+
+    public void handlePacket(ClientServerManagerMetaDataPacket packet)
+    {
+        ABSOLUTE_SERVER_FIRST_STARTUP_TIME_MILLIS = packet.getAbsoluteServerFirstStartupTimeMillis(); // Update the absolute server first startup time millis
+        if(!initialized)
+        {
+            init(); // Initialize the client market manager if it is not initialized yet
+        }
+        debug("Player joined. Absolute server first startup time millis: " + ABSOLUTE_SERVER_FIRST_STARTUP_TIME_MILLIS);
     }
 
 

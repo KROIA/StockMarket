@@ -219,6 +219,13 @@ public interface IServerMarketManager  {
 
 
     /**
+     * Gets the time in milliseconds when the server was started the first time using this mod.
+     * @return the absolute server first startup time in milliseconds.
+     */
+    long getAbsoluteServerFirstStartupTimeMillis();
+
+
+    /**
      * Overwrites the candlestick time interval for all markets.
      * @param shiftPriceCandleIntervalMS the new time interval in milliseconds for shifting the price candles.
      */

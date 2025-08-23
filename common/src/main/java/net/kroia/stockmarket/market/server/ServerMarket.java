@@ -15,6 +15,7 @@ import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.market.server.order.OrderFactory;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.Tuple;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -624,7 +625,7 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
         unlockLockedAmount(order);
         if(order.getFilledAmount() != 0)
         {
-            BACKEND_INSTANCES.SERVER_MARKET_MANAGER.logNewOrderToHistory(this.tradingPair, order);
+
         }
         if(order instanceof LimitOrder limitOrder)
         {
@@ -633,8 +634,21 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
         {
 
         }
+        onOrderFinished(order);
         return true;
     }
+
+    public void onOrderPlaced(Order order)
+    {
+        BACKEND_INSTANCES.SERVER_EVENTS.ORDER_PLACED.notifyListeners(new Tuple<>(tradingPair, order));
+    }
+    public void onOrderFinished(Order order)
+    {
+        BACKEND_INSTANCES.SERVER_MARKET_MANAGER.logNewOrderToHistory(this.tradingPair, order);
+        BACKEND_INSTANCES.SERVER_PLAYER_MANAGER.logNewOrderToHistory(this.tradingPair, order);
+        BACKEND_INSTANCES.SERVER_EVENTS.ORDER_FINISHED.notifyListeners(new Tuple<>(tradingPair, order));
+    }
+
 
     @Override
     public void cancelAllBotOrders()
@@ -661,6 +675,7 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
     protected void addOrder(@NotNull Order order)
     {
         orderBook.addIncommingOrder(order);
+        onOrderPlaced(order);
     }
 
     protected boolean changeOrderPrice(long orderID, float newPrice)
