@@ -1,7 +1,6 @@
 package net.kroia.stockmarket.networking.packet.request;
 
 import net.kroia.modutilities.networking.INetworkPayloadConverter;
-import net.kroia.modutilities.networking.INetworkPayloadEncoder;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.server.order.OrderDataRecord;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
@@ -14,7 +13,7 @@ public class FetchOrderHistoryRequest extends StockMarketGenericRequest<FetchOrd
 
     @Override
     public String getRequestTypeID() {
-        return "";
+        return FetchOrderHistoryRequest.class.getName();
     }
 
     @Override

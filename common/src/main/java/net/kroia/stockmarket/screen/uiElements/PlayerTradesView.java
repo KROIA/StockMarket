@@ -4,11 +4,16 @@ import net.kroia.modutilities.gui.elements.*;
 import net.kroia.modutilities.gui.elements.base.ListView;
 import net.kroia.modutilities.gui.layout.Layout;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
+import net.kroia.modutilities.networking.arrs.AsynchronousRequestResponseSystem;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.market.server.order.OrderDataRecord;
+import net.kroia.stockmarket.networking.StockMarketNetworking;
+import net.kroia.stockmarket.networking.packet.request.FetchOrderHistoryRequest;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
+
+import java.util.*;
 
 public class PlayerTradesView extends StockMarketGuiElement {
 
@@ -16,6 +21,17 @@ public class PlayerTradesView extends StockMarketGuiElement {
         private static final String PREFIX = "gui." + StockMarketMod.MOD_ID + ".player_trades_view.";
         //public static final Component TEST_BUTTON = Component.translatable(PREFIX + "test_button");
     }
+
+
+    private final List<OrderDataRecord> records = new ArrayList<>();
+    private final Map<UUID, String> nameMap = new HashMap<>();
+    private TradingPair currentView;
+    private boolean lookingAtPlayerTrades;
+
+
+
+    // Gui elements
+    private final Button swapViewButton;
 
 
     private static class PlayerTradeView extends StockMarketGuiElement
@@ -68,10 +84,15 @@ public class PlayerTradesView extends StockMarketGuiElement {
         layout.padding = 2;
         layout.spacing = 2;
         playersListView.setLayout(layout);
-        Button button = new Button("TEST");
         addChild(playersListView);
-        addChild(button);
 
+
+        swapViewButton = new Button("Player Order History");
+        swapViewButton.setOnFallingEdge(this::swapTradeView);
+        swapViewButton.setSize(100, 20);
+        addChild(swapViewButton);
+
+        fetchNewData();
     }
 
     public void addPlayerTrade(OrderDataRecord record, String name){
@@ -100,5 +121,35 @@ public class PlayerTradesView extends StockMarketGuiElement {
         int spacing = StockMarketGuiElement.spacing;
 
         playersListView.setBounds(padding, padding, width/2, height - 2 * padding);
+        swapViewButton.setBounds(playersListView.getRight(), padding, 150, 20);
     }
+
+
+
+    private void swapTradeView(){
+        lookingAtPlayerTrades = !lookingAtPlayerTrades;
+        currentView = null;
+        records.clear();
+        nameMap.clear();
+        fetchNewData();
+        swapViewButton.setLabel(lookingAtPlayerTrades ? "Swap to Global Order History" : "Swap to Player Order History");
+
+    }
+
+    public void fetchNewData(){
+        FetchOrderHistoryRequest.Input input = new FetchOrderHistoryRequest.Input(records.size(), currentView, lookingAtPlayerTrades);
+        AsynchronousRequestResponseSystem.sendRequestToServer(StockMarketNetworking.ORDER_HISTORY_REQUEST, input, (output) -> {
+            records.addAll(output.records);
+            nameMap.putAll(output.nameMap);
+            addNewTrades(output);
+
+        });
+    }
+
+    protected void addNewTrades(FetchOrderHistoryRequest.Output output){
+        for(OrderDataRecord trade : output.records){
+            addPlayerTrade(trade, output.nameMap.get(trade.getPlayer()));
+        }
+    }
+
 }
