@@ -2,6 +2,7 @@ package net.kroia.stockmarket.market.server.order;
 
 import net.kroia.modutilities.networking.INetworkPayloadConverter;
 import net.kroia.modutilities.persistence.ServerSaveable;
+import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.TradingPair;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
@@ -134,6 +135,8 @@ public class OrderDataRecord implements INetworkPayloadConverter{
         byte enumData = friendlyByteBuf.readByte();
         type = Order.Type.values()[enumData >> 4 & 0x0F];
         status = Order.Status.values()[enumData & 0x0F];
+        tradingPair = new TradingPair();
+        tradingPair.decode(friendlyByteBuf);
 
     }
 
@@ -142,6 +145,7 @@ public class OrderDataRecord implements INetworkPayloadConverter{
         friendlyByteBuf.writeVarLong(amount);
         friendlyByteBuf.writeUUID(player);
         friendlyByteBuf.writeByte((byte)((type.ordinal() << 4) | status.ordinal()));
+        tradingPair.encode(friendlyByteBuf);
     }
 
     public boolean save(CompoundTag compoundTag, byte useFlags) {

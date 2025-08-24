@@ -38,6 +38,7 @@ public class StockMarketNetworking extends NetworkManager {
     public static SetMarketOpenRequest SET_MARKET_OPEN_REQUEST = (SetMarketOpenRequest) AsynchronousRequestResponseSystem.register(new SetMarketOpenRequest());
     public static DefaultPriceAjustmentFactorsDataRequest DEFAULT_PRICE_ADJUSTMENT_FACTORS_REQUEST = (DefaultPriceAjustmentFactorsDataRequest) AsynchronousRequestResponseSystem.register(new DefaultPriceAjustmentFactorsDataRequest());
     public static OrderReadDataRequest ORDER_READ_DATA_REQUEST = (OrderReadDataRequest) AsynchronousRequestResponseSystem.register(new OrderReadDataRequest());
+    public static FetchOrderHistoryRequest ORDER_HISTORY_REQUEST = (FetchOrderHistoryRequest) AsynchronousRequestResponseSystem.register(new FetchOrderHistoryRequest());
 
 
     public StockMarketNetworking()

@@ -26,13 +26,13 @@ public class FetchOrderHistoryRequest extends StockMarketGenericRequest<FetchOrd
     public Output handleOnServer(Input input, ServerPlayer sender) {
         List<OrderDataRecord> records = new ArrayList<>();
         if(input.isPlayerHistory){
-            //BACKEND_INSTANCES.SERVER_PLAYER_MANAGER
+            records = BACKEND_INSTANCES.SERVER_PLAYER_MANAGER.retrieveOrderData(sender.getUUID(), input.numFetched, 20);
         }
         else{
             records = BACKEND_INSTANCES.SERVER_MARKET_MANAGER.fetchOrderChunk(input.market, input.numFetched);
         }
         Map<UUID, String> nameMap = new HashMap<>();
-        records.forEach((r) -> nameMap.putIfAbsent(r.player, "player"));
+        records.forEach((r) -> nameMap.putIfAbsent(r.getPlayer(), BACKEND_INSTANCES.SERVER_PLAYER_MANAGER.getPlayerName(r.getPlayer())));
         return new Output(records, nameMap);
     }
 

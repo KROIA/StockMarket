@@ -12,6 +12,7 @@ import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.Nullable;
 
 import java.nio.file.Path;
+import java.util.List;
 import java.util.UUID;
 
 public class ServerPlayerData {
@@ -185,6 +186,10 @@ public class ServerPlayerData {
 
     public void putOrder(TradingPair pair, Order order){
         orderHistory.putOrder(pair, order);
+    }
+
+    public List<OrderDataRecord> getOrderHistory(int offset, int amount){
+        return orderHistory.getChronological(offset, amount);
     }
 
 

@@ -4,6 +4,7 @@ import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.server.order.Order;
+import net.kroia.stockmarket.market.server.order.OrderDataRecord;
 import net.kroia.stockmarket.networking.packet.server_sender.ClientServerManagerMetaDataPacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -129,6 +130,11 @@ public class ServerPlayerManager {
             return;
         ServerPlayerData playerData = getPlayerData(playerUUID);
         playerData.putOrder(pair, order);
+    }
+
+    public List<OrderDataRecord> retrieveOrderData(UUID player, int offset, int amount){
+        ServerPlayerData playerData = getPlayerData(player);
+        return playerData.getOrderHistory(offset, amount);
     }
 
 

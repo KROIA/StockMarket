@@ -19,6 +19,7 @@
   "gui.stockmarket.trade_screen.cancel": "Cancel",
   "gui.stockmarket.trade_screen.direction": "Type",
   "gui.stockmarket.candle_stick_chart.bot_target_price": "Bot Target Price: ",
+  "gui.stockmarket.player_trades_view_screen.title": "Trade History",
 
   "message.stockmarket.invalid_item_id": "Unknown item {item_name}",
   "message.stockmarket.marketplace_not_existing": "Marketplace for {item_name} does not exist",

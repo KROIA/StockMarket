@@ -26,7 +26,7 @@ public class PlayerTradesView extends StockMarketGuiElement {
         {
 
            description = new Label(playerName + " executed a " +
-                   (record.type == Order.Type.LIMIT ? "LIMIT" : "MARKET") + " order to " + (record.amount > 0 ? "BUY " : "SELL " ) + Math.abs(record.amount));
+                   (record.getType() == Order.Type.LIMIT ? "LIMIT" : "MARKET") + " order to " + (record.getAmount() > 0 ? "BUY " : "SELL " ) + Math.abs(record.getAmount()));
            description.setBounds(this.getX(), this.getY(), 200, 16);
            description.setPadding(3);
            ItemView tex = new ItemView(record.tradingPair.getItem().getStack());
@@ -68,7 +68,9 @@ public class PlayerTradesView extends StockMarketGuiElement {
         layout.padding = 2;
         layout.spacing = 2;
         playersListView.setLayout(layout);
+        Button button = new Button("TEST");
         addChild(playersListView);
+        addChild(button);
 
     }
 
@@ -80,7 +82,7 @@ public class PlayerTradesView extends StockMarketGuiElement {
     }
 
     public void clear(){
-        playersListView.removeChilds();
+        //playersListView.removeChilds();
     }
 
 

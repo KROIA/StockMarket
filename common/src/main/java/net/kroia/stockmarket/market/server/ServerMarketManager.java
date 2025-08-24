@@ -111,7 +111,7 @@ public class ServerMarketManager implements IServerMarketManager, ServerSaveable
 
     @Override
     public List<OrderDataRecord> fetchOrderChunk(TradingPair pair, int offset) {
-        return orderHistory.getOrderHistoryForMarket(pair);
+        return pair != null ? orderHistory.getOrderHistoryForMarket(pair) : orderHistory.getChronological(offset, 20);
     }
 
     @Override
