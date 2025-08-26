@@ -11,9 +11,12 @@ import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.market.server.order.OrderDataRecord;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.kroia.stockmarket.networking.packet.request.FetchOrderHistoryRequest;
+import net.kroia.stockmarket.screen.custom.PlayerTradesViewScreen;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 
 import java.util.*;
+
+import static net.kroia.stockmarket.screen.custom.TradeScreen.CHANGE_MARKET_BUTTON;
 
 public class PlayerTradesView extends StockMarketGuiElement {
 
@@ -27,6 +30,7 @@ public class PlayerTradesView extends StockMarketGuiElement {
     private final Map<UUID, String> nameMap = new HashMap<>();
     private TradingPair currentView;
     private boolean lookingAtPlayerTrades;
+    private final Button selectMarketButton;
 
 
 
@@ -76,7 +80,7 @@ public class PlayerTradesView extends StockMarketGuiElement {
 
     private final ListView playersListView;
 
-    public PlayerTradesView()
+    public PlayerTradesView(PlayerTradesViewScreen screen)
     {
         playersListView = new VerticalListView();
         Layout layout = new LayoutVertical();
@@ -92,6 +96,11 @@ public class PlayerTradesView extends StockMarketGuiElement {
         swapViewButton.setSize(100, 20);
         addChild(swapViewButton);
 
+        selectMarketButton = new Button(CHANGE_MARKET_BUTTON.getString());
+        selectMarketButton.setOnFallingEdge(screen::onSelectItemButtonPressed);
+        selectMarketButton.setSize(100, 20);
+        addChild(selectMarketButton);
+
         fetchNewData();
     }
 
@@ -103,7 +112,7 @@ public class PlayerTradesView extends StockMarketGuiElement {
     }
 
     public void clear(){
-        //playersListView.removeChilds();
+        playersListView.removeChilds();
     }
 
 
@@ -122,11 +131,13 @@ public class PlayerTradesView extends StockMarketGuiElement {
 
         playersListView.setBounds(padding, padding, width/2, height - 2 * padding);
         swapViewButton.setBounds(playersListView.getRight(), padding, 150, 20);
+        selectMarketButton.setBounds(playersListView.getRight(), swapViewButton.getBottom() + padding, 150, 20);
     }
 
 
 
     private void swapTradeView(){
+        this.clear();
         lookingAtPlayerTrades = !lookingAtPlayerTrades;
         currentView = null;
         records.clear();
@@ -151,5 +162,13 @@ public class PlayerTradesView extends StockMarketGuiElement {
             addPlayerTrade(trade, output.nameMap.get(trade.getPlayer()));
         }
     }
+
+    public void setCurrentView(TradingPair pair){
+        currentView = pair;
+        clear();
+        fetchNewData();
+    }
+
+
 
 }

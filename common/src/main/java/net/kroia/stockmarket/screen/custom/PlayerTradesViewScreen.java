@@ -1,11 +1,16 @@
 package net.kroia.stockmarket.screen.custom;
 
 import net.kroia.modutilities.gui.Gui;
+import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.screen.uiElements.PlayerTradesView;
 import net.kroia.stockmarket.util.StockMarketGuiScreen;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+
+import static net.kroia.stockmarket.screen.custom.TradeScreen.CHANGE_MARKET_BUTTON;
 
 public class PlayerTradesViewScreen extends StockMarketGuiScreen {
 
@@ -22,8 +27,9 @@ public class PlayerTradesViewScreen extends StockMarketGuiScreen {
         super(TEXTS.TITLE);
         this.parent = parent;
 
-        playerTradesView = new PlayerTradesView();
+        playerTradesView = new PlayerTradesView(this);
         addElement(playerTradesView);
+
     }
 
     @Override
@@ -34,6 +40,18 @@ public class PlayerTradesViewScreen extends StockMarketGuiScreen {
         if (parent != null) {
             this.minecraft.setScreen(parent);
         }
+    }
+
+    private void onItemSelected(TradingPair pair){
+        playerTradesView.setCurrentView(pair);
+    }
+
+    public void onSelectItemButtonPressed() {
+
+        MarketSelectionScreen screen = new MarketSelectionScreen(this, this::onItemSelected);
+        getMarketManager().requestTradingPairs(
+                screen::setAvailableTradingPairs);
+        Minecraft.getInstance().setScreen(screen);
     }
 
 
