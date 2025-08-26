@@ -255,7 +255,6 @@ public class TradeScreen extends StockMarketGuiScreen {
         this.tradingPair = tradingPair;
         selectMarket(tradingPair);
         tradingPanel.setTradingPair(tradingPair);
-        minecraft.setScreen(this);
     }
 
 

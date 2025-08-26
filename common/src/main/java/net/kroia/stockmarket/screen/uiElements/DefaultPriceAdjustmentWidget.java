@@ -309,7 +309,7 @@ public class DefaultPriceAdjustmentWidget extends Frame {
         if(defaultMarketSetupDataList == null || defaultMarketSetupDataList.isEmpty())
             return;
 
-        graphicsPosePush();
+        graphicsPushPose();
         graphicsTranslate(0,0,160);
         int lastGuiX = 0;
         int yOffset = 0;
@@ -356,7 +356,7 @@ public class DefaultPriceAdjustmentWidget extends Frame {
 
             //drawItem(data.tradingPair.getItem().getStack(), absPosX, absPosY); // Draw the item icon at the ajusted price position
         }
-        graphicsPosePop();
+        graphicsPopPose();
 
 
         var childs = marketsListView.getChilds();
@@ -376,7 +376,7 @@ public class DefaultPriceAdjustmentWidget extends Frame {
                             float defaultPrice = data.getDefaultPrice();
                             float ajustedPrice = getAjustedPrice(defaultPrice);
                             Point plotPos = plot.getGuiPosFromXValue(defaultPrice, ajustedPrice);
-                            graphicsPosePush();
+                            graphicsPushPose();
                             graphicsTranslate(0,0,170);
 
                             int absPosX = plotPos.x+plot.getX();
@@ -388,7 +388,7 @@ public class DefaultPriceAdjustmentWidget extends Frame {
                             //else
                             //    drawText(defaultPrice + "->"+ ajustedPrice, absPosX, absPosY+20, 0xFF88ff8c, Alignment.TOP); // Draw the price text at the ajusted price position
 
-                            graphicsPosePop();
+                            graphicsPopPose();
                             return;
                         }
                     }

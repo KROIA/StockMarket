@@ -6,6 +6,7 @@ import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.IClientMarket;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.client.ClientMarketManager;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 public abstract class StockMarketGuiScreen extends GuiScreen {
@@ -16,6 +17,10 @@ public abstract class StockMarketGuiScreen extends GuiScreen {
 
     protected StockMarketGuiScreen(Component pTitle) {
         super(pTitle);
+        setGuiScale(guiScale);
+    }
+    protected StockMarketGuiScreen(Component pTitle, Screen parent) {
+        super(pTitle, parent);
         setGuiScale(guiScale);
     }
 

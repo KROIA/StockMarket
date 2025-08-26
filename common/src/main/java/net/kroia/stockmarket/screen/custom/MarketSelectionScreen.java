@@ -1,12 +1,13 @@
 package net.kroia.stockmarket.screen.custom;
 
 import net.kroia.modutilities.gui.Gui;
-import net.kroia.modutilities.gui.GuiScreen;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.screen.uiElements.MarketSelectionView;
 import net.kroia.stockmarket.util.StockMarketGuiScreen;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
 import java.util.function.Consumer;
@@ -22,28 +23,20 @@ public class MarketSelectionScreen extends StockMarketGuiScreen {
 
 
     private final MarketSelectionView marketSelectionView;
-    private final GuiScreen parentScreen;
+    private boolean closeOnSelect = true;
+    private final Consumer<TradingPair> onSelected;
 
-    public MarketSelectionScreen(GuiScreen parent, Consumer<TradingPair> onSelected){
-        super(TITLE);
-        parentScreen = parent;
-        marketSelectionView = new MarketSelectionView(onSelected);
+    public MarketSelectionScreen(Screen parent, @NotNull Consumer<TradingPair> onSelected){
+        super(TITLE, parent);
+        this.onSelected = onSelected;
+        marketSelectionView = new MarketSelectionView(this::onMarketSelected);
 
         addElement(marketSelectionView);
     }
 
-    @Override
-    public void onClose()
-    {
-        super.onClose();
-        if(parentScreen != null) {
-            int mousePosX = getMouseX();
-            int mousePosY = getMouseY();
-            minecraft.setScreen(parentScreen);
-            setMousePos(mousePosX, mousePosY);
-        }
+    public void setCloseOnSelect(boolean closeOnSelect) {
+        this.closeOnSelect = closeOnSelect;
     }
-
 
     @Override
     protected void updateLayout(Gui gui) {
@@ -60,5 +53,11 @@ public class MarketSelectionScreen extends StockMarketGuiScreen {
         marketSelectionView.setAvailableTradingPairs(tradingPairs);
     }
 
+    private void onMarketSelected(TradingPair tradingPair)
+    {
+        if(closeOnSelect)
+            this.close();
+        onSelected.accept(tradingPair);
+    }
 
 }

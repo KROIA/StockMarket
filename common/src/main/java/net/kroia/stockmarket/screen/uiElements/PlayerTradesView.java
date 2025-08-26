@@ -1,6 +1,9 @@
 package net.kroia.stockmarket.screen.uiElements;
 
-import net.kroia.modutilities.gui.elements.*;
+import net.kroia.modutilities.gui.elements.Button;
+import net.kroia.modutilities.gui.elements.ItemView;
+import net.kroia.modutilities.gui.elements.Label;
+import net.kroia.modutilities.gui.elements.VerticalListView;
 import net.kroia.modutilities.gui.elements.base.ListView;
 import net.kroia.modutilities.gui.layout.Layout;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
@@ -11,8 +14,9 @@ import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.market.server.order.OrderDataRecord;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.kroia.stockmarket.networking.packet.request.FetchOrderHistoryRequest;
-import net.kroia.stockmarket.screen.custom.PlayerTradesViewScreen;
+import net.kroia.stockmarket.screen.custom.MarketSelectionScreen;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
+import net.minecraft.client.Minecraft;
 
 import java.util.*;
 
@@ -34,8 +38,7 @@ public class PlayerTradesView extends StockMarketGuiElement {
 
 
 
-    // Gui elements
-    private final Button swapViewButton;
+
 
 
     private static class PlayerTradeView extends StockMarketGuiElement
@@ -78,9 +81,13 @@ public class PlayerTradesView extends StockMarketGuiElement {
     }
 
 
+    // Gui elements
+    private final Button swapViewButton;
     private final ListView playersListView;
 
-    public PlayerTradesView(PlayerTradesViewScreen screen)
+
+
+    public PlayerTradesView()
     {
         playersListView = new VerticalListView();
         Layout layout = new LayoutVertical();
@@ -97,7 +104,7 @@ public class PlayerTradesView extends StockMarketGuiElement {
         addChild(swapViewButton);
 
         selectMarketButton = new Button(CHANGE_MARKET_BUTTON.getString());
-        selectMarketButton.setOnFallingEdge(screen::onSelectItemButtonPressed);
+        selectMarketButton.setOnFallingEdge(this::onSelectItemButtonPressed);
         selectMarketButton.setSize(100, 20);
         addChild(selectMarketButton);
 
@@ -167,6 +174,18 @@ public class PlayerTradesView extends StockMarketGuiElement {
         currentView = pair;
         clear();
         fetchNewData();
+    }
+
+    private void onItemSelected(TradingPair pair){
+        setCurrentView(pair);
+    }
+
+    public void onSelectItemButtonPressed() {
+
+        MarketSelectionScreen screen = new MarketSelectionScreen(getGui().getScreen(), this::onItemSelected);
+        getMarketManager().requestTradingPairs(
+                screen::setAvailableTradingPairs);
+        Minecraft.getInstance().setScreen(screen);
     }
 
 
