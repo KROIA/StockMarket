@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.screen.uiElements;
 
+import net.kroia.modutilities.gui.GuiScreen;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.ItemView;
 import net.kroia.modutilities.gui.elements.Label;
@@ -16,7 +17,6 @@ import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.kroia.stockmarket.networking.packet.request.FetchOrderHistoryRequest;
 import net.kroia.stockmarket.screen.custom.MarketSelectionScreen;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
-import net.minecraft.client.Minecraft;
 
 import java.util.*;
 
@@ -182,10 +182,10 @@ public class PlayerTradesView extends StockMarketGuiElement {
 
     public void onSelectItemButtonPressed() {
 
-        MarketSelectionScreen screen = new MarketSelectionScreen(getGui().getScreen(), this::onItemSelected);
+        MarketSelectionScreen screen = new MarketSelectionScreen(getScreen(), this::onItemSelected);
         getMarketManager().requestTradingPairs(
                 screen::setAvailableTradingPairs);
-        Minecraft.getInstance().setScreen(screen);
+        GuiScreen.setScreen(screen);
     }
 
 
