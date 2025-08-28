@@ -248,6 +248,10 @@ public class TradingPair implements ServerSaveable, INetworkPayloadConverter {
 
         //return item.getName() + " <-> " + currency.getName();
     }
+    public String getUltraShortDescription()
+    {
+        return item.getName() + " <-> " + currency.getName();
+    }
 
     @Override
     public int hashCode() {

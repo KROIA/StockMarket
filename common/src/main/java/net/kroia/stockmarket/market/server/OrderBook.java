@@ -9,9 +9,12 @@ import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.util.Tuple;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
+import java.util.function.Function;
 
 public class OrderBook implements ServerSaveable {
     // Create a sorted queue for buy and sell orders, sorted by price.
@@ -23,7 +26,7 @@ public class OrderBook implements ServerSaveable {
     private VirtualOrderBook virtualOrderBook;
     private int priceScaleFactor = 1; // Scale factor for prices, used to handle floating point precision issues.
     private int itemFractionScaleFactor = 1; // Scale factor for item fractions, used to handle fractional item amounts.
-
+    private Function<Float, Float> defaultVolumeDistributionFunction = null;
     public OrderBook()
     {
         virtualOrderBook = null;
@@ -43,9 +46,12 @@ public class OrderBook implements ServerSaveable {
         this.priceScaleFactor = priceScaleFactor;
         this.itemFractionScaleFactor = itemFractionScaleFactor;
         if(virtualOrderBook != null)
-        {
-            virtualOrderBook.setItemFractionScaleFactor(itemFractionScaleFactor);
-        }
+            virtualOrderBook.setPriceScaleFactor(priceScaleFactor);
+    }
+    public void setDefaultVirtualVolumeDistributionFunction(Function<Float, Float> defaultVolumeDistributionFunction) {
+        this.defaultVolumeDistributionFunction = defaultVolumeDistributionFunction;
+        if(virtualOrderBook != null)
+            virtualOrderBook.setDefaultVolumeDistributionFunction(defaultVolumeDistributionFunction);
     }
 
     public void createVirtualOrderBook(int realVolumeBookSize, int initialPrice, VirtualOrderBook.Settings settings)
@@ -55,7 +61,7 @@ public class OrderBook implements ServerSaveable {
         this.virtualOrderBook = new VirtualOrderBook(realVolumeBookSize, initialPrice);
         this.virtualOrderBook.setSettings(settings); // Set the settings for the virtual order book.
         this.virtualOrderBook.resetVolumeDistribution();
-        this.virtualOrderBook.setItemFractionScaleFactor(itemFractionScaleFactor); // Set the item fraction scale factor for the virtual order book.
+        this.virtualOrderBook.setDefaultVolumeDistributionFunction(defaultVolumeDistributionFunction);
     }
     public void destroyVirtualOrderBook()
     {
@@ -326,7 +332,7 @@ public class OrderBook implements ServerSaveable {
 
         if(tileCount <= 0)
             tileCount = 1; // Ensure at least one tile is created.
-        long[] volume = new long[tileCount];
+        float[] volume = new float[tileCount];
 
         for(int i = 0; i < tileCount; i++) {
             int lowerBound = rawMinPrice + i * stepSize;
@@ -338,21 +344,21 @@ public class OrderBook implements ServerSaveable {
     }
 
 
-    public long getVolumeRealPrice(float price, float currentRealMarketPrice)
+    public float getVolumeRealPrice(float price, float currentRealMarketPrice)
     {
         int rawPrice = (int)ServerMarketManager.realToRawPrice(price, priceScaleFactor);
         int currentRawMarketPrice = (int)ServerMarketManager.realToRawPrice(currentRealMarketPrice, priceScaleFactor);
         return getVolumeRawPrice(rawPrice, currentRawMarketPrice);
     }
-    public long getVolumeRawPrice(int rawPrice, int currentRawMarketPrice)
+    public float getVolumeRawPrice(int rawPrice, int currentRawMarketPrice)
     {
-        long volume = 0;
+        float volume = 0;
         if(rawPrice < currentRawMarketPrice)
         {
             for(LimitOrder order : limitBuyOrders)
             {
                 if(order.getPrice() == rawPrice)
-                    volume += order.getPendingAmount();
+                    volume += order.getPendingAmount() * itemFractionScaleFactor;
             }
         }
         else
@@ -360,41 +366,70 @@ public class OrderBook implements ServerSaveable {
             for(LimitOrder order : limitSellOrders)
             {
                 if(order.getPrice() == rawPrice)
-                    volume += order.getPendingAmount();
+                    volume += order.getPendingAmount() * itemFractionScaleFactor;
             }
         }
         if(virtualOrderBook != null)
             volume += virtualOrderBook.getAmount(rawPrice);
-
         return volume;
     }
 
 
-    public long getVolumeInRawRange(int minPrice, int maxPrice)
+    public float getVolumeInRawRange(int minRawPrice, int maxRawPrice)
     {
-        long volume = 0;
+        float volume = 0;
         for(LimitOrder order : limitBuyOrders)
         {
-            if(order.getPrice() >= minPrice && order.getPrice() <= maxPrice)
-                volume += order.getPendingAmount();
+            if(order.getPrice() >= minRawPrice && order.getPrice() <= maxRawPrice)
+                volume += order.getPendingAmount() * itemFractionScaleFactor;
         }
         for(LimitOrder order : limitSellOrders)
         {
-            if(order.getPrice() >= minPrice && order.getPrice() <= maxPrice)
-                volume += order.getPendingAmount();
+            if(order.getPrice() >= minRawPrice && order.getPrice() <= maxRawPrice)
+                volume += order.getPendingAmount() * itemFractionScaleFactor;
         }
         if(virtualOrderBook != null) {
-            for (int i = minPrice; i <= maxPrice; i++) {
+            for (int i = minRawPrice; i <= maxRawPrice; i++) {
                 volume += virtualOrderBook.getAmount(i);
             }
         }
         return volume;
     }
-    public long getVolumeInRealRange(float minPrice, float maxPrice)
+    public float getVolumeInRealRange(float minPrice, float maxPrice)
     {
         int rawMinPrice = (int)ServerMarketManager.realToRawPrice(minPrice, priceScaleFactor);
         int rawMaxPrice = (int)ServerMarketManager.realToRawPrice(maxPrice, priceScaleFactor);
         return getVolumeInRawRange(rawMinPrice, rawMaxPrice);
+    }
+
+    public @NotNull Tuple<@NotNull Float,@NotNull  Float> getEditablePriceRange()
+    {
+        if(virtualOrderBook != null)
+        {
+            int minRawPrice = virtualOrderBook.getMinEditablePrice();
+            int maxRawPrice = virtualOrderBook.getMaxEditablePrice();
+            return new Tuple<>(
+                    ServerMarketManager.rawToRealPrice(minRawPrice, priceScaleFactor),
+                    ServerMarketManager.rawToRealPrice(maxRawPrice, priceScaleFactor)
+            );
+        }
+        return new Tuple<>(0f, 0f);
+    }
+    public void setVirtualOrderBookVolume(float minPrice, float maxPrice, float volume)
+    {
+        if(virtualOrderBook == null)
+            return;
+        int rawMinPrice = (int)ServerMarketManager.realToRawPrice(minPrice, priceScaleFactor);
+        int rawMaxPrice = (int)ServerMarketManager.realToRawPrice(maxPrice, priceScaleFactor);
+        virtualOrderBook.setVolume(rawMinPrice, rawMaxPrice, volume * itemFractionScaleFactor);
+    }
+    public void addVirtualOrderBookVolume(float minPrice, float maxPrice, float volume)
+    {
+        if(virtualOrderBook == null)
+            return;
+        int rawMinPrice = (int)ServerMarketManager.realToRawPrice(minPrice, priceScaleFactor);
+        int rawMaxPrice = (int)ServerMarketManager.realToRawPrice(maxPrice, priceScaleFactor);
+        virtualOrderBook.addVolume(rawMinPrice, rawMaxPrice, volume * itemFractionScaleFactor);
     }
 
     /*private int getRawPrice(float price)

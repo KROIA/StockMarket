@@ -8,10 +8,10 @@ public class OrderBookVolumeData implements INetworkPayloadEncoder {
 
     public final float minPrice;
     public final float maxPrice;
-    public final long[] volume;
+    public final float[] volume;
 
 
-    public OrderBookVolumeData(float minPrice, float maxPrice, long[] volume) {
+    public OrderBookVolumeData(float minPrice, float maxPrice, float[] volume) {
         this.minPrice = minPrice;
         this.maxPrice = maxPrice;
         this.volume = volume;
@@ -25,8 +25,8 @@ public class OrderBookVolumeData implements INetworkPayloadEncoder {
         buf.writeFloat(minPrice);
         buf.writeFloat(maxPrice);
         buf.writeInt(volume.length);
-        for (long v : volume) {
-            buf.writeLong(v);
+        for (float v : volume) {
+            buf.writeFloat(v);
         }
     }
 
@@ -35,17 +35,17 @@ public class OrderBookVolumeData implements INetworkPayloadEncoder {
         float minPrice = buf.readFloat();
         float maxPrice = buf.readFloat();
         int tiles = buf.readInt();
-        long[] volume = new long[tiles];
+        float[] volume = new float[tiles];
         for (int i = 0; i < tiles; i++) {
-            volume[i] = buf.readLong();
+            volume[i] = buf.readFloat();
         }
         return new OrderBookVolumeData(minPrice, maxPrice, volume);
     }
 
-    public long getMaxVolume()
+    public float getMaxVolume()
     {
-        long maxVolume = 0;
-        for (long l : volume) {
+        float maxVolume = 0;
+        for (float l : volume) {
             maxVolume = Math.max(maxVolume, Math.abs(l));
         }
         return maxVolume;

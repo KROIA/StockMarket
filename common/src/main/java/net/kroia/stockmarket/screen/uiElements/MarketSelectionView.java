@@ -1,10 +1,11 @@
 package net.kroia.stockmarket.screen.uiElements;
 
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.gui.elements.*;
 import net.kroia.modutilities.gui.geometry.Point;
 import net.kroia.modutilities.gui.layout.Layout;
-import net.kroia.modutilities.gui.layout.LayoutVertical;
+import net.kroia.modutilities.gui.layout.LayoutGrid;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
@@ -67,8 +68,9 @@ public class MarketSelectionView extends StockMarketGuiElement {
         selectedMarketLabel = new Label(SELECT_MARKET.getString());
         selectedMarketLabel.setAlignment(Label.Alignment.CENTER);
         tradingPairListView = new VerticalListView();
-        Layout layout = new LayoutVertical();
+        LayoutGrid layout = new LayoutGrid();
         layout.stretchX = true;
+        layout.columns = 3;
         tradingPairListView.setLayout(layout);
 
         itemSelectionView = new ItemSelectionView(this::onItemSelected);
@@ -103,7 +105,7 @@ public class MarketSelectionView extends StockMarketGuiElement {
 
         int column1WidthRatio = 100;
         int column2WidthRatio = 100;
-        int column3WidthRatio = 50;
+        int column3WidthRatio = 150;
 
         int sumOfRatios = column1WidthRatio + column2WidthRatio + column3WidthRatio;
         int column1Width = (width * column1WidthRatio) / sumOfRatios;
@@ -141,6 +143,11 @@ public class MarketSelectionView extends StockMarketGuiElement {
         tradingPairListView.setBounds(pos.x, selectedMarketLabel.getBottom() + spacing, column3Width, height - selectedMarketLabel.getBottom());
 
 
+        LayoutGrid layout = (LayoutGrid) tradingPairListView.getLayout();
+        if(layout != null)
+        {
+            layout.columns = column3Width/60;
+        }
     }
 
     public TradingPair getSelectedTradingPair() {
@@ -189,6 +196,7 @@ public class MarketSelectionView extends StockMarketGuiElement {
         Layout layout = tradingPairListView.getLayout();
         if(layout != null)
             layout.enabled = false;
+        List<TradingPairView> views = new ArrayList<>();
         for(TradingPair pair : availableTradingPairs)
         {
             ItemStack itemStack = selectedItemView.getItemStack();
@@ -213,8 +221,28 @@ public class MarketSelectionView extends StockMarketGuiElement {
                 selectedPair = pair;
                 onSelected.accept(pair);
             });
-            tradingPairListView.addChild(tradingPairView);
+            views.add(tradingPairView);
+
         }
+
+        views.sort((a, b) -> {
+            String itemNameA = ItemUtilities.getItemIDStr(a.getTradingPair().getItem().getStack().getItem());
+            // reverse the itemName
+            itemNameA = new StringBuilder(itemNameA).reverse().toString();
+            String itemNameB = ItemUtilities.getItemIDStr(b.getTradingPair().getItem().getStack().getItem());
+            itemNameB = new StringBuilder(itemNameB).reverse().toString();
+
+            int itemCompare = itemNameA.compareTo(itemNameB);
+            if(itemCompare != 0)
+                return itemCompare;
+            String currencyNameA = a.getTradingPair().getCurrency().getName();
+            String currencyNameB = b.getTradingPair().getCurrency().getName();
+            return currencyNameA.compareTo(currencyNameB);
+        });
+
+        for(TradingPairView tradingPairView : views)
+            tradingPairListView.addChild(tradingPairView);
+
         if(layout != null) {
             layout.enabled = true;
             tradingPairListView.layoutChangedInternal();

@@ -5,6 +5,8 @@ import net.kroia.stockmarket.market.clientdata.*;
 import net.kroia.stockmarket.market.server.OrderBook;
 import net.kroia.stockmarket.market.server.VirtualOrderBook;
 import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
+import net.kroia.stockmarket.market.server.order.LimitOrder;
+import net.kroia.stockmarket.market.server.order.MarketOrder;
 import net.kroia.stockmarket.market.server.order.Order;
 import org.jetbrains.annotations.Nullable;
 
@@ -286,8 +288,8 @@ public interface IServerMarket {
 
     /**
      * Gets the order book for the market.
-     * @Note The OrderBook is used to manage the orders and their execution.
-     * @return the OrderBook for the market.
+     * @Note The OrderBookInterface is used to manage the orders and their execution.
+     * @return the OrderBookInterface for the market.
      */
     OrderBook getOrderBook();
 
@@ -351,6 +353,47 @@ public interface IServerMarket {
     void setMarketOpen(boolean marketOpen);
 
 
+    /**
+     * Creates a limit order without placing it on the market.
+     * @param playerUUID the UUID of the player creating the order.
+     * @param bankAccountNumber the bank account number to use for the order.
+     * @param amount the amount of items to buy or sell.
+     * @param price the price per item in real currency.
+     * @return the created LimitOrder, or null if the order could not be created.
+     */
+    //LimitOrder createLimitOrder(UUID playerUUID, int bankAccountNumber, float amount, float price);
+
+    /**
+     * Creates a market order without placing it on the market.
+     * @param playerUUID the UUID of the player creating the order.
+     * @param bankAccountNumber the bank account number to use for the order.
+     * @param amount the amount of items to buy or sell.
+     * @return the created MarketOrder, or null if the order could not be created.
+     */
+    //MarketOrder createMarketOrder(UUID playerUUID, int bankAccountNumber, float amount);
+
+    /**
+     * Creates a limit order for the bot without placing it on the market.
+     * @param amount the amount of items to buy or sell.
+     * @param price the price per item in real currency.
+     * @return the created LimitOrder, or null if the order could not be created.
+     */
+    LimitOrder createBotLimitOrder(float amount, float price);
+
+    /**
+     * Creates a market order for the bot without placing it on the market.
+     * @param amount the amount of items to buy or sell.
+     * @return the created MarketOrder, or null if the order could not be created.
+     */
+    MarketOrder createBotMarketOrder(float amount);
+
+    /**
+     * Places an order on the market.
+     * The order must be created using one of the create order functions.
+     * @param order the order to place.
+     * @return true if the order was successfully placed, false otherwise.
+     */
+    boolean placeOrder(Order order);
 
 
     /**
@@ -362,7 +405,7 @@ public interface IServerMarket {
      * @param price the price per item in real currency.
      * @return true if the order was successfully created, false otherwise.
      */
-    boolean createLimitOrder(UUID playerUUID, int bankAccountNumber, float amount, float price);
+    boolean createAndPlaceLimitOrder(UUID playerUUID, int bankAccountNumber, float amount, float price);
 
     /**
      * Creates a market order for the player.
@@ -372,7 +415,7 @@ public interface IServerMarket {
      *               Positive values indicate a buy order, negative values indicate a sell order.
      * @return true if the order was successfully created, false otherwise.
      */
-    boolean createMarketOrder(UUID playerUUID, int bankAccountNumber, float amount);
+    boolean createAndPlaceMarketOrder(UUID playerUUID, int bankAccountNumber, float amount);
 
     /**
      * Creates a limit order for the bot.
@@ -383,7 +426,7 @@ public interface IServerMarket {
      * @param price the price per item in real currency.
      * @return true if the order was successfully created, false otherwise.
      */
-    boolean createBotLimitOrder(float amount, float price);
+    boolean createAndPlaceBotLimitOrder(float amount, float price);
 
     /**
      * Creates a market order for the bot.
@@ -393,7 +436,7 @@ public interface IServerMarket {
      *               Positive values indicate a buy order, negative values indicate a sell order.
      * @return true if the order was successfully created, false otherwise.
      */
-    boolean createBotMarketOrder(float amount);
+    boolean createAndPlaceBotMarketOrder(float amount);
 
 
 

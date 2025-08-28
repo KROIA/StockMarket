@@ -28,6 +28,7 @@ public class MatchingEngine implements ServerSaveable {
     private final OrderBook orderBook;  // Owned by the ServerMarket
     private final TradingPair tradingPair;  // Owned by the ServerMarket
     private int priceScaleFactor = 1;
+    private int itemFractionScaleFactor = 1;
     private int currencyItemFractionScaleFactor = 1;
     public MatchingEngine(ServerMarket market,
                           HistoricalMarketData historicalMarketData,
@@ -40,9 +41,10 @@ public class MatchingEngine implements ServerSaveable {
         this.tradingPair = tradingPair;
     }
 
-    public void setScaleFactors(int priceScaleFactor, int currencyItemFractionScaleFactor) {
+    public void setScaleFactors(int priceScaleFactor, int currencyItemFractionScaleFactor, int itemScaleFactor) {
         this.priceScaleFactor = priceScaleFactor;
         this.currencyItemFractionScaleFactor = currencyItemFractionScaleFactor;
+        this.itemFractionScaleFactor = itemScaleFactor;
     }
     public void processIncommingOrders(List<Order> orders)
     {
@@ -127,8 +129,8 @@ public class MatchingEngine implements ServerSaveable {
                         marketOrder.markAsInvalid("Market order processing loop timeout");
                         break;
                     }
-                    long virtualVolume = virtualOrderBook.getAmount(newPrice);
-                    long transferedVolume = TransactionEngine.virtualFill(tradingPair, marketOrder, virtualVolume, newPrice, priceScaleFactor, currencyItemFractionScaleFactor);
+                    float virtualVolume = virtualOrderBook.getAmount(newPrice);
+                    long transferedVolume = TransactionEngine.virtualFill(tradingPair, marketOrder, virtualVolume, newPrice, priceScaleFactor, currencyItemFractionScaleFactor, itemFractionScaleFactor);
                     filledVolume += transferedVolume;
                     if (transferedVolume > 0) {
                         if (marketOrder.isBuy()) {
@@ -207,8 +209,8 @@ public class MatchingEngine implements ServerSaveable {
                     break;
                 }
                 // Fill the remaining volume with virtual orders
-                long virtualVolume = virtualOrderBook.getAmount(newPrice);
-                long transferedVolume = TransactionEngine.virtualFill(tradingPair, marketOrder, virtualVolume, newPrice, priceScaleFactor, currencyItemFractionScaleFactor);
+                float virtualVolume = virtualOrderBook.getAmount(newPrice);
+                long transferedVolume = TransactionEngine.virtualFill(tradingPair, marketOrder, virtualVolume, newPrice, priceScaleFactor, currencyItemFractionScaleFactor, itemFractionScaleFactor);
                 fillVolume -= transferedVolume;
 
                 if (transferedVolume > 0) {
@@ -282,8 +284,8 @@ public class MatchingEngine implements ServerSaveable {
                         limitOrder.markAsInvalid("Limit order processing loop timeout");
                         break;
                     }
-                    long virtualVolume = virtualOrderBook.getAmount(newPrice);
-                    long transferedVolume = TransactionEngine.virtualFill(tradingPair, limitOrder, virtualVolume, newPrice, priceScaleFactor, currencyItemFractionScaleFactor);
+                    float virtualVolume = virtualOrderBook.getAmount(newPrice);
+                    long transferedVolume = TransactionEngine.virtualFill(tradingPair, limitOrder, virtualVolume, newPrice, priceScaleFactor, currencyItemFractionScaleFactor, itemFractionScaleFactor);
                     //filledVolume += transferedVolume;
                     fillVolume -= transferedVolume;
                     if (transferedVolume > 0) {
@@ -365,8 +367,8 @@ public class MatchingEngine implements ServerSaveable {
                     limitOrder.markAsInvalid("Limit order processing loop timeout");
                     break;
                 }
-                long virtualVolume = virtualOrderBook.getAmount(newPrice);
-                long transferedVolume = TransactionEngine.virtualFill(tradingPair, limitOrder, virtualVolume, newPrice, priceScaleFactor, currencyItemFractionScaleFactor);
+                float virtualVolume = virtualOrderBook.getAmount(newPrice);
+                long transferedVolume = TransactionEngine.virtualFill(tradingPair, limitOrder, virtualVolume, newPrice, priceScaleFactor, currencyItemFractionScaleFactor, itemFractionScaleFactor);
                 fillVolume -= transferedVolume;
                 if (transferedVolume > 0) {
                     if (limitOrder.isBuy()) {

@@ -361,6 +361,7 @@ public class DefaultMarketSettings {
 
             public final Price FLINT = registerSetting("flint", 10);
             public final Price BLAZE_POWDER = registerSetting("blaze_powder", 100);
+            public final Price GUN_POWDER = registerSetting("gun_powder", 5);
 
             public final Price GLOWSTONE_DUST = registerSetting("glowstone_dust", 10);
             public final Price STRING = registerSetting("string", 10);

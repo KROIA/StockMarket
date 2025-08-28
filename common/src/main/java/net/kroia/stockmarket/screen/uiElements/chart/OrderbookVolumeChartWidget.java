@@ -60,25 +60,27 @@ public class OrderbookVolumeChartWidget extends StockMarketGuiElement {
             barHeight = (float)chartViewHeight / (orderBookVolume.volume.length - 1);
         }
 
-        long[] volume = orderBookVolume.volume;
+        float[] volume = orderBookVolume.volume;
         // Get max volume of volume
-        long maxVolume = orderBookVolume.getMaxVolume();
+        float maxVolume = orderBookVolume.getMaxVolume();
         int i = 1;
         int y = miny;
         int lastY = y;
-        long currentVolume = 0L;
-        for (long vol : volume) {
+        float currentVolume = 0;
+        for (float vol : volume) {
             lastY = y;
             y = Math.max((int)(maxy + chartViewHeight+barHeight/2 - barHeight*i), maxy);
            // long absVol = Math.abs(vol);
-            currentVolume += vol;
+
             if(y == lastY)
             {
                 // skip this bar since it is not getting displayed because the height is 0.
                 i++;
+                currentVolume = Math.max(vol, currentVolume); // Simple way to remove aliasing effect
                 continue;
             }
-            long absVol = Math.abs(currentVolume);
+            currentVolume = vol;
+            float absVol = Math.abs(currentVolume);
             if (absVol > 0) {
                 int color = currentVolume > 0 ? colorBuy : colorSell;
                 int barWidth = (int)map(Math.min(absVol, maxVolume), 0L, maxVolume, 0L, (long)chartViewWidth);

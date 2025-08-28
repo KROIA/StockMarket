@@ -215,7 +215,7 @@ public class TransactionEngine {
         }
         return fillVolume;
     }
-    public static long virtualFill(TradingPair pair, Order o1, long virtualAmount, int currentPrice, int priceScaleFactor, int currencyScaleFactor)
+    public static long virtualFill(TradingPair pair, Order o1, float virtualAmount, int currentPrice, int priceScaleFactor, int currencyScaleFactor, int itemScaleFactor)
     {
         if(virtualAmount == 0 || o1.getAmount()-o1.getFilledAmount() == 0)
             return 0;
@@ -226,7 +226,7 @@ public class TransactionEngine {
         }
 
         long fillAmount1 = o1.getPendingAmount();
-        long fillVolume = Math.min(Math.abs(fillAmount1), Math.abs(virtualAmount));
+        long fillVolume = Math.min(Math.abs(fillAmount1), (long)Math.abs(virtualAmount/itemScaleFactor));
         long money = (long)fillVolume * (long)currentPrice;
 
         if(o1.isBot())

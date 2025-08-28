@@ -196,15 +196,15 @@ public class ServerTradingBot implements ServerSaveable {
 
     }
 
-    protected long getOrderBookVolumeAtRawPrice(int rawPrice)
+    protected float getOrderBookVolumeAtRawPrice(int rawPrice)
     {
         return serverMarket.getOrderBook().getVolumeRawPrice(rawPrice, serverMarket.getCurrentRawPrice());
     }
-    protected long getOrderBookVolume(float realPrice)
+    protected float getOrderBookVolume(float realPrice)
     {
         return serverMarket.getOrderBook().getVolumeRawPrice(serverMarket.mapToRawPrice(realPrice), serverMarket.getCurrentRawPrice());
     }
-    protected long getOrderBookVolume(float minRealPrice, float maxRealPrice)
+    protected float getOrderBookVolume(float minRealPrice, float maxRealPrice)
     {
         return serverMarket.getOrderBook().getVolumeInRawRange(serverMarket.mapToRawPrice(minRealPrice), serverMarket.mapToRawPrice(maxRealPrice));
     }
@@ -232,37 +232,37 @@ public class ServerTradingBot implements ServerSaveable {
         if(volume <= 0 || price < 0)
             return false;
 
-        return serverMarket.createBotLimitOrder(volume, price);
+        return serverMarket.createAndPlaceBotLimitOrder(volume, price);
     }
     protected boolean sellLimit(long volume, int price)
     {
         if(volume <= 0 || price < 0)
             return false;
-        return serverMarket.createBotLimitOrder(-volume, price);
+        return serverMarket.createAndPlaceBotLimitOrder(-volume, price);
     }
     protected boolean limitTrade(long volume, int price)
     {
         if(volume == 0 || price < 0)
             return false;
-        return serverMarket.createBotLimitOrder(volume, price);
+        return serverMarket.createAndPlaceBotLimitOrder(volume, price);
     }
     protected boolean buyMarket(long volume)
     {
         if(volume <= 0)
             return false;
-        return serverMarket.createBotMarketOrder(volume);
+        return serverMarket.createAndPlaceBotMarketOrder(volume);
     }
     protected boolean sellMarket(long volume)
     {
         if(volume <= 0)
             return false;
-        return serverMarket.createBotMarketOrder(-volume);
+        return serverMarket.createAndPlaceBotMarketOrder(-volume);
     }
     protected boolean marketTrade(long volume)
     {
         if(volume == 0)
             return false;
-        return serverMarket.createBotMarketOrder(volume);
+        return serverMarket.createAndPlaceBotMarketOrder(volume);
     }
 
     @Override

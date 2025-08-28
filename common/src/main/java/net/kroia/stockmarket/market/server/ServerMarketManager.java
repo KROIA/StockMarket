@@ -260,11 +260,11 @@ public class ServerMarketManager implements IServerMarketManager, ServerSaveable
 
         if(orderCreateData.type == Order.Type.LIMIT)
         {
-            return market.createLimitOrder(orderCreateData.owner, orderCreateData.bankAccountNumber, orderCreateData.volume, orderCreateData.limitPrice);
+            return market.createAndPlaceLimitOrder(orderCreateData.owner, orderCreateData.bankAccountNumber, orderCreateData.volume, orderCreateData.limitPrice);
         }
         else if(orderCreateData.type == Order.Type.MARKET)
         {
-            return market.createMarketOrder(orderCreateData.owner, orderCreateData.bankAccountNumber, orderCreateData.volume);
+            return market.createAndPlaceMarketOrder(orderCreateData.owner, orderCreateData.bankAccountNumber, orderCreateData.volume);
         }
         else
         {
@@ -467,7 +467,10 @@ public class ServerMarketManager implements IServerMarketManager, ServerSaveable
         if(currentTime2-currentTime > 5)
             debug("Market update time: " + (currentTime2-currentTime)+"ms");
     }
-
+    public int getMarketUpdateChunkIndex()
+    {
+        return marketUpdateChunkIndex;
+    }
 
     @Override
     public boolean createMarket(MarketFactory.DefaultMarketSetupData defaultMarketSetupData)
@@ -497,8 +500,9 @@ public class ServerMarketManager implements IServerMarketManager, ServerSaveable
         if(market != null)
         {
             markets.put(market.getTradingPair(), market);
-            onMarketAdded(market);
             rebuildTradeItemsChunks();
+            onMarketAdded(market);
+
             return true;
         }
         return false;
@@ -513,6 +517,7 @@ public class ServerMarketManager implements IServerMarketManager, ServerSaveable
             return false;
         }
         boolean success = true;
+        List<ServerMarket> added = new ArrayList<>();
         for(MarketFactory.DefaultMarketSetupData data : category.marketSetupDataList)
         {
             TradingPair pair = data.tradingPair;
@@ -538,10 +543,14 @@ public class ServerMarketManager implements IServerMarketManager, ServerSaveable
             if(market != null)
             {
                 markets.put(market.getTradingPair(), market);
-                onMarketAdded(market);
+                added.add(market);
             }
         }
         rebuildTradeItemsChunks();
+        for(ServerMarket market : added)
+        {
+            onMarketAdded(market);
+        }
         return success;
     }
 
@@ -557,8 +566,8 @@ public class ServerMarketManager implements IServerMarketManager, ServerSaveable
         if(market != null)
         {
             markets.put(market.getTradingPair(), market);
-            onMarketAdded(market);
             rebuildTradeItemsChunks();
+            onMarketAdded(market);
             return true;
         }
         return false;
@@ -588,8 +597,8 @@ public class ServerMarketManager implements IServerMarketManager, ServerSaveable
         if(market != null)
         {
             markets.put(market.getTradingPair(), market);
-            onMarketAdded(market);
             rebuildTradeItemsChunks();
+            onMarketAdded(market);
             return true;
         }
         return false;
@@ -643,11 +652,11 @@ public class ServerMarketManager implements IServerMarketManager, ServerSaveable
 
     protected void onMarketAdded(ServerMarket market)
     {
-
+        BACKEND_INSTANCES.SERVER_EVENTS.MARKET_CREATED.notifyListeners(market);
     }
     protected void onMarketRemoved(ServerMarket market)
     {
-
+        BACKEND_INSTANCES.SERVER_EVENTS.MARKET_REMOVED.notifyListeners(market);
     }
 
 
@@ -677,6 +686,8 @@ public class ServerMarketManager implements IServerMarketManager, ServerSaveable
             }
             tradeMarketChunks.add(chunk);
         }
+
+        BACKEND_INSTANCES.SERVER_PLUGIN_MANAGER.onServerMarketUpdateChunksChanged(tradeMarketChunks);
     }
 
 

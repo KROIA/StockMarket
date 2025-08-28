@@ -10,6 +10,8 @@ import net.kroia.stockmarket.util.DynamicIndexedArray;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 
+import java.util.function.Function;
+
 
 /**
  * This class represents a virtual order book that is used to simulate the order book of a stock market.
@@ -147,10 +149,12 @@ public class VirtualOrderBook implements ServerSaveable {
     private final DynamicIndexedArray virtualOrderVolumeDistribution;
     private long lastMillis;
     private Settings settings = new Settings();
-    private int itemFractionScaleFactor = 1; // Scale factor for item fractions, used to handle fractional item amounts.
+    private int priceScaleFactor = 1;
+    //private int itemFractionScaleFactor = 1; // Scale factor for item fractions, used to handle fractional item amounts.
 
 
     //private boolean dbgSavedToFile = false;
+    private Function<Float, Float> defaultVolumeDistributionFunction = null;
 
     public VirtualOrderBook(int realVolumeBookSize, int initialPrice) {
         virtualOrderVolumeDistribution = new DynamicIndexedArray(realVolumeBookSize, this::getTargetAmount);
@@ -160,15 +164,22 @@ public class VirtualOrderBook implements ServerSaveable {
         virtualOrderVolumeDistribution.resetToDefaultValues();
     }
 
-    public void setItemFractionScaleFactor(int itemFractionScaleFactor) {
-        this.itemFractionScaleFactor = itemFractionScaleFactor;
-    }
-
     public void cleanup() {
         virtualOrderVolumeDistribution.clear();
     }
 
+    public void setPriceScaleFactor(int priceScaleFactor) {
+        if(priceScaleFactor <= 0)
+            priceScaleFactor = 1;
+        this.priceScaleFactor = priceScaleFactor;
+    }
+    public void setDefaultVolumeDistributionFunction(Function<Float, Float> defaultVolumeDistributionFunction) {
+        this.defaultVolumeDistributionFunction = defaultVolumeDistributionFunction;
+        //virtualOrderVolumeDistribution.resetToDefaultValues();
+    }
+
     public void updateVolume(int currentPrice) {
+        /*
         long currentMillis = System.currentTimeMillis();
         double deltaT = Math.min((currentMillis - lastMillis) / 1000.0, 1.0);
         lastMillis = currentMillis;
@@ -214,36 +225,7 @@ public class VirtualOrderBook implements ServerSaveable {
 
             }
         }
-
-       /* if(!dbgSavedToFile)
-        {
-            dbgSavedToFile = true;
-            String fileName = "virtual_order_book.csv";
-            int minPrice = 0;
-            int maxPrice = 100;
-            currentMarketPrice = 50;
-
-            // Open file
-            StringBuilder sb = new StringBuilder();
-            sb.append("Price;Amount\n");
-            for(int i=minPrice; i<=maxPrice; i++)
-            {
-                float amount = getTargetAmount(i);
-                sb.append(i).append(";").append(amount).append("\n");
-            }
-            // Write to file
-            File file = new File(fileName);
-            try {
-                if(!file.exists()) {
-                    file.createNewFile();
-                }
-                java.nio.file.Files.write(file.toPath(), sb.toString().getBytes());
-            } catch (java.io.IOException e) {
-                e.printStackTrace();
-            }
-
-            currentMarketPrice = currentPrice;
-        }*/
+        */
     }
 
     public void setCurrentPrice(int currentMarketPrice) {
@@ -271,6 +253,46 @@ public class VirtualOrderBook implements ServerSaveable {
     }
     public Settings getSettings() {
         return settings;
+    }
+
+    public int getMinEditablePrice()
+    {
+        return virtualOrderVolumeDistribution.getVirtualIndex(0);
+    }
+    public int getMaxEditablePrice()
+    {
+        return virtualOrderVolumeDistribution.getVirtualIndex(virtualOrderVolumeDistribution.getSize()-1);
+    }
+
+    public void setVolume(int minPrice, int maxPrice, float volume) {
+        if(minPrice > maxPrice)
+            return;
+        float volumePerPricerange = Math.max(0, volume) / (maxPrice - minPrice + 1);
+        for(int i=minPrice; i<=maxPrice; i++)
+        {
+            if(virtualOrderVolumeDistribution.isInRange(i)) {
+                // Change sign if target price is > currentMarketPrice
+                if(i > currentMarketPrice)
+                    virtualOrderVolumeDistribution.set(i, -volumePerPricerange);
+                else if(i < currentMarketPrice)
+                    virtualOrderVolumeDistribution.set(i, volumePerPricerange);
+            }
+        }
+    }
+    public void addVolume(int minPrice, int maxPrice, float volume) {
+        if(minPrice > maxPrice)
+            return;
+        float volumePerPricerange = Math.max(0, volume) / (maxPrice - minPrice + 1);
+        for(int i=minPrice; i<=maxPrice; i++)
+        {
+            if(virtualOrderVolumeDistribution.isInRange(i)) {
+                // Change sign if target price is > currentMarketPrice
+                if(i > currentMarketPrice)
+                    virtualOrderVolumeDistribution.add(i, -volumePerPricerange);
+                else if(i < currentMarketPrice)
+                    virtualOrderVolumeDistribution.add(i, volumePerPricerange);
+            }
+        }
     }
 
     public void setVolumeScale(float volumeScale) {
@@ -315,34 +337,49 @@ public class VirtualOrderBook implements ServerSaveable {
 
     /**
      * Get the amount of items to buy or sell based on the price difference
-     * @param price on which the amount should be based
+     * @param rawPrice on which the amount should be based
      * @return the amount of items to buy or sell. Negative values indicate selling
      */
-    public long getAmount(int price)
+    public float getAmount(int rawPrice)
     {
-        if(virtualOrderVolumeDistribution.isInRange(price))
+        if(virtualOrderVolumeDistribution.isInRange(rawPrice))
         {
-            return (long)virtualOrderVolumeDistribution.get(price) * itemFractionScaleFactor;
+            return virtualOrderVolumeDistribution.get(rawPrice);
         }
-        return (long)getTargetAmount(price) * itemFractionScaleFactor;
+        return getTargetAmount(rawPrice);
     }
-    public void removeAmount(int price, long amount)
+    public void removeAmount(int rawPrice, long amount)
     {
-        if(virtualOrderVolumeDistribution.isInRange(price))
+        if(virtualOrderVolumeDistribution.isInRange(rawPrice))
         {
-            if(virtualOrderVolumeDistribution.get(price) > 0)
+            if(virtualOrderVolumeDistribution.get(rawPrice) > 0)
             {
-                virtualOrderVolumeDistribution.add(price, -Math.abs(amount/(float)itemFractionScaleFactor));
+                virtualOrderVolumeDistribution.add(rawPrice, -Math.abs(amount));
             }
-            else if(virtualOrderVolumeDistribution.get(price) < 0)
+            else if(virtualOrderVolumeDistribution.get(rawPrice) < 0)
             {
-                virtualOrderVolumeDistribution.add(price, Math.abs(amount/(float)itemFractionScaleFactor));
+                virtualOrderVolumeDistribution.add(rawPrice, Math.abs(amount));
             }
         }
     }
 
     private float getTargetAmount(int price)
     {
+        if(defaultVolumeDistributionFunction != null)
+        {
+            float realPrice = price / (float)priceScaleFactor;
+            float volume = Math.max(0, defaultVolumeDistributionFunction.apply(realPrice));
+            if(currentMarketPrice > price)
+                return volume;
+            else if(currentMarketPrice < price)
+                return -volume;
+            else
+                return volume;
+        }
+        return 0;
+
+
+        /*
         if(price < 0)
             return 0;
         // Calculate close price volume distribution
@@ -371,7 +408,7 @@ public class VirtualOrderBook implements ServerSaveable {
         if(relativePrice > 0)
             amount += lowPriceAccumulator*5;
 
-        return (amount*settings.volumeScale);
+        return (amount*settings.volumeScale);*/
     }
 
     @Override

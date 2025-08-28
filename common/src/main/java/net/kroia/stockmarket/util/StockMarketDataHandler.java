@@ -79,6 +79,7 @@ public class StockMarketDataHandler extends DataPersistence {
         success &= save_globalSettings();
         success &= save_defaultPrices();
         success &= save_player();
+        success &= load_plugins();
         if(BACKEND_INSTANCES.SERVER_MARKET_MANAGER != null)
             success &= save_market();
 
@@ -105,6 +106,7 @@ public class StockMarketDataHandler extends DataPersistence {
         CompletableFuture<Boolean> fut2;
         CompletableFuture<Boolean> fut3 = save_globalSettingsAsync();
         CompletableFuture<Boolean> fut4 = CompletableFuture.supplyAsync(this::save_defaultPrices);
+        CompletableFuture<Boolean> fut6 = CompletableFuture.supplyAsync(this::load_plugins);
         if(BACKEND_INSTANCES.SERVER_MARKET_MANAGER != null)
             fut2 = save_marketAsync();
         else
@@ -112,7 +114,7 @@ public class StockMarketDataHandler extends DataPersistence {
 
         // Combine all futures to ensure all data is saved before returning
         return CompletableFuture.allOf(fut1, fut2, fut3, fut4).thenApply(v -> {
-            boolean allSuccess = fut1.join() && fut2.join() && fut3.join() && fut4.join() && fut5.join();
+            boolean allSuccess = fut1.join() && fut2.join() && fut3.join() && fut4.join() && fut5.join() && fut6.join();
             if(allSuccess)
                 info("StockMarket Mod data saved successfully.");
             else
@@ -176,6 +178,7 @@ public class StockMarketDataHandler extends DataPersistence {
 
         success &= load_player();
         success &= load_market();
+        success &= load_plugins();
 
         if(success) {
             info("StockMarket Mod data loaded successfully.");
@@ -250,6 +253,16 @@ public class StockMarketDataHandler extends DataPersistence {
         return BACKEND_INSTANCES.SERVER_MARKET_MANAGER.load(dataListMap);
     }
 
+    public boolean load_plugins()
+    {
+        return BACKEND_INSTANCES.SERVER_PLUGIN_MANAGER.load();
+    }
+    public boolean save_plugins()
+    {
+        return BACKEND_INSTANCES.SERVER_PLUGIN_MANAGER.save();
+    }
+
+
     public boolean save_metadata()
     {
         CompoundTag data = new CompoundTag();
@@ -318,6 +331,10 @@ public class StockMarketDataHandler extends DataPersistence {
     public Path getPlayerManagerFolderPath()
     {
         return getAbsoluteSavePath("PlayerManager");
+    }
+    public Path getPluginManagerFolderPath()
+    {
+        return getAbsoluteSavePath("ServerPluginManager");
     }
     public Path getMetaDataFilePath()
     {

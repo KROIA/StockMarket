@@ -137,7 +137,7 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
         this.historicalMarketData.getHistory().setScaleFactors(this.priceScaleFactor, currencyItemFractionScaleFactor);
         this.orderBook.setScaleFactors(this.priceScaleFactor, itemFractionScaleFactor);
         this.matchingEngine = new MatchingEngine(this, historicalMarketData, orderBook, tradingPair);
-        this.matchingEngine.setScaleFactors(this.priceScaleFactor, currencyItemFractionScaleFactor);
+        this.matchingEngine.setScaleFactors(this.priceScaleFactor, currencyItemFractionScaleFactor, itemFractionScaleFactor);
 
         this.volatilityBot = null;
 
@@ -153,7 +153,7 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
         this.historicalMarketData.getHistory().setScaleFactors(priceScaleFactor, currencyItemFractionScaleFactor);
         this.orderBook.setScaleFactors(priceScaleFactor, itemFractionScaleFactor);
         this.matchingEngine = new MatchingEngine(this ,historicalMarketData, orderBook, tradingPair);
-        this.matchingEngine.setScaleFactors(priceScaleFactor, currencyItemFractionScaleFactor);
+        this.matchingEngine.setScaleFactors(priceScaleFactor, currencyItemFractionScaleFactor, itemFractionScaleFactor);
 
         this.volatilityBot = null;
 
@@ -561,51 +561,71 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
 
 
 
-    @Override
-    public boolean createLimitOrder(UUID playerUUID, int bankAccountNumber, float amount, float price)
+    private LimitOrder createLimitOrder(UUID playerUUID, int bankAccountNumber, float amount, float price)
     {
-        if(!marketOpen)
-            return false;
-
         int rawPrice = mapToRawPrice(price);
-        LimitOrder order = OrderFactory.createLimitOrder(playerUUID, bankAccountNumber, tradingPair, amount, rawPrice, priceScaleFactor, currencyItemFractionScaleFactor, itemFractionScaleFactor);
+        return OrderFactory.createLimitOrder(playerUUID, bankAccountNumber, tradingPair, amount, rawPrice, priceScaleFactor, currencyItemFractionScaleFactor, itemFractionScaleFactor);
+    }
+    private MarketOrder createMarketOrder(UUID playerUUID, int bankAccountNumber, float amount)
+    {
+        int currentPrice = getCurrentRawPrice();
+        return OrderFactory.createMarketOrder(playerUUID, bankAccountNumber, tradingPair, amount, currentPrice, priceScaleFactor, currencyItemFractionScaleFactor, itemFractionScaleFactor);
+    }
+
+    @Override
+    public LimitOrder createBotLimitOrder(float amount, float price)
+    {
+        int rawPrice = mapToRawPrice(price);
+        long rawAmount = (long)(amount*itemFractionScaleFactor);
+        return OrderFactory.createBotLimitOrder(rawAmount, rawPrice);
+    }
+    @Override
+    public MarketOrder createBotMarketOrder(float amount)
+    {
+        long rawAmount = (long)(amount*itemFractionScaleFactor);
+        return OrderFactory.createBotMarketOrder(rawAmount);
+    }
+    @Override
+    public boolean placeOrder(Order order)
+    {
         if(order == null)
             return false;
-
         addOrder(order);
         return true;
     }
     @Override
-    public boolean createMarketOrder(UUID playerUUID, int bankAccountNumber, float amount)
+    public boolean createAndPlaceLimitOrder(UUID playerUUID, int bankAccountNumber, float amount, float price)
+    {
+        if(!marketOpen)
+            return false;
+        LimitOrder order = createLimitOrder(playerUUID, bankAccountNumber, amount, price);
+        return placeOrder(order);
+    }
+
+    @Override
+    public boolean createAndPlaceMarketOrder(UUID playerUUID, int bankAccountNumber, float amount)
     {
         if(!marketOpen)
             return false;
 
-        int currentPrice = getCurrentRawPrice();
-        MarketOrder order = OrderFactory.createMarketOrder(playerUUID, bankAccountNumber, tradingPair, amount, currentPrice, priceScaleFactor, currencyItemFractionScaleFactor, itemFractionScaleFactor);
-        if(order == null)
-            return false;
-
-        addOrder(order);
-        return true;
+        MarketOrder order = createMarketOrder(playerUUID, bankAccountNumber, amount);
+        return placeOrder(order);
     }
 
     @Override
-    public boolean createBotLimitOrder(float amount, float price)
+    public boolean createAndPlaceBotLimitOrder(float amount, float price)
     {
         int rawPrice = mapToRawPrice(price);
         long rawAmount = (long)(amount*itemFractionScaleFactor);
         LimitOrder order = OrderFactory.createBotLimitOrder(rawAmount, rawPrice);
-        addOrder(order);
-        return true;
+        return placeOrder(order);
     }
     @Override
-    public boolean createBotMarketOrder(float amount)
+    public boolean createAndPlaceBotMarketOrder(float amount)
     {
         long rawAmount = (long)(amount*itemFractionScaleFactor);
         MarketOrder order = OrderFactory.createBotMarketOrder(rawAmount);
-        addOrder(order);
-        return true;
+        return placeOrder(order);
     }
 
     @Override
@@ -790,7 +810,7 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
             volatilityBot.save(volatilityBotTag);
         }
         tag.put("tradingPair", tradingPairTag);
-        tag.put("orderBook", orderBookTag);
+        tag.put("orderBookInterface", orderBookTag);
         tag.put("matchingEngine", matchingEngineTag);
         tag.put("historicalMarketData", historicalMarketDataTag);
         if(volatilityBot != null) {
@@ -819,8 +839,8 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
             success &= tradingPair.load(tag.getCompound("tradingPair"));
             success &= tradingPair.isValid();
         }
-        if(tag.contains("orderBook")) {
-            success &= orderBook.load(tag.getCompound("orderBook"));
+        if(tag.contains("orderBookInterface")) {
+            success &= orderBook.load(tag.getCompound("orderBookInterface"));
         }
         if(tag.contains("matchingEngine")) {
             success &= matchingEngine.load(tag.getCompound("matchingEngine"));
@@ -873,7 +893,7 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
 
         this.historicalMarketData.getHistory().setScaleFactors(priceScaleFactor, currencyItemFractionScaleFactor);
         this.orderBook.setScaleFactors(priceScaleFactor, itemFractionScaleFactor);
-        this.matchingEngine.setScaleFactors(priceScaleFactor, currencyItemFractionScaleFactor);
+        this.matchingEngine.setScaleFactors(priceScaleFactor, currencyItemFractionScaleFactor, itemFractionScaleFactor);
         this.smallesTradableVolume = Math.min(currencyItemFractionScaleFactor / this.priceScaleFactor, itemFractionScaleFactor);
         return success;
     }

@@ -213,9 +213,41 @@ public class OrderHistory {
             if(endIndex < startIndex)
                 return result; // Overflow occurred
 
-            int currentIndex = 0;
+            int indexCounter = 0;
             int chunkBeginIndex = 0;
-            for(int i=chunkArray.size()-1; i>=0; --i)
+            try {
+                for (int i = chunkArray.size() - 1; i >= 0; --i) {
+                    ChunkArrayElement chunkElement = chunkArray.get(i);
+                    if (!chunkElement.isLoaded()) {
+                        chunkElement.load();
+                    }
+                    OrderHistoryDataArchiveChunk chunk = chunkElement.getChunk();
+                    if (chunk == null) {
+                        warn("Chunk at index " + i + " is null, skipping. Maybe the file got deleted? Start chunk time = " + chunkElement.startTime);
+                        continue; // Skip if the chunk is not loaded
+                    }
+                    int chunkSize = chunk.chronologicalOrderedOrderList.size();
+                    if (indexCounter + chunkSize < startIndex) {
+                        indexCounter += chunkSize;
+                        chunkBeginIndex += chunkSize;
+                        continue; // Skip this chunk if it doesn't contain the requested range
+                    }
+                    for (; indexCounter < endIndex && indexCounter < chunkBeginIndex + chunkSize; ++indexCounter) {
+                        int chunkIndex = chunkSize - (indexCounter - chunkBeginIndex) - 1;
+                        result.add(chunk.chronologicalOrderedOrderList.get(chunkIndex));
+                    }
+                    if (indexCounter >= endIndex)
+                        break; // Stop if we reached the end index
+                    chunkBeginIndex += chunkSize;
+                }
+            }
+            catch(Exception e)
+            {
+                error("Exception while getting chronological orders from index "+startIndex+" amount "+amount, e);
+            }
+
+
+            /*for(int i=chunkArray.size()-1; i>=0; --i)
             {
                 ChunkArrayElement chunkElement = chunkArray.get(i);
                 if(!chunkElement.isLoaded())
@@ -243,7 +275,7 @@ public class OrderHistory {
                 if(currentIndex >= endIndex)
                     break; // Stop if we reached the end index
                 chunkBeginIndex += chunkSize;
-            }
+            }*/
             debug("getChronological collected: "+result.size()+" elements from: "+ this);
             return result;
         }

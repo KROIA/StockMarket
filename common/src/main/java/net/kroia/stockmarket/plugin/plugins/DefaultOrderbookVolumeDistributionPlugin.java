@@ -1,0 +1,262 @@
+package net.kroia.stockmarket.plugin.plugins;
+
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import net.kroia.modutilities.networking.INetworkPayloadConverter;
+import net.kroia.modutilities.persistence.ServerSaveable;
+import net.kroia.stockmarket.market.server.VirtualOrderBook;
+import net.kroia.stockmarket.plugin.base.IMarketPluginInterface;
+import net.kroia.stockmarket.plugin.base.MarketPlugin;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.util.Tuple;
+import org.jetbrains.annotations.NotNull;
+
+public class DefaultOrderbookVolumeDistributionPlugin extends MarketPlugin {
+
+    public static class Settings implements ServerSaveable, INetworkPayloadConverter
+    {
+        public float volumeScale;
+        public float nearMarketVolumeScale;
+        public float volumeAccumulationRate ;
+        public float volumeFastAccumulationRate;
+        public float volumeDecumulationRate;
+
+        public Settings()
+        {
+            volumeScale = 100.0f;
+            nearMarketVolumeScale = 2f;
+            volumeAccumulationRate = 0.005f;
+            volumeFastAccumulationRate = 0.1f;
+            volumeDecumulationRate = 0.0001f;
+        }
+
+        public Settings(VirtualOrderBook.Settings other) {
+            this.volumeScale = other.volumeScale;
+            this.nearMarketVolumeScale = other.nearMarketVolumeScale;
+            this.volumeAccumulationRate = other.volumeAccumulationRate;
+            this.volumeFastAccumulationRate = other.volumeFastAccumulationRate;
+            this.volumeDecumulationRate = other.volumeDecumulationRate;
+        }
+
+        @Override
+        public boolean save(CompoundTag tag) {
+            tag.putFloat("volumeScale", volumeScale);
+            tag.putFloat("nearMarketVolumeScale", nearMarketVolumeScale);
+            tag.putFloat("volumeAccumulationRate", volumeAccumulationRate);
+            tag.putFloat("volumeFastAccumulationRate", volumeFastAccumulationRate);
+            tag.putFloat("volumeDecumulationRate", volumeDecumulationRate);
+            return true;
+        }
+
+        @Override
+        public boolean load(CompoundTag tag) {
+            if(tag.contains("volumeScale"))
+                volumeScale = tag.getFloat("volumeScale");
+            if(tag.contains("nearMarketVolumeScale"))
+                nearMarketVolumeScale = tag.getFloat("nearMarketVolumeScale");
+            if(tag.contains("volumeAccumulationRate"))
+                volumeAccumulationRate = tag.getFloat("volumeAccumulationRate");
+            if(tag.contains("volumeFastAccumulationRate"))
+                volumeFastAccumulationRate = tag.getFloat("volumeFastAccumulationRate");
+            if(tag.contains("volumeDecumulationRate"))
+                volumeDecumulationRate = tag.getFloat("volumeDecumulationRate");
+
+            if(volumeAccumulationRate <= 0)
+                this.volumeAccumulationRate = 0.00001f;
+            if(volumeFastAccumulationRate <= 0)
+                this.volumeFastAccumulationRate = 0.00001f;
+            if(volumeDecumulationRate <= 0)
+                this.volumeDecumulationRate = 0.00001f;
+            return true;
+        }
+
+        @Override
+        public void decode(FriendlyByteBuf buf) {
+            volumeScale = buf.readFloat();
+            nearMarketVolumeScale = buf.readFloat();
+            volumeAccumulationRate = buf.readFloat();
+            volumeFastAccumulationRate = buf.readFloat();
+            volumeDecumulationRate = buf.readFloat();
+
+            if(volumeAccumulationRate <= 0)
+                this.volumeAccumulationRate = 0.00001f;
+            if(volumeFastAccumulationRate <= 0)
+                this.volumeFastAccumulationRate = 0.00001f;
+            if(volumeDecumulationRate <= 0)
+                this.volumeDecumulationRate = 0.00001f;
+        }
+
+        @Override
+        public void encode(FriendlyByteBuf buf) {
+            buf.writeFloat(volumeScale);
+            buf.writeFloat(nearMarketVolumeScale);
+            buf.writeFloat(volumeAccumulationRate);
+            buf.writeFloat(volumeFastAccumulationRate);
+            buf.writeFloat(volumeDecumulationRate);
+        }
+        public JsonElement toJson()
+        {
+            JsonObject jsonObject = new JsonObject();
+            jsonObject.addProperty("volumeScale", volumeScale);
+            jsonObject.addProperty("nearMarketVolumeScale", nearMarketVolumeScale);
+            jsonObject.addProperty("volumeAccumulationRate", volumeAccumulationRate);
+            jsonObject.addProperty("volumeFastAccumulationRate", volumeFastAccumulationRate);
+            jsonObject.addProperty("volumeDecumulationRate", volumeDecumulationRate);
+            return jsonObject;
+        }
+
+        public boolean fromJson(JsonElement json) {
+            if(json.isJsonObject()) {
+                JsonObject jsonObject = json.getAsJsonObject();
+                if(jsonObject.has("volumeScale"))
+                    volumeScale = jsonObject.get("volumeScale").getAsFloat();
+                if(jsonObject.has("nearMarketVolumeScale"))
+                    nearMarketVolumeScale = jsonObject.get("nearMarketVolumeScale").getAsFloat();
+                if(jsonObject.has("volumeAccumulationRate"))
+                    volumeAccumulationRate = jsonObject.get("volumeAccumulationRate").getAsFloat();
+                if(jsonObject.has("volumeFastAccumulationRate"))
+                    volumeFastAccumulationRate = jsonObject.get("volumeFastAccumulationRate").getAsFloat();
+                if(jsonObject.has("volumeDecumulationRate"))
+                    volumeDecumulationRate = jsonObject.get("volumeDecumulationRate").getAsFloat();
+
+                return true;
+            }
+            return false;
+        }
+
+    }
+
+
+    private Settings settings = new Settings();
+
+
+
+    private long lastMillis;
+    private float currentMarketPrice = 0;
+
+    @Override
+    public void setup()
+    {
+        market.getOrderBook().registerDefaultVolumeDistributionFunction(this::getTargetAmount);
+    }
+
+    @Override
+    public void update()
+    {
+        currentMarketPrice = market.getPrice();
+        //info("Current market price: " + currentMarketPrice);
+        updateVolume();
+    }
+
+    public void updateVolume() {
+        long currentMillis = System.currentTimeMillis();
+        Tuple<@NotNull Float,@NotNull  Float> editableRange = market.getOrderBook().getEditablePriceRange();
+        double deltaT = Math.min((currentMillis - lastMillis) / 1000.0, 1.0);
+        lastMillis = currentMillis;
+
+        float updateCount = 100;
+        float icrement = ((1+editableRange.getB() - editableRange.getA())/updateCount);
+        IMarketPluginInterface.OrderBookInterface orderBook = market.getOrderBook();
+        for(float i=editableRange.getA(); i<editableRange.getB(); i+=icrement)
+        {
+            float targetAmount = getTargetAmount(i);
+            float currentVal = orderBook.getVolume(i, i+icrement);
+            if((currentVal<targetAmount) || (currentVal>targetAmount)) {
+                if(currentVal < 0 && targetAmount > 0 || currentVal > 0 && targetAmount < 0)
+                {
+                    currentVal = 0;
+                    orderBook.setVolume(i, i+icrement, 0);
+                    //virtualOrderVolumeDistribution.set(priceIndex, currentVal);
+                }
+
+                float scale = settings.volumeAccumulationRate;
+
+                if(Math.abs(currentVal) < Math.abs(targetAmount)*0.2f)
+                {
+                    scale = settings.volumeFastAccumulationRate;
+                }else if(Math.abs(currentVal) > Math.abs(targetAmount))
+                {
+                    scale = settings.volumeDecumulationRate;
+                }
+                float deltaAmount = (targetAmount - currentVal) * (float) deltaT * scale;
+                if(deltaAmount < 0 && currentVal > 0 && -deltaAmount > currentVal)
+                {
+                    deltaAmount = -currentVal;
+                }
+                else if(deltaAmount > 0 && currentVal < 0 && deltaAmount > -currentVal)
+                {
+                    deltaAmount = -currentVal;
+                }
+                orderBook.addVolume(i, i+icrement, deltaAmount);
+                //virtualOrderVolumeDistribution.add(priceIndex, deltaAmount);
+            }
+        }
+    }
+    private void setToDefaultDistribution()
+    {
+        Tuple<@NotNull Float,@NotNull  Float> editableRange = market.getOrderBook().getEditablePriceRange();
+
+        float updateCount = 100;
+        float icrement = ((1+editableRange.getB() - editableRange.getA())/updateCount);
+        IMarketPluginInterface.OrderBookInterface orderBook = market.getOrderBook();
+        for(float i=editableRange.getA(); i<editableRange.getB(); i+=icrement)
+        {
+            float targetAmount = getTargetAmount(i);
+            orderBook.setVolume(i, i+icrement, targetAmount);
+        }
+    }
+
+    float getTargetAmount(float price)
+    {
+        if(price < 0)
+            return 0;
+        // Calculate close price volume distribution
+        float currentPriceFloat = currentMarketPrice;
+        //float relativePrice = (currentPriceFloat - (float)price)/(currentPriceFloat+1);
+        float relativePrice = (currentPriceFloat - (float)price);
+
+        final float constant1 = (float)(2.0/Math.E);
+
+        float amount = 0;
+        if(relativePrice < 40 && relativePrice > -40) {
+            //amount += (float) Math.E * width * relativePrice * (float) Math.exp(-Math.abs(relativePrice * width));
+            float sqrt = (float) Math.sqrt(Math.abs(relativePrice)) * Math.signum(relativePrice);
+            amount += (float) constant1 * settings.nearMarketVolumeScale * sqrt * (float) Math.exp(-Math.abs(relativePrice*relativePrice*0.01));
+        }
+
+
+        if(relativePrice > 0)
+            amount += 0.1f;
+        else if(relativePrice <= 0)
+            amount += -0.1f;
+        if(price == 0)
+            amount += 0.2f;
+
+        float lowPriceAccumulator = 1/(1+(float)price);
+        if(relativePrice > 0)
+            amount += lowPriceAccumulator*5;
+
+        return Math.abs(amount*settings.volumeScale);
+    }
+
+    @Override
+    public void decode(FriendlyByteBuf buf) {
+
+    }
+
+    @Override
+    public void encode(FriendlyByteBuf buf) {
+
+    }
+
+    @Override
+    public boolean save(CompoundTag tag) {
+        return false;
+    }
+
+    @Override
+    public boolean load(CompoundTag tag) {
+        return false;
+    }
+}
