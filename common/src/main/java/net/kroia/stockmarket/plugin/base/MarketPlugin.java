@@ -1,48 +1,50 @@
 package net.kroia.stockmarket.plugin.base;
 
-import net.kroia.modutilities.networking.INetworkPayloadConverter;
-import net.kroia.modutilities.persistence.ServerSaveable;
-import net.kroia.stockmarket.StockMarketModBackend;
+import net.minecraft.network.FriendlyByteBuf;
 
-public abstract class MarketPlugin implements ServerSaveable, INetworkPayloadConverter {
-    private static StockMarketModBackend.Instances BACKEND_INSTANCES;
-    public static void setBackend(StockMarketModBackend.Instances backend) {
-        BACKEND_INSTANCES = backend;
-    }
+public abstract class MarketPlugin extends Plugin {
+
+
     protected IMarketPluginInterface market = null;
-    protected String name;
-    protected boolean loggerEnabled = true;
-
     public MarketPlugin() {
-
+        super();
     }
     public final void setInterface(IMarketPluginInterface market)
     {
         this.market = market;
+        this.setTradingPair(market.getTradingPair());
     }
-    public void setName(String name)
-    {
-        this.name = name;
-    }
-
-    //public abstract String getMarketPluginTypeID();
 
     public IMarketPluginInterface getPluginInterface() {
         return market;
     }
-    public String getName() {
-        return name;
-    }
 
 
-    public void setup()
+    public void encodeClientStreamData(FriendlyByteBuf buf)
     {
-
+        // Default implementation does nothing
     }
-    public void update()
+
+    /*public static MarketPlugin createFromBuf(FriendlyByteBuf buf)
     {
+        String typeID = buf.readUtf();
+        MarketPlugin plugin = PluginRegistry.createServerPluginInstance(typeID);
+        if(plugin == null)
+        {
+            BACKEND_INSTANCES.LOGGER.error("Failed to create MarketPlugin instance from buffer: unknown type ID " + typeID+
+                    ".\nMake sure the plugin is registered on both client and server.");
+            return null;
+        }
+        try{
+            plugin.decode(buf);
+        }catch(Exception e)
+        {
+            BACKEND_INSTANCES.LOGGER.error("Failed to decode MarketPlugin instance from buffer: " + typeID, e);
+            return null;
+        }
+        return plugin;
+    }*/
 
-    }
 
 
 
@@ -52,29 +54,15 @@ public abstract class MarketPlugin implements ServerSaveable, INetworkPayloadCon
 
 
 
-    protected void info(String msg)
-    {
-        if(loggerEnabled)
-            BACKEND_INSTANCES.LOGGER.info("[MarketPlugin: "+name+"("+ market.getTradingPair().getUltraShortDescription() + ")] " + msg);
-    }
-    protected void error(String msg)
-    {
-        if(loggerEnabled)
-            BACKEND_INSTANCES.LOGGER.error("[MarketPlugin: "+name+"("+ market.getTradingPair().getUltraShortDescription() + ")] " + msg);
-    }
-    protected void error(String msg, Throwable e)
-    {
-        if(loggerEnabled)
-            BACKEND_INSTANCES.LOGGER.error("[MarketPlugin: "+name+"("+ market.getTradingPair().getUltraShortDescription() + ")] " + msg, e);
-    }
-    protected void warn(String msg)
-    {
-        if(loggerEnabled)
-            BACKEND_INSTANCES.LOGGER.warn("[MarketPlugin: "+name+"("+ market.getTradingPair().getUltraShortDescription() + ")] " + msg);
-    }
-    protected void debug(String msg)
-    {
-        if(loggerEnabled)
-            BACKEND_INSTANCES.LOGGER.debug("[MarketPlugin: "+name+"("+ market.getTradingPair().getUltraShortDescription() + ")] " + msg);
-    }
+
+
+
+
+
+
+
+
+
+
+
 }

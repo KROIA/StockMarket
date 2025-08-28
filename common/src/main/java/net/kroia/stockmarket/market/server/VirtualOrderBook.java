@@ -294,6 +294,12 @@ public class VirtualOrderBook implements ServerSaveable {
             }
         }
     }
+    public void setVolume(int startPrice, float[] volume, float scaleMultiplier) {
+        virtualOrderVolumeDistribution.set(startPrice, volume, currentMarketPrice, scaleMultiplier);
+    }
+    public void addVolume(int startPrice, float[] volume, float scaleMultiplier) {
+        virtualOrderVolumeDistribution.add(startPrice, volume, currentMarketPrice, scaleMultiplier);
+    }
 
     public void setVolumeScale(float volumeScale) {
         this.settings.volumeScale = volumeScale;

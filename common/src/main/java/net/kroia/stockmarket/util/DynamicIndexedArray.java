@@ -59,6 +59,29 @@ public class DynamicIndexedArray implements ServerSaveable {
         }
         return false;
     }
+    public boolean set(int virtualIndex, float[] value,  int signFlipAboveVirtualIndex, float scaleMultiplier)
+    {
+        int realIndex = getOffsetedIndex(virtualIndex);
+        int endIndex = Math.min(realIndex + value.length, array.length);
+        if(realIndex < 0)
+            realIndex = 0;
+        if(realIndex >= array.length)
+            return false;
+        if(endIndex < 0)
+            return false;
+        if(endIndex > array.length)
+            endIndex = array.length;
+
+        for(int i = realIndex; i < endIndex; i++, virtualIndex++)
+        {
+
+            if(virtualIndex > signFlipAboveVirtualIndex)
+                array[i] = -value[i - realIndex] * scaleMultiplier;
+            else
+                array[i] = value[i - realIndex] * scaleMultiplier;
+        }
+        return true;
+    }
     public void setAll(float value)
     {
         for(int i = 0; i < array.length; i++)
@@ -78,6 +101,27 @@ public class DynamicIndexedArray implements ServerSaveable {
         {
             array[realIndex] += value;
             return true;
+        }
+        return false;
+    }
+    public boolean add(int virtualIndex, float[] value, int signFlipAboveVirtualIndex, float scaleMultiplier)
+    {
+        int realIndex = getOffsetedIndex(virtualIndex);
+        int endIndex = Math.min(realIndex + value.length, array.length);
+        if(realIndex < 0)
+            realIndex = 0;
+        if(realIndex >= array.length)
+            return false;
+        if(endIndex < 0)
+            return false;
+        if(endIndex > array.length)
+            endIndex = array.length;
+        for(int i = realIndex; i < endIndex; i++, virtualIndex++)
+        {
+            if(virtualIndex > signFlipAboveVirtualIndex)
+                array[i] -= value[i - realIndex] * scaleMultiplier;
+            else
+                array[i] += value[i - realIndex] * scaleMultiplier;
         }
         return false;
     }

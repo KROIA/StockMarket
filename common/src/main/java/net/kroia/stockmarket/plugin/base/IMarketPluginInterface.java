@@ -20,6 +20,25 @@ public interface IMarketPluginInterface {
      */
     float getPrice();
 
+
+    /**
+     * Converts the internal backend price to a real price value.
+     * The backend price is an integer value used for calculations and storage.
+     * The real price is a float value that is scaled using the internal scaling factor.
+     * @param backendPrice The internal backend price to convert.
+     * @return The converted real price value.
+     */
+    float convertBackendPriceToRealPrice(int backendPrice);
+
+    /**
+     * Converts a real price value to the internal backend price.
+     * The backend price is an integer value used for calculations and storage.
+     * The real price is a float value that is scaled using the internal scaling factor.
+     * @param realPrice The real price value to convert.
+     * @return The converted internal backend price.
+     */
+    int convertRealPriceToBackendPrice(float realPrice);
+
     /**
      * Gets the price value where the market is moving towards.
      * This value must be secret from non-admin players.
@@ -93,12 +112,27 @@ public interface IMarketPluginInterface {
          */
         float getVolume(float minPrice, float maxPrice);
 
+        /**
+         * Gets the total volume of orders at the given price.
+         * @param backendPrice The price to get the volume at.
+         *                     This is the internal unscaled price value!
+         * @return Total volume of orders at the given price.
+         */
+        float getVolume(int backendPrice);
+
 
         /**
          * Gets the price range where it is possible to change the volume of the virtual order-book.
          * @return A tuple containing the minimum and maximum editable price.
          */
         @NotNull Tuple<@NotNull Float,@NotNull  Float> getEditablePriceRange();
+
+        /**
+         * Gets the price range where it is possible to change the volume of the virtual order-book,
+         * using the internal unscaled price values.
+         * @return A tuple containing the minimum and maximum editable price.
+         */
+        @NotNull Tuple<@NotNull Integer,@NotNull  Integer> getEditableBackendPriceRange();
 
         /**
          * Creates a uniform distribution of volume between the given price range (inclusive).
@@ -111,11 +145,12 @@ public interface IMarketPluginInterface {
 
         /**
          * Sets the volume distribution using the given array of volume values.
-         * @param startPrice The price at which the first volume value is set.
+         * @param backendStartPrice The price at which the first volume value is set.
+         *                          This is the internal unscaled price value!
          * @param volume Array of volume values.
-         * @param priceStep The price step between each volume value in the array.
          */
-        void setVolume(float startPrice, float[] volume, float priceStep);
+        void setVolume(int backendStartPrice, float[] volume);
+
 
         /**
          * Adds a uniform distribution of volume between the given price range (inclusive).
@@ -128,11 +163,13 @@ public interface IMarketPluginInterface {
 
         /**
          * Adds the volume distribution using the given array of volume values.
-         * @param startPrice The price at which the first volume value is added.
+         * @param backendStartPrice The price at which the first volume value is added.
+         *                          This is the internal unscaled price value!
          * @param volume Array of volume values.
-         * @param priceStep The price step between each volume value in the array.
          */
-        void addVolume(float startPrice, float[] volume, float priceStep);
+        void addVolume(int backendStartPrice, float[] volume);
+
+
 
 
         /**

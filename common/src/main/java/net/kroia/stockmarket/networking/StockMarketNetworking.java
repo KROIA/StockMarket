@@ -3,6 +3,7 @@ package net.kroia.stockmarket.networking;
 
 import net.kroia.modutilities.networking.NetworkManager;
 import net.kroia.modutilities.networking.arrs.AsynchronousRequestResponseSystem;
+import net.kroia.modutilities.networking.streaming.StreamSystem;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.networking.packet.client_sender.update.entity.UpdateStockMarketBlockEntityPacket;
 import net.kroia.stockmarket.networking.packet.request.*;
@@ -10,6 +11,8 @@ import net.kroia.stockmarket.networking.packet.server_sender.ClientServerManager
 import net.kroia.stockmarket.networking.packet.server_sender.update.OpenScreenPacket;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncTradeItemsPacket;
 import net.kroia.stockmarket.networking.packet.server_sender.update.entity.SyncStockMarketBlockEntityPacket;
+import net.kroia.stockmarket.plugin.networking.MarketPluginNetworkStream;
+import net.kroia.stockmarket.plugin.networking.MarketPluginTypesRequest;
 
 public class StockMarketNetworking extends NetworkManager {
 
@@ -41,10 +44,16 @@ public class StockMarketNetworking extends NetworkManager {
     public static FetchOrderHistoryRequest ORDER_HISTORY_REQUEST = (FetchOrderHistoryRequest) AsynchronousRequestResponseSystem.register(new FetchOrderHistoryRequest());
 
 
+
+
+    public static final MarketPluginTypesRequest MARKET_PLUGIN_TYPES_REQUEST = (MarketPluginTypesRequest) AsynchronousRequestResponseSystem.register(new MarketPluginTypesRequest());
+    public static final MarketPluginNetworkStream MARKET_PLUGIN_NETWORK_STREAM = (MarketPluginNetworkStream) StreamSystem.register(new MarketPluginNetworkStream());
+
     public StockMarketNetworking()
     {
         super(StockMarketMod.MOD_ID, "stockmarket_channel");
         setupARRS();
+        setupStreamSystem();
         setupClientReceiverPackets();
         setupServerReceiverPackets();
     }

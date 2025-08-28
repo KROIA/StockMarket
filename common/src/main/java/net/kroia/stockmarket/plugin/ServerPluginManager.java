@@ -9,7 +9,10 @@ import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.Order;
 import net.kroia.stockmarket.plugin.base.IMarketPluginInterface;
 import net.kroia.stockmarket.plugin.base.MarketPlugin;
+import net.kroia.stockmarket.plugin.base.Plugin;
+import net.kroia.stockmarket.util.StockMarketGenericStream;
 import net.kroia.stockmarket.util.Stopwatch;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.util.Tuple;
 import org.jetbrains.annotations.NotNull;
 
@@ -21,7 +24,8 @@ public class ServerPluginManager {
     private static StockMarketModBackend.Instances BACKEND_INSTANCES;
     public static void setBackend(StockMarketModBackend.Instances backend) {
         BACKEND_INSTANCES = backend;
-        MarketPlugin.setBackend(backend);
+        Plugin.setBackend(backend);
+        StockMarketGenericStream.setBackend(backend);
     }
     private class MarketPluginInstanceData
     {
@@ -42,6 +46,23 @@ public class ServerPluginManager {
                 this.type = type;
             }
         }
+        private class VirtualOrderBookVolumeManipulationRealArrayData
+        {
+            enum ManipulationType
+            {
+                SET,
+                ADD,
+            }
+            public final int backendStartPrice;
+            public final float[] volume;
+            public final ManipulationType type;
+
+            private VirtualOrderBookVolumeManipulationRealArrayData(int backendStartPrice, float[] volume, ManipulationType type) {
+                this.backendStartPrice = backendStartPrice;
+                this.volume = volume;
+                this.type = type;
+            }
+        }
 
         public class MarketPluginInterface  {
             public class MarketInterface implements IMarketPluginInterface {
@@ -53,6 +74,18 @@ public class ServerPluginManager {
                 @Override
                 public float getPrice() {
                     return marketData.currentPrice;
+                }
+
+                @Override
+                public float convertBackendPriceToRealPrice(int backendPrice)
+                {
+                    return marketData.market.mapToRealPrice(backendPrice);
+                }
+
+                @Override
+                public int convertRealPriceToBackendPrice(float realPrice)
+                {
+                    return marketData.market.mapToRawPrice(realPrice);
                 }
 
                 @Override
@@ -102,8 +135,20 @@ public class ServerPluginManager {
                     }
 
                     @Override
+                    public float getVolume(int backendPrice)
+                    {
+                        return marketData.market.getOrderBook().getVolumeRawPrice(backendPrice, marketData.market.mapToRawPrice(marketData.currentPrice));
+                    }
+
+                    @Override
                     public @NotNull Tuple<@NotNull Float, @NotNull Float> getEditablePriceRange() {
                         return marketData.market.getOrderBook().getEditablePriceRange();
+                    }
+
+                    @Override
+                    public @NotNull Tuple<@NotNull Integer,@NotNull  Integer> getEditableBackendPriceRange()
+                    {
+                        return marketData.market.getOrderBook().getEditableBackendPriceRange();
                     }
 
                     @Override
@@ -112,18 +157,18 @@ public class ServerPluginManager {
                     }
 
                     @Override
-                    public void setVolume(float startPrice, float[] volume, float priceStep)
+                    public void setVolume(int backendStartPrice, float[] volume)
                     {
-
+                        virtualOrderBookVolumeArrayManipulations.add(new VirtualOrderBookVolumeManipulationRealArrayData(backendStartPrice, volume, VirtualOrderBookVolumeManipulationRealArrayData.ManipulationType.SET));
                     }
                     @Override
                     public void addVolume(float minPrice, float maxPrice, float volume) {
                         virtualOrderBookVolumeManipulations.add(new VirtualOrderBookVolumeManipulationData(minPrice, maxPrice, volume, VirtualOrderBookVolumeManipulationData.ManipulationType.ADD));
                     }
                     @Override
-                    public void addVolume(float startPrice, float[] volume, float priceStep)
+                    public void addVolume(int backendStartPrice, float[] volume)
                     {
-
+                        virtualOrderBookVolumeArrayManipulations.add(new VirtualOrderBookVolumeManipulationRealArrayData(backendStartPrice, volume, VirtualOrderBookVolumeManipulationRealArrayData.ManipulationType.ADD));
                     }
                     @Override
                     public void registerDefaultVolumeDistributionFunction(Function<Float, Float> volumeDistributionFunction_) {
@@ -153,6 +198,7 @@ public class ServerPluginManager {
         private final MarketPluginInterface marketPluginInterface = new MarketPluginInterface();
         public final MarketPlugin plugin;
         public final List<VirtualOrderBookVolumeManipulationData> virtualOrderBookVolumeManipulations = new java.util.ArrayList<>();
+        public final List<VirtualOrderBookVolumeManipulationRealArrayData> virtualOrderBookVolumeArrayManipulations = new java.util.ArrayList<>();
         public Function<Float, Float> volumeDistributionFunction = null;
         public float nextTargetPriceDelta = 0;
         public List<LimitOrder> nextLimitOrders = new java.util.ArrayList<>();
@@ -176,6 +222,7 @@ public class ServerPluginManager {
         public void clear()
         {
             virtualOrderBookVolumeManipulations.clear();
+            virtualOrderBookVolumeArrayManipulations.clear();
             nextTargetPriceDelta = 0;
             nextLimitOrders.clear();
             nextCreatingMarketOrderVolume = 0;
@@ -226,7 +273,7 @@ public class ServerPluginManager {
             for(MarketPluginInstanceData pluginData : pluginsData.values())
             {
                 pluginData.performanceTrackWatch.start();
-                pluginData.plugin.update();
+                pluginData.plugin.update_internal();
                 nextTargetPrice += pluginData.nextTargetPriceDelta;
                 pluginData.lastUpdateDurationNs = pluginData.performanceTrackWatch.stop();
             }
@@ -256,6 +303,14 @@ public class ServerPluginManager {
                     {
                         case SET -> orderBook.setVirtualOrderBookVolume(manipulation.minPrice, manipulation.maxPrice, manipulation.volume);
                         case ADD -> orderBook.addVirtualOrderBookVolume(manipulation.minPrice, manipulation.maxPrice, manipulation.volume);
+                    }
+                }
+                for(MarketPluginInstanceData.VirtualOrderBookVolumeManipulationRealArrayData manipulation : pluginData.virtualOrderBookVolumeArrayManipulations)
+                {
+                    switch (manipulation.type)
+                    {
+                        case SET -> orderBook.setVirtualOrderBookVolume(manipulation.backendStartPrice, manipulation.volume);
+                        case ADD -> orderBook.addVirtualOrderBookVolume(manipulation.backendStartPrice, manipulation.volume);
                     }
                 }
 
@@ -289,11 +344,11 @@ public class ServerPluginManager {
                 warn("MarketPlugin with ID '"+pluginID+"' already exists for market "+market.getTradingPair().getUltraShortDescription());
                 return;
             }
-            MarketPlugin pluginInstance = ServerPluginRegistry.createPluginInstance(pluginID);
+            MarketPlugin pluginInstance = PluginRegistry.createServerPluginInstance(pluginID);
             pluginInstance.setName(name);
             MarketPluginInstanceData instanceData = new MarketPluginInstanceData(pluginInstance, this);
             pluginsData.put(pluginID, instanceData);
-            instanceData.plugin.setup();
+            instanceData.plugin.setup_interal();
         }
         public int getPluginCount()
         {
@@ -408,7 +463,7 @@ public class ServerPluginManager {
         }
         marketData.createMarketPlugin(pluginID, name);
     }
-    public void createMarketPlugin(TradingPair market, ServerPluginRegistry.MarketPluginRegistrationObject pluginReg, String name)
+    public void createMarketPlugin(TradingPair market, PluginRegistry.MarketPluginRegistrationObject pluginReg, String name)
     {
         PluginMarket marketData = allMarketsData.get(market);
         if(marketData == null)
@@ -436,6 +491,31 @@ public class ServerPluginManager {
             total += marketData.getPluginCount();
         }
         return total;
+    }
+    public boolean encodeClientStreamData(TradingPair pair, String pluginTypeID, FriendlyByteBuf buf)
+    {
+        PluginMarket marketData = allMarketsData.get(pair);
+        if(marketData == null)
+        {
+            return false;
+        }
+        MarketPluginInstanceData pluginData = marketData.pluginsData.get(pluginTypeID);
+        if(pluginData == null)
+        {
+            return false;
+        }
+        // Write data to buf
+        pluginData.plugin.encodeClientStreamData(buf);
+        return true;
+    }
+    public List<String> getPluginTypes(TradingPair market)
+    {
+        PluginMarket marketData = allMarketsData.get(market);
+        if(marketData == null)
+        {
+            return Collections.emptyList();
+        }
+        return new ArrayList<>(marketData.pluginsData.keySet());
     }
 
     public boolean save() {

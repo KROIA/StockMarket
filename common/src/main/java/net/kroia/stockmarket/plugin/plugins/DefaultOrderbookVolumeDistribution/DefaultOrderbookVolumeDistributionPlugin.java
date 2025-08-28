@@ -1,11 +1,10 @@
-package net.kroia.stockmarket.plugin.plugins;
+package net.kroia.stockmarket.plugin.plugins.DefaultOrderbookVolumeDistribution;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import net.kroia.modutilities.networking.INetworkPayloadConverter;
-import net.kroia.modutilities.persistence.ServerSaveable;
 import net.kroia.stockmarket.market.server.VirtualOrderBook;
 import net.kroia.stockmarket.plugin.base.IMarketPluginInterface;
+import net.kroia.stockmarket.plugin.base.IPluginSettings;
 import net.kroia.stockmarket.plugin.base.MarketPlugin;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
@@ -14,7 +13,7 @@ import org.jetbrains.annotations.NotNull;
 
 public class DefaultOrderbookVolumeDistributionPlugin extends MarketPlugin {
 
-    public static class Settings implements ServerSaveable, INetworkPayloadConverter
+    public static class Settings implements IPluginSettings
     {
         public float volumeScale;
         public float nearMarketVolumeScale;
@@ -71,7 +70,7 @@ public class DefaultOrderbookVolumeDistributionPlugin extends MarketPlugin {
             return true;
         }
 
-        @Override
+
         public void decode(FriendlyByteBuf buf) {
             volumeScale = buf.readFloat();
             nearMarketVolumeScale = buf.readFloat();
@@ -129,18 +128,13 @@ public class DefaultOrderbookVolumeDistributionPlugin extends MarketPlugin {
 
 
     private Settings settings = new Settings();
-
-
-
     private long lastMillis;
     private float currentMarketPrice = 0;
-
     @Override
     public void setup()
     {
         market.getOrderBook().registerDefaultVolumeDistributionFunction(this::getTargetAmount);
     }
-
     @Override
     public void update()
     {
@@ -149,9 +143,52 @@ public class DefaultOrderbookVolumeDistributionPlugin extends MarketPlugin {
         updateVolume();
     }
 
+
+
     public void updateVolume() {
         long currentMillis = System.currentTimeMillis();
-        Tuple<@NotNull Float,@NotNull  Float> editableRange = market.getOrderBook().getEditablePriceRange();
+        Tuple<@NotNull Integer,@NotNull  Integer> editableRange = market.getOrderBook().getEditableBackendPriceRange();
+        double deltaT = Math.min((currentMillis - lastMillis) / 1000.0, 1.0);
+        lastMillis = currentMillis;
+
+        float updateCount = 100;
+        IMarketPluginInterface.OrderBookInterface orderBook = market.getOrderBook();
+        float[] newVolume = new float[editableRange.getB() - editableRange.getA()];
+        for(int i=editableRange.getA(); i<editableRange.getB(); i++)
+        {
+            float targetAmount = getTargetAmount(market.convertBackendPriceToRealPrice(i));
+            float currentVal = orderBook.getVolume(i);
+            if((currentVal<targetAmount) || (currentVal>targetAmount)) {
+                if(currentVal < 0 && targetAmount > 0 || currentVal > 0 && targetAmount < 0)
+                {
+                    currentVal = 0;
+                    newVolume[i - editableRange.getA()] = 0;
+                }
+
+                float scale = settings.volumeAccumulationRate;
+
+                if(Math.abs(currentVal) < Math.abs(targetAmount)*0.2f)
+                {
+                    scale = settings.volumeFastAccumulationRate;
+                }else if(Math.abs(currentVal) > Math.abs(targetAmount))
+                {
+                    scale = settings.volumeDecumulationRate;
+                }
+                float deltaAmount = (targetAmount - currentVal) * (float) deltaT * scale;
+                if(deltaAmount < 0 && currentVal > 0 && -deltaAmount > currentVal)
+                {
+                    deltaAmount = -currentVal;
+                }
+                else if(deltaAmount > 0 && currentVal < 0 && deltaAmount > -currentVal)
+                {
+                    deltaAmount = -currentVal;
+                }
+                newVolume[i - editableRange.getA()] = currentVal + deltaAmount;
+                //virtualOrderVolumeDistribution.add(priceIndex, deltaAmount);
+            }
+        }
+        orderBook.setVolume(editableRange.getA(), newVolume);
+        /*Tuple<@NotNull Float,@NotNull  Float> editableRange = market.getOrderBook().getEditablePriceRange();
         double deltaT = Math.min((currentMillis - lastMillis) / 1000.0, 1.0);
         lastMillis = currentMillis;
 
@@ -191,7 +228,7 @@ public class DefaultOrderbookVolumeDistributionPlugin extends MarketPlugin {
                 orderBook.addVolume(i, i+icrement, deltaAmount);
                 //virtualOrderVolumeDistribution.add(priceIndex, deltaAmount);
             }
-        }
+        }*/
     }
     private void setToDefaultDistribution()
     {
@@ -240,23 +277,33 @@ public class DefaultOrderbookVolumeDistributionPlugin extends MarketPlugin {
         return Math.abs(amount*settings.volumeScale);
     }
 
-    @Override
-    public void decode(FriendlyByteBuf buf) {
 
+
+    @Override
+    protected void encodeSettings(FriendlyByteBuf buf) {
+        settings.encode(buf);
     }
 
     @Override
-    public void encode(FriendlyByteBuf buf) {
-
+    protected void decodeSettings(FriendlyByteBuf buf) {
+        settings.decode(buf);
     }
 
     @Override
-    public boolean save(CompoundTag tag) {
-        return false;
+    public boolean saveToFilesystem(CompoundTag tag) {
+        CompoundTag settingsTag = new CompoundTag();
+        settings.save(settingsTag);
+        tag.put("settings", settingsTag);
+        return true;
     }
 
     @Override
-    public boolean load(CompoundTag tag) {
-        return false;
+    public boolean loadFromFilesystem(CompoundTag tag) {
+        if(tag.contains("settings"))
+        {
+            CompoundTag settingsTag = tag.getCompound("settings");
+            settings.load(settingsTag);
+        }
+        return true;
     }
 }

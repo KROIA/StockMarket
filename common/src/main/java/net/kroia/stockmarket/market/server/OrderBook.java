@@ -415,6 +415,19 @@ public class OrderBook implements ServerSaveable {
         }
         return new Tuple<>(0f, 0f);
     }
+    public @NotNull Tuple<@NotNull Integer,@NotNull  Integer> getEditableBackendPriceRange()
+    {
+        if(virtualOrderBook != null)
+        {
+            int minRawPrice = virtualOrderBook.getMinEditablePrice();
+            int maxRawPrice = virtualOrderBook.getMaxEditablePrice();
+            return new Tuple<>(
+                    minRawPrice,
+                    maxRawPrice
+            );
+        }
+        return new Tuple<>(0, 0);
+    }
     public void setVirtualOrderBookVolume(float minPrice, float maxPrice, float volume)
     {
         if(virtualOrderBook == null)
@@ -430,6 +443,18 @@ public class OrderBook implements ServerSaveable {
         int rawMinPrice = (int)ServerMarketManager.realToRawPrice(minPrice, priceScaleFactor);
         int rawMaxPrice = (int)ServerMarketManager.realToRawPrice(maxPrice, priceScaleFactor);
         virtualOrderBook.addVolume(rawMinPrice, rawMaxPrice, volume * itemFractionScaleFactor);
+    }
+    public void setVirtualOrderBookVolume(int backendStartPrice, float[] volume)
+    {
+        if(virtualOrderBook == null)
+            return;
+        virtualOrderBook.setVolume(backendStartPrice, volume, itemFractionScaleFactor);
+    }
+    public void addVirtualOrderBookVolume(int backendStartPrice, float[] volume)
+    {
+        if(virtualOrderBook == null)
+            return;
+        virtualOrderBook.addVolume(backendStartPrice, volume, itemFractionScaleFactor);
     }
 
     /*private int getRawPrice(float price)
