@@ -12,6 +12,7 @@ import net.kroia.stockmarket.networking.packet.server_sender.update.OpenScreenPa
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncTradeItemsPacket;
 import net.kroia.stockmarket.networking.packet.server_sender.update.entity.SyncStockMarketBlockEntityPacket;
 import net.kroia.stockmarket.plugin.networking.MarketPluginNetworkStream;
+import net.kroia.stockmarket.plugin.networking.MarketPluginSettingsRequest;
 import net.kroia.stockmarket.plugin.networking.MarketPluginTypesRequest;
 
 public class StockMarketNetworking extends NetworkManager {
@@ -47,7 +48,9 @@ public class StockMarketNetworking extends NetworkManager {
 
 
     public static final MarketPluginTypesRequest MARKET_PLUGIN_TYPES_REQUEST = (MarketPluginTypesRequest) AsynchronousRequestResponseSystem.register(new MarketPluginTypesRequest());
+    public static final MarketPluginSettingsRequest MARKET_PLUGIN_SETTINGS_REQUEST = (MarketPluginSettingsRequest) AsynchronousRequestResponseSystem.register(new MarketPluginSettingsRequest());
     public static final MarketPluginNetworkStream MARKET_PLUGIN_NETWORK_STREAM = (MarketPluginNetworkStream) StreamSystem.register(new MarketPluginNetworkStream());
+
 
     public StockMarketNetworking()
     {

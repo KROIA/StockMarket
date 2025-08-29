@@ -20,10 +20,11 @@ public abstract class MarketPlugin extends Plugin {
     }
 
 
-    public void encodeClientStreamData(FriendlyByteBuf buf)
-    {
-        // Default implementation does nothing
-    }
+    /**
+     * Encode data tha the client needs when starting a stream
+     * @param buf The buffer to write to
+     */
+    public abstract void encodeClientStreamData(FriendlyByteBuf buf);
 
     /*public static MarketPlugin createFromBuf(FriendlyByteBuf buf)
     {

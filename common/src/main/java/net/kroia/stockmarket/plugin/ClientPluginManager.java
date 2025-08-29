@@ -29,8 +29,7 @@ public class ClientPluginManager {
             if(plugin != null)
             {
 
-                plugin = PluginRegistry.createClientPluginInstance(pluginTypeID);
-                plugin.setTradingPair(tradingPair);
+                plugin = PluginRegistry.createClientPluginInstance(tradingPair, pluginTypeID);
                 plugins.put(pluginTypeID, plugin);
             }
             return plugin;
@@ -44,8 +43,7 @@ public class ClientPluginManager {
             {
                 if(!plugins.containsKey(pluginTypeID))
                 {
-                    ClientMarketPlugin plugin = PluginRegistry.createClientPluginInstance(pluginTypeID);
-                    plugin.setTradingPair(tradingPair);
+                    ClientMarketPlugin plugin = PluginRegistry.createClientPluginInstance(tradingPair, pluginTypeID);
                     plugins.put(pluginTypeID, plugin);
                 }
             }

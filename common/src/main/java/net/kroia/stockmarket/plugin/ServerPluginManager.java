@@ -517,6 +517,20 @@ public class ServerPluginManager {
         }
         return new ArrayList<>(marketData.pluginsData.keySet());
     }
+    public MarketPlugin getMarketPlugin(TradingPair market, String pluginTypeID)
+    {
+        PluginMarket marketData = allMarketsData.get(market);
+        if(marketData == null)
+        {
+            return null;
+        }
+        MarketPluginInstanceData pluginData = marketData.pluginsData.get(pluginTypeID);
+        if(pluginData == null)
+        {
+            return null;
+        }
+        return pluginData.plugin;
+    }
 
     public boolean save() {
         return false;

@@ -66,7 +66,7 @@ public abstract class Plugin {
 
 
 
-    protected Settings settings;
+    private Settings settings;
     private TradingPair tradingPair;
     private String pluginTypeID;
 
@@ -123,6 +123,15 @@ public abstract class Plugin {
     public final boolean isPluginEnabled() {
         return settings.pluginEnabled;
     }
+
+    public final void setSettings(Settings settings) {
+        if(settings != null)
+            this.settings = settings;
+    }
+    public final Settings getSettings() {
+        return settings;
+    }
+
 
 
 

@@ -1,10 +1,12 @@
 package net.kroia.stockmarket.plugin;
 
+import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.plugin.base.ClientMarketPlugin;
 import net.kroia.stockmarket.plugin.base.MarketPlugin;
 
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiFunction;
 import java.util.function.Supplier;
 
 public class PluginRegistry {
@@ -13,11 +15,11 @@ public class PluginRegistry {
     {
         public final String pluginTypeID;
         private final Supplier<MarketPlugin> serverPluginSupplier;
-        private final Supplier<ClientMarketPlugin> clientPluginSupplier;
+        private final BiFunction<TradingPair, String, ClientMarketPlugin> clientPluginSupplier;
 
         public MarketPluginRegistrationObject(String pluginTypeID,
                                               Supplier<MarketPlugin> serverPluginSupplier,
-                                              Supplier<ClientMarketPlugin> clientPluginSupplier) {
+                                              BiFunction<TradingPair, String, ClientMarketPlugin> clientPluginSupplier) {
             if(serverPluginSupplier == null)
                 throw new IllegalArgumentException("Plugin supplier cannot be null");
             if(pluginTypeID == null || pluginTypeID.isEmpty())
@@ -32,7 +34,7 @@ public class PluginRegistry {
     private static final Map<String, MarketPluginRegistrationObject> REGISTERED_PLUGINS = new java.util.HashMap<>();
 
 
-    public static MarketPluginRegistrationObject registerPlugin(String pluginTypeID, Supplier<MarketPlugin> pluginSupplier, Supplier<ClientMarketPlugin> clientPluginSupplier)
+    public static MarketPluginRegistrationObject registerPlugin(String pluginTypeID, Supplier<MarketPlugin> pluginSupplier, BiFunction<TradingPair, String, ClientMarketPlugin> clientPluginSupplier)
     {
         if(pluginSupplier == null)
             throw new IllegalArgumentException("Plugin supplier cannot be null");
@@ -57,19 +59,17 @@ public class PluginRegistry {
     {
         return registrationObject.serverPluginSupplier.get();
     }
-    public static ClientMarketPlugin createClientPluginInstance(String pluginTypeID)
+    public static ClientMarketPlugin createClientPluginInstance(TradingPair tradingPair, String pluginTypeID)
     {
         MarketPluginRegistrationObject registryObj = REGISTERED_PLUGINS.get(pluginTypeID);
         if(registryObj == null)
             throw new IllegalArgumentException("Plugin type ID not registered: " + pluginTypeID);
-        ClientMarketPlugin plugin = registryObj.clientPluginSupplier.get();
-        plugin.setPluginTypeID(pluginTypeID);
+        ClientMarketPlugin plugin = registryObj.clientPluginSupplier.apply(tradingPair , pluginTypeID);
         return plugin;
     }
-    public static ClientMarketPlugin createClientPluginInstance(MarketPluginRegistrationObject registrationObject)
+    public static ClientMarketPlugin createClientPluginInstance(MarketPluginRegistrationObject registrationObject, TradingPair tradingPair)
     {
-        ClientMarketPlugin plugin = registrationObject.clientPluginSupplier.get();
-        plugin.setPluginTypeID(registrationObject.pluginTypeID);
+        ClientMarketPlugin plugin = registrationObject.clientPluginSupplier.apply(tradingPair, registrationObject.pluginTypeID);
         return plugin;
     }
     public static Map<String, MarketPluginRegistrationObject> getRegisteredPlugins() {

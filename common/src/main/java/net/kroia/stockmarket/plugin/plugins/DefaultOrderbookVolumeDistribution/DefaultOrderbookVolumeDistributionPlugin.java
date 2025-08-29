@@ -13,6 +13,8 @@ import org.jetbrains.annotations.NotNull;
 
 public class DefaultOrderbookVolumeDistributionPlugin extends MarketPlugin {
 
+
+
     public static class Settings implements IPluginSettings
     {
         public float volumeScale;
@@ -141,6 +143,11 @@ public class DefaultOrderbookVolumeDistributionPlugin extends MarketPlugin {
         currentMarketPrice = market.getPrice();
         //info("Current market price: " + currentMarketPrice);
         updateVolume();
+    }
+
+    @Override
+    public void encodeClientStreamData(FriendlyByteBuf buf) {
+
     }
 
 
