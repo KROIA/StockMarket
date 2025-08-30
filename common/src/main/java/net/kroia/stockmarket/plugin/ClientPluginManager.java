@@ -91,6 +91,13 @@ public class ClientPluginManager {
         BACKEND_INSTANCES = backend;
         markets = new HashMap<>();
     }
+    public Map<String, ClientMarketPlugin> getMarketPlugins(TradingPair pair)
+    {
+        Market market = markets.get(pair);
+        if(market == null)
+            return Map.of();
+        return market.getPlugins();
+    }
 
 
     public void requestMarketPluginTypes(TradingPair pair, Consumer<List<String>> callback)

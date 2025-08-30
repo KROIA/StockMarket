@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.plugin;
 
+import net.kroia.modutilities.persistence.ServerSaveable;
+import net.kroia.modutilities.persistence.ServerSaveableChunked;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.IServerMarket;
 import net.kroia.stockmarket.market.TradingPair;
@@ -12,6 +14,8 @@ import net.kroia.stockmarket.plugin.base.MarketPlugin;
 import net.kroia.stockmarket.plugin.base.Plugin;
 import net.kroia.stockmarket.util.StockMarketGenericStream;
 import net.kroia.stockmarket.util.Stopwatch;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.util.Tuple;
 import org.jetbrains.annotations.NotNull;
@@ -27,7 +31,7 @@ public class ServerPluginManager {
         Plugin.setBackend(backend);
         StockMarketGenericStream.setBackend(backend);
     }
-    private class MarketPluginInstanceData
+    private class MarketPluginInstanceData implements ServerSaveable
     {
         private class VirtualOrderBookVolumeManipulationData
         {
@@ -227,10 +231,25 @@ public class ServerPluginManager {
             nextLimitOrders.clear();
             nextCreatingMarketOrderVolume = 0;
         }
+        @Override
+        public boolean save(CompoundTag tag) {
+            CompoundTag pluginTag = new CompoundTag();
+            plugin.saveToFilesystem_internal(pluginTag);
+            tag.put("pluginData", pluginTag);
+            return true;
+        }
+
+        @Override
+        public boolean load(CompoundTag tag) {
+            if(!tag.contains("pluginData"))
+                return false;
+            CompoundTag pluginTag = tag.getCompound("pluginData");
+            return plugin.loadFromFilesystem_internal(pluginTag);
+        }
     }
 
 
-    private class PluginMarket
+    private class PluginMarket implements ServerSaveableChunked
     {
         private final IServerMarket market;
         private final Map<String, MarketPluginInstanceData> pluginsData = new HashMap<>(); // pluginTypeID -> data
@@ -353,6 +372,53 @@ public class ServerPluginManager {
         public int getPluginCount()
         {
             return pluginsData.size();
+        }
+
+        @Override
+        public boolean save(Map<String, ListTag> listTags) {
+            ListTag marketTag = new ListTag();
+            for(MarketPluginInstanceData pluginData : pluginsData.values())
+            {
+                CompoundTag pluginTag = new CompoundTag();
+                pluginTag.putString("pluginTypeID", pluginData.plugin.getPluginTypeID());
+                if(pluginData.save(pluginTag))
+                {
+                    marketTag.add(pluginTag);
+                }
+            }
+            UUID tradingPairUUID = market.getTradingPair().getUUID();
+            listTags.put(tradingPairUUID.toString(), marketTag);
+            return true;
+        }
+
+        @Override
+        public boolean load(Map<String, ListTag> listTags) {
+            String tradingPairUUIDStr = market.getTradingPair().getUUID().toString();
+            if(!listTags.containsKey(tradingPairUUIDStr))
+                return false;
+            ListTag marketTag = listTags.get(tradingPairUUIDStr);
+            for(int i = 0; i < marketTag.size(); i++)
+            {
+                CompoundTag pluginTag = marketTag.getCompound(i);
+                if(!pluginTag.contains("pluginTypeID"))
+                    continue;
+                String pluginTypeID = pluginTag.getString("pluginTypeID");
+                MarketPluginInstanceData pluginData = pluginsData.get(pluginTypeID);
+                if(pluginData == null)
+                {
+                    MarketPlugin pluginInstance = PluginRegistry.createServerPluginInstance(pluginTypeID);
+                    if(pluginInstance == null)
+                    {
+                        warn("Failed to load MarketPlugin with unknown ID '"+pluginTypeID+"' for market "+market.getTradingPair().getUltraShortDescription());
+                        continue;
+                    }
+                    pluginData = new MarketPluginInstanceData(pluginInstance, this);
+                    pluginsData.put(pluginTypeID, pluginData);
+                    pluginData.plugin.setup_interal();
+                }
+                pluginData.load(pluginTag);
+            }
+            return true;
         }
     }
 
@@ -533,14 +599,38 @@ public class ServerPluginManager {
     }
 
     public boolean save() {
-        return false;
+        boolean success = true;
+        Map<String, ListTag> dataMapList = new HashMap<>();
+        for(PluginMarket marketData : allMarketsData.values())
+        {
+            if(!marketData.save(dataMapList))
+            {
+                error("Failed to save plugin market data for market: " + marketData.market.getTradingPair().getUltraShortDescription());
+                success = false;
+            }
+        }
+        success &= BACKEND_INSTANCES.SERVER_DATA_HANDLER.saveDataCompoundListMap(saveFolder, dataMapList);
+        return success;
     }
 
 
     public boolean load() {
-
-
-        setup();
+        boolean success = true;
+        Map<String, ListTag> dataMapList = BACKEND_INSTANCES.SERVER_DATA_HANDLER.readDataCompoundListMap(saveFolder);
+        if(dataMapList == null)
+        {
+            warn("No saved plugin data found.");
+            return true;
+        }
+        for(PluginMarket marketData : allMarketsData.values())
+        {
+            if(!marketData.load(dataMapList))
+            {
+                error("Failed to load plugin market data for market: " + marketData.market.getTradingPair().getUltraShortDescription());
+                success = false;
+            }
+        }
+        //setup();
         return false;
     }
 

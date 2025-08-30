@@ -79,7 +79,7 @@ public class StockMarketDataHandler extends DataPersistence {
         success &= save_globalSettings();
         success &= save_defaultPrices();
         success &= save_player();
-        success &= load_plugins();
+        success &= save_plugins();
         if(BACKEND_INSTANCES.SERVER_MARKET_MANAGER != null)
             success &= save_market();
 
@@ -106,7 +106,7 @@ public class StockMarketDataHandler extends DataPersistence {
         CompletableFuture<Boolean> fut2;
         CompletableFuture<Boolean> fut3 = save_globalSettingsAsync();
         CompletableFuture<Boolean> fut4 = CompletableFuture.supplyAsync(this::save_defaultPrices);
-        CompletableFuture<Boolean> fut6 = CompletableFuture.supplyAsync(this::load_plugins);
+        CompletableFuture<Boolean> fut6 = CompletableFuture.supplyAsync(this::save_plugins);
         if(BACKEND_INSTANCES.SERVER_MARKET_MANAGER != null)
             fut2 = save_marketAsync();
         else
