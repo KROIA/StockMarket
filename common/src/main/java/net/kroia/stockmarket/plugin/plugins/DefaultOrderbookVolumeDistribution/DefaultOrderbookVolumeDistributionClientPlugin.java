@@ -7,8 +7,11 @@ import net.minecraft.network.FriendlyByteBuf;
 
 public class DefaultOrderbookVolumeDistributionClientPlugin extends ClientMarketPlugin {
 
+    private final DefaultOrderbookVolumeDistributionPluginGuiElement guiElement;
+    private DefaultOrderbookVolumeDistributionPlugin.Settings settings = new DefaultOrderbookVolumeDistributionPlugin.Settings();
     public DefaultOrderbookVolumeDistributionClientPlugin(TradingPair tradingPair, String pluginTypeID) {
         super(tradingPair, pluginTypeID);
+        guiElement = new DefaultOrderbookVolumeDistributionPluginGuiElement(this);
     }
 
     @Override
@@ -23,28 +26,28 @@ public class DefaultOrderbookVolumeDistributionClientPlugin extends ClientMarket
 
     @Override
     protected ClientMarketPluginGuiElement getSettingsGuiElement() {
-        return null;
+        return guiElement;
     }
 
     @Override
-    protected void setSettingsToGuiElement(ClientMarketPluginGuiElement element) {
-
+    protected void setSettingsToGuiElement() {
+        guiElement.setSettings(settings);
     }
 
     @Override
-    protected void applySettingsFromGuiElement(ClientMarketPluginGuiElement element) {
-
+    protected void applySettingsFromGuiElement() {
+        settings = guiElement.getSettings();
     }
 
 
     @Override
     protected void encodeSettings(FriendlyByteBuf buf) {
-
+        settings.encode(buf);
     }
 
     @Override
     protected void decodeSettings(FriendlyByteBuf buf) {
-
+        settings.decode(buf);
     }
 
 

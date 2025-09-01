@@ -76,9 +76,9 @@ public class DynamicIndexedArray implements ServerSaveable {
         {
 
             if(virtualIndex > signFlipAboveVirtualIndex)
-                array[i] = -value[i - realIndex] * scaleMultiplier;
+                array[i] = Math.min(0, value[i - realIndex] * scaleMultiplier);
             else
-                array[i] = value[i - realIndex] * scaleMultiplier;
+                array[i] = Math.max(0, value[i - realIndex] * scaleMultiplier);
         }
         return true;
     }
@@ -119,9 +119,9 @@ public class DynamicIndexedArray implements ServerSaveable {
         for(int i = realIndex; i < endIndex; i++, virtualIndex++)
         {
             if(virtualIndex > signFlipAboveVirtualIndex)
-                array[i] -= value[i - realIndex] * scaleMultiplier;
+                array[i] = Math.min(0, array[i] + value[i - realIndex] * scaleMultiplier);
             else
-                array[i] += value[i - realIndex] * scaleMultiplier;
+                array[i] = Math.max(0, array[i]+ value[i - realIndex] * scaleMultiplier);
         }
         return false;
     }

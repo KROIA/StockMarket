@@ -140,6 +140,8 @@ public interface IMarketPluginInterface {
          * @param minPrice Minimum price (inclusive)
          * @param maxPrice Maximum price (inclusive)
          * @param volume Total volume to distribute between the given price range.
+         *               The volume is always positive.
+         *               The backend will determine the correct sign to match the correct side of the order book (Buy/Sell).
          */
         void setVolume(float minPrice, float maxPrice, float volume);
 
@@ -148,6 +150,8 @@ public interface IMarketPluginInterface {
          * @param backendStartPrice The price at which the first volume value is set.
          *                          This is the internal unscaled price value!
          * @param volume Array of volume values.
+         *               Each volume element can be positive or negative but if a negative volume is in the buy side of the order book,
+         *               it will be set to 0 and vice versa for the sell side of the order book.
          */
         void setVolume(int backendStartPrice, float[] volume);
 
@@ -158,6 +162,8 @@ public interface IMarketPluginInterface {
          * @param minPrice Minimum price (inclusive)
          * @param maxPrice Maximum price (inclusive)
          * @param volume Total volume to add between the given price range.
+         *               The volume is always positive.
+         *               The backend will determine the correct sign to match the correct side of the order book (Buy/Sell).
          */
         void addVolume(float minPrice, float maxPrice, float volume);
 
@@ -166,6 +172,8 @@ public interface IMarketPluginInterface {
          * @param backendStartPrice The price at which the first volume value is added.
          *                          This is the internal unscaled price value!
          * @param volume Array of volume values.
+         *               Each volume element can be positive or negative but if a negative volume is in the buy side of the order book,
+         *               it will be set to 0 and vice versa for the sell side of the order book.
          */
         void addVolume(int backendStartPrice, float[] volume);
 

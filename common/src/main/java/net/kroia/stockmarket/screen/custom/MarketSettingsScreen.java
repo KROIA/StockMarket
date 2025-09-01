@@ -1,7 +1,6 @@
 package net.kroia.stockmarket.screen.custom;
 
 import dev.architectury.event.events.common.TickEvent;
-import net.kroia.banksystem.banking.bank.Bank;
 import net.kroia.modutilities.TimerMillis;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.GuiScreen;
@@ -13,8 +12,8 @@ import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.clientdata.ServerMarketSettingsData;
-import net.kroia.stockmarket.market.server.VirtualOrderBook;
-import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
+import net.kroia.stockmarket.plugin.base.ClientMarketPlugin;
+import net.kroia.stockmarket.plugin.base.ClientMarketPluginGuiElement;
 import net.kroia.stockmarket.screen.uiElements.TradingPairView;
 import net.kroia.stockmarket.screen.uiElements.chart.TradingChartWidget;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
@@ -23,6 +22,9 @@ import net.kroia.stockmarket.util.StockMarketTextMessages;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 public class MarketSettingsScreen extends StockMarketGuiScreen {
@@ -110,7 +112,7 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
 
         public GeneralGuiElement() {
             super();
-            this.setEnableBackground(false);
+            //this.setEnableBackground(false);
             titleLabel = new Label(TEXTS.GENERAL_TITLE.getString());
             titleLabel.setAlignment(Alignment.CENTER);
             chartResetButton = new Button(TEXTS.GENERAL_CHART_RESET.getString(), () -> {
@@ -217,7 +219,7 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
             return value;
         }
     }
-
+/*
     public class VirtualOderBookGuiElement extends StockMarketGuiElement
     {
         VirtualOrderBook.Settings virtualOrderBookSettings;
@@ -639,7 +641,7 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
             volatilityTextBox.setBounds(volatilityLabel.getRight(), volatilityLabel.getTop(), width - volatilityLabel.getWidth(), volatilityLabel.getHeight());
         }
     }
-
+*/
 
 
     GuiScreen parentScreen;
@@ -650,10 +652,11 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
     private final TradingPairView tradingPairView;
     private final Button saveButton;
     private final Button backButton;
-    private final ListView listView;
+    private final ListView pluginsListView;
     GeneralGuiElement generalGuiElement;
-    private final VirtualOderBookGuiElement virtualOrderBookGuiElement;
-    private final BotGuiElement botGuiElement;
+    //private final VirtualOderBookGuiElement virtualOrderBookGuiElement;
+    //private final BotGuiElement botGuiElement;
+    private final List<ClientMarketPluginGuiElement> pluginGuiElements = new ArrayList<>();
 
     private final TimerMillis updateTimer;
     public int priceScaleFactor = 1;
@@ -678,26 +681,27 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
 
 
 
-        listView = new VerticalListView();
+        pluginsListView = new VerticalListView();
         Layout layout = new LayoutVertical();
         layout.stretchX = true;
-        listView.setLayout(layout);
+        pluginsListView.setLayout(layout);
 
         generalGuiElement = new GeneralGuiElement();
-        botGuiElement = new BotGuiElement();
-        virtualOrderBookGuiElement = new VirtualOderBookGuiElement();
+        //botGuiElement = new BotGuiElement();
+        //virtualOrderBookGuiElement = new VirtualOderBookGuiElement();
 
 
-        listView.addChild(generalGuiElement);
-        listView.addChild(virtualOrderBookGuiElement);
-        listView.addChild(botGuiElement);
+        //pluginsListView.addChild(generalGuiElement);
+        //listView.addChild(virtualOrderBookGuiElement);
+        //listView.addChild(botGuiElement);
 
 
+        addElement(generalGuiElement);
         addElement(tradingPairView);
         addElement(saveButton);
         addElement(backButton);
         addElement(tradingChart);
-        addElement(listView);
+        addElement(pluginsListView);
 
         instance = this;
         this.updateTimer = new TimerMillis(true); // Update every second
@@ -731,12 +735,16 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
         tradingPairView.setBounds(tradingChart.getRight()+spacing, padding, (width-chartWidth)/3-spacing, 20);
         saveButton.setBounds(tradingPairView.getRight()+spacing, tradingPairView.getTop(), (width-chartWidth) / 3 - spacing, 20);
         backButton.setBounds(saveButton.getRight() + spacing, saveButton.getTop(), saveButton.getWidth(), 20);
-        listView.setBounds(tradingPairView.getLeft(), tradingPairView.getBottom() + spacing, (width-chartWidth) - spacing, height - tradingPairView.getBottom());
+
+        generalGuiElement.setBounds(tradingPairView.getLeft(), tradingPairView.getBottom() + spacing, (width-chartWidth) - spacing, generalGuiElement.getHeight());
+        pluginsListView.setBounds(generalGuiElement.getLeft(), generalGuiElement.getBottom() + spacing, generalGuiElement.getWidth(), height - generalGuiElement.getBottom());
     }
 
     public void setSettings(ServerMarketSettingsData settings)
     {
         //this.serverMarketSettingsData = settings;
+        pluginGuiElements.clear();
+        pluginsListView.removeChilds();
         if(settings != null)
         {
             priceScaleFactor = settings.priceScaleFactor;
@@ -745,13 +753,27 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
                 selectMarket(tradingPair);
                 tradingPairView.setTradingPair(tradingPair);
                 generalGuiElement.selectMarket(tradingPair);
-                virtualOrderBookGuiElement.selectMarket(tradingPair);
-                botGuiElement.selectMarket(tradingPair);
+
+                BACKEND_INSTANCES.CLIENT_PLUGIN_MANAGER.requestMarketPluginTypes(tradingPair, (pluginTypeList)->
+                {
+                    Map<String, ClientMarketPlugin> plugins = BACKEND_INSTANCES.CLIENT_PLUGIN_MANAGER.getMarketPlugins(tradingPair);
+                    for(ClientMarketPlugin plugin : plugins.values())
+                    {
+                        ClientMarketPluginGuiElement element = plugin.getSettingsGuiElement_internal();
+                        if(element != null)
+                        {
+                            pluginGuiElements.add(element);
+                            pluginsListView.addChild(element);
+                        }
+                    }
+                });
+                //virtualOrderBookGuiElement.selectMarket(tradingPair);
+                //botGuiElement.selectMarket(tradingPair);
             }
             generalGuiElement.setShiftPriceCandleIntervalMS(settings.shiftPriceCandleIntervalMS);
             generalGuiElement.setMarketOpen(settings.marketOpen);
 
-            if(settings.botSettingsData != null)
+           /* if(settings.botSettingsData != null)
                 botGuiElement.setBotSettings(settings.botSettingsData.settings);
             else
                 botGuiElement.setBotSettings(null);
@@ -759,17 +781,20 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
             if(settings.virtualOrderBookSettingsData != null)
                 virtualOrderBookGuiElement.setVirtualOrderBookSettings(settings.virtualOrderBookSettingsData.settings);
             else
-                virtualOrderBookGuiElement.setVirtualOrderBookSettings(null);
+                virtualOrderBookGuiElement.setVirtualOrderBookSettings(null);*/
             oldItemImbalance = settings.itemImbalance;
             generalGuiElement.setItemImbalance(settings.itemImbalance);
+
+
+
 
         }
         else {
             tradingPairView.setTradingPair(null);
             generalGuiElement.setShiftPriceCandleIntervalMS(0);
             generalGuiElement.setMarketOpen(false);
-            botGuiElement.setBotSettings(null);
-            virtualOrderBookGuiElement.setVirtualOrderBookSettings(null);
+           // botGuiElement.setBotSettings(null);
+           // virtualOrderBookGuiElement.setVirtualOrderBookSettings(null);
             oldItemImbalance = 0;
         }
 
@@ -784,8 +809,8 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
             return null;
         ServerMarketSettingsData settings = new ServerMarketSettingsData(
                 getSelectedMarket().getTradingPair(),
-                botGuiElement.getBotSettings(),
-                virtualOrderBookGuiElement.getVirtualOrderBookSettings(),
+                null,//botGuiElement.getBotSettings(),
+                null,//virtualOrderBookGuiElement.getVirtualOrderBookSettings(),
                 generalGuiElement.isMarketOpen(),
                 0,
                 generalGuiElement.getShiftPriceCandleIntervalMS(),

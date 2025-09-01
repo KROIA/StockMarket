@@ -77,8 +77,8 @@ public abstract class ClientMarketPlugin extends Plugin{
 
     protected abstract ClientMarketPluginGuiElement getSettingsGuiElement();
 
-    protected abstract void setSettingsToGuiElement(ClientMarketPluginGuiElement element);
-    protected abstract void applySettingsFromGuiElement(ClientMarketPluginGuiElement element);
+    protected abstract void setSettingsToGuiElement();
+    protected abstract void applySettingsFromGuiElement();
 
 
     @Override
@@ -115,12 +115,16 @@ public abstract class ClientMarketPlugin extends Plugin{
     }
     public final void setSettingsToGuiElement_internal()
     {
-        if(settingsGuiElement != null)
-            setSettingsToGuiElement(settingsGuiElement);
+        if(settingsGuiElement != null) {
+            settingsGuiElement.setPluginSettings_internal(this.getSettings());
+            setSettingsToGuiElement();
+        }
     }
     public final void applySettingsFromGuiElement_internal()
     {
-        if(settingsGuiElement != null)
-            applySettingsFromGuiElement(settingsGuiElement);
+        if(settingsGuiElement != null) {
+            this.setSettings(settingsGuiElement.getPluginSettings_internal());
+            applySettingsFromGuiElement();
+        }
     }
 }

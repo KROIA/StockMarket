@@ -265,7 +265,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
             double randomWalkValue = (priceGenerator.getCurrentValue() * (double)settings.volatility * (double)settings.defaultPrice);
             randomWalkDeltaTargetPriceF = (float)randomWalkValue;
             targetPriceF += randomWalkDeltaTargetPriceF;
-            marketOrderAmountF +=  (float)randomWalk.nextValue() * settings.volatility * settings.volumeScale;
+            //marketOrderAmountF +=  (float)randomWalk.nextValue() * settings.volatility * settings.volumeScale;
         }
 
         if(targetPriceF < 0)

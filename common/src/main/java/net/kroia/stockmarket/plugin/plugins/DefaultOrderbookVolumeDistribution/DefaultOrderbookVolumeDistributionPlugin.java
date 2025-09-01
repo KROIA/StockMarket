@@ -158,41 +158,58 @@ public class DefaultOrderbookVolumeDistributionPlugin extends MarketPlugin {
         double deltaT = Math.min((currentMillis - lastMillis) / 1000.0, 1.0);
         lastMillis = currentMillis;
 
-        float updateCount = 100;
         IMarketPluginInterface.OrderBookInterface orderBook = market.getOrderBook();
-        float[] newVolume = new float[editableRange.getB() - editableRange.getA()];
-        for(int i=editableRange.getA(); i<editableRange.getB(); i++)
+        float[] newVolume = new float[editableRange.getB() - editableRange.getA()+1];
+        for(int i=editableRange.getA(); i<editableRange.getB()+1; i++)
         {
+            /*float targetAmount = getTargetAmount(market.convertBackendPriceToRealPrice(i));
+            float currentVal = orderBook.getVolume(i);
+            float scale = settings.volumeAccumulationRate;
+            if(Math.abs(currentVal) < Math.abs(targetAmount)*0.2f)
+            {
+                scale = settings.volumeFastAccumulationRate;
+            }else if(Math.abs(currentVal) > Math.abs(targetAmount))
+            {
+                scale = settings.volumeDecumulationRate;
+            }
+            if(currentVal<targetAmount)
+            {
+                float deltaAmount = (targetAmount-currentVal) * (float) deltaT * scale;
+                newVolume[i - editableRange.getA()] = Math.max(0,currentVal + deltaAmount);
+            }else if(currentVal>targetAmount)
+            {
+                float deltaAmount = (targetAmount-currentVal) * (float) deltaT * scale;
+                newVolume[i - editableRange.getA()] = Math.max(0,currentVal + deltaAmount);
+            }*/
+
             float targetAmount = getTargetAmount(market.convertBackendPriceToRealPrice(i));
             float currentVal = orderBook.getVolume(i);
-            if((currentVal<targetAmount) || (currentVal>targetAmount)) {
-                if(currentVal < 0 && targetAmount > 0 || currentVal > 0 && targetAmount < 0)
-                {
-                    currentVal = 0;
-                    newVolume[i - editableRange.getA()] = 0;
-                }
-
-                float scale = settings.volumeAccumulationRate;
-
-                if(Math.abs(currentVal) < Math.abs(targetAmount)*0.2f)
-                {
-                    scale = settings.volumeFastAccumulationRate;
-                }else if(Math.abs(currentVal) > Math.abs(targetAmount))
-                {
-                    scale = settings.volumeDecumulationRate;
-                }
-                float deltaAmount = (targetAmount - currentVal) * (float) deltaT * scale;
-                if(deltaAmount < 0 && currentVal > 0 && -deltaAmount > currentVal)
-                {
-                    deltaAmount = -currentVal;
-                }
-                else if(deltaAmount > 0 && currentVal < 0 && deltaAmount > -currentVal)
-                {
-                    deltaAmount = -currentVal;
-                }
-                newVolume[i - editableRange.getA()] = currentVal + deltaAmount;
-                //virtualOrderVolumeDistribution.add(priceIndex, deltaAmount);
+            if(currentVal < 0 && targetAmount > 0 || currentVal > 0 && targetAmount < 0)
+            {
+                currentVal = 0;
+                newVolume[i - editableRange.getA()] = 0;
+                //virtualOrderVolumeDistribution.set(priceIndex, currentVal);
             }
+
+            float scale = settings.volumeAccumulationRate;
+
+            if(Math.abs(currentVal) < Math.abs(targetAmount)*0.2f)
+            {
+                scale = settings.volumeFastAccumulationRate;
+            }else if(Math.abs(currentVal) > Math.abs(targetAmount))
+            {
+                scale = settings.volumeDecumulationRate;
+            }
+            float deltaAmount = (targetAmount - currentVal) * (float) deltaT * scale;
+            if(deltaAmount < 0 && currentVal > 0 && -deltaAmount > currentVal)
+            {
+                deltaAmount = -currentVal;
+            }
+            else if(deltaAmount > 0 && currentVal < 0 && deltaAmount > -currentVal)
+            {
+                deltaAmount = -currentVal;
+            }
+            newVolume[i - editableRange.getA()] = currentVal + deltaAmount;
         }
         orderBook.setVolume(editableRange.getA(), newVolume);
         /*Tuple<@NotNull Float,@NotNull  Float> editableRange = market.getOrderBook().getEditablePriceRange();
@@ -258,30 +275,31 @@ public class DefaultOrderbookVolumeDistributionPlugin extends MarketPlugin {
         // Calculate close price volume distribution
         float currentPriceFloat = currentMarketPrice;
         //float relativePrice = (currentPriceFloat - (float)price)/(currentPriceFloat+1);
-        float relativePrice = (currentPriceFloat - (float)price);
+        int relativeRawPrice = market.convertRealPriceToBackendPrice(currentPriceFloat - (float)price);
 
         final float constant1 = (float)(2.0/Math.E);
 
         float amount = 0;
-        if(relativePrice < 40 && relativePrice > -40) {
+        if(relativeRawPrice < 40 && relativeRawPrice > -40) {
             //amount += (float) Math.E * width * relativePrice * (float) Math.exp(-Math.abs(relativePrice * width));
-            float sqrt = (float) Math.sqrt(Math.abs(relativePrice)) * Math.signum(relativePrice);
-            amount += (float) constant1 * settings.nearMarketVolumeScale * sqrt * (float) Math.exp(-Math.abs(relativePrice*relativePrice*0.01));
+            float sqrt = (float) Math.sqrt(Math.abs(relativeRawPrice)) * Math.signum(relativeRawPrice);
+            amount += (float) constant1 * settings.nearMarketVolumeScale * sqrt * (float) Math.exp(-Math.abs(relativeRawPrice*relativeRawPrice*0.01));
         }
 
 
-        if(relativePrice > 0)
+        if(relativeRawPrice > 0)
             amount += 0.1f;
-        else if(relativePrice <= 0)
-            amount += -0.1f;
+        else if(relativeRawPrice < 0)
+            amount -= 0.1f;
         if(price == 0)
             amount += 0.2f;
 
-        float lowPriceAccumulator = 1/(1+(float)price);
-        if(relativePrice > 0)
-            amount += lowPriceAccumulator*5;
 
-        return Math.abs(amount*settings.volumeScale);
+        if(relativeRawPrice > 0) {
+            float lowPriceAccumulator = 1/(1+(float)market.convertRealPriceToBackendPrice(price));
+            amount += lowPriceAccumulator * 5;
+        }
+        return amount*settings.volumeScale;
     }
 
 

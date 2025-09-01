@@ -76,7 +76,22 @@ public class OrderbookVolumeChartWidget extends StockMarketGuiElement {
             {
                 // skip this bar since it is not getting displayed because the height is 0.
                 i++;
-                currentVolume = Math.max(vol, currentVolume); // Simple way to remove aliasing effect
+                /*if(vol < 0 && currentVolume > 0 || vol > 0 && currentVolume < 0)
+                {
+                    currentVolume = vol;
+                    continue;
+                }
+                if(vol > 0) {
+                    currentVolume = Math.max(vol, currentVolume); // Simple way to remove aliasing effect
+                }
+                else
+                {
+                    currentVolume = Math.min(vol, currentVolume); // Simple way to remove aliasing effect
+                }*/
+                if(currentVolume < 0 && vol > 0 || currentVolume > 0 && vol < 0)
+                    currentVolume = vol;
+                else
+                    currentVolume += vol;
                 continue;
             }
             currentVolume = vol;

@@ -374,7 +374,7 @@ public class VirtualOrderBook implements ServerSaveable {
         if(defaultVolumeDistributionFunction != null)
         {
             float realPrice = price / (float)priceScaleFactor;
-            float volume = Math.max(0, defaultVolumeDistributionFunction.apply(realPrice));
+            float volume = Math.abs(defaultVolumeDistributionFunction.apply(realPrice));
             if(currentMarketPrice > price)
                 return volume;
             else if(currentMarketPrice < price)

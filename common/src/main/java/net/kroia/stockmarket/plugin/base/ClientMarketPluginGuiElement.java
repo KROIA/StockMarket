@@ -54,7 +54,7 @@ public abstract class ClientMarketPluginGuiElement extends StockMarketGuiElement
             int width = getWidth();
             int height = getHeight();
 
-            int elementHeight = height/3;
+            int elementHeight = height/4;
             saveButton.setBounds(0, 0, width, elementHeight);
             nameLabel.setBounds(0, saveButton.getBottom(), width, elementHeight);
             enableCheckBox.setBounds(0, nameLabel.getBottom(), width, elementHeight);
@@ -103,5 +103,17 @@ public abstract class ClientMarketPluginGuiElement extends StockMarketGuiElement
 
         genericSettingsWidget.setBounds(0,0,width, genericSettingsWidget.getHeight());
         customPluginWidget.setBounds(0, genericSettingsWidget.getHeight(), width, height - genericSettingsWidget.getHeight());
+    }
+
+    public void setPluginSettings_internal(Plugin.Settings settings)
+    {
+        if(settings != null)
+        {
+            genericSettingsWidget.setSettings(settings);
+        }
+    }
+    public Plugin.Settings getPluginSettings_internal()
+    {
+        return genericSettingsWidget.getSettings();
     }
 }
