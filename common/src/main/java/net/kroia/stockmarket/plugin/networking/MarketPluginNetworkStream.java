@@ -1,9 +1,12 @@
 package net.kroia.stockmarket.plugin.networking;
 
+import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.networking.streaming.GenericStream;
 import net.kroia.stockmarket.market.TradingPair;
+import net.kroia.stockmarket.plugin.ServerPluginManager;
 import net.kroia.stockmarket.util.StockMarketGenericStream;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.server.level.ServerPlayer;
 
 public class MarketPluginNetworkStream extends StockMarketGenericStream<MarketPluginNetworkStream.StartData, FriendlyByteBuf> {
 
@@ -19,7 +22,7 @@ public class MarketPluginNetworkStream extends StockMarketGenericStream<MarketPl
     }
 
 
-    private static final int updateInterval = 20; //ticks
+    ServerPluginManager.MarketPluginInstanceData instanceData = null;
     private int tickCounter = 0;
 
     @Override
@@ -34,7 +37,7 @@ public class MarketPluginNetworkStream extends StockMarketGenericStream<MarketPl
 
     @Override
     public void onStartStreamSendingOnSever() {
-
+        instanceData = BACKEND_INSTANCES.SERVER_PLUGIN_MANAGER.getMarketPluginInstanceData(getContextData().tradingPair, getContextData().pluginTypeID);
     }
 
     @Override
@@ -45,20 +48,32 @@ public class MarketPluginNetworkStream extends StockMarketGenericStream<MarketPl
     @Override
     protected void updateOnServer(){
         tickCounter++;
-        if(tickCounter >= updateInterval)
+        if(instanceData == null || instanceData.plugin == null)
+        {
+            instanceData = BACKEND_INSTANCES.SERVER_PLUGIN_MANAGER.getMarketPluginInstanceData(getContextData().tradingPair, getContextData().pluginTypeID);
+            if(instanceData == null || instanceData.plugin == null)
+            {
+                return;
+            }
+        }
+        if(tickCounter >= instanceData.streamPacketSendTickInterval)
         {
             tickCounter = 0;
-            sendPacket();
+            ServerPlayer player = ServerPlayerUtilities.getOnlinePlayer(getRequestorPlayerUUID());
+            if(player == null) {
+                stopStream();
+                return;
+            }
+            if(playerIsAdmin(player))
+                sendPacket();
         }
     }
 
     @Override
     public FriendlyByteBuf provideStreamPacketOnServer()  {
-        StartData context = getContextData();
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
-        if(BACKEND_INSTANCES.SERVER_PLUGIN_MANAGER.encodeClientStreamData(context.tradingPair, context.pluginTypeID, buf))
-            return buf;
-        return null;
+        instanceData.plugin.encodeClientStreamData(buf);
+        return buf;
     }
 
     @Override

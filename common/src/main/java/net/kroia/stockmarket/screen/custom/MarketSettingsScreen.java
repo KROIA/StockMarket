@@ -656,7 +656,7 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
     GeneralGuiElement generalGuiElement;
     //private final VirtualOderBookGuiElement virtualOrderBookGuiElement;
     //private final BotGuiElement botGuiElement;
-    private final List<ClientMarketPluginGuiElement> pluginGuiElements = new ArrayList<>();
+    private final List<ClientMarketPlugin> plugins = new ArrayList<>();
 
     private final TimerMillis updateTimer;
     public int priceScaleFactor = 1;
@@ -714,6 +714,9 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
         TickEvent.PLAYER_POST.unregister(MarketSettingsScreen::onClientTick);
         super.onClose();
         instance = null;
+        for(ClientMarketPlugin plugin : plugins)
+            plugin.close_internal();
+        plugins.clear();
         if (parentScreen != null) {
             int mousePosX = getMouseX();
             int mousePosY = getMouseY();
@@ -743,7 +746,9 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
     public void setSettings(ServerMarketSettingsData settings)
     {
         //this.serverMarketSettingsData = settings;
-        pluginGuiElements.clear();
+        for(ClientMarketPlugin plugin : plugins)
+            plugin.close_internal();
+        plugins.clear();
         pluginsListView.removeChilds();
         if(settings != null)
         {
@@ -762,8 +767,10 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
                         ClientMarketPluginGuiElement element = plugin.getSettingsGuiElement_internal();
                         if(element != null)
                         {
-                            pluginGuiElements.add(element);
+                            this.plugins.add(plugin);
                             pluginsListView.addChild(element);
+                            element.setChartWidget(tradingChart);
+                            plugin.setup_interal();
                         }
                     }
                 });

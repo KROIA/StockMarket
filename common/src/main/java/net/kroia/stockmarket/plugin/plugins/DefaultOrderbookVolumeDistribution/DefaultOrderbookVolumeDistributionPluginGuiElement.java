@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.plugin.plugins.DefaultOrderbookVolumeDistribution;
 
+import net.kroia.modutilities.ColorUtilities;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.TextBox;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
@@ -8,6 +9,9 @@ import net.kroia.stockmarket.plugin.base.ClientMarketPlugin;
 import net.kroia.stockmarket.plugin.base.ClientMarketPluginGuiElement;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.Tuple;
+
+import java.util.List;
 
 public class DefaultOrderbookVolumeDistributionPluginGuiElement extends ClientMarketPluginGuiElement {
 
@@ -172,7 +176,7 @@ public class DefaultOrderbookVolumeDistributionPluginGuiElement extends ClientMa
                 //child.setTextFontScale(textFontSize);
             }
 
-            int targetHeight = (20+spacing) * 5 + 5;
+            int targetHeight = (15) * 5 + padding * 2;
             this.setHeight(targetHeight);
         }
 
@@ -180,6 +184,8 @@ public class DefaultOrderbookVolumeDistributionPluginGuiElement extends ClientMa
         protected void render() {
 
         }
+
+
 
         @Override
         protected void layoutChanged() {
@@ -196,16 +202,16 @@ public class DefaultOrderbookVolumeDistributionPluginGuiElement extends ClientMa
             //y += elementHeight + spacing;
             volumeScaleLabel.setBounds(padding, y, labelWidth, elementHeight);
             volumeScaleTextBox.setBounds(volumeScaleLabel.getRight(), volumeScaleLabel.getTop(), width-volumeScaleLabel.getWidth(), volumeScaleLabel.getHeight());
-            y += elementHeight + spacing;
+            y += elementHeight;
             nearMarketVolumeScaleLabel.setBounds(padding, y, labelWidth, elementHeight);
             nearMarketVolumeScaleTextBox.setBounds(nearMarketVolumeScaleLabel.getRight(), nearMarketVolumeScaleLabel.getTop(), width-nearMarketVolumeScaleLabel.getWidth(), nearMarketVolumeScaleLabel.getHeight());
-            y += elementHeight + spacing;
+            y += elementHeight;
             volumeAccumulationRateLabel.setBounds(padding, y, labelWidth, elementHeight);
             volumeAccumulationRateTextBox.setBounds(volumeAccumulationRateLabel.getRight(), volumeAccumulationRateLabel.getTop(), width-volumeAccumulationRateLabel.getWidth(), volumeAccumulationRateLabel.getHeight());
-            y += elementHeight + spacing;
+            y += elementHeight;
             volumeFastAccumulationRateLabel.setBounds(padding, y, labelWidth, elementHeight);
             volumeFastAccumulationRateTextBox.setBounds(volumeFastAccumulationRateLabel.getRight(), volumeFastAccumulationRateLabel.getTop(), width-volumeFastAccumulationRateLabel.getWidth(), volumeFastAccumulationRateLabel.getHeight());
-            y += elementHeight + spacing;
+            y += elementHeight;
             volumeDecumulationRateLabel.setBounds(padding, y, labelWidth, elementHeight);
             volumeDecumulationRateTextBox.setBounds(volumeDecumulationRateLabel.getRight(), volumeDecumulationRateLabel.getTop(), width-volumeDecumulationRateLabel.getWidth(), volumeDecumulationRateLabel.getHeight());
         }
@@ -235,6 +241,7 @@ public class DefaultOrderbookVolumeDistributionPluginGuiElement extends ClientMa
     }
 
     private VirtualOderBookGuiElement customPluginWidget;
+    private List<Tuple<Float, Float>> volumeDistributionChart;
 
     public DefaultOrderbookVolumeDistributionPluginGuiElement(ClientMarketPlugin plugin) {
         super(plugin);
@@ -249,6 +256,35 @@ public class DefaultOrderbookVolumeDistributionPluginGuiElement extends ClientMa
         return customPluginWidget;
     }
 
+
+    @Override
+    protected void drawInCandlestickChartArea(int chartWidth, int chartHeight)
+    {
+        //drawFrame(0,0,chartWidth,chartHeight, 0xFF000000, 3);
+    }
+
+    @Override
+    protected void drawInOrderbookChartArea(int chartWidth, int chartHeight) {
+        //drawFrame(0,0,chartWidth,chartHeight, 0xFF000000, 3);
+        if(volumeDistributionChart == null || volumeDistributionChart.size() <= 1)
+            return;
+
+
+        int lastX = chartWidth - getVolumeBarWidth(Math.abs(volumeDistributionChart.get(0).getB()));
+        int lastY = getOrderbookvolumeYPosForPrice(volumeDistributionChart.get(0).getA());
+
+        int color = ColorUtilities.getRGB(0, 0, 255, 128);
+        float thickness = 1.0f;
+        for(int i=1; i<volumeDistributionChart.size(); ++i)
+        {
+            int nextX = chartWidth - getVolumeBarWidth(Math.abs(volumeDistributionChart.get(i).getB()));
+            int nextY = getOrderbookvolumeYPosForPrice(volumeDistributionChart.get(i).getA());
+            drawLine(lastX, lastY, nextX, nextY, thickness, color);
+            lastX = nextX;
+            lastY = nextY;
+        }
+    }
+
     public void setSettings(DefaultOrderbookVolumeDistributionPlugin.Settings settings)
     {
         customPluginWidget.setVirtualOrderBookSettings(settings);
@@ -257,6 +293,11 @@ public class DefaultOrderbookVolumeDistributionPluginGuiElement extends ClientMa
     public DefaultOrderbookVolumeDistributionPlugin.Settings getSettings()
     {
         return customPluginWidget.getVirtualOrderBookSettings();
+    }
+
+    public void setVolumeDistributionChart(List<Tuple<Float, Float>> volumeDistributionChart)
+    {
+        this.volumeDistributionChart = volumeDistributionChart;
     }
 
     public static float getInRange(float value, float min, float max) {

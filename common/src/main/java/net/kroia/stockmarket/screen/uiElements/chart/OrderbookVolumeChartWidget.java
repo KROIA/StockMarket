@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.screen.uiElements.chart;
 
+import net.kroia.modutilities.gui.geometry.Point;
+import net.kroia.modutilities.gui.geometry.Rectangle;
 import net.kroia.stockmarket.market.clientdata.OrderBookVolumeData;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 
@@ -17,6 +19,11 @@ public class OrderbookVolumeChartWidget extends StockMarketGuiElement {
     float chartViewMinPrice = 0;
     float chartViewMaxPrice = 1000;
     private Function<Float, Integer> priceToYPosFunc;
+    int minYPos = 0;
+    int maxYPos = 0;
+    float lastMaxVolume = 0;
+    int chartViewWidth = 0;
+    int chartViewHeight = 0;
 
 
     public OrderbookVolumeChartWidget(Function<Float, Integer> priceToYPosFunc, int colorBuy, int colorSell) {
@@ -48,11 +55,11 @@ public class OrderbookVolumeChartWidget extends StockMarketGuiElement {
             return;
         int x = xPadding;
 
-        int miny = priceToYPosFunc.apply(chartViewMinPrice);
-        int maxy = priceToYPosFunc.apply(chartViewMaxPrice);
+        minYPos = priceToYPosFunc.apply(chartViewMinPrice);
+        maxYPos = priceToYPosFunc.apply(chartViewMaxPrice);
 
-        int chartViewHeight = miny - maxy;
-        int chartViewWidth = getWidth() - xPadding*2;
+        chartViewHeight = minYPos - maxYPos;
+        chartViewWidth = getWidth() - xPadding*2;
 
         float barHeight = (float)chartViewHeight;
         if(orderBookVolume.volume.length > 1)
@@ -62,14 +69,14 @@ public class OrderbookVolumeChartWidget extends StockMarketGuiElement {
 
         float[] volume = orderBookVolume.volume;
         // Get max volume of volume
-        float maxVolume = orderBookVolume.getMaxVolume();
+        lastMaxVolume = orderBookVolume.getMaxVolume();
         int i = 1;
-        int y = miny;
+        int y = minYPos;
         int lastY = y;
         float currentVolume = 0;
         for (float vol : volume) {
             lastY = y;
-            y = Math.max((int)(maxy + chartViewHeight+barHeight/2 - barHeight*i), maxy);
+            y = Math.max((int)(maxYPos + chartViewHeight+barHeight/2 - barHeight*i), maxYPos);
            // long absVol = Math.abs(vol);
 
             if(y == lastY)
@@ -98,7 +105,7 @@ public class OrderbookVolumeChartWidget extends StockMarketGuiElement {
             float absVol = Math.abs(currentVolume);
             if (absVol > 0) {
                 int color = currentVolume > 0 ? colorBuy : colorSell;
-                int barWidth = (int)map(Math.min(absVol, maxVolume), 0L, maxVolume, 0L, (long)chartViewWidth);
+                int barWidth = getVolumeBarWidth(absVol);//(int)map(Math.min(absVol, lastMaxVolume), 0L, lastMaxVolume, 0L, (long)chartViewWidth);
                 int xPos = x + chartViewWidth - barWidth;
                 int height = lastY-y;
                 drawRect(xPos, y, barWidth, height, color);
@@ -116,6 +123,22 @@ public class OrderbookVolumeChartWidget extends StockMarketGuiElement {
     @Override
     protected void layoutChanged() {
 
+    }
+
+
+    public Rectangle getGlobalChartBounds()
+    {
+        Point globalPos = getGlobalPositon();
+        return new Rectangle(globalPos.x+xPadding, maxYPos+globalPos.y, getWidth() - xPadding*2, chartViewHeight);
+    }
+    public int getGlobalYPosForPrice(float price)
+    {
+        Point globalPos = getGlobalPositon();
+        return globalPos.y + priceToYPosFunc.apply(price);
+    }
+    public int getVolumeBarWidth(float volume)
+    {
+        return (int)map(Math.min(volume, lastMaxVolume), 0L, lastMaxVolume, 0L, (long)chartViewWidth);
     }
 
 }

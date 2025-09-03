@@ -135,30 +135,42 @@ public class DefaultOrderbookVolumeDistributionPlugin extends MarketPlugin {
     @Override
     public void setup()
     {
-        market.getOrderBook().registerDefaultVolumeDistributionFunction(this::getTargetAmount);
+        pluginInterface.getOrderBook().registerDefaultVolumeDistributionFunction(this::getTargetAmount);
+        pluginInterface.setStreamPacketSendTickInterval(5);
     }
     @Override
     public void update()
     {
-        currentMarketPrice = market.getPrice();
+        currentMarketPrice = pluginInterface.getPrice();
         //info("Current market price: " + currentMarketPrice);
         updateVolume();
     }
 
     @Override
     public void encodeClientStreamData(FriendlyByteBuf buf) {
-
+        Tuple<@NotNull Integer,@NotNull  Integer> editableRange = pluginInterface.getOrderBook().getEditableBackendPriceRange();
+        int pointCount = 100;
+        buf.writeInt(pointCount);
+        int priceRange = editableRange.getB() - editableRange.getA();
+        for(int i=0; i<pointCount; i++)
+        {
+            int priceIndex = editableRange.getA() + (i * priceRange) / (pointCount - 1);
+            float price = pluginInterface.convertBackendPriceToRealPrice(priceIndex);
+            float targetAmount = getTargetAmount(price);
+            buf.writeFloat(price);
+            buf.writeFloat(targetAmount);
+        }
     }
 
 
 
     public void updateVolume() {
         long currentMillis = System.currentTimeMillis();
-        Tuple<@NotNull Integer,@NotNull  Integer> editableRange = market.getOrderBook().getEditableBackendPriceRange();
+        Tuple<@NotNull Integer,@NotNull  Integer> editableRange = pluginInterface.getOrderBook().getEditableBackendPriceRange();
         double deltaT = Math.min((currentMillis - lastMillis) / 1000.0, 1.0);
         lastMillis = currentMillis;
 
-        IMarketPluginInterface.OrderBookInterface orderBook = market.getOrderBook();
+        IMarketPluginInterface.OrderBookInterface orderBook = pluginInterface.getOrderBook();
         float[] newVolume = new float[editableRange.getB() - editableRange.getA()+1];
         for(int i=editableRange.getA(); i<editableRange.getB()+1; i++)
         {
@@ -182,7 +194,7 @@ public class DefaultOrderbookVolumeDistributionPlugin extends MarketPlugin {
                 newVolume[i - editableRange.getA()] = Math.max(0,currentVal + deltaAmount);
             }*/
 
-            float targetAmount = getTargetAmount(market.convertBackendPriceToRealPrice(i));
+            float targetAmount = getTargetAmount(pluginInterface.convertBackendPriceToRealPrice(i));
             float currentVal = orderBook.getVolume(i);
             if(currentVal < 0 && targetAmount > 0 || currentVal > 0 && targetAmount < 0)
             {
@@ -256,11 +268,11 @@ public class DefaultOrderbookVolumeDistributionPlugin extends MarketPlugin {
     }
     private void setToDefaultDistribution()
     {
-        Tuple<@NotNull Float,@NotNull  Float> editableRange = market.getOrderBook().getEditablePriceRange();
+        Tuple<@NotNull Float,@NotNull  Float> editableRange = pluginInterface.getOrderBook().getEditablePriceRange();
 
         float updateCount = 100;
         float icrement = ((1+editableRange.getB() - editableRange.getA())/updateCount);
-        IMarketPluginInterface.OrderBookInterface orderBook = market.getOrderBook();
+        IMarketPluginInterface.OrderBookInterface orderBook = pluginInterface.getOrderBook();
         for(float i=editableRange.getA(); i<editableRange.getB(); i+=icrement)
         {
             float targetAmount = getTargetAmount(i);
@@ -275,7 +287,7 @@ public class DefaultOrderbookVolumeDistributionPlugin extends MarketPlugin {
         // Calculate close price volume distribution
         float currentPriceFloat = currentMarketPrice;
         //float relativePrice = (currentPriceFloat - (float)price)/(currentPriceFloat+1);
-        int relativeRawPrice = market.convertRealPriceToBackendPrice(currentPriceFloat - (float)price);
+        int relativeRawPrice = pluginInterface.convertRealPriceToBackendPrice(currentPriceFloat - (float)price);
 
         final float constant1 = (float)(2.0/Math.E);
 
@@ -296,7 +308,7 @@ public class DefaultOrderbookVolumeDistributionPlugin extends MarketPlugin {
 
 
         if(relativeRawPrice > 0) {
-            float lowPriceAccumulator = 1/(1+(float)market.convertRealPriceToBackendPrice(price));
+            float lowPriceAccumulator = 1/(1+(float) pluginInterface.convertRealPriceToBackendPrice(price));
             amount += lowPriceAccumulator * 5;
         }
         return amount*settings.volumeScale;

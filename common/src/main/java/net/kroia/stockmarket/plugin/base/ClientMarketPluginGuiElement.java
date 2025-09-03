@@ -4,6 +4,9 @@ import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.CheckBox;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
+import net.kroia.modutilities.gui.geometry.Point;
+import net.kroia.modutilities.gui.geometry.Rectangle;
+import net.kroia.stockmarket.screen.uiElements.chart.TradingChartWidget;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 
 public abstract class ClientMarketPluginGuiElement extends StockMarketGuiElement {
@@ -19,15 +22,18 @@ public abstract class ClientMarketPluginGuiElement extends StockMarketGuiElement
             super();
             saveButton = new Button("Save", plugin::saveSettings);
             nameLabel = new Label();
+            nameLabel.setAlignment(Alignment.CENTER);
             enableCheckBox = new CheckBox("Enable Plugin");
+            enableCheckBox.setTextAlignment(Alignment.RIGHT);
             loggerCheckBox = new CheckBox("Debug");
+            loggerCheckBox.setTextAlignment(Alignment.RIGHT);
 
             addChild(saveButton);
             addChild(nameLabel);
             addChild(enableCheckBox);
             addChild(loggerCheckBox);
 
-            setHeight(20*4);
+            setHeight(15*4+2*padding);
         }
 
         public void setSettings(Plugin.Settings settings)
@@ -51,14 +57,16 @@ public abstract class ClientMarketPluginGuiElement extends StockMarketGuiElement
 
         @Override
         protected void layoutChanged() {
-            int width = getWidth();
-            int height = getHeight();
+            int padding = StockMarketGuiElement.padding;
+            int width = getWidth() - 2*padding;
+            int height = getHeight() - 2*padding;
 
             int elementHeight = height/4;
-            saveButton.setBounds(0, 0, width, elementHeight);
-            nameLabel.setBounds(0, saveButton.getBottom(), width, elementHeight);
-            enableCheckBox.setBounds(0, nameLabel.getBottom(), width, elementHeight);
-            loggerCheckBox.setBounds(0, enableCheckBox.getBottom(), width, elementHeight);
+
+            saveButton.setBounds(padding, padding, width, elementHeight);
+            nameLabel.setBounds(padding, saveButton.getBottom(), width, elementHeight);
+            enableCheckBox.setBounds(padding, nameLabel.getBottom(), width, elementHeight);
+            loggerCheckBox.setBounds(padding, enableCheckBox.getBottom(), width, elementHeight);
         }
     }
 
@@ -69,6 +77,9 @@ public abstract class ClientMarketPluginGuiElement extends StockMarketGuiElement
     private final GuiElement customPluginWidget;
 
 
+    private TradingChartWidget chartWidget;
+    private Rectangle lastCandlestickChartArea = new Rectangle(0,0,0,0);
+    private Rectangle lastOrderbookvolumeChartArea = new Rectangle(0,0,0,0);
 
     public ClientMarketPluginGuiElement(ClientMarketPlugin plugin) {
         super();
@@ -89,12 +100,34 @@ public abstract class ClientMarketPluginGuiElement extends StockMarketGuiElement
 
     protected abstract GuiElement getCustomPluginWidget();
 
+    public void setChartWidget(TradingChartWidget chartWidget)
+    {
+        this.chartWidget = chartWidget;
+    }
 
 
     @Override
     protected void render() {
+        lastCandlestickChartArea = getGlobalCandlestickChartBounds();
+        lastOrderbookvolumeChartArea = getGlobalOrderbookvolumeChartBounds();
+        Point globalPos = getGlobalPositon();
+        scissorPause();
 
+        graphicsPushPose();
+        graphicsTranslate(lastCandlestickChartArea.x - globalPos.x, lastCandlestickChartArea.y - globalPos.y, 0);
+        drawInCandlestickChartArea(lastCandlestickChartArea.width, lastCandlestickChartArea.height);
+        graphicsPopPose();
+
+        graphicsPushPose();
+        graphicsTranslate(lastOrderbookvolumeChartArea.x - globalPos.x, lastOrderbookvolumeChartArea.y - globalPos.y, 0);
+        drawInOrderbookChartArea(lastOrderbookvolumeChartArea.width, lastOrderbookvolumeChartArea.height);
+        graphicsPopPose();
+
+        scissorResume();
     }
+
+    protected abstract void drawInCandlestickChartArea(int chartWidth, int chartHeight);
+    protected abstract void drawInOrderbookChartArea(int chartWidth, int chartHeight);
 
     @Override
     protected void layoutChanged() {
@@ -115,5 +148,66 @@ public abstract class ClientMarketPluginGuiElement extends StockMarketGuiElement
     public Plugin.Settings getPluginSettings_internal()
     {
         return genericSettingsWidget.getSettings();
+    }
+
+
+    public Rectangle getGlobalCandlestickChartBounds()
+    {
+        if(chartWidget == null)
+        {
+            return new Rectangle(0,0,0,0);
+        }
+        return chartWidget.getGlobalCandlestickChartBounds();
+    }
+    public int getGlobalCandlestickYPosForPrice(float price)
+    {
+        if(chartWidget == null)
+        {
+            return 0;
+        }
+        return chartWidget.getGlobalCandlestickYPosForPrice(price);
+    }
+    public int getCandlestickYPosForPrice(float price)
+    {
+        if(chartWidget == null)
+        {
+            return 0;
+        }
+        return getGlobalCandlestickYPosForPrice(price) - lastCandlestickChartArea.y;
+    }
+
+
+    public Rectangle getGlobalOrderbookvolumeChartBounds()
+    {
+        if(chartWidget == null)
+        {
+            return new Rectangle(0,0,0,0);
+        }
+        return chartWidget.getGlobalOrderbookvolumeChartBounds();
+    }
+    public int getGlobalOrderbookvolumeYPosForPrice(float price)
+    {
+        if(chartWidget == null)
+        {
+            return 0;
+        }
+        return chartWidget.getGlobalOrderbookvolumeYPosForPrice(price);
+    }
+
+    public int getOrderbookvolumeYPosForPrice(float price)
+    {
+        if(chartWidget == null)
+        {
+            return 0;
+        }
+        return getGlobalOrderbookvolumeYPosForPrice(price) - lastOrderbookvolumeChartArea.y;
+    }
+    public int getVolumeBarWidth(float volume)
+    {
+        if(chartWidget == null)
+        {
+            return 0;
+        }
+        return chartWidget.getVolumeBarWidth(volume);
     }
 }

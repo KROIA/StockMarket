@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.screen.uiElements.chart;
 
 import net.kroia.modutilities.gui.elements.base.GuiElement;
+import net.kroia.modutilities.gui.geometry.Rectangle;
 import net.kroia.stockmarket.market.clientdata.OrderReadData;
 import net.kroia.stockmarket.market.clientdata.TradingViewData;
 import net.kroia.stockmarket.util.PriceHistory;
@@ -115,6 +116,26 @@ public class TradingChartWidget extends StockMarketGuiElement {
         candleStickChart.updateOrderDisplay(data.openOrdersData, data.tradingPairData.toTradingPair());
     }
 
+    public Rectangle getGlobalCandlestickChartBounds()
+    {
+        return candleStickChart.getGlobalChartBounds();
+    }
+    public int getGlobalCandlestickYPosForPrice(float price)
+    {
+        return candleStickChart.getGlobalYPosForPrice(price);
+    }
+    public Rectangle getGlobalOrderbookvolumeChartBounds()
+    {
+        return orderbookVolumeChart.getGlobalChartBounds();
+    }
+    public int getGlobalOrderbookvolumeYPosForPrice(float price)
+    {
+        return orderbookVolumeChart.getGlobalYPosForPrice(price);
+    }
+    public int getVolumeBarWidth(float volume)
+    {
+        return orderbookVolumeChart.getVolumeBarWidth(volume);
+    }
     /*@Override
     public void renderBackgroundInternal()
     {

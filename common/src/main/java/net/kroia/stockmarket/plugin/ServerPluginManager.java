@@ -31,7 +31,7 @@ public class ServerPluginManager {
         Plugin.setBackend(backend);
         StockMarketGenericStream.setBackend(backend);
     }
-    private class MarketPluginInstanceData implements ServerSaveable
+    public class MarketPluginInstanceData implements ServerSaveable
     {
         private class VirtualOrderBookVolumeManipulationData
         {
@@ -76,6 +76,23 @@ public class ServerPluginManager {
                 }
 
                 @Override
+                public int getStreamPacketSendTickInterval()
+                {
+                    return streamPacketSendTickInterval;
+                }
+
+                @Override
+                public void setStreamPacketSendTickInterval(int interval)
+                {
+                    streamPacketSendTickInterval = Math.max(1, interval);
+                }
+
+                @Override
+                public float getDefaultPrice()
+                {
+                    return marketData.market.getDefaultRealPrice();
+                }
+                @Override
                 public float getPrice() {
                     return marketData.currentPrice;
                 }
@@ -115,6 +132,31 @@ public class ServerPluginManager {
                 }
 
 
+                @Override
+                public boolean marketPluginExists(PluginRegistry.MarketPluginRegistrationObject registrationObject)
+                {
+                    return marketData.pluginExists(registrationObject.pluginTypeID);
+                }
+
+                @Override
+                public boolean marketPluginExists(String pluginTypeID)
+                {
+                    return marketData.pluginExists(pluginTypeID);
+                }
+
+                @Override
+                public MarketPlugin getMarketPlugin(PluginRegistry.MarketPluginRegistrationObject registrationObject)
+                {
+                    return marketData.getPlugin(registrationObject.pluginTypeID);
+                }
+
+                @Override
+                public MarketPlugin getMarketPlugin(String pluginTypeID)
+                {
+                    return marketData.getPlugin(pluginTypeID);
+                }
+
+
                 public class OrderBookInterfaceInterface implements IMarketPluginInterface.OrderBookInterface {
 
 
@@ -135,6 +177,12 @@ public class ServerPluginManager {
 
                     @Override
                     public float getVolume(float minPrice, float maxPrice) {
+                        if(minPrice > maxPrice)
+                        {
+                            float tmp = minPrice;
+                            minPrice = maxPrice;
+                            maxPrice = tmp;
+                        }
                         return marketData.market.getOrderBook().getVolumeInRealRange(minPrice, maxPrice);
                     }
 
@@ -207,6 +255,7 @@ public class ServerPluginManager {
         public float nextTargetPriceDelta = 0;
         public List<LimitOrder> nextLimitOrders = new java.util.ArrayList<>();
         public float nextCreatingMarketOrderVolume = 0;
+        public int streamPacketSendTickInterval = 20; // ticks/packet
 
 
         // Performance tracking
@@ -280,6 +329,7 @@ public class ServerPluginManager {
         {
             performanceTrackWatch.start();
             currentPrice = market.getCurrentRealPrice();
+            nextTargetPrice = market.getDefaultRealPrice();
 
             OrderBook orderBook = market.getOrderBook();
             buyOrders.clear();
@@ -289,12 +339,15 @@ public class ServerPluginManager {
             sellOrders.addAll(orderBook.getSellOrders());
             newOrders.addAll(orderBook.getIncommingOrders());
 
+
             for(MarketPluginInstanceData pluginData : pluginsData.values())
             {
-                pluginData.performanceTrackWatch.start();
-                pluginData.plugin.update_internal();
-                nextTargetPrice += pluginData.nextTargetPriceDelta;
-                pluginData.lastUpdateDurationNs = pluginData.performanceTrackWatch.stop();
+                if(pluginData.plugin.isPluginEnabled()) {
+                    pluginData.performanceTrackWatch.start();
+                    pluginData.plugin.update_internal();
+                    nextTargetPrice += pluginData.nextTargetPriceDelta;
+                    pluginData.lastUpdateDurationNs = pluginData.performanceTrackWatch.stop();
+                }
             }
 
             lastUpdateDurationNs = performanceTrackWatch.stop();
@@ -306,36 +359,38 @@ public class ServerPluginManager {
             nextTargetPrice = 0;
             for(MarketPluginInstanceData pluginData : pluginsData.values())
             {
-                pluginData.performanceTrackWatch.start();
-                // Placing orders
-                for(LimitOrder order : pluginData.nextLimitOrders)
-                {
-                    market.placeOrder(order);
-                }
-                market.createAndPlaceBotMarketOrder(pluginData.nextCreatingMarketOrderVolume);
-
-                // Manipulating order book volume
-                OrderBook orderBook = market.getOrderBook();
-                for(MarketPluginInstanceData.VirtualOrderBookVolumeManipulationData manipulation : pluginData.virtualOrderBookVolumeManipulations)
-                {
-                    switch (manipulation.type)
-                    {
-                        case SET -> orderBook.setVirtualOrderBookVolume(manipulation.minPrice, manipulation.maxPrice, manipulation.volume);
-                        case ADD -> orderBook.addVirtualOrderBookVolume(manipulation.minPrice, manipulation.maxPrice, manipulation.volume);
+                if(pluginData.plugin.isPluginEnabled()) {
+                    pluginData.performanceTrackWatch.start();
+                    // Placing orders
+                    for (LimitOrder order : pluginData.nextLimitOrders) {
+                        market.placeOrder(order);
                     }
-                }
-                for(MarketPluginInstanceData.VirtualOrderBookVolumeManipulationRealArrayData manipulation : pluginData.virtualOrderBookVolumeArrayManipulations)
-                {
-                    switch (manipulation.type)
-                    {
-                        case SET -> orderBook.setVirtualOrderBookVolume(manipulation.backendStartPrice, manipulation.volume);
-                        case ADD -> orderBook.addVirtualOrderBookVolume(manipulation.backendStartPrice, manipulation.volume);
+                    if(pluginData.nextCreatingMarketOrderVolume != 0)
+                        market.createAndPlaceBotMarketOrder(pluginData.nextCreatingMarketOrderVolume);
+
+                    // Manipulating order book volume
+                    OrderBook orderBook = market.getOrderBook();
+                    for (MarketPluginInstanceData.VirtualOrderBookVolumeManipulationData manipulation : pluginData.virtualOrderBookVolumeManipulations) {
+                        switch (manipulation.type) {
+                            case SET ->
+                                    orderBook.setVirtualOrderBookVolume(manipulation.minPrice, manipulation.maxPrice, manipulation.volume);
+                            case ADD ->
+                                    orderBook.addVirtualOrderBookVolume(manipulation.minPrice, manipulation.maxPrice, manipulation.volume);
+                        }
                     }
+                    for (MarketPluginInstanceData.VirtualOrderBookVolumeManipulationRealArrayData manipulation : pluginData.virtualOrderBookVolumeArrayManipulations) {
+                        switch (manipulation.type) {
+                            case SET ->
+                                    orderBook.setVirtualOrderBookVolume(manipulation.backendStartPrice, manipulation.volume);
+                            case ADD ->
+                                    orderBook.addVirtualOrderBookVolume(manipulation.backendStartPrice, manipulation.volume);
+                        }
+                    }
+
+
+                    pluginData.clear();
+                    pluginData.lastFinalizeDurationNs = pluginData.performanceTrackWatch.stop();
                 }
-
-
-                pluginData.clear();
-                pluginData.lastFinalizeDurationNs = pluginData.performanceTrackWatch.stop();
             }
             lastFinalizeDurationNs = performanceTrackWatch.stop();
         }
@@ -346,7 +401,7 @@ public class ServerPluginManager {
             float totalVolume = 0;
             for(MarketPluginInstanceData pluginData : pluginsData.values())
             {
-                if(pluginData.volumeDistributionFunction != null)
+                if(pluginData.volumeDistributionFunction != null && pluginData.plugin.isPluginEnabled())
                 {
                     totalVolume += pluginData.volumeDistributionFunction.apply(price);
                 }
@@ -372,6 +427,18 @@ public class ServerPluginManager {
         public int getPluginCount()
         {
             return pluginsData.size();
+        }
+
+        boolean pluginExists(String pluginTypeID)
+        {
+            return pluginsData.containsKey(pluginTypeID);
+        }
+        MarketPlugin getPlugin(String pluginTypeID)
+        {
+            MarketPluginInstanceData data = pluginsData.get(pluginTypeID);
+            if(data == null)
+                return null;
+            return data.plugin;
         }
 
         @Override
@@ -573,6 +640,16 @@ public class ServerPluginManager {
         // Write data to buf
         pluginData.plugin.encodeClientStreamData(buf);
         return true;
+    }
+
+    public MarketPluginInstanceData getMarketPluginInstanceData(TradingPair market, String pluginTypeID)
+    {
+        PluginMarket marketData = allMarketsData.get(market);
+        if(marketData == null)
+        {
+            return null;
+        }
+        return marketData.pluginsData.get(pluginTypeID);
     }
     public List<String> getPluginTypes(TradingPair market)
     {

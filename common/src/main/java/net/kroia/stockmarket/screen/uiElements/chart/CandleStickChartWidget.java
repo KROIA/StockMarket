@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.screen.uiElements.chart;
 
+import net.kroia.modutilities.gui.geometry.Point;
+import net.kroia.modutilities.gui.geometry.Rectangle;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.clientdata.OrderReadData;
@@ -193,6 +195,17 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
             display.setWidth(getWidth()/2-5);
             display.setPosition(getWidth()-display.getWidth(), priceToYPosFunc(display.getOrder().limitPrice));
         }
+    }
+
+    public Rectangle getGlobalChartBounds()
+    {
+        Point globalPos = getGlobalPositon();
+        return new Rectangle(globalPos.x, globalPos.y, getChartRightEndPos(), getHeight());
+    }
+    public int getGlobalYPosForPrice(float price)
+    {
+        Point globalPos = getGlobalPositon();
+        return globalPos.y + priceToYPosFunc(price);
     }
 
 

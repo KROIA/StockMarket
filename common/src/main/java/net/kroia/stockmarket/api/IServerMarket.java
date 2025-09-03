@@ -293,6 +293,13 @@ public interface IServerMarket {
      */
     OrderBook getOrderBook();
 
+
+    /**
+     * Gets the default price for the market.
+     * @return the default raw market price.
+     */
+    float getDefaultRealPrice();
+
     /**
      * Gets the current "raw" market price.
      * The raw market price is the price that is used internally by the market.

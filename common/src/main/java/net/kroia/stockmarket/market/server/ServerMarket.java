@@ -43,6 +43,7 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
      * If this value is positive, it means that more volume has been sold by players than bought
      */
     private long itemImbalance;
+    private float defaultRealPrice = 0;
     private long shiftPriceCandleIntervalMS = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.SHIFT_PRICE_CANDLE_INTERVAL_MS.get();
     protected TimerMillis shiftPriceTimer = new TimerMillis(true);
 
@@ -58,6 +59,7 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
     public ServerMarket(TradingPair pair, float initialPrice, int virtualOrderBookArraySize, int historySize, int priceScaleFactor)
     {
         this.tradingPair = pair;
+        this.defaultRealPrice = initialPrice;
         if(tradingPair == null)
         {
             throw new IllegalArgumentException("Trading pair cannot be null");
@@ -131,7 +133,7 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
         }*/
 
 
-        int rawInitialPrice = mapToRawPrice(initialPrice);
+        int rawInitialPrice = mapToRawPrice(defaultRealPrice);
         this.orderBook = new OrderBook(virtualOrderBookArraySize, rawInitialPrice);
         this.historicalMarketData = new HistoricalMarketData(rawInitialPrice, historySize);
         this.historicalMarketData.getHistory().setScaleFactors(this.priceScaleFactor, currencyItemFractionScaleFactor);
@@ -518,6 +520,12 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
     //public HistoricalMarketData getHistoricalMarketData() {
     //    return historicalMarketData;
     //}
+
+    @Override
+    public float getDefaultRealPrice()
+    {
+        return defaultRealPrice;
+    }
     @Override
     public int getCurrentRawPrice() {
         return historicalMarketData.getCurrentPrice();
@@ -820,6 +828,7 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
 
         tag.putBoolean("marketOpen", marketOpen);
         tag.putLong("itemImbalance", itemImbalance);
+        tag.putFloat("defaultRealPrice", defaultRealPrice);
         tag.putLong("shiftPriceCandleIntervalMS", shiftPriceCandleIntervalMS);
         tag.putInt("priceScaleFactor", priceScaleFactor);
         tag.putInt("currencyItemFractionScaleFactor", currencyItemFractionScaleFactor);
@@ -858,6 +867,8 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
             marketOpen = tag.getBoolean("marketOpen");
         if(tag.contains("itemImbalance"))
             itemImbalance = tag.getLong("itemImbalance");
+        if(tag.contains("defaultRealPrice"))
+            defaultRealPrice = tag.getFloat("defaultRealPrice");
         if(tag.contains("shiftPriceCandleIntervalMS"))
             shiftPriceCandleIntervalMS = tag.getLong("shiftPriceCandleIntervalMS");
         //if(tag.contains("notifySubscriberIntervalMS"))

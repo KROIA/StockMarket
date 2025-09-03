@@ -5,18 +5,18 @@ import net.minecraft.network.FriendlyByteBuf;
 public abstract class MarketPlugin extends Plugin {
 
 
-    protected IMarketPluginInterface market = null;
+    protected IMarketPluginInterface pluginInterface = null;
     public MarketPlugin() {
         super();
     }
     public final void setInterface(IMarketPluginInterface market)
     {
-        this.market = market;
+        this.pluginInterface = market;
         this.setTradingPair(market.getTradingPair());
     }
 
     public IMarketPluginInterface getPluginInterface() {
-        return market;
+        return pluginInterface;
     }
 
 

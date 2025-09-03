@@ -28,7 +28,7 @@ public abstract class Plugin {
             public static final String PLUGIN_ENABLED = "enabled";
         }
         public String name;
-        public boolean loggerEnabled = true;
+        public boolean loggerEnabled = false;
         public boolean pluginEnabled = true;
 
 

@@ -21,8 +21,15 @@ public abstract class ClientMarketPlugin extends Plugin{
         //loadSettings();
     }
 
+    protected abstract void close();
+
     public final void startStream()
     {
+        if(streamID != null)
+        {
+            warn("ClientMarketPlugin: Starting stream when one is already active. Stopping the old stream first. Plugin: "+this);
+            stopStream();
+        }
         MarketPluginNetworkStream.StartData startData = new MarketPluginNetworkStream.StartData(getTradingPair(), getPluginTypeID());
         streamID = StreamSystem.startServerToClientStream(StockMarketNetworking.MARKET_PLUGIN_NETWORK_STREAM, startData, this::onStreamPacketReceived_internal,
                 this::onStreamClosed);
@@ -126,5 +133,11 @@ public abstract class ClientMarketPlugin extends Plugin{
             this.setSettings(settingsGuiElement.getPluginSettings_internal());
             applySettingsFromGuiElement();
         }
+    }
+
+    public void close_internal()
+    {
+        close();
+        stopStream();
     }
 }

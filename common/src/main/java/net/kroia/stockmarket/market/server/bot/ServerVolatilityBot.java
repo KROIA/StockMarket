@@ -233,6 +233,7 @@ public class ServerVolatilityBot extends ServerTradingBot {
 
     @Override
     public void createOrders() {
+        /*
         long currentItemBalance = getItemImbalance();
 
 
@@ -279,21 +280,10 @@ public class ServerVolatilityBot extends ServerTradingBot {
             marketOrderAmountF += normalized;
         }
 
-        /*if(marketOrderAmountF > 0)
-        {
-            long amount = getOrderBookVolumeAtRawPrice(getCurrentRawPrice()+1);
-            if(-amount < marketOrderAmountF)
-                marketOrderAmountF = -amount;
-        }
-        else if(marketOrderAmountF < 0)
-        {
-            long amount = getOrderBookVolumeAtRawPrice(getCurrentRawPrice()-1);
-            if(amount < -marketOrderAmountF)
-                marketOrderAmountF = -amount;
-        }*/
+
         long marketOrderAmount = Math.round(marketOrderAmountF);
         marketTrade(marketOrderAmount);
-
+*/
     }
 
 

@@ -3,6 +3,7 @@ package net.kroia.stockmarket.plugin.base;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.market.server.order.Order;
+import net.kroia.stockmarket.plugin.PluginRegistry;
 import net.minecraft.util.Tuple;
 import org.jetbrains.annotations.NotNull;
 
@@ -10,8 +11,32 @@ import java.util.List;
 import java.util.function.Function;
 
 public interface IMarketPluginInterface {
+
+    /**
+     * Gets the trading pair associated with this market.
+     * @return The trading pair of the market.
+     */
     @NotNull TradingPair getTradingPair();
 
+
+    /**
+     * Gets the interval in ticks at which the plugin should send stream packets to clients.
+     * @return The tick interval for sending stream packets.
+     */
+    int getStreamPacketSendTickInterval();
+
+    /**
+     * Sets the interval in ticks at which the plugin should send stream packets to clients.
+     * @param interval The tick interval for sending stream packets.
+     */
+    void setStreamPacketSendTickInterval(int interval);
+
+
+    /**
+     * Gets the default price of the market as a real price value.
+     * @return The default price of the market.
+     */
+    float getDefaultPrice();
 
     /**
      * Gets the current price of the market as a real price value.
@@ -75,6 +100,34 @@ public interface IMarketPluginInterface {
      */
     void placeOrder(float amount);
 
+
+    /**
+     * Checks if a market plugin with the given registration object exists for this market.
+     * @param registrationObject The registration object of the plugin to check.
+     * @return True if the plugin exists, false otherwise.
+     */
+    boolean marketPluginExists(PluginRegistry.MarketPluginRegistrationObject registrationObject);
+
+    /**
+     * Checks if a market plugin with the given type ID exists for this market.
+     * @param pluginTypeID The type ID of the plugin to check.
+     * @return True if the plugin exists, false otherwise.
+     */
+    boolean marketPluginExists(String pluginTypeID);
+
+    /**
+     * Gets the market plugin with the given registration object.
+     * @param registrationObject The registration object of the plugin to get.
+     * @return The market plugin instance, or null if it does not exist.
+     */
+    MarketPlugin getMarketPlugin(PluginRegistry.MarketPluginRegistrationObject registrationObject);
+
+    /**
+     * Gets the market plugin with the given type ID.
+     * @param pluginTypeID The type ID of the plugin to get.
+     * @return The market plugin instance, or null if it does not exist.
+     */
+    MarketPlugin getMarketPlugin(String pluginTypeID);
 
 
     interface OrderBookInterface
