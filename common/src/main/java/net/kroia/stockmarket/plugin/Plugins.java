@@ -25,21 +25,27 @@ public class Plugins {
             PluginRegistry.registerPlugin(
                     DefaultOrderbookVolumeDistributionPlugin.class.getName(),
                     DefaultOrderbookVolumeDistributionPlugin::new,
-                    DefaultOrderbookVolumeDistributionClientPlugin::new);
+                    DefaultOrderbookVolumeDistributionClientPlugin::new,
+                    DefaultOrderbookVolumeDistributionPlugin.getNameStatic(),
+                    DefaultOrderbookVolumeDistributionPlugin.getDescriptionStatic());
 
 
     public static final PluginRegistry.MarketPluginRegistrationObject TARGET_PRICE_BOT =
             PluginRegistry.registerPlugin(
                     TargetPriceBotPlugin.class.getName(),
                     TargetPriceBotPlugin::new,
-                    TargetPriceBotClientPlugin::new);
+                    TargetPriceBotClientPlugin::new,
+                    TargetPriceBotPlugin.getNameStatic(),
+                    TargetPriceBotPlugin.getDescriptionStatic());
 
 
     public static final PluginRegistry.MarketPluginRegistrationObject RANDOM_WALK_VOLATILITY =
             PluginRegistry.registerPlugin(
                     RandomWalkVolatilityPlugin.class.getName(),
                     RandomWalkVolatilityPlugin::new,
-                    RandomWalkVolatilityClientPlugin::new);
+                    RandomWalkVolatilityClientPlugin::new,
+                    RandomWalkVolatilityPlugin.getNameStatic(),
+                    RandomWalkVolatilityPlugin.getDescriptionStatic());
 
     public static void serverSetup()
     {
@@ -55,8 +61,8 @@ public class Plugins {
     {
         TradingPair pair = market.getTradingPair();
         ServerPluginManager mngr = BACKEND_INSTANCES.SERVER_PLUGIN_MANAGER;
-        mngr.createMarketPlugin(pair, DEFAULT_ORDERBOOK_VOLUME_DISTRIBUTION, "Orderbook Volume Distribution" );
-        mngr.createMarketPlugin(pair, TARGET_PRICE_BOT, "Target Price Bot" );
-        mngr.createMarketPlugin(pair, RANDOM_WALK_VOLATILITY, "Randomwalk Volatility" );
+        mngr.createMarketPlugin(pair, DEFAULT_ORDERBOOK_VOLUME_DISTRIBUTION);
+        mngr.createMarketPlugin(pair, TARGET_PRICE_BOT);
+        mngr.createMarketPlugin(pair, RANDOM_WALK_VOLATILITY);
     }
 }

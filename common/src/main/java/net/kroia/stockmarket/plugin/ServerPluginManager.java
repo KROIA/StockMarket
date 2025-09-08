@@ -410,7 +410,7 @@ public class ServerPluginManager {
             return totalVolume;
         }
 
-        public void createMarketPlugin(String pluginID, String name)
+        public void createMarketPlugin(String pluginID)
         {
             // Check if pluginID already exists
             if(pluginsData.containsKey(pluginID))
@@ -418,8 +418,7 @@ public class ServerPluginManager {
                 warn("MarketPlugin with ID '"+pluginID+"' already exists for market "+market.getTradingPair().getUltraShortDescription());
                 return;
             }
-            MarketPlugin pluginInstance = PluginRegistry.createServerPluginInstance(pluginID);
-            pluginInstance.setName(name);
+            MarketPlugin pluginInstance = PluginRegistry.createServerMarketPluginInstance(pluginID);
             MarketPluginInstanceData instanceData = new MarketPluginInstanceData(pluginInstance, this);
             pluginsData.put(pluginID, instanceData);
             instanceData.plugin.setup_interal();
@@ -473,7 +472,7 @@ public class ServerPluginManager {
                 MarketPluginInstanceData pluginData = pluginsData.get(pluginTypeID);
                 if(pluginData == null)
                 {
-                    MarketPlugin pluginInstance = PluginRegistry.createServerPluginInstance(pluginTypeID);
+                    MarketPlugin pluginInstance = PluginRegistry.createServerMarketPluginInstance(pluginTypeID);
                     if(pluginInstance == null)
                     {
                         warn("Failed to load MarketPlugin with unknown ID '"+pluginTypeID+"' for market "+market.getTradingPair().getUltraShortDescription());
@@ -586,7 +585,7 @@ public class ServerPluginManager {
     }
 
 
-    public void createMarketPlugin(TradingPair market, String pluginID, String name)
+    public void createMarketPlugin(TradingPair market, String pluginID)
     {
         PluginMarket marketData = allMarketsData.get(market);
         if(marketData == null)
@@ -594,9 +593,9 @@ public class ServerPluginManager {
             error("Can't create MarketPlugin '"+pluginID+"' for unknown market: " + market.getUltraShortDescription());
             return;
         }
-        marketData.createMarketPlugin(pluginID, name);
+        marketData.createMarketPlugin(pluginID);
     }
-    public void createMarketPlugin(TradingPair market, PluginRegistry.MarketPluginRegistrationObject pluginReg, String name)
+    public void createMarketPlugin(TradingPair market, PluginRegistry.MarketPluginRegistrationObject pluginReg)
     {
         PluginMarket marketData = allMarketsData.get(market);
         if(marketData == null)
@@ -604,7 +603,7 @@ public class ServerPluginManager {
             error("Can't create MarketPlugin '"+pluginReg.pluginTypeID+"' for unknown market: " + market.getUltraShortDescription());
             return;
         }
-        marketData.createMarketPlugin(pluginReg.pluginTypeID, name);
+        marketData.createMarketPlugin(pluginReg.pluginTypeID);
     }
 
     public int getPluginCount(TradingPair market)

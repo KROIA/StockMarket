@@ -132,6 +132,15 @@ public class DefaultOrderbookVolumeDistributionPlugin extends MarketPlugin {
     private Settings settings = new Settings();
     private long lastMillis;
     private float currentMarketPrice = 0;
+
+    public static String getNameStatic()
+    {
+        return "Orderbook Volume Distribution";
+    }
+    public static String getDescriptionStatic()
+    {
+        return "Automatically fills the orderbook with a reasonable volume distribution.";
+    }
     @Override
     public void setup()
     {

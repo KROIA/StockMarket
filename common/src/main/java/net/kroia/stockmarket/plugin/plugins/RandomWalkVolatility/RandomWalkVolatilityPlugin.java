@@ -53,6 +53,14 @@ public class RandomWalkVolatilityPlugin extends MarketPlugin {
     private static Random random = new Random();
     private final NormalizedRandomPriceGenerator priceGenerator;
 
+    public static String getNameStatic()
+    {
+        return "Random Walk Volatility";
+    }
+    public static String getDescriptionStatic()
+    {
+        return "A plugin that adds random walk based volatility to the target price.";
+    }
     public RandomWalkVolatilityPlugin()
     {
         priceGenerator = new NormalizedRandomPriceGenerator(5);

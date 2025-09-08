@@ -4,6 +4,7 @@ import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.kroia.stockmarket.plugin.base.ClientMarketPlugin;
+import net.kroia.stockmarket.plugin.networking.PluginTypesRequest;
 
 import java.util.HashMap;
 import java.util.List;
@@ -29,7 +30,7 @@ public class ClientPluginManager {
             if(plugin != null)
             {
 
-                plugin = PluginRegistry.createClientPluginInstance(tradingPair, pluginTypeID);
+                plugin = PluginRegistry.createClientMarketPluginInstance(tradingPair, pluginTypeID);
                 plugins.put(pluginTypeID, plugin);
             }
             return plugin;
@@ -43,7 +44,7 @@ public class ClientPluginManager {
             {
                 if(!plugins.containsKey(pluginTypeID))
                 {
-                    ClientMarketPlugin plugin = PluginRegistry.createClientPluginInstance(tradingPair, pluginTypeID);
+                    ClientMarketPlugin plugin = PluginRegistry.createClientMarketPluginInstance(tradingPair, pluginTypeID);
                     plugins.put(pluginTypeID, plugin);
                 }
             }
@@ -86,6 +87,7 @@ public class ClientPluginManager {
 
 
     private final Map<TradingPair, Market> markets;
+    private PluginTypesRequest.ResponseData availablePlugins;
     public ClientPluginManager(StockMarketModBackend.Instances backend)
     {
         BACKEND_INSTANCES = backend;
@@ -114,6 +116,59 @@ public class ClientPluginManager {
         });
     }
 
+    /**
+     * Updates the list of available plugins that can be used in a market.
+     * @param callback
+     */
+    public void requestMarketPluginTypes(Consumer<PluginTypesRequest.ResponseData> callback)
+    {
+        StockMarketNetworking.PLUGIN_TYPES_REQUEST.sendRequestToServer(0, (response) -> {
+            availablePlugins = response;
+            debug("Received available plugins from server. Market plugins: " + availablePlugins.marketPlugins.size() + ", Global plugins: " + availablePlugins.globalPlugins.size());
+            callback.accept(response);
+        });
+    }
+    public List<PluginTypesRequest.PluginInfo> getAvailableMarketPlugins()
+    {
+        if(availablePlugins == null) {
+            warn("Available plugins have not been requested yet!");
+            requestMarketPluginTypes((response) -> {});
+            return List.of();
+        }
+        return availablePlugins.marketPlugins;
+    }
+    public List<PluginTypesRequest.PluginInfo> getAvailableGlobalPlugins()
+    {
+        if(availablePlugins == null) {
+            warn("Available plugins have not been requested yet!");
+            requestMarketPluginTypes((response) -> {});
+            return List.of();
+        }
+        return availablePlugins.globalPlugins;
+    }
 
 
+
+
+
+    protected void info(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.info("[ClientPluginManager] " + msg);
+    }
+    protected void error(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.error("[ClientPluginManager] " + msg);
+    }
+    protected void error(String msg, Throwable e)
+    {
+        BACKEND_INSTANCES.LOGGER.error("[ClientPluginManager] " + msg, e);
+    }
+    protected void warn(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.warn("[ClientPluginManager] " + msg);
+    }
+    protected void debug(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.debug("[ClientPluginManager] " + msg);
+    }
 }

@@ -43,6 +43,15 @@ public class TargetPriceBotPlugin extends MarketPlugin {
     private int tickCounter = 0;
 
     private float targetPrice = 0;
+
+    public static String getNameStatic()
+    {
+        return "Target Price Bot";
+    }
+    public static String getDescriptionStatic()
+    {
+        return "A bot that tries to move the price towards a target price using a PID controller.";
+    }
     @Override
     public void encodeClientStreamData(FriendlyByteBuf buf) {
         buf.writeFloat(targetPrice);
