@@ -45,6 +45,7 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
         // GeneralGui
         public static final Component GENERAL_TITLE = Component.translatable(PREFIX + "general.title");
         public static final Component GENERAL_CHART_RESET = Component.translatable(PREFIX + "general.chart_reset");
+        public static final Component GENERAL_CHART_RESET_TOOLTIP = Component.translatable(PREFIX + "general.chart_reset.tooltip");
         public static final Component GENERAL_IS_MARKET_OPEN = Component.translatable(PREFIX + "general.is_market_open");
         public static final Component GENERAL_CANDLE_TIME = Component.translatable(PREFIX + "general.candle_time_min");
         public static final Component ITEM_IMBALANCE = Component.translatable(PREFIX + "general.item_imbalance");
@@ -121,6 +122,8 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
                     getSelectedMarket().requestChartReset((result)->{});
                 }
             });
+            chartResetButton.setHoverTooltipSupplier(TEXTS.GENERAL_CHART_RESET_TOOLTIP::getString);
+            chartResetButton.setHoverTooltipMousePositionAlignment(Alignment.RIGHT);
             isMarketOpenCheckBox = new CheckBox(TEXTS.GENERAL_IS_MARKET_OPEN.getString());
             isMarketOpenCheckBox.setTextAlignment(Alignment.RIGHT);
             candleTimeMinLabel = new Label(TEXTS.GENERAL_CANDLE_TIME.getString());
@@ -159,7 +162,7 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
                 child.setTextFontScale(textFontSize);
             }
 
-            int targetHeight = (elementHeight+spacing) * 5 + 5;
+            int targetHeight = (elementHeight) * 5 + padding*2;
             this.setHeight(targetHeight);
         }
         @Override
@@ -175,14 +178,14 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
 
             int y = padding;
             titleLabel.setBounds(padding, y, width, elementHeight);
-            y += elementHeight + spacing;
+            y += elementHeight;
             chartResetButton.setBounds(padding, y, width, elementHeight);
-            y += elementHeight + spacing;
+            y += elementHeight;
             isMarketOpenCheckBox.setBounds(width/2+padding, y, width-width/2, elementHeight);
-            y += elementHeight + spacing;
+            y += elementHeight;
             candleTimeMinLabel.setBounds(padding, y, width/2, elementHeight);
             candleTimeMin.setBounds(candleTimeMinLabel.getRight(), candleTimeMinLabel.getTop(), width - candleTimeMinLabel.getWidth(), candleTimeMinLabel.getHeight());
-            itemImbalanceLabel.setBounds(padding, y + elementHeight + spacing, width/2, elementHeight);
+            itemImbalanceLabel.setBounds(padding, y + elementHeight, width/2, elementHeight);
             itemImbalanceTextBox.setBounds(itemImbalanceLabel.getRight(), itemImbalanceLabel.getTop(), width - itemImbalanceLabel.getWidth(), itemImbalanceLabel.getHeight());
         }
 
@@ -662,15 +665,23 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
     public int priceScaleFactor = 1;
     public MarketSettingsScreen(GuiScreen parent, Consumer<ServerMarketSettingsData> onSave) {
         super(TEXTS.TITLE);
+        setGuiScale(0.5f);
         this.parentScreen = parent;
 
         tradingChart = new TradingChartWidget();
-        tradingChart.enableBotTargetPriceDisplay(true);
+        //tradingChart.enableBotTargetPriceDisplay(true);
 
         tradingPairView = new TradingPairView();
 
         saveButton = new Button(TEXTS.SAVE_BUTTON.getString(), () -> {
             ServerMarketSettingsData settings = getSettings();
+
+            for(ClientMarketPlugin plugin : plugins)
+            {
+                if(settings != null) {
+                    plugin.saveSettings();
+                }
+            }
             if(settings != null)
             {
                 onSave.accept(settings);
@@ -737,7 +748,7 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
         tradingChart.setBounds(padding, padding, chartWidth, height);
         tradingPairView.setBounds(tradingChart.getRight()+spacing, padding, (width-chartWidth)/3-spacing, 20);
         saveButton.setBounds(tradingPairView.getRight()+spacing, tradingPairView.getTop(), (width-chartWidth) / 3 - spacing, 20);
-        backButton.setBounds(saveButton.getRight() + spacing, saveButton.getTop(), saveButton.getWidth(), 20);
+        backButton.setBounds(saveButton.getRight() + spacing, saveButton.getTop(), width - saveButton.getRight(), 20);
 
         generalGuiElement.setBounds(tradingPairView.getLeft(), tradingPairView.getBottom() + spacing, (width-chartWidth) - spacing, generalGuiElement.getHeight());
         pluginsListView.setBounds(generalGuiElement.getLeft(), generalGuiElement.getBottom() + spacing, generalGuiElement.getWidth(), height - generalGuiElement.getBottom());

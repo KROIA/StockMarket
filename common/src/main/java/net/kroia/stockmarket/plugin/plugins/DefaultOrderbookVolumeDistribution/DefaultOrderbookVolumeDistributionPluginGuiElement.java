@@ -99,6 +99,7 @@ public class DefaultOrderbookVolumeDistributionPluginGuiElement extends ClientMa
         public VirtualOderBookGuiElement() {
             super();
             this.setEnableBackground(false);
+            this.setEnableOutline(false);
 
             //titleLabel = new Label(TEXTS.VIRTUAL_ORDER_BOOK_TITLE.getString());
             //titleLabel.setAlignment(Alignment.CENTER);
@@ -176,7 +177,7 @@ public class DefaultOrderbookVolumeDistributionPluginGuiElement extends ClientMa
                 //child.setTextFontScale(textFontSize);
             }
 
-            int targetHeight = (15) * 5 + padding * 2;
+            int targetHeight = 15 * 5;
             this.setHeight(targetHeight);
         }
 
@@ -189,30 +190,30 @@ public class DefaultOrderbookVolumeDistributionPluginGuiElement extends ClientMa
 
         @Override
         protected void layoutChanged() {
-            int width = getWidth() - padding * 2;
+            int width = getWidth();
             //int height = getHeight() - padding * 2;
             int elementHeight = 15;
             int labelWidthPercent = 70;
 
-            int y = padding;
+            int y = 0;
             //titleLabel.setBounds(padding, y, width, elementHeight);
             //y += elementHeight + spacing;
             int labelWidth = (width*labelWidthPercent)/100;
             //enableCheckBox.setBounds(width/2+padding, y, width-width/2, elementHeight);
             //y += elementHeight + spacing;
-            volumeScaleLabel.setBounds(padding, y, labelWidth, elementHeight);
+            volumeScaleLabel.setBounds(0, y, labelWidth, elementHeight);
             volumeScaleTextBox.setBounds(volumeScaleLabel.getRight(), volumeScaleLabel.getTop(), width-volumeScaleLabel.getWidth(), volumeScaleLabel.getHeight());
             y += elementHeight;
-            nearMarketVolumeScaleLabel.setBounds(padding, y, labelWidth, elementHeight);
+            nearMarketVolumeScaleLabel.setBounds(0, y, labelWidth, elementHeight);
             nearMarketVolumeScaleTextBox.setBounds(nearMarketVolumeScaleLabel.getRight(), nearMarketVolumeScaleLabel.getTop(), width-nearMarketVolumeScaleLabel.getWidth(), nearMarketVolumeScaleLabel.getHeight());
             y += elementHeight;
-            volumeAccumulationRateLabel.setBounds(padding, y, labelWidth, elementHeight);
+            volumeAccumulationRateLabel.setBounds(0, y, labelWidth, elementHeight);
             volumeAccumulationRateTextBox.setBounds(volumeAccumulationRateLabel.getRight(), volumeAccumulationRateLabel.getTop(), width-volumeAccumulationRateLabel.getWidth(), volumeAccumulationRateLabel.getHeight());
             y += elementHeight;
-            volumeFastAccumulationRateLabel.setBounds(padding, y, labelWidth, elementHeight);
+            volumeFastAccumulationRateLabel.setBounds(0, y, labelWidth, elementHeight);
             volumeFastAccumulationRateTextBox.setBounds(volumeFastAccumulationRateLabel.getRight(), volumeFastAccumulationRateLabel.getTop(), width-volumeFastAccumulationRateLabel.getWidth(), volumeFastAccumulationRateLabel.getHeight());
             y += elementHeight;
-            volumeDecumulationRateLabel.setBounds(padding, y, labelWidth, elementHeight);
+            volumeDecumulationRateLabel.setBounds(0, y, labelWidth, elementHeight);
             volumeDecumulationRateTextBox.setBounds(volumeDecumulationRateLabel.getRight(), volumeDecumulationRateLabel.getTop(), width-volumeDecumulationRateLabel.getWidth(), volumeDecumulationRateLabel.getHeight());
         }
 

@@ -297,15 +297,9 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
         //    return null;
 
         List<Order> orders = new ArrayList<>(orderBook.getOrders(bankAccountNumber));
-        float botTargetPrice = -1;
-        if(requestBotTargetPrice && volatilityBot != null)
-        {
-            botTargetPrice = volatilityBot.getTargetPriceF();
-        }
-
         return new TradingViewData(new TradingPairData(tradingPair), new PriceHistoryData(historicalMarketData.getHistory(), maxHistoryPointCount),
                 bankAccount, getOrderBookVolumeData(maxHistoryPointCount, minVisiblePrice, maxVisiblePrice, orderBookTileCount),
-                new OrderReadListData(orders, priceScaleFactor), marketOpen, botTargetPrice, (float)smallesTradableVolume/(float)itemFractionScaleFactor);
+                new OrderReadListData(orders, priceScaleFactor), marketOpen, (float)smallesTradableVolume/(float)itemFractionScaleFactor);
     }
     @Override
     public TradingViewData getTradingViewData(int bankAccountNumber)

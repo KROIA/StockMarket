@@ -15,6 +15,7 @@ public class TargetPriceBotPluginGuiElement extends ClientMarketPluginGuiElement
     public static final class TEXTS {
         private static final String PREFIX = "gui." + StockMarketMod.MOD_ID + ".target_price_bot_plugin_gui_element.";
         public static final Component VOLUME_SCALE = Component.translatable(PREFIX + "volume_scale");
+        public static final Component VOLUME_SCALE_TOOLTIP = Component.translatable(PREFIX + "volume_scale.tooltip");
     }
 
     public class TargetPriceBotGuiElement extends StockMarketGuiElement
@@ -26,9 +27,12 @@ public class TargetPriceBotPluginGuiElement extends ClientMarketPluginGuiElement
         {
             super();
             this.setEnableBackground(false);
+            this.setEnableOutline(false);
 
             volumeScaleLabel = new Label(TEXTS.VOLUME_SCALE.getString());
             volumeScaleLabel.setAlignment(Alignment.RIGHT);
+            volumeScaleLabel.setHoverTooltipSupplier(TEXTS.VOLUME_SCALE_TOOLTIP::getString);
+            volumeScaleLabel.setHoverTooltipMousePositionAlignment(Alignment.RIGHT);
             volumeScaleTextBox = new TextBox();
             volumeScaleTextBox.setAllowNumbers(true,true);
             volumeScaleTextBox.setAllowLetters(false);
@@ -36,7 +40,7 @@ public class TargetPriceBotPluginGuiElement extends ClientMarketPluginGuiElement
             this.addChild(volumeScaleLabel);
             this.addChild(volumeScaleTextBox);
 
-            this.setHeight(15 + padding * 2);
+            this.setHeight(15*1);
         }
 
         @Override
@@ -46,15 +50,15 @@ public class TargetPriceBotPluginGuiElement extends ClientMarketPluginGuiElement
 
         @Override
         protected void layoutChanged() {
-            int width = getWidth() - padding * 2;
+            int width = getWidth();
             //int height = getHeight() - padding * 2;
             int elementHeight = 15;
             int labelWidthPercent = 70;
 
-            int y = padding;
+            int y = 0;
             int labelWidth = (width*labelWidthPercent)/100;
 
-            volumeScaleLabel.setBounds(padding, y, labelWidth, elementHeight);
+            volumeScaleLabel.setBounds(0, y, labelWidth, elementHeight);
             volumeScaleTextBox.setBounds(volumeScaleLabel.getRight(), volumeScaleLabel.getTop(), width-volumeScaleLabel.getWidth(), volumeScaleLabel.getHeight());
 
         }
@@ -108,8 +112,13 @@ public class TargetPriceBotPluginGuiElement extends ClientMarketPluginGuiElement
     protected void drawInCandlestickChartArea(int chartWidth, int chartHeight) {
         int targetPriceYPos = getCandlestickYPosForPrice(targetPrice);
 
+        if(targetPriceYPos < 0 || targetPriceYPos > chartHeight)
+            return; //out of bounds
 
         drawRect(chartWidth-lineWidth, targetPriceYPos, lineWidth, 1, markerColor);
+        String text = "Bot Target Price: "+String.format("%.2f", targetPrice);
+        int textWidth = getTextWidth(text);
+        drawText(text, chartWidth-lineWidth-textWidth-20, targetPriceYPos-getTextHeight()/2);
     }
 
     @Override

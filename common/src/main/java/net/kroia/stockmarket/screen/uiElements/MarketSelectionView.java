@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.screen.uiElements;
 
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.ClientPlayerUtilities;
 import net.kroia.modutilities.ItemUtilities;
 import net.kroia.modutilities.gui.elements.*;
 import net.kroia.modutilities.gui.geometry.Point;
@@ -24,6 +25,7 @@ public class MarketSelectionView extends StockMarketGuiElement {
     public static final Component CLEAR_ITEM = Component.translatable("gui."+ StockMarketMod.MOD_ID + ".market_selection_view.clear_item");
     public static final Component CLEAR_CURRENCY = Component.translatable("gui."+ StockMarketMod.MOD_ID + ".market_selection_view.clear_currency");
     public static final Component SELECT_MARKET = Component.translatable("gui."+ StockMarketMod.MOD_ID + ".market_selection_view.select_market");
+    public static final Component SEARCH_MARKET = Component.translatable("gui."+ StockMarketMod.MOD_ID + ".market_selection_view.search_market");
 
     private final Consumer<TradingPair> onSelected;
     private TradingPair selectedPair;
@@ -40,6 +42,8 @@ public class MarketSelectionView extends StockMarketGuiElement {
 
 
     private final Label selectedMarketLabel;
+    private final Label searchMarketLabel;
+    private final TextBox searchMarketTextBox;
     private final VerticalListView tradingPairListView;
     private final ItemSelectionView itemSelectionView;
     private final ItemSelectionView currencySelectionView;
@@ -67,10 +71,17 @@ public class MarketSelectionView extends StockMarketGuiElement {
 
         selectedMarketLabel = new Label(SELECT_MARKET.getString());
         selectedMarketLabel.setAlignment(Label.Alignment.CENTER);
+        searchMarketLabel = new Label(SEARCH_MARKET.getString());
+        searchMarketLabel.setAlignment(Label.Alignment.RIGHT);
+        searchMarketTextBox = new TextBox();
+        searchMarketTextBox.setOnTextChanged((s)->applyFilter());
+
+
         tradingPairListView = new VerticalListView();
         LayoutGrid layout = new LayoutGrid();
         layout.stretchX = true;
         layout.columns = 3;
+        tradingPairListView.setScrolSpeed(10);
         tradingPairListView.setLayout(layout);
 
         itemSelectionView = new ItemSelectionView(this::onItemSelected);
@@ -87,6 +98,8 @@ public class MarketSelectionView extends StockMarketGuiElement {
         addChild(selectedCurrencyView);
         addChild(currencySelectionView);
         addChild(selectedMarketLabel);
+        addChild(searchMarketLabel);
+        addChild(searchMarketTextBox);
         addChild(tradingPairListView);
     }
 
@@ -138,7 +151,9 @@ public class MarketSelectionView extends StockMarketGuiElement {
                 column2Width, height - clearCurrencyButton.getBottom());
 
         pos.x += clearCurrencyButton.getWidth() + selectedCurrencyView.getWidth() + spacing;
-        selectedMarketLabel.setBounds(pos.x, filterLabel.getTop(), column3Width, filterLabel.getHeight());
+        selectedMarketLabel.setBounds(pos.x, filterLabel.getTop(), column3Width/3, filterLabel.getHeight());
+        searchMarketLabel.setBounds(selectedMarketLabel.getRight(), filterLabel.getTop(), column3Width/3-padding, filterLabel.getHeight());
+        searchMarketTextBox.setBounds(searchMarketLabel.getRight(), filterLabel.getTop(), column3Width/3, filterLabel.getHeight());
         pos.y += clearItemButton.getHeight() + spacing;
         tradingPairListView.setBounds(pos.x, selectedMarketLabel.getBottom() + spacing, column3Width, height - selectedMarketLabel.getBottom());
 
@@ -156,6 +171,10 @@ public class MarketSelectionView extends StockMarketGuiElement {
 
     public void setAvailableTradingPairs(List<TradingPair> tradingPairs) {
         availableTradingPairs = tradingPairs;
+        // Sort trading pairs by item and then by currency
+        availableTradingPairs.sort(TradingPair::compareTo);
+
+
         itemSelectionView.clearItems();
         currencySelectionView.clearItems();
 
@@ -197,6 +216,7 @@ public class MarketSelectionView extends StockMarketGuiElement {
         if(layout != null)
             layout.enabled = false;
         List<TradingPairView> views = new ArrayList<>();
+        String searchText = searchMarketTextBox.getText().toLowerCase();
         for(TradingPair pair : availableTradingPairs)
         {
             ItemStack itemStack = selectedItemView.getItemStack();
@@ -221,6 +241,21 @@ public class MarketSelectionView extends StockMarketGuiElement {
                 selectedPair = pair;
                 onSelected.accept(pair);
             });
+
+            boolean matchesSearch = false;
+            String itemName = pair.getItem().getName().toLowerCase();
+            String currencyName = pair.getCurrency().getName().toLowerCase();
+            String itemDecoration = ClientPlayerUtilities.getItemDisplayText(pair.getItem().getStack()).toLowerCase();
+            String currencyDecoration = ClientPlayerUtilities.getItemDisplayText(pair.getCurrency().getStack()).toLowerCase();
+
+            if(itemName.contains(searchText) || currencyName.contains(searchText) ||
+               itemDecoration.contains(searchText) || currencyDecoration.contains(searchText))
+            {
+                matchesSearch = true;
+            }
+            if(!matchesSearch)
+                continue;
+
             views.add(tradingPairView);
 
         }

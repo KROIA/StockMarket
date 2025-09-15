@@ -15,7 +15,9 @@ public class RandomWalkVolatilityPluginGuiElement extends ClientMarketPluginGuiE
     public static final class TEXTS {
         private static final String PREFIX = "gui." + StockMarketMod.MOD_ID + ".random_walk_volatility_plugin_gui_element.";
         public static final Component VOLATILITY = Component.translatable(PREFIX + "volatility");
+        public static final Component VOLATILITY_TOOLTIP = Component.translatable(PREFIX + "volatility.tooltip");
         public static final Component UPDATE_TIMER_MS = Component.translatable(PREFIX + "update_timer_ms");
+        public static final Component UPDATE_TIMER_MS_TOOLTIP = Component.translatable(PREFIX + "update_timer_ms.tooltip");
     }
 
     public class RandomWalkGuiElement extends StockMarketGuiElement
@@ -30,9 +32,12 @@ public class RandomWalkVolatilityPluginGuiElement extends ClientMarketPluginGuiE
         {
             super();
             this.setEnableBackground(false);
+            this.setEnableOutline(false);
 
             volatilityLabel = new Label(TEXTS.VOLATILITY.getString());
             volatilityLabel.setAlignment(Alignment.RIGHT);
+            volatilityLabel.setHoverTooltipSupplier(TEXTS.VOLATILITY_TOOLTIP::getString);
+            volatilityLabel.setHoverTooltipMousePositionAlignment(Alignment.RIGHT);
             volatilityTextBox = new TextBox();
             volatilityTextBox.setAllowNumbers(true,true);
             volatilityTextBox.setAllowLetters(false);
@@ -40,6 +45,8 @@ public class RandomWalkVolatilityPluginGuiElement extends ClientMarketPluginGuiE
 
             updateTimerMSLabel = new Label(TEXTS.UPDATE_TIMER_MS.getString());
             updateTimerMSLabel.setAlignment(Alignment.RIGHT);
+            updateTimerMSLabel.setHoverTooltipSupplier(TEXTS.UPDATE_TIMER_MS_TOOLTIP::getString);
+            updateTimerMSLabel.setHoverTooltipMousePositionAlignment(Alignment.RIGHT);
 
             updateTimerMSTextBox = new TextBox();
             updateTimerMSTextBox.setAllowNumbers(true,false);
@@ -52,7 +59,7 @@ public class RandomWalkVolatilityPluginGuiElement extends ClientMarketPluginGuiE
             this.addChild(updateTimerMSLabel);
             this.addChild(updateTimerMSTextBox);
 
-            this.setHeight(15*2 + padding * 2);
+            this.setHeight(15*2);
         }
 
         @Override
@@ -62,19 +69,19 @@ public class RandomWalkVolatilityPluginGuiElement extends ClientMarketPluginGuiE
 
         @Override
         protected void layoutChanged() {
-            int width = getWidth() - padding * 2;
+            int width = getWidth();
             //int height = getHeight() - padding * 2;
             int elementHeight = 15;
             int labelWidthPercent = 70;
 
-            int y = padding;
+            int y = 0;
             int labelWidth = (width*labelWidthPercent)/100;
 
-            volatilityLabel.setBounds(padding, y, labelWidth, elementHeight);
+            volatilityLabel.setBounds(0, y, labelWidth, elementHeight);
             volatilityTextBox.setBounds(volatilityLabel.getRight(), volatilityLabel.getTop(), width- volatilityLabel.getWidth(), volatilityLabel.getHeight());
 
-            y += elementHeight + padding;
-            updateTimerMSLabel.setBounds(padding, y, labelWidth, elementHeight);
+            y += elementHeight;
+            updateTimerMSLabel.setBounds(0, y, labelWidth, elementHeight);
             updateTimerMSTextBox.setBounds(updateTimerMSLabel.getRight(), updateTimerMSLabel.getTop(), width- updateTimerMSLabel.getWidth(), updateTimerMSLabel.getHeight());
         }
 
@@ -94,7 +101,6 @@ public class RandomWalkVolatilityPluginGuiElement extends ClientMarketPluginGuiE
     }
 
     private RandomWalkGuiElement guiElement;
-    private float targetPrice = 0;
     private int lineWidth = 30;
     private int markerColor = ColorUtilities.getRGB(0,0,255);
     public RandomWalkVolatilityPluginGuiElement(ClientMarketPlugin plugin) {
@@ -110,10 +116,6 @@ public class RandomWalkVolatilityPluginGuiElement extends ClientMarketPluginGuiE
         return guiElement;
     }
 
-    public void setTargetPrice(float targetPrice)
-    {
-        this.targetPrice = targetPrice;
-    }
 
     public void setSettings(RandomWalkVolatilityPlugin.Settings settings)
     {
@@ -127,10 +129,7 @@ public class RandomWalkVolatilityPluginGuiElement extends ClientMarketPluginGuiE
 
     @Override
     protected void drawInCandlestickChartArea(int chartWidth, int chartHeight) {
-        int targetPriceYPos = getCandlestickYPosForPrice(targetPrice);
 
-
-        drawRect(chartWidth-lineWidth, targetPriceYPos, chartWidth, 1, markerColor);
     }
 
     @Override

@@ -487,7 +487,7 @@ public class ManagementScreen extends StockMarketGuiScreen {
         updateTradingItems();
 
         tradingChart = new TradingChartWidget();
-        tradingChart.enableBotTargetPriceDisplay(true);
+        //tradingChart.enableBotTargetPriceDisplay(true);
 
         listView = new VerticalListView();
         Layout layout = new LayoutVertical();

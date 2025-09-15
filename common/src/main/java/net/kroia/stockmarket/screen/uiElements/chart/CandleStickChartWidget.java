@@ -32,8 +32,8 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
     private double scrollValue = 1;
     private int chartWidth = 0;
     private int candleWidth = 0;
-    private boolean enableBotTargetPriceDisplay = false;
-    private float botTargetPrice = -1;
+    //private boolean enableBotTargetPriceDisplay = false;
+    //private float botTargetPrice = -1;
     private int priceScaleFactor = 1;
     private PriceHistory priceHistory = null;
     private HashMap<Long, LimitOrderInChartDisplay> limitOrderDisplays = new HashMap<>();
@@ -165,7 +165,7 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
                 break;
         }
 
-        if(enableBotTargetPriceDisplay && botTargetPrice >= 0)
+        /*if(enableBotTargetPriceDisplay && botTargetPrice >= 0)
         {
             int tooltipWidth = getTextWidth(labelText);
             int yPos = priceToYPosFunc(botTargetPrice);
@@ -173,7 +173,7 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
 
             String priceString = priceHistory.getRealPriceString(botTargetPrice);
             drawText(BOT_TARGET_PRICE.getString() + priceString, currentPriceLineLeftPos - tooltipWidth-10, yPos, Alignment.RIGHT);
-        }
+        }*/
         drawRect(currentPriceLineLeftPos, currentPriceYPos, currentPriceLineWidth, 1, 0xFF555555);
         //getGraphics().popPose();
 
@@ -223,12 +223,12 @@ public class CandleStickChartWidget extends StockMarketGuiElement {
             display.setY(priceToYPosFunc(display.getOrder().limitPrice));
         }
     }
-    public void enableBotTargetPriceDisplay(boolean enabled) {
+    /*public void enableBotTargetPriceDisplay(boolean enabled) {
         enableBotTargetPriceDisplay = enabled;
     }
     public void setBotTargetPrice(float botTargetPrice) {
         this.botTargetPrice = botTargetPrice;
-    }
+    }*/
     public void setPriceScaleFactor(int priceScaleFactor) {
         this.priceScaleFactor = priceScaleFactor;
     }

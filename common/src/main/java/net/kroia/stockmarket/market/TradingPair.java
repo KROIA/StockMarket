@@ -264,4 +264,15 @@ public class TradingPair implements ServerSaveable, INetworkPayloadConverter {
         if (!(obj instanceof TradingPair other)) return false;
         return pairUUID.equals(other.pairUUID);
     }
+
+
+
+    public int compareTo(TradingPair other)
+    {
+        int itemCompare = this.item.compareTo(other.item);
+        if(itemCompare != 0)
+            return itemCompare;
+        return this.currency.compareTo(other.currency);
+    }
+
 }

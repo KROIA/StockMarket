@@ -20,6 +20,8 @@ public abstract class ClientMarketPluginGuiElement extends StockMarketGuiElement
         public GenericPluginSettingsWidget()
         {
             super();
+            this.setEnableBackground(false);
+            this.setEnableOutline(false);
             saveButton = new Button("Save", plugin::saveSettings);
             nameLabel = new Label();
             nameLabel.setAlignment(Alignment.CENTER);
@@ -33,7 +35,7 @@ public abstract class ClientMarketPluginGuiElement extends StockMarketGuiElement
             addChild(enableCheckBox);
             addChild(loggerCheckBox);
 
-            setHeight(15*4+2*padding);
+            setHeight(15*3);
         }
 
         public void setSettings(Plugin.Settings settings)
@@ -57,16 +59,16 @@ public abstract class ClientMarketPluginGuiElement extends StockMarketGuiElement
 
         @Override
         protected void layoutChanged() {
-            int padding = StockMarketGuiElement.padding;
-            int width = getWidth() - 2*padding;
-            int height = getHeight() - 2*padding;
+            //int padding = StockMarketGuiElement.padding;
+            int width = getWidth();
+            int height = getHeight();
 
-            int elementHeight = height/4;
+            int elementHeight = height/3;
 
-            saveButton.setBounds(padding, padding, width, elementHeight);
-            nameLabel.setBounds(padding, saveButton.getBottom(), width, elementHeight);
-            enableCheckBox.setBounds(padding, nameLabel.getBottom(), width, elementHeight);
-            loggerCheckBox.setBounds(padding, enableCheckBox.getBottom(), width, elementHeight);
+            nameLabel.setBounds(0, 0, width, elementHeight);
+            saveButton.setBounds(0, nameLabel.getBottom(), width, elementHeight);
+            enableCheckBox.setBounds(0, saveButton.getBottom(), width/2, elementHeight);
+            loggerCheckBox.setBounds(enableCheckBox.getRight(), saveButton.getBottom(), width-width/2, elementHeight);
         }
     }
 
@@ -94,7 +96,7 @@ public abstract class ClientMarketPluginGuiElement extends StockMarketGuiElement
             throw new IllegalStateException("Custom plugin widget cannot be null");
         addChild(customPluginWidget);
 
-        setHeight(genericSettingsWidget.getHeight() + customPluginWidget.getHeight());
+        setHeight(genericSettingsWidget.getHeight() + customPluginWidget.getHeight()+ padding*2);
     }
 
 
@@ -131,11 +133,12 @@ public abstract class ClientMarketPluginGuiElement extends StockMarketGuiElement
 
     @Override
     protected void layoutChanged() {
-        int width = getWidth();
-        int height = getHeight();
+        int width = getWidth() - padding * 2;
+        int height = getHeight() - padding * 2;
 
-        genericSettingsWidget.setBounds(0,0,width, genericSettingsWidget.getHeight());
-        customPluginWidget.setBounds(0, genericSettingsWidget.getHeight(), width, height - genericSettingsWidget.getHeight());
+
+        genericSettingsWidget.setBounds(padding,padding, width, genericSettingsWidget.getHeight());
+        customPluginWidget.setBounds(padding, genericSettingsWidget.getBottom(), width, height - genericSettingsWidget.getHeight());
     }
 
     public void setPluginSettings_internal(Plugin.Settings settings)

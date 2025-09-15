@@ -14,7 +14,7 @@ public abstract class StockMarketGuiScreen extends GuiScreen {
 
     protected static StockMarketModBackend.Instances BACKEND_INSTANCES;
     protected IClientMarket selectedMarket;
-    public static final float guiScale = 0.8f;
+    public static final float guiScale = 0.7f;
 
     protected StockMarketGuiScreen(Component pTitle) {
         super(pTitle);

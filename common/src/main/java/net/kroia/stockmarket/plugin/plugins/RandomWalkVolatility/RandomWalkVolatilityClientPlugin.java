@@ -27,8 +27,8 @@ public class RandomWalkVolatilityClientPlugin extends ClientMarketPlugin {
 
     @Override
     protected void onStreamPacketReceived(FriendlyByteBuf buf) {
-        float targetPrice = buf.readFloat();
-        guiElement.setTargetPrice(targetPrice);
+        //float targetPrice = buf.readFloat();
+        //guiElement.setTargetPrice(targetPrice);
     }
 
     @Override

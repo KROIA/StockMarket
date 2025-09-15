@@ -92,10 +92,10 @@ public class TradingChartWidget extends StockMarketGuiElement {
         orderbookVolumeChart.setMinMaxPrice(minPrice, maxPrice);
     }
 
-    public void enableBotTargetPriceDisplay(boolean enabled)
-    {
-        candleStickChart.enableBotTargetPriceDisplay(enabled);
-    }
+    //public void enableBotTargetPriceDisplay(boolean enabled)
+    //{
+        //candleStickChart.enableBotTargetPriceDisplay(enabled);
+    //}
     public void updateView(TradingViewData data)
     {
         if(data == null)
@@ -111,7 +111,7 @@ public class TradingChartWidget extends StockMarketGuiElement {
         candleStickChart.setPriceHistory(history);
         tradingVolumeHistoryChart.setPriceHistory(history);
         orderbookVolumeChart.setOrderBookVolume(data.orderBookVolumeData);
-        candleStickChart.setBotTargetPrice(data.botTargetPrice);
+        //candleStickChart.setBotTargetPrice(data.botTargetPrice);
         candleStickChart.setPriceScaleFactor(history.getPriceScaleFactor());
         candleStickChart.updateOrderDisplay(data.openOrdersData, data.tradingPairData.toTradingPair());
     }

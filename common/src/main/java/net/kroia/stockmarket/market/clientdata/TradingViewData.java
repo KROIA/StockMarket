@@ -16,7 +16,7 @@ public class TradingViewData implements INetworkPayloadEncoder {
     public final BankData itemBankData;
     public final BankData currencyBankData;
     public final boolean marketIsOpen;
-    public final float botTargetPrice;
+    //public final float botTargetPrice;
     public final float smalestTradableVolume;
 
     public TradingViewData(@NotNull TradingPairData pair,
@@ -25,7 +25,7 @@ public class TradingViewData implements INetworkPayloadEncoder {
                            @NotNull OrderBookVolumeData orderBookVolumeData,
                            @NotNull OrderReadListData openOrders,
                            boolean marketIsOpen,
-                           float botTargetPrice,
+                           //float botTargetPrice,
                            float smalestTradableVolume) {
         this.tradingPairData = pair;
         this.priceHistoryData = history;
@@ -42,7 +42,7 @@ public class TradingViewData implements INetworkPayloadEncoder {
             this.currencyBankData = null;
         }
         this.marketIsOpen = marketIsOpen;
-        this.botTargetPrice = botTargetPrice;
+        //this.botTargetPrice = botTargetPrice;
         this.smalestTradableVolume = smalestTradableVolume;
     }
     private TradingViewData(@NotNull TradingPairData tradingPairData,
@@ -52,7 +52,7 @@ public class TradingViewData implements INetworkPayloadEncoder {
                             @Nullable BankData itemBankData,
                             @Nullable BankData currencyBankData,
                             boolean marketIsOpen,
-                            float botTargetPrice,
+                            //float botTargetPrice,
                             float smalestTradableVolume) {
         this.tradingPairData = tradingPairData;
         this.priceHistoryData = priceHistoryData;
@@ -61,7 +61,7 @@ public class TradingViewData implements INetworkPayloadEncoder {
         this.itemBankData = itemBankData;
         this.currencyBankData = currencyBankData;
         this.marketIsOpen = marketIsOpen;
-        this.botTargetPrice = botTargetPrice;
+        //this.botTargetPrice = botTargetPrice;
         this.smalestTradableVolume = smalestTradableVolume;
     }
 
@@ -81,7 +81,7 @@ public class TradingViewData implements INetworkPayloadEncoder {
             currencyBankData.encode(buf);
         }
         buf.writeBoolean(marketIsOpen);
-        buf.writeFloat(botTargetPrice);
+        //buf.writeFloat(botTargetPrice);
         buf.writeFloat(smalestTradableVolume);
     }
 
@@ -100,9 +100,9 @@ public class TradingViewData implements INetworkPayloadEncoder {
             currencyBankData = BankData.decode(buf);
         }
         boolean marketIsOpen = buf.readBoolean();
-        float botTargetPrice = buf.readFloat();
+        //float botTargetPrice = buf.readFloat();
         float smalestTradableVolume = buf.readFloat();
         return new TradingViewData(tradingPairData, priceHistoryData, orderBookVolumeData,
-                openOrdersData, itemBankData, currencyBankData, marketIsOpen, botTargetPrice, smalestTradableVolume);
+                openOrdersData, itemBankData, currencyBankData, marketIsOpen, smalestTradableVolume);
     }
 }

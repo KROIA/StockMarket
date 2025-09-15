@@ -19,6 +19,7 @@
   "gui.stockmarket.trade_screen.cancel": "Abbrechen",
   "gui.stockmarket.trade_screen.direction": "Typ",
   "gui.stockmarket.candle_stick_chart.bot_target_price": "Bot Ziel Preis: ",
+  "gui.stockmarket.player_trades_view_screen.title": "Handels Historie",
 
   "message.stockmarket.invalid_item_id": "Unbekanntes Item: {item_name}",
   "message.stockmarket.marketplace_not_existing": "Es gibt kein Markt um {item_name} zu handeln",
@@ -145,6 +146,7 @@
   "gui.stockmarket.market_selection_view.clear_item": "Item abwählen",
   "gui.stockmarket.market_selection_view.clear_currency": "Währung abwählen",
   "gui.stockmarket.market_selection_view.select_market": "Markt wählen",
+  "gui.stockmarket.market_selection_view.search_market": "Suche",
 
   "gui.stockmarket.market_creation_screen.title": "Trading Pair Erstellung",
   "gui.stockmarket.market_creation_screen.item_selection_title": "Wähle Item für den Handel",
@@ -185,6 +187,7 @@
   "gui.stockmarket.market_settings_screen.back_button": "Zurück",
   "gui.stockmarket.market_settings_screen.general.title": "Allgemeine Einstellungen",
   "gui.stockmarket.market_settings_screen.general.chart_reset": "Chart zurücksetzen",
+  "gui.stockmarket.market_settings_screen.general.chart_reset.tooltip": "Setzt das Preis Diagramm zurück,\nindem alle historischen Preisdaten gelöscht werden.\nDas Diagramm wird auf den aktuellen Marktpreis gesetzt.",
   "gui.stockmarket.market_settings_screen.general.is_market_open": "Markt geöffnet",
   "gui.stockmarket.market_settings_screen.general.candle_time_min": "Candle Zeit",
   "gui.stockmarket.market_settings_screen.general.item_imbalance": "Item Ungleichgewicht",

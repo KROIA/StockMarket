@@ -19,6 +19,7 @@
   "gui.stockmarket.trade_screen.cancel": "Abbreche",
   "gui.stockmarket.trade_screen.direction": "Typ",
   "gui.stockmarket.candle_stick_chart.bot_target_price": "Bot Ziel Pris: ",
+  "gui.stockmarket.player_trades_view_screen.title": "Handels Verlauf",
 
   "message.stockmarket.invalid_item_id": "Unbekannts Item: {item_name}",
   "message.stockmarket.marketplace_not_existing": "Es git kein Markt zum {item_name} handle",
@@ -27,7 +28,7 @@
   "message.stockmarket.marketplace_is_now_closed_all": "Alli Märkt sind jetzt gschlossä",
   "message.stockmarket.marketplace_is_now_open": "Markt für {item_name} isch jetzt göffnet zum handle",
   "message.stockmarket.marketplace_is_now_open_all": "Alli Märkt sind jetzt göffnet zum handle",
-   "message.stockmarket.candlestick_time_set": "Candle stick Zit uf {value} Minute gsetzt",
+  "message.stockmarket.candlestick_time_set": "Candle stick Zit uf {value} Minute gsetzt",
   "message.stockmarket.marketplace_is_not_allowed": "Markt für {item_name} isch nöd erlaubt",
   "message.stockmarket.marketplace_deleted": "{item_name} cha nüme ghandelt wärdä",
   "message.stockmarket.marketplace_created": "{item_name} cha jetzt ghandelt wärdä",
@@ -145,6 +146,7 @@
   "gui.stockmarket.market_selection_view.clear_item": "Item abwählä",
   "gui.stockmarket.market_selection_view.clear_currency": "Währig abwählä",
   "gui.stockmarket.market_selection_view.select_market": "Markt wähle",
+   "gui.stockmarket.market_selection_view.search_market": "Suechä",
 
   "gui.stockmarket.market_creation_screen.title": "Trading Pair Erstellung",
   "gui.stockmarket.market_creation_screen.item_selection_title": "Wähle Item für den Handel",
@@ -185,6 +187,7 @@
   "gui.stockmarket.market_settings_screen.back_button": "Zrugg",
   "gui.stockmarket.market_settings_screen.general.title": "Allgemeine Einstellungen",
   "gui.stockmarket.market_settings_screen.general.chart_reset": "Chart zurücksetzen",
+  "gui.stockmarket.market_settings_screen.general.chart_reset.tooltip": "Löscht alli historischä Preisdatä.\nS Preis Diagramm wird uf dä aktuell Marktpreis gsetzt.",
   "gui.stockmarket.market_settings_screen.general.is_market_open": "Markt geöffnet",
   "gui.stockmarket.market_settings_screen.general.candle_time_min": "Candle Zit",
   "gui.stockmarket.market_settings_screen.general.item_imbalance": "Item Unglichgwicht",
