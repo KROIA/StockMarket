@@ -13,8 +13,6 @@ import org.jetbrains.annotations.NotNull;
 
 public class DefaultOrderbookVolumeDistributionPlugin extends MarketPlugin {
 
-
-
     public static class Settings implements IPluginSettings
     {
         public float volumeScale;
@@ -129,7 +127,7 @@ public class DefaultOrderbookVolumeDistributionPlugin extends MarketPlugin {
     }
 
 
-    private Settings settings = new Settings();
+    private final Settings settings = new Settings();
     private long lastMillis;
     private float currentMarketPrice = 0;
 

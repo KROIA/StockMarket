@@ -346,18 +346,18 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
             success = destroyVolatilityBot();
         }
 
-        if(settingsData.virtualOrderBookSettingsData != null) {
+        /*if(settingsData.virtualOrderBookSettingsData != null) {
             if (orderBook.getVirtualOrderBook() != null) {
                 orderBook.getVirtualOrderBook().setSettings(settingsData.virtualOrderBookSettingsData.settings);
             }else if(settingsData.doCreateVirtualOrderBookIfNotExists) {
                 createVirtualOrderBook(BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.VIRTUAL_ORDERBOOK_ARRAY_SIZE.get(),
                         settingsData.virtualOrderBookSettingsData.settings);
             }
-        }
-        else if(orderBook.getVirtualOrderBook() != null && settingsData.doDestroyVirtualOrderBookIfExists)
-        {
-            success = destroyVirtualOrderBook();
-        }
+    }*/
+        //else if(orderBook.getVirtualOrderBook() != null && settingsData.doDestroyVirtualOrderBookIfExists)
+        //{
+        //    success = destroyVirtualOrderBook();
+        //}
 
         marketOpen = settingsData.marketOpen;
         if(settingsData.overwriteItemImbalance)
@@ -473,7 +473,7 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
         return volatilityBot != null;
     }
 
-    @Override
+    /*@Override
     public void createVirtualOrderBook(int realVolumeBookSize, VirtualOrderBook.Settings settings)
     {
         if(orderBook.getVirtualOrderBook() == null)
@@ -482,9 +482,9 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
         }else {
             orderBook.getVirtualOrderBook().setSettings(settings);
         }
-    }
+    }*/
 
-    @Override
+    /*@Override
     public boolean destroyVirtualOrderBook()
     {
         if(orderBook.getVirtualOrderBook() == null)
@@ -492,7 +492,7 @@ public class ServerMarket implements IServerMarket, ServerSaveable {
 
         orderBook.destroyVirtualOrderBook();
         return true;
-    }
+    }*/
     @Override
     public boolean hasVirtualOrderBook()
     {

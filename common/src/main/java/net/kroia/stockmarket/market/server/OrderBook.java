@@ -23,38 +23,30 @@ public class OrderBook implements ServerSaveable {
 
     private final List<Order> incommingOrders = new ArrayList<>();
 
-    private VirtualOrderBook virtualOrderBook;
+    private final VirtualOrderBook virtualOrderBook;
     private int priceScaleFactor = 1; // Scale factor for prices, used to handle floating point precision issues.
     private int itemFractionScaleFactor = 1; // Scale factor for item fractions, used to handle fractional item amounts.
     private Function<Float, Float> defaultVolumeDistributionFunction = null;
-    public OrderBook()
-    {
-        virtualOrderBook = null;
-    }
     public OrderBook(int realVolumeBookSize)
     {
-        if(realVolumeBookSize > 0)
-            this.virtualOrderBook = new VirtualOrderBook(realVolumeBookSize,0);
+        this.virtualOrderBook = new VirtualOrderBook(realVolumeBookSize,0);
     }
     public OrderBook(int realVolumeBookSize, int initialPrice)
     {
-        if(realVolumeBookSize > 0)
-            this.virtualOrderBook = new VirtualOrderBook(realVolumeBookSize, initialPrice);
+        this.virtualOrderBook = new VirtualOrderBook(realVolumeBookSize, initialPrice);
     }
     public void setScaleFactors(int priceScaleFactor, int itemFractionScaleFactor)
     {
         this.priceScaleFactor = priceScaleFactor;
         this.itemFractionScaleFactor = itemFractionScaleFactor;
-        if(virtualOrderBook != null)
-            virtualOrderBook.setPriceScaleFactor(priceScaleFactor);
+        virtualOrderBook.setPriceScaleFactor(priceScaleFactor);
     }
     public void setDefaultVirtualVolumeDistributionFunction(Function<Float, Float> defaultVolumeDistributionFunction) {
         this.defaultVolumeDistributionFunction = defaultVolumeDistributionFunction;
-        if(virtualOrderBook != null)
-            virtualOrderBook.setDefaultVolumeDistributionFunction(defaultVolumeDistributionFunction);
+        virtualOrderBook.setDefaultVolumeDistributionFunction(defaultVolumeDistributionFunction);
     }
 
-    public void createVirtualOrderBook(int realVolumeBookSize, int initialPrice, VirtualOrderBook.Settings settings)
+    /*public void createVirtualOrderBook(int realVolumeBookSize, int initialPrice, VirtualOrderBook.Settings settings)
     {
         if(virtualOrderBook != null)
             return; // Virtual order book already exists.
@@ -62,11 +54,11 @@ public class OrderBook implements ServerSaveable {
         this.virtualOrderBook.setSettings(settings); // Set the settings for the virtual order book.
         this.virtualOrderBook.resetVolumeDistribution();
         this.virtualOrderBook.setDefaultVolumeDistributionFunction(defaultVolumeDistributionFunction);
-    }
-    public void destroyVirtualOrderBook()
+    }*/
+    /*public void destroyVirtualOrderBook()
     {
         this.virtualOrderBook = null; // Remove the virtual order book.
-    }
+    }*/
 
     public void updateVirtualOrderBookVolume(int currentPrice)
     {
@@ -530,14 +522,14 @@ public class OrderBook implements ServerSaveable {
         if(tag.contains("virtual_order_book"))
         {
             CompoundTag virtualOrderBookTag = tag.getCompound("virtual_order_book");
-            if(virtualOrderBook == null)
-                virtualOrderBook = new VirtualOrderBook(10, 0);
+            //if(virtualOrderBook == null)
+            //    virtualOrderBook = new VirtualOrderBook(10, 0);
             success &= virtualOrderBook.load(virtualOrderBookTag);
         }
-        else
+        /*else
         {
             virtualOrderBook = null;
-        }
+        }*/
         return success;
     }
 

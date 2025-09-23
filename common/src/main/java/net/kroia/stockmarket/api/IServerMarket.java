@@ -260,14 +260,14 @@ public interface IServerMarket {
      *                           needs to update each element in the array.
      * @param settings the settings for the virtual order book.
      */
-    void createVirtualOrderBook(int realVolumeBookSize, VirtualOrderBook.Settings settings);
+    //void createVirtualOrderBook(int realVolumeBookSize, VirtualOrderBook.Settings settings);
 
     /**
      * Destroys the virtual order book if it exists.
      * @return true if the virtual order book was successfully destroyed, false otherwise.
      *         It will also return false if there was no virtual order book to destroy.
      */
-    boolean destroyVirtualOrderBook();
+    //boolean destroyVirtualOrderBook();
 
     /**
      * Checks if a virtual order book exists.

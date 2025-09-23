@@ -753,7 +753,8 @@ public class ServerMarketManager implements IServerMarketManager, ServerSaveable
             for(int i = 0; i < marketsListTag.size(); i++)
             {
                 CompoundTag tradeItemTag = marketsListTag.getCompound(i);
-                ServerMarket tradeItem = new ServerMarket(0, BACKEND_INSTANCES.SERVER_SETTINGS.UI.PRICE_HISTORY_SIZE.get());
+                ServerMarket tradeItem = new ServerMarket(BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.VIRTUAL_ORDERBOOK_ARRAY_SIZE.get(),
+                        BACKEND_INSTANCES.SERVER_SETTINGS.UI.PRICE_HISTORY_SIZE.get());
                 if(!tradeItem.load(tradeItemTag))
                 {
                     error("Failed to load market from NBT: " + tradeItemTag);

@@ -64,9 +64,10 @@ public abstract class ClientMarketPluginGuiElement extends StockMarketGuiElement
             int height = getHeight();
 
             int elementHeight = height/3;
+            int saveButtonWidth = Math.min(50, width/3);
 
             nameLabel.setBounds(0, 0, width, elementHeight);
-            saveButton.setBounds(0, nameLabel.getBottom(), width, elementHeight);
+            saveButton.setBounds((width-saveButtonWidth)/2, nameLabel.getBottom(), saveButtonWidth, elementHeight);
             enableCheckBox.setBounds(0, saveButton.getBottom(), width/2, elementHeight);
             loggerCheckBox.setBounds(enableCheckBox.getRight(), saveButton.getBottom(), width-width/2, elementHeight);
         }
