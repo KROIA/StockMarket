@@ -52,4 +52,4 @@ In this screen are three columns.
    By clicking the `Create selected markets` button, all these selected markets will be created.
 
 > :link: More infos about the presets can be found [here](MarketPresets.md). <br>
-> :link: Visit the [Manage Markets](#manage-markets) chapter to tune the markets settings.
+> :link: Visit the [Manage Markets](ManageMarkets.md) chapter to tune the markets settings.
