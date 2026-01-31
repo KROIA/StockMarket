@@ -10,6 +10,8 @@ StockMarket is a Minecraft mod that brings a better way for trading to the game.
 </div>
 </td>
 
+You want to support me?<br>
+[!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://buymeacoffee.com/alexkrieg)
 ---
 
 
@@ -523,3 +525,6 @@ Since this is a complex field from control theory, I will not cover this here.
 <div align="center">
     <img src="https://upload.wikimedia.org/wikipedia/commons/4/43/PID_en.svg" width=500> 
 </div>
+
+
+
