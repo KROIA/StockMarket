@@ -11,6 +11,8 @@ StockMarket is a Minecraft mod that brings a better way for trading to the game.
 </td>
 </table>
 
+You want to support me?<br>
+[!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://buymeacoffee.com/alexkrieg)
 ---
 
 
