@@ -5,3 +5,4 @@ For each Trading-Pair multiple plugins can be enabled that create different mark
 
 
 
+- [Create a Plugin](CreateAPlugin/CreateAPlugin.md)
