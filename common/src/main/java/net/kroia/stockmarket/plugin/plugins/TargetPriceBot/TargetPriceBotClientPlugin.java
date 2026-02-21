@@ -2,7 +2,6 @@ package net.kroia.stockmarket.plugin.plugins.TargetPriceBot;
 
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.plugin.base.ClientMarketPlugin;
-import net.kroia.stockmarket.plugin.base.ClientMarketPluginGuiElement;
 import net.minecraft.network.FriendlyByteBuf;
 
 public class TargetPriceBotClientPlugin extends ClientMarketPlugin {
@@ -14,6 +13,8 @@ public class TargetPriceBotClientPlugin extends ClientMarketPlugin {
     public TargetPriceBotClientPlugin(TradingPair tradingPair, String pluginTypeID) {
         super(tradingPair, pluginTypeID);
         guiElement = new TargetPriceBotPluginGuiElement(this);
+        setCustomSettings(settings);
+        setCustomSettingsGuiElement(guiElement);
     }
 
     @Override
@@ -31,24 +32,24 @@ public class TargetPriceBotClientPlugin extends ClientMarketPlugin {
         guiElement.setTargetPrice(targetPrice);
     }
 
-    @Override
+    /*@Override
     protected ClientMarketPluginGuiElement getSettingsGuiElement() {
         return guiElement;
+    }*/
+/*
+    @Override
+    protected void setCustomSettingsToGuiElement() {
+        guiElement.setCustomSettings(settings);
     }
 
     @Override
-    protected void setSettingsToGuiElement() {
-        guiElement.setSettings(settings);
-    }
-
-    @Override
-    protected void applySettingsFromGuiElement() {
-        settings = guiElement.getSettings();
-    }
+    protected void applyCustomSettingsFromGuiElement() {
+        guiElement.getCustomSettings(settings);
+    }*/
 
 
 
-    @Override
+    /*@Override
     protected void encodeSettings(FriendlyByteBuf buf) {
         settings.encode(buf);
     }
@@ -56,5 +57,5 @@ public class TargetPriceBotClientPlugin extends ClientMarketPlugin {
     @Override
     protected void decodeSettings(FriendlyByteBuf buf) {
         settings.decode(buf);
-    }
+    }*/
 }

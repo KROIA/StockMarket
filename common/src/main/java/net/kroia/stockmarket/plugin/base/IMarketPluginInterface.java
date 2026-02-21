@@ -133,15 +133,13 @@ public interface IMarketPluginInterface {
     interface OrderBookInterface
     {
         /**
-         * Gets all buy orders, currently in the order book,
-         * excluding the orders that are created since the last update.
+         * Gets all buy orders, currently in the order book.
          * @return List of all orders in the book.
          */
 
         @NotNull List<LimitOrder> getBuyOrders();
         /**
-         * Gets all sell orders, currently in the order book,
-         * excluding the orders that are created since the last update.
+         * Gets all sell orders, currently in the order book.
          * @return List of all orders in the book.
          */
         @NotNull List<LimitOrder> getSellOrders();

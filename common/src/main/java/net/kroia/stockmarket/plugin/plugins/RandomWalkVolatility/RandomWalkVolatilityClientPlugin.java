@@ -2,7 +2,6 @@ package net.kroia.stockmarket.plugin.plugins.RandomWalkVolatility;
 
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.plugin.base.ClientMarketPlugin;
-import net.kroia.stockmarket.plugin.base.ClientMarketPluginGuiElement;
 import net.minecraft.network.FriendlyByteBuf;
 
 public class RandomWalkVolatilityClientPlugin extends ClientMarketPlugin {
@@ -14,6 +13,8 @@ public class RandomWalkVolatilityClientPlugin extends ClientMarketPlugin {
     public RandomWalkVolatilityClientPlugin(TradingPair tradingPair, String pluginTypeID) {
         super(tradingPair, pluginTypeID);
         guiElement = new RandomWalkVolatilityPluginGuiElement(this);
+        setCustomSettings(settings);
+        setCustomSettingsGuiElement(guiElement);
     }
 
     @Override
@@ -31,6 +32,7 @@ public class RandomWalkVolatilityClientPlugin extends ClientMarketPlugin {
         //guiElement.setTargetPrice(targetPrice);
     }
 
+    /*
     @Override
     protected ClientMarketPluginGuiElement getSettingsGuiElement() {
         return guiElement;
@@ -45,10 +47,10 @@ public class RandomWalkVolatilityClientPlugin extends ClientMarketPlugin {
     protected void applySettingsFromGuiElement() {
         settings = guiElement.getSettings();
     }
+*/
 
 
-
-    @Override
+    /*@Override
     protected void encodeSettings(FriendlyByteBuf buf) {
         settings.encode(buf);
     }
@@ -56,5 +58,5 @@ public class RandomWalkVolatilityClientPlugin extends ClientMarketPlugin {
     @Override
     protected void decodeSettings(FriendlyByteBuf buf) {
         settings.decode(buf);
-    }
+    }*/
 }

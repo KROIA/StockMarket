@@ -1,29 +1,27 @@
-package net.kroia.stockmarket.plugin.plugins.TargetPriceBot;
+# ExamplePluginGuiElement
 
-import net.kroia.modutilities.ColorUtilities;
-import net.kroia.modutilities.gui.elements.Label;
-import net.kroia.modutilities.gui.elements.TextBox;
-import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.plugin.base.ClientMarketPlugin;
-import net.kroia.stockmarket.plugin.base.ClientMarketPluginGuiElement;
-import net.kroia.stockmarket.plugin.base.IPluginSettings;
-import net.kroia.stockmarket.util.StockMarketGuiElement;
-import net.minecraft.network.chat.Component;
 
-public class TargetPriceBotPluginGuiElement extends ClientMarketPluginGuiElement {
+
+
+
+## Example code
+
+
+``` Java
+public class ExamplePluginGuiElement extends ClientMarketPluginGuiElement {
 
     public static final class TEXTS {
-        private static final String PREFIX = "gui." + StockMarketMod.MOD_ID + ".target_price_bot_plugin_gui_element.";
+        private static final String PREFIX = "gui." + StockMarketMod.MOD_ID + ".example_bot_plugin_gui_element.";
         public static final Component VOLUME_SCALE = Component.translatable(PREFIX + "volume_scale");
         public static final Component VOLUME_SCALE_TOOLTIP = Component.translatable(PREFIX + "volume_scale.tooltip");
     }
 
-    public static class TargetPriceBotGuiElement extends StockMarketGuiElement
+    public static class ExampleGuiElement extends StockMarketGuiElement
     {
         private final Label volumeScaleLabel;
         private final TextBox volumeScaleTextBox;
 
-        public TargetPriceBotGuiElement()
+        public ExampleGuiElement()
         {
             super();
             this.setEnableBackground(false);
@@ -63,35 +61,27 @@ public class TargetPriceBotPluginGuiElement extends ClientMarketPluginGuiElement
 
         }
 
-        public void setSettings(TargetPriceBotPlugin.Settings settings)
+        public void setSettings(ExamplePlugin.Settings settings)
         {
             volumeScaleTextBox.setText(Float.toString(settings.volumeScale));
         }
 
-        public void getSettings(TargetPriceBotPlugin.Settings settings)
+        public void getSettings(ExamplePlugin.Settings settings)
         {
             settings.volumeScale = Math.max(0,(float)volumeScaleTextBox.getDouble());
         }
     }
 
-    private TargetPriceBotGuiElement guiElement;
+    private ExampleGuiElement guiElement;
     private float targetPrice = 0;
     private int lineWidth = 30;
     private final int markerColor = ColorUtilities.getRGB(0,0,255);
-    public TargetPriceBotPluginGuiElement(ClientMarketPlugin plugin) {
+    public ExamplePluginGuiElement(ClientMarketPlugin plugin) {
         super(plugin);
-        this.guiElement = new TargetPriceBotGuiElement();
-        setCustomPluginWidget(guiElement);
+        guiElement = new TargetPriceBotGuiElement();
+        setCustomPluginWidget(guiElement);                                  // << Don't forget this!
     }
 
-    /*@Override
-    protected GuiElement getCustomPluginWidget() {
-        if(guiElement == null)
-        {
-            this.guiElement = new TargetPriceBotGuiElement();
-        }
-        return guiElement;
-    }*/
 
     public void setTargetPrice(float targetPrice)
     {
@@ -99,25 +89,23 @@ public class TargetPriceBotPluginGuiElement extends ClientMarketPluginGuiElement
     }
 
 
+    /**
+     * Cast the settings to the specific Settings class used for the serverside Plugin and read the settings on to the UI
+     */ 
     @Override
     public void setCustomSettings(IPluginSettings settings) {
-        guiElement.setSettings((TargetPriceBotPlugin.Settings)settings);
+        guiElement.setSettings((ExamplePlugin.Settings)settings);
     }
 
+
+    /**
+     * Read the settings from the UI and write them to the casted settings instance
+     */ 
     @Override
     public void getCustomSettings(IPluginSettings settings) {
-        guiElement.getSettings((TargetPriceBotPlugin.Settings)settings);
+        guiElement.getSettings((ExamplePlugin.Settings)settings);
     }
 
-    /*public void setSettings(TargetPriceBotPlugin.Settings settings)
-    {
-        guiElement.setSettings(settings);
-    }
-
-    public TargetPriceBotPlugin.Settings getSettings()
-    {
-        return guiElement.getSettings();
-    }*/
 
     /**
      * Custom draw methode to draw stuff onto the candlestick chart in the management window
@@ -141,11 +129,15 @@ public class TargetPriceBotPluginGuiElement extends ClientMarketPluginGuiElement
         drawText(text, chartWidth-lineWidth-textWidth-20, targetPriceYPos-getTextHeight()/2);
     }
 
+    /**
+     * Custom draw methode to draw stuff onto the orderbook chart area
+     */
     @Override
     protected void drawInOrderbookChartArea(int chartWidth, int chartHeight) {
-        // yPos = getOrderbookvolumeYPosForPrice(price)
+        // yPos = getOrderbookvolumeYPosForPrice(price) 
     }
 
 
 
 }
+```

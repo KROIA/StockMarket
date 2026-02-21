@@ -14,7 +14,7 @@ public class RandomWalkVolatilityPlugin extends MarketPlugin {
 
     public static class Settings implements IPluginSettings
     {
-        private final class TAGS {
+        private static final class TAGS {
             public static final String VOLATILITY = "volatility";
             public static final String UPDATE_TIMER_INTERVAL_MS = "updateTimerIntervalMS";
         }
@@ -50,7 +50,7 @@ public class RandomWalkVolatilityPlugin extends MarketPlugin {
     }
     private final Settings settings = new Settings();
     private final TimerMillis randomWalkTimer = new TimerMillis(false);
-    private static Random random = new Random();
+    private static final Random random = new Random();
     private final NormalizedRandomPriceGenerator priceGenerator;
 
     public static String getNameStatic()
@@ -65,6 +65,7 @@ public class RandomWalkVolatilityPlugin extends MarketPlugin {
     {
         priceGenerator = new NormalizedRandomPriceGenerator(5);
         randomWalkTimer.start(random.nextInt(10000));
+        setCustomSettings(settings);
     }
     @Override
     public void encodeClientStreamData(FriendlyByteBuf buf) {
@@ -90,7 +91,7 @@ public class RandomWalkVolatilityPlugin extends MarketPlugin {
         pluginInterface.addToTargetPrice(randomWalkValue);
     }
 
-    @Override
+   /*@Override
     protected void encodeSettings(FriendlyByteBuf buf) {
         settings.encode(buf);
     }
@@ -108,5 +109,5 @@ public class RandomWalkVolatilityPlugin extends MarketPlugin {
     @Override
     protected boolean loadFromFilesystem(CompoundTag tag) {
         return settings.load(tag);
-    }
+    }*/
 }

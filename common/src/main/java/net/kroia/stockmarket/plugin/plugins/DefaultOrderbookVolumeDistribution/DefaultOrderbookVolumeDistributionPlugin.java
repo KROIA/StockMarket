@@ -70,7 +70,7 @@ public class DefaultOrderbookVolumeDistributionPlugin extends MarketPlugin {
             return true;
         }
 
-
+        @Override
         public void decode(FriendlyByteBuf buf) {
             volumeScale = buf.readFloat();
             nearMarketVolumeScale = buf.readFloat();
@@ -139,6 +139,11 @@ public class DefaultOrderbookVolumeDistributionPlugin extends MarketPlugin {
     {
         return "Automatically fills the orderbook with a reasonable volume distribution.";
     }
+    public DefaultOrderbookVolumeDistributionPlugin()
+    {
+        setCustomSettings(settings);
+    }
+
     @Override
     public void setup()
     {
@@ -323,7 +328,7 @@ public class DefaultOrderbookVolumeDistributionPlugin extends MarketPlugin {
 
 
 
-    @Override
+    /*@Override
     protected void encodeSettings(FriendlyByteBuf buf) {
         settings.encode(buf);
     }
@@ -349,5 +354,5 @@ public class DefaultOrderbookVolumeDistributionPlugin extends MarketPlugin {
             settings.load(settingsTag);
         }
         return true;
-    }
+    }*/
 }

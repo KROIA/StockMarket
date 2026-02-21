@@ -7,6 +7,7 @@ import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.plugin.base.ClientMarketPlugin;
 import net.kroia.stockmarket.plugin.base.ClientMarketPluginGuiElement;
+import net.kroia.stockmarket.plugin.base.IPluginSettings;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Tuple;
@@ -80,7 +81,7 @@ public class DefaultOrderbookVolumeDistributionPluginGuiElement extends ClientMa
         public static final Component BOT_SETTINGS_VOLATILITY_TOOLTIP = Component.translatable(PREFIX + "bot_settings.volatility.tooltip");
     }
 
-    public class VirtualOderBookGuiElement extends StockMarketGuiElement
+    public static class VirtualOderBookGuiElement extends StockMarketGuiElement
     {
         //DefaultOrderbookVolumeDistributionPlugin.Settings virtualOrderBookSettings;
 
@@ -225,8 +226,7 @@ public class DefaultOrderbookVolumeDistributionPluginGuiElement extends ClientMa
             volumeFastAccumulationRateTextBox.setText(String.valueOf(settings.volumeFastAccumulationRate));
             volumeDecumulationRateTextBox.setText(String.valueOf(settings.volumeDecumulationRate));
         }
-        public DefaultOrderbookVolumeDistributionPlugin.Settings getVirtualOrderBookSettings() {
-            DefaultOrderbookVolumeDistributionPlugin.Settings settings = new DefaultOrderbookVolumeDistributionPlugin.Settings();
+        public void getVirtualOrderBookSettings(DefaultOrderbookVolumeDistributionPlugin.Settings settings) {
             settings.volumeScale = getInRange((float)volumeScaleTextBox.getDouble(), 0.f, 100000.f);
             volumeScaleTextBox.setText(String.valueOf(settings.volumeScale));
             settings.nearMarketVolumeScale = getInRange((float)nearMarketVolumeScaleTextBox.getDouble(), 0.f, 100000.f);
@@ -237,7 +237,6 @@ public class DefaultOrderbookVolumeDistributionPluginGuiElement extends ClientMa
             volumeFastAccumulationRateTextBox.setText(String.valueOf(settings.volumeFastAccumulationRate));
             settings.volumeDecumulationRate = getInRange((float)volumeDecumulationRateTextBox.getDouble(), 0.f, 100000.f);
             volumeDecumulationRateTextBox.setText(String.valueOf(settings.volumeDecumulationRate));
-            return settings;
         }
     }
 
@@ -246,16 +245,18 @@ public class DefaultOrderbookVolumeDistributionPluginGuiElement extends ClientMa
 
     public DefaultOrderbookVolumeDistributionPluginGuiElement(ClientMarketPlugin plugin) {
         super(plugin);
+        customPluginWidget = new VirtualOderBookGuiElement();
+        setCustomPluginWidget(customPluginWidget);
     }
 
-    @Override
+    /*@Override
     protected GuiElement getCustomPluginWidget() {
         if(customPluginWidget == null)
         {
             customPluginWidget = new VirtualOderBookGuiElement();
         }
         return customPluginWidget;
-    }
+    }*/
 
 
     @Override
@@ -286,14 +287,16 @@ public class DefaultOrderbookVolumeDistributionPluginGuiElement extends ClientMa
         }
     }
 
-    public void setSettings(DefaultOrderbookVolumeDistributionPlugin.Settings settings)
+    @Override
+    public void setCustomSettings(IPluginSettings settings)
     {
-        customPluginWidget.setVirtualOrderBookSettings(settings);
+        customPluginWidget.setVirtualOrderBookSettings((DefaultOrderbookVolumeDistributionPlugin.Settings)settings);
     }
 
-    public DefaultOrderbookVolumeDistributionPlugin.Settings getSettings()
+    @Override
+    public void getCustomSettings(IPluginSettings settings)
     {
-        return customPluginWidget.getVirtualOrderBookSettings();
+        customPluginWidget.getVirtualOrderBookSettings((DefaultOrderbookVolumeDistributionPlugin.Settings)settings);
     }
 
     public void setVolumeDistributionChart(List<Tuple<Float, Float>> volumeDistributionChart)

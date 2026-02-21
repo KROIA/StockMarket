@@ -38,7 +38,14 @@ public abstract class Plugin {
             buf.writeBoolean(loggerEnabled);
             buf.writeBoolean(pluginEnabled);
         }
-        public static Settings decode(FriendlyByteBuf buf)
+        @Override
+        public void decode(FriendlyByteBuf buf)
+        {
+            name = buf.readUtf();
+            loggerEnabled = buf.readBoolean();
+            pluginEnabled = buf.readBoolean();
+        }
+        public static Settings create(FriendlyByteBuf buf)
         {
             Settings settings = new Settings();
             settings.name = buf.readUtf();
@@ -75,8 +82,14 @@ public abstract class Plugin {
         this.settings = new Settings();
     }
 
-
+    /**
+     * Gets called when a plugin gets created (client and server side)
+     */
     protected abstract void setup();
+
+    /**
+     * Update call for the plugin
+     */
     protected abstract void update();
 
 
@@ -154,7 +167,7 @@ public abstract class Plugin {
     }
     public final void decodeSettings_internal(FriendlyByteBuf buf)
     {
-        settings = Settings.decode(buf);
+        settings = Settings.create(buf);
         decodeSettings(buf);
     }
 

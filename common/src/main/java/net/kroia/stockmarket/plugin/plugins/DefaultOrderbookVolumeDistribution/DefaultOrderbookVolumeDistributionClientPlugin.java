@@ -2,7 +2,6 @@ package net.kroia.stockmarket.plugin.plugins.DefaultOrderbookVolumeDistribution;
 
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.plugin.base.ClientMarketPlugin;
-import net.kroia.stockmarket.plugin.base.ClientMarketPluginGuiElement;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.util.Tuple;
 
@@ -16,6 +15,8 @@ public class DefaultOrderbookVolumeDistributionClientPlugin extends ClientMarket
     public DefaultOrderbookVolumeDistributionClientPlugin(TradingPair tradingPair, String pluginTypeID) {
         super(tradingPair, pluginTypeID);
         guiElement = new DefaultOrderbookVolumeDistributionPluginGuiElement(this);
+        setCustomSettings(settings);
+        setCustomSettingsGuiElement(guiElement);
     }
 
 
@@ -44,23 +45,23 @@ public class DefaultOrderbookVolumeDistributionClientPlugin extends ClientMarket
         guiElement.setVolumeDistributionChart(volumeDistributionChart);
     }
 
-    @Override
+    /*@Override
     protected ClientMarketPluginGuiElement getSettingsGuiElement() {
         return guiElement;
     }
 
     @Override
     protected void setSettingsToGuiElement() {
-        guiElement.setSettings(settings);
+        guiElement.setCustomSettings(settings);
     }
 
     @Override
     protected void applySettingsFromGuiElement() {
-        settings = guiElement.getSettings();
-    }
+        guiElement.getCustomSettings(settings);
+    }*/
 
 
-    @Override
+    /*@Override
     protected void encodeSettings(FriendlyByteBuf buf) {
         settings.encode(buf);
     }
@@ -68,7 +69,7 @@ public class DefaultOrderbookVolumeDistributionClientPlugin extends ClientMarket
     @Override
     protected void decodeSettings(FriendlyByteBuf buf) {
         settings.decode(buf);
-    }
+    }*/
 
 
 

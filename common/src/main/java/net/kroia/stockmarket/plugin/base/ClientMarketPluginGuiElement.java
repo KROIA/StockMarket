@@ -44,13 +44,11 @@ public abstract class ClientMarketPluginGuiElement extends StockMarketGuiElement
             enableCheckBox.setChecked(settings.pluginEnabled);
             loggerCheckBox.setChecked(settings.loggerEnabled);
         }
-        public Plugin.Settings getSettings()
+        public void getSettings(Plugin.Settings settings)
         {
-            Plugin.Settings settings = new Plugin.Settings();
             settings.name = nameLabel.getText();
             settings.pluginEnabled = enableCheckBox.isChecked();
             settings.loggerEnabled = loggerCheckBox.isChecked();
-            return settings;
         }
         @Override
         protected void render() {
@@ -77,7 +75,7 @@ public abstract class ClientMarketPluginGuiElement extends StockMarketGuiElement
     private final ClientMarketPlugin plugin;
 
     private final GenericPluginSettingsWidget genericSettingsWidget;
-    private final GuiElement customPluginWidget;
+    private GuiElement customPluginWidget;
 
 
     private TradingChartWidget chartWidget;
@@ -92,16 +90,22 @@ public abstract class ClientMarketPluginGuiElement extends StockMarketGuiElement
         genericSettingsWidget.setSettings(plugin.getSettings());
         addChild(genericSettingsWidget);
 
-        customPluginWidget = getCustomPluginWidget();
-        if(customPluginWidget == null)
-            throw new IllegalStateException("Custom plugin widget cannot be null");
-        addChild(customPluginWidget);
+       // customPluginWidget = getCustomPluginWidget();
+       // if(customPluginWidget == null)
+       //     throw new IllegalStateException("Custom plugin widget cannot be null");
+       // addChild(customPluginWidget);
 
         setHeight(genericSettingsWidget.getHeight() + customPluginWidget.getHeight()+ padding*2);
     }
 
 
-    protected abstract GuiElement getCustomPluginWidget();
+    public void setCustomPluginWidget(GuiElement customPluginWidget) {
+        if(this.customPluginWidget != null)
+            return;
+        this.customPluginWidget  = customPluginWidget;
+        addChild(this.customPluginWidget);
+    }
+    //protected abstract GuiElement getCustomPluginWidget();
 
     public void setChartWidget(TradingChartWidget chartWidget)
     {
@@ -142,6 +146,22 @@ public abstract class ClientMarketPluginGuiElement extends StockMarketGuiElement
         customPluginWidget.setBounds(padding, genericSettingsWidget.getBottom(), width, height - genericSettingsWidget.getHeight());
     }
 
+
+    /**
+     * Used to set the settings for a specialized plugin
+     * @param settings
+     */
+    public abstract void setCustomSettings(IPluginSettings settings);
+
+    /**
+     * Used to read the settings for a specialized plugin from the GUI-Element back to the container class
+     */
+    public abstract void getCustomSettings(IPluginSettings settings);
+
+    /**
+     * Used to set the generic settings that is the same for each plugin
+     * @param settings
+     */
     public void setPluginSettings_internal(Plugin.Settings settings)
     {
         if(settings != null)
@@ -149,9 +169,9 @@ public abstract class ClientMarketPluginGuiElement extends StockMarketGuiElement
             genericSettingsWidget.setSettings(settings);
         }
     }
-    public Plugin.Settings getPluginSettings_internal()
+    public void getPluginSettings_internal(Plugin.Settings settings)
     {
-        return genericSettingsWidget.getSettings();
+        genericSettingsWidget.getSettings(settings);
     }
 
 

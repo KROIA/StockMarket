@@ -12,13 +12,32 @@ import java.util.UUID;
 
 public abstract class ClientMarketPlugin extends Plugin{
     private UUID streamID = null;
-    private ClientMarketPluginGuiElement settingsGuiElement = null;
+    private ClientMarketPluginGuiElement customSettingsGuiElement = null;
+    private IPluginSettings customPluginSettings = null;
 
     public ClientMarketPlugin(TradingPair tradingPair,String pluginTypeID) {
         super();
         setTradingPair(tradingPair);
         setPluginTypeID(pluginTypeID);
         //loadSettings();
+    }
+
+    /**
+     * Set the custom settings instance to this super class in order to automatically handle:
+     * - encodeSettings()
+     * - decodeSettings()
+     * - saveToFilesystem()
+     * - loadFromFilesystem()
+     * @param settings instance, private member instance of the derived class
+     */
+    public final void setCustomSettings(IPluginSettings settings)
+    {
+        this.customPluginSettings = settings;
+    }
+
+    public final void setCustomSettingsGuiElement(ClientMarketPluginGuiElement guiElement)
+    {
+        this.customSettingsGuiElement = guiElement;
     }
 
     protected abstract void close();
@@ -53,7 +72,7 @@ public abstract class ClientMarketPlugin extends Plugin{
     }
     public final void saveSettings()
     {
-        applySettingsFromGuiElement_internal();
+        readSettingsFromGuiElement_internal();
         FriendlyByteBuf buf = new FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
         encodeSettings_internal(buf);
         MarketPluginSettingsRequest.Input input = new MarketPluginSettingsRequest.Input(getTradingPair(), getPluginTypeID(), buf);
@@ -82,10 +101,19 @@ public abstract class ClientMarketPlugin extends Plugin{
     }
 
 
-    protected abstract ClientMarketPluginGuiElement getSettingsGuiElement();
+    protected ClientMarketPluginGuiElement getCustomSettingsGuiElement()
+    {
+        return customSettingsGuiElement;
+    }
 
-    protected abstract void setSettingsToGuiElement();
-    protected abstract void applySettingsFromGuiElement();
+    protected void setCustomSettingsToGuiElement()
+    {
+        customSettingsGuiElement.setCustomSettings(customPluginSettings);
+    }
+    protected void readCustomSettingsFromGuiElement()
+    {
+        customSettingsGuiElement.getCustomSettings(customPluginSettings);
+    }
 
 
     @Override
@@ -102,6 +130,27 @@ public abstract class ClientMarketPlugin extends Plugin{
         return true;
     }
 
+    /**
+     * Encodes the settings to a ByteBuffer that gets sent to the server
+     * This is used to save the current settings from the management UI back to the server
+     * @param buf to hold the data
+     * @implNote If setCustomSettings() was not called with a valid instance, this will crash!
+     */
+    @Override
+    protected void encodeSettings(FriendlyByteBuf buf) {
+        customPluginSettings.encode(buf);
+    }
+
+    /**
+     * Decodes the settings from a ByteBuffer received from the server
+     * @param buf containing the data
+     * @implNote If setCustomSettings() was not called with a valid instance, this will crash!
+     */
+    @Override
+    protected void decodeSettings(FriendlyByteBuf buf) {
+        customPluginSettings.decode(buf);
+    }
+
 
     private void onStreamPacketReceived_internal(FriendlyByteBuf buf)
     {
@@ -116,22 +165,23 @@ public abstract class ClientMarketPlugin extends Plugin{
     }
     public final ClientMarketPluginGuiElement getSettingsGuiElement_internal()
     {
-        settingsGuiElement = getSettingsGuiElement();
+        //customSettingsGuiElement = getSettingsGuiElement();
         loadSettings();
-        return settingsGuiElement;
+        return customSettingsGuiElement;
     }
     public final void setSettingsToGuiElement_internal()
     {
-        if(settingsGuiElement != null) {
-            settingsGuiElement.setPluginSettings_internal(this.getSettings());
-            setSettingsToGuiElement();
+        if(customSettingsGuiElement != null) {
+            customSettingsGuiElement.setPluginSettings_internal(this.getSettings());
+            setCustomSettingsToGuiElement();
         }
     }
-    public final void applySettingsFromGuiElement_internal()
+    public final void readSettingsFromGuiElement_internal()
     {
-        if(settingsGuiElement != null) {
-            this.setSettings(settingsGuiElement.getPluginSettings_internal());
-            applySettingsFromGuiElement();
+        Settings settings = getSettings();
+        if(customSettingsGuiElement != null && settings != null) {
+            customSettingsGuiElement.getPluginSettings_internal(settings);
+            readCustomSettingsFromGuiElement();
         }
     }
 

@@ -33,9 +33,9 @@ public class ServerPluginManager {
     }
     public class MarketPluginInstanceData implements ServerSaveable
     {
-        private class VirtualOrderBookVolumeManipulationData
+        public static class VirtualOrderBookVolumeManipulationData
         {
-            enum ManipulationType
+            public enum ManipulationType
             {
                 SET,
                 ADD,
@@ -50,9 +50,9 @@ public class ServerPluginManager {
                 this.type = type;
             }
         }
-        private class VirtualOrderBookVolumeManipulationRealArrayData
+        public static class VirtualOrderBookVolumeManipulationRealArrayData
         {
-            enum ManipulationType
+            public enum ManipulationType
             {
                 SET,
                 ADD,
@@ -247,7 +247,6 @@ public class ServerPluginManager {
             }
         }
 
-        private final MarketPluginInterface marketPluginInterface = new MarketPluginInterface();
         public final MarketPlugin plugin;
         public final List<VirtualOrderBookVolumeManipulationData> virtualOrderBookVolumeManipulations = new java.util.ArrayList<>();
         public final List<VirtualOrderBookVolumeManipulationRealArrayData> virtualOrderBookVolumeArrayManipulations = new java.util.ArrayList<>();
@@ -270,6 +269,7 @@ public class ServerPluginManager {
         public MarketPluginInstanceData(MarketPlugin plugin, PluginMarket marketData) {
             this.plugin = plugin;
             this.marketData = marketData;
+            MarketPluginInterface marketPluginInterface = new MarketPluginInterface();
             this.plugin.setInterface(marketPluginInterface.marketInterface);
         }
         public void clear()
@@ -298,7 +298,7 @@ public class ServerPluginManager {
     }
 
 
-    private class PluginMarket implements ServerSaveableChunked
+    public class PluginMarket implements ServerSaveableChunked
     {
         private final IServerMarket market;
         private final Map<String, MarketPluginInstanceData> pluginsData = new HashMap<>(); // pluginTypeID -> data
@@ -359,38 +359,44 @@ public class ServerPluginManager {
             nextTargetPrice = 0;
             for(MarketPluginInstanceData pluginData : pluginsData.values())
             {
-                if(pluginData.plugin.isPluginEnabled()) {
-                    pluginData.performanceTrackWatch.start();
-                    // Placing orders
-                    for (LimitOrder order : pluginData.nextLimitOrders) {
-                        market.placeOrder(order);
-                    }
-                    if(pluginData.nextCreatingMarketOrderVolume != 0)
-                        market.createAndPlaceBotMarketOrder(pluginData.nextCreatingMarketOrderVolume);
+                if(!pluginData.plugin.isPluginEnabled())
+                    continue;
 
-                    // Manipulating order book volume
-                    OrderBook orderBook = market.getOrderBook();
-                    for (MarketPluginInstanceData.VirtualOrderBookVolumeManipulationData manipulation : pluginData.virtualOrderBookVolumeManipulations) {
-                        switch (manipulation.type) {
-                            case SET ->
-                                    orderBook.setVirtualOrderBookVolume(manipulation.minPrice, manipulation.maxPrice, manipulation.volume);
-                            case ADD ->
-                                    orderBook.addVirtualOrderBookVolume(manipulation.minPrice, manipulation.maxPrice, manipulation.volume);
-                        }
-                    }
-                    for (MarketPluginInstanceData.VirtualOrderBookVolumeManipulationRealArrayData manipulation : pluginData.virtualOrderBookVolumeArrayManipulations) {
-                        switch (manipulation.type) {
-                            case SET ->
-                                    orderBook.setVirtualOrderBookVolume(manipulation.backendStartPrice, manipulation.volume);
-                            case ADD ->
-                                    orderBook.addVirtualOrderBookVolume(manipulation.backendStartPrice, manipulation.volume);
-                        }
-                    }
-
-
-                    pluginData.clear();
-                    pluginData.lastFinalizeDurationNs = pluginData.performanceTrackWatch.stop();
+                pluginData.performanceTrackWatch.start();
+                // Placing orders
+                for (LimitOrder order : pluginData.nextLimitOrders) {
+                    market.placeOrder(order);
                 }
+                if(pluginData.nextCreatingMarketOrderVolume != 0)
+                    market.createAndPlaceBotMarketOrder(pluginData.nextCreatingMarketOrderVolume);
+
+                // Manipulating order book volume
+                OrderBook orderBook = market.getOrderBook();
+                for (MarketPluginInstanceData.VirtualOrderBookVolumeManipulationData manipulation : pluginData.virtualOrderBookVolumeManipulations) {
+                    switch (manipulation.type) {
+                        case SET:
+                                orderBook.setVirtualOrderBookVolume(manipulation.minPrice, manipulation.maxPrice, manipulation.volume);
+                                break;
+                        case ADD:
+                                orderBook.addVirtualOrderBookVolume(manipulation.minPrice, manipulation.maxPrice, manipulation.volume);
+                                break;
+                    }
+                }
+                for (MarketPluginInstanceData.VirtualOrderBookVolumeManipulationRealArrayData manipulation : pluginData.virtualOrderBookVolumeArrayManipulations) {
+                    switch (manipulation.type) {
+                        case SET:
+                                orderBook.setVirtualOrderBookVolume(manipulation.backendStartPrice, manipulation.volume);
+                                break;
+                        case ADD:
+                                orderBook.addVirtualOrderBookVolume(manipulation.backendStartPrice, manipulation.volume);
+                                break;
+                    }
+                }
+
+
+                pluginData.clear();
+                pluginData.lastFinalizeDurationNs = pluginData.performanceTrackWatch.stop();
+
             }
             lastFinalizeDurationNs = performanceTrackWatch.stop();
         }
@@ -473,11 +479,11 @@ public class ServerPluginManager {
                 if(pluginData == null)
                 {
                     MarketPlugin pluginInstance = PluginRegistry.createServerMarketPluginInstance(pluginTypeID);
-                    if(pluginInstance == null)
-                    {
-                        warn("Failed to load MarketPlugin with unknown ID '"+pluginTypeID+"' for market "+market.getTradingPair().getUltraShortDescription());
-                        continue;
-                    }
+                    //if(pluginInstance == null)
+                    //{
+                    //    warn("Failed to load MarketPlugin with unknown ID '"+pluginTypeID+"' for market "+market.getTradingPair().getUltraShortDescription());
+                    //    continue;
+                    //}
                     pluginData = new MarketPluginInstanceData(pluginInstance, this);
                     pluginsData.put(pluginTypeID, pluginData);
                     pluginData.plugin.setup_interal();
@@ -493,6 +499,10 @@ public class ServerPluginManager {
 
 
     private final Path saveFolder;
+
+    /**
+     * Group the plugins in the same chunks like the markets
+     */
     private final List<List<PluginMarket>> marketsDataChunks = new ArrayList<>();
     private final Map<TradingPair, PluginMarket> allMarketsData = new java.util.HashMap<>();
     private int marketUpdateChunkIndex = 0;

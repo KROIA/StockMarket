@@ -11,7 +11,7 @@ public class TargetPriceBotPlugin extends MarketPlugin {
 
     public static class Settings implements IPluginSettings
     {
-        private final class TAGS {
+        private static final class TAGS {
             public static final String VOLUME_SCALE = "volumeScale";
         }
         public float volumeScale = 1.0f;
@@ -20,6 +20,7 @@ public class TargetPriceBotPlugin extends MarketPlugin {
             buf.writeFloat(volumeScale);
         }
 
+        @Override
         public void decode(FriendlyByteBuf buf) {
             volumeScale = buf.readFloat();
         }
@@ -52,6 +53,12 @@ public class TargetPriceBotPlugin extends MarketPlugin {
     {
         return "A bot that tries to move the price towards a target price using a PID controller.";
     }
+
+    public TargetPriceBotPlugin()
+    {
+        setCustomSettings(settings);
+    }
+
     @Override
     public void encodeClientStreamData(FriendlyByteBuf buf) {
         buf.writeFloat(targetPrice);
@@ -59,7 +66,7 @@ public class TargetPriceBotPlugin extends MarketPlugin {
 
     @Override
     protected void setup() {
-        pluginInterface.setStreamPacketSendTickInterval(5);
+        getPluginInterface().setStreamPacketSendTickInterval(5);
     }
 
     @Override
@@ -101,11 +108,23 @@ public class TargetPriceBotPlugin extends MarketPlugin {
 
     @Override
     protected boolean saveToFilesystem(CompoundTag tag) {
-        return settings.save(tag);
+        CompoundTag customDataTag = new CompoundTag();
+        customDataTag.putFloat("targetPrice", targetPrice);
+
+        CompoundTag settingsTag  = new CompoundTag();
+        settings.save(settingsTag);
+
+        tag.put("customData", customDataTag);
+        tag.put("settings", settingsTag);
+        return true;
     }
 
     @Override
     protected boolean loadFromFilesystem(CompoundTag tag) {
-        return settings.load(tag);
+        CompoundTag customDataTag = tag.getCompound("customData");
+        targetPrice = customDataTag.getFloat("targetPrice");
+
+        CompoundTag settingsTag = customDataTag.getCompound("settings");
+        return settings.load(settingsTag);
     }
 }

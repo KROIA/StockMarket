@@ -3,10 +3,10 @@ package net.kroia.stockmarket.plugin.plugins.RandomWalkVolatility;
 import net.kroia.modutilities.ColorUtilities;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.TextBox;
-import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.plugin.base.ClientMarketPlugin;
 import net.kroia.stockmarket.plugin.base.ClientMarketPluginGuiElement;
+import net.kroia.stockmarket.plugin.base.IPluginSettings;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.minecraft.network.chat.Component;
 
@@ -20,7 +20,7 @@ public class RandomWalkVolatilityPluginGuiElement extends ClientMarketPluginGuiE
         public static final Component UPDATE_TIMER_MS_TOOLTIP = Component.translatable(PREFIX + "update_timer_ms.tooltip");
     }
 
-    public class RandomWalkGuiElement extends StockMarketGuiElement
+    public static class RandomWalkGuiElement extends StockMarketGuiElement
     {
         private final Label volatilityLabel;
         private final TextBox volatilityTextBox;
@@ -91,12 +91,10 @@ public class RandomWalkVolatilityPluginGuiElement extends ClientMarketPluginGuiE
             updateTimerMSTextBox.setText(Integer.toString(settings.updateTimerIntervallMS));
         }
 
-        public RandomWalkVolatilityPlugin.Settings getSettings()
+        public void getSettings(RandomWalkVolatilityPlugin.Settings settings)
         {
-            RandomWalkVolatilityPlugin.Settings settings = new RandomWalkVolatilityPlugin.Settings();
             settings.volatility = Math.max(0,(float) volatilityTextBox.getDouble());
             settings.updateTimerIntervallMS = Math.max(1,updateTimerMSTextBox.getInt());
-            return settings;
         }
     }
 
@@ -105,19 +103,30 @@ public class RandomWalkVolatilityPluginGuiElement extends ClientMarketPluginGuiE
     private int markerColor = ColorUtilities.getRGB(0,0,255);
     public RandomWalkVolatilityPluginGuiElement(ClientMarketPlugin plugin) {
         super(plugin);
+        this.guiElement = new RandomWalkGuiElement();
+        setCustomPluginWidget(this.guiElement);
     }
 
-    @Override
+    /*@Override
     protected GuiElement getCustomPluginWidget() {
         if(guiElement == null)
         {
             this.guiElement = new RandomWalkGuiElement();
         }
         return guiElement;
+    }*/
+
+
+    @Override
+    public void setCustomSettings(IPluginSettings settings) {
+        guiElement.setSettings((RandomWalkVolatilityPlugin.Settings)settings);
     }
 
-
-    public void setSettings(RandomWalkVolatilityPlugin.Settings settings)
+    @Override
+    public void getCustomSettings(IPluginSettings settings) {
+        guiElement.getSettings((RandomWalkVolatilityPlugin.Settings)settings);
+    }
+   /* public void setSettings(RandomWalkVolatilityPlugin.Settings settings)
     {
         guiElement.setSettings(settings);
     }
@@ -125,7 +134,7 @@ public class RandomWalkVolatilityPluginGuiElement extends ClientMarketPluginGuiE
     public RandomWalkVolatilityPlugin.Settings getSettings()
     {
         return guiElement.getSettings();
-    }
+    }*/
 
     @Override
     protected void drawInCandlestickChartArea(int chartWidth, int chartHeight) {
@@ -136,5 +145,7 @@ public class RandomWalkVolatilityPluginGuiElement extends ClientMarketPluginGuiE
     protected void drawInOrderbookChartArea(int chartWidth, int chartHeight) {
 
     }
+
+
 
 }
