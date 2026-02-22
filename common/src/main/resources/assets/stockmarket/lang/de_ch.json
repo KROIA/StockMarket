@@ -184,8 +184,10 @@
 
   "gui.stockmarket.market_settings_screen.title": "Market Einstellungs Fenster",
   "gui.stockmarket.market_settings_screen.save_button": "Speichere",
+  "gui.stockmarket.market_settings_screen.save_button.tooltip": "Speichert alli Plugins und die allgemeinä Marktistellige",
   "gui.stockmarket.market_settings_screen.back_button": "Zrugg",
   "gui.stockmarket.market_settings_screen.open_plugin_browser_button": "Verwendeti Plugins verwaltä",
+  "gui.stockmarket.market_settings_screen.open_plugin_browser_button.tooltip": "Öffnet de Plugin Browser um Plugins für de\nMarkt hinzu z füege oder z entferne",
   "gui.stockmarket.market_settings_screen.general.title": "Allgemeine Einstellungen",
   "gui.stockmarket.market_settings_screen.general.chart_reset": "Chart zurücksetzen",
   "gui.stockmarket.market_settings_screen.general.chart_reset.tooltip": "Löscht alli historischä Preisdatä.\nS Preis Diagramm wird uf dä aktuell Marktpreis gsetzt.",
@@ -255,7 +257,23 @@
    "gui.stockmarket.adjusted_default_price.tooltip": "{item_name} wör normalerwis\nfür {price} {currency} pro stuck ghandlet werdä.\nMit de aktuelle Istellige wird s Item für\n{value} {currency} pro stuck ghandlet.",
    "gui.stockmarket.trading_pair_already_selected.tooltip": "Handelspaar: {value} isch bereits usgwählt.\nDu chasch es nöd namal uswähle.",
 
-   "gui.stockmarket.plugin_browser_screen.title": "Plugins Browser",
+   "gui.stockmarket.target_price_bot_plugin_gui_element.volume_scale": "Volume Skalierung",
+   "gui.stockmarket.target_price_bot_plugin_gui_element.volume_scale.tooltip": "Definiert die skalierung des Handelsvolumens\nfür Market-Orders, um den Zielpreis zu erreichen.",
+   "gui.stockmarket.target_price_bot_plugin_gui_element.kp": "PID-Kp Wert",
+   "gui.stockmarket.target_price_bot_plugin_gui_element.kp.tooltip": "Proportional Faktor für die Zielpreisabweichung.",
+   "gui.stockmarket.target_price_bot_plugin_gui_element.ki": "PID-Ki Wert",
+   "gui.stockmarket.target_price_bot_plugin_gui_element.ki.tooltip": "Integrator Faktor für die Zielpreisabweichung.",
+   "gui.stockmarket.target_price_bot_plugin_gui_element.ibound": "I-Saturation",
+   "gui.stockmarket.target_price_bot_plugin_gui_element.ibound.tooltip": "Positive und negativer Grenzwert für den PID-Integrator",
+   "gui.stockmarket.target_price_bot_plugin_gui_element.kd": "PID-Kd Wert",
+   "gui.stockmarket.target_price_bot_plugin_gui_element.kd.tooltip": "Ableitungs-Faktor für die Zielpreisabweichung.",
+
+   "gui.stockmarket.random_walk_volatility_plugin_gui_element.volatility": "Volatilität",
+   "gui.stockmarket.random_walk_volatility_plugin_gui_element.volatility.tooltip": "Definiert die stärke der Volatilität\nGrössere Werte resultieren in stärkeren Preisschwankungen.",
+   "gui.stockmarket.random_walk_volatility_plugin_gui_element.update_timer_ms": "Update Timer Interval",
+   "gui.stockmarket.random_walk_volatility_plugin_gui_element.update_timer_ms.tooltip": "Interval in Millisekunden für\ndas updaten des neuen Zielpreises\nKleine Werte resultieren in schnelleren Zielpreisänderungen.\n",
+
+   "gui.stockmarket.plugin_browser_screen.title": "Plugin Browser",
    "gui.stockmarket.plugin_browser_screen.ok_button": "Awende",
    "gui.stockmarket.plugin_browser_screen.plugin_used_checkbox": "Verwendet",
    "gui.stockmarket.plugin_browser_screen.plugin_used_checkbox.tooltip": "Aktivier da Plugin dur achrüze"

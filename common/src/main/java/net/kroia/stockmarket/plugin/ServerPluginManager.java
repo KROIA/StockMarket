@@ -93,9 +93,19 @@ public class ServerPluginManager {
                 {
                     return marketData.market.getDefaultRealPrice();
                 }
+
                 @Override
                 public float getPrice() {
                     return marketData.currentPrice;
+                }
+
+                @Override
+                public float getPriceOf(TradingPair pair)
+                {
+                    IServerMarket market = BACKEND_INSTANCES.SERVER_MARKET_MANAGER.getMarket(pair);
+                    if(market == null)
+                        return 0.f;
+                    return market.getCurrentRealPrice();
                 }
 
                 @Override
@@ -111,7 +121,7 @@ public class ServerPluginManager {
                 }
 
                 @Override
-                public float getTargetPrice() {
+                public float getPreviousTargetPrice() {
                     return marketData.lastTargetPrice;
                 }
 
@@ -326,6 +336,8 @@ public class ServerPluginManager {
         public PluginMarket(IServerMarket market) {
             this.market = market;
             this.market.getOrderBook().setDefaultVirtualVolumeDistributionFunction(this::getDefaultVolumeDistribution);
+            //nextTargetPrice = market.getDefaultRealPrice();
+            lastTargetPrice = market.getDefaultRealPrice();
         }
         public void update()
         {
@@ -346,7 +358,7 @@ public class ServerPluginManager {
             {
                 if(pluginData.plugin.isPluginEnabled()) {
                     pluginData.performanceTrackWatch.start();
-                    pluginData.plugin.update_internal();
+                    pluginData.plugin.update_internal();    // Update the plugin
                     nextTargetPrice += pluginData.nextTargetPriceDelta;
                     pluginData.lastUpdateDurationNs = pluginData.performanceTrackWatch.stop();
                 }
@@ -598,7 +610,7 @@ public class ServerPluginManager {
     private final Path saveFolder;
 
     /**
-     * Group the plugins in the same chunks like the markets
+     * Group the plugins in the same chunks as the markets
      */
     private final List<List<PluginMarket>> marketsDataChunks = new ArrayList<>();
     private final Map<TradingPair, PluginMarket> allMarketsData = new java.util.HashMap<>();
@@ -702,16 +714,6 @@ public class ServerPluginManager {
         }
         marketData.createMarketPlugin(pluginID);
     }
-    public void setUsedMarketPlugins(TradingPair market, List<String> pluginIDs)
-    {
-        PluginMarket marketData = allMarketsData.get(market);
-        if(marketData == null)
-        {
-            error("Can't set MarketPlugins for unknown market: " + market.getUltraShortDescription());
-            return;
-        }
-        marketData.setUsedMarketPlugins(pluginIDs);
-    }
     public void createMarketPlugin(TradingPair market, PluginRegistry.MarketPluginRegistrationObject pluginReg)
     {
         PluginMarket marketData = allMarketsData.get(market);
@@ -721,6 +723,16 @@ public class ServerPluginManager {
             return;
         }
         marketData.createMarketPlugin(pluginReg.pluginTypeID);
+    }
+    public void setUsedMarketPlugins(TradingPair market, List<String> pluginIDs)
+    {
+        PluginMarket marketData = allMarketsData.get(market);
+        if(marketData == null)
+        {
+            error("Can't set MarketPlugins for unknown market: " + market.getUltraShortDescription());
+            return;
+        }
+        marketData.setUsedMarketPlugins(pluginIDs);
     }
 
     public int getPluginCount(TradingPair market)

@@ -186,33 +186,12 @@ public class DefaultOrderbookVolumeDistributionPlugin extends MarketPlugin {
         float[] newVolume = new float[editableRange.getB() - editableRange.getA()+1];
         for(int i=editableRange.getA(); i<=editableRange.getB(); i++)
         {
-            /*float targetAmount = getTargetAmount(market.convertBackendPriceToRealPrice(i));
-            float currentVal = orderBook.getVolume(i);
-            float scale = settings.volumeAccumulationRate;
-            if(Math.abs(currentVal) < Math.abs(targetAmount)*0.2f)
-            {
-                scale = settings.volumeFastAccumulationRate;
-            }else if(Math.abs(currentVal) > Math.abs(targetAmount))
-            {
-                scale = settings.volumeDecumulationRate;
-            }
-            if(currentVal<targetAmount)
-            {
-                float deltaAmount = (targetAmount-currentVal) * (float) deltaT * scale;
-                newVolume[i - editableRange.getA()] = Math.max(0,currentVal + deltaAmount);
-            }else if(currentVal>targetAmount)
-            {
-                float deltaAmount = (targetAmount-currentVal) * (float) deltaT * scale;
-                newVolume[i - editableRange.getA()] = Math.max(0,currentVal + deltaAmount);
-            }*/
-
             float targetAmount = getTargetAmount(pluginInterface.convertBackendPriceToRealPrice(i));
             float currentVal = orderBook.getVolume(i);
             if(currentVal < 0 && targetAmount > 0 || currentVal > 0 && targetAmount < 0)
             {
                 currentVal = 0;
                 newVolume[i - editableRange.getA()] = 0;
-                //virtualOrderVolumeDistribution.set(priceIndex, currentVal);
             }
 
             float scale = settings.volumeAccumulationRate;
@@ -236,47 +215,6 @@ public class DefaultOrderbookVolumeDistributionPlugin extends MarketPlugin {
             newVolume[i - editableRange.getA()] = currentVal + deltaAmount;
         }
         orderBook.setVolume(editableRange.getA(), newVolume);
-        /*Tuple<@NotNull Float,@NotNull  Float> editableRange = market.getOrderBook().getEditablePriceRange();
-        double deltaT = Math.min((currentMillis - lastMillis) / 1000.0, 1.0);
-        lastMillis = currentMillis;
-
-        float updateCount = 100;
-        float icrement = ((1+editableRange.getB() - editableRange.getA())/updateCount);
-        IMarketPluginInterface.OrderBookInterface orderBook = market.getOrderBook();
-        for(float i=editableRange.getA(); i<editableRange.getB(); i+=icrement)
-        {
-            float targetAmount = getTargetAmount(i);
-            float currentVal = orderBook.getVolume(i, i+icrement);
-            if((currentVal<targetAmount) || (currentVal>targetAmount)) {
-                if(currentVal < 0 && targetAmount > 0 || currentVal > 0 && targetAmount < 0)
-                {
-                    currentVal = 0;
-                    orderBook.setVolume(i, i+icrement, 0);
-                    //virtualOrderVolumeDistribution.set(priceIndex, currentVal);
-                }
-
-                float scale = settings.volumeAccumulationRate;
-
-                if(Math.abs(currentVal) < Math.abs(targetAmount)*0.2f)
-                {
-                    scale = settings.volumeFastAccumulationRate;
-                }else if(Math.abs(currentVal) > Math.abs(targetAmount))
-                {
-                    scale = settings.volumeDecumulationRate;
-                }
-                float deltaAmount = (targetAmount - currentVal) * (float) deltaT * scale;
-                if(deltaAmount < 0 && currentVal > 0 && -deltaAmount > currentVal)
-                {
-                    deltaAmount = -currentVal;
-                }
-                else if(deltaAmount > 0 && currentVal < 0 && deltaAmount > -currentVal)
-                {
-                    deltaAmount = -currentVal;
-                }
-                orderBook.addVolume(i, i+icrement, deltaAmount);
-                //virtualOrderVolumeDistribution.add(priceIndex, deltaAmount);
-            }
-        }*/
     }
     private void setToDefaultDistribution()
     {

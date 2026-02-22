@@ -184,8 +184,10 @@
 
   "gui.stockmarket.market_settings_screen.title": "Market Settings Screen",
   "gui.stockmarket.market_settings_screen.save_button": "Save",
+  "gui.stockmarket.market_settings_screen.save_button.tooltip": "Save all plugins and general market settings.",
   "gui.stockmarket.market_settings_screen.back_button": "Back",
   "gui.stockmarket.market_settings_screen.open_plugin_browser_button": "Manage used Plugins",
+  "gui.stockmarket.market_settings_screen.open_plugin_browser_button.tooltip": "Opens the Plugin Browser to add/remove plugins for this market.",
   "gui.stockmarket.market_settings_screen.general.title": "General Settings",
   "gui.stockmarket.market_settings_screen.general.chart_reset": "Reset Price chart",
   "gui.stockmarket.market_settings_screen.general.chart_reset.tooltip": "Resets the historical data for the market.\nThe chart will be reset to the current market price.",
@@ -258,13 +260,21 @@
 
   "gui.stockmarket.target_price_bot_plugin_gui_element.volume_scale": "Volume scale",
   "gui.stockmarket.target_price_bot_plugin_gui_element.volume_scale.tooltip": "Defines the scale of volume the bot uses\nto trade in order to reach the target price.",
+  "gui.stockmarket.target_price_bot_plugin_gui_element.kp": "PID-Kp value",
+  "gui.stockmarket.target_price_bot_plugin_gui_element.kp.tooltip": "Proportional scale of the target-price deviation.",
+  "gui.stockmarket.target_price_bot_plugin_gui_element.ki": "PID-Ki value",
+  "gui.stockmarket.target_price_bot_plugin_gui_element.ki.tooltip": "Integrator scale of the target-price deviation.",
+  "gui.stockmarket.target_price_bot_plugin_gui_element.ibound": "I-Saturation",
+  "gui.stockmarket.target_price_bot_plugin_gui_element.ibound.tooltip": "Positive and negative saturation value for the PID-Integrator",
+  "gui.stockmarket.target_price_bot_plugin_gui_element.kd": "PID-Kd value",
+  "gui.stockmarket.target_price_bot_plugin_gui_element.kd.tooltip": "Differential scale of the target-price deviation.",
 
   "gui.stockmarket.random_walk_volatility_plugin_gui_element.volatility": "Volatility",
   "gui.stockmarket.random_walk_volatility_plugin_gui_element.volatility.tooltip": "Defines how volatile the random walk is.\nHigher values result in a more volatile market.",
-  "gui.stockmarket.random_walk_volatility_plugin_gui_element.update_timer_ms": "Update Timer",
+  "gui.stockmarket.random_walk_volatility_plugin_gui_element.update_timer_ms": "Update Timer Interval",
   "gui.stockmarket.random_walk_volatility_plugin_gui_element.update_timer_ms.tooltip": "Interval in milliseconds for how\noften the bot will update the target price.\nLow values result in more frequent price changes.\n",
 
-  "gui.stockmarket.plugin_browser_screen.title": "Plugins Browser",
+  "gui.stockmarket.plugin_browser_screen.title": "Plugin Browser",
   "gui.stockmarket.plugin_browser_screen.ok_button": "Apply",
   "gui.stockmarket.plugin_browser_screen.plugin_used_checkbox": "In use",
   "gui.stockmarket.plugin_browser_screen.plugin_used_checkbox.tooltip": "Activate the plugin for the market by checking the checkbox."

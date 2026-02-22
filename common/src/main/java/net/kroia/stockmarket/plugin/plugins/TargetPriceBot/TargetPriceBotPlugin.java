@@ -13,21 +13,43 @@ public class TargetPriceBotPlugin extends MarketPlugin {
     {
         private static final class TAGS {
             public static final String VOLUME_SCALE = "volumeScale";
+            public static final String KP = "kp";
+            public static final String KI = "ki";
+            public static final String IBOUND = "iBound";
+            public static final String KD = "kd";
+
         }
         public float volumeScale = 1.0f;
+        public float kp = 0.1f;
+        public float ki = 0.1f;
+        public float iBound = 0.1f;
+        public float kd = 0.0f;
+
         @Override
         public void encode(FriendlyByteBuf buf) {
             buf.writeFloat(volumeScale);
+            buf.writeFloat(kp);
+            buf.writeFloat(ki);
+            buf.writeFloat(iBound);
+            buf.writeFloat(kd);
         }
 
         @Override
         public void decode(FriendlyByteBuf buf) {
             volumeScale = buf.readFloat();
+            kp = buf.readFloat();
+            ki = buf.readFloat();
+            iBound = buf.readFloat();
+            kd = buf.readFloat();
         }
 
         @Override
         public boolean save(CompoundTag tag) {
             tag.putFloat(TAGS.VOLUME_SCALE, volumeScale);
+            tag.putFloat(TAGS.KP, kp);
+            tag.putFloat(TAGS.KI, ki);
+            tag.putFloat(TAGS.IBOUND, iBound);
+            tag.putFloat(TAGS.KD, kd);
             return true;
         }
 
@@ -35,6 +57,14 @@ public class TargetPriceBotPlugin extends MarketPlugin {
         public boolean load(CompoundTag tag) {
             if(tag.contains(TAGS.VOLUME_SCALE))
                 volumeScale = tag.getFloat(TAGS.VOLUME_SCALE);
+            if(tag.contains(TAGS.KP))
+                kp = tag.getFloat(TAGS.KP);
+            if(tag.contains(TAGS.KI))
+                ki = tag.getFloat(TAGS.KI);
+            if(tag.contains(TAGS.IBOUND))
+                iBound = tag.getFloat(TAGS.IBOUND);
+            if(tag.contains(TAGS.KD))
+                kd = tag.getFloat(TAGS.KD);
             return true;
         }
     }
@@ -76,7 +106,7 @@ public class TargetPriceBotPlugin extends MarketPlugin {
             return;
         tickCounter = 0;
         IMarketPluginInterface pluginInterface = getPluginInterface();
-        targetPrice = pluginInterface.getTargetPrice();
+        targetPrice = pluginInterface.getPreviousTargetPrice();
         float currentPrice = pluginInterface.getPrice();
 
         float output = pid.update(targetPrice - currentPrice);
@@ -92,19 +122,19 @@ public class TargetPriceBotPlugin extends MarketPlugin {
         if(marketOrderAmount != 0)
         {
             pluginInterface.placeOrder(marketOrderAmount);
-            info("Placing order: " + marketOrderAmount + " (output: " + output + ", normalized: " + normalized +" , volumeToTarget: " + volumeToTarget + ")");
+            info("Placing order: " + marketOrderAmount + " (PID-OUT: " + output + ", normalized-order-size: " + normalized +" , volumeToTarget: " + volumeToTarget + ")");
         }
     }
 
-   /* @Override
-    protected void encodeSettings(FriendlyByteBuf buf) {
-        settings.encode(buf);
-    }
 
     @Override
     protected void decodeSettings(FriendlyByteBuf buf) {
-        settings.decode(buf);
-    }*/
+        super.decodeSettings(buf);
+        pid.setKP(settings.kp);
+        pid.setKI(settings.ki);
+        pid.setIBound(settings.iBound);
+        pid.setKD(settings.kd);
+    }
 
     @Override
     protected boolean saveToFilesystem(CompoundTag tag) {

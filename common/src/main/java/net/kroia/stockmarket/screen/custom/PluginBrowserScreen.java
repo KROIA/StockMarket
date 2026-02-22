@@ -83,7 +83,7 @@ public class PluginBrowserScreen extends StockMarketGuiScreen {
             int splitXPos = width / 4;
             pluginNameLabel.setBounds(padding,padding, splitXPos, 20);
             pluginUsedCheckBox.setBounds(padding,pluginNameLabel.getBottom(), splitXPos, 20);
-            pluginDescriptionLabel.setBounds(splitXPos,padding, width-splitXPos-padding, height-padding*2);
+            pluginDescriptionLabel.setBounds(splitXPos+2,padding, width-splitXPos-padding-2, height-padding*2);
         }
     }
 

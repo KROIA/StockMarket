@@ -38,8 +38,10 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
 
         public static final Component TITLE = Component.translatable(PREFIX + "title");
         public static final Component SAVE_BUTTON = Component.translatable(PREFIX + "save_button");
+        public static final Component SAVE_BUTTON_TOOLTIP = Component.translatable(PREFIX + "save_button.tooltip");
         public static final Component BACK_BUTTON = Component.translatable(PREFIX + "back_button");
         public static final Component OPEN_PLUGIN_BROWSER_BUTTON = Component.translatable(PREFIX + "open_plugin_browser_button");
+        public static final Component OPEN_PLUGIN_BROWSER_BUTTON_TOOLTIP = Component.translatable(PREFIX + "open_plugin_browser_button.tooltip");
 
 
         // GeneralGui
@@ -679,8 +681,10 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
         tradingPairView.setClickable(false);
 
         saveButton = new Button(TEXTS.SAVE_BUTTON.getString(), this::onSaveButtonClicked);
+        saveButton.setHoverTooltipSupplier(TEXTS.SAVE_BUTTON_TOOLTIP::getString);
         backButton = new Button(TEXTS.BACK_BUTTON.getString(), this::onClose);
         openPluginBrowserButton = new Button(TEXTS.OPEN_PLUGIN_BROWSER_BUTTON.getString(), this::onOpenPluginBrowserButtonClicked);
+        openPluginBrowserButton.setHoverTooltipSupplier(TEXTS.OPEN_PLUGIN_BROWSER_BUTTON_TOOLTIP::getString);
 
 
         pluginsListView = new VerticalListView();

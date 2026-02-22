@@ -296,7 +296,7 @@ public interface IServerMarket {
 
     /**
      * Gets the default price for the market.
-     * @return the default raw market price.
+     * @return the default real market price.
      */
     float getDefaultRealPrice();
 

@@ -47,6 +47,15 @@ public interface IMarketPluginInterface {
 
 
     /**
+     * Gets the current price of the specified trading pair market as a real price value.
+     * Already scaled using the internal scaling factor.
+     * @param pair for which market the price should be returned
+     * @return the current market price of the trading pair market
+     */
+    float getPriceOf(TradingPair pair);
+
+
+    /**
      * Converts the internal backend price to a real price value.
      * The backend price is an integer value used for calculations and storage.
      * The real price is a float value that is scaled using the internal scaling factor.
@@ -65,12 +74,12 @@ public interface IMarketPluginInterface {
     int convertRealPriceToBackendPrice(float realPrice);
 
     /**
-     * Gets the price value where the market is moving towards.
+     * Gets the target-price value where the market is moving towards.
      * This value must be secret from non-admin players.
-     * It is the value used the last time the market was updated.
+     * It is the target-price value used the last time the market was updated.
      * @return The target price of the market.
      */
-    float getTargetPrice();
+    float getPreviousTargetPrice();
 
     /**
      * Adds the given delta to the target price.
