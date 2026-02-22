@@ -185,6 +185,7 @@
   "gui.stockmarket.market_settings_screen.title": "Market Einstellungs Fenster",
   "gui.stockmarket.market_settings_screen.save_button": "Speichere",
   "gui.stockmarket.market_settings_screen.back_button": "Zrugg",
+  "gui.stockmarket.market_settings_screen.open_plugin_browser_button": "Verwendeti Plugins verwaltä",
   "gui.stockmarket.market_settings_screen.general.title": "Allgemeine Einstellungen",
   "gui.stockmarket.market_settings_screen.general.chart_reset": "Chart zurücksetzen",
   "gui.stockmarket.market_settings_screen.general.chart_reset.tooltip": "Löscht alli historischä Preisdatä.\nS Preis Diagramm wird uf dä aktuell Marktpreis gsetzt.",
@@ -252,8 +253,11 @@
    "gui.stockmarket.default_price_adjustment_widget.old_price_axis_label": "Altä Standardpris",
    "gui.stockmarket.default_price_adjustment_widget.new_price_axis_label": "Neuä Standardpris",
    "gui.stockmarket.adjusted_default_price.tooltip": "{item_name} wör normalerwis\nfür {price} {currency} pro stuck ghandlet werdä.\nMit de aktuelle Istellige wird s Item für\n{value} {currency} pro stuck ghandlet.",
-   "gui.stockmarket.trading_pair_already_selected.tooltip": "Handelspaar: {value} isch bereits usgwählt.\nDu chasch es nöd namal uswähle."
+   "gui.stockmarket.trading_pair_already_selected.tooltip": "Handelspaar: {value} isch bereits usgwählt.\nDu chasch es nöd namal uswähle.",
 
-
+   "gui.stockmarket.plugin_browser_screen.title": "Plugins Browser",
+   "gui.stockmarket.plugin_browser_screen.ok_button": "Awende",
+   "gui.stockmarket.plugin_browser_screen.plugin_used_checkbox": "Verwendet",
+   "gui.stockmarket.plugin_browser_screen.plugin_used_checkbox.tooltip": "Aktivier da Plugin dur achrüze"
 
  }

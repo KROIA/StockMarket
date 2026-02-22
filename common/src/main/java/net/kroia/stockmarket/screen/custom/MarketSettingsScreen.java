@@ -24,7 +24,6 @@ import net.minecraft.world.entity.player.Player;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.function.Consumer;
 
 public class MarketSettingsScreen extends StockMarketGuiScreen {
@@ -40,6 +39,7 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
         public static final Component TITLE = Component.translatable(PREFIX + "title");
         public static final Component SAVE_BUTTON = Component.translatable(PREFIX + "save_button");
         public static final Component BACK_BUTTON = Component.translatable(PREFIX + "back_button");
+        public static final Component OPEN_PLUGIN_BROWSER_BUTTON = Component.translatable(PREFIX + "open_plugin_browser_button");
 
 
         // GeneralGui
@@ -655,11 +655,14 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
     private final TradingPairView tradingPairView;
     private final Button saveButton;
     private final Button backButton;
+    private final Button openPluginBrowserButton;
     private final ListView pluginsListView;
     GeneralGuiElement generalGuiElement;
+    PluginBrowserScreen  pluginBrowserScreen = null;
     //private final VirtualOderBookGuiElement virtualOrderBookGuiElement;
     //private final BotGuiElement botGuiElement;
     private final List<ClientMarketPlugin> plugins = new ArrayList<>();
+    Consumer<ServerMarketSettingsData> onSaveCallback;
 
     private final TimerMillis updateTimer;
     public int priceScaleFactor = 1;
@@ -667,29 +670,17 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
         super(TEXTS.TITLE);
         setGuiScale(0.5f);
         this.parentScreen = parent;
+        this.onSaveCallback = onSave;
 
         tradingChart = new TradingChartWidget();
         //tradingChart.enableBotTargetPriceDisplay(true);
 
         tradingPairView = new TradingPairView();
+        tradingPairView.setClickable(false);
 
-        saveButton = new Button(TEXTS.SAVE_BUTTON.getString(), () -> {
-            ServerMarketSettingsData settings = getSettings();
-
-            for(ClientMarketPlugin plugin : plugins)
-            {
-                if(settings != null) {
-                    plugin.saveSettings();
-                }
-            }
-            if(settings != null)
-            {
-                onSave.accept(settings);
-            }
-            //onClose();
-        });
+        saveButton = new Button(TEXTS.SAVE_BUTTON.getString(), this::onSaveButtonClicked);
         backButton = new Button(TEXTS.BACK_BUTTON.getString(), this::onClose);
-
+        openPluginBrowserButton = new Button(TEXTS.OPEN_PLUGIN_BROWSER_BUTTON.getString(), this::onOpenPluginBrowserButtonClicked);
 
 
         pluginsListView = new VerticalListView();
@@ -711,6 +702,7 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
         addElement(tradingPairView);
         addElement(saveButton);
         addElement(backButton);
+        addElement(openPluginBrowserButton);
         addElement(tradingChart);
         addElement(pluginsListView);
 
@@ -750,17 +742,51 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
         saveButton.setBounds(tradingPairView.getRight()+spacing, tradingPairView.getTop(), (width-chartWidth) / 3 - spacing, 20);
         backButton.setBounds(saveButton.getRight() + spacing, saveButton.getTop(), width - saveButton.getRight(), 20);
 
+
         generalGuiElement.setBounds(tradingPairView.getLeft(), tradingPairView.getBottom() + spacing, (width-chartWidth) - spacing, generalGuiElement.getHeight());
-        pluginsListView.setBounds(generalGuiElement.getLeft(), generalGuiElement.getBottom() + spacing, generalGuiElement.getWidth(), height - generalGuiElement.getBottom());
+
+        openPluginBrowserButton.setBounds(generalGuiElement.getLeft(), generalGuiElement.getBottom() + spacing, generalGuiElement.getWidth(), 20);
+        pluginsListView.setBounds(openPluginBrowserButton.getLeft(), openPluginBrowserButton.getBottom(), openPluginBrowserButton.getWidth(), getHeight() - openPluginBrowserButton.getBottom() - padding);
+    }
+
+    private void onSaveButtonClicked()
+    {
+        ServerMarketSettingsData settings = getSettings();
+        if(settings == null)
+            return;
+
+        for(ClientMarketPlugin plugin : plugins)
+        {
+            plugin.saveSettings();
+        }
+        onSaveCallback.accept(settings);
+    }
+    private void onOpenPluginBrowserButtonClicked()
+    {
+        TradingPair pair = tradingPairView.getTradingPair();
+        if(pair == null)
+            return;
+        pluginBrowserScreen = new PluginBrowserScreen(pair, this::onPluginBrowserChangesApplyed, this);
+        setScreen(pluginBrowserScreen);
+    }
+    private void onPluginBrowserChangesApplyed()
+    {
+        getSelectedMarket().requestGetMarketSettings(
+                (settingsData -> {
+                    if (settingsData != null) {
+                        setSettings(settingsData);
+                    }
+                }));
+        if(pluginBrowserScreen != null)
+        {
+            pluginBrowserScreen.close();
+            pluginBrowserScreen = null;
+        }
     }
 
     public void setSettings(ServerMarketSettingsData settings)
     {
         //this.serverMarketSettingsData = settings;
-        for(ClientMarketPlugin plugin : plugins)
-            plugin.close_internal();
-        plugins.clear();
-        pluginsListView.removeChilds();
         if(settings != null)
         {
             priceScaleFactor = settings.priceScaleFactor;
@@ -770,21 +796,7 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
                 tradingPairView.setTradingPair(tradingPair);
                 generalGuiElement.selectMarket(tradingPair);
 
-                BACKEND_INSTANCES.CLIENT_PLUGIN_MANAGER.requestMarketPluginTypes(tradingPair, (pluginTypeList)->
-                {
-                    Map<String, ClientMarketPlugin> plugins = BACKEND_INSTANCES.CLIENT_PLUGIN_MANAGER.getMarketPlugins(tradingPair);
-                    for(ClientMarketPlugin plugin : plugins.values())
-                    {
-                        ClientMarketPluginGuiElement element = plugin.getSettingsGuiElement_internal();
-                        if(element != null)
-                        {
-                            this.plugins.add(plugin);
-                            pluginsListView.addChild(element);
-                            element.setChartWidget(tradingChart);
-                            plugin.setup_interal();
-                        }
-                    }
-                });
+                updatePluginsListView();
                 //virtualOrderBookGuiElement.selectMarket(tradingPair);
                 //botGuiElement.selectMarket(tradingPair);
             }
@@ -860,6 +872,120 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
         {
             instance.getSelectedMarket().requestTradingViewData(0, instance.tradingChart.getMaxCandleCount(), 0,0,500,true ,instance.tradingChart::updateView);
         }
+    }
+
+    private void updatePluginsListView()
+    {
+        for(ClientMarketPlugin plugin : plugins)
+            plugin.close_internal();
+        plugins.clear();
+        pluginsListView.removeChilds();
+        TradingPair tradingPair = getSelectedMarket().getTradingPair();
+
+        BACKEND_INSTANCES.CLIENT_PLUGIN_MANAGER.requestMarketPluginTypes(tradingPair, (pluginTypeList)->
+        {
+            List<ClientMarketPlugin> plugins = BACKEND_INSTANCES.CLIENT_PLUGIN_MANAGER.getMarketPlugins(tradingPair);
+            for(ClientMarketPlugin plugin : plugins)
+            {
+                ClientMarketPluginGuiElement element = plugin.getSettingsGuiElement_internal();
+                if(element != null)
+                {
+                    this.plugins.add(plugin);
+                    pluginsListView.addChild(element);
+                    element.setMoveUpDownCallbacks(this::movePluginUp, this::movePluginDown);
+                    element.setChartWidget(tradingChart);
+                    plugin.setup_interal();
+                }
+            }
+        });
+    }
+
+    private void movePluginUp(ClientMarketPluginGuiElement guiElement)
+    {
+        TradingPair tradingPair = getSelectedMarket().getTradingPair();
+
+        List<GuiElement> elements = pluginsListView.getChilds();
+        int currentIndex = elements.indexOf(guiElement);
+        if(currentIndex == -1)
+            return;
+
+        List<String> sortedPluginIDs = new ArrayList<>();
+        for(int i = 0; i<elements.size(); i++)
+        {
+            if(i == currentIndex-1 && currentIndex > 0)
+            {
+                sortedPluginIDs.add(guiElement.getPlugin().getPluginTypeID());
+                sortedPluginIDs.add(((ClientMarketPluginGuiElement)elements.get(i)).getPlugin().getPluginTypeID());
+                i++;
+            }
+            else
+                sortedPluginIDs.add(((ClientMarketPluginGuiElement)elements.get(i)).getPlugin().getPluginTypeID());
+        }
+
+        BACKEND_INSTANCES.CLIENT_PLUGIN_MANAGER.requestSetMarketPluginTypes(tradingPair, sortedPluginIDs, (success)->
+        {
+            if(!success)
+                error("Can't update order of market plugins");
+            else
+                updatePluginsListView();
+        });
+
+        //updatePluginsListView();
+
+
+
+        /*
+        List<GuiElement> elements = pluginsListView.getChilds();
+        List<GuiElement> newElements = new ArrayList<>();
+        int currentIndex = elements.indexOf(guiElement);
+
+        if(currentIndex == -1)
+            return;
+        elements.remove(currentIndex);
+        for(int i = 0; i<elements.size(); i++)
+        {
+            if(i == currentIndex-1)
+            {
+                newElements.add(guiElement);
+            }
+            newElements.add(elements.get(i));
+        }
+        pluginsListView.removeChilds();
+        for(GuiElement element : newElements)
+        {
+            pluginsListView.addChild(element);
+        }
+        */
+    }
+    private void movePluginDown(ClientMarketPluginGuiElement guiElement)
+    {
+        TradingPair tradingPair = getSelectedMarket().getTradingPair();
+
+        List<GuiElement> elements = pluginsListView.getChilds();
+        int currentIndex = elements.indexOf(guiElement);
+        if(currentIndex == -1)
+            return;
+
+        List<String> sortedPluginIDs = new ArrayList<>();
+        for(int i = 0; i<elements.size(); i++)
+        {
+            if(i == currentIndex && currentIndex < elements.size() - 1)
+            {
+                sortedPluginIDs.add(((ClientMarketPluginGuiElement)elements.get(i+1)).getPlugin().getPluginTypeID());
+                sortedPluginIDs.add(guiElement.getPlugin().getPluginTypeID());
+                i++;
+            }
+            else
+                sortedPluginIDs.add(((ClientMarketPluginGuiElement)elements.get(i)).getPlugin().getPluginTypeID());
+        }
+
+        BACKEND_INSTANCES.CLIENT_PLUGIN_MANAGER.requestSetMarketPluginTypes(tradingPair, sortedPluginIDs, (success)->
+        {
+            if(!success)
+                error("Can't update order of market plugins");
+            else
+                updatePluginsListView();
+        });
     }
 
     public static float getInRange(float value, float min, float max) {

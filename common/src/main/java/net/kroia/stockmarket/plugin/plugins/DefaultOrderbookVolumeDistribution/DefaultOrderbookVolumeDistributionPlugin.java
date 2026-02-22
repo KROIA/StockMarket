@@ -184,7 +184,7 @@ public class DefaultOrderbookVolumeDistributionPlugin extends MarketPlugin {
 
         IMarketPluginInterface.OrderBookInterface orderBook = pluginInterface.getOrderBook();
         float[] newVolume = new float[editableRange.getB() - editableRange.getA()+1];
-        for(int i=editableRange.getA(); i<editableRange.getB()+1; i++)
+        for(int i=editableRange.getA(); i<=editableRange.getB(); i++)
         {
             /*float targetAmount = getTargetAmount(market.convertBackendPriceToRealPrice(i));
             float currentVal = orderBook.getVolume(i);

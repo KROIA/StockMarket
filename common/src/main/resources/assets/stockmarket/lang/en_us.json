@@ -185,6 +185,7 @@
   "gui.stockmarket.market_settings_screen.title": "Market Settings Screen",
   "gui.stockmarket.market_settings_screen.save_button": "Save",
   "gui.stockmarket.market_settings_screen.back_button": "Back",
+  "gui.stockmarket.market_settings_screen.open_plugin_browser_button": "Manage used Plugins",
   "gui.stockmarket.market_settings_screen.general.title": "General Settings",
   "gui.stockmarket.market_settings_screen.general.chart_reset": "Reset Price chart",
   "gui.stockmarket.market_settings_screen.general.chart_reset.tooltip": "Resets the historical data for the market.\nThe chart will be reset to the current market price.",
@@ -261,8 +262,12 @@
   "gui.stockmarket.random_walk_volatility_plugin_gui_element.volatility": "Volatility",
   "gui.stockmarket.random_walk_volatility_plugin_gui_element.volatility.tooltip": "Defines how volatile the random walk is.\nHigher values result in a more volatile market.",
   "gui.stockmarket.random_walk_volatility_plugin_gui_element.update_timer_ms": "Update Timer",
-  "gui.stockmarket.random_walk_volatility_plugin_gui_element.update_timer_ms.tooltip": "Interval in milliseconds for how\noften the bot will update the target price.\nLow values result in more frequent price changes.\n"
+  "gui.stockmarket.random_walk_volatility_plugin_gui_element.update_timer_ms.tooltip": "Interval in milliseconds for how\noften the bot will update the target price.\nLow values result in more frequent price changes.\n",
 
+  "gui.stockmarket.plugin_browser_screen.title": "Plugins Browser",
+  "gui.stockmarket.plugin_browser_screen.ok_button": "Apply",
+  "gui.stockmarket.plugin_browser_screen.plugin_used_checkbox": "In use",
+  "gui.stockmarket.plugin_browser_screen.plugin_used_checkbox.tooltip": "Activate the plugin for the market by checking the checkbox."
 
 
 }

@@ -185,6 +185,7 @@
   "gui.stockmarket.market_settings_screen.title": "Market Einstellungs Fenster",
   "gui.stockmarket.market_settings_screen.save_button": "Speicheren",
   "gui.stockmarket.market_settings_screen.back_button": "Zurück",
+  "gui.stockmarket.market_settings_screen.open_plugin_browser_button": "Verwendete Plugins verwalten",
   "gui.stockmarket.market_settings_screen.general.title": "Allgemeine Einstellungen",
   "gui.stockmarket.market_settings_screen.general.chart_reset": "Chart zurücksetzen",
   "gui.stockmarket.market_settings_screen.general.chart_reset.tooltip": "Setzt das Preis Diagramm zurück,\nindem alle historischen Preisdaten gelöscht werden.\nDas Diagramm wird auf den aktuellen Marktpreis gesetzt.",
@@ -252,7 +253,13 @@
   "gui.stockmarket.default_price_adjustment_widget.old_price_axis_label": "Alter Standardpreis",
   "gui.stockmarket.default_price_adjustment_widget.new_price_axis_label": "Neuer Standardpreis",
   "gui.stockmarket.adjusted_default_price.tooltip": "{item_name} würde normalerweise\nfür {price} {currency} pro stuck gehandelt werden.\nMit den aktuellen Einstellungen wird das Item für\n{value} {currency} pro stuck gehandelt.",
-  "gui.stockmarket.trading_pair_already_selected.tooltip": "Handelspaar: {value} ist bereits ausgewählt.\nDu kannst es nicht erneut auswählen."
+  "gui.stockmarket.trading_pair_already_selected.tooltip": "Handelspaar: {value} ist bereits ausgewählt.\nDu kannst es nicht erneut auswählen.",
+
+  "gui.stockmarket.plugin_browser_screen.title": "Plugins Browser",
+  "gui.stockmarket.plugin_browser_screen.ok_button": "Anwenden",
+  "gui.stockmarket.plugin_browser_screen.plugin_used_checkbox": "Verwendet",
+  "gui.stockmarket.plugin_browser_screen.plugin_used_checkbox.tooltip": "Aktiviere das Plugin durch ankreuzen"
+
 
 
 }

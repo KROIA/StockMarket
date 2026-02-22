@@ -342,40 +342,41 @@ public class ManagementScreen extends StockMarketGuiScreen {
         }
         private void onMarketSettingsButtonClicked()
         {
-            if(tradingPair != null) {
-                marketSettingsScreen = new MarketSettingsScreen(parentScreen, (settings)->
-                {
-                    if(settings != null) {
-                        currentMarketSettingsData = settings;
-                        getSelectedMarket().requestSetMarketSettings(settings, (success) -> {
-                            if (success) {
-                                getSelectedMarket().requestGetMarketSettings(
-                                        (settingsData -> {
-                                            if (settingsData != null) {
-                                                setCurrentTradingPairMarketSettings(settingsData);
-                                                marketSettingsScreen.setSettings(settingsData);
-                                            }
-                                        }));
-                            }
-                        });
-                    }
-                });
-                if (currentMarketSettingsData != null) {
-                    if(getSelectedMarket() != null)
-                        getSelectedMarket().requestGetMarketSettings(
-                                (settingsData -> {
-                                    if (settingsData != null) {
-                                        marketSettingsScreen.setSettings(settingsData);
-                                        minecraft.setScreen(marketSettingsScreen);
-                                    }
-                                }));
+            if(tradingPair == null)
+                return;
+            marketSettingsScreen = new MarketSettingsScreen(parentScreen, (settings)->
+            {
+                if(settings != null) {
+                    currentMarketSettingsData = settings;
+                    getSelectedMarket().requestSetMarketSettings(settings, (success) -> {
+                        if (success) {
+                            getSelectedMarket().requestGetMarketSettings(
+                                    (settingsData -> {
+                                        if (settingsData != null) {
+                                            setCurrentTradingPairMarketSettings(settingsData);
+                                            marketSettingsScreen.setSettings(settingsData);
+                                        }
+                                    }));
+                        }
+                    });
                 }
-                else
-                {
-                    marketSettingsScreen.setSettings(currentMarketSettingsData);
-                    minecraft.setScreen(marketSettingsScreen);
-                }
+            });
+            if (currentMarketSettingsData != null) {
+                if(getSelectedMarket() != null)
+                    getSelectedMarket().requestGetMarketSettings(
+                            (settingsData -> {
+                                if (settingsData != null) {
+                                    marketSettingsScreen.setSettings(settingsData);
+                                    minecraft.setScreen(marketSettingsScreen);
+                                }
+                            }));
             }
+            else
+            {
+                marketSettingsScreen.setSettings(currentMarketSettingsData);
+                minecraft.setScreen(marketSettingsScreen);
+            }
+
         }
         private void onMarketOpenCheckBoxChanged(Boolean isOpen)
         {

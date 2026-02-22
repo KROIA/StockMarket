@@ -51,13 +51,13 @@ public class PluginTypesRequest extends StockMarketGenericRequest<Integer, Plugi
     public static class ResponseData implements INetworkPayloadConverter
     {
         public List<PluginInfo> marketPlugins;
-        public List<PluginInfo> globalPlugins;
+        //public List<PluginInfo> globalPlugins;
 
 
-        public ResponseData(List<PluginInfo> marketPlugins, List<PluginInfo> globalPlugins)
+        public ResponseData(List<PluginInfo> marketPlugins/*, List<PluginInfo> globalPlugins*/)
         {
             this.marketPlugins = marketPlugins;
-            this.globalPlugins = globalPlugins;
+         //   this.globalPlugins = globalPlugins;
         }
         private ResponseData()
         {
@@ -77,12 +77,12 @@ public class PluginTypesRequest extends StockMarketGenericRequest<Integer, Plugi
             {
                 marketPlugins.add(PluginInfo.fromBuf(buf));
             }
-            int globalSize = buf.readInt();
+            /*int globalSize = buf.readInt();
             globalPlugins = new java.util.ArrayList<>(globalSize);
             for(int i = 0; i < globalSize; i++)
             {
                 globalPlugins.add(PluginInfo.fromBuf(buf));
-            }
+            }*/
         }
 
         @Override
@@ -92,11 +92,11 @@ public class PluginTypesRequest extends StockMarketGenericRequest<Integer, Plugi
             {
                 info.encode(buf);
             }
-            buf.writeInt(globalPlugins.size());
+            /*buf.writeInt(globalPlugins.size());
             for(PluginInfo info : globalPlugins)
             {
                 info.encode(buf);
-            }
+            }*/
         }
     }
 
@@ -107,7 +107,7 @@ public class PluginTypesRequest extends StockMarketGenericRequest<Integer, Plugi
 
     public ResponseData handleOnServer(Integer input, ServerPlayer sender) {
         List<PluginInfo> marketPlugins = new java.util.ArrayList<>();
-        List<PluginInfo> globalPlugins = new java.util.ArrayList<>();
+        //List<PluginInfo> globalPlugins = new java.util.ArrayList<>();
 
         for(var plugin : PluginRegistry.getRegisteredMarketPlugins().values())
         {
@@ -118,7 +118,7 @@ public class PluginTypesRequest extends StockMarketGenericRequest<Integer, Plugi
         {
             globalPlugins.add(new PluginInfo(plugin.pluginTypeID, plugin.name, plugin.description));
         }*/
-        return new ResponseData(marketPlugins, globalPlugins);
+        return new ResponseData(marketPlugins/*, globalPlugins*/);
     }
 
     @Override

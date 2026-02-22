@@ -11,10 +11,7 @@ import net.kroia.stockmarket.networking.packet.server_sender.ClientServerManager
 import net.kroia.stockmarket.networking.packet.server_sender.update.OpenScreenPacket;
 import net.kroia.stockmarket.networking.packet.server_sender.update.SyncTradeItemsPacket;
 import net.kroia.stockmarket.networking.packet.server_sender.update.entity.SyncStockMarketBlockEntityPacket;
-import net.kroia.stockmarket.plugin.networking.MarketPluginNetworkStream;
-import net.kroia.stockmarket.plugin.networking.MarketPluginSettingsRequest;
-import net.kroia.stockmarket.plugin.networking.MarketPluginTypesRequest;
-import net.kroia.stockmarket.plugin.networking.PluginTypesRequest;
+import net.kroia.stockmarket.plugin.networking.*;
 
 public class StockMarketNetworking extends NetworkManager {
 
@@ -51,6 +48,7 @@ public class StockMarketNetworking extends NetworkManager {
     public static final MarketPluginTypesRequest MARKET_PLUGIN_TYPES_REQUEST = (MarketPluginTypesRequest) AsynchronousRequestResponseSystem.register(new MarketPluginTypesRequest());
     public static final MarketPluginSettingsRequest MARKET_PLUGIN_SETTINGS_REQUEST = (MarketPluginSettingsRequest) AsynchronousRequestResponseSystem.register(new MarketPluginSettingsRequest());
     public static final PluginTypesRequest PLUGIN_TYPES_REQUEST = (PluginTypesRequest) AsynchronousRequestResponseSystem.register(new PluginTypesRequest());
+    public static final UpdateUsedMarketPluginsRequest UPDATE_USED_MARKET_PLUGINS_REQUEST = (UpdateUsedMarketPluginsRequest) AsynchronousRequestResponseSystem.register(new UpdateUsedMarketPluginsRequest());
     public static final MarketPluginNetworkStream MARKET_PLUGIN_NETWORK_STREAM = (MarketPluginNetworkStream) StreamSystem.register(new MarketPluginNetworkStream());
 
 

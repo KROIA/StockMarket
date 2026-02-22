@@ -212,8 +212,9 @@ public class StockMarketModBackend implements StockMarketAPI {
     private static void onServerTick(MinecraftServer server)
     {
         INSTANCES.SERVER_PLUGIN_MANAGER.update();
-        INSTANCES.SERVER_MARKET_MANAGER.onServerTick(server);
         INSTANCES.SERVER_PLUGIN_MANAGER.finalizeUpdate();
+        INSTANCES.SERVER_MARKET_MANAGER.onServerTick(server);
+
         INSTANCES.SERVER_DATA_HANDLER.tickUpdate();
     }
 

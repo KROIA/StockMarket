@@ -96,7 +96,7 @@ public class TargetPriceBotPlugin extends MarketPlugin {
         }
     }
 
-    @Override
+   /* @Override
     protected void encodeSettings(FriendlyByteBuf buf) {
         settings.encode(buf);
     }
@@ -104,7 +104,7 @@ public class TargetPriceBotPlugin extends MarketPlugin {
     @Override
     protected void decodeSettings(FriendlyByteBuf buf) {
         settings.decode(buf);
-    }
+    }*/
 
     @Override
     protected boolean saveToFilesystem(CompoundTag tag) {
@@ -124,7 +124,7 @@ public class TargetPriceBotPlugin extends MarketPlugin {
         CompoundTag customDataTag = tag.getCompound("customData");
         targetPrice = customDataTag.getFloat("targetPrice");
 
-        CompoundTag settingsTag = customDataTag.getCompound("settings");
+        CompoundTag settingsTag = tag.getCompound("settings");
         return settings.load(settingsTag);
     }
 }

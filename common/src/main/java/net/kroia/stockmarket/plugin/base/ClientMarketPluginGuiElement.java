@@ -9,10 +9,16 @@ import net.kroia.modutilities.gui.geometry.Rectangle;
 import net.kroia.stockmarket.screen.uiElements.chart.TradingChartWidget;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 
+import java.util.function.Consumer;
+
 public abstract class ClientMarketPluginGuiElement extends StockMarketGuiElement {
 
     private class GenericPluginSettingsWidget extends GuiElement
     {
+        private final Button moveUpButton;
+        private final Button moveDownButton;
+
+
         private final Button saveButton;
         private final Label nameLabel;
         private final CheckBox enableCheckBox;
@@ -22,6 +28,15 @@ public abstract class ClientMarketPluginGuiElement extends StockMarketGuiElement
             super();
             this.setEnableBackground(false);
             this.setEnableOutline(false);
+            moveUpButton = new Button("^", ()->{
+                if(onMoveUp != null)
+                    onMoveUp.accept(ClientMarketPluginGuiElement.this);
+            });
+            moveDownButton = new Button("v", ()->{
+                if(onMoveDown != null)
+                    onMoveDown.accept(ClientMarketPluginGuiElement.this);
+            });
+
             saveButton = new Button("Save", plugin::saveSettings);
             nameLabel = new Label();
             nameLabel.setAlignment(Alignment.CENTER);
@@ -30,6 +45,8 @@ public abstract class ClientMarketPluginGuiElement extends StockMarketGuiElement
             loggerCheckBox = new CheckBox("Debug");
             loggerCheckBox.setTextAlignment(Alignment.RIGHT);
 
+            addChild(moveUpButton);
+            addChild(moveDownButton);
             addChild(saveButton);
             addChild(nameLabel);
             addChild(enableCheckBox);
@@ -64,10 +81,12 @@ public abstract class ClientMarketPluginGuiElement extends StockMarketGuiElement
             int elementHeight = height/3;
             int saveButtonWidth = Math.min(50, width/3);
 
+            moveUpButton.setBounds(0,0,20,20);
+            moveDownButton.setBounds(moveUpButton.getLeft(),moveUpButton.getBottom(),moveUpButton.getWidth(),moveUpButton.getHeight());
             nameLabel.setBounds(0, 0, width, elementHeight);
             saveButton.setBounds((width-saveButtonWidth)/2, nameLabel.getBottom(), saveButtonWidth, elementHeight);
-            enableCheckBox.setBounds(0, saveButton.getBottom(), width/2, elementHeight);
-            loggerCheckBox.setBounds(enableCheckBox.getRight(), saveButton.getBottom(), width-width/2, elementHeight);
+            enableCheckBox.setBounds(25, saveButton.getBottom(), (width-25)/2, elementHeight);
+            loggerCheckBox.setBounds(enableCheckBox.getRight(), saveButton.getBottom(), width-enableCheckBox.getRight(), elementHeight);
         }
     }
 
@@ -82,6 +101,9 @@ public abstract class ClientMarketPluginGuiElement extends StockMarketGuiElement
     private Rectangle lastCandlestickChartArea = new Rectangle(0,0,0,0);
     private Rectangle lastOrderbookvolumeChartArea = new Rectangle(0,0,0,0);
 
+    private Consumer<ClientMarketPluginGuiElement> onMoveUp = null;
+    private Consumer<ClientMarketPluginGuiElement> onMoveDown = null;
+
     public ClientMarketPluginGuiElement(ClientMarketPlugin plugin) {
         super();
         this.plugin = plugin;
@@ -95,7 +117,17 @@ public abstract class ClientMarketPluginGuiElement extends StockMarketGuiElement
        //     throw new IllegalStateException("Custom plugin widget cannot be null");
        // addChild(customPluginWidget);
 
-        setHeight(genericSettingsWidget.getHeight() + customPluginWidget.getHeight()+ padding*2);
+
+    }
+    public ClientMarketPlugin getPlugin() {
+        return plugin;
+    }
+
+
+    public void setMoveUpDownCallbacks(Consumer<ClientMarketPluginGuiElement> upCallback, Consumer<ClientMarketPluginGuiElement> downCallback)
+    {
+        onMoveUp = upCallback;
+        onMoveDown = downCallback;
     }
 
 
@@ -104,6 +136,7 @@ public abstract class ClientMarketPluginGuiElement extends StockMarketGuiElement
             return;
         this.customPluginWidget  = customPluginWidget;
         addChild(this.customPluginWidget);
+        setHeight(genericSettingsWidget.getHeight() + customPluginWidget.getHeight()+ padding*2);
     }
     //protected abstract GuiElement getCustomPluginWidget();
 

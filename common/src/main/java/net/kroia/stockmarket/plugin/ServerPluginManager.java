@@ -19,6 +19,7 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.util.Tuple;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.nio.file.Path;
 import java.util.*;
@@ -301,7 +302,8 @@ public class ServerPluginManager {
     public class PluginMarket implements ServerSaveableChunked
     {
         private final IServerMarket market;
-        private final Map<String, MarketPluginInstanceData> pluginsData = new HashMap<>(); // pluginTypeID -> data
+        private final List<MarketPluginInstanceData> pluginsData = new ArrayList<>(); // pluginTypeID -> data
+        //private final Map<String, MarketPluginInstanceData> pluginsData = new HashMap<>(); // pluginTypeID -> data
 
         // Runtime data
         private final List<LimitOrder> buyOrders = new java.util.ArrayList<>();
@@ -340,7 +342,7 @@ public class ServerPluginManager {
             newOrders.addAll(orderBook.getIncommingOrders());
 
 
-            for(MarketPluginInstanceData pluginData : pluginsData.values())
+            for(MarketPluginInstanceData pluginData : pluginsData)
             {
                 if(pluginData.plugin.isPluginEnabled()) {
                     pluginData.performanceTrackWatch.start();
@@ -357,7 +359,7 @@ public class ServerPluginManager {
             performanceTrackWatch.start();
             lastTargetPrice = nextTargetPrice;
             nextTargetPrice = 0;
-            for(MarketPluginInstanceData pluginData : pluginsData.values())
+            for(MarketPluginInstanceData pluginData : pluginsData)
             {
                 if(!pluginData.plugin.isPluginEnabled())
                     continue;
@@ -405,7 +407,7 @@ public class ServerPluginManager {
         {
             defaultVolumeDistributionCalculationTrackWatch.start();
             float totalVolume = 0;
-            for(MarketPluginInstanceData pluginData : pluginsData.values())
+            for(MarketPluginInstanceData pluginData : pluginsData)
             {
                 if(pluginData.volumeDistributionFunction != null && pluginData.plugin.isPluginEnabled())
                 {
@@ -416,18 +418,83 @@ public class ServerPluginManager {
             return totalVolume;
         }
 
-        public void createMarketPlugin(String pluginID)
+        @Nullable
+        public MarketPluginInstanceData createMarketPlugin(String pluginID)
         {
             // Check if pluginID already exists
-            if(pluginsData.containsKey(pluginID))
+            if(pluginExists(pluginID))
             {
                 warn("MarketPlugin with ID '"+pluginID+"' already exists for market "+market.getTradingPair().getUltraShortDescription());
-                return;
+                return null;
             }
             MarketPlugin pluginInstance = PluginRegistry.createServerMarketPluginInstance(pluginID);
             MarketPluginInstanceData instanceData = new MarketPluginInstanceData(pluginInstance, this);
-            pluginsData.put(pluginID, instanceData);
+            pluginsData.add(instanceData);
             instanceData.plugin.setup_interal();
+            return instanceData;
+        }
+
+        public void removeMarketPlugin(String pluginID)
+        {
+            int index = getPluginIndex(pluginID);
+            if(index == -1)
+                return;
+            MarketPluginInstanceData  pluginInstance = pluginsData.remove(index);
+            pluginInstance.plugin.setPluginEnabled(false);
+        }
+
+
+        /**
+         * - Removes existing plugins if they are not contained in the given pluginIDs list
+         * - Creates new plugin instances if they are not already existing.
+         * @param pluginIDs
+         */
+        public void setUsedMarketPlugins(List<String> pluginIDs)
+        {
+            Set<String> currentlyUsedPlugins = new HashSet<>();
+            for(MarketPluginInstanceData pluginData : pluginsData)
+            {
+                currentlyUsedPlugins.add(pluginData.plugin.getPluginTypeID());
+            }
+
+            // Remove plugins that are not in pluginIDs list
+            for(String currentlyUsed : currentlyUsedPlugins)
+            {
+                if(!pluginIDs.contains(currentlyUsed))
+                {
+                    removeMarketPlugin(currentlyUsed);
+                }
+            }
+
+            // Create plugins
+            for(String pluginID : pluginIDs)
+            {
+                if(!currentlyUsedPlugins.contains(pluginID))
+                {
+                    MarketPluginInstanceData createdPlugin = createMarketPlugin(pluginID);
+
+                    if(createdPlugin != null) {
+                        // Disable new created plugins so they do not impact the market until they are enabled
+                        createdPlugin.plugin.setPluginEnabled(false);
+                    }
+                }
+            }
+
+            // Sort the plugins according to the same order of the pluginIDs
+            List<MarketPluginInstanceData> oldPluginData = new ArrayList<>(pluginsData);
+            pluginsData.clear();
+            for(String pluginID : pluginIDs)
+            {
+                for(MarketPluginInstanceData pluginInstance : oldPluginData)
+                {
+                    if(pluginID.compareTo(pluginInstance.plugin.getPluginTypeID()) == 0)
+                    {
+                        pluginsData.add(pluginInstance);
+                        break;
+                    }
+                }
+            }
+
         }
         public int getPluginCount()
         {
@@ -436,20 +503,50 @@ public class ServerPluginManager {
 
         boolean pluginExists(String pluginTypeID)
         {
-            return pluginsData.containsKey(pluginTypeID);
+            int index = getPluginIndex(pluginTypeID);
+            return index >= 0;
+        }
+        int getPluginIndex(String pluginTypeID)
+        {
+            int index = 0;
+            for(MarketPluginInstanceData pluginData : pluginsData)
+            {
+                if(pluginData.plugin.getPluginTypeID().equals(pluginTypeID))
+                {
+                    return index;
+                }
+                index++;
+            }
+            return -1;
+        }
+        MarketPluginInstanceData getPlugin(int index)
+        {
+            if(index >= 0 && index < pluginsData.size())
+            {
+                return pluginsData.get(index);
+            }
+            return null;
         }
         MarketPlugin getPlugin(String pluginTypeID)
         {
-            MarketPluginInstanceData data = pluginsData.get(pluginTypeID);
+            MarketPluginInstanceData data = getPlugin(getPluginIndex(pluginTypeID));
             if(data == null)
                 return null;
             return data.plugin;
         }
 
+        public List<String> getPluginTypes()
+        {
+            List<String> types = new ArrayList<>();
+            for(MarketPluginInstanceData data :  pluginsData)
+                types.add(data.plugin.getPluginTypeID());
+            return types;
+        }
+
         @Override
         public boolean save(Map<String, ListTag> listTags) {
             ListTag marketTag = new ListTag();
-            for(MarketPluginInstanceData pluginData : pluginsData.values())
+            for(MarketPluginInstanceData pluginData : pluginsData)
             {
                 CompoundTag pluginTag = new CompoundTag();
                 pluginTag.putString("pluginTypeID", pluginData.plugin.getPluginTypeID());
@@ -475,7 +572,7 @@ public class ServerPluginManager {
                 if(!pluginTag.contains("pluginTypeID"))
                     continue;
                 String pluginTypeID = pluginTag.getString("pluginTypeID");
-                MarketPluginInstanceData pluginData = pluginsData.get(pluginTypeID);
+                MarketPluginInstanceData pluginData = getPlugin(getPluginIndex(pluginTypeID));
                 if(pluginData == null)
                 {
                     MarketPlugin pluginInstance = PluginRegistry.createServerMarketPluginInstance(pluginTypeID);
@@ -485,7 +582,7 @@ public class ServerPluginManager {
                     //    continue;
                     //}
                     pluginData = new MarketPluginInstanceData(pluginInstance, this);
-                    pluginsData.put(pluginTypeID, pluginData);
+                    pluginsData.add(pluginData);
                     pluginData.plugin.setup_interal();
                 }
                 pluginData.load(pluginTag);
@@ -605,6 +702,16 @@ public class ServerPluginManager {
         }
         marketData.createMarketPlugin(pluginID);
     }
+    public void setUsedMarketPlugins(TradingPair market, List<String> pluginIDs)
+    {
+        PluginMarket marketData = allMarketsData.get(market);
+        if(marketData == null)
+        {
+            error("Can't set MarketPlugins for unknown market: " + market.getUltraShortDescription());
+            return;
+        }
+        marketData.setUsedMarketPlugins(pluginIDs);
+    }
     public void createMarketPlugin(TradingPair market, PluginRegistry.MarketPluginRegistrationObject pluginReg)
     {
         PluginMarket marketData = allMarketsData.get(market);
@@ -641,7 +748,7 @@ public class ServerPluginManager {
         {
             return false;
         }
-        MarketPluginInstanceData pluginData = marketData.pluginsData.get(pluginTypeID);
+        MarketPluginInstanceData pluginData = marketData.getPlugin(marketData.getPluginIndex(pluginTypeID));
         if(pluginData == null)
         {
             return false;
@@ -658,7 +765,7 @@ public class ServerPluginManager {
         {
             return null;
         }
-        return marketData.pluginsData.get(pluginTypeID);
+        return marketData.getPlugin(marketData.getPluginIndex(pluginTypeID));
     }
     public List<String> getPluginTypes(TradingPair market)
     {
@@ -667,7 +774,7 @@ public class ServerPluginManager {
         {
             return Collections.emptyList();
         }
-        return new ArrayList<>(marketData.pluginsData.keySet());
+        return marketData.getPluginTypes();
     }
     public MarketPlugin getMarketPlugin(TradingPair market, String pluginTypeID)
     {
@@ -676,7 +783,7 @@ public class ServerPluginManager {
         {
             return null;
         }
-        MarketPluginInstanceData pluginData = marketData.pluginsData.get(pluginTypeID);
+        MarketPluginInstanceData pluginData = marketData.getPlugin(marketData.getPluginIndex(pluginTypeID));
         if(pluginData == null)
         {
             return null;

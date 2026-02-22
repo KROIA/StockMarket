@@ -85,6 +85,7 @@ public abstract class ClientMarketPlugin extends Plugin{
             }
         });
     }
+
     public final void stopStream()
     {
         if(streamID == null)
@@ -188,6 +189,10 @@ public abstract class ClientMarketPlugin extends Plugin{
     public void close_internal()
     {
         close();
+        if(customSettingsGuiElement != null)
+        {
+            customSettingsGuiElement.setMoveUpDownCallbacks(null, null);
+        }
         stopStream();
     }
 }
