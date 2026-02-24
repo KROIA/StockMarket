@@ -569,7 +569,7 @@ public class ManagementScreen extends StockMarketGuiScreen {
             }
             setCurrentTradingPair(null); // If current trading pair is not found, set it to null
         }));
-        getPluginManager().requestMarketPluginTypes((plugins) -> {});
+        //getPluginManager().requestMarketPluginTypes((plugins) -> {});
     }
 
 

@@ -10,7 +10,6 @@ import net.kroia.modutilities.gui.layout.Layout;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.TradingPair;
-import net.kroia.stockmarket.plugin.networking.PluginTypesRequest;
 import net.kroia.stockmarket.screen.uiElements.TradingPairView;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.kroia.stockmarket.util.StockMarketGuiScreen;
@@ -18,7 +17,6 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 
 public class PluginBrowserScreen extends StockMarketGuiScreen {
@@ -118,13 +116,13 @@ public class PluginBrowserScreen extends StockMarketGuiScreen {
         addElement(pluginsListView);
         addElement(okButton);
 
-        BACKEND_INSTANCES.CLIENT_PLUGIN_MANAGER.requestMarketPluginTypes(tradingPair, (usedPlugins)->
-        {
-            BACKEND_INSTANCES.CLIENT_PLUGIN_MANAGER.requestMarketPluginTypes((availablePlugins)->
-            {
-                populatePluginList(usedPlugins, availablePlugins.marketPlugins);
-            });
-        });
+        //BACKEND_INSTANCES.CLIENT_PLUGIN_MANAGER.requestMarketPluginTypes(tradingPair, (usedPlugins)->
+        //{
+        //    BACKEND_INSTANCES.CLIENT_PLUGIN_MANAGER.requestMarketPluginTypes((availablePlugins)->
+        //    {
+        //        populatePluginList(usedPlugins, availablePlugins.marketPlugins);
+        //    });
+        //});
     }
 
     @Override
@@ -152,11 +150,11 @@ public class PluginBrowserScreen extends StockMarketGuiScreen {
                 usedPluginIDs.add(pluginWidget.getPluginID());
             }
         }
-        sendPluginUpdateToSever(tradingPair, usedPluginIDs);
+        //sendPluginUpdateToSever(tradingPair, usedPluginIDs);
     }
 
 
-    private void populatePluginList(List<String> usedPlugins, List<PluginTypesRequest.PluginInfo> allPlugins)
+   /* private void populatePluginList(List<String> usedPlugins, List<PluginTypesRequest.PluginInfo> allPlugins)
     {
         pluginWidgets.clear();
         pluginsListView.removeChilds();
@@ -182,5 +180,5 @@ public class PluginBrowserScreen extends StockMarketGuiScreen {
             else if(onChangesApplied != null)
                 onChangesApplied.run();
         });
-    }
+    }*/
 }

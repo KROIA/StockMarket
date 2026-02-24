@@ -687,7 +687,7 @@ public class ServerMarketManager implements IServerMarketManager, ServerSaveable
             tradeMarketChunks.add(chunk);
         }
 
-        BACKEND_INSTANCES.SERVER_PLUGIN_MANAGER.onServerMarketUpdateChunksChanged(tradeMarketChunks);
+        //BACKEND_INSTANCES.SERVER_PLUGIN_MANAGER.onServerMarketUpdateChunksChanged(tradeMarketChunks);
     }
 
 

@@ -12,8 +12,6 @@ import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.clientdata.ServerMarketSettingsData;
-import net.kroia.stockmarket.plugin.base.ClientMarketPlugin;
-import net.kroia.stockmarket.plugin.base.ClientMarketPluginGuiElement;
 import net.kroia.stockmarket.screen.uiElements.TradingPairView;
 import net.kroia.stockmarket.screen.uiElements.chart.TradingChartWidget;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
@@ -22,8 +20,6 @@ import net.kroia.stockmarket.util.StockMarketTextMessages;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.function.Consumer;
 
 public class MarketSettingsScreen extends StockMarketGuiScreen {
@@ -224,429 +220,6 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
             return value;
         }
     }
-/*
-    public class VirtualOderBookGuiElement extends StockMarketGuiElement
-    {
-        VirtualOrderBook.Settings virtualOrderBookSettings;
-
-        private final Label titleLabel;
-        private final CheckBox enableCheckBox;
-        private final Label volumeScaleLabel;
-        private final TextBox volumeScaleTextBox;
-        private final Label nearMarketVolumeScaleLabel;
-        private final TextBox nearMarketVolumeScaleTextBox;
-        private final Label volumeAccumulationRateLabel;
-        private final TextBox volumeAccumulationRateTextBox;
-        private final Label volumeFastAccumulationRateLabel;
-        private final TextBox volumeFastAccumulationRateTextBox;
-        private final Label volumeDecumulationRateLabel;
-        private final TextBox volumeDecumulationRateTextBox;
-        public VirtualOderBookGuiElement() {
-            super();
-            this.setEnableBackground(false);
-
-            titleLabel = new Label(TEXTS.VIRTUAL_ORDER_BOOK_TITLE.getString());
-            titleLabel.setAlignment(Alignment.CENTER);
-            enableCheckBox = new CheckBox(TEXTS.VIRTUAL_ORDER_BOOK_ENABLE.getString());
-            enableCheckBox.setTextAlignment(Alignment.RIGHT);
-            volumeScaleLabel = new Label(TEXTS.VIRTUAL_ORDER_BOOK_VOLUME_SCALE.getString());
-            volumeScaleLabel.setAlignment(Alignment.RIGHT);
-            volumeScaleTextBox = new TextBox();
-            volumeScaleTextBox.setAllowNumbers(true,true);
-            volumeScaleTextBox.setAllowLetters(false);
-            nearMarketVolumeScaleLabel = new Label(TEXTS.VIRTUAL_ORDER_BOOK_NEAR_MARKET_VOLUME_SCALE.getString());
-            nearMarketVolumeScaleLabel.setAlignment(Alignment.RIGHT);
-            nearMarketVolumeScaleTextBox = new TextBox();
-            nearMarketVolumeScaleTextBox.setAllowNumbers(true,true);
-            nearMarketVolumeScaleTextBox.setAllowLetters(false);
-            volumeAccumulationRateLabel = new Label(TEXTS.VIRTUAL_ORDER_BOOK_VOLUME_ACCUMULATION_RATE.getString());
-            volumeAccumulationRateLabel.setAlignment(Alignment.RIGHT);
-            volumeAccumulationRateTextBox = new TextBox();
-            volumeAccumulationRateTextBox.setAllowNumbers(true,true);
-            volumeAccumulationRateTextBox.setAllowLetters(false);
-            volumeFastAccumulationRateLabel = new Label(TEXTS.VIRTUAL_ORDER_BOOK_VOLUME_FAST_ACCUMULATION_RATE.getString());
-            volumeFastAccumulationRateLabel.setAlignment(Alignment.RIGHT);
-            volumeFastAccumulationRateTextBox = new TextBox();
-            volumeFastAccumulationRateTextBox.setAllowNumbers(true,true);
-            volumeFastAccumulationRateTextBox.setAllowLetters(false);
-            volumeDecumulationRateLabel = new Label(TEXTS.VIRTUAL_ORDER_BOOK_VOLUME_DECUMULATION_RATE.getString());
-            volumeDecumulationRateLabel.setAlignment(Alignment.RIGHT);
-            volumeDecumulationRateTextBox = new TextBox();
-            volumeDecumulationRateTextBox.setAllowNumbers(true,true);
-            volumeDecumulationRateTextBox.setAllowLetters(false);
-
-            enableCheckBox.setHoverTooltipSupplier(TEXTS.VIRTUAL_ORDER_BOOK_ENABLE_TOOLTIP::getString);
-            volumeScaleLabel.setHoverTooltipSupplier(TEXTS.VIRTUAL_ORDER_BOOK_VOLUME_SCALE_TOOLTIP::getString);
-            volumeScaleTextBox.setHoverTooltipSupplier(TEXTS.VIRTUAL_ORDER_BOOK_VOLUME_SCALE_TOOLTIP::getString);
-            nearMarketVolumeScaleLabel.setHoverTooltipSupplier(TEXTS.VIRTUAL_ORDER_BOOK_NEAR_MARKET_VOLUME_SCALE_TOOLTIP::getString);
-            nearMarketVolumeScaleTextBox.setHoverTooltipSupplier(TEXTS.VIRTUAL_ORDER_BOOK_NEAR_MARKET_VOLUME_SCALE_TOOLTIP::getString);
-            volumeAccumulationRateLabel.setHoverTooltipSupplier(TEXTS.VIRTUAL_ORDER_BOOK_VOLUME_ACCUMULATION_RATE_TOOLTIP::getString);
-            volumeAccumulationRateTextBox.setHoverTooltipSupplier(TEXTS.VIRTUAL_ORDER_BOOK_VOLUME_ACCUMULATION_RATE_TOOLTIP::getString);
-            volumeFastAccumulationRateLabel.setHoverTooltipSupplier(TEXTS.VIRTUAL_ORDER_BOOK_VOLUME_FAST_ACCUMULATION_RATE_TOOLTIP::getString);
-            volumeFastAccumulationRateTextBox.setHoverTooltipSupplier(TEXTS.VIRTUAL_ORDER_BOOK_VOLUME_FAST_ACCUMULATION_RATE_TOOLTIP::getString);
-            volumeDecumulationRateLabel.setHoverTooltipSupplier(TEXTS.VIRTUAL_ORDER_BOOK_VOLUME_DECUMULATION_RATE_TOOLTIP::getString);
-            volumeDecumulationRateTextBox.setHoverTooltipSupplier(TEXTS.VIRTUAL_ORDER_BOOK_VOLUME_DECUMULATION_RATE_TOOLTIP::getString);
-
-            enableCheckBox.setOnStateChanged((checked)->
-            {
-                volumeScaleLabel.setEnabled(checked);
-                volumeScaleTextBox.setEnabled(checked);
-                nearMarketVolumeScaleLabel.setEnabled(checked);
-                nearMarketVolumeScaleTextBox.setEnabled(checked);
-                volumeAccumulationRateLabel.setEnabled(checked);
-                volumeAccumulationRateTextBox.setEnabled(checked);
-                volumeFastAccumulationRateLabel.setEnabled(checked);
-                volumeFastAccumulationRateTextBox.setEnabled(checked);
-                volumeDecumulationRateLabel.setEnabled(checked);
-                volumeDecumulationRateTextBox.setEnabled(checked);
-            });
-
-            addChild(titleLabel);
-            addChild(enableCheckBox);
-            addChild(volumeScaleLabel);
-            addChild(volumeScaleTextBox);
-            addChild(nearMarketVolumeScaleLabel);
-            addChild(nearMarketVolumeScaleTextBox);
-            addChild(volumeAccumulationRateLabel);
-            addChild(volumeAccumulationRateTextBox);
-            addChild(volumeFastAccumulationRateLabel);
-            addChild(volumeFastAccumulationRateTextBox);
-            addChild(volumeDecumulationRateLabel);
-            addChild(volumeDecumulationRateTextBox);
-
-            for(GuiElement child : getChilds())
-            {
-                child.setHoverTooltipMousePositionAlignment(Alignment.RIGHT);
-                child.setHoverTooltipFontScale(textFontSize);
-                child.setTextFontScale(textFontSize);
-            }
-
-            int targetHeight = (elementHeight+spacing) * 7 + 5;
-            this.setHeight(targetHeight);
-        }
-
-        @Override
-        protected void render() {
-
-        }
-
-        @Override
-        protected void layoutChanged() {
-            int width = getWidth() - padding * 2;
-            //int height = getHeight() - padding * 2;
-            int elementHeight = 15;
-
-            int y = padding;
-            titleLabel.setBounds(padding, y, width, elementHeight);
-            y += elementHeight + spacing;
-            enableCheckBox.setBounds(width/2+padding, y, width-width/2, elementHeight);
-            y += elementHeight + spacing;
-            volumeScaleLabel.setBounds(padding, y, width/2, elementHeight);
-            volumeScaleTextBox.setBounds(volumeScaleLabel.getRight(), volumeScaleLabel.getTop(), width-volumeScaleLabel.getWidth(), volumeScaleLabel.getHeight());
-            y += elementHeight + spacing;
-            nearMarketVolumeScaleLabel.setBounds(padding, y, width/2, elementHeight);
-            nearMarketVolumeScaleTextBox.setBounds(nearMarketVolumeScaleLabel.getRight(), nearMarketVolumeScaleLabel.getTop(), width-nearMarketVolumeScaleLabel.getWidth(), nearMarketVolumeScaleLabel.getHeight());
-            y += elementHeight + spacing;
-            volumeAccumulationRateLabel.setBounds(padding, y, width/2, elementHeight);
-            volumeAccumulationRateTextBox.setBounds(volumeAccumulationRateLabel.getRight(), volumeAccumulationRateLabel.getTop(), width-volumeAccumulationRateLabel.getWidth(), volumeAccumulationRateLabel.getHeight());
-            y += elementHeight + spacing;
-            volumeFastAccumulationRateLabel.setBounds(padding, y, width/2, elementHeight);
-            volumeFastAccumulationRateTextBox.setBounds(volumeFastAccumulationRateLabel.getRight(), volumeFastAccumulationRateLabel.getTop(), width-volumeFastAccumulationRateLabel.getWidth(), volumeFastAccumulationRateLabel.getHeight());
-            y += elementHeight + spacing;
-            volumeDecumulationRateLabel.setBounds(padding, y, width/2, elementHeight);
-            volumeDecumulationRateTextBox.setBounds(volumeDecumulationRateLabel.getRight(), volumeDecumulationRateLabel.getTop(), width-volumeDecumulationRateLabel.getWidth(), volumeDecumulationRateLabel.getHeight());
-        }
-
-        public void setVirtualOrderBookSettings(VirtualOrderBook.Settings settings)
-        {
-            this.virtualOrderBookSettings = settings;
-
-            if(virtualOrderBookSettings == null)
-            {
-                enableCheckBox.setChecked(false);
-            }
-            else
-            {
-                enableCheckBox.setChecked(true);
-                volumeScaleTextBox.setText(String.valueOf(virtualOrderBookSettings.volumeScale));
-                nearMarketVolumeScaleTextBox.setText(String.valueOf(virtualOrderBookSettings.nearMarketVolumeScale));
-                volumeAccumulationRateTextBox.setText(String.valueOf(virtualOrderBookSettings.volumeAccumulationRate));
-                volumeFastAccumulationRateTextBox.setText(String.valueOf(virtualOrderBookSettings.volumeFastAccumulationRate));
-                volumeDecumulationRateTextBox.setText(String.valueOf(virtualOrderBookSettings.volumeDecumulationRate));
-            }
-        }
-        public VirtualOrderBook.Settings getVirtualOrderBookSettings() {
-            if(enableCheckBox.isChecked())
-            {
-                virtualOrderBookSettings = new VirtualOrderBook.Settings();
-                virtualOrderBookSettings.volumeScale = 100f;
-                virtualOrderBookSettings.nearMarketVolumeScale = 2f;
-                virtualOrderBookSettings.volumeAccumulationRate = 0.01f;
-                virtualOrderBookSettings.volumeFastAccumulationRate = 0.5f;
-                virtualOrderBookSettings.volumeDecumulationRate = 0.005f;
-            }
-            else
-                virtualOrderBookSettings = null;
-            if(virtualOrderBookSettings != null) {
-                virtualOrderBookSettings.volumeScale = getInRange((float)volumeScaleTextBox.getDouble(), 0.f, 100000.f);
-                volumeScaleTextBox.setText(String.valueOf(virtualOrderBookSettings.volumeScale));
-                virtualOrderBookSettings.nearMarketVolumeScale = getInRange((float)nearMarketVolumeScaleTextBox.getDouble(), 0.f, 100000.f);
-                nearMarketVolumeScaleTextBox.setText(String.valueOf(virtualOrderBookSettings.nearMarketVolumeScale));
-                virtualOrderBookSettings.volumeAccumulationRate = getInRange((float)volumeAccumulationRateTextBox.getDouble(), 0.f, 100000.f);
-                volumeAccumulationRateTextBox.setText(String.valueOf(virtualOrderBookSettings.volumeAccumulationRate));
-                virtualOrderBookSettings.volumeFastAccumulationRate = getInRange((float)volumeFastAccumulationRateTextBox.getDouble(), 0.f, 100000.f);
-                volumeFastAccumulationRateTextBox.setText(String.valueOf(virtualOrderBookSettings.volumeFastAccumulationRate));
-                virtualOrderBookSettings.volumeDecumulationRate = getInRange((float)volumeDecumulationRateTextBox.getDouble(), 0.f, 100000.f);
-                volumeDecumulationRateTextBox.setText(String.valueOf(virtualOrderBookSettings.volumeDecumulationRate));
-            }
-            return virtualOrderBookSettings;
-        }
-    }
-
-    private class BotGuiElement extends StockMarketGuiElement
-    {
-        private ServerVolatilityBot.Settings botSettings;
-
-        private final Label titleLabel;
-        private final CheckBox enableCheckBox;
-        private final Label defaultPriceLabel;
-        private final TextBox defaultPriceTextBox;
-        private final Label updateTimerInvervalMSLabel;
-        private final TextBox updateTimerInvervalMSTextBox;
-        private final Label volumeScaleLabel;
-        private final TextBox volumeScaleTextBox;
-        private final CheckBox enableTargetPriceCheckBox;
-        private final Label targetPriceSteeringFactorLabel;
-        private final TextBox targetPriceSteeringFactorTextBox;
-        private final CheckBox enableVolumeTrackingCheckBox;
-        private final Label volumeSteeringFactorLabel;
-        private final TextBox volumeSteeringFactorTextBox;
-        private final CheckBox enableRandomWalkCheckBox;
-        private final Label volatilityLabel;
-        private final TextBox volatilityTextBox;
-        public BotGuiElement() {
-            super();
-            this.setEnableBackground(false);
-
-            titleLabel = new Label(TEXTS.BOT_SETTINGS_TITLE.getString());
-            titleLabel.setAlignment(Alignment.CENTER);
-            enableCheckBox = new CheckBox(TEXTS.BOT_SETTINGS_ENABLE.getString());
-            enableCheckBox.setTextAlignment(Alignment.RIGHT);
-            defaultPriceLabel = new Label(TEXTS.BOT_SETTINGS_DEFAULT_PRICE.getString());
-            defaultPriceLabel.setAlignment(Alignment.RIGHT);
-            defaultPriceTextBox = new TextBox();
-            defaultPriceTextBox.setAllowNumbers(true,true);
-            defaultPriceTextBox.setAllowLetters(false);
-            defaultPriceTextBox.setAllowNegativeNumbers(false);
-            defaultPriceTextBox.setMaxDecimalChar(0);
-            updateTimerInvervalMSLabel = new Label(TEXTS.BOT_SETTINGS_UPDATE_INTERVAL_MS.getString());
-            updateTimerInvervalMSLabel.setAlignment(Alignment.RIGHT);
-            updateTimerInvervalMSTextBox = new TextBox();
-            updateTimerInvervalMSTextBox.setAllowNumbers(true,false);
-            updateTimerInvervalMSTextBox.setAllowLetters(false);
-            volumeScaleLabel = new Label(TEXTS.BOT_SETTINGS_VOLUME_SCALE.getString());
-            volumeScaleLabel.setAlignment(Alignment.RIGHT);
-            volumeScaleTextBox = new TextBox();
-            volumeScaleTextBox.setAllowNumbers(true,false);
-            volumeScaleTextBox.setAllowLetters(false);
-            enableTargetPriceCheckBox = new CheckBox(TEXTS.BOT_SETTINGS_ENABLE_TARGET_PRICE.getString());
-            enableTargetPriceCheckBox.setTextAlignment(Alignment.RIGHT);
-            targetPriceSteeringFactorLabel = new Label(TEXTS.BOT_SETTINGS_TARGET_PRICE_STEERING_FAC.getString());
-            targetPriceSteeringFactorLabel.setAlignment(Alignment.RIGHT);
-            targetPriceSteeringFactorTextBox = new TextBox();
-            targetPriceSteeringFactorTextBox.setAllowNumbers(true,true);
-            targetPriceSteeringFactorTextBox.setAllowLetters(false);
-            enableVolumeTrackingCheckBox = new CheckBox(TEXTS.BOT_SETTINGS_ENABLE_VOLUME_TRACKING.getString());
-            enableVolumeTrackingCheckBox.setTextAlignment(Alignment.RIGHT);
-            volumeSteeringFactorLabel = new Label(TEXTS.BOT_SETTINGS_VOLUME_STEERING_FAC.getString());
-            volumeSteeringFactorLabel.setAlignment(Alignment.RIGHT);
-            volumeSteeringFactorTextBox = new TextBox();
-            volumeSteeringFactorTextBox.setAllowNumbers(true,true);
-            volumeSteeringFactorTextBox.setAllowLetters(false);
-            enableRandomWalkCheckBox = new CheckBox(TEXTS.BOT_SETTINGS_ENABLE_RANDOM_WALK.getString());
-            enableRandomWalkCheckBox.setTextAlignment(Alignment.RIGHT);
-            volatilityLabel = new Label(TEXTS.BOT_SETTINGS_VOLATILITY.getString());
-            volatilityLabel.setAlignment(Alignment.RIGHT);
-            volatilityTextBox = new TextBox();
-            volatilityTextBox.setAllowNumbers(true,true);
-            volatilityTextBox.setAllowLetters(false);
-
-
-            enableCheckBox.setHoverTooltipSupplier(TEXTS.BOT_SETTINGS_ENABLE_TOOLTIP::getString);
-            defaultPriceLabel.setHoverTooltipSupplier(TEXTS.BOT_SETTINGS_DEFAULT_PRICE_TOOLTIP::getString);
-            defaultPriceTextBox.setHoverTooltipSupplier(TEXTS.BOT_SETTINGS_DEFAULT_PRICE_TOOLTIP::getString);
-            updateTimerInvervalMSLabel.setHoverTooltipSupplier(TEXTS.BOT_SETTINGS_UPDATE_INTERVAL_MS_TOOLTIP::getString);
-            updateTimerInvervalMSTextBox.setHoverTooltipSupplier(TEXTS.BOT_SETTINGS_UPDATE_INTERVAL_MS_TOOLTIP::getString);
-            volumeScaleLabel.setHoverTooltipSupplier(TEXTS.BOT_SETTINGS_VOLUME_SCALE_TOOLTIP::getString);
-            volumeScaleTextBox.setHoverTooltipSupplier(TEXTS.BOT_SETTINGS_VOLUME_SCALE_TOOLTIP::getString);
-            enableTargetPriceCheckBox.setHoverTooltipSupplier(TEXTS.BOT_SETTINGS_ENABLE_TARGET_PRICE_TOOLTIP::getString);
-            targetPriceSteeringFactorLabel.setHoverTooltipSupplier(TEXTS.BOT_SETTINGS_TARGET_PRICE_STEERING_FAC_TOOLTIP::getString);
-            targetPriceSteeringFactorTextBox.setHoverTooltipSupplier(TEXTS.BOT_SETTINGS_TARGET_PRICE_STEERING_FAC_TOOLTIP::getString);
-            enableVolumeTrackingCheckBox.setHoverTooltipSupplier(TEXTS.BOT_SETTINGS_ENABLE_VOLUME_TRACKING_TOOLTIP::getString);
-            volumeSteeringFactorLabel.setHoverTooltipSupplier(TEXTS.BOT_SETTINGS_VOLUME_STEERING_FAC_TOOLTIP::getString);
-            volumeSteeringFactorTextBox.setHoverTooltipSupplier(TEXTS.BOT_SETTINGS_VOLUME_STEERING_FAC_TOOLTIP::getString);
-            enableRandomWalkCheckBox.setHoverTooltipSupplier(TEXTS.BOT_SETTINGS_ENABLE_RANDOM_WALK_TOOLTIP::getString);
-            volatilityLabel.setHoverTooltipSupplier(TEXTS.BOT_SETTINGS_VOLATILITY_TOOLTIP::getString);
-            volatilityTextBox.setHoverTooltipSupplier(TEXTS.BOT_SETTINGS_VOLATILITY_TOOLTIP::getString);
-
-
-            enableTargetPriceCheckBox.setOnStateChanged((enabled)-> {
-                targetPriceSteeringFactorLabel.setEnabled(enabled);
-                targetPriceSteeringFactorTextBox.setEnabled(enabled);
-            });
-            enableVolumeTrackingCheckBox.setOnStateChanged((enabled)->{
-                volumeSteeringFactorLabel.setEnabled(enabled);
-                volumeSteeringFactorTextBox.setEnabled(enabled);
-            });
-            enableRandomWalkCheckBox.setOnStateChanged((enabled)->{
-                volatilityLabel.setEnabled(enabled);
-                volatilityTextBox.setEnabled(enabled);
-            });
-
-            enableCheckBox.setOnStateChanged((checked)->
-            {
-                defaultPriceLabel.setEnabled(checked);
-                defaultPriceTextBox.setEnabled(checked);
-                updateTimerInvervalMSLabel.setEnabled(checked);
-                updateTimerInvervalMSTextBox.setEnabled(checked);
-                volumeScaleLabel.setEnabled(checked);
-                volumeScaleTextBox.setEnabled(checked);
-                enableTargetPriceCheckBox.setEnabled(checked);
-                targetPriceSteeringFactorLabel.setEnabled(checked && enableTargetPriceCheckBox.isChecked());
-                targetPriceSteeringFactorTextBox.setEnabled(checked && enableTargetPriceCheckBox.isChecked());
-                enableVolumeTrackingCheckBox.setEnabled(checked);
-                volumeSteeringFactorLabel.setEnabled(checked && enableVolumeTrackingCheckBox.isChecked());
-                volumeSteeringFactorTextBox.setEnabled(checked && enableVolumeTrackingCheckBox.isChecked());
-                enableRandomWalkCheckBox.setEnabled(checked);
-                volatilityLabel.setEnabled(checked && enableRandomWalkCheckBox.isChecked());
-                volatilityTextBox.setEnabled(checked && enableRandomWalkCheckBox.isChecked());
-            });
-
-
-
-            addChild(titleLabel);
-            addChild(enableCheckBox);
-            addChild(defaultPriceLabel);
-            addChild(defaultPriceTextBox);
-            addChild(updateTimerInvervalMSLabel);
-            addChild(updateTimerInvervalMSTextBox);
-            addChild(volumeScaleLabel);
-            addChild(volumeScaleTextBox);
-            addChild(enableTargetPriceCheckBox);
-            addChild(targetPriceSteeringFactorLabel);
-            addChild(targetPriceSteeringFactorTextBox);
-            addChild(enableVolumeTrackingCheckBox);
-            addChild(volumeSteeringFactorLabel);
-            addChild(volumeSteeringFactorTextBox);
-            addChild(enableRandomWalkCheckBox);
-            addChild(volatilityLabel);
-            addChild(volatilityTextBox);
-
-            for(GuiElement child : getChilds())
-            {
-                child.setHoverTooltipMousePositionAlignment(Alignment.RIGHT);
-                child.setHoverTooltipFontScale(textFontSize);
-                child.setTextFontScale(textFontSize);
-            }
-
-            int targetHeight = (elementHeight+spacing) * 11 + 5;
-            this.setHeight(targetHeight);
-        }
-
-        public void setBotSettings(ServerVolatilityBot.Settings settings) {
-            this.botSettings = settings;
-
-            if(botSettings == null)
-            {
-                enableCheckBox.setChecked(false);
-            }
-            else
-            {
-                enableCheckBox.setChecked(botSettings.enabled);
-                defaultPriceTextBox.setMaxDecimalChar(Bank.getMaxDecimalDigitsCount(priceScaleFactor));
-                defaultPriceTextBox.setText(String.valueOf(botSettings.defaultPrice));
-                updateTimerInvervalMSTextBox.setText(String.valueOf(botSettings.updateTimerIntervallMS));
-                volumeScaleTextBox.setText(String.valueOf(botSettings.volumeScale));
-                enableTargetPriceCheckBox.setChecked(botSettings.enableTargetPrice);
-                targetPriceSteeringFactorTextBox.setText(String.valueOf(botSettings.targetPriceSteeringFactor));
-                enableVolumeTrackingCheckBox.setChecked(botSettings.enableVolumeTracking);
-                volumeSteeringFactorTextBox.setText(String.valueOf(botSettings.volumeSteeringFactor));
-                enableRandomWalkCheckBox.setChecked(botSettings.enableRandomWalk);
-                volatilityTextBox.setText(String.valueOf(botSettings.volatility));
-            }
-        }
-        public ServerVolatilityBot.Settings getBotSettings() {
-            if(enableCheckBox.isChecked())
-            {
-                botSettings = new ServerVolatilityBot.Settings();
-            }
-            else
-                botSettings = null;
-            if(botSettings != null) {
-                botSettings.enabled = enableCheckBox.isChecked();
-                botSettings.defaultPrice = getInRange((float)defaultPriceTextBox.getDouble(), 0.f, (float)Integer.MAX_VALUE);
-                defaultPriceTextBox.setText(String.valueOf(botSettings.defaultPrice));
-                botSettings.updateTimerIntervallMS = getInRange(updateTimerInvervalMSTextBox.getLong(), 10, Long.MAX_VALUE);
-                updateTimerInvervalMSTextBox.setText(String.valueOf(botSettings.updateTimerIntervallMS));
-                botSettings.volumeScale = getInRange((float)volumeScaleTextBox.getDouble(), 0.f, 100000.f);
-                volumeScaleTextBox.setText(String.valueOf(botSettings.volumeScale));
-                botSettings.enableTargetPrice = enableTargetPriceCheckBox.isChecked();
-                botSettings.targetPriceSteeringFactor = getInRange((float)targetPriceSteeringFactorTextBox.getDouble(), 0.f, 100000.f);
-                targetPriceSteeringFactorTextBox.setText(String.valueOf(botSettings.targetPriceSteeringFactor));
-                botSettings.enableVolumeTracking = enableVolumeTrackingCheckBox.isChecked();
-                botSettings.volumeSteeringFactor = getInRange((float)volumeSteeringFactorTextBox.getDouble(), 0.f, 100000.f);
-                volumeSteeringFactorTextBox.setText(String.valueOf(botSettings.volumeSteeringFactor));
-                botSettings.enableRandomWalk = enableRandomWalkCheckBox.isChecked();
-                botSettings.volatility = getInRange((float)volatilityTextBox.getDouble(), 0.f, 100000.f);
-                volatilityTextBox.setText(String.valueOf(botSettings.volatility));
-            }
-            return botSettings;
-        }
-
-
-
-        @Override
-        protected void render() {
-
-
-        }
-        @Override
-        protected void layoutChanged() {
-            int width = getWidth() - padding * 2;
-            //int height = getHeight() - padding * 2;
-            int elementHeight = 15;
-
-            int y = padding;
-            titleLabel.setBounds(padding, y, width, elementHeight);
-            y += elementHeight + spacing;
-            enableCheckBox.setBounds(width/2+padding, y, width-width/2, elementHeight);
-            y += elementHeight + spacing;
-            defaultPriceLabel.setBounds(padding, y, width/2, elementHeight);
-            defaultPriceTextBox.setBounds(defaultPriceLabel.getRight(), defaultPriceLabel.getTop(), width - defaultPriceLabel.getWidth(), defaultPriceLabel.getHeight());
-            y += elementHeight + spacing;
-            updateTimerInvervalMSLabel.setBounds(padding, y, width/2, elementHeight);
-            updateTimerInvervalMSTextBox.setBounds(updateTimerInvervalMSLabel.getRight(), updateTimerInvervalMSLabel.getTop(), width - updateTimerInvervalMSLabel.getWidth(), updateTimerInvervalMSLabel.getHeight());
-            y += elementHeight + spacing;
-            volumeScaleLabel.setBounds(padding, y, width/2, elementHeight);
-            volumeScaleTextBox.setBounds(volumeScaleLabel.getRight(), volumeScaleLabel.getTop(), width - volumeScaleLabel.getWidth(), volumeScaleLabel.getHeight());
-            y += elementHeight + spacing;
-            enableTargetPriceCheckBox.setBounds(width/2+padding, y, width-width/2, elementHeight);
-            y += elementHeight + spacing;
-            targetPriceSteeringFactorLabel.setBounds(padding, y, width/2, elementHeight);
-            targetPriceSteeringFactorTextBox.setBounds(targetPriceSteeringFactorLabel.getRight(), targetPriceSteeringFactorLabel.getTop(), width - targetPriceSteeringFactorLabel.getWidth(), targetPriceSteeringFactorLabel.getHeight());
-            y += elementHeight + spacing;
-            enableVolumeTrackingCheckBox.setBounds(width/2+padding, y, width-width/2, elementHeight);
-            y += elementHeight + spacing;
-            volumeSteeringFactorLabel.setBounds(padding, y, width/2, elementHeight);
-            volumeSteeringFactorTextBox.setBounds(volumeSteeringFactorLabel.getRight(), volumeSteeringFactorLabel.getTop(), width - volumeSteeringFactorLabel.getWidth(), volumeSteeringFactorLabel.getHeight());
-            y += elementHeight + spacing;
-            enableRandomWalkCheckBox.setBounds(width/2+padding, y, width-width/2, elementHeight);
-            y += elementHeight + spacing;
-            volatilityLabel.setBounds(padding, y, width/2, elementHeight);
-            volatilityTextBox.setBounds(volatilityLabel.getRight(), volatilityLabel.getTop(), width - volatilityLabel.getWidth(), volatilityLabel.getHeight());
-        }
-    }
-*/
 
 
     GuiScreen parentScreen;
@@ -663,7 +236,7 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
     PluginBrowserScreen  pluginBrowserScreen = null;
     //private final VirtualOderBookGuiElement virtualOrderBookGuiElement;
     //private final BotGuiElement botGuiElement;
-    private final List<ClientMarketPlugin> plugins = new ArrayList<>();
+    //private final List<ClientMarketPlugin> plugins = new ArrayList<>();
     Consumer<ServerMarketSettingsData> onSaveCallback;
 
     private final TimerMillis updateTimer;
@@ -721,9 +294,9 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
         TickEvent.PLAYER_POST.unregister(MarketSettingsScreen::onClientTick);
         super.onClose();
         instance = null;
-        for(ClientMarketPlugin plugin : plugins)
-            plugin.close_internal();
-        plugins.clear();
+        //for(ClientMarketPlugin plugin : plugins)
+        //    plugin.close_internal();
+        //plugins.clear();
         if (parentScreen != null) {
             int mousePosX = getMouseX();
             int mousePosY = getMouseY();
@@ -759,10 +332,10 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
         if(settings == null)
             return;
 
-        for(ClientMarketPlugin plugin : plugins)
-        {
-            plugin.saveSettings();
-        }
+        //for(ClientMarketPlugin plugin : plugins)
+        //{
+        //    plugin.saveSettings();
+        //}
         onSaveCallback.accept(settings);
     }
     private void onOpenPluginBrowserButtonClicked()
@@ -880,7 +453,7 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
 
     private void updatePluginsListView()
     {
-        for(ClientMarketPlugin plugin : plugins)
+        /*for(ClientMarketPlugin plugin : plugins)
             plugin.close_internal();
         plugins.clear();
         pluginsListView.removeChilds();
@@ -901,10 +474,10 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
                     plugin.setup_interal();
                 }
             }
-        });
+        });*/
     }
 
-    private void movePluginUp(ClientMarketPluginGuiElement guiElement)
+    /*private void movePluginUp(ClientMarketPluginGuiElement guiElement)
     {
         TradingPair tradingPair = getSelectedMarket().getTradingPair();
 
@@ -933,33 +506,6 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
             else
                 updatePluginsListView();
         });
-
-        //updatePluginsListView();
-
-
-
-        /*
-        List<GuiElement> elements = pluginsListView.getChilds();
-        List<GuiElement> newElements = new ArrayList<>();
-        int currentIndex = elements.indexOf(guiElement);
-
-        if(currentIndex == -1)
-            return;
-        elements.remove(currentIndex);
-        for(int i = 0; i<elements.size(); i++)
-        {
-            if(i == currentIndex-1)
-            {
-                newElements.add(guiElement);
-            }
-            newElements.add(elements.get(i));
-        }
-        pluginsListView.removeChilds();
-        for(GuiElement element : newElements)
-        {
-            pluginsListView.addChild(element);
-        }
-        */
     }
     private void movePluginDown(ClientMarketPluginGuiElement guiElement)
     {
@@ -990,7 +536,7 @@ public class MarketSettingsScreen extends StockMarketGuiScreen {
             else
                 updatePluginsListView();
         });
-    }
+    }*/
 
     public static float getInRange(float value, float min, float max) {
         if (value < min) {
