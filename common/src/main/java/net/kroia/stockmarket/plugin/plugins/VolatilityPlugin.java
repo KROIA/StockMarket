@@ -2,7 +2,7 @@ package net.kroia.stockmarket.plugin.plugins;
 
 import net.kroia.modutilities.TimerMillis;
 import net.kroia.stockmarket.market.TradingPair;
-import net.kroia.stockmarket.plugin.base.MarketBehaviorPlugin;
+import net.kroia.stockmarket.plugin.base.ServerPlugin;
 import net.kroia.stockmarket.plugin.interaction.MarketInterfaces;
 import net.kroia.stockmarket.util.NormalizedRandomPriceGenerator;
 import net.minecraft.nbt.CompoundTag;
@@ -10,14 +10,14 @@ import net.minecraft.nbt.CompoundTag;
 import java.util.List;
 import java.util.Random;
 
-public class VolatilityPlugin extends MarketBehaviorPlugin {
+public class VolatilityPlugin extends ServerPlugin {
     private static final Random random = new Random();
     private final TimerMillis randomWalkTimer = new TimerMillis(false);
     private final NormalizedRandomPriceGenerator priceGenerator;
 
     public VolatilityPlugin()
     {
-        super("VolatilityPlugin");
+        super();
         priceGenerator = new NormalizedRandomPriceGenerator(5);
         randomWalkTimer.start(random.nextInt(10000));
     }

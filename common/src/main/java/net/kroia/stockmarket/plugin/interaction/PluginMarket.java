@@ -2,6 +2,7 @@ package net.kroia.stockmarket.plugin.interaction;
 
 import net.kroia.stockmarket.api.IServerMarket;
 import net.kroia.stockmarket.market.TradingPair;
+import net.kroia.stockmarket.market.server.order.LimitOrder;
 import net.kroia.stockmarket.plugin.base.cache.MarketCache;
 import net.kroia.stockmarket.plugin.base.interaction.IPluginMarket;
 import org.jetbrains.annotations.NotNull;
@@ -78,11 +79,13 @@ public class PluginMarket implements IPluginMarket
 
     @Override
     public long placeOrder(float amount, float price) {
-        return 0;
+        LimitOrder order = serverMarket.createBotLimitOrder(amount, price);
+        cache.addLimitOrder(order);
+        return order.getOrderID();
     }
 
     @Override
     public void placeOrder(float amount) {
-
+        cache.addMarketOrder(amount);
     }
 }

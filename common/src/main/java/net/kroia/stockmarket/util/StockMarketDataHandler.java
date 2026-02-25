@@ -255,11 +255,11 @@ public class StockMarketDataHandler extends DataPersistence {
 
     public boolean load_plugins()
     {
-        return BACKEND_INSTANCES.SERVER_MARKET_PLUGIN_MANAGER.load();
+        return BACKEND_INSTANCES.SERVER_PLUGIN_MANAGER.load();
     }
     public boolean save_plugins()
     {
-        return BACKEND_INSTANCES.SERVER_MARKET_PLUGIN_MANAGER.save();
+        return BACKEND_INSTANCES.SERVER_PLUGIN_MANAGER.save();
     }
 
 

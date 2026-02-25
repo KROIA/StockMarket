@@ -1,26 +1,27 @@
 package net.kroia.stockmarket.plugin.base;
 
-import net.kroia.modutilities.persistence.ServerSaveable;
 import net.kroia.stockmarket.StockMarketModBackend;
-import net.minecraft.nbt.CompoundTag;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
 
-public abstract class Plugin implements ServerSaveable {
+public abstract class Plugin
+{
     private static StockMarketModBackend.Instances BACKEND_INSTANCES;
     public static void setBackend(StockMarketModBackend.Instances backend) {
         BACKEND_INSTANCES = backend;
     }
 
-    private UUID id;
+    private PluginRegistryObject registrar;
+    private UUID instanceID;
     private String name;
+    private String description;
     private boolean loggerEnabled;
     private boolean enabled;
 
-    public Plugin(String name)
+    public Plugin(UUID instanceID)
     {
-        id  = UUID.randomUUID();
-        this.name = name;
+        this.instanceID = instanceID;
         loggerEnabled = false;
         enabled = false;
     }
@@ -34,9 +35,23 @@ public abstract class Plugin implements ServerSaveable {
     {
         return loggerEnabled;
     }
+
+    public void setName(String name)
+    {
+        this.name = name;
+    }
     public String getName()
     {
         return name;
+    }
+
+    public void setDescription(String description)
+    {
+        this.description = description;
+    }
+    public String getDescription()
+    {
+        return description;
     }
 
     public void setEnabled(boolean enabled)
@@ -48,32 +63,38 @@ public abstract class Plugin implements ServerSaveable {
         return enabled;
     }
 
-    public final UUID getID()
+    protected final void setInstanceID(UUID id)
     {
-        return id;
+        this.instanceID = id;
+    }
+    public final UUID getInstanceID()
+    {
+        return instanceID;
+    }
+    public final void setRegistrar(PluginRegistryObject registrar)
+    {
+        this.registrar = registrar;
+        if(registrar != null)
+        {
+            name = registrar.getPluginName();
+            description = registrar.getPluginDescription();
+        }
+    }
+    public final @Nullable PluginRegistryObject getRegistrar()
+    {
+        return registrar;
+    }
+    public final @Nullable String getPluginTypeID()
+    {
+        if(registrar != null)
+        {
+            return registrar.getPluginTypeID();
+        }
+        return null;
     }
 
 
-    @Override
-    public boolean save(CompoundTag tag) {
-        tag.putUUID("id", id);
-        tag.putString("name", name);
-        tag.putBoolean("loggerEnabled", loggerEnabled);
-        return true;
-    }
 
-    @Override
-    public boolean load(CompoundTag tag) {
-        if(!tag.contains("id") ||
-           !tag.contains("name") ||
-           !tag.contains("loggerEnabled"))
-            return false;
-
-        id = tag.getUUID("id");
-        name = tag.getString("name");
-        loggerEnabled = tag.getBoolean("loggerEnabled");
-        return true;
-    }
 
 
 

@@ -1,8 +1,9 @@
 package net.kroia.stockmarket.plugin.base;
 
 import net.kroia.modutilities.networking.INetworkPayloadConverter;
+import net.kroia.modutilities.persistence.ServerSaveable;
 import net.kroia.stockmarket.market.TradingPair;
-import net.kroia.stockmarket.plugin.ServerMarketPluginManager;
+import net.kroia.stockmarket.plugin.ServerPluginManager;
 import net.kroia.stockmarket.plugin.base.cache.MarketBehaviorPluginCache;
 import net.kroia.stockmarket.plugin.base.cache.MarketCache;
 import net.kroia.stockmarket.plugin.interaction.MarketInterfaces;
@@ -11,10 +12,11 @@ import net.minecraft.network.FriendlyByteBuf;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.UUID;
 
-public abstract class MarketBehaviorPlugin extends Plugin implements INetworkPayloadConverter
+public abstract class ServerPlugin extends Plugin implements INetworkPayloadConverter, ServerSaveable
 {
-    private ServerMarketPluginManager manager = null;
+    private ServerPluginManager manager = null;
     private final MarketBehaviorPluginCache cache = new MarketBehaviorPluginCache();
     private enum State
     {
@@ -33,8 +35,9 @@ public abstract class MarketBehaviorPlugin extends Plugin implements INetworkPay
 
     private int networkStreamPacketTickInterval = 20;
 
-    public MarketBehaviorPlugin(String name) {
-        super(name);
+    public ServerPlugin() {
+        super(UUID.randomUUID());
+
     }
 
     /* ----------------------------------------------------------------------------------------------------------------
@@ -103,14 +106,27 @@ public abstract class MarketBehaviorPlugin extends Plugin implements INetworkPay
      */
     public void encodeNetworkData(FriendlyByteBuf buf)
     {
+
+
+
         /*
          * Dummy implementation that uses the save methode to send all data over the network
          * For small data chunks, this is fine but if there is the need of sending custom
          * data, overwrite this function. In that case, also overwrite the decodeNetworkData() function!
          */
-        CompoundTag tag = new CompoundTag();
-        save(tag);
-        buf.writeNbt(tag);
+        CompoundTag userData = new CompoundTag();
+        boolean hasUserData = false;
+        if(saveData(userData)) {
+            hasUserData = !userData.isEmpty();
+        }
+        if(hasUserData)
+        {
+            buf.writeBoolean(true);
+            buf.writeNbt(userData);
+        }
+        else
+            buf.writeBoolean(false);
+
     }
 
     /**
@@ -174,6 +190,11 @@ public abstract class MarketBehaviorPlugin extends Plugin implements INetworkPay
         return networkStreamPacketTickInterval;
     }
 
+    public List<TradingPair> getSubscribedMarkets()
+    {
+        return cache.getMarketCaches().keySet().stream().toList();
+    }
+
 
     /* ----------------------------------------------------------------------------------------------------------------
      *                     INTERNAL  METHODS
@@ -220,19 +241,11 @@ public abstract class MarketBehaviorPlugin extends Plugin implements INetworkPay
         state  = State.NONE;
     }
 
-
-    /*public final void apply_internal(IServerMarketManager manager)
-    {
-        state  = State.EXEC_APPLY;
-        cache.apply(manager);
-        state  = State.NONE;
-    }*/
-
-    public final void setManager(ServerMarketPluginManager manager)
+    public final void setManager(ServerPluginManager manager)
     {
         this.manager = manager;
     }
-    public final ServerMarketPluginManager getManager()
+    public final ServerPluginManager getManager()
     {
         return manager;
     }
@@ -240,10 +253,16 @@ public abstract class MarketBehaviorPlugin extends Plugin implements INetworkPay
     @Override
     public final boolean save(CompoundTag tag) {
         state  = State.EXEC_SAVE;
-        super.save(tag);
+        tag.putUUID("instanceID", getInstanceID());
+        tag.putString("name", getName());
+        tag.putBoolean("loggerEnabled", isLoggerEnabled());
+        tag.putBoolean("enabled", isEnabled());
+
         CompoundTag userData = new CompoundTag();
-        if(saveData(tag))
-            tag.put("UserData", userData);
+        if(saveData(userData)) {
+            if(!userData.isEmpty())
+                tag.put("UserData", userData);
+        }
         state  = State.NONE;
         return true;
     }
@@ -251,11 +270,21 @@ public abstract class MarketBehaviorPlugin extends Plugin implements INetworkPay
     @Override
     public final boolean load(CompoundTag tag) {
         state  = State.EXEC_LOAD;
-        if (!super.load(tag))
+
+        if(!tag.contains("instanceID") ||
+           !tag.contains("name") ||
+           !tag.contains("loggerEnabled") ||
+           !tag.contains("enabled"))
         {
             state  = State.NONE;
             return false;
         }
+
+        setInstanceID(tag.getUUID("instanceID"));
+        setName(tag.getString("name"));
+        setLoggerEnabled(tag.getBoolean("loggerEnabled"));
+        setEnabled(tag.getBoolean("enabled"));
+
         if(tag.contains("UserData")) {
             CompoundTag userData = tag.getCompound("UserData");
             boolean result = loadData(userData);
@@ -270,6 +299,13 @@ public abstract class MarketBehaviorPlugin extends Plugin implements INetworkPay
     public final void encode(FriendlyByteBuf buf)
     {
         state = State.EXEC_ENCODING;
+
+        // Internal data
+        buf.writeUUID(getInstanceID());
+        buf.writeUtf(getName());
+        buf.writeBoolean(isLoggerEnabled());
+        buf.writeBoolean(isEnabled());
+
         encodeNetworkData(buf);
         state = State.NONE;
     }
@@ -278,6 +314,20 @@ public abstract class MarketBehaviorPlugin extends Plugin implements INetworkPay
     public final void decode(FriendlyByteBuf buf)
     {
         state = State.EXEC_DECODING;
+
+        UUID instanceID = buf.readUUID();
+        if(!instanceID.equals(getInstanceID()))
+        {
+            error("The received Plugin data does not belong to this plugin. This UUID: "+ getInstanceID().toString() + " UUID from buffer: "+instanceID.toString());
+            state = State.NONE;
+            return;
+        }
+
+        setName(buf.readUtf());
+        setLoggerEnabled(buf.readBoolean());
+        setEnabled(buf.readBoolean());
+
+
         decodeNetworkData(buf);
         state = State.NONE;
     }

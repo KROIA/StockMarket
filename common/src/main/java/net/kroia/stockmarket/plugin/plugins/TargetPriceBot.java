@@ -1,7 +1,7 @@
 package net.kroia.stockmarket.plugin.plugins;
 
 import net.kroia.stockmarket.market.TradingPair;
-import net.kroia.stockmarket.plugin.base.MarketBehaviorPlugin;
+import net.kroia.stockmarket.plugin.base.ServerPlugin;
 import net.kroia.stockmarket.plugin.interaction.MarketInterfaces;
 import net.kroia.stockmarket.util.PID;
 import net.minecraft.nbt.CompoundTag;
@@ -10,7 +10,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class TargetPriceBot extends MarketBehaviorPlugin {
+public class TargetPriceBot extends ServerPlugin {
 
     static class RuntimeData
     {
@@ -23,7 +23,7 @@ public class TargetPriceBot extends MarketBehaviorPlugin {
 
 
     public TargetPriceBot() {
-        super("TargetPriceBot");
+        super();
     }
 
     @Override

@@ -2,7 +2,7 @@ package net.kroia.stockmarket.plugin.plugins;
 
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.plugin.base.IVolumeDistributionCalculator;
-import net.kroia.stockmarket.plugin.base.MarketBehaviorPlugin;
+import net.kroia.stockmarket.plugin.base.ServerPlugin;
 import net.kroia.stockmarket.plugin.base.interaction.IPluginOrderBook;
 import net.kroia.stockmarket.plugin.interaction.MarketInterfaces;
 import net.minecraft.nbt.CompoundTag;
@@ -13,7 +13,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class DefaultOrderbookVolumeDistributionPlugin extends MarketBehaviorPlugin {
+public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin {
 
     static class DistributionCalculator implements IVolumeDistributionCalculator
     {
@@ -26,6 +26,7 @@ public class DefaultOrderbookVolumeDistributionPlugin extends MarketBehaviorPlug
         @Override
         public float getVolume(float marketPrice, float volumePickPrice) {
             float delta = Math.abs(marketPrice - volumePickPrice);
+            // Dummy implementation
             if(delta > 10)
                 delta = 10;
             return delta*100;
@@ -47,7 +48,7 @@ public class DefaultOrderbookVolumeDistributionPlugin extends MarketBehaviorPlug
 
     public DefaultOrderbookVolumeDistributionPlugin()
     {
-        super("DefaultOrderbookVolumeDistributionPlugin");
+        super();
     }
 
     @Override

@@ -36,17 +36,17 @@ public class ClientMarketManager implements IClientMarketManager {
     }
 
     private final List<ClientMarket> clientMarkets = new ArrayList<>();
-    private boolean initialized = false;
+    //private boolean initialized = false;
     private final OrderHistory orderHistory = new OrderHistory();
     //@Override
     private void init()
     {
-        if(!initialized)
+        //if(!initialized)
         {
             debug("Initializing client stock market manager.");
             requestTradingPairs((result) -> {
                 populateClientMarkets(result); // populate the client markets with the received trading pairs
-                initialized = true;
+               // initialized = true;
                 debug("Client markets initialized with " + clientMarkets.size() + " trading pairs.");
             });
         }
@@ -63,7 +63,7 @@ public class ClientMarketManager implements IClientMarketManager {
                 return market;
             }
         }
-        if(!initialized)
+       // if(!initialized)
         {
             init();
         }
@@ -247,9 +247,11 @@ public class ClientMarketManager implements IClientMarketManager {
     public void handlePacket(ClientServerManagerMetaDataPacket packet)
     {
         ABSOLUTE_SERVER_FIRST_STARTUP_TIME_MILLIS = packet.getAbsoluteServerFirstStartupTimeMillis(); // Update the absolute server first startup time millis
-        if(!initialized)
+        //if(!initialized)
         {
             init(); // Initialize the client market manager if it is not initialized yet
+            BACKEND_INSTANCES.CLIENT_PLUGIN_MANAGER.requestPluginTypes();
+            BACKEND_INSTANCES.CLIENT_PLUGIN_MANAGER.requestPluginInstances();
         }
         debug("Player joined. Absolute server first startup time millis: " + ABSOLUTE_SERVER_FIRST_STARTUP_TIME_MILLIS);
     }
@@ -281,7 +283,7 @@ public class ClientMarketManager implements IClientMarketManager {
         {
             removeClientMarket(clientMarket); // Remove the markets that are no longer in the received pairs
         }
-        initialized = true;
+       // initialized = true;
     }
 
     private boolean marketExists(TradingPair pair)

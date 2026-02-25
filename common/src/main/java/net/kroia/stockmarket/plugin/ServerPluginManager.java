@@ -4,30 +4,26 @@ import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.IServerMarket;
 import net.kroia.stockmarket.market.TradingPair;
 import net.kroia.stockmarket.market.clientdata.TradingPairListData;
-import net.kroia.stockmarket.plugin.base.MarketBehaviorPlugin;
-import net.kroia.stockmarket.plugin.base.Plugin;
+import net.kroia.stockmarket.plugin.base.PluginRegistry;
+import net.kroia.stockmarket.plugin.base.ServerPlugin;
 import net.kroia.stockmarket.plugin.base.cache.MarketCache;
-import net.kroia.stockmarket.plugin.plugins.DefaultOrderbookVolumeDistributionPlugin;
-import net.kroia.stockmarket.plugin.plugins.TargetPriceBot;
-import net.kroia.stockmarket.plugin.plugins.VolatilityPlugin;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.nio.file.Path;
 import java.util.*;
 
-public class ServerMarketPluginManager
+public class ServerPluginManager
 {
     private static StockMarketModBackend.Instances BACKEND_INSTANCES;
     public static void setBackend(StockMarketModBackend.Instances backend) {
         BACKEND_INSTANCES = backend;
-        Plugin.setBackend(backend);
     }
 
     private boolean loggerEnabled = false;
     private final Path saveFolder;
     private final Map<TradingPair, MarketCache> marketCaches = new HashMap<>(); // Contains all caches, instance ownership belongs to this class
-    private final Map<UUID, MarketBehaviorPlugin> plugins = new HashMap<>();    // Contains all plugin instances
+    private final Map<UUID, ServerPlugin> plugins = new HashMap<>();    // Contains all plugin instances
 
     private enum State
     {
@@ -44,7 +40,7 @@ public class ServerMarketPluginManager
     }
     private State state = State.NONE;
 
-    public ServerMarketPluginManager(Path saveFolder)
+    public ServerPluginManager(Path saveFolder)
     {
         this.saveFolder = saveFolder;
     }
@@ -55,7 +51,7 @@ public class ServerMarketPluginManager
     public void updatePlugins()
     {
         state = State.EXEC_INIT;
-        for(MarketBehaviorPlugin plugin : plugins.values())
+        for(ServerPlugin plugin : plugins.values())
         {
             if(plugin.isEnabled())
             {
@@ -67,7 +63,7 @@ public class ServerMarketPluginManager
     public void finalizePlugis()
     {
         state = State.EXEC_FINALIZE;
-        for(MarketBehaviorPlugin plugin : plugins.values())
+        for(ServerPlugin plugin : plugins.values())
         {
             if(plugin.isEnabled())
             {
@@ -124,7 +120,7 @@ public class ServerMarketPluginManager
             error("Cannot remove market cache for trading pair " + tradingPair +  " inside an update loop!");
             return;
         }
-        for(MarketBehaviorPlugin plugin : plugins.values())
+        for(ServerPlugin plugin : plugins.values())
             plugin.unsubscribeFromMarket(tradingPair);
         marketCaches.remove(tradingPair);
         IServerMarket serverMarket = BACKEND_INSTANCES.SERVER_MARKET_MANAGER.getMarket(tradingPair);
@@ -147,7 +143,7 @@ public class ServerMarketPluginManager
     }
 
 
-    public void addPlugin(@NotNull MarketBehaviorPlugin plugin)
+    public void addPlugin(@NotNull ServerPlugin plugin)
     {
         if(plugin.getManager() == this)
             return;
@@ -158,11 +154,11 @@ public class ServerMarketPluginManager
             return;
         }
         plugin.setManager(this);
-        plugins.put(plugin.getID(), plugin);
+        plugins.put(plugin.getInstanceID(), plugin);
         plugin.init();
     }
 
-    public void removePlugin(@NotNull MarketBehaviorPlugin plugin)
+    public void removePlugin(@NotNull ServerPlugin plugin)
     {
         if(plugin.getManager() != this)
             return; // Does not belong to this manager or is not in a manager
@@ -175,8 +171,14 @@ public class ServerMarketPluginManager
         }
         plugin.setEnabled(false);
         plugin.deInit();
-        plugins.remove(plugin.getID());
+        plugins.remove(plugin.getInstanceID());
         plugin.setManager(null);
+    }
+
+
+    public Map<UUID, ServerPlugin> getPlugins()
+    {
+        return plugins;
     }
 
     /* ----------------------------------------------------------------------------------------------------------------
@@ -195,7 +197,7 @@ public class ServerMarketPluginManager
         // Dummy plugin creation
         TradingPairListData tradingPairs =  BACKEND_INSTANCES.SERVER_MARKET_MANAGER.getTradingPairListData();
 
-        DefaultOrderbookVolumeDistributionPlugin orderBookVolumePlugin = new DefaultOrderbookVolumeDistributionPlugin();
+        /*DefaultOrderbookVolumeDistributionPlugin orderBookVolumePlugin = new DefaultOrderbookVolumeDistributionPlugin();
         TargetPriceBot targetPriceBot = new TargetPriceBot();
         VolatilityPlugin volatilityPlugin = new VolatilityPlugin();
 
@@ -210,16 +212,31 @@ public class ServerMarketPluginManager
             volatilityPlugin.subscribeToMarket(pair);
             targetPriceBot.subscribeToMarket(pair);
         }
-        /*for(TradingPairData pairData : tradingPairs.tradingPairs)
-        {
-            TradingPair pair = pairData.toTradingPair();
-            orderBookVolumePlugin.subscribeToMarket(pair);
-        }*/
 
         targetPriceBot.setEnabled(true);
         volatilityPlugin.setEnabled(true);
-        orderBookVolumePlugin.setEnabled(true);
+        orderBookVolumePlugin.setEnabled(true);*/
 
+
+        ServerPlugin plugin1 = PluginRegistry.instantiateServerPlugin(Plugins.VOLATILITY_PLUGIN);
+        ServerPlugin plugin2 = PluginRegistry.instantiateServerPlugin(Plugins.DEFAULT_ORDERBOOK_VOLUME_DISTRIBUTION_PLUGIN);
+        ServerPlugin plugin3 = PluginRegistry.instantiateServerPlugin(Plugins.TARGET_PRICE_BOT_PLUGIN);
+
+        addPlugin(plugin1);
+        addPlugin(plugin2);
+        addPlugin(plugin3);
+
+        if(!tradingPairs.tradingPairs.isEmpty())
+        {
+            TradingPair pair = tradingPairs.tradingPairs.get(0).toTradingPair();
+            plugin1.subscribeToMarket(pair);
+            plugin2.subscribeToMarket(pair);
+            plugin3.subscribeToMarket(pair);
+        }
+
+        plugin1.setEnabled(true);
+        plugin2.setEnabled(true);
+        plugin3.setEnabled(true);
 
         return success;
     }
