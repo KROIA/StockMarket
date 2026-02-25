@@ -40,6 +40,8 @@ public class OrderBook implements ServerSaveable {
         this.priceScaleFactor = priceScaleFactor;
         this.itemFractionScaleFactor = itemFractionScaleFactor;
         virtualOrderBook.setPriceScaleFactor(priceScaleFactor);
+        virtualOrderBook.setItemFractionScaleFactor(itemFractionScaleFactor);
+
     }
     public void setDefaultVirtualVolumeDistributionFunction(Function<Float, Float> defaultVolumeDistributionFunction) {
         this.defaultVolumeDistributionFunction = defaultVolumeDistributionFunction;
@@ -62,8 +64,6 @@ public class OrderBook implements ServerSaveable {
 
     public void updateVirtualOrderBookVolume(int currentPrice)
     {
-        if(virtualOrderBook == null)
-            return; // No virtual order book initialized.
         this.virtualOrderBook.updateVolume(currentPrice);
     }
     public @Nullable VirtualOrderBook getVirtualOrderBook()

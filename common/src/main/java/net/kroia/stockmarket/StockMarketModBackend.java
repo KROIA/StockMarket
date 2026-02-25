@@ -26,6 +26,7 @@ import net.kroia.stockmarket.market.server.order.OrderFactory;
 import net.kroia.stockmarket.menu.StockMarketMenus;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.kroia.stockmarket.player.ServerPlayerManager;
+import net.kroia.stockmarket.plugin.ServerMarketPluginManager;
 import net.kroia.stockmarket.util.*;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -47,7 +48,7 @@ public class StockMarketModBackend implements StockMarketAPI {
         public DefaultMarketSettings.DefaultPrices SERVER_DEFAULT_PRICES;
         public StockMarketDataHandler SERVER_DATA_HANDLER;
         public ServerMarketManager SERVER_MARKET_MANAGER;
-        //public ServerPluginManager SERVER_PLUGIN_MANAGER;
+        public ServerMarketPluginManager SERVER_MARKET_PLUGIN_MANAGER;
         //public ClientPluginManager CLIENT_PLUGIN_MANAGER;
         public ServerPlayerManager SERVER_PLAYER_MANAGER;
         public ClientMarketManager CLIENT_MARKET_MANAGER;
@@ -69,7 +70,7 @@ public class StockMarketModBackend implements StockMarketAPI {
         INSTANCES.SERVER_DEFAULT_PRICES = null;
         INSTANCES.SERVER_DATA_HANDLER = null;
         INSTANCES.SERVER_MARKET_MANAGER = null;
-        //INSTANCES.SERVER_PLUGIN_MANAGER = null;
+        INSTANCES.SERVER_MARKET_PLUGIN_MANAGER = null;
         //INSTANCES.CLIENT_PLUGIN_MANAGER = null;
         INSTANCES.SERVER_PLAYER_MANAGER = null;
         INSTANCES.CLIENT_MARKET_MANAGER = null;
@@ -78,7 +79,7 @@ public class StockMarketModBackend implements StockMarketAPI {
         INSTANCES.LOGGER = new StockMarketModLogger(INSTANCES);
         StockMarketDataHandler.setBackend(INSTANCES);
         ServerMarketManager.setBackend(INSTANCES);
-        //ServerPluginManager.setBackend(INSTANCES);
+        ServerMarketPluginManager.setBackend(INSTANCES);
         ServerPlayerManager.setBackend(INSTANCES);
         StockMarketModSettings.setBackend(INSTANCES);
         StockMarketCommands.setBackend(INSTANCES);
@@ -150,7 +151,7 @@ public class StockMarketModBackend implements StockMarketAPI {
         INSTANCES.SERVER_DATA_HANDLER.setLevelSavePath(rootSaveFolder.toPath());
         INSTANCES.SERVER_MARKET_MANAGER = new ServerMarketManager(INSTANCES.SERVER_DATA_HANDLER.getOrderHistoryFolderPath());
         INSTANCES.SERVER_PLAYER_MANAGER = new ServerPlayerManager(INSTANCES.SERVER_DATA_HANDLER.getPlayerManagerFolderPath());
-        //INSTANCES.SERVER_PLUGIN_MANAGER = new ServerPluginManager(INSTANCES.SERVER_DATA_HANDLER.getPluginManagerFolderPath());
+        INSTANCES.SERVER_MARKET_PLUGIN_MANAGER = new ServerMarketPluginManager(INSTANCES.SERVER_DATA_HANDLER.getPluginManagerFolderPath());
 
         NEZNAMY_TAB_Placeholders.setBackend(INSTANCES);
 
@@ -208,8 +209,12 @@ public class StockMarketModBackend implements StockMarketAPI {
     // Called from the server side
     private static void onServerTick(MinecraftServer server)
     {
-        //INSTANCES.SERVER_PLUGIN_MANAGER.update();
-        //INSTANCES.SERVER_PLUGIN_MANAGER.finalizeUpdate();
+        if(INSTANCES.SERVER_MARKET_MANAGER.getMarketUpdateChunkIndex() == 0)
+        {
+            // Update only once after all market chunks have been updated
+            INSTANCES.SERVER_MARKET_PLUGIN_MANAGER.updatePlugins();
+            INSTANCES.SERVER_MARKET_PLUGIN_MANAGER.finalizePlugis();
+        }
         INSTANCES.SERVER_MARKET_MANAGER.onServerTick(server);
 
         INSTANCES.SERVER_DATA_HANDLER.tickUpdate();

@@ -150,7 +150,7 @@ public class VirtualOrderBook implements ServerSaveable {
     private long lastMillis;
     private Settings settings = new Settings();
     private int priceScaleFactor = 1;
-    //private int itemFractionScaleFactor = 1; // Scale factor for item fractions, used to handle fractional item amounts.
+    private int itemFractionScaleFactor = 1; // Scale factor for item fractions, used to handle fractional item amounts.
 
 
     //private boolean dbgSavedToFile = false;
@@ -172,6 +172,11 @@ public class VirtualOrderBook implements ServerSaveable {
         if(priceScaleFactor <= 0)
             priceScaleFactor = 1;
         this.priceScaleFactor = priceScaleFactor;
+    }
+    public void setItemFractionScaleFactor(int itemFractionScaleFactor) {
+        if(itemFractionScaleFactor <= 0)
+            itemFractionScaleFactor = 1;
+        this.itemFractionScaleFactor = itemFractionScaleFactor;
     }
     public void setDefaultVolumeDistributionFunction(Function<Float, Float> defaultVolumeDistributionFunction) {
         this.defaultVolumeDistributionFunction = defaultVolumeDistributionFunction;
@@ -348,11 +353,15 @@ public class VirtualOrderBook implements ServerSaveable {
      */
     public float getAmount(int rawPrice)
     {
+        float amount = 0;
         if(virtualOrderVolumeDistribution.isInRange(rawPrice))
-        {
-            return virtualOrderVolumeDistribution.get(rawPrice);
-        }
-        return getTargetAmount(rawPrice);
+            amount = virtualOrderVolumeDistribution.get(rawPrice);
+        else
+            amount = getTargetAmount(rawPrice);
+
+        // Round to the item fraction
+        //return Math.round(amount * itemFractionScaleFactor) / (float) itemFractionScaleFactor;
+        return amount;
     }
     public void removeAmount(int rawPrice, long amount)
     {
@@ -369,15 +378,15 @@ public class VirtualOrderBook implements ServerSaveable {
         }
     }
 
-    private float getTargetAmount(int price)
+    private float getTargetAmount(int rawPrice)
     {
         if(defaultVolumeDistributionFunction != null)
         {
-            float realPrice = price / (float)priceScaleFactor;
+            float realPrice = rawPrice / (float)priceScaleFactor;
             float volume = Math.abs(defaultVolumeDistributionFunction.apply(realPrice));
-            if(currentMarketPrice > price)
+            if(currentMarketPrice > rawPrice)
                 return volume;
-            else if(currentMarketPrice < price)
+            else if(currentMarketPrice < rawPrice)
                 return -volume;
             else
                 return volume;

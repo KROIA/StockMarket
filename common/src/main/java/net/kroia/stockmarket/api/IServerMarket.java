@@ -402,7 +402,6 @@ public interface IServerMarket {
      */
     boolean placeOrder(Order order);
 
-
     /**
      * Creates a limit order for the player.
      * @param playerUUID the UUID of the player for which the order is created.
