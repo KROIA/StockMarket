@@ -1,10 +1,6 @@
 package net.kroia.stockmarket;
 
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
-import net.kroia.stockmarket.screen.custom.BotSettingsScreen;
-import net.kroia.stockmarket.screen.custom.StockMarketManagementScreen;
-import net.kroia.stockmarket.screen.custom.TradeScreen;
-import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -14,9 +10,10 @@ public class StockMarketClientHooks {
     {
         if(entity instanceof StockMarketBlockEntity stockMarketBlockEntity)
         {
-            Minecraft.getInstance().submit(() -> {
-                TradeScreen.openScreen(stockMarketBlockEntity);
-            });
+            // todo: replace this
+            //Minecraft.getInstance().submit(() -> {
+            //    TradeScreen.openScreen(stockMarketBlockEntity);
+            //});
         }
         else
         {
@@ -27,17 +24,20 @@ public class StockMarketClientHooks {
     }
     public static void openStockMarketBlockScreen()
     {
-        Minecraft.getInstance().submit(() -> {
-            TradeScreen.openScreen();
-        });
+        // todo: replace this
+        //Minecraft.getInstance().submit(() -> {
+        //    TradeScreen.openScreen();
+        //});
     }
     public static void openBotSettingsScreen()
     {
-        Minecraft.getInstance().submit(()->{BotSettingsScreen.openScreen();});
+        // todo: replace this
+        //Minecraft.getInstance().submit(()->{BotSettingsScreen.openScreen();});
     }
     public static void openStockMarketManagementScreen()
     {
-        Minecraft.getInstance().submit(()->{
-            StockMarketManagementScreen.openScreen();});
+        // todo: replace this
+        //Minecraft.getInstance().submit(()->{
+        //    StockMarketManagementScreen.openScreen();});
     }
 }

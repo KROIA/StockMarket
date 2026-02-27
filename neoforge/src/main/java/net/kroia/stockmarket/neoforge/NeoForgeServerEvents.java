@@ -2,7 +2,6 @@ package net.kroia.stockmarket.neoforge;
 
 import dev.architectury.event.events.common.LifecycleEvent;
 import net.kroia.modutilities.ModUtilitiesMod;
-import net.kroia.stockmarket.util.StockMarketServerEvents;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -15,18 +14,23 @@ public class NeoForgeServerEvents {
     {
         LifecycleEvent.SERVER_STARTED.register(server -> {
             ModUtilitiesMod.LOGGER.info("[NeoForgeSetup] SERVER_STARTING");
-            StockMarketServerEvents.onServerStart(server);
+            // todo: replace this
+            // StockMarketServerEvents.onServerStart(server);
         });
         LifecycleEvent.SERVER_STOPPING.register(server -> {
             ModUtilitiesMod.LOGGER.info("[NeoForgeSetup] SERVER_STOPPED");
-            StockMarketServerEvents.onServerStop(server);
+
+            // todo: replace this
+            // StockMarketServerEvents.onServerStop(server);
         });
     }
     @SubscribeEvent
     public static void onWorldSave(LevelEvent.Save event) {
         if (event.getLevel() instanceof ServerLevel serverLevel) {
-            if (serverLevel.dimension().equals(ServerLevel.OVERWORLD))
-                StockMarketServerEvents.onWorldSave(serverLevel);
+            if (serverLevel.dimension().equals(ServerLevel.OVERWORLD)) {
+                // todo: replace this
+                // StockMarketServerEvents.onWorldSave(serverLevel);
+            }
         }
     }
 }

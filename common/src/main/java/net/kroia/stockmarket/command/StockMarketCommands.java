@@ -1,32 +1,8 @@
 package net.kroia.stockmarket.command;
 
-import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
-import com.mojang.brigadier.arguments.DoubleArgumentType;
-import com.mojang.brigadier.arguments.IntegerArgumentType;
-import com.mojang.brigadier.arguments.LongArgumentType;
-import com.mojang.brigadier.arguments.StringArgumentType;
-import net.kroia.modutilities.ItemUtilities;
-import net.kroia.modutilities.PlayerUtilities;
-import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.StockMarketModSettings;
-import net.kroia.stockmarket.market.server.ServerMarket;
-import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
-import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
-import net.kroia.stockmarket.networking.packet.server_sender.update.OpenScreenPacket;
-import net.kroia.stockmarket.networking.packet.server_sender.update.SyncBotSettingsPacket;
-import net.kroia.stockmarket.util.ServerPlayerList;
-import net.kroia.stockmarket.util.StockMarketDataHandler;
-import net.kroia.stockmarket.util.StockMarketTextMessages;
 import net.minecraft.commands.CommandSourceStack;
-import net.minecraft.commands.Commands;
-import net.minecraft.network.chat.Component;
-import net.minecraft.server.level.ServerPlayer;
 
-import java.util.ArrayList;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
 
 public class StockMarketCommands {
     // Method to register commands
@@ -70,17 +46,9 @@ public class StockMarketCommands {
         // /StockMarket save                                                            - Save market data
         // /StockMarket load                                                            - Load market data
 
+        /*
         dispatcher.register(
                 Commands.literal("StockMarket")
-                        /*.then(Commands.literal("help")
-                                .executes(context -> {
-                                    CommandSourceStack source = context.getSource();
-                                    ServerPlayer player = source.getPlayerOrException();
-                                    player.sendSystemMessage(Component.literal("StockMarket commands:"));
-
-                                    return Command.SINGLE_SUCCESS;
-                                })
-                        )*/
                         .then(Commands.literal("setPriceCandleTimeInterval")
                                 .requires(source -> source.hasPermission(2))
                                 .then(Commands.argument("seconds", IntegerArgumentType.integer(1))
@@ -218,15 +186,6 @@ public class StockMarketCommands {
                                     ServerPlayer player = context.getSource().getPlayer();
                                     if(player != null) {
                                         OpenScreenPacket.sendPacket(player, OpenScreenPacket.ScreenType.STOCKMARKET_MANAGEMENT);
-                                        /*
-                                        ArrayList<String> suggestions = ServerMarket.getTradeItemIDs();
-                                        if(!suggestions.isEmpty()) {
-                                            //String itemID = suggestions.get(0);
-                                            //SyncBotSettingsPacket.sendPacket(player, itemID, ServerMarket.getBotUserUUID());
-                                            }
-                                        else {
-                                            PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getNoTradingItemAvailableMessage());
-                                        }*/
                                     }
                                     return Command.SINGLE_SUCCESS;
                                 })
@@ -736,9 +695,10 @@ public class StockMarketCommands {
                                     return Command.SINGLE_SUCCESS;
                                 })
                         )
-        );
+        );*/
     }
 
+    /*
     private static void bot_set_setting(ServerPlayer executor, ServerVolatilityBot.Settings.Type settingsType, String itemID, double value)
     {
         ServerVolatilityBot bot = bot_set_setting_checkParams(executor, settingsType, itemID);
@@ -885,5 +845,5 @@ public class StockMarketCommands {
         }
         PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotNotExistMessage(itemID));
         return null;
-    }
+    }*/
 }

@@ -2,8 +2,6 @@ package net.kroia.stockmarket;
 
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.item.custom.money.MoneyItem;
-import net.kroia.stockmarket.market.server.bot.ServerTradingBotFactory;
-import net.kroia.stockmarket.util.StockMarketDataHandler;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -12,9 +10,9 @@ import java.util.Map;
 public class StockMarketModSettings {
     public static void init()
     {
-        Market.init();
+      //  Market.init();
     }
-    public static final class UI
+   /* public static final class UI
     {
         public static final int PRICE_HISTORY_SIZE = 100;
         public static final int MAX_ORDERBOOK_TILES = 100;
@@ -143,6 +141,6 @@ public class StockMarketModSettings {
         {
             return getBotBuilder().get(item);
         }
-    }
+    }*/
 
 }

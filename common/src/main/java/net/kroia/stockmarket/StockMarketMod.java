@@ -2,16 +2,12 @@ package net.kroia.stockmarket;
 
 import com.mojang.logging.LogUtils;
 import dev.architectury.event.events.common.CommandRegistrationEvent;
-import dev.architectury.event.events.common.TickEvent;
-import net.kroia.stockmarket.util.StockMarketDataHandler;
 import net.kroia.stockmarket.block.StockMarketBlocks;
 import net.kroia.stockmarket.command.StockMarketCommands;
 import net.kroia.stockmarket.entity.StockMarketEntities;
 import net.kroia.stockmarket.item.StockMarketCreativeModeTab;
 import net.kroia.stockmarket.item.StockMarketItems;
 import net.kroia.stockmarket.menu.StockMarketMenus;
-import net.kroia.stockmarket.networking.StockMarketNetworking;
-import net.kroia.stockmarket.util.StockMarketTextMessages;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
 import org.slf4j.Logger;
@@ -32,13 +28,13 @@ public final class StockMarketMod {
         StockMarketEntities.init();
         StockMarketMenus.init();
         StockMarketCreativeModeTab.init();
-        StockMarketTextMessages.init();
+        //StockMarketTextMessages.init();
 
-        StockMarketNetworking.init();
+        //StockMarketNetworking.init();
 
-        TickEvent.ServerLevelTick.SERVER_POST.register((serverLevel) -> {
-            StockMarketDataHandler.tickUpdate();
-        });
+        //TickEvent.ServerLevelTick.SERVER_POST.register((serverLevel) -> {
+        //    StockMarketDataHandler.tickUpdate();
+        //});
     }
 
     public static void onClientSetup()
@@ -55,18 +51,19 @@ public final class StockMarketMod {
     {
         File rootSaveFolder = server.getWorldPath(LevelResource.ROOT).toFile();
         // Load data from the root save folder
-        StockMarketDataHandler.setSaveFolder(rootSaveFolder);
-        StockMarketDataHandler.loadAll();
+        //StockMarketDataHandler.setSaveFolder(rootSaveFolder);
+        //StockMarketDataHandler.loadAll();
     }
     public static void saveDataToFiles(MinecraftServer server)
     {
         File rootSaveFolder = server.getWorldPath(LevelResource.ROOT).toFile();
         // Load data from the root save folder
-        StockMarketDataHandler.setSaveFolder(rootSaveFolder);
-        StockMarketDataHandler.saveAll();
+        //StockMarketDataHandler.setSaveFolder(rootSaveFolder);
+        //StockMarketDataHandler.saveAll();
     }
     public static boolean isDataLoaded() {
-        return StockMarketDataHandler.isLoaded();
+        //return StockMarketDataHandler.isLoaded();
+        return false;
     }
 
 }

@@ -7,10 +7,7 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.loader.api.FabricLoader;
-import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.util.StockMarketPlayerEvents;
-import net.kroia.stockmarket.util.StockMarketServerEvents;
 
 public final class StockMarketFabric implements ModInitializer {
     @Override
@@ -34,23 +31,27 @@ public final class StockMarketFabric implements ModInitializer {
 
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             StockMarketMod.LOGGER.info("[FabricSetup] SERVER_STARTED");
-            StockMarketServerEvents.onServerStart(server); // Handle world load (start)
+            // todo: replace this
+            //StockMarketServerEvents.onServerStart(server); // Handle world load (start)
         });
 
         // World save
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
             StockMarketMod.LOGGER.info("[FabricSetup] SERVER_STOPPING");
-            StockMarketServerEvents.onServerStop(server);
+            // todo: replace this
+            //StockMarketServerEvents.onServerStop(server);
         });
 
 
         // Player Events
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
-            StockMarketPlayerEvents.onPlayerJoin(handler.getPlayer());
+            // todo: replace this
+            //StockMarketPlayerEvents.onPlayerJoin(handler.getPlayer());
         });
 
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
-            StockMarketPlayerEvents.onPlayerLeave(handler.getPlayer());
+            // todo: replace this
+            //StockMarketPlayerEvents.onPlayerLeave(handler.getPlayer());
         });
 
 
