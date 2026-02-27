@@ -44,6 +44,9 @@ subprojects {
 
         //maven { url 'https://jitpack.io' }
         //mavenLocal()
+
+        // https://github.com/NEZNAMY/TAB API
+        maven { url 'https://jitpack.io' }
     }
 
     dependencies {
@@ -56,6 +59,10 @@ subprojects {
         //    officialMojangMappings()
         //    parchment("org.parchmentmc.data:parchment-${rootProject.minecraft_version}:${rootProject.mapping_version}")
         //}
+
+
+        // https://github.com/NEZNAMY/TAB API
+        compileOnly 'com.github.NEZNAMY:TAB-API:5.2.5'
     }
 
     java {

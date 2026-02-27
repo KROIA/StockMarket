@@ -1,7 +1,11 @@
 package net.kroia.stockmarket.neoforge;
 
 import dev.architectury.event.events.common.LifecycleEvent;
+import dev.architectury.platform.Platform;
+import dev.architectury.utils.Env;
 import net.kroia.modutilities.ModUtilitiesMod;
+import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.compat.NEZNAMY_TAB_Placeholders;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -12,25 +16,25 @@ public class NeoForgeServerEvents {
 
     public static void init()
     {
-        LifecycleEvent.SERVER_STARTED.register(server -> {
-            ModUtilitiesMod.LOGGER.info("[NeoForgeSetup] SERVER_STARTING");
-            // todo: replace this
-            // StockMarketServerEvents.onServerStart(server);
-        });
-        LifecycleEvent.SERVER_STOPPING.register(server -> {
-            ModUtilitiesMod.LOGGER.info("[NeoForgeSetup] SERVER_STOPPED");
+        LifecycleEvent.SERVER_STARTED.register((server)->{
+            // Check if NEZNAMY/TAB is present and register placeholders
+            StockMarketModBackend.onServerStart(server);
+            if (Platform.getEnvironment() == Env.SERVER && Platform.isModLoaded("tab")) {
+                NEZNAMY_TAB_Placeholders.register();
+            }
 
-            // todo: replace this
-            // StockMarketServerEvents.onServerStop(server);
+            ModUtilitiesMod.LOGGER.info("[NeoForgeSetup] SERVER_STARTING");
+            StockMarketModBackend.onServerStart(server);
+
+
         });
+        LifecycleEvent.SERVER_STOPPING.register(StockMarketModBackend::onServerStop);
     }
     @SubscribeEvent
     public static void onWorldSave(LevelEvent.Save event) {
         if (event.getLevel() instanceof ServerLevel serverLevel) {
-            if (serverLevel.dimension().equals(ServerLevel.OVERWORLD)) {
-                // todo: replace this
-                // StockMarketServerEvents.onWorldSave(serverLevel);
-            }
+            if (serverLevel.dimension().equals(ServerLevel.OVERWORLD))
+                StockMarketModBackend.saveDataToFiles(serverLevel.getServer());
         }
     }
 }

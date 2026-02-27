@@ -1,69 +1,27 @@
 package net.kroia.stockmarket;
 
 import com.mojang.logging.LogUtils;
-import dev.architectury.event.events.common.CommandRegistrationEvent;
-import net.kroia.stockmarket.block.StockMarketBlocks;
-import net.kroia.stockmarket.command.StockMarketCommands;
-import net.kroia.stockmarket.entity.StockMarketEntities;
-import net.kroia.stockmarket.item.StockMarketCreativeModeTab;
-import net.kroia.stockmarket.item.StockMarketItems;
-import net.kroia.stockmarket.menu.StockMarketMenus;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.world.level.storage.LevelResource;
+import net.kroia.stockmarket.api.StockMarketAPI;
 import org.slf4j.Logger;
 
-import java.io.File;
 
 public final class StockMarketMod {
     public static final String MOD_ID = "stockmarket";
+    public static final String VERSION = "2.0.0_ALPHA";
     public static final Logger LOGGER = LogUtils.getLogger();
 
+    private static StockMarketModBackend backend;
+
     public static void init() {
-        StockMarketModSettings.init();
-        CommandRegistrationEvent.EVENT.register((dispatcher, registryAccess, environment) -> {
-            StockMarketCommands.register(dispatcher);
-        });
-        StockMarketBlocks.init();
-        StockMarketItems.init();
-        StockMarketEntities.init();
-        StockMarketMenus.init();
-        StockMarketCreativeModeTab.init();
-        //StockMarketTextMessages.init();
-
-        //StockMarketNetworking.init();
-
-        //TickEvent.ServerLevelTick.SERVER_POST.register((serverLevel) -> {
-        //    StockMarketDataHandler.tickUpdate();
-        //});
+        if(backend == null)
+            backend = new StockMarketModBackend();
     }
 
-    public static void onClientSetup()
-    {
-        StockMarketMenus.setupScreens();
-    }
 
-    public static void onServerSetup()
-    {
-        //BankSystemNetworking.setupServerReceiverPackets();
-    }
-
-    public static void loadDataFromFiles(MinecraftServer server)
-    {
-        File rootSaveFolder = server.getWorldPath(LevelResource.ROOT).toFile();
-        // Load data from the root save folder
-        //StockMarketDataHandler.setSaveFolder(rootSaveFolder);
-        //StockMarketDataHandler.loadAll();
-    }
-    public static void saveDataToFiles(MinecraftServer server)
-    {
-        File rootSaveFolder = server.getWorldPath(LevelResource.ROOT).toFile();
-        // Load data from the root save folder
-        //StockMarketDataHandler.setSaveFolder(rootSaveFolder);
-        //StockMarketDataHandler.saveAll();
-    }
-    public static boolean isDataLoaded() {
-        //return StockMarketDataHandler.isLoaded();
-        return false;
+    public static StockMarketAPI getAPI() {
+        if(backend == null)
+            backend = new StockMarketModBackend();
+        return backend;
     }
 
 }

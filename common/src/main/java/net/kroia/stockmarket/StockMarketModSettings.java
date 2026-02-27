@@ -1,17 +1,75 @@
 package net.kroia.stockmarket;
 
-import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.item.custom.money.MoneyItem;
+import net.kroia.modutilities.setting.ModSettings;
+import net.kroia.modutilities.setting.Setting;
+import net.kroia.modutilities.setting.SettingsGroup;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
+public class StockMarketModSettings extends ModSettings {
 
-public class StockMarketModSettings {
+    private static StockMarketModBackend.Instances BACKEND_INSTANCES;
+    public static void setBackend(StockMarketModBackend.Instances backend) {
+        BACKEND_INSTANCES = backend;
+    }
+
+    public final Utilities UTILITIES = createGroup(new Utilities());
+
+    public StockMarketModSettings() {
+        super("StockMarketModSettings");
+    }
+
     public static void init()
     {
       //  Market.init();
     }
+
+    public static final class Utilities extends SettingsGroup
+    {
+        public final Setting<Long> SAVE_INTERVAL_MINUTES = registerSetting("SAVE_INTERVAL_MINUTES",5L, Long.class); // 5 minutes
+        public final Setting<Boolean> LOGGING_ENABLE_INFO = registerSetting("LOGGING_ENABLE_INFO",true, Boolean.class);
+        public final Setting<Boolean> LOGGING_ENABLE_WARNING = registerSetting("LOGGING_ENABLE_WARNING",true, Boolean.class);
+        public final Setting<Boolean> LOGGING_ENABLE_ERROR = registerSetting("LOGGING_ENABLE_ERROR",true, Boolean.class);
+        public final Setting<Boolean> LOGGING_ENABLE_DEBUG = registerSetting("LOGGING_ENABLE_DEBUG",false, Boolean.class);
+        public final Setting<Integer> ADMIN_PERMISSION_LEVEL = registerSetting("ADMIN_PERMISSION_LEVEL",2, Integer.class);
+
+        public Utilities() { super("Utilities"); }
+    }
+    public static final class Player extends SettingsGroup
+    {
+        public final Setting<Float> STARTING_BALANCE = registerSetting("STARTING_BALANCE", 0.f, Float.class); // Starting balance for new players
+
+        public Player() { super("Player"); }
+    }
+
+
+
+    /**
+     * ---------------------------------------------------------------------------------------
+     *                Utilities for creating and managing settings groups
+     * ---------------------------------------------------------------------------------------
+     */
+
+    @Override
+    public boolean saveSettings(String filePath) {
+        boolean success = super.saveSettings(filePath);
+        if (success) {
+            // todo: replace the below
+            //BACKEND_INSTANCES.SERVER_EVENTS.SETTINGS_SAVED_TO_FILE.notifyListeners();
+        }
+        return success;
+    }
+
+    @Override
+    public boolean loadSettings(String filePaht) {
+        boolean success = super.loadSettings(filePaht);
+        if (success) {
+            // todo: replace the below
+            //BACKEND_INSTANCES.SERVER_EVENTS.SETTINGS_LOADED_FROM_FILE.notifyListeners();
+        }
+        return success;
+    }
+
+
+
    /* public static final class UI
     {
         public static final int PRICE_HISTORY_SIZE = 100;

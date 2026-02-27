@@ -8,7 +8,6 @@ public final class StockMarketNeoForge {
     public StockMarketNeoForge() {
 
         NeoForgeServerEvents.init();
-        // Run our common setup.
         StockMarketMod.init();
     }
 }
