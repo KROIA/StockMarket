@@ -12,6 +12,7 @@ import net.kroia.stockmarket.api.StockMarketAPI;
 import net.kroia.stockmarket.block.StockMarketBlocks;
 import net.kroia.stockmarket.compat.NEZNAMY_TAB_Placeholders;
 import net.kroia.stockmarket.entity.StockMarketEntities;
+import net.kroia.stockmarket.event.EventRegistration;
 import net.kroia.stockmarket.item.StockMarketCreativeModeTab;
 import net.kroia.stockmarket.item.StockMarketItems;
 import net.kroia.stockmarket.menu.StockMarketMenus;
@@ -53,6 +54,8 @@ public class StockMarketModBackend implements StockMarketAPI {
         StockMarketMenus.init();
         StockMarketCreativeModeTab.init();
         StockMarketTextMessages.init();
+
+        EventRegistration.init();
     }
 
 
