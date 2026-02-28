@@ -11,6 +11,8 @@ import java.nio.charset.StandardCharsets;
 import java.sql.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 
 public class DatabaseManager {
@@ -18,6 +20,13 @@ public class DatabaseManager {
     private static Statement statement;
     private static ResultSet resultSet;
     private static PreparedStatement preparedStatement;
+
+    private static final ExecutorService executor = Executors.newSingleThreadExecutor( r -> {
+        Thread t = new Thread(r, "db-worker");
+        t.setDaemon(true);
+        return t;
+    });
+
 
     public static final Path DATABASE_PATH = Path.of("data", "stockmarket", "database");
 
@@ -77,6 +86,7 @@ public class DatabaseManager {
                 Files.createDirectories(dbPath.toAbsolutePath());
             }
             connection = DriverManager.getConnection(url);
+            connection.setAutoCommit(false);
         } catch (SQLException e) {
             StockMarketMod.LOGGER.error("Failed to connect to database {}", e.getMessage());
             return;
@@ -100,4 +110,26 @@ public class DatabaseManager {
             }
 
     }
+
+
+    public static ExecutorService getDatabaseThread(){
+        return executor;
+    }
+
+    public static Connection getConnection(){
+        return connection;
+    }
+
+    public static void commitTransaction() throws SQLException {
+        try{
+            connection.commit();
+        }
+        catch (SQLException e){
+            connection.rollback();
+            StockMarketMod.LOGGER.error("Failed to commit transaction {}",  e.getMessage());
+        }
+    }
+
+
+
 }
