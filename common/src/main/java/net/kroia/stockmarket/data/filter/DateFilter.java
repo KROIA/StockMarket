@@ -1,16 +1,16 @@
 package net.kroia.stockmarket.data.filter;
 
 public class DateFilter implements DataFilter {
-    int startTime;
-    int endTime;
+    long startTime;
+    long endTime;
 
 
     @Override
     public String getClause(String columnName) {
-        return columnName + " > " + startTime + " AND " + columnName + " < " + endTime;
+        return columnName + " >= " + startTime + " AND " + columnName + " <= " + endTime;
     }
 
-    public DateFilter(int startTime, int endTime) {
+    public DateFilter(long startTime, long endTime) {
         this.startTime = startTime;
         this.endTime = endTime;
     }

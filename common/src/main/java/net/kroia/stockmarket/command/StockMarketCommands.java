@@ -1,12 +1,25 @@
 package net.kroia.stockmarket.command;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.brigadier.arguments.StringArgumentType;
+import net.kroia.stockmarket.data.Table.Data.MarketPriceStruct;
+import net.kroia.stockmarket.data.Table.MarketPriceManager;
+import net.kroia.stockmarket.data.filter.DateFilter;
+import net.kroia.stockmarket.data.filter.EqualityFilter;
+import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.Commands;
+import net.minecraft.network.chat.Component;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 
 public class StockMarketCommands {
     // Method to register commands
-    public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
+    public static void register(CommandDispatcher<CommandSourceStack> dispatcher, CommandBuildContext commandBuildContext, Commands.CommandSelection commandSelection) {
 
 
         // /StockMarket setPriceCandleTimeInterval <seconds>                            - Set the interval for the price candles. (Each candle will represent this amount of time)
@@ -46,7 +59,52 @@ public class StockMarketCommands {
         // /StockMarket save                                                            - Save market data
         // /StockMarket load                                                            - Load market data
 
+
+        dispatcher.register(Commands.literal("stockmarket")
+                .then(Commands.literal("testdb")
+                        .then(Commands.argument("record_count", IntegerArgumentType.integer())
+                        .executes(context -> {
+                            int numRecords = IntegerArgumentType.getInteger(context, "record_count");
+                            List<MarketPriceStruct> exData = MarketPriceStruct.generateExampleData(numRecords);
+                            MarketPriceManager manager = MarketPriceManager.create();
+                            long time = System.currentTimeMillis();
+                            manager.save(exData).thenRun(() -> {
+                                long writeTime = System.currentTimeMillis() - time;
+                                context.getSource().getPlayer().sendSystemMessage(Component.literal("Database write for " + numRecords + " records took " + writeTime + " ms"));
+                                long time2 = System.currentTimeMillis();
+                                manager.getHistory(Optional.of(new DateFilter(Long.MAX_VALUE, Long.MAX_VALUE)), Optional.empty(), -1)
+                                        .thenRun(() -> {
+                                            long readTime =  System.currentTimeMillis() - time2;
+                                            context.getSource().getPlayer().sendSystemMessage(Component.literal("Database read for " + numRecords + " records took " + readTime + " ms"));
+                                            long time3 = System.currentTimeMillis();
+                                            manager.removeHistory(Optional.of(new DateFilter(Long.MAX_VALUE, Long.MAX_VALUE)), Optional.empty())
+                                                    .thenRun(() -> {
+                                                        long deleteTime = System.currentTimeMillis() - time3;
+                                                        context.getSource().getPlayer().sendSystemMessage(Component.literal("Database delete for " + numRecords + " records took " + deleteTime + " ms"));
+                                                    });
+                                        });
+
+                            });
+                            return 1;
+                        })))
+                .then(Commands.literal("db")
+                        .then(Commands.argument("table", StringArgumentType.string())
+                        .then(Commands.literal("count")
+                                .executes(context -> {
+                                    MarketPriceManager manager = MarketPriceManager.create();
+                                    manager.getRecordCount(Optional.empty(), Optional.empty())
+                                            .thenAccept(count -> {
+                                                context.getSource().getPlayer().sendSystemMessage(Component.literal("MarketPrice table currently has " + count + " records."));
+                                            });
+                                    return 1;
+                                })))));
+
+
+
+
         /*
+
+
         dispatcher.register(
                 Commands.literal("StockMarket")
                         .then(Commands.literal("setPriceCandleTimeInterval")

@@ -39,6 +39,7 @@ public class DatabaseManager {
     public static void createDatabase(MinecraftServer server) {
         try {
             DatabaseManager.executeSqlFile("/sql/MarketPrice.sql");
+            DatabaseManager.executeSqlFile("/sql/OrderHistory.sql");
         }
         catch(SQLException | IOException e){
             StockMarketMod.LOGGER.error("Failed to create database table {}", e.getMessage());
@@ -101,6 +102,7 @@ public class DatabaseManager {
     public static void shutdownDatabase(MinecraftServer server){
         try{
             if(connection != null && !connection.isClosed()) {
+                connection.commit();
                 connection.close();
                 StockMarketMod.LOGGER.info("Successfully closed database connection {}", connection.getCatalog());
             }
