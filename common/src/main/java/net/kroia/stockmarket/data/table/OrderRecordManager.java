@@ -2,6 +2,7 @@ package net.kroia.stockmarket.data.table;
 
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.data.DatabaseManager;
+import net.kroia.stockmarket.data.filter.UUIDFilter;
 import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
 import net.kroia.stockmarket.data.filter.DateFilter;
 import net.kroia.stockmarket.data.filter.EqualityFilter;
@@ -19,8 +20,8 @@ import java.util.concurrent.CompletableFuture;
 public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
     private static OrderRecordManager instance;
 
-    public static final String INSERT = "INSERT INTO OrderHistory (itemid, userid, type, amount, price, time) VALUES (?, ?, ?, ?, ?, ?)";
-    public static final String SELECT = "SELECT itemid, userid, type, amount, price, time FROM OrderHistory";
+    public static final String INSERT = "INSERT INTO OrderHistory (itemid, userid_one, userid_two, type, amount, price, time) VALUES (?, ?, ?, ?, ?, ?, ?)";
+    public static final String SELECT = "SELECT itemid, userid_one, userid_two, type, amount, price, time FROM OrderHistory";
     public static final String DELETE = "DELETE FROM OrderHistory";
 
 
@@ -58,11 +59,12 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
     public void queueRecord(PreparedStatement stmt, OrderRecordStruct data) {
         try {
             stmt.setShort(1, data.itemID());
-            stmt.setString(2, data.userID().toString());
-            stmt.setInt(3, data.type());
-            stmt.setInt(4, data.amount());
-            stmt.setLong(5, data.price());
-            stmt.setLong(6, data.time());
+            stmt.setLong(2, data.userID().getMostSignificantBits());
+            stmt.setLong(3, data.userID().getLeastSignificantBits());
+            stmt.setInt(4, data.type());
+            stmt.setInt(5, data.amount());
+            stmt.setLong(6, data.price());
+            stmt.setLong(7, data.time());
             stmt.addBatch();
         }
         catch(SQLException e){
@@ -71,12 +73,12 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
     }
 
 
-    public CompletableFuture<List<OrderRecordStruct>> getHistory(Optional<DateFilter> dateFilter, Optional<EqualityFilter> userFilter, Optional<EqualityFilter> marketFilter){
+    public CompletableFuture<List<OrderRecordStruct>> getHistory(Optional<DateFilter> dateFilter, Optional<UUIDFilter> userFilter, Optional<EqualityFilter> marketFilter){
         return query(dateFilter, userFilter, marketFilter, SELECT);
 
     }
 
-    public CompletableFuture<Void> removeHistory(Optional<DateFilter> dateFilter, Optional<EqualityFilter> userFilter, Optional<EqualityFilter> marketFilter) {
+    public CompletableFuture<Void> removeHistory(Optional<DateFilter> dateFilter, Optional<UUIDFilter> userFilter, Optional<EqualityFilter> marketFilter) {
         return CompletableFuture.runAsync(() -> {
             try {
                 boolean started = false;
@@ -86,7 +88,7 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
                     started = true;
                 }
                 if (userFilter.isPresent()) {
-                    statement += (started ? " AND " : " WHERE ") + userFilter.get().getClause("userid");
+                    statement += (started ? " AND " : " WHERE ") + userFilter.get().getClause("userid_one", "userid_two");
                     started = true;
                 }
                 if (marketFilter.isPresent()) {
@@ -103,7 +105,7 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
         }, DatabaseManager.getDatabaseThread());
     }
 
-    public CompletableFuture<List<OrderRecordStruct>> query(Optional<DateFilter> dateFilter, Optional<EqualityFilter> userFilter, Optional<EqualityFilter> marketFilter, String stmt){
+    public CompletableFuture<List<OrderRecordStruct>> query(Optional<DateFilter> dateFilter, Optional<UUIDFilter> userFilter, Optional<EqualityFilter> marketFilter, String stmt){
         return CompletableFuture.supplyAsync(() -> {
             try {
                 boolean started = false;
@@ -113,7 +115,7 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
                     started = true;
                 }
                 if (userFilter.isPresent()) {
-                    statement += (started ? " AND " : " WHERE ") + userFilter.get().getClause("userid");
+                    statement += (started ? " AND " : " WHERE ") + userFilter.get().getClause("userid_one", "userid_two");
                     started = true;
                 }
                 if (marketFilter.isPresent()) {
@@ -138,8 +140,7 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
 
     public OrderRecordStruct mapRow(ResultSet rs){
         try {
-            StockMarketMod.LOGGER.info(rs.getString(2));
-            OrderRecordStruct struct =  new OrderRecordStruct(rs.getShort(1), UUID.fromString(rs.getString(2)), rs.getInt(3), rs.getInt(4), rs.getLong(5), rs.getLong(6));
+            OrderRecordStruct struct =  new OrderRecordStruct(rs.getShort(1), new UUID(rs.getLong(2), rs.getLong(3)), rs.getInt(4), rs.getInt(5), rs.getLong(6), rs.getLong(7));
             return struct;
         }
         catch(SQLException e){
