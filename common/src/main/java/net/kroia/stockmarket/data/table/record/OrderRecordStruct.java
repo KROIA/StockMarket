@@ -1,11 +1,11 @@
-package net.kroia.stockmarket.data.Table.Data;
+package net.kroia.stockmarket.data.table.record;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.UUID;
 
-public record OrderRecordStruct(short itemID, UUID userID, int type, int amount, int price, long time) {
+public record OrderRecordStruct(short itemID, UUID userID, int type, int amount, long price, long time) {
 
     private static final Random RANDOM = new Random();
 

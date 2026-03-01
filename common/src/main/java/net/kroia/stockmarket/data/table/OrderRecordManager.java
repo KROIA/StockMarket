@@ -1,10 +1,8 @@
-package net.kroia.stockmarket.data.Table;
+package net.kroia.stockmarket.data.table;
 
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.data.DatabaseManager;
-import net.kroia.stockmarket.data.Table.Data.MarketPriceStruct;
-import net.kroia.stockmarket.data.Table.Data.OrderRecordStruct;
-import net.kroia.stockmarket.data.filter.DataFilter;
+import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
 import net.kroia.stockmarket.data.filter.DateFilter;
 import net.kroia.stockmarket.data.filter.EqualityFilter;
 
@@ -19,9 +17,10 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
+    private static OrderRecordManager instance;
 
-    public static final String INSERT = "INSERT INTO OrderHistory (itemid, userid, type, amount, price, timestamp) VALUES (?, ?, ?, ?, ?, ?)";
-    public static final String SELECT = "SELECT * FROM OrderHistory";
+    public static final String INSERT = "INSERT INTO OrderHistory (itemid, userid, type, amount, price, time) VALUES (?, ?, ?, ?, ?, ?)";
+    public static final String SELECT = "SELECT itemid, userid, type, amount, price, time FROM OrderHistory";
     public static final String DELETE = "DELETE FROM OrderHistory";
 
 
@@ -58,11 +57,11 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
     @Override
     public void queueRecord(PreparedStatement stmt, OrderRecordStruct data) {
         try {
-            stmt.setInt(1, data.itemID());
-            stmt.setBytes(2, uuidToBytes(data.userID()));
+            stmt.setShort(1, data.itemID());
+            stmt.setString(2, data.userID().toString());
             stmt.setInt(3, data.type());
             stmt.setInt(4, data.amount());
-            stmt.setInt(5, data.price());
+            stmt.setLong(5, data.price());
             stmt.setLong(6, data.time());
             stmt.addBatch();
         }
@@ -71,34 +70,54 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
         }
     }
 
-    private byte[] uuidToBytes(UUID uuid) {
-        ByteBuffer buf = ByteBuffer.wrap(new byte[16]);
-        buf.putLong(uuid.getMostSignificantBits());
-        buf.putLong(uuid.getLeastSignificantBits());
-        return buf.array();
-    }
 
     public CompletableFuture<List<OrderRecordStruct>> getHistory(Optional<DateFilter> dateFilter, Optional<EqualityFilter> userFilter, Optional<EqualityFilter> marketFilter){
         return query(dateFilter, userFilter, marketFilter, SELECT);
 
     }
 
-    public CompletableFuture<List<OrderRecordStruct>> deleteHistory(Optional<DateFilter> dateFilter, Optional<EqualityFilter> userFilter, Optional<EqualityFilter> marketFilter){
-        return query(dateFilter, userFilter, marketFilter, DELETE);
+    public CompletableFuture<Void> removeHistory(Optional<DateFilter> dateFilter, Optional<EqualityFilter> userFilter, Optional<EqualityFilter> marketFilter) {
+        return CompletableFuture.runAsync(() -> {
+            try {
+                boolean started = false;
+                String statement = DELETE;
+                if (dateFilter.isPresent()) {
+                    statement += " WHERE " + dateFilter.get().getClause("time");
+                    started = true;
+                }
+                if (userFilter.isPresent()) {
+                    statement += (started ? " AND " : " WHERE ") + userFilter.get().getClause("userid");
+                    started = true;
+                }
+                if (marketFilter.isPresent()) {
+                    statement += (started ? " AND " : " WHERE ") + marketFilter.get().getClause("itemid");
+                }
+
+                PreparedStatement preparedStatement = DatabaseManager.getConnection().prepareStatement(statement);
+                preparedStatement.executeUpdate();
+                DatabaseManager.commitTransaction();
+
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
+            }
+        }, DatabaseManager.getDatabaseThread());
     }
 
     public CompletableFuture<List<OrderRecordStruct>> query(Optional<DateFilter> dateFilter, Optional<EqualityFilter> userFilter, Optional<EqualityFilter> marketFilter, String stmt){
         return CompletableFuture.supplyAsync(() -> {
             try {
+                boolean started = false;
                 String statement = stmt;
-                if(dateFilter.isPresent()){
-                    statement = statement + " WHERE " + dateFilter.get().getClause("time");
+                if (dateFilter.isPresent()) {
+                    statement += " WHERE " + dateFilter.get().getClause("time");
+                    started = true;
                 }
-                if(userFilter.isPresent()){
-                    statement = statement + " AND " + userFilter.get().getClause("userid");
+                if (userFilter.isPresent()) {
+                    statement += (started ? " AND " : " WHERE ") + userFilter.get().getClause("userid");
+                    started = true;
                 }
-                if(marketFilter.isPresent()){
-                    statement = statement + " AND " + marketFilter.get().getClause("itemid");
+                if (marketFilter.isPresent()) {
+                    statement += (started ? " AND " : " WHERE ") + marketFilter.get().getClause("itemid");
                 }
                 List<OrderRecordStruct> result = new ArrayList<>();
                 PreparedStatement preparedStatement = DatabaseManager.getConnection().prepareStatement(statement);
@@ -116,18 +135,23 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
         }, DatabaseManager.getDatabaseThread());
     }
 
-    private UUID bytesToUuid(byte[] bytes) {
-        ByteBuffer buf = ByteBuffer.wrap(bytes);
-        return new UUID(buf.getLong(), buf.getLong());
-    }
 
     public OrderRecordStruct mapRow(ResultSet rs){
         try {
-            return new OrderRecordStruct(rs.getShort(1), bytesToUuid(rs.getBytes(2)), rs.getInt(3), rs.getInt(4), rs.getInt(5), rs.getLong(6));
+            StockMarketMod.LOGGER.info(rs.getString(2));
+            OrderRecordStruct struct =  new OrderRecordStruct(rs.getShort(1), UUID.fromString(rs.getString(2)), rs.getInt(3), rs.getInt(4), rs.getLong(5), rs.getLong(6));
+            return struct;
         }
         catch(SQLException e){
             StockMarketMod.LOGGER.warn("Failed to read MarketPrice record, is the data corrupt?");
             return null;
         }
+    }
+
+    public static OrderRecordManager create(){
+        if(instance == null){
+            instance = new OrderRecordManager();
+        }
+        return instance;
     }
 }

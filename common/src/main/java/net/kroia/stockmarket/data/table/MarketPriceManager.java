@@ -1,16 +1,14 @@
-package net.kroia.stockmarket.data.Table;
+package net.kroia.stockmarket.data.table;
 
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.data.DatabaseManager;
-import net.kroia.stockmarket.data.Table.Data.MarketPriceStruct;
-import net.kroia.stockmarket.data.Table.Data.OrderRecordStruct;
+import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import net.kroia.stockmarket.data.filter.DateFilter;
 import net.kroia.stockmarket.data.filter.EqualityFilter;
 
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -20,7 +18,7 @@ public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
     private static MarketPriceManager instance;
 
     public static final String INSERT = "INSERT INTO MarketPrice (marketid, price, low, high, time) VALUES (?, ?, ?, ?, ?)";
-    public static final String SELECT = "SELECT * FROM MarketPrice";
+    public static final String SELECT = "SELECT marketid, price, low, high, time FROM MarketPrice";
     public static final String DELETE = "DELETE FROM MarketPrice";
     public static final String COUNT =  "SELECT COUNT(*) FROM MarketPrice";
 
@@ -65,9 +63,9 @@ public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
     public void queueRecord(PreparedStatement stmt, MarketPriceStruct data){
         try {
             stmt.setShort(1, data.id());
-            stmt.setInt(2, data.price());
-            stmt.setInt(3, data.low());
-            stmt.setInt(4, data.high());
+            stmt.setLong(2, data.price());
+            stmt.setLong(3, data.low());
+            stmt.setLong(4, data.high());
             stmt.setLong(5, data.time());
             stmt.addBatch();
         }
@@ -137,7 +135,7 @@ public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
 
     public MarketPriceStruct mapRow(ResultSet rs){
         try {
-            return new MarketPriceStruct(rs.getShort(1), rs.getInt(2), rs.getInt(3), rs.getInt(4), rs.getLong(5));
+            return new MarketPriceStruct(rs.getShort(1), rs.getLong(2), rs.getLong(3), rs.getLong(4), rs.getLong(5));
         }
         catch(SQLException e){
             StockMarketMod.LOGGER.warn("Failed to read MarketPrice record, is the data corrupt?");

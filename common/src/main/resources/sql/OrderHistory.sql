@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS OrderHistory (
                                             id INTEGER PRIMARY KEY AUTOINCREMENT,
                                             itemid INTEGER NOT NULL,
-                                            userid BLOB NOT NULL,
+                                            userid NVARCHAR(36) NOT NULL,
                                             type INTEGER NOT NULL,
                                             amount INTEGER NOT NULL,
                                             price INTEGER NOT NULL,

@@ -1,11 +1,10 @@
-package net.kroia.stockmarket.data.Table.Data;
+package net.kroia.stockmarket.data.table.record;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
-import java.util.stream.IntStream;
 
-public record MarketPriceStruct(short id, int price, int low, int high, long time) {
+public record MarketPriceStruct(short id, long price, long low, long high, long time) {
     private static final Random RANDOM = new Random();
 
 

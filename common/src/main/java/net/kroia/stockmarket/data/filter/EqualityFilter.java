@@ -6,7 +6,7 @@ public class EqualityFilter implements DataFilter{
 
     @Override
     public String getClause(String columnName) {
-        return columnName + " = " + id;
+        return columnName + " = " + id.toString();
     }
 
     public EqualityFilter(Object id) {

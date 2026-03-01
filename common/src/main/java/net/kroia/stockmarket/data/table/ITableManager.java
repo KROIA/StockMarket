@@ -1,7 +1,6 @@
-package net.kroia.stockmarket.data.Table;
+package net.kroia.stockmarket.data.table;
 
 import java.sql.PreparedStatement;
-import java.sql.Statement;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
