@@ -1,6 +1,7 @@
 plugins {
     id 'com.github.johnrengelman.shadow'
 }
+
 repositories {
     maven { url 'https://maven.quiltmc.org/repository/release/' }
     maven {
@@ -11,6 +12,7 @@ repositories {
     flatDir {
         dir "../../../MC_ModUtilities/mc_${minecraft_version}_MC_ModUtilities/fabric/build/libs"
     }
+
 
     //mavenLocal()
     //maven { url 'https://jitpack.io' }
@@ -54,6 +56,7 @@ dependencies {
     //include("net.kroia:modutilities-fabric:$rootProject.modutilities_version")
 
     modCompileOnlyApi("mezz.jei:jei-${rootProject.minecraft_version}-fabric-api:${rootProject.jei_version}")
+
 }
 
 processResources {

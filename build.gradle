@@ -47,6 +47,7 @@ subprojects {
 
         // https://github.com/NEZNAMY/TAB API
         maven { url 'https://jitpack.io' }
+        maven { url = "https://api.modrinth.com/maven" }
     }
 
     dependencies {
@@ -63,6 +64,8 @@ subprojects {
 
         // https://github.com/NEZNAMY/TAB API
         compileOnly 'com.github.NEZNAMY:TAB-API:5.2.5'
+
+
     }
 
     java {

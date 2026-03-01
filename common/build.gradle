@@ -18,6 +18,7 @@ repositories {
 
 }
 
+
 dependencies {
     // We depend on Fabric Loader here to use the Fabric @Environment annotations,
     // which get remapped to the correct annotations on each platform.
@@ -31,4 +32,9 @@ dependencies {
     modCompileOnly("net.kroia:modutilities-common:$rootProject.modutilities_version")
 
     compileOnly("mezz.jei:jei-${minecraft_version}-common-api:${jei_version}")
+    implementation 'org.xerial:sqlite-jdbc:3.46.0.0'
+
+
+
+
 }
