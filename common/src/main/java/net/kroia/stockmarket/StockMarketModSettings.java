@@ -12,6 +12,7 @@ public class StockMarketModSettings extends ModSettings {
     }
 
     public final Utilities UTILITIES = createGroup(new Utilities());
+    public final Market MARKET = createGroup(new Market());
 
     public StockMarketModSettings() {
         super("StockMarketModSettings");
@@ -38,6 +39,14 @@ public class StockMarketModSettings extends ModSettings {
         public final Setting<Float> STARTING_BALANCE = registerSetting("STARTING_BALANCE", 0.f, Float.class); // Starting balance for new players
 
         public Player() { super("Player"); }
+    }
+
+
+    public static final class Market extends SettingsGroup
+    {
+        public final Setting<Integer> VIRTUAL_ORDERBOOK_DEFAULT_ARRAY_SIZE = registerSetting("VIRTUAL_ORDERBOOK_DEFAULT_ARRAY_SIZE", 100, Integer.class); // Starting balance for new players
+
+        public Market() { super("Market"); }
     }
 
 

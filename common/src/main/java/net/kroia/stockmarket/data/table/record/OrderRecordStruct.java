@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.UUID;
 
-public record OrderRecordStruct(short itemID, UUID userID, int type, int amount, long price, long time) {
+public record OrderRecordStruct(short itemID, UUID userID, int type, long amount, long price, long time) {
 
     private static final Random RANDOM = new Random();
 

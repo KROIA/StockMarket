@@ -62,7 +62,7 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
             stmt.setLong(2, data.userID().getMostSignificantBits());
             stmt.setLong(3, data.userID().getLeastSignificantBits());
             stmt.setInt(4, data.type());
-            stmt.setInt(5, data.amount());
+            stmt.setLong(5, data.amount());
             stmt.setLong(6, data.price());
             stmt.setLong(7, data.time());
             stmt.addBatch();
@@ -140,7 +140,7 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
 
     public OrderRecordStruct mapRow(ResultSet rs){
         try {
-            OrderRecordStruct struct =  new OrderRecordStruct(rs.getShort(1), new UUID(rs.getLong(2), rs.getLong(3)), rs.getInt(4), rs.getInt(5), rs.getLong(6), rs.getLong(7));
+            OrderRecordStruct struct =  new OrderRecordStruct(rs.getShort(1), new UUID(rs.getLong(2), rs.getLong(3)), rs.getInt(4), rs.getLong(5), rs.getLong(6), rs.getLong(7));
             return struct;
         }
         catch(SQLException e){

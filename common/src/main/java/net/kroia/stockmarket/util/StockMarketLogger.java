@@ -12,6 +12,7 @@ public class StockMarketLogger {
 
     public StockMarketLogger(StockMarketModBackend.Instances instances) {
         INSTANCES = instances;
+        LoggableObj.setBackend(INSTANCES);
     }
 
     public void info(String message) {
