@@ -1,5 +1,7 @@
 package net.kroia.stockmarket;
 
+import net.kroia.banksystem.item.BankSystemItems;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.setting.ModSettings;
 import net.kroia.modutilities.setting.Setting;
 import net.kroia.modutilities.setting.SettingsGroup;
@@ -45,6 +47,7 @@ public class StockMarketModSettings extends ModSettings {
     public static final class Market extends SettingsGroup
     {
         public final Setting<Integer> VIRTUAL_ORDERBOOK_DEFAULT_ARRAY_SIZE = registerSetting("VIRTUAL_ORDERBOOK_DEFAULT_ARRAY_SIZE", 100, Integer.class); // Starting balance for new players
+        public final Setting<ItemID> CURRENCY = registerSetting("CURRENCY", ItemID.of(BankSystemItems.MONEY.get().getDefaultInstance()), ItemID.class); // Starting balance for new players
 
         public Market() { super("Market"); }
     }

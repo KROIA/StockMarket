@@ -2,6 +2,8 @@ package net.kroia.stockmarket;
 
 import dev.architectury.event.events.client.ClientPlayerEvent;
 import dev.architectury.event.events.common.TickEvent;
+import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.api.BankSystemAPI;
 import net.kroia.banksystem.block.BankSystemBlocks;
 import net.kroia.banksystem.entity.BankSystemEntities;
 import net.kroia.banksystem.item.BankSystemCreativeModeTab;
@@ -30,6 +32,7 @@ public class StockMarketModBackend implements StockMarketAPI {
 
     public static class Instances
     {
+        public BankSystemAPI BANK_SYSTEM_API;
         public StockMarketModSettings SERVER_SETTINGS;
 
 
@@ -41,6 +44,7 @@ public class StockMarketModBackend implements StockMarketAPI {
 
     StockMarketModBackend()
     {
+        INSTANCES.BANK_SYSTEM_API = null;
         INSTANCES.LOGGER = new StockMarketLogger(INSTANCES);
 
 
@@ -56,6 +60,8 @@ public class StockMarketModBackend implements StockMarketAPI {
         StockMarketTextMessages.init();
 
         EventRegistration.init();
+
+        INSTANCES.BANK_SYSTEM_API = BankSystemMod.getAPI();
     }
 
 
@@ -87,6 +93,8 @@ public class StockMarketModBackend implements StockMarketAPI {
         loadDataFromFiles(server);
 
         TickEvent.SERVER_POST.register(StockMarketModBackend::onServerTick);
+
+        //INSTANCES.BANK_SYSTEM_API.getEvents().getBankDataLoadedFromFileSignal().addListener();
     }
 
 

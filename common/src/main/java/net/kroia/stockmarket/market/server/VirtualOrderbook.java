@@ -163,6 +163,10 @@ public class VirtualOrderbook implements ServerSaveable
     {
         return dynamicArray.get(price);
     }
+    public float getVolumeRounded(long price)
+    {
+        return dynamicArray.getRounded(price);
+    }
 
     /**
      * Gets the volume in the given price range
@@ -175,14 +179,22 @@ public class VirtualOrderbook implements ServerSaveable
      */
     public float getVolume(long startPrice, long endPrice)
     {
-        float sum = 0;
-        for(long i = startPrice; i <= endPrice; i++)
-        {
-            sum += getVolume(i);
-        }
-        return sum;
+        return dynamicArray.getSum(startPrice, endPrice+1);
+    }
+    public long getVolumeRounded(long startPrice, long endPrice)
+    {
+        return dynamicArray.getSumRounded(startPrice, endPrice+1);
     }
 
+
+    public float getCapital(long startPrice, long endPrice)
+    {
+        return dynamicArray.getSumProduct(startPrice, endPrice+1);
+    }
+    public long getCapitalRounded(long startPrice, long endPrice)
+    {
+        return dynamicArray.getSumProductRounded(startPrice, endPrice+1);
+    }
 
 
 
@@ -212,6 +224,36 @@ public class VirtualOrderbook implements ServerSaveable
                 return result;
         }
         return 0;
+    }
+    public long getDefaultVolumeRounded(long price)
+    {
+        if(defaultVolumeProvider != null)
+        {
+            long result = roundConservative(defaultVolumeProvider.apply(price));
+            if(price > currentMarketPrice)
+                return Math.abs(result);
+            else if(price < currentMarketPrice)
+                return -Math.abs(result);
+            else
+                return result;
+        }
+        return 0;
+    }
+
+
+    /**
+     * Rounds the given value in such a way that the absolute value of the returned
+     * long is always less or equal than the input:
+     *                      |result| <= |input| && sign(result) == sign(input)
+     * @param value
+     * @return
+     */
+    public static long roundConservative(float value)
+    {
+        if(value < 0)
+            return (long)Math.ceil(value);
+        else
+            return (long)Math.floor(value);
     }
 
     @Override

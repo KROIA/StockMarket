@@ -91,6 +91,122 @@ public class DynamicIndexedArray implements ServerSaveable {
         }
         return array[arrayIndex];
     }
+    public long getRounded(long virtualIndex)
+    {
+        int arrayIndex = getArrayIndex(virtualIndex);
+        if(!isInRange(virtualIndex))
+        {
+            return roundConservative(defaultValueProvider.apply(virtualIndex));
+        }
+        return roundConservative(array[arrayIndex]);
+    }
+
+    public float getSum(long virtualStartIndex, long virtualEndIndex)
+    {
+        float sum = 0;
+
+        // Outside the array
+        for(long i=virtualStartIndex; i<indexOffset; ++i)
+        {
+            sum += defaultValueProvider.apply(i);
+        }
+
+        // Inside the array range
+        int arrayLoopEndIndex = (int)Math.min(virtualEndIndex - indexOffset, array.length);
+        for(int i=0; i<arrayLoopEndIndex; ++i)
+        {
+            sum += array[i];
+        }
+
+        // Outside the array
+        for(long i=virtualStartIndex + arrayLoopEndIndex; i<virtualEndIndex; i++)
+        {
+            sum += defaultValueProvider.apply(i);
+        }
+        return sum;
+    }
+    public long getSumRounded(long virtualStartIndex, long virtualEndIndex)
+    {
+        long sum = 0;
+
+        // Outside the array
+        for(long i=virtualStartIndex; i<indexOffset; ++i)
+        {
+            sum += roundConservative(defaultValueProvider.apply(i));
+        }
+
+        // Inside the array range
+        int arrayLoopEndIndex = (int)Math.min(virtualEndIndex - indexOffset, array.length);
+        for(int i=0; i<arrayLoopEndIndex; ++i)
+        {
+            sum += roundConservative(array[i]);
+        }
+
+        // Outside the array
+        for(long i=virtualStartIndex + arrayLoopEndIndex; i<virtualEndIndex; i++)
+        {
+            sum += roundConservative(defaultValueProvider.apply(i));
+        }
+        return sum;
+    }
+
+
+    /**
+     * Multiplies each element with its virtualIndex and sums them up
+     * @param virtualStartIndex
+     * @param virtualEndIndex
+     * @return
+     */
+    public float getSumProduct(long virtualStartIndex, long virtualEndIndex)
+    {
+        float sum = 0;
+
+        // Outside the array
+        for(long i=virtualStartIndex; i<indexOffset; ++i)
+        {
+            sum += defaultValueProvider.apply(i) * i;
+        }
+
+        // Inside the array range
+        int arrayLoopEndIndex = (int)Math.min(virtualEndIndex - indexOffset, array.length);
+        for(int i=0; i<arrayLoopEndIndex; ++i)
+        {
+            sum += array[i] * (indexOffset + i);
+        }
+
+        // Outside the array
+        for(long i=virtualStartIndex + arrayLoopEndIndex; i<virtualEndIndex; i++)
+        {
+            sum += defaultValueProvider.apply(i) * i;
+        }
+        return sum;
+    }
+    public long getSumProductRounded(long virtualStartIndex, long virtualEndIndex)
+    {
+        long sum = 0;
+
+        // Outside the array
+        for(long i=virtualStartIndex; i<indexOffset; ++i)
+        {
+            sum += roundConservative(defaultValueProvider.apply(i)) * i;
+        }
+
+        // Inside the array range
+        int arrayLoopEndIndex = (int)Math.min(virtualEndIndex - indexOffset, array.length);
+        for(int i=0; i<arrayLoopEndIndex; ++i)
+        {
+            sum += roundConservative(array[i]) * (indexOffset + i);
+        }
+
+        // Outside the array
+        for(long i=virtualStartIndex + arrayLoopEndIndex; i<virtualEndIndex; i++)
+        {
+            sum += roundConservative(defaultValueProvider.apply(i)) * i;
+        }
+        return sum;
+    }
+
+
 
     /**
      * @param virtualIndex on which the value should be set
@@ -321,6 +437,21 @@ public class DynamicIndexedArray implements ServerSaveable {
             return true;
         }
         return false;
+    }
+
+    /**
+     * Rounds the given value in such a way that the absolute value of the returned
+     * long is always less or equal than the input:
+     *                      |result| <= |input| && sign(result) == sign(input)
+     * @param value
+     * @return
+     */
+    public static long roundConservative(float value)
+    {
+        if(value < 0)
+            return (long)Math.ceil(value);
+        else
+            return (long)Math.floor(value);
     }
 
     public void moveOffset(long offset)

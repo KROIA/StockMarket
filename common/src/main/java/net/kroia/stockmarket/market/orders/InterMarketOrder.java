@@ -88,6 +88,10 @@ public class InterMarketOrder implements ServerSaveable
     {
         return buyOrder.isFilled();
     }
+    public boolean isMarketOrder()
+    {
+        return buyOrder.isMarketOrder();
+    }
 
     /**
      * For saving pending orders

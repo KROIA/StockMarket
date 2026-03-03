@@ -20,7 +20,7 @@ public class Order implements ServerSaveable
 
     @NotNull ItemID itemID;     // The ID for which Market the item gets traded
 
-    @Nullable UUID ownerID;     // The owners player UUID, Bot Order if set to null
+    @Nullable UUID ownerBankID; // The owners bank account UUID, Bot Order if set to null
 
     Type type;                  // The type of order
 
@@ -59,14 +59,14 @@ public class Order implements ServerSaveable
 
 
     // Player order
-    public Order(@NotNull ItemID itemID, @NotNull Type type, long volume, long price, long time, @NotNull UUID ownerID)
+    public Order(@NotNull ItemID itemID, @NotNull Type type, long volume, long price, long time, @NotNull UUID ownerBankID)
     {
         this.itemID = itemID;
         this.type = type;
         this.targetVolume = volume;
         this.startPrice = price;
         this.time = time;
-        this.ownerID = ownerID;
+        this.ownerBankID = ownerBankID;
     }
 
     // Bot order
@@ -77,7 +77,7 @@ public class Order implements ServerSaveable
         this.targetVolume = volume;
         this.startPrice = price;
         this.time = time;
-        this.ownerID = null;
+        this.ownerBankID = null;
     }
 
 
@@ -99,7 +99,7 @@ public class Order implements ServerSaveable
         short itemID_raw = itemID.getShort();
         int typeValue = type.ordinal();
         long averageExecPrice = getAverageExecutionPrice();
-        OrderRecordStruct recordStruct = new OrderRecordStruct(itemID_raw, ownerID, typeValue, filledVolume, averageExecPrice, time);
+        OrderRecordStruct recordStruct = new OrderRecordStruct(itemID_raw, ownerBankID, typeValue, filledVolume, averageExecPrice, time);
         return recordStruct;
     }
 
@@ -107,9 +107,9 @@ public class Order implements ServerSaveable
     {
         return itemID;
     }
-    public @Nullable UUID getOwnerID()
+    public @Nullable UUID getOwnerBankID()
     {
-        return ownerID;
+        return ownerBankID;
     }
     public Type getType()
     {
@@ -175,8 +175,8 @@ public class Order implements ServerSaveable
     @Override
     public boolean save(CompoundTag tag) {
         tag.putShort("ItemID", itemID.getShort());
-        if(ownerID != null)
-            tag.putUUID("OwnerID", ownerID);
+        if(ownerBankID != null)
+            tag.putUUID("OwnerID", ownerBankID);
         tag.putInt("Type", type.ordinal());
         tag.putLong("TargetVolume", targetVolume);
         tag.putLong("FilledVolume", filledVolume);
@@ -202,9 +202,9 @@ public class Order implements ServerSaveable
 
         itemID = new ItemID(tag.getShort("ItemID"));
         if(tag.contains("OwnerID"))
-            ownerID = tag.getUUID("OwnerID");
+            ownerBankID = tag.getUUID("OwnerID");
         else
-            ownerID = null;
+            ownerBankID = null;
         type = Type.values()[tag.getInt("Type")];
         targetVolume = tag.getLong("TargetVolume");
         filledVolume = tag.getLong("FilledVolume");
