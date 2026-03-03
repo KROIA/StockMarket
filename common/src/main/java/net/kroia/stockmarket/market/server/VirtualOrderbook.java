@@ -3,13 +3,12 @@ package net.kroia.stockmarket.market.server;
 import net.kroia.modutilities.persistence.ServerSaveable;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.util.DynamicIndexedArray;
-import net.kroia.stockmarket.util.LoggableObj;
 import net.minecraft.nbt.CompoundTag;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.function.Function;
 
-public class VirtualOrderbook extends LoggableObj implements ServerSaveable
+public class VirtualOrderbook implements ServerSaveable
 {
     private static StockMarketModBackend.Instances BACKEND_INSTANCES;
     public static void setBackend(StockMarketModBackend.Instances backend) {
@@ -238,5 +237,24 @@ public class VirtualOrderbook extends LoggableObj implements ServerSaveable
             success &= dynamicArray.load(arrayTag);
         }
         return success;
+    }
+
+
+
+
+    protected void info(String message) {
+        BACKEND_INSTANCES.LOGGER.info("[VirtualOrderbook]: "+message);
+    }
+    protected void error(String message) {
+        BACKEND_INSTANCES.LOGGER.error("[VirtualOrderbook]: "+message);
+    }
+    protected void error(String message, Throwable throwable) {
+        BACKEND_INSTANCES.LOGGER.error("[VirtualOrderbook]: "+message, throwable);
+    }
+    protected void warn(String message) {
+        BACKEND_INSTANCES.LOGGER.warn("[VirtualOrderbook]: "+message);
+    }
+    protected void debug(String message) {
+        BACKEND_INSTANCES.LOGGER.debug("[VirtualOrderbook]: "+message);
     }
 }

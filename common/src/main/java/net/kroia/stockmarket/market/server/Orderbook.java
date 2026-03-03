@@ -5,14 +5,13 @@ import net.kroia.modutilities.persistence.ServerSaveable;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.orders.InterMarketOrder;
 import net.kroia.stockmarket.market.orders.Order;
-import net.kroia.stockmarket.util.LoggableObj;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 
 import java.util.Comparator;
 import java.util.PriorityQueue;
 
-public class Orderbook extends LoggableObj implements ServerSaveable
+public class Orderbook implements ServerSaveable
 {
     private static StockMarketModBackend.Instances BACKEND_INSTANCES;
     public static void setBackend(StockMarketModBackend.Instances backend) {
@@ -202,9 +201,22 @@ public class Orderbook extends LoggableObj implements ServerSaveable
                 }
             }
         }
-
-
-
         return success;
+    }
+
+    protected void info(String message) {
+        BACKEND_INSTANCES.LOGGER.info("[Orderbook]: "+message);
+    }
+    protected void error(String message) {
+        BACKEND_INSTANCES.LOGGER.error("[Orderbook]: "+message);
+    }
+    protected void error(String message, Throwable throwable) {
+        BACKEND_INSTANCES.LOGGER.error("[Orderbook]: "+message, throwable);
+    }
+    protected void warn(String message) {
+        BACKEND_INSTANCES.LOGGER.warn("[Orderbook]: "+message);
+    }
+    protected void debug(String message) {
+        BACKEND_INSTANCES.LOGGER.debug("[Orderbook]: "+message);
     }
 }
