@@ -73,7 +73,7 @@ public class DatabaseManager {
         try {
             Class<?> driverClass = ClassLoader.getSystemClassLoader().loadClass("org.sqlite.JDBC");
             Driver driver = (Driver) driverClass.getDeclaredConstructor().newInstance();
-            DriverManager.registerDriver(new DriverShim(driver));
+            DriverManager.registerDriver(driver);
         } catch (Exception e) {
             StockMarketMod.LOGGER.error("Failed to register JDBC driver", e);
             return;
