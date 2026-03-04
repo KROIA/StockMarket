@@ -184,6 +184,15 @@ public class Orderbook implements ServerSaveable
         return volume;
     }
 
+    public float getVirtualVolume(long price)
+    {
+        return virtualOrderbook.getVolume(price);
+    }
+    public long getVirtualPriceRounded(long price)
+    {
+        return VirtualOrderbook.roundConservative(getVirtualVolume(price));
+    }
+
 
     public float getVolume(long startPrice, long endPrice)
     {
@@ -426,6 +435,19 @@ public class Orderbook implements ServerSaveable
             return newVolume - currentVolume;
         }
         return 0;
+    }
+
+
+    public boolean removeOrder(Order order)
+    {
+        if(order.isBuyOrder())
+            return buyLimitOrders.remove(order);
+        else
+            return sellLimitOrders.remove(order);
+    }
+    public boolean removeOrder(InterMarketOrder order)
+    {
+        return interMarketBuyOrders.remove(order);
     }
 
 

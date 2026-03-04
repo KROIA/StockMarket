@@ -36,6 +36,8 @@ public class MatchingEngine
     private final @NotNull Consumer<Order> cancelOrderCallback;
     private final @NotNull Consumer<InterMarketOrder> cancelInterMarketOrderCallback;
 
+    private final @NotNull Consumer<Long> priceChanged;
+
 
     private final Orderbook.LongPair pair_cache =  new Orderbook.LongPair();
     private long currentMarketPrice;
@@ -51,7 +53,8 @@ public class MatchingEngine
                           @NotNull Consumer<Order> consumedOrderCallback,
                           @NotNull Consumer<InterMarketOrder> consumedInterMarketOrderCallback,
                           @NotNull Consumer<Order> cancelOrderCallback,
-                          @NotNull Consumer<InterMarketOrder> cancelInterMarketOrderCallback)
+                          @NotNull Consumer<InterMarketOrder> cancelInterMarketOrderCallback,
+                          @NotNull Consumer<Long> priceChanged)
     {
         this.itemID = itemID;
         this.orderbook = orderbook;
@@ -67,6 +70,8 @@ public class MatchingEngine
         this.consumedInterMarketOrderCallback = consumedInterMarketOrderCallback;
         this.cancelOrderCallback = cancelOrderCallback;
         this.cancelInterMarketOrderCallback = cancelInterMarketOrderCallback;
+
+        this.priceChanged = priceChanged;
     }
 
 
@@ -81,14 +86,36 @@ public class MatchingEngine
     private void processMarketOrder(Order order)
     {
         long volume = order.getRemainingVolume();
-        UUID mainBankAccount = order.getOwnerBankID();
-       // IBankAccount mainBankAccount = BACKEND_INSTANCES.BANK_SYSTEM_API.getSer
+        UUID executorPlayerUUID = order.getExecutorPlayerUUID();
+        IBank itemBank = null;
+        IBank moneyBank = null;
+
+        IBankAccount account = getBankAccount(order.getBankAccountNr());
+        if(account != null)
+        {
+            itemBank  = account.getBank(itemID);
+            moneyBank = account.getBank(BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.CURRENCY.get());
+        }
+        if(itemBank == null || moneyBank == null)
+        {
+            orderCanceled(order); // Missing bank account
+            return;
+        }
+
         if(volume < 0)
         {
             // Sell order
+
+            // check item balance
+            long availableItemBalance = itemBank.getTotalBalance();
+            if(availableItemBalance < volume)
+                volume = availableItemBalance;
+
             if(orderbook.getPriceWhenConsumingVolume(volume, pair_cache))
             {
-                long earnedMoney = pair_cache.second;
+                //long earnedMoney = pair_cache.second;
+                long itemBankBalanceDelta = 0;
+                long moneyBankBalanceDelta = 0;
                 List<Order> matchableOrders = orderbook.getBuyOrders(currentMarketPrice, pair_cache.first); // Get Orders that are in matchable range
                 for(Order buyOrder : matchableOrders)
                 {
@@ -96,7 +123,103 @@ public class MatchingEngine
                     while(buyOrderPrice < currentMarketPrice)
                     {
                         // Fill virtual orderbook
+                        if(orderbook.getVirtualPriceRounded(currentMarketPrice) > 0) {
+                            long filled = orderbook.fillVirtual(currentMarketPrice, volume);
+                            itemBankBalanceDelta += filled;
+                            moneyBankBalanceDelta -= currentMarketPrice * filled;
+                            volume -= filled;
+                            if(volume >= 0)
+                            {
+                                itemBank.withdrawLockedPrefered(-itemBankBalanceDelta);
+                                moneyBank.deposit(moneyBankBalanceDelta);
+                                orderConsumed(order);
+                                return;
+                            }
+                        }
+                        else
+                        {
+                            currentMarketPrice -= 1;
+                        }
+                    }
 
+
+                    long fillPotential = buyOrder.getRemainingVolume();
+                    if(buyOrder.isPlayerOrder())
+                    {
+                        // Player offer
+                        IBankAccount otherAccount = getBankAccount(buyOrder.getBankAccountNr());
+                        IBank otherItemBank = null;
+                        IBank otherMoneyBank = null;
+                        if (otherAccount != null) {
+                            otherItemBank = otherAccount.getBank(itemID);
+                            otherMoneyBank = otherAccount.getBank(BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.CURRENCY.get());
+                        }
+                        if (otherItemBank == null || otherMoneyBank == null) {
+                            orderbook.removeOrder(buyOrder);
+                            orderCanceled(buyOrder); // Missing bank account
+                            continue;
+                        }
+                        long otherMoneyBalance = otherMoneyBank.getTotalBalance();
+                        long otherCost = fillPotential * buyOrderPrice;
+                        if(otherMoneyBalance < otherCost)
+                        {
+                            fillPotential = otherMoneyBalance /  buyOrderPrice;
+                            otherCost = fillPotential * buyOrderPrice;
+                            buyOrder.edit(fillPotential, -otherCost);
+                            volume += fillPotential;
+                            assert(fillPotential > 0);
+                            assert(otherCost < 0);
+                            otherItemBank.deposit(fillPotential);
+                            otherMoneyBank.withdrawLockedPrefered(-otherCost);
+                            itemBankBalanceDelta -= fillPotential;
+                            moneyBankBalanceDelta += otherCost;
+                            orderbook.removeOrder(buyOrder);
+                            orderCanceled(buyOrder);
+                            if(volume >= 0)
+                            {
+                                itemBank.withdrawLockedPrefered(-itemBankBalanceDelta);
+                                moneyBank.deposit(moneyBankBalanceDelta);
+                                orderConsumed(order);
+                                return;
+                            }
+                            continue;
+                        }
+                        else
+                        {
+                            buyOrder.edit(fillPotential, -otherCost);
+                            volume += fillPotential;
+                            assert(fillPotential > 0);
+                            assert(otherCost < 0);
+                            otherItemBank.deposit(fillPotential);
+                            otherMoneyBank.withdrawLockedPrefered(-otherCost);
+                            itemBankBalanceDelta -= fillPotential;
+                            moneyBankBalanceDelta += otherCost;
+                            if(buyOrder.isFilled()) {
+                                orderbook.removeOrder(buyOrder);
+                                orderConsumed(buyOrder);
+                            }
+                        }
+                    }
+                    else {
+                        // Bot offer
+                        long otherCost = fillPotential * buyOrderPrice;
+                        buyOrder.edit(fillPotential, -otherCost);
+                        volume += fillPotential;
+                        assert(fillPotential > 0);
+                        assert(otherCost < 0);
+                        itemBankBalanceDelta -= fillPotential;
+                        moneyBankBalanceDelta += otherCost;
+                        if(buyOrder.isFilled()) {
+                            orderbook.removeOrder(buyOrder);
+                            orderConsumed(buyOrder);
+                        }
+                    }
+                    if(volume >= 0)
+                    {
+                        itemBank.withdrawLockedPrefered(-itemBankBalanceDelta);
+                        moneyBank.deposit(moneyBankBalanceDelta);
+                        orderConsumed(order);
+                        return;
                     }
                 }
             }
@@ -109,7 +232,7 @@ public class MatchingEngine
     {
         return BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getBankAccount(bankAccountID);
     }
-    @Nullable IBank getBank(int bankAccountID)
+    @Nullable IBank getItemBank(int bankAccountID)
     {
         IBankAccount account = getBankAccount(bankAccountID);
         if(account != null)

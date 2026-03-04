@@ -51,7 +51,8 @@ public class Market implements ServerSaveable {
                 interMarket_LimitBuyOrders_inputBuffer,
                 interMarket_MarketBuyOrders_inputBuffer,
                 this::onOrderConsumed, this::onOrderConsumed,
-                this::onOrderCanceled, this::onOrderCanceled);
+                this::onOrderCanceled, this::onOrderCanceled,
+                this::onPriceChanged);
 
         this.marketOpen = false;
         this.currentMarketPrice = 0;
@@ -147,6 +148,13 @@ public class Market implements ServerSaveable {
     private void onOrderCanceled(Order order)
     {
 
+    }
+
+
+    private void onPriceChanged(long newPrice)
+    {
+        currentMarketPrice = newPrice;
+        orderbook.update(currentMarketPrice);
     }
 
 
