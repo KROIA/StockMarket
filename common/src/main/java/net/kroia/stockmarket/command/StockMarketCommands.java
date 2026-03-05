@@ -82,12 +82,12 @@ public class StockMarketCommands {
                                     long writeTime = System.currentTimeMillis() - time;
                                     context.getSource().getPlayer().sendSystemMessage(Component.literal("Database write for " + numRecords + " records took " + writeTime + " ms"));
                                     long time2 = System.currentTimeMillis();
-                                    manager.getHistory(Optional.of(new DateFilter(Long.MAX_VALUE, Long.MAX_VALUE)), Optional.empty(), Optional.empty())
+                                    manager.getHistory(Optional.of(new DateFilter(Long.MAX_VALUE, Long.MAX_VALUE)), Optional.empty(),Optional.empty(), Optional.empty())
                                             .thenRun(() -> {
                                                 long readTime = System.currentTimeMillis() - time2;
                                                 context.getSource().getPlayer().sendSystemMessage(Component.literal("Database read for " + numRecords + " records took " + readTime + " ms"));
                                                 long time3 = System.currentTimeMillis();
-                                                manager.removeHistory(Optional.of(new DateFilter(Long.MAX_VALUE, Long.MAX_VALUE)), Optional.empty(), Optional.empty())
+                                                manager.removeHistory(Optional.of(new DateFilter(Long.MAX_VALUE, Long.MAX_VALUE)), Optional.empty(),Optional.empty(), Optional.empty())
                                                         .thenRun(() -> {
                                                             long deleteTime = System.currentTimeMillis() - time3;
                                                             context.getSource().getPlayer().sendSystemMessage(Component.literal("Database delete for " + numRecords + " records took " + deleteTime + " ms"));

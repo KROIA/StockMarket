@@ -20,8 +20,8 @@ import java.util.concurrent.CompletableFuture;
 public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
     private static OrderRecordManager instance;
 
-    public static final String INSERT = "INSERT INTO OrderHistory (itemid, marketid, type, amount, price, time) VALUES (?, ?, ?, ?, ?, ?)";
-    public static final String SELECT = "SELECT itemid, marketid, type, amount, price, time FROM OrderHistory";
+    public static final String INSERT = "INSERT INTO OrderHistory (itemid, marketid, userid_one, userid_two, type, amount, price, time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+    public static final String SELECT = "SELECT itemid, marketid, userid_one, userid_two, type, amount, price, time FROM OrderHistory";
     public static final String DELETE = "DELETE FROM OrderHistory";
 
 
@@ -60,10 +60,12 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
         try {
             stmt.setShort(1, data.itemID());
             stmt.setInt(2, data.bankaccountID());
-            stmt.setInt(3, data.type());
-            stmt.setLong(4, data.amount());
-            stmt.setLong(5, data.price());
-            stmt.setLong(6, data.time());
+            stmt.setLong(3, data.user().getMostSignificantBits());
+            stmt.setLong(4, data.user().getLeastSignificantBits());
+            stmt.setInt(5, data.type());
+            stmt.setLong(6, data.amount());
+            stmt.setLong(7, data.price());
+            stmt.setLong(8, data.time());
             stmt.addBatch();
         }
         catch(SQLException e){
@@ -72,12 +74,12 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
     }
 
 
-    public CompletableFuture<List<OrderRecordStruct>> getHistory(Optional<DateFilter> dateFilter, Optional<EqualityFilter> userFilter, Optional<EqualityFilter> marketFilter){
-        return query(dateFilter, userFilter, marketFilter, SELECT);
+    public CompletableFuture<List<OrderRecordStruct>> getHistory(Optional<DateFilter> dateFilter, Optional<EqualityFilter> accountFilter, Optional<UUIDFilter> userFilter, Optional<EqualityFilter> marketFilter){
+        return query(dateFilter, accountFilter, userFilter, marketFilter, SELECT);
 
     }
 
-    public CompletableFuture<Void> removeHistory(Optional<DateFilter> dateFilter, Optional<EqualityFilter> userFilter, Optional<EqualityFilter> marketFilter) {
+    public CompletableFuture<Void> removeHistory(Optional<DateFilter> dateFilter, Optional<EqualityFilter> accountFilter, Optional<UUIDFilter> userFilter, Optional<EqualityFilter> marketFilter) {
         return CompletableFuture.runAsync(() -> {
             try {
                 boolean started = false;
@@ -86,8 +88,12 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
                     statement += " WHERE " + dateFilter.get().getClause("time");
                     started = true;
                 }
-                if (userFilter.isPresent()) {
-                    statement += (started ? " AND " : " WHERE ") + userFilter.get().getClause("marketid");
+                if (accountFilter.isPresent()) {
+                    statement += (started ? " AND " : " WHERE ") + accountFilter.get().getClause("accountid");
+                    started = true;
+                }
+                if(userFilter.isPresent()){
+                    statement += (started ? " AND " : " WHERE ") + userFilter.get().getClause("userid_one", "userid_two");
                     started = true;
                 }
                 if (marketFilter.isPresent()) {
@@ -104,7 +110,7 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
         }, DatabaseManager.getDatabaseThread());
     }
 
-    public CompletableFuture<List<OrderRecordStruct>> query(Optional<DateFilter> dateFilter, Optional<EqualityFilter> userFilter, Optional<EqualityFilter> marketFilter, String stmt){
+    public CompletableFuture<List<OrderRecordStruct>> query(Optional<DateFilter> dateFilter, Optional<EqualityFilter> accountFilter, Optional<UUIDFilter> userFilter, Optional<EqualityFilter> marketFilter, String stmt){
         return CompletableFuture.supplyAsync(() -> {
             try {
                 boolean started = false;
@@ -113,8 +119,12 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
                     statement += " WHERE " + dateFilter.get().getClause("time");
                     started = true;
                 }
-                if (userFilter.isPresent()) {
-                    statement += (started ? " AND " : " WHERE ") + userFilter.get().getClause("marketid");
+                if (accountFilter.isPresent()) {
+                    statement += (started ? " AND " : " WHERE ") + accountFilter.get().getClause("accountid");
+                    started = true;
+                }
+                if(userFilter.isPresent()){
+                    statement += (started ? " AND " : " WHERE ") + userFilter.get().getClause("userid_one", "userid_two");
                     started = true;
                 }
                 if (marketFilter.isPresent()) {
@@ -139,8 +149,7 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
 
     public OrderRecordStruct mapRow(ResultSet rs){
         try {
-            OrderRecordStruct struct =  new OrderRecordStruct(rs.getShort(1), rs.getInt(2), rs.getInt(3), rs.getLong(4), rs.getLong(5), rs.getLong(6));
-            return struct;
+            return new OrderRecordStruct(rs.getShort(1), rs.getInt(2), new UUID(rs.getLong(3), rs.getLong(4)), rs.getInt(5), rs.getLong(6), rs.getLong(7), rs.getLong(8));
         }
         catch(SQLException e){
             StockMarketMod.LOGGER.warn("Failed to read MarketPrice record, is the data corrupt?");
