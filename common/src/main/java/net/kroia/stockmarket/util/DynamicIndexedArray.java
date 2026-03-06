@@ -137,13 +137,14 @@ public class DynamicIndexedArray implements ServerSaveable {
 
         // Inside the array range
         int arrayLoopEndIndex = (int)Math.min(virtualEndIndex - indexOffset, array.length);
-        for(int i=0; i<arrayLoopEndIndex; ++i)
+        int arrayLoopStartIndex = (int)Math.max(virtualStartIndex - indexOffset, 0);
+        for(int i=arrayLoopStartIndex; i<arrayLoopEndIndex; ++i)
         {
             sum += roundConservative(array[i]);
         }
 
         // Outside the array
-        for(long i=virtualStartIndex + arrayLoopEndIndex; i<virtualEndIndex; i++)
+        for(long i=array.length + indexOffset; i<virtualEndIndex; i++)
         {
             sum += roundConservative(defaultValueProvider.apply(i));
         }

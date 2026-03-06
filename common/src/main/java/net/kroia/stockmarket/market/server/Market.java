@@ -9,6 +9,7 @@ import net.minecraft.nbt.CompoundTag;
 
 import java.util.Comparator;
 import java.util.PriorityQueue;
+import java.util.UUID;
 
 public class Market implements ServerSaveable {
     private static StockMarketModBackend.Instances BACKEND_INSTANCES;
@@ -36,6 +37,10 @@ public class Market implements ServerSaveable {
     private final PriorityQueue<InterMarketOrder> interMarket_LimitBuyOrders_inputBuffer = new PriorityQueue<>((o1, o2) -> Long.compare(o2.getTime(), o1.getTime()));
     private final PriorityQueue<InterMarketOrder> interMarket_MarketBuyOrders_inputBuffer = new PriorityQueue<>((o1, o2) -> Long.compare(o2.getTime(), o1.getTime()));
 
+
+    private boolean placeOrderVar = false;
+    private int testBankAccountNr = 1;
+
     public Market(ItemID itemID)
     {
         this.itemID = itemID;
@@ -54,8 +59,10 @@ public class Market implements ServerSaveable {
                 this::onOrderCanceled, this::onOrderCanceled,
                 this::onPriceChanged);
 
-        this.marketOpen = false;
-        this.currentMarketPrice = 0;
+        this.marketOpen = true;
+        this.currentMarketPrice = 10;
+        this.orderbook.setCurrentMarketPrice(currentMarketPrice);
+        this.orderbook.resetVirtualVolumeDistribution();
     }
 
     // Buffers the incoming order, execution will take place in the update()
@@ -109,8 +116,14 @@ public class Market implements ServerSaveable {
     {
         if(!marketOpen)
             return;
+        if(placeOrderVar)
+        {
+            placeOrderVar = false;
+            Order order = new Order(itemID, Order.Type.MARKET, -10, 10, 0, UUID.randomUUID(), testBankAccountNr);
+            putOrder(order);
+        }
+        orderbook.setCurrentMarketPrice(currentMarketPrice);
         matchingEngine.update(currentMarketPrice);
-        orderbook.update(currentMarketPrice);
     }
 
 
@@ -154,13 +167,13 @@ public class Market implements ServerSaveable {
     private void onPriceChanged(long newPrice)
     {
         currentMarketPrice = newPrice;
-        orderbook.update(currentMarketPrice);
+        orderbook.setCurrentMarketPrice(currentMarketPrice);
     }
 
 
     private float defaultVolumeProvider(long price)
     {
-        float volume = Math.min(10, Math.max(-10, price -  currentMarketPrice));
+        float volume = Math.min(10, Math.max(-10, currentMarketPrice - price));
         return volume;
     }
 

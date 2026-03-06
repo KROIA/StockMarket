@@ -9,7 +9,9 @@ import net.kroia.banksystem.entity.BankSystemEntities;
 import net.kroia.banksystem.item.BankSystemCreativeModeTab;
 import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.menu.BankSystemMenus;
+import net.kroia.banksystem.util.BankSystemDataHandler;
 import net.kroia.banksystem.util.BankSystemTextMessages;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.api.StockMarketAPI;
 import net.kroia.stockmarket.block.StockMarketBlocks;
 import net.kroia.stockmarket.compat.NEZNAMY_TAB_Placeholders;
@@ -17,12 +19,14 @@ import net.kroia.stockmarket.entity.StockMarketEntities;
 import net.kroia.stockmarket.event.EventRegistration;
 import net.kroia.stockmarket.item.StockMarketCreativeModeTab;
 import net.kroia.stockmarket.item.StockMarketItems;
+import net.kroia.stockmarket.market.server.Market;
 import net.kroia.stockmarket.menu.StockMarketMenus;
 import net.kroia.stockmarket.util.StockMarketLogger;
 import net.kroia.stockmarket.util.StockMarketTextMessages;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.storage.LevelResource;
 import org.jetbrains.annotations.Nullable;
 
@@ -41,6 +45,7 @@ public class StockMarketModBackend implements StockMarketAPI {
 
     private static Instances INSTANCES = new Instances();
 
+    private static Market testMarket = null;
 
     StockMarketModBackend()
     {
@@ -50,6 +55,7 @@ public class StockMarketModBackend implements StockMarketAPI {
 
         StockMarketModSettings.setBackend(INSTANCES);
         StockMarketTextMessages.setBackend(INSTANCES);
+        Market.setBackend(INSTANCES);
 
 
         StockMarketBlocks.init();
@@ -94,7 +100,24 @@ public class StockMarketModBackend implements StockMarketAPI {
 
         TickEvent.SERVER_POST.register(StockMarketModBackend::onServerTick);
 
+
+
         //INSTANCES.BANK_SYSTEM_API.getEvents().getBankDataLoadedFromFileSignal().addListener();
+
+        if(BankSystemDataHandler.isBankDataLoaded())
+        {
+            BankSystemDataHandler.resetBankDataLoaded();
+            onPostBankSystemDataLoaded();
+        }
+        else
+        {
+            INSTANCES.BANK_SYSTEM_API.getEvents().getBankDataLoadedFromFileSignal().addListener(StockMarketModBackend::onPostBankSystemDataLoaded, 1);
+        }
+    }
+    private static void onPostBankSystemDataLoaded()
+    {
+        ItemID id = ItemID.getOrRegisterFromItemStack(Items.GOLD_INGOT.getDefaultInstance());
+        testMarket = new Market(id);
     }
 
 
@@ -129,7 +152,7 @@ public class StockMarketModBackend implements StockMarketAPI {
     // Called from the server side
     private static void onServerTick(MinecraftServer server)
     {
-
+        testMarket.update();
     }
 
     public static void loadDataFromFiles(MinecraftServer server)

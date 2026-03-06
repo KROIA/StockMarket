@@ -64,15 +64,19 @@ public class Orderbook implements ServerSaveable
         this.virtualOrderbook.setDefaultVolumeProvider(volumeProvider);
     }
 
-    public void setDefaultVolumeProvider(@Nullable Function<Long, Float> volumeProvider)
+    //public void setDefaultVolumeProvider(@Nullable Function<Long, Float> volumeProvider)
+    //{
+    //    virtualOrderbook.setDefaultVolumeProvider(volumeProvider);
+    //}
+    public void resetVirtualVolumeDistribution()
     {
-        virtualOrderbook.setDefaultVolumeProvider(volumeProvider);
+        virtualOrderbook.resetVolumeDistribution();
     }
 
-    public void update(long currentMarketPrice)
+    public void setCurrentMarketPrice(long currentMarketPrice)
     {
         this.currentMarketPrice = currentMarketPrice;
-        virtualOrderbook.update(currentMarketPrice);
+        virtualOrderbook.setCurrentMarketPrice(currentMarketPrice);
     }
 
 
@@ -188,7 +192,7 @@ public class Orderbook implements ServerSaveable
     {
         return virtualOrderbook.getVolume(price);
     }
-    public long getVirtualPriceRounded(long price)
+    public long getVirtualVolumeRounded(long price)
     {
         return VirtualOrderbook.roundConservative(getVirtualVolume(price));
     }
@@ -415,14 +419,14 @@ public class Orderbook implements ServerSaveable
 
     public long fillVirtual(long price, long volume)
     {
-        long currentVolume = virtualOrderbook.getCapitalRounded(price, volume);
+        long currentVolume = virtualOrderbook.getVolumeRounded(price, price);
         if(currentVolume > 0 && volume < 0)
         {
             long newVolume = currentVolume + volume;
             if(newVolume < 0)
                 newVolume = 0;
 
-            virtualOrderbook.setVolume(currentVolume, newVolume);
+            virtualOrderbook.setVolume(price, newVolume);
             return newVolume - currentVolume;
         }
         else if(currentVolume < 0 && volume > 0)
@@ -431,7 +435,7 @@ public class Orderbook implements ServerSaveable
             if(newVolume > 0)
                 newVolume = 0;
 
-            virtualOrderbook.setVolume(currentVolume, newVolume);
+            virtualOrderbook.setVolume(price, newVolume);
             return newVolume - currentVolume;
         }
         return 0;

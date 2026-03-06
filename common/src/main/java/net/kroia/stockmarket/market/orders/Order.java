@@ -102,7 +102,7 @@ public class Order implements ServerSaveable
         short itemID_raw = itemID.getShort();
         int typeValue = type.ordinal();
         long averageExecPrice = getAverageExecutionPrice();
-        OrderRecordStruct recordStruct = new OrderRecordStruct(itemID_raw, bankAccountNr, typeValue, filledVolume, averageExecPrice, time);
+        OrderRecordStruct recordStruct = new OrderRecordStruct(itemID_raw, bankAccountNr, orderExecutor, typeValue, filledVolume, averageExecPrice, time);
         return recordStruct;
     }
 

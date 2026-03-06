@@ -19,10 +19,10 @@ public class InterMarketOrder implements ServerSaveable
     public InterMarketOrder(@NotNull ItemID buyItemID, @NotNull ItemID sellItemID, @NotNull Order.Type type,
                             long buyVolume, long buyPrice,
                             long estimatedSellVolume, long estimatedSellPrice,
-                            long time, @NotNull UUID ownerID)
+                            long time, @NotNull UUID ownerID, int bankAccountNr)
     {
-        buyOrder = new Order(buyItemID, type, Math.abs(buyVolume), buyPrice, time, ownerID);
-        sellOrder = new Order(sellItemID, type, -Math.abs(estimatedSellVolume), estimatedSellPrice, time, ownerID);
+        buyOrder = new Order(buyItemID, type, Math.abs(buyVolume), buyPrice, time, ownerID, bankAccountNr);
+        sellOrder = new Order(sellItemID, type, -Math.abs(estimatedSellVolume), estimatedSellPrice, time, ownerID, bankAccountNr);
     }
 
     // Bot order

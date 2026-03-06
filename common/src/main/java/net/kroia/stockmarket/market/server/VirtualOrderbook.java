@@ -37,7 +37,7 @@ public class VirtualOrderbook implements ServerSaveable
     }
 
 
-    public void update(long currentMarketPrice)
+    public void setCurrentMarketPrice(long currentMarketPrice)
     {
         this.currentMarketPrice = currentMarketPrice;
     }
@@ -62,14 +62,14 @@ public class VirtualOrderbook implements ServerSaveable
     {
         if(price > currentMarketPrice)
         {
-            dynamicArray.set(currentMarketPrice, -Math.abs(price));
+            dynamicArray.set(price, -Math.abs(volume));
         } else if(price < currentMarketPrice)
         {
-            dynamicArray.set(currentMarketPrice, Math.abs(price));
+            dynamicArray.set(price, Math.abs(volume));
         }
         else
         {
-            dynamicArray.set(currentMarketPrice, volume);
+            dynamicArray.set(price, volume);
         }
     }
 
@@ -112,14 +112,18 @@ public class VirtualOrderbook implements ServerSaveable
      */
     public void addVoume(long price, float volume)
     {
-        float currentVolume = dynamicArray.get(currentMarketPrice);
-        if(price >  currentVolume)
+        float currentVolume = dynamicArray.get(price);
+        if(price > currentMarketPrice)
         {
-            dynamicArray.set(currentMarketPrice, Math.min(0, currentVolume + volume));
+            dynamicArray.set(price, Math.min(0, currentVolume + volume));
+        }
+        else if(price < currentMarketPrice)
+        {
+            dynamicArray.set(price, Math.max(0, currentVolume + volume));
         }
         else
         {
-            dynamicArray.set(currentMarketPrice, Math.max(0, currentVolume + volume));
+            dynamicArray.set(price, currentVolume + volume);
         }
     }
 
@@ -217,9 +221,9 @@ public class VirtualOrderbook implements ServerSaveable
         {
             float result = defaultVolumeProvider.apply(price);
             if(price > currentMarketPrice)
-                return Math.abs(result);
-            else if(price < currentMarketPrice)
                 return -Math.abs(result);
+            else if(price < currentMarketPrice)
+                return Math.abs(result);
             else
                 return result;
         }
@@ -231,9 +235,9 @@ public class VirtualOrderbook implements ServerSaveable
         {
             long result = roundConservative(defaultVolumeProvider.apply(price));
             if(price > currentMarketPrice)
-                return Math.abs(result);
-            else if(price < currentMarketPrice)
                 return -Math.abs(result);
+            else if(price < currentMarketPrice)
+                return Math.abs(result);
             else
                 return result;
         }
