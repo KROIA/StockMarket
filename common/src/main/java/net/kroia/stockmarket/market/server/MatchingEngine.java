@@ -208,6 +208,7 @@ public class MatchingEngine
                 orderVolume += fillPotential;
                 itemDelta   -= fillPotential;
                 moneyDelta  += cost;
+                currentMarketPrice  = buyOrder.getStartPrice();
 
                 if (buyOrder.isFilled()) {
                     orderbook.removeOrder(buyOrder);
@@ -223,6 +224,7 @@ public class MatchingEngine
                 orderVolume += fillPotential;
                 itemDelta   -= fillPotential;
                 moneyDelta  += cost;
+                currentMarketPrice  = buyOrder.getStartPrice();
                 if (buyOrder.isFilled()) {
                     orderbook.removeOrder(buyOrder);
                     orderConsumed(buyOrder);
@@ -246,6 +248,7 @@ public class MatchingEngine
 
 
         commitSell(itemBank, moneyBank, itemDelta, moneyDelta, order);
+        orderbook.setCurrentMarketPrice(currentMarketPrice);
     }
 
 
@@ -340,6 +343,7 @@ public class MatchingEngine
                 itemDelta      -= fillPotential;
                 moneyDelta     += cost;
                 availableFunds += cost;
+                currentMarketPrice  = sellOrder.getStartPrice();
 
                 if (sellOrder.isFilled()) {
                     orderbook.removeOrder(sellOrder);
@@ -363,6 +367,7 @@ public class MatchingEngine
                 itemDelta      -= fillPotential;
                 moneyDelta     += cost;
                 availableFunds += cost;
+                currentMarketPrice  = sellOrder.getStartPrice();
 
                 if (sellOrder.isFilled()) {
                     orderbook.removeOrder(sellOrder);
@@ -388,6 +393,7 @@ public class MatchingEngine
         moneyDelta  = result[2];
 
         commitBuy(itemBank, moneyBank, itemDelta, moneyDelta, order);
+        orderbook.setCurrentMarketPrice(currentMarketPrice);
     }
 
 
@@ -408,27 +414,39 @@ public class MatchingEngine
      */
     private long[] drainVirtualSell(long orderVolume, long itemDelta, long moneyDelta, long stopPrice)
     {
-        while (orderVolume < 0 && currentMarketPrice > stopPrice)
+        long nextExecutedPrice = currentMarketPrice;
+        long timeout = TIMEOUT_COUNT;
+        while (orderVolume < 0 && nextExecutedPrice > stopPrice)
         {
-            long virtualVol = orderbook.getVirtualVolumeRounded(currentMarketPrice);
+            long virtualVol = orderbook.getVirtualVolumeRounded(nextExecutedPrice);
             if (virtualVol > 0)
             {
-                long filled = orderbook.fillVirtual(currentMarketPrice, orderVolume);
+                long filled = orderbook.fillVirtual(nextExecutedPrice, orderVolume);
                 itemDelta  += filled;
-                moneyDelta -= currentMarketPrice * filled;
+                moneyDelta -= nextExecutedPrice * filled;
                 orderVolume -= filled;
+                if(filled != 0)
+                {
+                    currentMarketPrice = nextExecutedPrice;
+                }
                 // If we emptied this price level, step down
                 if (virtualVol + filled == 0 && orderVolume != 0)
-                    currentMarketPrice -= 1;
+                    nextExecutedPrice -= 1;
             }
             else
             {
-                currentMarketPrice -= 1;
+                nextExecutedPrice -= 1;
             }
 
-            if (currentMarketPrice <= 0)
+            if (nextExecutedPrice <= 0)
             {
-                currentMarketPrice = 0;
+                nextExecutedPrice = 0;
+                break;
+            }
+            timeout--;
+            if(timeout <= 0)
+            {
+                // timeout
                 break;
             }
         }
@@ -450,33 +468,46 @@ public class MatchingEngine
     private long[] drainVirtualBuy(long orderVolume, long itemDelta, long moneyDelta,
                                    long stopPrice, long availableFunds)
     {
+        long nextExecutedPrice = currentMarketPrice;
+        long timeout = TIMEOUT_COUNT;
         while (orderVolume > 0 && currentMarketPrice < stopPrice)
         {
-            long virtualVol = orderbook.getVirtualVolumeRounded(currentMarketPrice);
+            long virtualVol = orderbook.getVirtualVolumeRounded(nextExecutedPrice);
             if (virtualVol < 0)
             {
                 // Also cap to what the buyer can afford at this price level
-                long maxByFunds = (currentMarketPrice > 0)
-                        ? availableFunds / currentMarketPrice
+                long maxByFunds = (nextExecutedPrice > 0)
+                        ? availableFunds / nextExecutedPrice
                         : orderVolume;
                 long wantToFill = Math.min(orderVolume, maxByFunds);
 
-                if (wantToFill <= 0) break;   // buyer is broke
+                if (wantToFill <= 0)
+                    break;   // buyer is broke
 
-                long filled = orderbook.fillVirtual(currentMarketPrice, wantToFill);
-                long cost   = currentMarketPrice * filled;
+                long filled = orderbook.fillVirtual(nextExecutedPrice, wantToFill);
+                long cost   = nextExecutedPrice * filled;
                 itemDelta      += filled;
                 moneyDelta     -= cost;
                 availableFunds -= cost;
                 orderVolume    -= filled;
+                if(filled != 0)
+                {
+                    currentMarketPrice = nextExecutedPrice;
+                }
 
                 // If we emptied this price level, step up
                 if (virtualVol + filled == 0 && orderVolume != 0)
-                    currentMarketPrice += 1;
+                    nextExecutedPrice += 1;
             }
             else
             {
-                currentMarketPrice += 1;
+                nextExecutedPrice += 1;
+            }
+            timeout--;
+            if(timeout <= 0)
+            {
+                // timeout
+                break;
             }
         }
         orderbook.setCurrentMarketPrice(currentMarketPrice);
