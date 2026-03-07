@@ -98,6 +98,26 @@ public class Orderbook implements ServerSaveable
         return true;
     }
 
+    public PriorityQueue<Order> getBuyLimitOrders()
+    {
+        return buyLimitOrders;
+    }
+    public PriorityQueue<Order> getSellLimitOrders()
+    {
+        return sellLimitOrders;
+    }
+    PriorityQueue<InterMarketOrder>  getInterMarketBuyOrders()
+    {
+        return interMarketBuyOrders;
+    }
+    public void clear()
+    {
+        buyLimitOrders.clear();
+        sellLimitOrders.clear();
+        interMarketBuyOrders.clear();
+    }
+
+
 
 
     public float getVolume(long price)

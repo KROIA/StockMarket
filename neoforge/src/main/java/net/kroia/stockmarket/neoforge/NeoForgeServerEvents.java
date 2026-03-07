@@ -18,7 +18,7 @@ public class NeoForgeServerEvents {
     {
         LifecycleEvent.SERVER_STARTED.register((server)->{
             // Check if NEZNAMY/TAB is present and register placeholders
-            StockMarketModBackend.onServerStart(server);
+            //StockMarketModBackend.onServerStart(server);
             if (Platform.getEnvironment() == Env.SERVER && Platform.isModLoaded("tab")) {
                 NEZNAMY_TAB_Placeholders.register();
             }

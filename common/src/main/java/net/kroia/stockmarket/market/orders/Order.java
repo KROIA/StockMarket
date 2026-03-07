@@ -182,6 +182,26 @@ public class Order implements ServerSaveable
     }
 
 
+    @Override
+    public String toString()
+    {
+        StringBuilder sb = new StringBuilder();
+        sb.append(itemID.toString());
+        sb.append(", ");
+        sb.append(type.toString());
+        sb.append(", TargetVolume=");
+        sb.append(targetVolume);
+        sb.append(", FilledVolume=");
+        sb.append(filledVolume);
+        sb.append(", StartPrice=");
+        sb.append(startPrice);
+        sb.append(", Time=");
+        sb.append(time);
+        sb.append(", TransferredMoney=");
+        sb.append(transferredMoney);
+        return sb.toString();
+    }
+
     /**
      * For saving pending orders
      * @param tag

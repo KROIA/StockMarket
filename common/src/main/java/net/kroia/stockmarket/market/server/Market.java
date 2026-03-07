@@ -6,10 +6,12 @@ import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.orders.InterMarketOrder;
 import net.kroia.stockmarket.market.orders.Order;
 import net.minecraft.nbt.CompoundTag;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.Comparator;
 import java.util.PriorityQueue;
 import java.util.UUID;
+import java.util.function.Function;
 
 public class Market implements ServerSaveable {
     private static StockMarketModBackend.Instances BACKEND_INSTANCES;
@@ -25,6 +27,7 @@ public class Market implements ServerSaveable {
     private final MatchingEngine matchingEngine;
     private boolean marketOpen;
     private long currentMarketPrice;
+    private @Nullable Function<Long, Float> defaultVolumeProviderFunction;
 
     /**
      * Temporary order buffers for collecting orders async and only process the orders on update
@@ -38,11 +41,9 @@ public class Market implements ServerSaveable {
     private final PriorityQueue<InterMarketOrder> interMarket_MarketBuyOrders_inputBuffer = new PriorityQueue<>((o1, o2) -> Long.compare(o2.getTime(), o1.getTime()));
 
 
-    private boolean placeOrderVar = false;
-    private int testBankAccountNr = 1;
-
-    public Market(ItemID itemID)
+    public Market(ItemID itemID, @Nullable Function<Long, Float> volumeProvider, long currentMarketPrice)
     {
+        this.defaultVolumeProviderFunction =  volumeProvider;
         this.itemID = itemID;
         this.orderbook = new Orderbook(itemID,
                                         this::onOrderConsumed, this::onOrderConsumed,
@@ -60,9 +61,41 @@ public class Market implements ServerSaveable {
                 this::onPriceChanged);
 
         this.marketOpen = true;
-        this.currentMarketPrice = 10;
+        this.currentMarketPrice = currentMarketPrice;
         this.orderbook.setCurrentMarketPrice(currentMarketPrice);
         this.orderbook.resetVirtualVolumeDistribution();
+    }
+    public Market(ItemID itemID)
+    {
+        this(itemID, null, 10);
+    }
+
+    public void test_resetVirtualVolumeDistribution()
+    {
+        orderbook.resetVirtualVolumeDistribution();
+    }
+    public void test_setCurrentMarketPrice(long currentMarketPrice)
+    {
+        this.currentMarketPrice = currentMarketPrice;
+        this.orderbook.setCurrentMarketPrice(currentMarketPrice);
+    }
+    public void test_clearOrderbook()
+    {
+        orderbook.clear();
+        orderbook.resetVirtualVolumeDistribution();
+    }
+    public void test_setDefaultVolumeProviderFunction(Function<Long, Float> defaultVolumeProviderFunction)
+    {
+        this.defaultVolumeProviderFunction = defaultVolumeProviderFunction;
+    }
+
+    public ItemID getItemID()
+    {
+        return itemID;
+    }
+    public long getCurrentMarketPrice()
+    {
+        return currentMarketPrice;
     }
 
     // Buffers the incoming order, execution will take place in the update()
@@ -116,12 +149,13 @@ public class Market implements ServerSaveable {
     {
         if(!marketOpen)
             return;
-        if(placeOrderVar)
-        {
-            placeOrderVar = false;
-            Order order = new Order(itemID, Order.Type.MARKET, -10, 10, 0, UUID.randomUUID(), testBankAccountNr);
-            putOrder(order);
-        }
+        for(Order order : buyLimitOrders_inputBuffer)
+            orderbook.putOrder(order);
+        for(Order order : sellLimitOrders_inputBuffer)
+            orderbook.putOrder(order);
+        buyLimitOrders_inputBuffer.clear();
+        sellLimitOrders_inputBuffer.clear();
+
         orderbook.setCurrentMarketPrice(currentMarketPrice);
         matchingEngine.update(currentMarketPrice);
     }
@@ -173,6 +207,8 @@ public class Market implements ServerSaveable {
 
     private float defaultVolumeProvider(long price)
     {
+        if(defaultVolumeProviderFunction != null)
+            return defaultVolumeProviderFunction.apply(price);
         float volume = Math.min(10, Math.max(-10, currentMarketPrice - price));
         return volume;
     }

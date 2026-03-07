@@ -19,7 +19,9 @@ import net.kroia.stockmarket.entity.StockMarketEntities;
 import net.kroia.stockmarket.event.EventRegistration;
 import net.kroia.stockmarket.item.StockMarketCreativeModeTab;
 import net.kroia.stockmarket.item.StockMarketItems;
+import net.kroia.stockmarket.market.orders.Order;
 import net.kroia.stockmarket.market.server.Market;
+import net.kroia.stockmarket.market.server.Testing;
 import net.kroia.stockmarket.menu.StockMarketMenus;
 import net.kroia.stockmarket.util.StockMarketLogger;
 import net.kroia.stockmarket.util.StockMarketTextMessages;
@@ -31,6 +33,7 @@ import net.minecraft.world.level.storage.LevelResource;
 import org.jetbrains.annotations.Nullable;
 
 import java.nio.file.Path;
+import java.util.UUID;
 
 public class StockMarketModBackend implements StockMarketAPI {
 
@@ -45,14 +48,13 @@ public class StockMarketModBackend implements StockMarketAPI {
 
     private static Instances INSTANCES = new Instances();
 
-    private static Market testMarket = null;
-
     StockMarketModBackend()
     {
         INSTANCES.BANK_SYSTEM_API = null;
         INSTANCES.LOGGER = new StockMarketLogger(INSTANCES);
 
 
+        Testing.setBackend(INSTANCES);
         StockMarketModSettings.setBackend(INSTANCES);
         StockMarketTextMessages.setBackend(INSTANCES);
         Market.setBackend(INSTANCES);
@@ -116,8 +118,26 @@ public class StockMarketModBackend implements StockMarketAPI {
     }
     private static void onPostBankSystemDataLoaded()
     {
-        ItemID id = ItemID.getOrRegisterFromItemStack(Items.GOLD_INGOT.getDefaultInstance());
-        testMarket = new Market(id);
+        Testing testing = new Testing();
+        if(!testing.setup())
+        {
+            INSTANCES.LOGGER.info("Can't setup testing");
+            return;
+        }
+        if(testing.runTests())
+        {
+            INSTANCES.LOGGER.info("All tests executed successfully");
+        }
+        else
+        {
+            INSTANCES.LOGGER.info("Some tests failed");
+            testing.runTests();
+        }
+        //ItemID id = ItemID.getOrRegisterFromItemStack(Items.GOLD_INGOT.getDefaultInstance());
+        //testMarket = new Market(id);
+//
+        //Order botOrder1 = new Order(id, Order.Type.LIMIT, -3, 12, 0, UUID.randomUUID(), 1);
+        //testMarket.putOrder(botOrder1);
     }
 
 
@@ -152,7 +172,7 @@ public class StockMarketModBackend implements StockMarketAPI {
     // Called from the server side
     private static void onServerTick(MinecraftServer server)
     {
-        testMarket.update();
+
     }
 
     public static void loadDataFromFiles(MinecraftServer server)
