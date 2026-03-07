@@ -166,7 +166,7 @@ public class Orderbook implements ServerSaveable
     }
     public long getVolumeRounded(long price)
     {
-        long volume = VirtualOrderbook.roundConservative(getVolume(price));
+        long volume = VirtualOrderbook.roundConservative(virtualOrderbook.getVolume(price));
         if(currentMarketPrice > price) {
             // The searched price is inside the buy orders since the market price is higher than the searched price
             for(Order order : buyLimitOrders)

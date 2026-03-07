@@ -79,11 +79,27 @@ public class MatchingEngine
     {
         this.currentMarketPrice = currentMarketPrice;
 
+        if(!buyLimitOrders_inputBuffer.isEmpty())
+        {
+            for(Order order : buyLimitOrders_inputBuffer)
+            {
+                processLimitOrder(order);
+            }
+            buyLimitOrders_inputBuffer.clear();
+        }
+        if(!sellLimitOrders_inputBuffer.isEmpty())
+        {
+            for(Order order : sellLimitOrders_inputBuffer)
+            {
+                processLimitOrder(order);
+            }
+            sellLimitOrders_inputBuffer.clear();
+        }
         if(!selMarketOrders_inputBuffer.isEmpty())
         {
             for(Order order : selMarketOrders_inputBuffer)
             {
-                processMarketOrder(order);
+                processMarketOrder(order, 0, Long.MAX_VALUE);
             }
             selMarketOrders_inputBuffer.clear();
         }
@@ -91,13 +107,40 @@ public class MatchingEngine
         {
             for(Order order : buyMarketOrders_inputBuffer)
             {
-                processMarketOrder(order);
+                processMarketOrder(order, 0, Long.MAX_VALUE);
             }
             buyMarketOrders_inputBuffer.clear();
         }
 
         priceChanged.accept(this.currentMarketPrice);
     }
+
+    private void processLimitOrder(Order order)
+    {
+        if(order.isBuyOrder())
+        {
+            if(order.getStartPrice() < currentMarketPrice)
+            {
+                orderbook.putOrder(order);
+                return;
+            }
+
+        }
+        else
+        {
+            if(order.getStartPrice() > currentMarketPrice)
+            {
+                orderbook.putOrder(order);
+                return;
+            }
+        }
+        processMarketOrder(order, order.getStartPrice(), order.getStartPrice());
+        if(!order.isFilled())
+        {
+            orderbook.putOrder(order);
+        }
+    }
+
 
 
     /**
@@ -118,7 +161,7 @@ public class MatchingEngine
      *    (volume satisfied OR price underflows to 0) without an arbitrary iteration cap.
      *  - pair_cache is still passed in to avoid allocation on the hot path.
      */
-    private void processMarketOrder(Order order)
+    private void processMarketOrder(Order order, long minAcceptedPrice, long maxAcceptedPrice)
     {
         // ── Resolve the submitting player's bank accounts ──────────────────────
         IBankAccount account = getBankAccount(order.getBankAccountNr());
@@ -132,16 +175,16 @@ public class MatchingEngine
 
         // ── Route by direction ─────────────────────────────────────────────────
         if (orderVolume < 0)
-            processSell(order, orderVolume, itemBank, moneyBank);
+            processSell(order, orderVolume, itemBank, moneyBank, minAcceptedPrice);
         else
-            processBuy(order, orderVolume, itemBank, moneyBank);
+            processBuy(order, orderVolume, itemBank, moneyBank, maxAcceptedPrice);
     }
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  SELL
 // ═══════════════════════════════════════════════════════════════════════════
 
-    private void processSell(Order order, long orderVolume, IBank itemBank, IBank moneyBank)
+    private void processSell(Order order, long orderVolume, IBank itemBank, IBank moneyBank, long minimalAcceptedPrice)
     {
         // Cap sell volume to what the player actually holds
         long available = itemBank.getTotalBalance();
@@ -160,7 +203,7 @@ public class MatchingEngine
         for (Order buyOrder : buyOrders)
         {
             // Fill any virtual volume that sits above the buy order's price
-            long[] result = drainVirtualSell(orderVolume, itemDelta, moneyDelta, buyOrder.getStartPrice());
+            long[] result = drainVirtualSell(orderVolume, itemDelta, moneyDelta, Math.max(minimalAcceptedPrice, buyOrder.getStartPrice()));
 
             order.edit(result[1] - itemDelta, result[2] - moneyDelta);
 
@@ -168,7 +211,7 @@ public class MatchingEngine
             itemDelta   = result[1];
             moneyDelta  = result[2];
 
-            if (orderVolume >= 0)
+            if (orderVolume >= 0 || (currentMarketPrice <= minimalAcceptedPrice && buyOrder.getStartPrice() != minimalAcceptedPrice))
             {
                 commitSell(itemBank, moneyBank, itemDelta, moneyDelta, order);
                 return;
@@ -239,7 +282,7 @@ public class MatchingEngine
         }
 
         // ── Real orders exhausted — drain remaining virtual depth ─────────────
-        long[] result = drainVirtualSell(orderVolume, itemDelta, moneyDelta, /*stopPrice=*/ 0);
+        long[] result = drainVirtualSell(orderVolume, itemDelta, moneyDelta, minimalAcceptedPrice);
 
         order.edit(result[1] - itemDelta, result[2] - moneyDelta);
         orderVolume = result[0];
@@ -256,7 +299,7 @@ public class MatchingEngine
 //  BUY
 // ═══════════════════════════════════════════════════════════════════════════
 
-    private void processBuy(Order order, long orderVolume, IBank itemBank, IBank moneyBank)
+    private void processBuy(Order order, long orderVolume, IBank itemBank, IBank moneyBank, long maximalAcceptedPrice)
     {
         // Cap buy volume to what the player can afford at the current market price.
         // This is a conservative upper bound; actual cost may be lower if fills happen
@@ -280,7 +323,7 @@ public class MatchingEngine
         {
             // Fill any virtual volume that sits below the sell order's price
             long[] result = drainVirtualBuy(orderVolume, itemDelta, moneyDelta,
-                    sellOrder.getStartPrice(), availableFunds);
+                    Math.min(maximalAcceptedPrice, sellOrder.getStartPrice()), availableFunds);
 
             order.edit(result[1] - itemDelta, result[2] - moneyDelta);
 
@@ -291,7 +334,7 @@ public class MatchingEngine
 
 
 
-            if (orderVolume <= 0)
+            if (orderVolume <= 0 || (currentMarketPrice >= maximalAcceptedPrice && sellOrder.getStartPrice() != maximalAcceptedPrice))
             {
                 commitBuy(itemBank, moneyBank, itemDelta, moneyDelta, order);
                 return;
@@ -385,7 +428,7 @@ public class MatchingEngine
 
         // ── Real orders exhausted — drain remaining virtual depth ─────────────
         long[] result = drainVirtualBuy(orderVolume, itemDelta, moneyDelta,
-                Long.MAX_VALUE, availableFunds);
+                maximalAcceptedPrice, availableFunds);
 
         order.edit(result[1] - itemDelta, result[2] - moneyDelta);
         orderVolume = result[0];
@@ -416,7 +459,7 @@ public class MatchingEngine
     {
         long nextExecutedPrice = currentMarketPrice;
         long timeout = TIMEOUT_COUNT;
-        while (orderVolume < 0 && nextExecutedPrice > stopPrice)
+        while (orderVolume < 0 && nextExecutedPrice >= stopPrice)
         {
             long virtualVol = orderbook.getVirtualVolumeRounded(nextExecutedPrice);
             if (virtualVol > 0)
@@ -470,7 +513,7 @@ public class MatchingEngine
     {
         long nextExecutedPrice = currentMarketPrice;
         long timeout = TIMEOUT_COUNT;
-        while (orderVolume > 0 && currentMarketPrice < stopPrice)
+        while (orderVolume > 0 && nextExecutedPrice <= stopPrice)
         {
             long virtualVol = orderbook.getVirtualVolumeRounded(nextExecutedPrice);
             if (virtualVol < 0)

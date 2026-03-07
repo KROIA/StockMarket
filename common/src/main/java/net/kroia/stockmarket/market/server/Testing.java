@@ -77,6 +77,10 @@ public class Testing {
         success &= printTestResult(marketOrderTest_3(), "marketOrderTest_3");
         success &= printTestResult(marketOrderTest_4(), "marketOrderTest_4");
         success &= printTestResult(marketOrderTest_5(), "marketOrderTest_5");
+        success &= printTestResult(limitOrderTest_1(), "limitOrderTest_1");
+        success &= printTestResult(limitOrderTest_2(), "limitOrderTest_2");
+        success &= printTestResult(limitOrderTest_3(), "limitOrderTest_3");
+        success &= printTestResult(limitOrderTest_4(), "limitOrderTest_4");
 
         return success;
     }
@@ -377,7 +381,217 @@ public class Testing {
     }
 
 
+    private boolean limitOrderTest_1()
+    {
+        boolean success = true;
+        market.test_setDefaultVolumeProviderFunction(this::uniformVolumeDistribution);
+        uniformVolumeDistributionScale = 5;
+        market.test_setCurrentMarketPrice(10);
+        market.test_clearOrderbook();
+        ItemID item = market.getItemID();
 
+        bankAccount1.getBank(item).setBalance( 100);
+        bankAccount2.getBank(item).setBalance( 100);
+
+        bankAccount1.getBank(moneyID).setBalance( 1000);
+        bankAccount2.getBank(moneyID).setBalance( 1000);
+
+        Order limitOrder = new Order(market.getItemID(), Order.Type.LIMIT, 10, 13, 0, UUID.randomUUID(), bankAccountNr1);
+        market.putOrder(limitOrder);
+        market.update();
+
+        success &= errorIfFalse(limitOrder.isFilled(), "Order should be filled. Order: " + limitOrder);
+        success &= errorIfFalse(limitOrder.getTransferredMoney() == -(11*5+12*5),
+                " should be "+-(11*5+12*5)+"$ but was: " + limitOrder.getTransferredMoney());
+
+        long newItemBalance = bankAccount1.getBank(market.getItemID()).getTotalBalance();
+        long newMoneyBalance = bankAccount1.getBank(moneyID).getTotalBalance();
+
+        success &= errorIfFalse(newMoneyBalance - limitOrder.getTransferredMoney() == 1000, "Wrong money amount transfered: "+newMoneyBalance);
+        success &= errorIfFalse(newItemBalance == 110, "Wrong end balance of items: "+newItemBalance);
+        success &= errorIfFalse(market.getCurrentMarketPrice() == 12, "Wrong market end price: "+market.getCurrentMarketPrice());
+        success &= errorIfFalse(market.getVolume(11) == 0, "Virtual orderbook at price=11 should be empty now");
+        success &= errorIfFalse(market.getVolume(12) == 0, "Virtual orderbook at price=12 should be empty now");
+        success &= errorIfFalse(market.getVolume(13) == -5, "Virtual orderbook at price=13 should be at -5");
+
+        market.update();
+        market.update();
+        market.update();
+
+        success &= errorIfFalse(limitOrder.isFilled(), "Order should be filled. Order: " + limitOrder);
+        success &= errorIfFalse(limitOrder.getTransferredMoney() == -(11*5+12*5),
+                " should be "+-(11*5+12*5)+"$ but was: " + limitOrder.getTransferredMoney());
+
+        newItemBalance = bankAccount1.getBank(market.getItemID()).getTotalBalance();
+        newMoneyBalance = bankAccount1.getBank(moneyID).getTotalBalance();
+
+        success &= errorIfFalse(newMoneyBalance - limitOrder.getTransferredMoney() == 1000, "Wrong money amount transfered: "+newMoneyBalance);
+        success &= errorIfFalse(newItemBalance == 110, "Wrong end balance of items: "+newItemBalance);
+        success &= errorIfFalse(market.getCurrentMarketPrice() == 12, "Wrong market end price: "+market.getCurrentMarketPrice());
+        return success;
+    }
+
+    private boolean limitOrderTest_2()
+    {
+        boolean success = true;
+        market.test_setDefaultVolumeProviderFunction(this::uniformVolumeDistribution);
+        uniformVolumeDistributionScale = 5;
+        market.test_setCurrentMarketPrice(10);
+        market.test_clearOrderbook();
+        ItemID item = market.getItemID();
+
+        bankAccount1.getBank(item).setBalance( 100);
+        bankAccount2.getBank(item).setBalance( 100);
+
+        bankAccount1.getBank(moneyID).setBalance( 1000);
+        bankAccount2.getBank(moneyID).setBalance( 1000);
+
+        Order limitOrder = new Order(market.getItemID(), Order.Type.LIMIT, 30, 13, 0, UUID.randomUUID(), bankAccountNr1);
+        market.putOrder(limitOrder);
+        market.update();
+
+        success &= errorIfFalse(!limitOrder.isFilled(), "Order should not be filled. Order: " + limitOrder);
+        success &= errorIfFalse(limitOrder.getTransferredMoney() == -(11*5+12*5+13*5),
+                " should be "+-(11*5+12*5+13*5)+"$ but was: " + limitOrder.getTransferredMoney());
+
+        long newItemBalance = bankAccount1.getBank(market.getItemID()).getTotalBalance();
+        long newMoneyBalance = bankAccount1.getBank(moneyID).getTotalBalance();
+
+        success &= errorIfFalse(newMoneyBalance - limitOrder.getTransferredMoney() == 1000, "Wrong money amount transfered: "+newMoneyBalance);
+        success &= errorIfFalse(newItemBalance == 115, "Wrong end balance of items: "+newItemBalance);
+        success &= errorIfFalse(market.getCurrentMarketPrice() == 13, "Wrong market end price: "+market.getCurrentMarketPrice());
+        success &= errorIfFalse(market.getVolume(13) == limitOrder.getRemainingVolume(), "limit order may not be placed into the orderbook after not filling it completly.");
+        success &= errorIfFalse(market.getVolume(11) == 0, "Virtual orderbook at price=11 should be empty now");
+        success &= errorIfFalse(market.getVolume(12) == 0, "Virtual orderbook at price=12 should be empty now");
+        success &= errorIfFalse(market.getVolume(13) == limitOrder.getRemainingVolume(), "Virtual orderbook at price=13 should be: "+limitOrder.getRemainingVolume());
+        success &= errorIfFalse(market.getVolume(14) == -5, "Virtual orderbook at price=14 should be -5 now");
+
+        market.update();
+        market.update();
+        market.update();
+
+        success &= errorIfFalse(!limitOrder.isFilled(), "Order should not be filled. Order: " + limitOrder);
+        success &= errorIfFalse(limitOrder.getTransferredMoney() == -(11*5+12*5+13*5),
+                " should be "+-(11*5+12*5+13*5)+"$ but was: " + limitOrder.getTransferredMoney());
+
+        newItemBalance = bankAccount1.getBank(market.getItemID()).getTotalBalance();
+        newMoneyBalance = bankAccount1.getBank(moneyID).getTotalBalance();
+
+        success &= errorIfFalse(newMoneyBalance - limitOrder.getTransferredMoney() == 1000, "Wrong money amount transfered: "+newMoneyBalance);
+        success &= errorIfFalse(newItemBalance == 115, "Wrong end balance of items: "+newItemBalance);
+        success &= errorIfFalse(market.getCurrentMarketPrice() == 13, "Wrong market end price: "+market.getCurrentMarketPrice());
+        return success;
+    }
+
+
+
+    private boolean limitOrderTest_3()
+    {
+        boolean success = true;
+        market.test_setDefaultVolumeProviderFunction(this::uniformVolumeDistribution);
+        uniformVolumeDistributionScale = 5;
+        market.test_setCurrentMarketPrice(10);
+        market.test_clearOrderbook();
+        ItemID item = market.getItemID();
+
+        bankAccount1.getBank(item).setBalance( 100);
+        bankAccount2.getBank(item).setBalance( 100);
+
+        bankAccount1.getBank(moneyID).setBalance( 1000);
+        bankAccount2.getBank(moneyID).setBalance( 1000);
+
+        Order limitOrder = new Order(market.getItemID(), Order.Type.LIMIT, -10, 7, 0, UUID.randomUUID(), bankAccountNr1);
+        market.putOrder(limitOrder);
+        market.update();
+
+        success &= errorIfFalse(limitOrder.isFilled(), "Order should be filled. Order: " + limitOrder);
+        success &= errorIfFalse(limitOrder.getTransferredMoney() == (10*5+9*5),
+                " should be "+(10*5+9*5)+"$ but was: " + limitOrder.getTransferredMoney());
+
+        long newItemBalance = bankAccount1.getBank(market.getItemID()).getTotalBalance();
+        long newMoneyBalance = bankAccount1.getBank(moneyID).getTotalBalance();
+
+        success &= errorIfFalse(newMoneyBalance - limitOrder.getTransferredMoney() == 1000, "Wrong money amount transfered: "+newMoneyBalance);
+        success &= errorIfFalse(newItemBalance == 90, "Wrong end balance of items: "+newItemBalance);
+        success &= errorIfFalse(market.getCurrentMarketPrice() == 9, "Wrong market end price: "+market.getCurrentMarketPrice());
+        success &= errorIfFalse(market.getVolume(10) == 0, "Virtual orderbook at price=10 should be empty now");
+        success &= errorIfFalse(market.getVolume(9) == 0, "Virtual orderbook at price=9 should be empty now");
+        success &= errorIfFalse(market.getVolume(8) == 5, "Virtual orderbook at price=8 should be at 5");
+
+        market.update();
+        market.update();
+        market.update();
+
+        success &= errorIfFalse(limitOrder.isFilled(), "Order should be filled. Order: " + limitOrder);
+        success &= errorIfFalse(limitOrder.getTransferredMoney() == (10*5+9*5),
+                " should be "+(10*5+9*5)+"$ but was: " + limitOrder.getTransferredMoney());
+
+        newItemBalance = bankAccount1.getBank(market.getItemID()).getTotalBalance();
+        newMoneyBalance = bankAccount1.getBank(moneyID).getTotalBalance();
+
+        success &= errorIfFalse(newMoneyBalance - limitOrder.getTransferredMoney() == 1000, "Wrong money amount transfered: "+newMoneyBalance);
+        success &= errorIfFalse(newItemBalance == 90, "Wrong end balance of items: "+newItemBalance);
+        success &= errorIfFalse(market.getCurrentMarketPrice() == 9, "Wrong market end price: "+market.getCurrentMarketPrice());
+        success &= errorIfFalse(market.getVolume(10) == 0, "Virtual orderbook at price=10 should be empty now");
+        success &= errorIfFalse(market.getVolume(9) == 0, "Virtual orderbook at price=9 should be empty now");
+        success &= errorIfFalse(market.getVolume(8) == 5, "Virtual orderbook at price=8 should be at 5");
+        return success;
+    }
+
+    private boolean limitOrderTest_4()
+    {
+        boolean success = true;
+        market.test_setDefaultVolumeProviderFunction(this::uniformVolumeDistribution);
+        uniformVolumeDistributionScale = 5;
+        market.test_setCurrentMarketPrice(10);
+        market.test_clearOrderbook();
+        ItemID item = market.getItemID();
+
+        bankAccount1.getBank(item).setBalance( 100);
+        bankAccount2.getBank(item).setBalance( 100);
+
+        bankAccount1.getBank(moneyID).setBalance( 1000);
+        bankAccount2.getBank(moneyID).setBalance( 1000);
+
+        Order limitOrder = new Order(market.getItemID(), Order.Type.LIMIT, -30, 7, 0, UUID.randomUUID(), bankAccountNr1);
+        market.putOrder(limitOrder);
+        market.update();
+
+        success &= errorIfFalse(!limitOrder.isFilled(), "Order should not be filled. Order: " + limitOrder);
+        success &= errorIfFalse(limitOrder.getTransferredMoney() == (10*5+9*5+8*5+7*5),
+                " should be "+(10*5+9*5+8*5+7*5)+"$ but was: " + limitOrder.getTransferredMoney());
+
+        long newItemBalance = bankAccount1.getBank(market.getItemID()).getTotalBalance();
+        long newMoneyBalance = bankAccount1.getBank(moneyID).getTotalBalance();
+
+        success &= errorIfFalse(newMoneyBalance - limitOrder.getTransferredMoney() == 1000, "Wrong money amount transfered: "+newMoneyBalance);
+        success &= errorIfFalse(newItemBalance == 80, "Wrong end balance of items: "+newItemBalance);
+        success &= errorIfFalse(market.getCurrentMarketPrice() == 7, "Wrong market end price: "+market.getCurrentMarketPrice());
+        success &= errorIfFalse(market.getVolume(10) == 0, "Virtual orderbook at price=10 should be empty now");
+        success &= errorIfFalse(market.getVolume(9) == 0, "Virtual orderbook at price=9 should be empty now");
+        success &= errorIfFalse(market.getVolume(8) == 0, "Virtual orderbook at price=8 should be empty now");
+        success &= errorIfFalse(market.getVolume(7) == limitOrder.getRemainingVolume(), "Virtual orderbook at price=7 should be: "+limitOrder.getRemainingVolume());
+
+        market.update();
+        market.update();
+        market.update();
+
+        success &= errorIfFalse(!limitOrder.isFilled(), "Order should not be filled. Order: " + limitOrder);
+        success &= errorIfFalse(limitOrder.getTransferredMoney() == (10*5+9*5+8*5+7*5),
+                " should be "+(10*5+9*5+8*5+7*5)+"$ but was: " + limitOrder.getTransferredMoney());
+
+        newItemBalance = bankAccount1.getBank(market.getItemID()).getTotalBalance();
+        newMoneyBalance = bankAccount1.getBank(moneyID).getTotalBalance();
+
+        success &= errorIfFalse(newMoneyBalance - limitOrder.getTransferredMoney() == 1000, "Wrong money amount transfered: "+newMoneyBalance);
+        success &= errorIfFalse(newItemBalance == 80, "Wrong end balance of items: "+newItemBalance);
+        success &= errorIfFalse(market.getCurrentMarketPrice() == 7, "Wrong market end price: "+market.getCurrentMarketPrice());
+        success &= errorIfFalse(market.getVolume(10) == 0, "Virtual orderbook at price=10 should be empty now");
+        success &= errorIfFalse(market.getVolume(9) == 0, "Virtual orderbook at price=9 should be empty now");
+        success &= errorIfFalse(market.getVolume(8) == 0, "Virtual orderbook at price=8 should be empty now");
+        success &= errorIfFalse(market.getVolume(7) == limitOrder.getRemainingVolume(), "Virtual orderbook at price=7 should be: "+limitOrder.getRemainingVolume());
+        return success;
+    }
 
 
     private float emptyVolumeDistribution(long price)
