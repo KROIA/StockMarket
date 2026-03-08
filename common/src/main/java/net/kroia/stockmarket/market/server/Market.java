@@ -30,6 +30,7 @@ public class Market implements ServerSaveable {
     private long currentMarketPrice;
     private @Nullable Function<Long, Float> defaultVolumeProviderFunction;
 
+    private long candleStartTime = System.currentTimeMillis();
     private long candleOpenPrice;
     private long candleHighPrice;
     private long candleLowPrice;
@@ -172,11 +173,12 @@ public class Market implements ServerSaveable {
 
     public MarketPriceStruct getCurrentMarketPriceStruct()
     {
-        return new MarketPriceStruct(itemID.getShort(), candleOpenPrice, candleLowPrice, candleHighPrice, System.currentTimeMillis());
+        return new MarketPriceStruct(itemID.getShort(), candleOpenPrice, candleLowPrice, candleHighPrice, candleStartTime);
     }
     public MarketPriceStruct getCurrentMarketPriceStructAndReset()
     {
-        MarketPriceStruct  currentMarketPriceStruct = new MarketPriceStruct(itemID.getShort(), candleOpenPrice, candleLowPrice, candleHighPrice, System.currentTimeMillis());
+        MarketPriceStruct  currentMarketPriceStruct = new MarketPriceStruct(itemID.getShort(), candleOpenPrice, candleLowPrice, candleHighPrice, candleStartTime);
+        candleStartTime =  System.currentTimeMillis();
         candleOpenPrice = this.currentMarketPrice;
         candleHighPrice = this.currentMarketPrice;
         candleLowPrice = this.currentMarketPrice;

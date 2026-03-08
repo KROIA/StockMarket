@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS MarketPrice (
                                            id INTEGER PRIMARY KEY AUTOINCREMENT,
                                            marketid INTEGER NOT NULL,
-                                           price INTEGER NOT NULL,
+                                           open INTEGER NOT NULL,
                                            low INTEGER NOT NULL,
                                            high INTEGER NOT NULL,
                                            time INTEGER NOT NULL

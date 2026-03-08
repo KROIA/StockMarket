@@ -42,11 +42,8 @@ public class CandlestickChart extends StockMarketGuiElement
             return;
 
 
-
-
-       // int candleWidth2 = toCanvasSpaceX(candleWidth);
         List<PriceHistoryData.Candle> candles =  data.getCandles();
-        if(candles.size()>0)
+        if(!candles.isEmpty())
         {
             long closePrice = data.getCurrentMarketPrice();
             int cancleCount = candles.size();

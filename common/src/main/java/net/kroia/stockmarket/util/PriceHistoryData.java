@@ -2,11 +2,14 @@ package net.kroia.stockmarket.util;
 
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
+import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 public class PriceHistoryData
@@ -40,6 +43,13 @@ public class PriceHistoryData
             this.high = high;
             this.low = low;
         }
+        public Candle(MarketPriceStruct  sqlData)
+        {
+            openTimestamp = sqlData.time();
+            open = sqlData.open();
+            high = sqlData.high();
+            low = sqlData.low();
+        }
     }
 
     public static final StreamCodec<RegistryFriendlyByteBuf, PriceHistoryData> STREAM_CODEC = StreamCodec.composite(
@@ -66,6 +76,25 @@ public class PriceHistoryData
         this.itemID = itemID;
         this.candles = candles;
         this.currentMarketPrice = currentMarketPrice;
+    }
+
+    public static @Nullable PriceHistoryData fromSqlData(List<MarketPriceStruct> sqlData)
+    {
+        if(sqlData.isEmpty())
+            return null;
+        ItemID itemID = new ItemID(sqlData.getFirst().id());
+        List<Candle> candles = new ArrayList<>();
+        for(MarketPriceStruct candle : sqlData)
+        {
+            candles.add(new Candle(candle));
+        }
+        return new PriceHistoryData(itemID, candles, sqlData.size());
+    }
+
+    public void insert(PriceHistoryData other)
+    {
+        candles.addAll(other.candles);
+        candles.sort(Comparator.comparingLong(a -> a.openTimestamp));
     }
 
     public void setCurrentMarketPrice(long currentMarketPrice)

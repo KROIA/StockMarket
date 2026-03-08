@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-public record MarketPriceStruct(short id, long price, long low, long high, long time) {
+public record MarketPriceStruct(short id, long open, long low, long high, long time) {
     private static final Random RANDOM = new Random();
 
 

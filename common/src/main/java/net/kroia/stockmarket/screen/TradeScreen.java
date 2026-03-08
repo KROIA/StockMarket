@@ -5,6 +5,7 @@ import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.networking.streaming.StreamSystem;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
+import net.kroia.stockmarket.networking.request.MarketPriceHistoryRequest;
 import net.kroia.stockmarket.screen.widgets.CandlestickChart;
 import net.kroia.stockmarket.util.PriceHistoryData;
 import net.kroia.stockmarket.util.StockMarketGuiScreen;
@@ -41,14 +42,27 @@ public class TradeScreen extends StockMarketGuiScreen {
 
         addElement(candlestickChart);
 
-        streamID = StreamSystem.startServerToClientStream(BACKEND_INSTANCES.NETWORKING.MARKET_PRICE_STREAM, ItemID.of(Items.GOLD_INGOT.getDefaultInstance()), (price)->
+        ItemID itemID = ItemID.of(Items.GOLD_INGOT.getDefaultInstance());
+
+        MarketPriceHistoryRequest.InputData priceChunkRequestData = new MarketPriceHistoryRequest.InputData(itemID, 0, Long.MAX_VALUE);
+        StreamSystem.startServerToClientStream(BACKEND_INSTANCES.NETWORKING.MARKET_PRICE_HISTORY_REQUEST, priceChunkRequestData, (historyData) ->
+        {
+            BACKEND_INSTANCES.LOGGER.info("Price chunck received");
+            priceHistoryData.insert(historyData);
+        }, () ->
+        {
+            // Stream stopped
+            BACKEND_INSTANCES.LOGGER.info("MARKET_PRICE_HISTORY_REQUEST stopped");
+        });
+
+        streamID = StreamSystem.startServerToClientStream(BACKEND_INSTANCES.NETWORKING.MARKET_PRICE_STREAM, itemID, (price)->
         {
             BACKEND_INSTANCES.LOGGER.info("Price received: " + price);
             priceHistoryData.setCurrentMarketPrice(price);
         },()->
         {
             // Stream stopped
-            BACKEND_INSTANCES.LOGGER.info("Stream stopped");
+            BACKEND_INSTANCES.LOGGER.info("MARKET_PRICE_STREAM stopped");
         });
     }
 

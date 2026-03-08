@@ -1,4 +1,4 @@
-package net.kroia.stockmarket.networking.streams;
+package net.kroia.stockmarket.networking.stream;
 
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.streaming.GenericStream;

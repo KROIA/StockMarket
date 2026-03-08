@@ -17,8 +17,8 @@ import java.util.concurrent.CompletableFuture;
 public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
     //private static MarketPriceManager instance;
 
-    public static final String INSERT = "INSERT INTO MarketPrice (marketid, price, low, high, time) VALUES (?, ?, ?, ?, ?)";
-    public static final String SELECT = "SELECT marketid, price, low, high, time FROM MarketPrice";
+    public static final String INSERT = "INSERT INTO MarketPrice (marketid, open, low, high, time) VALUES (?, ?, ?, ?, ?)";
+    public static final String SELECT = "SELECT marketid, open, low, high, time FROM MarketPrice";
     public static final String DELETE = "DELETE FROM MarketPrice";
     public static final String COUNT =  "SELECT COUNT(*) FROM MarketPrice";
 
@@ -63,7 +63,7 @@ public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
     public void queueRecord(PreparedStatement stmt, MarketPriceStruct data){
         try {
             stmt.setShort(1, data.id());
-            stmt.setLong(2, data.price());
+            stmt.setLong(2, data.open());
             stmt.setLong(3, data.low());
             stmt.setLong(4, data.high());
             stmt.setLong(5, data.time());

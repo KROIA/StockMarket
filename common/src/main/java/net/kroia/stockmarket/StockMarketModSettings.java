@@ -5,6 +5,7 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.setting.ModSettings;
 import net.kroia.modutilities.setting.Setting;
 import net.kroia.modutilities.setting.SettingsGroup;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 
 public class StockMarketModSettings extends ModSettings {
@@ -36,6 +37,11 @@ public class StockMarketModSettings extends ModSettings {
         public final Setting<Integer> ADMIN_PERMISSION_LEVEL = registerSetting("ADMIN_PERMISSION_LEVEL",2, Integer.class);
 
         public Utilities() { super("Utilities"); }
+
+        public boolean playerIsAdmin(ServerPlayer player)
+        {
+            return player.hasPermissions(ADMIN_PERMISSION_LEVEL.get());
+        }
     }
     public static final class Player extends SettingsGroup
     {
