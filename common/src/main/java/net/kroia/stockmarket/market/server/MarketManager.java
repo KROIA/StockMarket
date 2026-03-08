@@ -10,6 +10,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MarketManager
 {
@@ -21,9 +22,10 @@ public class MarketManager
 
 
     private final Map<ItemID, Market> markets = new HashMap<>();
-    private long candleSaveTimer_intervalMs = 100;
+    private long candleSaveTimer_intervalMs = 1000;
     private long candleSaveTimer_lastMs = System.currentTimeMillis();
     private final Random random = new Random();
+    private AtomicBoolean saveLock = new AtomicBoolean(false);
 
     public MarketManager()
     {
@@ -53,7 +55,7 @@ public class MarketManager
         {
             // Create random movement for testing
             long currentPrice = m.getCurrentMarketPrice();
-            long rand = (random.nextLong()%10)-5;
+            long rand = (random.nextLong()%10)-4;
             m.test_setCurrentMarketPrice(currentPrice + rand);
             m.update();
         }
@@ -69,6 +71,11 @@ public class MarketManager
 
     private void saveCandlesToSQL()
     {
+        if(!saveLock.compareAndSet(false, true))
+        {
+            warn("saveCandlesToSQL(): currently locked!");
+            return;
+        }
         MarketPriceManager manager = BACKEND_INSTANCES.MARKET_PRICE_HISTORY_MANAGER;
         long saveStartTime = System.nanoTime();
         List<MarketPriceStruct> candles = new ArrayList<>();
@@ -76,14 +83,16 @@ public class MarketManager
         {
             candles.add(entry.getValue().getCurrentMarketPriceStructAndReset());
         }
-        long gatheringCandlesTime = saveStartTime - System.nanoTime();
+        long gatheringCandlesTime = System.nanoTime() -saveStartTime;
+        info("Gathering time: "+gatheringCandlesTime/1000000.0 + "ms");
         long finalSaveStartTime = System.nanoTime();
 
         manager.save(candles).thenRun(() -> {
             long finalSaveEndTime = System.nanoTime();
             long writeTime = finalSaveEndTime - finalSaveStartTime;
-            info("Database write for " + candles.size() + " records took " + writeTime + " ns");
-            info("MarketManager::saveCandlesToSQL: took " + (finalSaveEndTime - saveStartTime) + " ns");
+            info("Database write for " + candles.size() + " records took " + writeTime/1000000.0 + " ms");
+            info("saveCandlesToSQL: took " + (double)(finalSaveEndTime - saveStartTime)/1000000.0 + " ms");
+            saveLock.set(false);
         });
     }
 
