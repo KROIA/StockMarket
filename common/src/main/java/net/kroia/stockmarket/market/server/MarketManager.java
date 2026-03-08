@@ -56,7 +56,8 @@ public class MarketManager
             // Create random movement for testing
             long currentPrice = m.getCurrentMarketPrice();
             long rand = (random.nextLong()%10);
-            m.test_setCurrentMarketPrice(currentPrice + rand);
+            currentPrice = Math.max(0, currentPrice + rand);
+            m.test_setCurrentMarketPrice(currentPrice);
             m.update();
         }
 

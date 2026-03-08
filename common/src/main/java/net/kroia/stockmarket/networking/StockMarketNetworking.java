@@ -3,9 +3,9 @@ package net.kroia.stockmarket.networking;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.modutilities.networking.PacketManager;
 import net.kroia.modutilities.networking.streaming.StreamSystem;
-import net.kroia.modutilities.sandbox.SineStream;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.networking.streams.MarketPriceStream;
+import net.kroia.stockmarket.util.StockMarketGenericStream;
 
 public class StockMarketNetworking extends PacketManager {
     public static void setBackend(StockMarketModBackend.Instances backend) {

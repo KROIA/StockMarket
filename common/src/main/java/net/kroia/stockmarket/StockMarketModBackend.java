@@ -28,6 +28,7 @@ import net.kroia.stockmarket.market.server.MarketManager;
 import net.kroia.stockmarket.market.server.Testing;
 import net.kroia.stockmarket.menu.StockMarketMenus;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
+import net.kroia.stockmarket.util.StockMarketGuiScreen;
 import net.kroia.stockmarket.util.StockMarketLogger;
 import net.kroia.stockmarket.util.StockMarketTextMessages;
 import net.minecraft.client.player.LocalPlayer;
@@ -91,6 +92,7 @@ public class StockMarketModBackend implements StockMarketAPI {
     public static void onClientSetup()
     {
         StockMarketMenus.setupScreens();
+        StockMarketGuiScreen.setBackend(INSTANCES);
 
 
         ClientPlayerEvent.CLIENT_PLAYER_QUIT.register(StockMarketModBackend::onPlayerLeaveClientSide);
@@ -188,13 +190,7 @@ public class StockMarketModBackend implements StockMarketAPI {
     }
     private static void onPlayerRespawnClientSide(LocalPlayer oldPlayer, LocalPlayer newPlayer)
     {
-        StreamSystem.startServerToClientStream(INSTANCES.NETWORKING.MARKET_PRICE_STREAM, ItemID.of(Items.GOLD_INGOT.getDefaultInstance()), (price)->
-        {
-            INSTANCES.LOGGER.info("Price received: " + price);
-        },()->
-        {
-            // Stream stoppedz
-        });
+
     }
     // Called from the client side
     private static void onPlayerLeaveClientSide(@Nullable LocalPlayer localPlayer)

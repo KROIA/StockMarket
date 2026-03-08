@@ -1,17 +1,12 @@
 package net.kroia.stockmarket.util;
 
-import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.networking.packet.client_sender.update.WithdrawMoneyPacket;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 
 public class PriceHistoryData
@@ -73,19 +68,28 @@ public class PriceHistoryData
         this.currentMarketPrice = currentMarketPrice;
     }
 
-    void setCurrentMarketPrice(long currentMarketPrice)
+    public void setCurrentMarketPrice(long currentMarketPrice)
     {
         this.currentMarketPrice = currentMarketPrice;
         if(!candles.isEmpty())
         {
             // Update newest candle
             Candle  candle = candles.getLast();
-            candle.high = Math.max(candle.low, candle.high);
-            candle.low = Math.min(candle.high, candle.low);
+            candle.high = Math.max(this.currentMarketPrice, candle.high);
+            candle.low = Math.min(this.currentMarketPrice, candle.low);
         }
     }
-    void startNewCandle()
+    public void startNewCandle()
     {
         candles.add(new Candle(currentMarketPrice,currentMarketPrice,currentMarketPrice));
+    }
+
+    public List<Candle> getCandles()
+    {
+        return candles;
+    }
+    public long getCurrentMarketPrice()
+    {
+        return currentMarketPrice;
     }
 }

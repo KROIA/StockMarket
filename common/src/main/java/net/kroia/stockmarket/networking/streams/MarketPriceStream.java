@@ -4,7 +4,7 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.streaming.GenericStream;
 import net.kroia.stockmarket.market.server.Market;
 import net.kroia.stockmarket.market.server.MarketManager;
-import net.kroia.stockmarket.networking.StockMarketGenericStream;
+import net.kroia.stockmarket.util.StockMarketGenericStream;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 

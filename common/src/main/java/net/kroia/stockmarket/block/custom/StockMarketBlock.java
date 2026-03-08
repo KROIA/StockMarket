@@ -1,8 +1,8 @@
 package net.kroia.stockmarket.block.custom;
 
 import net.kroia.banksystem.block.custom.TerminalBlock;
-import net.kroia.stockmarket.StockMarketClientHooks;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
+import net.kroia.stockmarket.util.StockMarketClientHooks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;

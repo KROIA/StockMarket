@@ -1,6 +1,5 @@
-package net.kroia.stockmarket.networking;
+package net.kroia.stockmarket.util;
 
-import net.kroia.banksystem.BankSystemModBackend;
 import net.kroia.modutilities.networking.streaming.GenericStream;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.server.MarketManager;
