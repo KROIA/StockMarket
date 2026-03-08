@@ -1,6 +1,5 @@
 package net.kroia.stockmarket.market.server;
 
-import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.util.ItemID;
@@ -11,8 +10,8 @@ import net.minecraft.world.item.Items;
 import java.util.UUID;
 
 public class Testing {
-    private static StockMarketModBackend.Instances BACKEND_INSTANCES;
-    public static void setBackend(StockMarketModBackend.Instances backend) {
+    private static StockMarketModBackend.ServerInstances BACKEND_INSTANCES;
+    public static void setBackend(StockMarketModBackend.ServerInstances backend) {
         BACKEND_INSTANCES = backend;
         Orderbook.setBackend(backend);
         MatchingEngine.setBackend(backend);

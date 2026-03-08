@@ -78,7 +78,7 @@ public class PriceHistoryData
         this.currentMarketPrice = currentMarketPrice;
     }
 
-    public static @Nullable PriceHistoryData fromSqlData(List<MarketPriceStruct> sqlData)
+    public static @Nullable PriceHistoryData fromSqlData(List<MarketPriceStruct> sqlData, long currentMarketPrice)
     {
         if(sqlData.isEmpty())
             return null;
@@ -88,13 +88,25 @@ public class PriceHistoryData
         {
             candles.add(new Candle(candle));
         }
-        return new PriceHistoryData(itemID, candles, sqlData.size());
+        return new PriceHistoryData(itemID, candles, currentMarketPrice);
     }
 
     public void insert(PriceHistoryData other)
     {
         candles.addAll(other.candles);
         candles.sort(Comparator.comparingLong(a -> a.openTimestamp));
+    }
+    public void clear()
+    {
+        candles.clear();
+        currentMarketPrice = 0;
+        startNewCandle();
+    }
+    public void loadFrom(PriceHistoryData other)
+    {
+        candles.clear();
+        candles.addAll(other.candles);
+        currentMarketPrice = other.currentMarketPrice;
     }
 
     public void setCurrentMarketPrice(long currentMarketPrice)
@@ -116,6 +128,12 @@ public class PriceHistoryData
     public List<Candle> getCandles()
     {
         return candles;
+    }
+    public @Nullable Candle getCurrentCandle()
+    {
+        if(candles.isEmpty())
+            return null;
+        return candles.getLast();
     }
     public long getCurrentMarketPrice()
     {

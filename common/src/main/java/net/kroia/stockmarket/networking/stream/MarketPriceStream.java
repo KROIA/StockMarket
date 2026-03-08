@@ -7,16 +7,35 @@ import net.kroia.stockmarket.market.server.MarketManager;
 import net.kroia.stockmarket.util.StockMarketGenericStream;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
 
-public class MarketPriceStream extends StockMarketGenericStream<ItemID, Long>
+public class MarketPriceStream extends StockMarketGenericStream<ItemID, MarketPriceStream.ResponseData>
 {
-    long updateInterval = 100;
-    long lastTimeMs = System.currentTimeMillis();
-    ItemID itemID;
-    long lastPrice = -1;
+    public static class ResponseData
+    {
+        public static final StreamCodec<RegistryFriendlyByteBuf, ResponseData> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_LONG, p -> p.timestamp,
+                ByteBufCodecs.VAR_LONG, p -> p.marketPrice,
+                ResponseData::new
+        );
+
+        public long timestamp;
+        public long marketPrice;
+
+        public ResponseData(long timestamp, long marketPrice)
+        {
+            this.timestamp = timestamp;
+            this.marketPrice = marketPrice;
+        }
+    }
+
+    private long updateInterval = 100;
+    private long lastTimeMs = System.currentTimeMillis();
+    private ItemID itemID;
+    private final ResponseData lastPrice = new ResponseData(-1,-1);
 
     @Override
-    public GenericStream<ItemID, Long> copy() {
+    public GenericStream<ItemID, ResponseData> copy() {
         return new MarketPriceStream();
     }
 
@@ -44,8 +63,11 @@ public class MarketPriceStream extends StockMarketGenericStream<ItemID, Long>
             Market market = manager.getMarket(itemID);
             if(market != null) {
                  long currentPrice = market.getCurrentMarketPrice();
-                 if(currentPrice != lastPrice) {
-                     lastPrice = currentPrice;
+                 long currentTime = market.getCurrentTime();
+                 if(currentPrice != lastPrice.marketPrice ||
+                    currentTime != lastPrice.timestamp) {
+                     lastPrice.marketPrice = currentPrice;
+                     lastPrice.timestamp = currentTime;
                      sendPacket();
                  }
             }
@@ -53,7 +75,7 @@ public class MarketPriceStream extends StockMarketGenericStream<ItemID, Long>
     }
 
     @Override
-    public Long provideStreamPacketOnServer() {
+    public ResponseData provideStreamPacketOnServer() {
         return lastPrice;
     }
 
@@ -68,12 +90,12 @@ public class MarketPriceStream extends StockMarketGenericStream<ItemID, Long>
     }
 
     @Override
-    public void encodeData(RegistryFriendlyByteBuf buffer, Long aLong) {
-        ByteBufCodecs.VAR_LONG.encode(buffer, aLong);
+    public void encodeData(RegistryFriendlyByteBuf buffer, ResponseData aLong) {
+        ResponseData.STREAM_CODEC.encode(buffer, aLong);
     }
 
     @Override
-    public Long decodeData(RegistryFriendlyByteBuf buffer) {
-        return ByteBufCodecs.VAR_LONG.decode(buffer);
+    public ResponseData decodeData(RegistryFriendlyByteBuf buffer) {
+        return ResponseData.STREAM_CODEC.decode(buffer);
     }
 }

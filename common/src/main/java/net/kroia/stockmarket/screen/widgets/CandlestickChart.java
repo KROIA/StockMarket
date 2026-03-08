@@ -2,6 +2,7 @@ package net.kroia.stockmarket.screen.widgets;
 
 import net.kroia.stockmarket.util.PriceHistoryData;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 
@@ -11,7 +12,7 @@ public class CandlestickChart extends StockMarketGuiElement
     public static final int colorGreen = 0x7F00FF00;
     public static final int colorRed = 0x7FFF0000;
 
-    private PriceHistoryData data;
+    private @Nullable PriceHistoryData data;
     int canvasWidth = 100;
     int canvasHeight = 100;
     int canvasX = 0;
@@ -22,15 +23,14 @@ public class CandlestickChart extends StockMarketGuiElement
     int candleWidth = 12;
 
 
-    long lastMillis = System.currentTimeMillis();
-    long candleTimeInterval = 1000;
+
 
     public CandlestickChart()
     {
 
     }
 
-    public void setData(PriceHistoryData data)
+    public void setData(@Nullable PriceHistoryData data)
     {
         this.data = data;
     }
@@ -53,13 +53,6 @@ public class CandlestickChart extends StockMarketGuiElement
                 renderCandlestick(cancleCount - i, candleWidth, candle.open, candle.high, candle.low, closePrice);
                 closePrice = candle.open;
             }
-        }
-
-        long currentMillis = System.currentTimeMillis();
-        if(currentMillis-lastMillis>candleTimeInterval)
-        {
-            lastMillis = currentMillis;
-            data.startNewCandle();
         }
     }
 

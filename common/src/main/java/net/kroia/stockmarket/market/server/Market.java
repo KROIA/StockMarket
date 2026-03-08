@@ -11,12 +11,11 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Comparator;
 import java.util.PriorityQueue;
-import java.util.UUID;
 import java.util.function.Function;
 
 public class Market implements ServerSaveable {
-    private static StockMarketModBackend.Instances BACKEND_INSTANCES;
-    public static void setBackend(StockMarketModBackend.Instances backend) {
+    private static StockMarketModBackend.ServerInstances BACKEND_INSTANCES;
+    public static void setBackend(StockMarketModBackend.ServerInstances backend) {
         BACKEND_INSTANCES = backend;
         Orderbook.setBackend(backend);
         MatchingEngine.setBackend(backend);
@@ -105,6 +104,10 @@ public class Market implements ServerSaveable {
     public long getCurrentMarketPrice()
     {
         return currentMarketPrice;
+    }
+    public long getCurrentTime()
+    {
+        return System.currentTimeMillis();
     }
     public long getVolume(long price)
     {

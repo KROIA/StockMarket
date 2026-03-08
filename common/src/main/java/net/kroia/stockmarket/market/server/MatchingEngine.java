@@ -14,8 +14,8 @@ import java.util.function.Consumer;
 
 public class MatchingEngine
 {
-    private static StockMarketModBackend.Instances BACKEND_INSTANCES;
-    public static void setBackend(StockMarketModBackend.Instances backend) {
+    private static StockMarketModBackend.ServerInstances BACKEND_INSTANCES;
+    public static void setBackend(StockMarketModBackend.ServerInstances backend) {
         BACKEND_INSTANCES = backend;
     }
 

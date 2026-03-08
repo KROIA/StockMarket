@@ -1,18 +1,11 @@
 package net.kroia.stockmarket;
 
 import dev.architectury.event.events.client.ClientPlayerEvent;
+import dev.architectury.event.events.client.ClientTickEvent;
 import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.api.BankSystemAPI;
-import net.kroia.banksystem.block.BankSystemBlocks;
-import net.kroia.banksystem.entity.BankSystemEntities;
-import net.kroia.banksystem.item.BankSystemCreativeModeTab;
-import net.kroia.banksystem.item.BankSystemItems;
-import net.kroia.banksystem.menu.BankSystemMenus;
 import net.kroia.banksystem.util.BankSystemDataHandler;
-import net.kroia.banksystem.util.BankSystemTextMessages;
-import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.networking.streaming.StreamSystem;
 import net.kroia.stockmarket.api.StockMarketAPI;
 import net.kroia.stockmarket.block.StockMarketBlocks;
 import net.kroia.stockmarket.command.StockMarketCommands;
@@ -22,31 +15,35 @@ import net.kroia.stockmarket.entity.StockMarketEntities;
 import net.kroia.stockmarket.event.EventRegistration;
 import net.kroia.stockmarket.item.StockMarketCreativeModeTab;
 import net.kroia.stockmarket.item.StockMarketItems;
-import net.kroia.stockmarket.market.orders.Order;
-import net.kroia.stockmarket.market.server.Market;
+import net.kroia.stockmarket.market.client.ClientMarketManager;
 import net.kroia.stockmarket.market.server.MarketManager;
 import net.kroia.stockmarket.market.server.Testing;
 import net.kroia.stockmarket.menu.StockMarketMenus;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
+import net.kroia.stockmarket.networking.packet.PlayerJoinSyncPacket;
+import net.kroia.stockmarket.util.ClientSettings;
 import net.kroia.stockmarket.util.StockMarketGuiScreen;
 import net.kroia.stockmarket.util.StockMarketLogger;
 import net.kroia.stockmarket.util.StockMarketTextMessages;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.level.storage.LevelResource;
 import org.jetbrains.annotations.Nullable;
 
 import java.nio.file.Path;
-import java.util.UUID;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 
 public class StockMarketModBackend implements StockMarketAPI {
 
-    public static class Instances
+
+    public static class CommonInstances
+    {
+        public StockMarketLogger LOGGER;
+        public StockMarketNetworking NETWORKING;
+    }
+
+    public static class ServerInstances
     {
         public BankSystemAPI BANK_SYSTEM_API;
         public StockMarketModSettings SERVER_SETTINGS;
@@ -57,21 +54,26 @@ public class StockMarketModBackend implements StockMarketAPI {
         public StockMarketNetworking NETWORKING;
         public StockMarketLogger LOGGER;
     }
+    public static class ClientInstances
+    {
+        public BankSystemAPI BANK_SYSTEM_API;
 
-    private static Instances INSTANCES = new Instances();
+        public ClientMarketManager MARKET_MANAGER;
+        public StockMarketNetworking NETWORKING;
+        public StockMarketLogger LOGGER;
+        public ClientSettings SETTINGS;
+    }
+
+    private static final CommonInstances COMMON_INSTANCES = new CommonInstances();
+    private static ServerInstances SERVER_INSTANCES = null;
+    private static ClientInstances CLIENT_INSTANCES = null;
 
     StockMarketModBackend()
     {
-        INSTANCES.BANK_SYSTEM_API = null;
-        INSTANCES.NETWORKING = null;
-        INSTANCES.LOGGER = new StockMarketLogger(INSTANCES);
+        COMMON_INSTANCES.LOGGER = new StockMarketLogger();
+        COMMON_INSTANCES.NETWORKING = new StockMarketNetworking();
 
 
-        Testing.setBackend(INSTANCES);
-        StockMarketModSettings.setBackend(INSTANCES);
-        StockMarketTextMessages.setBackend(INSTANCES);
-        MarketManager.setBackend(INSTANCES);
-        StockMarketNetworking.setBackend(INSTANCES);
 
         StockMarketBlocks.init();
         StockMarketItems.init();
@@ -82,8 +84,10 @@ public class StockMarketModBackend implements StockMarketAPI {
 
         EventRegistration.init();
 
-        INSTANCES.BANK_SYSTEM_API = BankSystemMod.getAPI();
-        INSTANCES.NETWORKING = new StockMarketNetworking();
+        StockMarketNetworking.setBackend(COMMON_INSTANCES);
+
+
+
     }
 
 
@@ -91,13 +95,15 @@ public class StockMarketModBackend implements StockMarketAPI {
     // Called from the client side
     public static void onClientSetup()
     {
+
         StockMarketMenus.setupScreens();
-        StockMarketGuiScreen.setBackend(INSTANCES);
+
 
 
         ClientPlayerEvent.CLIENT_PLAYER_QUIT.register(StockMarketModBackend::onPlayerLeaveClientSide);
         ClientPlayerEvent.CLIENT_PLAYER_JOIN.register(StockMarketModBackend::onPlayerJoinClientSide);
         ClientPlayerEvent.CLIENT_PLAYER_RESPAWN.register(StockMarketModBackend::onPlayerRespawnClientSide);
+        ClientTickEvent.CLIENT_LEVEL_POST.register(StockMarketModBackend::onClientTickEvent);
     }
 
     // Called from the server side
@@ -110,13 +116,24 @@ public class StockMarketModBackend implements StockMarketAPI {
     // Called from the server side
     public static void onServerStart(MinecraftServer server)
     {
-        INSTANCES.SERVER_SETTINGS = new StockMarketModSettings();
-        INSTANCES.SERVER_SETTINGS.setLogger(INSTANCES.LOGGER::error, INSTANCES.LOGGER::error, INSTANCES.LOGGER::debug);
-        INSTANCES.MARKET_PRICE_HISTORY_MANAGER = new MarketPriceManager();
-        INSTANCES.MARKET_MANAGER = new MarketManager();
+        SERVER_INSTANCES =  new ServerInstances();
 
-        NEZNAMY_TAB_Placeholders.setBackend(INSTANCES);
-        StockMarketCommands.setBackend(INSTANCES);
+        Testing.setBackend(SERVER_INSTANCES);
+        StockMarketModSettings.setBackend(SERVER_INSTANCES);
+        MarketManager.setBackend(SERVER_INSTANCES);
+        StockMarketNetworking.setBackend(SERVER_INSTANCES);
+        NEZNAMY_TAB_Placeholders.setBackend(SERVER_INSTANCES);
+        StockMarketCommands.setBackend(SERVER_INSTANCES);
+
+        SERVER_INSTANCES.LOGGER = COMMON_INSTANCES.LOGGER;
+        SERVER_INSTANCES.BANK_SYSTEM_API = BankSystemMod.getAPI();
+        SERVER_INSTANCES.NETWORKING = COMMON_INSTANCES.NETWORKING;
+        SERVER_INSTANCES.SERVER_SETTINGS = new StockMarketModSettings();
+        SERVER_INSTANCES.SERVER_SETTINGS.setLogger(SERVER_INSTANCES.LOGGER::error, SERVER_INSTANCES.LOGGER::error, SERVER_INSTANCES.LOGGER::debug);
+        SERVER_INSTANCES.MARKET_PRICE_HISTORY_MANAGER = new MarketPriceManager();
+        SERVER_INSTANCES.MARKET_MANAGER = new MarketManager();
+
+
 
         loadDataFromFiles(server);
 
@@ -133,7 +150,7 @@ public class StockMarketModBackend implements StockMarketAPI {
         }
         else
         {
-            INSTANCES.BANK_SYSTEM_API.getEvents().getBankDataLoadedFromFileSignal().addListener(StockMarketModBackend::onPostBankSystemDataLoaded, 1);
+            SERVER_INSTANCES.BANK_SYSTEM_API.getEvents().getBankDataLoadedFromFileSignal().addListener(StockMarketModBackend::onPostBankSystemDataLoaded, 1);
         }
     }
     private static void onPostBankSystemDataLoaded()
@@ -141,16 +158,16 @@ public class StockMarketModBackend implements StockMarketAPI {
         Testing testing = new Testing();
         if(!testing.setup())
         {
-            INSTANCES.LOGGER.info("Can't setup testing");
+            SERVER_INSTANCES.LOGGER.info("Can't setup testing");
             return;
         }
         if(testing.runTests())
         {
-            INSTANCES.LOGGER.info("All tests executed successfully");
+            SERVER_INSTANCES.LOGGER.info("All tests executed successfully");
         }
         else
         {
-            INSTANCES.LOGGER.info("Some tests failed");
+            SERVER_INSTANCES.LOGGER.info("Some tests failed");
             testing.runTests();
         }
         //ItemID id = ItemID.getOrRegisterFromItemStack(Items.GOLD_INGOT.getDefaultInstance());
@@ -173,7 +190,7 @@ public class StockMarketModBackend implements StockMarketAPI {
     // Called from the server side
     public static void onPlayerJoin(ServerPlayer player)
     {
-
+        PlayerJoinSyncPacket.send(player);
     }
 
 
@@ -186,22 +203,59 @@ public class StockMarketModBackend implements StockMarketAPI {
     // Called from the client side
     private static void onPlayerJoinClientSide(@Nullable LocalPlayer localPlayer)
     {
+        if(CLIENT_INSTANCES != null)
+            return;
+        CLIENT_INSTANCES = new ClientInstances();
 
-    }
-    private static void onPlayerRespawnClientSide(LocalPlayer oldPlayer, LocalPlayer newPlayer)
-    {
+        StockMarketNetworking.setBackend(CLIENT_INSTANCES);
+        StockMarketGuiScreen.setBackend(CLIENT_INSTANCES);
+        ClientMarketManager.setBackend(CLIENT_INSTANCES);
+        StockMarketTextMessages.setBackend(CLIENT_INSTANCES);
 
+
+        CLIENT_INSTANCES.LOGGER = COMMON_INSTANCES.LOGGER;
+        CLIENT_INSTANCES.NETWORKING = COMMON_INSTANCES.NETWORKING;
+        CLIENT_INSTANCES.BANK_SYSTEM_API = BankSystemMod.getAPI();
+        CLIENT_INSTANCES.MARKET_MANAGER = new ClientMarketManager();
+        CLIENT_INSTANCES.SETTINGS = new ClientSettings();
+
+
+
+
+        CLIENT_INSTANCES.MARKET_MANAGER.onPlayerJoin(localPlayer);
     }
     // Called from the client side
     private static void onPlayerLeaveClientSide(@Nullable LocalPlayer localPlayer)
     {
+        if(CLIENT_INSTANCES == null)
+            return;
+        CLIENT_INSTANCES.MARKET_MANAGER.onPlayerLeave(localPlayer);
 
+        StockMarketNetworking.setBackend((ClientInstances)null);
+        StockMarketGuiScreen.setBackend(null);
+        ClientMarketManager.setBackend(null);
+        StockMarketTextMessages.setBackend(null);
+        CLIENT_INSTANCES = null;
+
+
+    }
+
+
+    private static void onPlayerRespawnClientSide(LocalPlayer oldPlayer, LocalPlayer newPlayer)
+    {
+
+    }
+
+
+    private static void onClientTickEvent(ClientLevel clientLevel)
+    {
+        CLIENT_INSTANCES.MARKET_MANAGER.update();
     }
 
     // Called from the server side
     private static void onServerTick(MinecraftServer server)
     {
-        INSTANCES.MARKET_MANAGER.update();
+        SERVER_INSTANCES.MARKET_MANAGER.update();
     }
 
     public static void loadDataFromFiles(MinecraftServer server)

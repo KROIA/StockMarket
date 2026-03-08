@@ -1,17 +1,18 @@
 package net.kroia.stockmarket;
 
 import net.kroia.banksystem.item.BankSystemItems;
-import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.setting.ModSettings;
 import net.kroia.modutilities.setting.Setting;
 import net.kroia.modutilities.setting.SettingsGroup;
+import net.kroia.stockmarket.networking.packet.PlayerJoinSyncPacket;
+import net.kroia.stockmarket.util.ClientSettings;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 
 public class StockMarketModSettings extends ModSettings {
 
-    private static StockMarketModBackend.Instances BACKEND_INSTANCES;
-    public static void setBackend(StockMarketModBackend.Instances backend) {
+    private static StockMarketModBackend.ServerInstances BACKEND_INSTANCES;
+    public static void setBackend(StockMarketModBackend.ServerInstances backend) {
         BACKEND_INSTANCES = backend;
     }
 
@@ -55,11 +56,20 @@ public class StockMarketModSettings extends ModSettings {
     {
         public final Setting<Integer> VIRTUAL_ORDERBOOK_DEFAULT_ARRAY_SIZE = registerSetting("VIRTUAL_ORDERBOOK_DEFAULT_ARRAY_SIZE", 100, Integer.class); // Starting balance for new players
         public final Setting<ItemStack> CURRENCY = registerSetting("CURRENCY", BankSystemItems.MONEY.get().getDefaultInstance(), ItemStack.class); // Starting balance for new players
+        public final Setting<Long> CANDLE_TIME = registerSetting("CANDLE_TIME", 10000L, Long.class); // Time interval of candle sticks in ms
 
         public Market() { super("Market"); }
     }
 
 
+
+    public ClientSettings getClientSettings()
+    {
+        ClientSettings settings = new ClientSettings();
+        settings.setCandleTimeMs(MARKET.CANDLE_TIME.get());
+
+        return settings;
+    }
 
     /**
      * ---------------------------------------------------------------------------------------

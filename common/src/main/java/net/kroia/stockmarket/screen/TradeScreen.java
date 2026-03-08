@@ -2,18 +2,18 @@ package net.kroia.stockmarket.screen;
 
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.Gui;
-import net.kroia.modutilities.networking.streaming.StreamSystem;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
-import net.kroia.stockmarket.networking.request.MarketPriceHistoryRequest;
+import net.kroia.stockmarket.market.client.ClientMarket;
 import net.kroia.stockmarket.screen.widgets.CandlestickChart;
 import net.kroia.stockmarket.util.PriceHistoryData;
 import net.kroia.stockmarket.util.StockMarketGuiScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.Items;
+import org.jetbrains.annotations.Nullable;
 
-import java.util.UUID;
+import java.util.List;
 
 
 public class TradeScreen extends StockMarketGuiScreen {
@@ -27,43 +27,30 @@ public class TradeScreen extends StockMarketGuiScreen {
 
 
     private final CandlestickChart  candlestickChart;
-    private final PriceHistoryData priceHistoryData;
-    private final UUID streamID;
-
+    private @Nullable ItemID currentMarketID = null;
 
     public TradeScreen(StockMarketBlockEntity blockEntity)
     {
         super(Texts.TITLE);
         this.blockEntity = blockEntity;
 
-        priceHistoryData = new PriceHistoryData(ItemID.of(Items.GOLD_INGOT.getDefaultInstance()));
         candlestickChart =  new CandlestickChart();
-        candlestickChart.setData(priceHistoryData);
+        candlestickChart.setData(null);
 
         addElement(candlestickChart);
 
-        ItemID itemID = ItemID.of(Items.GOLD_INGOT.getDefaultInstance());
-
-        MarketPriceHistoryRequest.InputData priceChunkRequestData = new MarketPriceHistoryRequest.InputData(itemID, 0, Long.MAX_VALUE);
-        StreamSystem.startServerToClientStream(BACKEND_INSTANCES.NETWORKING.MARKET_PRICE_HISTORY_REQUEST, priceChunkRequestData, (historyData) ->
+        List<ItemID> markets = getAvailableMarkets();
+        if(markets.isEmpty())
         {
-            BACKEND_INSTANCES.LOGGER.info("Price chunck received");
-            priceHistoryData.insert(historyData);
-        }, () ->
-        {
-            // Stream stopped
-            BACKEND_INSTANCES.LOGGER.info("MARKET_PRICE_HISTORY_REQUEST stopped");
-        });
-
-        streamID = StreamSystem.startServerToClientStream(BACKEND_INSTANCES.NETWORKING.MARKET_PRICE_STREAM, itemID, (price)->
-        {
-            BACKEND_INSTANCES.LOGGER.info("Price received: " + price);
-            priceHistoryData.setCurrentMarketPrice(price);
-        },()->
-        {
-            // Stream stopped
-            BACKEND_INSTANCES.LOGGER.info("MARKET_PRICE_STREAM stopped");
-        });
+            info("No markets available");
+            return;
+        }
+        currentMarketID =  markets.getFirst();
+        ClientMarket market = getMarket(currentMarketID);
+        if(market != null) {
+            market.subscribeToMarketPriceUpdate();
+            candlestickChart.setData(market.getPriceHistoryData());
+        }
     }
 
 
@@ -75,7 +62,17 @@ public class TradeScreen extends StockMarketGuiScreen {
     @Override
     public void onClose()
     {
-        StreamSystem.stopStream(streamID);
+        if(currentMarketID != null)
+        {
+            ClientMarket market = getMarket(currentMarketID);
+            if(market != null)
+            {
+                market.unsubscribeFromMarketPriceUpdate();
+            }
+
+            candlestickChart.setData(null);
+            currentMarketID = null;
+        }
         super.onClose();
     }
 

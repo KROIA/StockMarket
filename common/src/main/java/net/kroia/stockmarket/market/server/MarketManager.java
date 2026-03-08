@@ -2,10 +2,8 @@ package net.kroia.stockmarket.market.server;
 
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.StockMarketModBackend;
-import net.kroia.stockmarket.data.filter.DateFilter;
 import net.kroia.stockmarket.data.table.MarketPriceManager;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
-import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -14,15 +12,15 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MarketManager
 {
-    private static StockMarketModBackend.Instances BACKEND_INSTANCES;
-    public static void setBackend(StockMarketModBackend.Instances backend) {
+    private static StockMarketModBackend.ServerInstances BACKEND_INSTANCES;
+    public static void setBackend(StockMarketModBackend.ServerInstances backend) {
         BACKEND_INSTANCES = backend;
         Market.setBackend(backend);
     }
 
 
     private final Map<ItemID, Market> markets = new HashMap<>();
-    private long candleSaveTimer_intervalMs = 10000;
+    private long candleSaveTimer_intervalMs = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.CANDLE_TIME.get();
     private long candleSaveTimer_lastMs = System.currentTimeMillis();
     private final Random random = new Random();
     private AtomicBoolean saveLock = new AtomicBoolean(false);
@@ -69,6 +67,15 @@ public class MarketManager
         }
     }
 
+    public List<ItemID> getAvailableMarketIDs()
+    {
+        List<ItemID> itemIDs = new ArrayList<>();
+        for(Market m : markets.values())
+        {
+            itemIDs.add(m.getItemID());
+        }
+        return itemIDs;
+    }
 
     private void saveCandlesToSQL()
     {

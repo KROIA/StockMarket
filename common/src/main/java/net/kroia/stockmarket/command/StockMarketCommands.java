@@ -4,7 +4,6 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.kroia.stockmarket.StockMarketModBackend;
-import net.kroia.stockmarket.compat.NEZNAMY_TAB_Placeholders;
 import net.kroia.stockmarket.data.table.OrderRecordManager;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import net.kroia.stockmarket.data.table.MarketPriceManager;
@@ -20,8 +19,8 @@ import java.util.Optional;
 
 
 public class StockMarketCommands {
-    private static StockMarketModBackend.Instances BACKEND_INSTANCES;
-    public static void setBackend(StockMarketModBackend.Instances backend) {
+    private static StockMarketModBackend.ServerInstances BACKEND_INSTANCES;
+    public static void setBackend(StockMarketModBackend.ServerInstances backend) {
         StockMarketCommands.BACKEND_INSTANCES = backend;
     }
 

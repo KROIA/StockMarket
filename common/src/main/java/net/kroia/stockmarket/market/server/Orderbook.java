@@ -19,8 +19,8 @@ import java.util.function.Function;
 
 public class Orderbook implements ServerSaveable
 {
-    private static StockMarketModBackend.Instances BACKEND_INSTANCES;
-    public static void setBackend(StockMarketModBackend.Instances backend) {
+    private static StockMarketModBackend.ServerInstances BACKEND_INSTANCES;
+    public static void setBackend(StockMarketModBackend.ServerInstances backend) {
         BACKEND_INSTANCES = backend;
         VirtualOrderbook.setBackend(backend);
     }

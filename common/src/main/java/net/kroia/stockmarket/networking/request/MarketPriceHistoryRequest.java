@@ -51,7 +51,8 @@ public class MarketPriceHistoryRequest extends StockMarketGenericStream<MarketPr
                         Optional.of(new DateFilter(inputData.minTimestamp, inputData.maxTimestamp)),
                         Optional.of(new EqualityFilter(inputData.item.getShort())), -1);
         fut.thenAccept(list -> {
-            data = PriceHistoryData.fromSqlData(list);
+
+            data = PriceHistoryData.fromSqlData(list, getCurrentMarketPrice(inputData.item));
             if(data == null)
             {
                 warn("MarketPriceHistoryRequest failed to fetch data for item: " + inputData.item);

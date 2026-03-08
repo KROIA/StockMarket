@@ -1,14 +1,13 @@
 package net.kroia.stockmarket.compat;
 
 import me.neznamy.tab.api.TabAPI;
-import me.neznamy.tab.api.TabPlayer;
 import me.neznamy.tab.api.placeholder.PlaceholderManager;
 import net.kroia.stockmarket.StockMarketModBackend;
 
 
 public class NEZNAMY_TAB_Placeholders {
-    private static StockMarketModBackend.Instances BACKEND_INSTANCES;
-    public static void setBackend(StockMarketModBackend.Instances backend) {
+    private static StockMarketModBackend.ServerInstances BACKEND_INSTANCES;
+    public static void setBackend(StockMarketModBackend.ServerInstances backend) {
         NEZNAMY_TAB_Placeholders.BACKEND_INSTANCES = backend;
     }
 

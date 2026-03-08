@@ -1,12 +1,11 @@
 package net.kroia.stockmarket.util;
 
-import net.kroia.banksystem.api.IClientBankManager;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.stockmarket.StockMarketModBackend;
 
 public abstract class StockMarketGuiElement extends GuiElement {
-    protected static StockMarketModBackend.Instances BACKEND_INSTANCES;
-    public static void setBackend(StockMarketModBackend.Instances backend) {
+    protected static StockMarketModBackend.ClientInstances BACKEND_INSTANCES;
+    public static void setBackend(StockMarketModBackend.ClientInstances backend) {
         BACKEND_INSTANCES = backend;
     }
 

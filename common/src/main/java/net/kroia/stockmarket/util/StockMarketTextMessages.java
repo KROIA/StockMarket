@@ -1,12 +1,10 @@
 package net.kroia.stockmarket.util;
 
-import net.kroia.banksystem.BankSystemModBackend;
-import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.stockmarket.StockMarketModBackend;
 
 public class StockMarketTextMessages {
 
-    private static StockMarketModBackend.Instances BACKEND_INSTANCES;
+    private static StockMarketModBackend.ClientInstances BACKEND_INSTANCES;
     private static boolean initialized = false;
     public static void init() {
         if (initialized) {
@@ -14,7 +12,7 @@ public class StockMarketTextMessages {
         }
         initialized = true;
     }
-    public static void setBackend(StockMarketModBackend.Instances backend) {
+    public static void setBackend(StockMarketModBackend.ClientInstances backend) {
         StockMarketTextMessages.BACKEND_INSTANCES = backend;
     }
 
