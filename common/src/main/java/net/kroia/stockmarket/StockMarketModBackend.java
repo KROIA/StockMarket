@@ -21,6 +21,7 @@ import net.kroia.stockmarket.item.StockMarketCreativeModeTab;
 import net.kroia.stockmarket.item.StockMarketItems;
 import net.kroia.stockmarket.market.orders.Order;
 import net.kroia.stockmarket.market.server.Market;
+import net.kroia.stockmarket.market.server.MarketManager;
 import net.kroia.stockmarket.market.server.Testing;
 import net.kroia.stockmarket.menu.StockMarketMenus;
 import net.kroia.stockmarket.util.StockMarketLogger;
@@ -57,7 +58,7 @@ public class StockMarketModBackend implements StockMarketAPI {
         Testing.setBackend(INSTANCES);
         StockMarketModSettings.setBackend(INSTANCES);
         StockMarketTextMessages.setBackend(INSTANCES);
-        Market.setBackend(INSTANCES);
+        MarketManager.setBackend(INSTANCES);
 
 
         StockMarketBlocks.init();

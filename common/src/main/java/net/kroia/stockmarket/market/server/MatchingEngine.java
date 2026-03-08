@@ -19,6 +19,14 @@ public class MatchingEngine
         BACKEND_INSTANCES = backend;
     }
 
+    /** Tiny value-holder to return two banks together. */
+    private static final class BankPair
+    {
+        final IBank itemBank;
+        final IBank moneyBank;
+        BankPair(IBank i, IBank m) { itemBank = i; moneyBank = m; }
+    }
+
     private final ItemID itemID;
     private final Orderbook orderbook;
     private static final int TIMEOUT_COUNT = 10000;
@@ -141,6 +149,10 @@ public class MatchingEngine
         }
     }
 
+    //private void processInterMarketLimitOrder(InterMarketOrder order)
+    //{
+    //
+    //}
 
 
     /**
@@ -152,14 +164,6 @@ public class MatchingEngine
      *
      * currentMarketPrice is mutable class-level state; it walks down on SELL, up on BUY.
      *
-     * Performance notes vs. original:
-     *  - Extracted resolveCounterpartyBanks() to de-duplicate the identical player-bank
-     *    lookup that appeared twice in the player-order branch.
-     *  - Replaced the inner while-loop + redundant outer do-while with a single shared
-     *    helper drainVirtualVolume() called at both sites.
-     *  - Removed the TIMEOUT_COUNT guard; the loop now terminates on the same conditions
-     *    (volume satisfied OR price underflows to 0) without an arbitrary iteration cap.
-     *  - pair_cache is still passed in to avoid allocation on the hot path.
      */
     private void processMarketOrder(Order order, long minAcceptedPrice, long maxAcceptedPrice)
     {
@@ -598,13 +602,7 @@ public class MatchingEngine
         return (ib == null || mb == null) ? null : new BankPair(ib, mb);
     }
 
-    /** Tiny value-holder to return two banks together without allocating an array. */
-    private static final class BankPair
-    {
-        final IBank itemBank;
-        final IBank moneyBank;
-        BankPair(IBank i, IBank m) { itemBank = i; moneyBank = m; }
-    }
+
 
 
 

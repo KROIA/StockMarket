@@ -153,12 +153,6 @@ public class Market implements ServerSaveable {
     {
         if(!marketOpen)
             return;
-        //for(Order order : buyLimitOrders_inputBuffer)
-        //    orderbook.putOrder(order);
-        //for(Order order : sellLimitOrders_inputBuffer)
-        //    orderbook.putOrder(order);
-        //buyLimitOrders_inputBuffer.clear();
-        //sellLimitOrders_inputBuffer.clear();
 
         orderbook.setCurrentMarketPrice(currentMarketPrice);
         matchingEngine.update(currentMarketPrice);
