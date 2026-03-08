@@ -22,7 +22,7 @@ public class MarketManager
 
 
     private final Map<ItemID, Market> markets = new HashMap<>();
-    private long candleSaveTimer_intervalMs = 1000;
+    private long candleSaveTimer_intervalMs = 10000;
     private long candleSaveTimer_lastMs = System.currentTimeMillis();
     private final Random random = new Random();
     private AtomicBoolean saveLock = new AtomicBoolean(false);
@@ -55,7 +55,7 @@ public class MarketManager
         {
             // Create random movement for testing
             long currentPrice = m.getCurrentMarketPrice();
-            long rand = (random.nextLong()%10)-4;
+            long rand = (random.nextLong()%10);
             m.test_setCurrentMarketPrice(currentPrice + rand);
             m.update();
         }
