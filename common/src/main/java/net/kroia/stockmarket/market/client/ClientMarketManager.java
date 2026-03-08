@@ -53,8 +53,9 @@ public class ClientMarketManager
     {
         AsynchronousRequestResponseSystem.sendRequestToServer(BACKEND_INSTANCES.NETWORKING.MARKETS_REQUEST, 0, (response) ->
         {
-            for(ItemID itemID : response)
+            for(ItemID itemID : response) {
                 createClientMarket(itemID);
+            }
         });
     }
 
@@ -84,6 +85,16 @@ public class ClientMarketManager
         }
     }
 
+    @Override
+    public String toString()
+    {
+        StringBuilder sb = new StringBuilder();
+        for(ClientMarket clientMarket : clientMarkets.values())
+        {
+            sb.append(clientMarket.toString()).append("\n");
+        }
+        return sb.toString();
+    }
 
     protected void info(String message) {
         BACKEND_INSTANCES.LOGGER.info("[ClientMarketManager]: "+message);

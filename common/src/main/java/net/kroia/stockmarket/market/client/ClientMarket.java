@@ -67,7 +67,7 @@ public class ClientMarket
         MarketPriceHistoryRequest.InputData priceChunkRequestData = new MarketPriceHistoryRequest.InputData(itemID, startTime, endTime);
         StreamSystem.startServerToClientStream(BACKEND_INSTANCES.NETWORKING.MARKET_PRICE_HISTORY_REQUEST, priceChunkRequestData, (historyData) ->
         {
-            info("Price chunck received");
+            info("Price chunck received for: "+itemID);
             //lastCandleCreationTime = System.currentTimeMillis();
             priceHistoryData.loadFrom(historyData);
             PriceHistoryData.Candle lastCandle = priceHistoryData.getCurrentCandle();
@@ -89,7 +89,7 @@ public class ClientMarket
         //if(priceHistoryData.getCandles().isEmpty())
         {
             // Request historical candle data first
-            requestFullPriceHistoryUpdate(0, Long.MAX_VALUE);
+            requestFullPriceHistoryUpdate(); // lazy update since it replaces all history data points
         }
 
         marketPriceUpdateStreamID = StreamSystem.startServerToClientStream(BACKEND_INSTANCES.NETWORKING.MARKET_PRICE_STREAM, itemID, (price)->
@@ -116,6 +116,11 @@ public class ClientMarket
 
 
 
+    @Override
+    public String toString()
+    {
+        return "Market:" + itemID + " Price:" + priceHistoryData.getCurrentMarketPrice();
+    }
 
 
 
