@@ -14,7 +14,9 @@ import net.kroia.banksystem.util.BankSystemTextMessages;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.api.StockMarketAPI;
 import net.kroia.stockmarket.block.StockMarketBlocks;
+import net.kroia.stockmarket.command.StockMarketCommands;
 import net.kroia.stockmarket.compat.NEZNAMY_TAB_Placeholders;
+import net.kroia.stockmarket.data.table.MarketPriceManager;
 import net.kroia.stockmarket.entity.StockMarketEntities;
 import net.kroia.stockmarket.event.EventRegistration;
 import net.kroia.stockmarket.item.StockMarketCreativeModeTab;
@@ -42,7 +44,9 @@ public class StockMarketModBackend implements StockMarketAPI {
     {
         public BankSystemAPI BANK_SYSTEM_API;
         public StockMarketModSettings SERVER_SETTINGS;
+        public MarketManager MARKET_MANAGER;
 
+        public MarketPriceManager MARKET_PRICE_HISTORY_MANAGER;
 
         public StockMarketLogger LOGGER;
     }
@@ -96,8 +100,11 @@ public class StockMarketModBackend implements StockMarketAPI {
     {
         INSTANCES.SERVER_SETTINGS = new StockMarketModSettings();
         INSTANCES.SERVER_SETTINGS.setLogger(INSTANCES.LOGGER::error, INSTANCES.LOGGER::error, INSTANCES.LOGGER::debug);
+        INSTANCES.MARKET_PRICE_HISTORY_MANAGER = new MarketPriceManager();
+        INSTANCES.MARKET_MANAGER = new MarketManager();
 
         NEZNAMY_TAB_Placeholders.setBackend(INSTANCES);
+        StockMarketCommands.setBackend(INSTANCES);
 
         loadDataFromFiles(server);
 
@@ -173,7 +180,7 @@ public class StockMarketModBackend implements StockMarketAPI {
     // Called from the server side
     private static void onServerTick(MinecraftServer server)
     {
-
+        INSTANCES.MARKET_MANAGER.update();
     }
 
     public static void loadDataFromFiles(MinecraftServer server)

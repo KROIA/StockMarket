@@ -3,6 +3,7 @@ package net.kroia.stockmarket.market.server;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.persistence.ServerSaveable;
 import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import net.kroia.stockmarket.market.orders.InterMarketOrder;
 import net.kroia.stockmarket.market.orders.Order;
 import net.minecraft.nbt.CompoundTag;
@@ -28,6 +29,10 @@ public class Market implements ServerSaveable {
     private boolean marketOpen;
     private long currentMarketPrice;
     private @Nullable Function<Long, Float> defaultVolumeProviderFunction;
+
+    private long candleOpenPrice;
+    private long candleHighPrice;
+    private long candleLowPrice;
 
     /**
      * Temporary order buffers for collecting orders async and only process the orders on update
@@ -64,6 +69,9 @@ public class Market implements ServerSaveable {
         this.currentMarketPrice = currentMarketPrice;
         this.orderbook.setCurrentMarketPrice(currentMarketPrice);
         this.orderbook.resetVirtualVolumeDistribution();
+        candleOpenPrice = this.currentMarketPrice;
+        candleHighPrice = this.currentMarketPrice;
+        candleLowPrice = this.currentMarketPrice;
     }
     public Market(ItemID itemID)
     {
@@ -156,8 +164,24 @@ public class Market implements ServerSaveable {
 
         orderbook.setCurrentMarketPrice(currentMarketPrice);
         matchingEngine.update(currentMarketPrice);
+
+        // Update the current candle
+        candleLowPrice = Math.min(candleLowPrice, currentMarketPrice);
+        candleHighPrice = Math.max(candleHighPrice, currentMarketPrice);
     }
 
+    public MarketPriceStruct getCurrentMarketPriceStruct()
+    {
+        return new MarketPriceStruct(itemID.getShort(), candleOpenPrice, candleLowPrice, candleHighPrice, System.currentTimeMillis());
+    }
+    public MarketPriceStruct getCurrentMarketPriceStructAndReset()
+    {
+        MarketPriceStruct  currentMarketPriceStruct = new MarketPriceStruct(itemID.getShort(), candleOpenPrice, candleLowPrice, candleHighPrice, System.currentTimeMillis());
+        candleOpenPrice = this.currentMarketPrice;
+        candleHighPrice = this.currentMarketPrice;
+        candleLowPrice = this.currentMarketPrice;
+        return currentMarketPriceStruct;
+    }
 
     /**
      * Gets called when the provided order has been consumed

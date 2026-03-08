@@ -56,7 +56,7 @@ public class Testing {
         bankAccountNr2 = bankAccount2.getAccountNumber();
 
         ItemID id = ItemID.getOrRegisterFromItemStack(Items.GOLD_INGOT.getDefaultInstance());
-        market = new Market(id);
+        market = BACKEND_INSTANCES.MARKET_MANAGER.createMarket(id);
 
         // Set balance
         bankAccount1.createBank(id, 100);

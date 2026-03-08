@@ -3,6 +3,8 @@ package net.kroia.stockmarket.command;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.compat.NEZNAMY_TAB_Placeholders;
 import net.kroia.stockmarket.data.table.OrderRecordManager;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import net.kroia.stockmarket.data.table.MarketPriceManager;
@@ -18,6 +20,12 @@ import java.util.Optional;
 
 
 public class StockMarketCommands {
+    private static StockMarketModBackend.Instances BACKEND_INSTANCES;
+    public static void setBackend(StockMarketModBackend.Instances backend) {
+        StockMarketCommands.BACKEND_INSTANCES = backend;
+    }
+
+
     // Method to register commands
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher, CommandBuildContext commandBuildContext, Commands.CommandSelection commandSelection) {
 
@@ -98,7 +106,7 @@ public class StockMarketCommands {
                             }
                             else {
                                 List<MarketPriceStruct> exData = MarketPriceStruct.generateExampleData(numRecords);
-                                MarketPriceManager manager = MarketPriceManager.create();
+                                MarketPriceManager manager = BACKEND_INSTANCES.MARKET_PRICE_HISTORY_MANAGER;
                                 long time = System.currentTimeMillis();
                                 manager.save(exData).thenRun(() -> {
                                     long writeTime = System.currentTimeMillis() - time;
@@ -124,7 +132,7 @@ public class StockMarketCommands {
                         .then(Commands.argument("table", StringArgumentType.string())
                         .then(Commands.literal("count")
                                 .executes(context -> {
-                                    MarketPriceManager manager = MarketPriceManager.create();
+                                    MarketPriceManager manager = BACKEND_INSTANCES.MARKET_PRICE_HISTORY_MANAGER;
                                     manager.getRecordCount(Optional.empty(), Optional.empty())
                                             .thenAccept(count -> {
                                                 context.getSource().getPlayer().sendSystemMessage(Component.literal("MarketPrice table currently has " + count + " records."));

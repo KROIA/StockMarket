@@ -15,7 +15,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
-    private static MarketPriceManager instance;
+    //private static MarketPriceManager instance;
 
     public static final String INSERT = "INSERT INTO MarketPrice (marketid, price, low, high, time) VALUES (?, ?, ?, ?, ?)";
     public static final String SELECT = "SELECT marketid, price, low, high, time FROM MarketPrice";
@@ -53,12 +53,12 @@ public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
         }, DatabaseManager.getDatabaseThread());
     }
 
-    public static MarketPriceManager create(){
-        if(instance == null){
-            instance = new MarketPriceManager();
-        }
-        return instance;
-    }
+    //public static MarketPriceManager create(){
+    //    if(instance == null){
+    //        instance = new MarketPriceManager();
+    //    }
+    //    return instance;
+    //}
 
     public void queueRecord(PreparedStatement stmt, MarketPriceStruct data){
         try {
