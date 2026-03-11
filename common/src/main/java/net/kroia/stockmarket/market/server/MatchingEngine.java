@@ -4,8 +4,8 @@ import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.StockMarketModBackend;
-import net.kroia.stockmarket.market.orders.InterMarketOrder;
-import net.kroia.stockmarket.market.orders.Order;
+import net.kroia.stockmarket.market.order.InterMarketOrder;
+import net.kroia.stockmarket.market.order.Order;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -172,7 +172,7 @@ public class MatchingEngine
         if (account == null) { orderCanceled(order); return; }
 
         IBank itemBank  = account.getBank(itemID);
-        IBank moneyBank = account.getBank(ItemID.of(BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.CURRENCY.get()));
+        IBank moneyBank = account.getBank(BACKEND_INSTANCES.MARKET_MANAGER.getTradingCurrencyID());
         if (itemBank == null || moneyBank == null) { orderCanceled(order); return; }
 
         long orderVolume = order.getRemainingVolume();
@@ -201,7 +201,7 @@ public class MatchingEngine
         long itemDelta  = 0;   // items leaving seller's account  (will be negative)
         long moneyDelta = 0;   // money entering seller's account (will be positive)
 
-        // ── Iterate real BUY orders in the matchable price range ──────────────
+        // ── Iterate real BUY order in the matchable price range ──────────────
         PriorityQueue<Order> buyOrders = orderbook.getBuyLimitOrders();
 
         for (Order buyOrder : buyOrders)
@@ -285,7 +285,7 @@ public class MatchingEngine
             }
         }
 
-        // ── Real orders exhausted — drain remaining virtual depth ─────────────
+        // ── Real order exhausted — drain remaining virtual depth ─────────────
         long[] result = drainVirtualSell(orderVolume, itemDelta, moneyDelta, minimalAcceptedPrice);
 
         order.edit(result[1] - itemDelta, result[2] - moneyDelta);
@@ -320,7 +320,7 @@ public class MatchingEngine
         long itemDelta  = 0;   // items entering buyer's account  (will be positive)
         long moneyDelta = 0;   // money leaving  buyer's account  (will be negative)
 
-        // ── Iterate real SELL orders in the matchable price range ─────────────
+        // ── Iterate real SELL order in the matchable price range ─────────────
         PriorityQueue<Order> sellOrders = orderbook.getSellLimitOrders();
 
         for (Order sellOrder : sellOrders)
@@ -430,7 +430,7 @@ public class MatchingEngine
             }
         }
 
-        // ── Real orders exhausted — drain remaining virtual depth ─────────────
+        // ── Real order exhausted — drain remaining virtual depth ─────────────
         long[] result = drainVirtualBuy(orderVolume, itemDelta, moneyDelta,
                 maximalAcceptedPrice, availableFunds);
 
@@ -598,7 +598,7 @@ public class MatchingEngine
         IBankAccount acct = getBankAccount(counterOrder.getBankAccountNr());
         if (acct == null) return null;
         IBank ib = acct.getBank(itemID);
-        IBank mb = acct.getBank(ItemID.of(BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.CURRENCY.get()));
+        IBank mb = acct.getBank(BACKEND_INSTANCES.MARKET_MANAGER.getTradingCurrencyID());
         return (ib == null || mb == null) ? null : new BankPair(ib, mb);
     }
 
@@ -640,7 +640,7 @@ public class MatchingEngine
     @Nullable IBank getMoneyBank(int bankAccountID)
     {
         IBankAccount account = getBankAccount(bankAccountID);
-        ItemID moneyID = ItemID.of(BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.CURRENCY.get());
+        ItemID moneyID = BACKEND_INSTANCES.MARKET_MANAGER.getTradingCurrencyID();
         if(account != null && moneyID != null)
         {
             IBank bank = account.getBank(moneyID);

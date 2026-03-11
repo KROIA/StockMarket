@@ -6,6 +6,13 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 
+/**
+ * todo:
+ * - Scaling the price data is currently done very simple
+ *   Improvement is needed in order to be able to translate and scale the chart view
+ *
+ * - Vertical and maybe horizontal axis is not implemented yet
+ */
 public class CandlestickChart extends StockMarketGuiElement
 {
 
@@ -15,9 +22,6 @@ public class CandlestickChart extends StockMarketGuiElement
     private @Nullable PriceHistoryData data;
     int canvasWidth = 100;
     int canvasHeight = 100;
-    int canvasX = 0;
-    int canvasY = 0;
-
     int elementWidth = 100;
     int elementHeight = 100;
     int candleWidth = 12;
@@ -30,6 +34,10 @@ public class CandlestickChart extends StockMarketGuiElement
 
     }
 
+    /**
+     * Sets the reference to the client markets price history data to visualize as candle stick chart
+     * @param data
+     */
     public void setData(@Nullable PriceHistoryData data)
     {
         this.data = data;

@@ -1,9 +1,14 @@
-package net.kroia.stockmarket.market.orders;
+package net.kroia.stockmarket.market.order;
 
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.modutilities.persistence.ServerSaveable;
 import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
+import net.minecraft.core.UUIDUtil;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -51,13 +56,47 @@ public class Order implements ServerSaveable
      * A positive volume means that the value on the players bank account grows.
      * A negative volume means that the value on the players bank account shrinks.
      *
-     * - The targetVolume is positive for buy orders
+     * - The targetVolume is positive for buy order
      * - The filledVolume is a value in between [0, targetVolume]
-     * - The transferedMoney is negative for buy orders (assuming the price for the item is positive)
+     * - The transferredMoney is negative for buy order (assuming the price for the item is positive)
      *
      *
      */
 
+
+    public record Data(ItemID itemID, UUID orderExecutor, int bankAccountNr, Type type, long volume, long price,
+                       long filledVolume, long transferredMoney, long time)
+    {
+        public static final StreamCodec<RegistryFriendlyByteBuf, Data> STREAM_CODEC = new StreamCodec<>() {
+            @Override
+            public @NotNull Data decode(RegistryFriendlyByteBuf buf) {
+                ItemID itemID = ItemID.STREAM_CODEC.decode(buf);
+                UUID orderExecutor = UUIDUtil.STREAM_CODEC.decode(buf);
+                int bankAccountNr = ByteBufCodecs.INT.decode(buf);
+                Type type = ExtraCodecUtils.enumStreamCodec(Type.class).decode(buf);
+                long volume = ByteBufCodecs.VAR_LONG.decode(buf);
+                long price = ByteBufCodecs.VAR_LONG.decode(buf);
+                long filledVolume = ByteBufCodecs.VAR_LONG.decode(buf);
+                long transferredMoney = ByteBufCodecs.VAR_LONG.decode(buf);
+                long time = ByteBufCodecs.VAR_LONG.decode(buf);
+                return new Data(itemID, orderExecutor, bankAccountNr, type, volume, price,
+                        filledVolume, transferredMoney, time);
+            }
+
+            @Override
+            public void encode(RegistryFriendlyByteBuf buf, Data data) {
+                ItemID.STREAM_CODEC.encode(buf, data.itemID());
+                UUIDUtil.STREAM_CODEC.encode(buf, data.orderExecutor());
+                ByteBufCodecs.INT.encode(buf, data.bankAccountNr());
+                ExtraCodecUtils.enumStreamCodec(Type.class).encode(buf, data.type());
+                ByteBufCodecs.VAR_LONG.encode(buf, data.volume());
+                ByteBufCodecs.VAR_LONG.encode(buf, data.price());
+                ByteBufCodecs.VAR_LONG.encode(buf, data.filledVolume());
+                ByteBufCodecs.VAR_LONG.encode(buf, data.transferredMoney());
+                ByteBufCodecs.VAR_LONG.encode(buf, data.time());
+            }
+        };
+    }
 
     // Player order
     public Order(@NotNull ItemID itemID, @NotNull Type type, long volume, long price, long time, @NotNull UUID orderExecutor, int bankAccountNr)
@@ -86,8 +125,15 @@ public class Order implements ServerSaveable
 
     private Order()
     {
-
+        itemID = null;
     }
+
+    public Order.Data  getData()
+    {
+        return new Data(itemID, orderExecutor, bankAccountNr, type, targetVolume,
+                startPrice, filledVolume, transferredMoney, time);
+    }
+
     public static Order createFromNBT(CompoundTag tag)
     {
         Order order = new Order();
@@ -203,7 +249,7 @@ public class Order implements ServerSaveable
     }
 
     /**
-     * For saving pending orders
+     * For saving pending order
      * @param tag
      * @return true if succeeded
      */

@@ -24,6 +24,7 @@ public class MarketManager
     private long candleSaveTimer_lastMs = System.currentTimeMillis();
     private final Random random = new Random();
     private AtomicBoolean saveLock = new AtomicBoolean(false);
+    private ItemID tradingCurrencyID = null;
 
     public MarketManager()
     {
@@ -67,6 +68,14 @@ public class MarketManager
         }
     }
 
+    public ItemID getTradingCurrencyID()
+    {
+        if(tradingCurrencyID == null)
+        {
+            tradingCurrencyID = ItemID.getOrRegisterFromItemStack(BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.CURRENCY.get());
+        }
+        return tradingCurrencyID;
+    }
     public List<ItemID> getAvailableMarketIDs()
     {
         List<ItemID> itemIDs = new ArrayList<>();

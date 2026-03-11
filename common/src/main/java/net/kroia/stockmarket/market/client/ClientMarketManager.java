@@ -62,8 +62,7 @@ public class ClientMarketManager
 
     public List<ItemID> getAvailableMarkets()
     {
-        List<ItemID> itemIDs = clientMarkets.keySet().stream().toList();
-        return itemIDs;
+        return clientMarkets.keySet().stream().toList();
     }
 
 

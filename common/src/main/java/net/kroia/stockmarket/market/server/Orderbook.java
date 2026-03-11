@@ -3,8 +3,8 @@ package net.kroia.stockmarket.market.server;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.persistence.ServerSaveable;
 import net.kroia.stockmarket.StockMarketModBackend;
-import net.kroia.stockmarket.market.orders.InterMarketOrder;
-import net.kroia.stockmarket.market.orders.Order;
+import net.kroia.stockmarket.market.order.InterMarketOrder;
+import net.kroia.stockmarket.market.order.Order;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import org.jetbrains.annotations.NotNull;
@@ -125,7 +125,7 @@ public class Orderbook implements ServerSaveable
         float volume = virtualOrderbook.getVolume(price);
 
         if(currentMarketPrice > price) {
-            // The searched price is inside the buy orders since the market price is higher than the searched price
+            // The searched price is inside the buy order since the market price is higher than the searched price
             for(Order order : buyLimitOrders)
             {
                 long startPrice = order.getStartPrice();
@@ -136,7 +136,7 @@ public class Orderbook implements ServerSaveable
             }
         }
         else if(currentMarketPrice < price){
-            // The searched price is inside the sell orders
+            // The searched price is inside the sell order
             for (Order order : sellLimitOrders) {
                 if (order.getStartPrice() == price) {
                     volume += order.getRemainingVolume();
@@ -168,7 +168,7 @@ public class Orderbook implements ServerSaveable
     {
         long volume = VirtualOrderbook.roundConservative(virtualOrderbook.getVolume(price));
         if(currentMarketPrice > price) {
-            // The searched price is inside the buy orders since the market price is higher than the searched price
+            // The searched price is inside the buy order since the market price is higher than the searched price
             for(Order order : buyLimitOrders)
             {
                 long startPrice = order.getStartPrice();
@@ -179,7 +179,7 @@ public class Orderbook implements ServerSaveable
             }
         }
         else if(currentMarketPrice < price){
-            // The searched price is inside the sell orders
+            // The searched price is inside the sell order
             for (Order order : sellLimitOrders) {
                 if (order.getStartPrice() == price) {
                     volume += order.getRemainingVolume();
@@ -325,14 +325,14 @@ public class Orderbook implements ServerSaveable
 
     /**
      * Returns the market price that will be if the given volume gets
-     * consumed by the orders.
-     * @param volume can be positive for consuming the sell orders
-     *               can be negative for consuming the buy orders
+     * consumed by the order.
+     * @param volume can be positive for consuming the sell order
+     *               can be negative for consuming the buy order
      * @param resultOut a pair object, who's elements are filled by the function call
      *                  resultOut.first contains the new market price
      *                  resultOut.second contains the amount of money that would flow out or into the market.
-     *                                   For positive volume -> consuming sell orders -> resultOut.second is negative.
-     *                                   For negative volume -> consuming buy orders -> resultOut.second is positive.
+     *                                   For positive volume -> consuming sell order -> resultOut.second is negative.
+     *                                   For negative volume -> consuming buy order -> resultOut.second is positive.
      * @return true if success
      *         false if run into a timeout, meaning there is not enough volume to consume without increasing the
      *               price too much
@@ -348,10 +348,10 @@ public class Orderbook implements ServerSaveable
 
         if(volume > 0)
         {
-            // Consuming the sell orders -> moving price up
+            // Consuming the sell order -> moving price up
 
             // max only necessary for the current market price since there can be a sell and a buy order
-            // We only want sell orders
+            // We only want sell order
             // Flipping the orderbook volume to be positive for easy comparison with the function
             // provided volume variable
             long currentVolume = Math.max(0, -getVolumeRounded(newMarketPrice));
@@ -378,7 +378,7 @@ public class Orderbook implements ServerSaveable
         }
         else
         {
-            // Consuming the buy orders -> moving price down
+            // Consuming the buy order -> moving price down
             // Flipping the orderbook volume to be negatice for easy comparison with the function
             // provided volume variable
             long currentVolume = Math.min(0, -getVolumeRounded(newMarketPrice));
@@ -480,8 +480,8 @@ public class Orderbook implements ServerSaveable
         if(volume > 0)
         {
             // use positive volume
-            List<Order> orders = getSellOrders(price, price);
-            for(Order order : orders)
+            List<Order> order = getSellOrders(price, price);
+            for(Order order : order)
             {
                 long pendingVolume = order.getRemainingVolume(); // negative value
                 long newPendingVolume = pendingVolume + volume;
@@ -499,11 +499,11 @@ public class Orderbook implements ServerSaveable
         long marketPrice = currentMarketPrice;
         if(volume > 0)
         {
-            // fill sell orders
+            // fill sell order
             int timeout = TIMEOUT_COUNT;
             do {
-                List<Order> orders = getSellOrders(marketPrice, marketPrice);
-                for(Order order : orders)
+                List<Order> order = getSellOrders(marketPrice, marketPrice);
+                for(Order order : order)
                 {
 
                 }

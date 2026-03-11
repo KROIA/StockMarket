@@ -1,6 +1,9 @@
 package net.kroia.stockmarket.util;
 
+import dev.architectury.networking.NetworkManager;
+import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.kroia.modutilities.networking.NetworkPacket;
+import net.kroia.modutilities.networking.PacketHandler;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -17,6 +20,33 @@ public abstract class StockMarketNetworkPacket extends NetworkPacket {
     public static void setBackend(StockMarketModBackend.ClientInstances backend) {
         BACKEND_CLIENT_INSTANCES = backend;
     }
+
+
+
+    public static final PacketHandler<StockMarketNetworkPacket> HANDLER = new PacketHandler<>(){
+        @Override
+        public void handleServer(StockMarketNetworkPacket packet, NetworkManager.PacketContext context) {
+            packet.handleOnServer(context);
+        }
+
+        @Override
+        public void handleClient(StockMarketNetworkPacket packet, NetworkManager.PacketContext context) {
+            packet.handleOnClient(context);
+        }
+    };
+
+
+    protected void handleOnClient(NetworkManager.PacketContext context)
+    {
+
+    }
+
+
+    protected void handleOnServer(NetworkManager.PacketContext context)
+    {
+
+    }
+
 
     protected void sendToServer()
     {

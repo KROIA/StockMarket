@@ -4,7 +4,7 @@ import net.kroia.banksystem.api.IBankAccount;
 import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.StockMarketModBackend;
-import net.kroia.stockmarket.market.orders.Order;
+import net.kroia.stockmarket.market.order.Order;
 import net.minecraft.world.item.Items;
 
 import java.util.UUID;
@@ -226,7 +226,7 @@ public class Testing {
         success &= errorIfFalse(newMoneyBalance - o1.getTransferredMoney() == 1000, "Wrong money amount transfered: "+newMoneyBalance);
         success &= errorIfFalse(newItemBalance == 105, "Wrong end balance of items: "+newItemBalance);
         success &= errorIfFalse(market.getCurrentMarketPrice() == 12, "Wrong market end price: "+market.getCurrentMarketPrice());
-        success &= errorIfFalse(limitOrder.getFilledVolume() + o1.getFilledVolume() == 0, "Filled volume not correctly saved in one of the orders: "+limitOrder + " or: "+o1);
+        success &= errorIfFalse(limitOrder.getFilledVolume() + o1.getFilledVolume() == 0, "Filled volume not correctly saved in one of the order: "+limitOrder + " or: "+o1);
         success &= errorIfFalse(bankAccount1.getBank(moneyID).getTotalBalance() + o1.getTransferredMoney() == 1000 , "Limit order has not received the correct amount of money. Balance: "+bankAccount1.getBank(moneyID).getTotalBalance());
         success &= errorIfFalse(bankAccount1.getBank(item).getTotalBalance() + o1.getFilledVolume() == 100 , "Limit order has not transfered the correct amount of items. Balance: "+bankAccount1.getBank(item).getTotalBalance());
         success &= errorIfFalse(!limitOrder.isFilled(), "Limit order is filled but it should not be");
@@ -248,7 +248,7 @@ public class Testing {
         success &= errorIfFalse(newMoneyBalance - o1.getTransferredMoney() == 1000, "Wrong money amount transfered: "+newMoneyBalance);
         success &= errorIfFalse(newItemBalance == 105, "Wrong end balance of items: "+newItemBalance);
         success &= errorIfFalse(market.getCurrentMarketPrice() == 12, "Wrong market end price: "+market.getCurrentMarketPrice());
-        success &= errorIfFalse(limitOrder.getFilledVolume() + o1.getFilledVolume() == 0, "Filled volume not correctly saved in one of the orders: "+limitOrder + " or: "+o1);
+        success &= errorIfFalse(limitOrder.getFilledVolume() + o1.getFilledVolume() == 0, "Filled volume not correctly saved in one of the order: "+limitOrder + " or: "+o1);
         success &= errorIfFalse(bankAccount1.getBank(moneyID).getTotalBalance() + o1.getTransferredMoney() == 1000 , "Limit order has not received the correct amount of money. Balance: "+bankAccount1.getBank(moneyID).getTotalBalance());
         success &= errorIfFalse(bankAccount1.getBank(item).getTotalBalance() + o1.getFilledVolume() == 100 , "Limit order has not transfered the correct amount of items. Balance: "+bankAccount1.getBank(item).getTotalBalance());
         success &= errorIfFalse(!limitOrder.isFilled(), "Limit order is filled but it should not be");
@@ -290,7 +290,7 @@ public class Testing {
         success &= errorIfFalse(newMoneyBalance - o1.getTransferredMoney() == 1000, "Wrong money amount transfered: "+newMoneyBalance);
         success &= errorIfFalse(newItemBalance == 110, "Wrong end balance of items: "+newItemBalance);
         success &= errorIfFalse(market.getCurrentMarketPrice() == 12, "Wrong market end price: "+market.getCurrentMarketPrice());
-        success &= errorIfFalse(limitOrder.getFilledVolume() + o1.getFilledVolume() == 0, "Filled volume not correctly saved in one of the orders: "+limitOrder + " or: "+o1);
+        success &= errorIfFalse(limitOrder.getFilledVolume() + o1.getFilledVolume() == 0, "Filled volume not correctly saved in one of the order: "+limitOrder + " or: "+o1);
         success &= errorIfFalse(bankAccount1.getBank(moneyID).getTotalBalance() + o1.getTransferredMoney() == 1000 , "Limit order has not received the correct amount of money. Balance: "+bankAccount1.getBank(moneyID).getTotalBalance());
         success &= errorIfFalse(bankAccount1.getBank(item).getTotalBalance() + o1.getFilledVolume() == 100 , "Limit order has not transfered the correct amount of items. Balance: "+bankAccount1.getBank(item).getTotalBalance());
         success &= errorIfFalse(limitOrder.isFilled(), "Limit order is not filled but it should be");
@@ -311,7 +311,7 @@ public class Testing {
         success &= errorIfFalse(newMoneyBalance - o1.getTransferredMoney() == 1000, "Wrong money amount transfered: "+newMoneyBalance);
         success &= errorIfFalse(newItemBalance == 110, "Wrong end balance of items: "+newItemBalance);
         success &= errorIfFalse(market.getCurrentMarketPrice() == 12, "Wrong market end price: "+market.getCurrentMarketPrice());
-        success &= errorIfFalse(limitOrder.getFilledVolume() + o1.getFilledVolume() == 0, "Filled volume not correctly saved in one of the orders: "+limitOrder + " or: "+o1);
+        success &= errorIfFalse(limitOrder.getFilledVolume() + o1.getFilledVolume() == 0, "Filled volume not correctly saved in one of the order: "+limitOrder + " or: "+o1);
         success &= errorIfFalse(bankAccount1.getBank(moneyID).getTotalBalance() + o1.getTransferredMoney() == 1000 , "Limit order has not received the correct amount of money. Balance: "+bankAccount1.getBank(moneyID).getTotalBalance());
         success &= errorIfFalse(bankAccount1.getBank(item).getTotalBalance() + o1.getFilledVolume() == 100 , "Limit order has not transfered the correct amount of items. Balance: "+bankAccount1.getBank(item).getTotalBalance());
         success &= errorIfFalse(limitOrder.isFilled(), "Limit order is not filled but it should be");
@@ -352,7 +352,7 @@ public class Testing {
         success &= errorIfFalse(newMoneyBalance - o1.getTransferredMoney() == 1000, "Wrong money amount transfered: "+newMoneyBalance);
         success &= errorIfFalse(newItemBalance == 110, "Wrong end balance of items: "+newItemBalance);
         success &= errorIfFalse(market.getCurrentMarketPrice() == 12, "Wrong market end price: "+market.getCurrentMarketPrice());
-        success &= errorIfFalse(limitOrder.getFilledVolume() + o1.getFilledVolume() == 0, "Filled volume not correctly saved in one of the orders: "+limitOrder + " or: "+o1);
+        success &= errorIfFalse(limitOrder.getFilledVolume() + o1.getFilledVolume() == 0, "Filled volume not correctly saved in one of the order: "+limitOrder + " or: "+o1);
         success &= errorIfFalse(bankAccount1.getBank(moneyID).getTotalBalance() + o1.getTransferredMoney() == 1000 , "Limit order has not received the correct amount of money. Balance: "+bankAccount1.getBank(moneyID).getTotalBalance());
         success &= errorIfFalse(bankAccount1.getBank(item).getTotalBalance() + o1.getFilledVolume() == 100 , "Limit order has not transfered the correct amount of items. Balance: "+bankAccount1.getBank(item).getTotalBalance());
         success &= errorIfFalse(limitOrder.isFilled(), "Limit order is not filled but it should be");
@@ -373,7 +373,7 @@ public class Testing {
         success &= errorIfFalse(newMoneyBalance - o1.getTransferredMoney() == 1000, "Wrong money amount transfered: "+newMoneyBalance);
         success &= errorIfFalse(newItemBalance == 110, "Wrong end balance of items: "+newItemBalance);
         success &= errorIfFalse(market.getCurrentMarketPrice() == 12, "Wrong market end price: "+market.getCurrentMarketPrice());
-        success &= errorIfFalse(limitOrder.getFilledVolume() + o1.getFilledVolume() == 0, "Filled volume not correctly saved in one of the orders: "+limitOrder + " or: "+o1);
+        success &= errorIfFalse(limitOrder.getFilledVolume() + o1.getFilledVolume() == 0, "Filled volume not correctly saved in one of the order: "+limitOrder + " or: "+o1);
         success &= errorIfFalse(bankAccount1.getBank(moneyID).getTotalBalance() + o1.getTransferredMoney() == 1000 , "Limit order has not received the correct amount of money. Balance: "+bankAccount1.getBank(moneyID).getTotalBalance());
         success &= errorIfFalse(bankAccount1.getBank(item).getTotalBalance() + o1.getFilledVolume() == 100 , "Limit order has not transfered the correct amount of items. Balance: "+bankAccount1.getBank(item).getTotalBalance());
         success &= errorIfFalse(limitOrder.isFilled(), "Limit order is not filled but it should be");

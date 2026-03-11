@@ -76,7 +76,7 @@ public class VirtualOrderbook implements ServerSaveable
     /**
      * Sets the volume onto the given range.
      * The absolute value of the volume is taken
-     * Flipping to sell orders above the current market price is done automatically
+     * Flipping to sell order above the current market price is done automatically
      * @param startPrice on which the volume needs to be applied
      * @param endPrice to which (including) the volume gets applied
      * @param volume volume to apply. the abs(volume) is taken
@@ -160,8 +160,8 @@ public class VirtualOrderbook implements ServerSaveable
     /**
      * Gets the volume at the given price
      * @param price
-     * @return positive value for buy orders
-     *         negative value for sell orders
+     * @return positive value for buy order
+     *         negative value for sell order
      */
     public float getVolume(long price)
     {
@@ -176,7 +176,7 @@ public class VirtualOrderbook implements ServerSaveable
      * Gets the volume in the given price range
      * @apiNote
      * Reading the volume using a range so that the current market price lays in between the given range
-     * will result in a wrong prediction since the buy and sell orders cancel each other.
+     * will result in a wrong prediction since the buy and sell order cancel each other.
      * @param startPrice
      * @param endPrice inclusive
      * @return the sum of volume inbetween the given range
@@ -213,7 +213,7 @@ public class VirtualOrderbook implements ServerSaveable
      * Gets the default volume at a given price
      * @apiNote
      * @param price on which the volume needs to be calculatet at
-     * @return positive volume vor buy orders, negative volume for sell orders
+     * @return positive volume vor buy order, negative volume for sell order
      */
     public float getDefaultVolume(long price)
     {

@@ -1,4 +1,4 @@
-package net.kroia.stockmarket.market.orders;
+package net.kroia.stockmarket.market.order;
 
 import com.ibm.icu.impl.Pair;
 import net.kroia.banksystem.util.ItemID;
@@ -94,7 +94,7 @@ public class InterMarketOrder implements ServerSaveable
     }
 
     /**
-     * For saving pending orders
+     * For saving pending order
      * @param tag
      * @return true if succeeded
      */

@@ -4,8 +4,8 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.persistence.ServerSaveable;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
-import net.kroia.stockmarket.market.orders.InterMarketOrder;
-import net.kroia.stockmarket.market.orders.Order;
+import net.kroia.stockmarket.market.order.InterMarketOrder;
+import net.kroia.stockmarket.market.order.Order;
 import net.minecraft.nbt.CompoundTag;
 import org.jetbrains.annotations.Nullable;
 
@@ -35,8 +35,8 @@ public class Market implements ServerSaveable {
     private long candleLowPrice;
 
     /**
-     * Temporary order buffers for collecting orders async and only process the orders on update
-     * These orders are not saved to NBT
+     * Temporary order buffers for collecting order async and only process the order on update
+     * These order are not saved to NBT
      */
     private final PriorityQueue<Order> buyMarketOders_inputBuffer = new PriorityQueue<>((o1, o2) -> Long.compare(o2.getStartPrice(), o1.getStartPrice()));
     private final PriorityQueue<Order> sellMarketOrders_inputBuffer = new PriorityQueue<>(Comparator.comparingLong(Order::getStartPrice));

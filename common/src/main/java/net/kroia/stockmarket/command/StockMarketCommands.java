@@ -1,18 +1,22 @@
 package net.kroia.stockmarket.command;
 
+import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import net.kroia.banksystem.networking.packet.server_sender.SyncOpenGUIPacket;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.data.table.OrderRecordManager;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import net.kroia.stockmarket.data.table.MarketPriceManager;
 import net.kroia.stockmarket.data.filter.DateFilter;
 import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
+import net.kroia.stockmarket.networking.packet.OpenUIPacket;
 import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 
 import java.util.List;
 import java.util.Optional;
@@ -32,17 +36,17 @@ public class StockMarketCommands {
         // /StockMarket setPriceCandleTimeInterval <seconds>                            - Set the interval for the price candles. (Each candle will represent this amount of time)
         // /StockMarket createDefaultBots                                               - Create default bots
         // /StockMarket createDefaultBot <itemID>                                       - Create a default bot for that item if presets are available
-        // /StockMarket order cancelAll                                                 - Cancel all orders
-        // /StockMarket order cancelAll <itemID>                                        - Cancel all orders of an item
-        // /StockMarket order <username> cancelAll                                      - Cancel all orders of a player
-        // /StockMarket order <username> cancelAll <itemID>                             - Cancel all orders of a player for an item
+        // /StockMarket order cancelAll                                                 - Cancel all order
+        // /StockMarket order cancelAll <itemID>                                        - Cancel all order of an item
+        // /StockMarket order <username> cancelAll                                      - Cancel all order of a player
+        // /StockMarket order <username> cancelAll <itemID>                             - Cancel all order of a player for an item
         // /StockMarket BotSettingsGUI                                                  - Open the settings GUI for the market bots
         // /StockMarket ManagementGUI                                                   - Open the management GUI to create and remove trading items
         // /StockMarket <itemID> bot settings get                                       - Get bot settings
         // /StockMarket <itemID> bot settings set enabled                               - Enable bot
         // /StockMarket <itemID> bot settings set disabled                              - Disable bot
         // /StockMarket <itemID> bot settings set volatility <volatility>               - Set volatility
-        // /StockMarket <itemID> bot settings set orderRandomness <randomness>          - Set scale for random market orders
+        // /StockMarket <itemID> bot settings set orderRandomness <randomness>          - Set scale for random market order
         // /StockMarket <itemID> bot settings set targetPriceRange <priceRange>         - Set imbalance price range
         // /StockMarket <itemID> bot settings set targetItemBalance <balance>           - Set target item balance
         // /StockMarket <itemID> bot settings set maxOrderCount <orderCount>            - Set max order count
@@ -137,9 +141,21 @@ public class StockMarketCommands {
                                                 context.getSource().getPlayer().sendSystemMessage(Component.literal("MarketPrice table currently has " + count + " records."));
                                             });
                                     return 1;
-                                })))));
+                                }))))
 
+                .then(Commands.literal("devTestScreen")
+                                .requires(source -> source.hasPermission(2))
+                                .executes(context -> {
+                                    CommandSourceStack source = context.getSource();
+                                    ServerPlayer player = source.getPlayerOrException();
 
+                                    // Open screen for settings GUI
+                                    OpenUIPacket.sendToClient(player, OpenUIPacket.GUIType.DEVELOPMENT);
+
+                                    return Command.SINGLE_SUCCESS;
+                                })
+
+                        ));
 
 
         /*

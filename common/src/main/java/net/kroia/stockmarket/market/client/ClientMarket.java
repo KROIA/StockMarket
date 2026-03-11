@@ -3,6 +3,8 @@ package net.kroia.stockmarket.market.client;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.streaming.StreamSystem;
 import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.market.order.Order;
+import net.kroia.stockmarket.networking.request.CreateOrderRequest;
 import net.kroia.stockmarket.networking.request.MarketPriceHistoryRequest;
 import net.kroia.stockmarket.util.PriceHistoryData;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
@@ -10,6 +12,8 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 
 public class ClientMarket
 {
@@ -39,7 +43,7 @@ public class ClientMarket
         if(marketPriceUpdateStreamID != null) {
             //long now = System.currentTimeMillis();
 
-            // Trying to sync using the server time to get the same candles like the server does
+            // Trying to sync using the server time to get the same candles as the server does
             // But it does not work 100%as intended
             if (currentServerTime - lastCandleCreationTime > newCandleInterval) {
                 lastCandleCreationTime = currentServerTime;
@@ -111,6 +115,43 @@ public class ClientMarket
             return false;
         StreamSystem.stopStream(marketPriceUpdateStreamID);
         return true;
+    }
+
+
+
+
+    public CompletableFuture<CreateOrderRequest.OutputData> createLimitOrder(int bankAccountNr, long volume, long price)
+    {
+        return createOrder(bankAccountNr, Order.Type.LIMIT, volume, price);
+    }
+    public CompletableFuture<CreateOrderRequest.OutputData> createLimitBuyOrder(int bankAccountNr, long volume, long price)
+    {
+        return createOrder(bankAccountNr, Order.Type.LIMIT, Math.max(0, volume), price);
+    }
+    public CompletableFuture<CreateOrderRequest.OutputData> createLimitSellOrder(int bankAccountNr, long volume, long price)
+    {
+        return createOrder(bankAccountNr, Order.Type.LIMIT, Math.min(0, volume), price);
+    }
+    public CompletableFuture<CreateOrderRequest.OutputData> createMarketOrder(int bankAccountNr, long volume)
+    {
+        return createOrder(bankAccountNr, Order.Type.MARKET, volume, 0);
+    }
+    public CompletableFuture<CreateOrderRequest.OutputData> createLimitBuyOrder(int bankAccountNr, long volume)
+    {
+        return createOrder(bankAccountNr, Order.Type.MARKET, Math.max(0, volume), 0);
+    }
+    public CompletableFuture<CreateOrderRequest.OutputData> createLimitSellOrder(int bankAccountNr, long volume)
+    {
+        return createOrder(bankAccountNr, Order.Type.MARKET, Math.min(0, volume), 0);
+    }
+
+
+    public CompletableFuture<CreateOrderRequest.OutputData> createOrder(int bankAccountNr, Order.Type type, long volume, long price)
+    {
+        CreateOrderRequest.InputData inputData = new CreateOrderRequest.InputData(itemID, bankAccountNr, type, volume, price);
+        CompletableFuture<CreateOrderRequest.OutputData> future = new CompletableFuture<>();
+        BACKEND_INSTANCES.NETWORKING.CREATE_ORDER_REQUEST.sendRequestToServer(inputData, future::complete);
+        return future;
     }
 
 

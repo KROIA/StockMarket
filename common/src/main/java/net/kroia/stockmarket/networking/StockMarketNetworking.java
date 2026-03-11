@@ -1,17 +1,23 @@
 package net.kroia.stockmarket.networking;
 
 import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.kroia.modutilities.networking.PacketManager;
 import net.kroia.modutilities.networking.arrs.AsynchronousRequestResponseSystem;
 import net.kroia.modutilities.networking.streaming.StreamSystem;
 import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.networking.packet.OpenUIPacket;
 import net.kroia.stockmarket.networking.packet.PlayerJoinSyncPacket;
+import net.kroia.stockmarket.networking.request.CreateOrderRequest;
 import net.kroia.stockmarket.networking.request.MarketPriceHistoryRequest;
 import net.kroia.stockmarket.networking.request.MarketsRequest;
 import net.kroia.stockmarket.networking.stream.MarketPriceStream;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
 import net.kroia.stockmarket.util.StockMarketGenericStream;
 import net.kroia.stockmarket.util.StockMarketNetworkPacket;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 
 public class StockMarketNetworking extends PacketManager {
     public static void setBackend(StockMarketModBackend.ServerInstances backend) {
@@ -31,6 +37,7 @@ public class StockMarketNetworking extends PacketManager {
 
 
     public final MarketsRequest MARKETS_REQUEST = (MarketsRequest) AsynchronousRequestResponseSystem.register(new MarketsRequest());
+    public final CreateOrderRequest CREATE_ORDER_REQUEST = (CreateOrderRequest) AsynchronousRequestResponseSystem.register(new CreateOrderRequest());
 
 
     public StockMarketNetworking()
@@ -46,11 +53,26 @@ public class StockMarketNetworking extends PacketManager {
 
     @Override
     public void setupClientReceiverPackets() {
-        registerS2C(PlayerJoinSyncPacket.TYPE, PlayerJoinSyncPacket.STREAM_CODEC, PlayerJoinSyncPacket.HANDLER);
+        registerS2C(PlayerJoinSyncPacket.TYPE, PlayerJoinSyncPacket.STREAM_CODEC);
+        registerS2C(OpenUIPacket.TYPE, OpenUIPacket.STREAM_CODEC);
     }
 
     @Override
     public void setupServerReceiverPackets() {
 
+    }
+
+
+
+    // Helper function to reduce code size for registration
+    public <T extends StockMarketNetworkPacket> void registerS2C(CustomPacketPayload.Type<T> packetType, StreamCodec<RegistryFriendlyByteBuf, T> streamCodec)
+    {
+        // All packets use the same handler
+        registerS2C(packetType, streamCodec, StockMarketNetworkPacket.HANDLER);
+    }
+    public <T extends StockMarketNetworkPacket> void registerC2S(CustomPacketPayload.Type<T> packetType, StreamCodec<RegistryFriendlyByteBuf, T> streamCodec)
+    {
+        // All packets use the same handler
+        registerC2S(packetType, streamCodec, StockMarketNetworkPacket.HANDLER);
     }
 }

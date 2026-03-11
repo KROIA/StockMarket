@@ -2,7 +2,6 @@ package net.kroia.stockmarket.networking.packet;
 
 import dev.architectury.networking.NetworkManager;
 import net.kroia.modutilities.ModUtilitiesMod;
-import net.kroia.modutilities.networking.PacketHandler;
 import net.kroia.stockmarket.util.ClientSettings;
 import net.kroia.stockmarket.util.StockMarketNetworkPacket;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -40,17 +39,9 @@ public class PlayerJoinSyncPacket extends StockMarketNetworkPacket {
     }
 
 
-
-    public static final PacketHandler<PlayerJoinSyncPacket> HANDLER = new PacketHandler<>(){
-
-        @Override
-        public void handleServer(PlayerJoinSyncPacket packet, NetworkManager.PacketContext context) {
-
-        }
-
-        @Override
-        public void handleClient(PlayerJoinSyncPacket packet, NetworkManager.PacketContext context) {
-            BACKEND_CLIENT_INSTANCES.SETTINGS.loadFrom(packet.settings);
-        }
-    };
+    @Override
+    protected void handleOnClient(NetworkManager.PacketContext context)
+    {
+        BACKEND_CLIENT_INSTANCES.SETTINGS.loadFrom(settings);
+    }
 }
