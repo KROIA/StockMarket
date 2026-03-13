@@ -4,6 +4,7 @@ import net.kroia.banksystem.api.IServerBankManager;
 import net.kroia.modutilities.networking.arrs.GenericRequest;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.server.MarketManager;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
 public abstract class StockMarketGenericRequest<IN, OUT> extends GenericRequest<IN, OUT> {
@@ -22,6 +23,15 @@ public abstract class StockMarketGenericRequest<IN, OUT> extends GenericRequest<
         return BACKEND_INSTANCES.MARKET_MANAGER;
     }
     protected IServerBankManager getServerBankManager() {return BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager(); }
+
+
+    @Override
+    public void decodeHandleEncodeOnServer(RegistryFriendlyByteBuf inputBuf, RegistryFriendlyByteBuf outputBuf, ServerPlayer sender)
+    {
+        IN input = decodeInput(inputBuf);
+        OUT output = handleOnServer(input, sender);
+        encodeOutput(outputBuf, output);
+    }
 
 
     protected void info(String msg)

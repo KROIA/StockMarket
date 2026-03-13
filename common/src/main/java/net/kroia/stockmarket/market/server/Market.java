@@ -9,7 +9,9 @@ import net.kroia.stockmarket.market.order.Order;
 import net.minecraft.nbt.CompoundTag;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.List;
 import java.util.PriorityQueue;
 import java.util.function.Function;
 
@@ -150,6 +152,11 @@ public class Market implements ServerSaveable {
         else
             interMarket_LimitBuyOrders_inputBuffer.add(order);
         return true;
+    }
+
+    public List<Order> getLimitOrders()
+    {
+        return orderbook.getLimitOrders();
     }
 
     public boolean isMarketOpen()

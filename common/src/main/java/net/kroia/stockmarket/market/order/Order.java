@@ -50,7 +50,7 @@ public class Order implements ServerSaveable
 
     /**
      * ----------------------------------------------
-     *          Note to volumes values
+     *          Note to volume values
      * ----------------------------------------------
      * All volume values are always in respect to the owners bank account.
      * A positive volume means that the value on the players bank account grows.

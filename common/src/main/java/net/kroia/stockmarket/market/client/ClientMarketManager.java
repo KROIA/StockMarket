@@ -3,13 +3,13 @@ package net.kroia.stockmarket.market.client;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.arrs.AsynchronousRequestResponseSystem;
 import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.networking.request.ActiveOrdersRequest;
+import net.kroia.stockmarket.networking.request.CreateOrderRequest;
 import net.minecraft.client.player.LocalPlayer;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
 
 public class ClientMarketManager
 {
@@ -49,14 +49,29 @@ public class ClientMarketManager
         return clientMarkets.get(itemID);
     }
 
-    public void requestMarkets()
+    public CompletableFuture<List<ItemID>> requestMarkets()
     {
+        CompletableFuture<List<ItemID>> future = new CompletableFuture<>();
         AsynchronousRequestResponseSystem.sendRequestToServer(BACKEND_INSTANCES.NETWORKING.MARKETS_REQUEST, 0, (response) ->
         {
             for(ItemID itemID : response) {
                 createClientMarket(itemID);
             }
+            future.complete(response);
         });
+        return future;
+    }
+
+    public CompletableFuture<ActiveOrdersRequest.OutputData> requestPendingOrders(@Nullable ItemID itemIDFilter,
+                                                                                  int bankAccountNr,
+                                                                                  @Nullable UUID executorPlayerFilter,
+                                                                                  long timeBegin,
+                                                                                  long timeEnd)
+    {
+        ActiveOrdersRequest.InputData inp = new ActiveOrdersRequest.InputData(itemIDFilter, bankAccountNr, executorPlayerFilter, timeBegin, timeEnd);
+        CompletableFuture<ActiveOrdersRequest.OutputData> future = new CompletableFuture<>();
+        BACKEND_INSTANCES.NETWORKING.ACTIVE_ORDERS_REQUEST.sendRequestToServer(inp, future::complete);
+        return future;
     }
 
 

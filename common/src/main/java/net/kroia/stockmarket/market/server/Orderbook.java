@@ -412,6 +412,20 @@ public class Orderbook implements ServerSaveable
 
 
 
+    public List<Order> getBuyOrders()
+    {
+        return new ArrayList<>(buyLimitOrders);
+    }
+    public List<Order> getSellOrders()
+    {
+        return new ArrayList<>(sellLimitOrders);
+    }
+    public List<Order> getLimitOrders()
+    {
+        List<Order> orders = new ArrayList<>(buyLimitOrders);
+        orders.addAll(sellLimitOrders);
+        return orders;
+    }
     public List<Order> getBuyOrders(long startPrice, long endPrice)
     {
         List<Order> orders = new ArrayList<>();

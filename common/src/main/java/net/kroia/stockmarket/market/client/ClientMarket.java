@@ -4,6 +4,7 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.streaming.StreamSystem;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.order.Order;
+import net.kroia.stockmarket.networking.request.ActiveOrdersRequest;
 import net.kroia.stockmarket.networking.request.CreateOrderRequest;
 import net.kroia.stockmarket.networking.request.MarketPriceHistoryRequest;
 import net.kroia.stockmarket.util.PriceHistoryData;
@@ -11,6 +12,7 @@ import net.kroia.stockmarket.util.StockMarketGuiElement;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
@@ -154,6 +156,39 @@ public class ClientMarket
         return future;
     }
 
+
+
+    public CompletableFuture<ActiveOrdersRequest.OutputData> requestPendingOrders(int bankAccountNr)
+    {
+        return requestPendingOrders(bankAccountNr, null, 0, Long.MAX_VALUE);
+    }
+    public CompletableFuture<ActiveOrdersRequest.OutputData> requestPendingOrders(@NotNull UUID executorPlayerFilter)
+    {
+        return requestPendingOrders(-1, executorPlayerFilter, 0, Long.MAX_VALUE);
+    }
+    public CompletableFuture<ActiveOrdersRequest.OutputData> requestPendingOrders(long timeBegin, long timeEnd)
+    {
+        return requestPendingOrders(-1, null, timeBegin, timeEnd);
+    }
+    public CompletableFuture<ActiveOrdersRequest.OutputData> requestPendingOrders(@NotNull UUID executorPlayerFilter, long timeBegin, long timeEnd)
+    {
+        return requestPendingOrders(-1, executorPlayerFilter, timeBegin, timeEnd);
+    }
+    public CompletableFuture<ActiveOrdersRequest.OutputData> requestPendingOrders(int bankAccountNr, long timeBegin, long timeEnd)
+    {
+        return requestPendingOrders(bankAccountNr, null, timeBegin, timeEnd);
+    }
+
+    public CompletableFuture<ActiveOrdersRequest.OutputData> requestPendingOrders(int bankAccountNr,
+                                                                                  @Nullable UUID executorPlayerFilter,
+                                                                                  long timeBegin,
+                                                                                  long timeEnd)
+    {
+        ActiveOrdersRequest.InputData inp = new ActiveOrdersRequest.InputData(itemID, bankAccountNr, executorPlayerFilter, timeBegin, timeEnd);
+        CompletableFuture<ActiveOrdersRequest.OutputData> future = new CompletableFuture<>();
+        BACKEND_INSTANCES.NETWORKING.ACTIVE_ORDERS_REQUEST.sendRequestToServer(inp, future::complete);
+        return future;
+    }
 
 
 
