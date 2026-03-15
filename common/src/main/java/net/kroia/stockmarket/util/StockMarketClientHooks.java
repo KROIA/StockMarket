@@ -1,6 +1,8 @@
 package net.kroia.stockmarket.util;
 
 import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
+import net.kroia.stockmarket.networking.packet.OpenUIPacket;
+import net.kroia.stockmarket.screen.DevTestScreen;
 import net.kroia.stockmarket.screen.TradeScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
@@ -22,5 +24,19 @@ public class StockMarketClientHooks {
             return InteractionResult.FAIL;
         }
         return InteractionResult.SUCCESS;
+    }
+
+    public static void openGUI(OpenUIPacket.GUIType type)
+    {
+        Minecraft mc = Minecraft.getInstance();
+        switch(type)
+        {
+            case DEVELOPMENT:
+            {
+                DevTestScreen screen = new DevTestScreen();
+                mc.setScreen(screen);
+                break;
+            }
+        }
     }
 }

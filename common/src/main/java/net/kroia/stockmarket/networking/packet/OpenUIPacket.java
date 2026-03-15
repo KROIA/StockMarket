@@ -3,9 +3,8 @@ package net.kroia.stockmarket.networking.packet;
 import dev.architectury.networking.NetworkManager;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.screen.DevTestScreen;
+import net.kroia.stockmarket.util.StockMarketClientHooks;
 import net.kroia.stockmarket.util.StockMarketNetworkPacket;
-import net.minecraft.client.Minecraft;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -51,15 +50,6 @@ public class OpenUIPacket extends StockMarketNetworkPacket {
     @Override
     protected void handleOnClient(NetworkManager.PacketContext context)
     {
-        Minecraft mc = Minecraft.getInstance();
-        switch(guiType)
-        {
-            case DEVELOPMENT:
-            {
-                DevTestScreen screen = new DevTestScreen();
-                mc.setScreen(screen);
-                break;
-            }
-        }
+        StockMarketClientHooks.openGUI(guiType);
     }
 }
