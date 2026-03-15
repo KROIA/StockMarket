@@ -63,8 +63,12 @@ dependencies {
 
 
 
-    implementation 'org.xerial:sqlite-jdbc:3.46.0.0'
-    shadowBundle 'org.xerial:sqlite-jdbc:3.46.0.0'
+    implementation('org.xerial:sqlite-jdbc:3.46.0.0'){
+        exclude group: "org.slf4j"
+    }
+    shadowBundle('org.xerial:sqlite-jdbc:3.46.0.0'){
+        exclude group: "org.slf4j"
+    }
     shadowBundle project(path: ':common', configuration: 'transformProductionNeoForge')
 }
 

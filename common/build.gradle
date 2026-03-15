@@ -32,9 +32,9 @@ dependencies {
     modCompileOnly("net.kroia:modutilities-common:$rootProject.modutilities_version")
 
     compileOnly("mezz.jei:jei-${minecraft_version}-common-api:${jei_version}")
-    implementation 'org.xerial:sqlite-jdbc:3.46.0.0'
-
-
+    implementation('org.xerial:sqlite-jdbc:3.46.0.0'){
+        exclude group: "org.slf4j"
+    }
 
 
 }
