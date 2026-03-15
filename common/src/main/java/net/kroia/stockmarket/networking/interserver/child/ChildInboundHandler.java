@@ -5,6 +5,7 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.networking.interserver.payload.BroadcastPayload;
+import net.kroia.stockmarket.networking.interserver.payload.PacketForwardPayload;
 import net.kroia.stockmarket.networking.interserver.payload.HubPayload;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
@@ -59,6 +60,9 @@ public class ChildInboundHandler extends SimpleChannelInboundHandler<HubPayload>
                         mcServer.getPlayerList().broadcastSystemMessage(chat, false);
                     });
                 }
+            }
+            case PacketForwardPayload bb -> {
+                info("[HubMod] bytes received from: "+bb.senderServerID()+" bytes: "+bb.data());
             }
 
             default ->

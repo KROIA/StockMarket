@@ -3,10 +3,10 @@ package net.kroia.stockmarket.networking.interserver.codec;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.MessageToByteEncoder;
-import net.kroia.stockmarket.networking.interserver.payload.BroadcastPayload;
-import net.kroia.stockmarket.networking.interserver.payload.HandshakePayload;
-import net.kroia.stockmarket.networking.interserver.payload.HubPayload;
-import net.kroia.stockmarket.networking.interserver.payload.StringMessagePayload;
+import net.kroia.stockmarket.networking.interserver.payload.*;
+import net.minecraft.core.UUIDUtil;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.resources.ResourceLocation;
 
 import java.nio.charset.StandardCharsets;
 
@@ -45,6 +45,13 @@ public class HubPayloadEncoder extends MessageToByteEncoder<HubPayload> {
                 writeString(out, bc.senderName());
                 writeString(out, bc.fromServer());
                 writeString(out, bc.message());
+            }
+            case PacketForwardPayload bb -> {
+                UUIDUtil.STREAM_CODEC.encode(out, bb.senderId());
+                ByteBufCodecs.STRING_UTF8.encode(out, bb.senderServerID());
+                ByteBufCodecs.STRING_UTF8.encode(out, bb.targetServerID());
+                ResourceLocation.STREAM_CODEC.encode(out, bb.packetType());
+                ByteBufCodecs.BYTE_ARRAY.encode(out, bb.data());
             }
         }
     }

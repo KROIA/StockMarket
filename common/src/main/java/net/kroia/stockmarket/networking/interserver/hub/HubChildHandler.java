@@ -1,14 +1,17 @@
 package net.kroia.stockmarket.networking.interserver.hub;
 
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.networking.interserver.config.ModConfig;
-import net.kroia.stockmarket.networking.interserver.payload.BroadcastPayload;
-import net.kroia.stockmarket.networking.interserver.payload.HandshakePayload;
-import net.kroia.stockmarket.networking.interserver.payload.HubPayload;
-import net.kroia.stockmarket.networking.interserver.payload.StringMessagePayload;
+import net.kroia.stockmarket.networking.interserver.payload.*;
+import net.kroia.stockmarket.networking.packet.TestPacket;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 
 /**
@@ -83,6 +86,26 @@ public class HubChildHandler extends SimpleChannelInboundHandler<HubPayload> {
                             msg.senderName(), msg.fromServer(), msg.message());
                     HubTcpServer.sendToChild(msg.targetServer(), bc);
                 }
+            }
+            case PacketForwardPayload bb -> {
+                if (serverId == null) {
+                    warn("[HubMod] Received StringMessage before handshake — closing.");
+                    ctx.close();
+                    return;
+                }
+                info("Received PacketForwardPayload from child server: "+bb.senderServerID());
+
+                ResourceLocation testPacketResouceeLoc = TestPacket.TYPE.id();
+                ResourceLocation packetResouceLoc = bb.packetType();
+                if(testPacketResouceeLoc.equals(packetResouceLoc))
+                {
+                    RegistryAccess reg = mcServer.registryAccess();
+                    RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.wrappedBuffer(bb.data()), reg);
+
+                    TestPacket dummy = TestPacket.STREAM_CODEC.decode(buf);
+                    TestPacket.HANDLER.handleServerRedirection(dummy, ctx);
+                }
+
             }
 
             default ->

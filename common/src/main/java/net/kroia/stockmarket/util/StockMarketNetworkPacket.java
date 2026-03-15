@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.util;
 
 import dev.architectury.networking.NetworkManager;
+import io.netty.channel.ChannelHandlerContext;
 import net.kroia.banksystem.util.BankSystemNetworkPacket;
 import net.kroia.modutilities.networking.NetworkPacket;
 import net.kroia.modutilities.networking.PacketHandler;
@@ -23,7 +24,8 @@ public abstract class StockMarketNetworkPacket extends NetworkPacket {
 
 
 
-    public static final PacketHandler<StockMarketNetworkPacket> HANDLER = new PacketHandler<>(){
+    public static class StockMarketPacketHandler implements PacketHandler<StockMarketNetworkPacket> {
+
         @Override
         public void handleServer(StockMarketNetworkPacket packet, NetworkManager.PacketContext context) {
             packet.handleOnServer(context);
@@ -33,7 +35,31 @@ public abstract class StockMarketNetworkPacket extends NetworkPacket {
         public void handleClient(StockMarketNetworkPacket packet, NetworkManager.PacketContext context) {
             packet.handleOnClient(context);
         }
-    };
+
+        public void handleServerRedirection(StockMarketNetworkPacket packet, ChannelHandlerContext redirectionContext)
+        {
+            packet.handleOnServer(redirectionContext);
+        }
+    }
+    public static final StockMarketPacketHandler HANDLER = new StockMarketPacketHandler();
+
+    /*public static final PacketHandler<StockMarketNetworkPacket> HANDLER = new PacketHandler<>(){
+        @Override
+        public void handleServer(StockMarketNetworkPacket packet, NetworkManager.PacketContext context) {
+            packet.handleOnServer(context);
+        }
+
+        @Override
+        public void handleClient(StockMarketNetworkPacket packet, NetworkManager.PacketContext context) {
+            packet.handleOnClient(context);
+        }
+
+
+        public void handleServerRedirection(StockMarketNetworkPacket packet, ChannelHandlerContext redirectionContext)
+        {
+            packet.handleOnServer(redirectionContext);
+        }
+    };*/
 
 
     protected void handleOnClient(NetworkManager.PacketContext context)
@@ -43,6 +69,11 @@ public abstract class StockMarketNetworkPacket extends NetworkPacket {
 
 
     protected void handleOnServer(NetworkManager.PacketContext context)
+    {
+
+    }
+
+    protected void handleOnServer(ChannelHandlerContext context)
     {
 
     }

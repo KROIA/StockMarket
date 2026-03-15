@@ -8,6 +8,7 @@ public final class PacketIds {
     public static final int HANDSHAKE      = 0x00; // Child → Hub: register server
     public static final int STRING_MESSAGE = 0x01; // Child → Hub → Child: send a string
     public static final int BROADCAST      = 0x02; // Hub  → All: hub-initiated broadcast
+    public static final int BYTE_BUFFER    = 0x03; //
 
     private PacketIds() {}
 }

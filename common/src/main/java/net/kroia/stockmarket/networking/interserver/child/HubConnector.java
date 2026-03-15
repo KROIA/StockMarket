@@ -10,13 +10,16 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 import io.netty.handler.codec.LengthFieldPrepender;
+import net.kroia.modutilities.networking.NetworkPacket;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.networking.interserver.codec.HubPayloadDecoder;
 import net.kroia.stockmarket.networking.interserver.codec.HubPayloadEncoder;
+import net.kroia.stockmarket.networking.interserver.payload.PacketForwardPayload;
 import net.kroia.stockmarket.networking.interserver.payload.HandshakePayload;
 import net.kroia.stockmarket.networking.interserver.payload.HubPayload;
 import net.kroia.stockmarket.networking.interserver.payload.StringMessagePayload;
 
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -142,6 +145,16 @@ public class HubConnector {
                 message
         ));
     }
+
+    /*public void forwardPacket(UUID playerID, String targetServer, NetworkPacket packet)
+    {
+        sendToHub(new PacketForwardPayload(
+                playerID,
+                serverId,
+                targetServer != null ? targetServer : "",
+                packet
+        ));
+    }*/
 
     public String getServerId() { return serverId; }
 

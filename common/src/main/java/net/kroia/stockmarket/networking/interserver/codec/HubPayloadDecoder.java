@@ -5,6 +5,9 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ByteToMessageDecoder;
 import io.netty.handler.codec.DecoderException;
 import net.kroia.stockmarket.networking.interserver.payload.*;
+import net.minecraft.core.UUIDUtil;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.resources.ResourceLocation;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -45,6 +48,13 @@ public class HubPayloadDecoder extends ByteToMessageDecoder {
                     readString(in),  // senderName
                     readString(in),  // fromServer
                     readString(in)   // message
+            );
+            case PacketIds.BYTE_BUFFER -> new PacketForwardPayload(
+                    UUIDUtil.STREAM_CODEC.decode(in),
+                    ByteBufCodecs.STRING_UTF8.decode(in),
+                    ByteBufCodecs.STRING_UTF8.decode(in),
+                    ResourceLocation.STREAM_CODEC.decode(in),
+                    ByteBufCodecs.BYTE_ARRAY.decode(in)
             );
             default -> throw new DecoderException(
                     "Unknown hub packet ID: 0x" + Integer.toHexString(packetId));

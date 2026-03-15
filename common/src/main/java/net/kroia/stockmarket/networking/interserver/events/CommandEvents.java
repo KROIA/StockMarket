@@ -8,6 +8,9 @@ import net.kroia.stockmarket.networking.interserver.config.ModConfig;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
+
+import java.nio.charset.StandardCharsets;
 
 /**
  * Registers the /hubsend command for testing cross-server string messages.
@@ -42,9 +45,8 @@ public class CommandEvents {
                                         }
 
                                         String message     = StringArgumentType.getString(ctx, "message");
-                                        String senderName  = ctx.getSource().getTextName();
-
-                                        HubConnector.get().sendString(senderName, message, null);
+                                        ServerPlayer player = ctx.getSource().getPlayer();
+                                        HubConnector.get().sendString(player.getName().toString(), message, null);
 
                                         ctx.getSource().sendSuccess(() ->
                                                         Component.literal("§7[HubMod] Sent to §ball servers§7: §e" + message),

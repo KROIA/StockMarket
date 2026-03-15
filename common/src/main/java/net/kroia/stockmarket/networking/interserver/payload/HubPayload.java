@@ -7,7 +7,8 @@ package net.kroia.stockmarket.networking.interserver.payload;
 public sealed interface HubPayload permits
         HandshakePayload,
         StringMessagePayload,
-        BroadcastPayload {
+        BroadcastPayload,
+        PacketForwardPayload {
 
     /** Unique byte ID used to identify this packet type on the wire. */
     int packetId();
