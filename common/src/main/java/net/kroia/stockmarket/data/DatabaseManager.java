@@ -71,7 +71,7 @@ public class DatabaseManager {
         Path dbPath = worldPath.resolve(DATABASE_PATH);
         String url = "jdbc:sqlite:" + Path.of(String.valueOf(dbPath.toAbsolutePath()), "stockdata.db");
         try {
-            Class<?> driverClass = ClassLoader.getSystemClassLoader().loadClass("org.sqlite.JDBC");
+            Class<?> driverClass = DatabaseManager.class.getClassLoader().loadClass("org.sqlite.JDBC");
             Driver driver = (Driver) driverClass.getDeclaredConstructor().newInstance();
             DriverManager.registerDriver(new DriverShim(driver));
         } catch (Exception e) {
