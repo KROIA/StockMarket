@@ -17,7 +17,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
-public class MarketPriceHistoryRequest extends StockMarketGenericStream<MarketPriceHistoryRequest.InputData, PriceHistoryData>
+public class MarketPriceHistoryRequest extends StockMarketGenericRequest<MarketPriceHistoryRequest.InputData, PriceHistoryData>
 {
 
     public record InputData(ItemID item, long minTimestamp, long maxTimestamp)
@@ -30,74 +30,49 @@ public class MarketPriceHistoryRequest extends StockMarketGenericStream<MarketPr
         );
     }
 
-    InputData inputData = null;
-    PriceHistoryData data = null;
-
     @Override
-    public GenericStream<InputData, PriceHistoryData> copy() {
-        return new MarketPriceHistoryRequest();
-    }
-
-    @Override
-    public String getStreamTypeID() {
+    public String getRequestTypeID() {
         return MarketPriceHistoryRequest.class.getName();
     }
 
+
     @Override
-    public void onStartStreamSendingOnSever() {
-        inputData = getContextData();
-        info("MarketPriceHistoryRequest started for item: " + inputData);
+    public CompletableFuture<PriceHistoryData> handleOnServer(InputData input, ServerPlayer sender)
+    {
+        CompletableFuture<PriceHistoryData> future = new CompletableFuture<>();
+        info("MarketPriceHistoryRequest started for item: " + input);
         CompletableFuture<List<MarketPriceStruct>>  fut = BACKEND_INSTANCES.MARKET_PRICE_HISTORY_MANAGER.getHistory(
-                        Optional.of(new DateFilter(inputData.minTimestamp, inputData.maxTimestamp)),
-                        Optional.of(new EqualityFilter(inputData.item.getShort())), -1);
+                Optional.of(new DateFilter(input.minTimestamp, input.maxTimestamp)),
+                Optional.of(new EqualityFilter(input.item.getShort())), -1);
         fut.thenAccept(list -> {
 
-            data = PriceHistoryData.fromSqlData(list, getCurrentMarketPrice(inputData.item));
+            PriceHistoryData data = PriceHistoryData.fromSqlData(list, getCurrentMarketPrice(input.item));
             if(data == null)
             {
-                warn("MarketPriceHistoryRequest failed to fetch data for item: " + inputData.item);
-                stopStream();
+                warn("MarketPriceHistoryRequest failed to fetch data for item: " + input.item);
             }
+            future.complete(data);
         });
+        return future;
     }
 
     @Override
-    public void onStopStreamSendingOnServer() {
-
+    public void encodeInput(RegistryFriendlyByteBuf buf, InputData input) {
+        InputData.STREAM_CODEC.encode(buf, input);
     }
 
     @Override
-    protected void updateOnServer(){
-        if(data != null)
-        {
-            sendPacket();
-            stopStream(); // Stop the stream since it is not used as stream but as async request
-        }
+    public void encodeOutput(RegistryFriendlyByteBuf buf, PriceHistoryData output) {
+        PriceHistoryData.STREAM_CODEC.encode(buf, output);
     }
 
     @Override
-    public PriceHistoryData provideStreamPacketOnServer()
-    {
-        return data;
+    public InputData decodeInput(RegistryFriendlyByteBuf buf) {
+        return InputData.STREAM_CODEC.decode(buf);
     }
 
     @Override
-    public void encodeContextData(RegistryFriendlyByteBuf buffer, InputData context) {
-        InputData.STREAM_CODEC.encode(buffer, context);
-    }
-
-    @Override
-    public InputData decodeContextData(RegistryFriendlyByteBuf buffer) {
-        return InputData.STREAM_CODEC.decode(buffer);
-    }
-
-    @Override
-    public void encodeData(RegistryFriendlyByteBuf buffer, PriceHistoryData priceHistoryData) {
-        PriceHistoryData.STREAM_CODEC.encode(buffer, priceHistoryData);
-    }
-
-    @Override
-    public PriceHistoryData decodeData(RegistryFriendlyByteBuf buffer) {
-        return PriceHistoryData.STREAM_CODEC.decode(buffer);
+    public PriceHistoryData decodeOutput(RegistryFriendlyByteBuf buf) {
+        return PriceHistoryData.STREAM_CODEC.decode(buf);
     }
 }

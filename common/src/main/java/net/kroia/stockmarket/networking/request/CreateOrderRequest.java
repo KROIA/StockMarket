@@ -16,6 +16,8 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.concurrent.CompletableFuture;
+
 public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderRequest.InputData, CreateOrderRequest.OutputData> {
 
     public record InputData(ItemID itemID, int bankAccountNr, Order.Type type, long volume, long price)
@@ -73,7 +75,8 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
 
 
     @Override
-    public OutputData handleOnServer(CreateOrderRequest.InputData input, ServerPlayer sender) {
+    public CompletableFuture<OutputData> handleOnServer(CreateOrderRequest.InputData input, ServerPlayer sender) {
+        CompletableFuture<OutputData> future = new CompletableFuture<>();
         OutputData response = new OutputData(Status.CREATED, null);
          Market market = getServerMarketManager().getMarket(input.itemID);
          if(market == null || input.volume == 0 || input.price < 0)
@@ -84,21 +87,24 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
                  response.status = Status.INVALID_VOLUME;
              if(input.price < 0)
                  response.status = Status.INVALID_PRICE;
-             return response;
+             future.complete(response);
+             return future;
          }
 
         IServerBankManager  serverBankManager = getServerBankManager();
         if(serverBankManager == null) {
             error("No IServerBankManager found ");
             response.status = Status.NO_SERVER_BANK_MANAGER;
-            return response;
+            future.complete(response);
+            return future;
         }
 
         IBankAccount bankAccount = serverBankManager.getBankAccount(input.bankAccountNr);
         if(bankAccount == null) {
             warn("No BankAccount found with BankAccountNr " + input.bankAccountNr);
             response.status = Status.NO_BANK_ACCOUNT;
-            return response;
+            future.complete(response);
+            return future;
         }
 
         BankUserData bankUserData = bankAccount.getUserData(sender.getUUID());
@@ -106,7 +112,8 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
             warn("No BankUserData found with BankAccountNr " + input.bankAccountNr + " for user: " +sender.getName()+
                     "\nThis player seems not to be a member of the BankAccount.");
             response.status = Status.NO_BANK_USER;
-            return response;
+            future.complete(response);
+            return future;
         }
 
 
@@ -114,14 +121,16 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
         {
             if(!BankPermission.hasPermission(bankUserData.permissions, BankPermission.DEPOSIT)) {
                 response.status = Status.NO_PERMISSION_TO_DEPOSIT;
-                return response; // User is not allowed to deposit items by buying
+                future.complete(response);
+                return future; // User is not allowed to deposit items by buying
             }
         }
         else
         {
             if(!BankPermission.hasPermission(bankUserData.permissions, BankPermission.WITHDRAW)) {
                 response.status = Status.NO_PERMISSION_TO_WITHDRAW;
-                return response; // User is not allowed to withdraw items by selling
+                future.complete(response);
+                return future; // User is not allowed to withdraw items by selling
             }
         }
 
@@ -129,7 +138,8 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
         IBank itemBank = bankAccount.getBank(input.itemID);
         if(itemBank == null) {
             response.status = Status.NO_ITEM_BANK;
-            return response;
+            future.complete(response);
+            return future;
         }
 
         ItemID moneyItemID = getServerMarketManager().getTradingCurrencyID();
@@ -137,7 +147,8 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
         if(moneyBank == null)
         {
             response.status = Status.NO_MONEY_BANK;
-            return response;
+            future.complete(response);
+            return future;
         }
 
         long currentMarketPrice = market.getCurrentMarketPrice();
@@ -151,14 +162,16 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
                     toLockAmount = input.volume * input.price;
                     if(moneyBank.getBalance() < toLockAmount) {
                         response.status = Status.NOT_ENOUGH_MONEY;
-                        return response;
+                        future.complete(response);
+                        return future;
                     }
                     break;
                 case Order.Type.MARKET:
                     toLockAmount  = input.volume * currentMarketPrice;
                     if(moneyBank.getBalance() < toLockAmount) {
                         response.status = Status.NOT_ENOUGH_MONEY;
-                        return response;
+                        future.complete(response);
+                        return future;
                     }
                     break;
             }
@@ -172,7 +185,8 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
                     toLockAmount = -input.volume;
                     if(itemBank.getBalance() < toLockAmount) {
                         response.status = Status.NOT_ENOUGH_ITEM;
-                        return response;
+                        future.complete(response);
+                        return future;
                     }
                 break;
             }
@@ -190,7 +204,8 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
                 warn("Trying to lock "+toLockAmount+" of "+ moneyItemID + " for bank: " +moneyBank +
                         " of BankAccount: "+ bankAccount.getAccountNumber() + "["+bankAccount.getAccountName()+"]. Got status: "+lockStatus);
                 response.status = Status.UNABLE_TO_LOCK_MONEY;
-                return response;
+                future.complete(response);
+                return future;
             }
         }
         else
@@ -201,7 +216,8 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
                 warn("Trying to lock "+toLockAmount+" of "+ input.itemID + " for bank: " +itemBank +
                         " of BankAccount: "+ bankAccount.getAccountNumber() + "["+bankAccount.getAccountName()+"]. Got status: "+lockStatus);
                 response.status = Status.UNABLE_TO_LOCK_ITEM;
-                return response;
+                future.complete(response);
+                return future;
             }
         }
 
@@ -219,7 +235,8 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
                             " of BankAccount: "+ bankAccount.getAccountNumber() + "["+bankAccount.getAccountName()+"] " +
                             "after failed to place order. Got status: "+unlockStatus);
                     response.status = Status.UNABLE_TO_UNLOCK_MONEY;
-                    return response;
+                    future.complete(response);
+                    return future;
                 }
             }
             else
@@ -231,13 +248,15 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
                             " of BankAccount: "+ bankAccount.getAccountNumber() + "["+bankAccount.getAccountName()+"] " +
                             "after failed to place order. Got status: "+unlockStatus);
                     response.status = Status.UNABLE_TO_UNLOCK_ITEM;
-                    return response;
+                    future.complete(response);
+                    return future;
                 }
             }
         }
         response.status = Status.CREATED;
         response.orderEcho = order.getData();
-        return response;
+        future.complete(response);
+        return future;
     }
 
     @Override

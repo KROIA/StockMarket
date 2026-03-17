@@ -1,8 +1,10 @@
 package net.kroia.stockmarket.util;
 
 import net.kroia.banksystem.api.IServerBankManager;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.client_server.arrs.GenericRequest;
 import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.market.server.Market;
 import net.kroia.stockmarket.market.server.MarketManager;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
@@ -24,13 +26,13 @@ public abstract class StockMarketGenericRequest<IN, OUT> extends GenericRequest<
     }
     protected IServerBankManager getServerBankManager() {return BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager(); }
 
-
-    @Override
-    public void decodeHandleEncodeOnServer(RegistryFriendlyByteBuf inputBuf, RegistryFriendlyByteBuf outputBuf, ServerPlayer sender)
+    protected final long getCurrentMarketPrice(ItemID id)
     {
-        IN input = decodeInput(inputBuf);
-        OUT output = handleOnServer(input, sender);
-        encodeOutput(outputBuf, output);
+        MarketManager marketManager = BACKEND_INSTANCES.MARKET_MANAGER;
+        Market m =  marketManager.getMarket(id);
+        if(m == null)
+            return 0L;
+        return m.getCurrentMarketPrice();
     }
 
 

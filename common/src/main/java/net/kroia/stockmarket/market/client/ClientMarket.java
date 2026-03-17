@@ -1,9 +1,11 @@
 package net.kroia.stockmarket.market.client;
 
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.networking.client_server.arrs.RequestManager;
 import net.kroia.modutilities.networking.client_server.streaming.StreamSystem;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.order.Order;
+import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.kroia.stockmarket.networking.request.ActiveOrdersRequest;
 import net.kroia.stockmarket.networking.request.CreateOrderRequest;
 import net.kroia.stockmarket.networking.request.MarketPriceHistoryRequest;
@@ -71,7 +73,7 @@ public class ClientMarket
     public void requestFullPriceHistoryUpdate(long startTime, long endTime)
     {
         MarketPriceHistoryRequest.InputData priceChunkRequestData = new MarketPriceHistoryRequest.InputData(itemID, startTime, endTime);
-        StreamSystem.startServerToClientStream(BACKEND_INSTANCES.NETWORKING.MARKET_PRICE_HISTORY_REQUEST, priceChunkRequestData, (historyData) ->
+        BACKEND_INSTANCES.NETWORKING.MARKET_PRICE_HISTORY_REQUEST.sendRequestToServer(priceChunkRequestData, (historyData) ->
         {
             info("Price chunck received for: "+itemID);
             //lastCandleCreationTime = System.currentTimeMillis();
@@ -81,10 +83,6 @@ public class ClientMarket
                 lastCandleCreationTime = lastCandle.openTimestamp + newCandleInterval;
                 currentServerTime = lastCandle.openTimestamp;
             }
-        }, () ->
-        {
-            // Stream stopped
-            info("MARKET_PRICE_HISTORY_REQUEST stopped");
         });
     }
     public boolean subscribeToMarketPriceUpdate()

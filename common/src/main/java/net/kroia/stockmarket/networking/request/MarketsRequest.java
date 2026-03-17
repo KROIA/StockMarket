@@ -8,6 +8,7 @@ import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 public class MarketsRequest extends StockMarketGenericRequest<Integer, List<ItemID>> {
 
@@ -18,8 +19,10 @@ public class MarketsRequest extends StockMarketGenericRequest<Integer, List<Item
     }
 
     @Override
-    public List<ItemID> handleOnServer(Integer input, ServerPlayer sender) {
-        return getServerMarketManager().getAvailableMarketIDs();
+    public CompletableFuture<List<ItemID>> handleOnServer(Integer input, ServerPlayer sender) {
+        CompletableFuture<List<ItemID>> future = new CompletableFuture<>();
+        future.complete(getServerMarketManager().getAvailableMarketIDs());
+        return future;
     }
 
     @Override

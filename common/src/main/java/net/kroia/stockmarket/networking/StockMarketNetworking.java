@@ -34,9 +34,8 @@ public class StockMarketNetworking extends ClientServerPacketManager {
     }
 
     public final MarketPriceStream MARKET_PRICE_STREAM = (MarketPriceStream) StreamSystem.register(new MarketPriceStream());
-    public final MarketPriceHistoryRequest MARKET_PRICE_HISTORY_REQUEST = (MarketPriceHistoryRequest) StreamSystem.register(new MarketPriceHistoryRequest());
 
-
+    public final MarketPriceHistoryRequest MARKET_PRICE_HISTORY_REQUEST = (MarketPriceHistoryRequest) AsynchronousRequestResponseSystem.register(new MarketPriceHistoryRequest());
     public final MarketsRequest MARKETS_REQUEST = (MarketsRequest) AsynchronousRequestResponseSystem.register(new MarketsRequest());
     public final CreateOrderRequest CREATE_ORDER_REQUEST = (CreateOrderRequest) AsynchronousRequestResponseSystem.register(new CreateOrderRequest());
     public final ActiveOrdersRequest ACTIVE_ORDERS_REQUEST = (ActiveOrdersRequest) AsynchronousRequestResponseSystem.register(new ActiveOrdersRequest());

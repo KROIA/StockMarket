@@ -18,6 +18,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * @brief
@@ -72,7 +73,8 @@ public class ActiveOrdersRequest extends StockMarketGenericRequest<ActiveOrdersR
 
 
     @Override
-    public OutputData handleOnServer(InputData input, ServerPlayer sender) {
+    public CompletableFuture<OutputData> handleOnServer(InputData input, ServerPlayer sender) {
+        CompletableFuture<OutputData>  future = new CompletableFuture<>();
         List<Order.Data> orderData = new ArrayList<>();
         /*boolean hasPermission = playerIsAdmin(sender);
         IServerBankManager bankManager = getServerBankManager();
@@ -151,8 +153,10 @@ public class ActiveOrdersRequest extends StockMarketGenericRequest<ActiveOrdersR
         if(input.itemID != null)
         {
             Market market = marketManager.getMarket(input.itemID);
-            if(market == null)
-                return new OutputData(orderData);
+            if(market == null) {
+                future.complete(new OutputData(orderData));
+                return future;
+            }
             List<Order> orders = market.getLimitOrders();
             for(Order order : orders)
             {
@@ -161,7 +165,6 @@ public class ActiveOrdersRequest extends StockMarketGenericRequest<ActiveOrdersR
                     orderData.add(order.getData());
                 }
             }
-            return new OutputData(orderData);
         }
         else
         {
@@ -177,8 +180,9 @@ public class ActiveOrdersRequest extends StockMarketGenericRequest<ActiveOrdersR
                     }
                 }
             }
-            return new OutputData(orderData);
         }
+        future.complete(new OutputData(orderData));
+        return future;
     }
 
     private boolean passesFilter(InputData input, ServerPlayer sender, Order order)
