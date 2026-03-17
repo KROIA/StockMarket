@@ -1,16 +1,9 @@
 package net.kroia.stockmarket.networking.packet;
 
-import com.sun.jna.platform.unix.solaris.LibKstat;
 import dev.architectury.networking.NetworkManager;
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.PooledByteBufAllocator;
-import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.networking.interserver.child.HubConnector;
-import net.kroia.stockmarket.networking.interserver.payload.PacketForwardPayload;
 import net.kroia.stockmarket.util.StockMarketNetworkPacket;
-import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
@@ -43,7 +36,7 @@ public class TestPacket extends StockMarketNetworkPacket {
     @Override
     protected void handleOnServer(NetworkManager.PacketContext context)
     {
-        HubConnector hubConnector = HubConnector.get();
+        /*bConnector hubConnector = HubConnector.get();
         if(hubConnector != null) {
             // This is a child server
             String targetServer = "";
@@ -62,7 +55,7 @@ public class TestPacket extends StockMarketNetworkPacket {
         {
             // This is the hub server
 
-        }
+        }*/
     }
 
     @Override

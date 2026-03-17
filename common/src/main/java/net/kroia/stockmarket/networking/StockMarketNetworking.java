@@ -1,10 +1,9 @@
 package net.kroia.stockmarket.networking;
 
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.util.BankSystemNetworkPacket;
-import net.kroia.modutilities.networking.PacketManager;
-import net.kroia.modutilities.networking.arrs.AsynchronousRequestResponseSystem;
-import net.kroia.modutilities.networking.streaming.StreamSystem;
+import net.kroia.modutilities.networking.client_server.arrs.AsynchronousRequestResponseSystem;
+import net.kroia.modutilities.networking.client_server.ClientServerPacketManager;
+import net.kroia.modutilities.networking.client_server.streaming.StreamSystem;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.networking.packet.OpenUIPacket;
 import net.kroia.stockmarket.networking.packet.PlayerJoinSyncPacket;
@@ -21,7 +20,7 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 
-public class StockMarketNetworking extends PacketManager {
+public class StockMarketNetworking extends ClientServerPacketManager {
     public static void setBackend(StockMarketModBackend.ServerInstances backend) {
         StockMarketGenericStream.setBackend(backend);
         StockMarketGenericRequest.setBackend(backend);

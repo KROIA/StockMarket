@@ -7,6 +7,7 @@ import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.api.BankSystemAPI;
 import net.kroia.banksystem.util.BankSystemDataHandler;
+import net.kroia.modutilities.networking.server_server.ServerServerManager;
 import net.kroia.stockmarket.api.StockMarketAPI;
 import net.kroia.stockmarket.block.StockMarketBlocks;
 import net.kroia.stockmarket.command.StockMarketCommands;
@@ -17,12 +18,6 @@ import net.kroia.stockmarket.event.EventRegistration;
 import net.kroia.stockmarket.item.StockMarketCreativeModeTab;
 import net.kroia.stockmarket.item.StockMarketItems;
 import net.kroia.stockmarket.market.client.ClientMarketManager;
-import net.kroia.stockmarket.networking.interserver.child.ChildInboundHandler;
-import net.kroia.stockmarket.networking.interserver.child.HubConnector;
-import net.kroia.stockmarket.networking.interserver.config.ModConfig;
-import net.kroia.stockmarket.networking.interserver.events.CommandEvents;
-import net.kroia.stockmarket.networking.interserver.hub.HubChildHandler;
-import net.kroia.stockmarket.networking.interserver.hub.HubTcpServer;
 import net.kroia.stockmarket.market.server.MarketManager;
 import net.kroia.stockmarket.market.server.Testing;
 import net.kroia.stockmarket.menu.StockMarketMenus;
@@ -93,57 +88,6 @@ public class StockMarketModBackend implements StockMarketAPI {
 
         StockMarketNetworking.setBackend(COMMON_INSTANCES);
 
-
-
-        ModConfig.setBackend(COMMON_INSTANCES);
-
-        // Register /hubsend and /hubsendto commands (child servers only, but safe to register always)
-        CommandEvents.register();
-
-        // inter server test
-        ModConfig cfg = ModConfig.get();
-
-        COMMON_INSTANCES.LOGGER.info("[HubMod] Initializing — mode: "+ (cfg.isHub ? "HUB" : "CHILD"));
-
-
-
-        if (cfg.isHub) {
-            initHub(cfg);
-        } else {
-            initChild(cfg);
-        }
-    }
-
-    // ── Hub mode ──────────────────────────────────────────────────────────────
-
-    private static void initHub(ModConfig cfg) {
-        LifecycleEvent.SERVER_STARTED.register(mcServer -> {
-            COMMON_INSTANCES.LOGGER.info("[HubMod] Starting hub TCP listener on port "+ cfg.hubTcpPort);
-            HubTcpServer.start(cfg.hubTcpPort, mcServer);
-        });
-
-        LifecycleEvent.SERVER_STOPPING.register(mcServer -> {
-            COMMON_INSTANCES.LOGGER.info("[HubMod] Stopping hub TCP listener...");
-            HubTcpServer.stop();
-        });
-    }
-
-    // ── Child mode ────────────────────────────────────────────────────────────
-
-    private static void initChild(ModConfig cfg) {
-        LifecycleEvent.SERVER_STARTED.register(mcServer -> {
-            // Give the handler access to the MC server so it can broadcast messages to players
-            ChildInboundHandler.setMcServer(mcServer);
-
-            COMMON_INSTANCES.LOGGER.info("[HubMod] Connecting to hub at "+cfg.hubHost+":"+cfg.hubTcpPort+" as '"+cfg.serverId+"'");
-            HubConnector.init(cfg.hubHost, cfg.hubTcpPort, cfg.serverId, cfg.sharedSecret);
-        });
-
-        LifecycleEvent.SERVER_STOPPING.register(mcServer -> {
-            if (HubConnector.get() != null) {
-                HubConnector.get().disconnect();
-            }
-        });
     }
 
 
@@ -181,10 +125,6 @@ public class StockMarketModBackend implements StockMarketAPI {
         NEZNAMY_TAB_Placeholders.setBackend(SERVER_INSTANCES);
         StockMarketCommands.setBackend(SERVER_INSTANCES);
 
-        ChildInboundHandler.setBackend(SERVER_INSTANCES);
-        HubConnector.setBackend(SERVER_INSTANCES);
-        HubChildHandler.setBackend(SERVER_INSTANCES);
-        HubTcpServer.setBackend(SERVER_INSTANCES);
 
 
         SERVER_INSTANCES.LOGGER = COMMON_INSTANCES.LOGGER;
@@ -215,8 +155,23 @@ public class StockMarketModBackend implements StockMarketAPI {
             SERVER_INSTANCES.BANK_SYSTEM_API.getEvents().getBankDataLoadedFromFileSignal().addListener(StockMarketModBackend::onPostBankSystemDataLoaded, 1);
         }
 
+        if(SERVER_INSTANCES.SERVER_SETTINGS.NETWORKING.ENABLE_SERVER_SERVER_COMMUNICATION.get()) {
+            boolean isMaster = SERVER_INSTANCES.SERVER_SETTINGS.NETWORKING.IS_MASTER.get();
+            String sharedSecret = SERVER_INSTANCES.SERVER_SETTINGS.NETWORKING.SHARED_SECRET.get();
+            int port = SERVER_INSTANCES.SERVER_SETTINGS.NETWORKING.MASTER_TCP_PORT.get();
 
-
+            if(!ServerServerManager.instanceExists()) {
+                if (isMaster) {
+                    ServerServerManager.createMaster(server, sharedSecret, port);
+                    ServerServerManager.start();
+                } else {
+                    String hostIP = SERVER_INSTANCES.SERVER_SETTINGS.NETWORKING.MASTER_IP.get();
+                    String thisServerID = SERVER_INSTANCES.SERVER_SETTINGS.NETWORKING.SLAVE_ID.get();
+                    ServerServerManager.createSlave(server, sharedSecret, thisServerID, hostIP, port);
+                    ServerServerManager.start();
+                }
+            }
+        }
     }
     private static void onPostBankSystemDataLoaded()
     {
@@ -235,11 +190,6 @@ public class StockMarketModBackend implements StockMarketAPI {
             SERVER_INSTANCES.LOGGER.info("Some tests failed");
             testing.runTests();
         }
-        //ItemID id = ItemID.getOrRegisterFromItemStack(Items.GOLD_INGOT.getDefaultInstance());
-        //testMarket = new Market(id);
-//
-        //Order botOrder1 = new Order(id, Order.Type.LIMIT, -3, 12, 0, UUID.randomUUID(), 1);
-        //testMarket.putOrder(botOrder1);
     }
 
 
@@ -249,6 +199,11 @@ public class StockMarketModBackend implements StockMarketAPI {
         TickEvent.SERVER_POST.unregister(StockMarketModBackend::onServerTick);
         saveDataToFiles(server);
 
+        if(ServerServerManager.instanceExists())
+        {
+            ServerServerManager.stop();
+            ServerServerManager.cleanup();
+        }
     }
 
 
@@ -325,16 +280,17 @@ public class StockMarketModBackend implements StockMarketAPI {
 
     public static void loadDataFromFiles(MinecraftServer server)
     {
-        Path rootSaveFolder = server.getWorldPath(LevelResource.ROOT);
         // Load data from the root save folder
-
+        Path worldPath = server.getWorldPath(LevelResource.ROOT);
+        Path path = worldPath.resolve(Path.of("data", "stockmarket", "settings.json"));
+        SERVER_INSTANCES.SERVER_SETTINGS.loadSettings(path.toAbsolutePath().toString());
 
     }
     public static void saveDataToFiles(MinecraftServer server)
     {
-        Path rootSaveFolder = server.getWorldPath(LevelResource.ROOT);
-        // Load data from the root save folder
-
+        Path worldPath = server.getWorldPath(LevelResource.ROOT);
+        Path path = worldPath.resolve(Path.of("data", "stockmarket", "settings.json"));
+        SERVER_INSTANCES.SERVER_SETTINGS.saveSettings(path.toAbsolutePath().toString());
     }
 
 

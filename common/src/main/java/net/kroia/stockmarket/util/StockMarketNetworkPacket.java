@@ -2,9 +2,8 @@ package net.kroia.stockmarket.util;
 
 import dev.architectury.networking.NetworkManager;
 import io.netty.channel.ChannelHandlerContext;
-import net.kroia.banksystem.util.BankSystemNetworkPacket;
-import net.kroia.modutilities.networking.NetworkPacket;
-import net.kroia.modutilities.networking.PacketHandler;
+import net.kroia.modutilities.networking.client_server.NetworkPacket;
+import net.kroia.modutilities.networking.client_server.PacketHandler;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.minecraft.server.level.ServerPlayer;
 

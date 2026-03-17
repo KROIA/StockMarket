@@ -1,7 +1,7 @@
 package net.kroia.stockmarket.networking.stream;
 
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.networking.streaming.GenericStream;
+import net.kroia.modutilities.networking.client_server.streaming.GenericStream;
 import net.kroia.stockmarket.market.server.Market;
 import net.kroia.stockmarket.market.server.MarketManager;
 import net.kroia.stockmarket.util.StockMarketGenericStream;

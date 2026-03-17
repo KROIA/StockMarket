@@ -70,8 +70,25 @@ public class DatabaseManager {
         Path worldPath = server.getWorldPath(LevelResource.ROOT);
         Path dbPath = worldPath.resolve(DATABASE_PATH);
         String url = "jdbc:sqlite:" + Path.of(String.valueOf(dbPath.toAbsolutePath()), "stockdata.db");
+        Class<?> driverClass = null;
+        Exception exception = null;
+        try{
+            driverClass = ClassLoader.getSystemClassLoader().loadClass("org.sqlite.JDBC");
+        }catch(ClassNotFoundException e)
+        {
+            exception = e;
+        }
+        if(exception != null)
+        {
+            try{
+                driverClass = DatabaseManager.class.getClassLoader().loadClass("org.sqlite.JDBC");
+            }catch(ClassNotFoundException e)
+            {
+                StockMarketMod.LOGGER.error("Failed to register JDBC driver", e);
+                return;
+            }
+        }
         try {
-            Class<?> driverClass = DatabaseManager.class.getClassLoader().loadClass("org.sqlite.JDBC");
             Driver driver = (Driver) driverClass.getDeclaredConstructor().newInstance();
             DriverManager.registerDriver(new DriverShim(driver));
         } catch (Exception e) {

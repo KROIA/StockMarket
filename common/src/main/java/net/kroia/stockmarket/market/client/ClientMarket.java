@@ -1,7 +1,7 @@
 package net.kroia.stockmarket.market.client;
 
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.networking.streaming.StreamSystem;
+import net.kroia.modutilities.networking.client_server.streaming.StreamSystem;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.order.Order;
 import net.kroia.stockmarket.networking.request.ActiveOrdersRequest;
