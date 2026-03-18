@@ -2,6 +2,7 @@ package net.kroia.stockmarket.networking.packet;
 
 import dev.architectury.networking.NetworkManager;
 import io.netty.channel.ChannelHandlerContext;
+import net.kroia.modutilities.networking.server_server.ForwardPacketContext;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.util.StockMarketNetworkPacket;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -34,34 +35,33 @@ public class TestPacket extends StockMarketNetworkPacket {
     }
 
     @Override
-    protected void handleOnServer(NetworkManager.PacketContext context)
+    protected boolean needsRoutingToMaster()
     {
-        /*bConnector hubConnector = HubConnector.get();
-        if(hubConnector != null) {
-            // This is a child server
-            String targetServer = "";
-            RegistryAccess reg = context.registryAccess();
-            RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(io.netty.buffer.Unpooled.buffer(), reg);
-            STREAM_CODEC.encode(buf, this);
-            hubConnector.sendToHub(new PacketForwardPayload(
-                    context.getPlayer().getUUID(),
-                    hubConnector.getServerId(),
-                    targetServer,
-                    type().id(),
-                    buf.array()
-            ));
-        }
-        else
-        {
-            // This is the hub server
-
-        }*/
+        return true;
     }
 
     @Override
-    protected void handleOnServer(ChannelHandlerContext context)
+    protected void handleOnServer(NetworkManager.PacketContext context)
     {
-        info("Handling redirected TestPacket with message: " + message);
+        info("[Server] Handling TestPacket with message: " + message + " without redirecting");
     }
 
+    @Override
+    protected void handleOnMaster(ForwardPacketContext context)
+    {
+        info("[Master] Handling redirected TestPacket with message: " + message);
+    }
+
+
+
+
+
+
+
+
+    @Override
+    protected void handleOnSlave(ForwardPacketContext context)
+    {
+        info("[Slave] Handling redirected TestPacket with message: " + message);
+    }
 }

@@ -1,9 +1,12 @@
 package net.kroia.stockmarket.networking;
 
+import io.netty.buffer.ByteBuf;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.modutilities.networking.client_server.arrs.AsynchronousRequestResponseSystem;
 import net.kroia.modutilities.networking.client_server.ClientServerPacketManager;
 import net.kroia.modutilities.networking.client_server.streaming.StreamSystem;
+import net.kroia.modutilities.networking.server_server.ForwardPacketHandler;
+import net.kroia.modutilities.networking.server_server.ServerServerPacketRegistry;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.networking.packet.OpenUIPacket;
 import net.kroia.stockmarket.networking.packet.PlayerJoinSyncPacket;
@@ -72,10 +75,12 @@ public class StockMarketNetworking extends ClientServerPacketManager {
     {
         // All packets use the same handler
         registerS2C(packetType, streamCodec, StockMarketNetworkPacket.HANDLER);
+        ServerServerPacketRegistry.register(packetType, streamCodec, StockMarketNetworkPacket.HANDLER);
     }
     public <T extends StockMarketNetworkPacket> void registerC2S(CustomPacketPayload.Type<T> packetType, StreamCodec<RegistryFriendlyByteBuf, T> streamCodec)
     {
         // All packets use the same handler
         registerC2S(packetType, streamCodec, StockMarketNetworkPacket.HANDLER);
+        ServerServerPacketRegistry.register(packetType, streamCodec, StockMarketNetworkPacket.HANDLER);
     }
 }
