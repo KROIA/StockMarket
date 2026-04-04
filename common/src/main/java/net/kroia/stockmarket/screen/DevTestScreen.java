@@ -3,6 +3,7 @@ package net.kroia.stockmarket.screen;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.market.client.ClientMarketManager;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.kroia.stockmarket.networking.packet.TestPacket;
 import net.kroia.stockmarket.util.StockMarketGuiScreen;
@@ -19,6 +20,7 @@ public class DevTestScreen extends StockMarketGuiScreen {
     }
 
     private final Button sendTestPacketButton;
+    private final Button requestMarketsButton;
 
     public DevTestScreen() {
         super(Texts.TITLE);
@@ -28,11 +30,18 @@ public class DevTestScreen extends StockMarketGuiScreen {
             TestPacket.sendToServer("Hello World!");
         });
 
+        requestMarketsButton = new Button("Request Markets", ()->
+        {
+            getMarketManager().requestMarkets();
+        });
+
         addElement(sendTestPacketButton);
+        addElement(requestMarketsButton);
     }
 
     @Override
     protected void updateLayout(Gui gui) {
         sendTestPacketButton.setBounds(0,0,100,20);
+        requestMarketsButton.setBounds(0,sendTestPacketButton.getBottom(),100,20);
     }
 }

@@ -8,6 +8,7 @@ import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 public class MarketsRequest extends StockMarketGenericRequest<Integer, List<ItemID>> {
@@ -19,7 +20,20 @@ public class MarketsRequest extends StockMarketGenericRequest<Integer, List<Item
     }
 
     @Override
+    public boolean needsRoutingToMaster() { return true; }
+
+
+    @Override
     public CompletableFuture<List<ItemID>> handleOnServer(Integer input, ServerPlayer sender) {
+        info("MarketsRequest::HandleOnServer");
+        CompletableFuture<List<ItemID>> future = new CompletableFuture<>();
+        future.complete(getServerMarketManager().getAvailableMarketIDs());
+        return future;
+    }
+
+    @Override
+    public CompletableFuture<List<ItemID>> handleOnMasterServer(Integer input, UUID playerSender) {
+        info("MarketsRequest::handleOnMasterServer");
         CompletableFuture<List<ItemID>> future = new CompletableFuture<>();
         future.complete(getServerMarketManager().getAvailableMarketIDs());
         return future;

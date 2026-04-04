@@ -54,6 +54,7 @@ public class ClientMarketManager
         CompletableFuture<List<ItemID>> future = new CompletableFuture<>();
         AsynchronousRequestResponseSystem.sendRequestToServer(BACKEND_INSTANCES.NETWORKING.MARKETS_REQUEST, 0, (response) ->
         {
+            info("Markets request response received with "+response.size()+" markets");
             for(ItemID itemID : response) {
                 createClientMarket(itemID);
             }

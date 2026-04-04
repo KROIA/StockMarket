@@ -1,7 +1,6 @@
 package net.kroia.stockmarket.util;
 
 import dev.architectury.networking.NetworkManager;
-import io.netty.channel.ChannelHandlerContext;
 import net.kroia.modutilities.networking.client_server.NetworkPacket;
 import net.kroia.modutilities.networking.client_server.PacketHandler;
 import net.kroia.modutilities.networking.server_server.ForwardPacketContext;
