@@ -67,20 +67,4 @@ public class StockMarketNetworking extends ClientServerPacketManager {
         registerC2S(TestPacket.TYPE, TestPacket.STREAM_CODEC);
 
     }
-
-
-
-    // Helper function to reduce code size for registration
-    public <T extends StockMarketNetworkPacket> void registerS2C(CustomPacketPayload.Type<T> packetType, StreamCodec<RegistryFriendlyByteBuf, T> streamCodec)
-    {
-        // All packets use the same handler
-        registerS2C(packetType, streamCodec, StockMarketNetworkPacket.HANDLER);
-        ServerServerPacketRegistry.register(packetType, streamCodec, StockMarketNetworkPacket.HANDLER);
-    }
-    public <T extends StockMarketNetworkPacket> void registerC2S(CustomPacketPayload.Type<T> packetType, StreamCodec<RegistryFriendlyByteBuf, T> streamCodec)
-    {
-        // All packets use the same handler
-        registerC2S(packetType, streamCodec, StockMarketNetworkPacket.HANDLER);
-        ServerServerPacketRegistry.register(packetType, streamCodec, StockMarketNetworkPacket.HANDLER);
-    }
 }
