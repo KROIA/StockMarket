@@ -155,7 +155,7 @@ public class StockMarketModBackend implements StockMarketAPI {
             SERVER_INSTANCES.BANK_SYSTEM_API.getEvents().getBankDataLoadedFromFileSignal().addListener(StockMarketModBackend::onPostBankSystemDataLoaded, 1);
         }
 
-        if(SERVER_INSTANCES.SERVER_SETTINGS.NETWORKING.ENABLE_SERVER_SERVER_COMMUNICATION.get()) {
+        /*if(SERVER_INSTANCES.SERVER_SETTINGS.NETWORKING.ENABLE_SERVER_SERVER_COMMUNICATION.get()) {
             boolean isMaster = SERVER_INSTANCES.SERVER_SETTINGS.NETWORKING.IS_MASTER.get();
             String sharedSecret = SERVER_INSTANCES.SERVER_SETTINGS.NETWORKING.SHARED_SECRET.get();
             int port = SERVER_INSTANCES.SERVER_SETTINGS.NETWORKING.MASTER_TCP_PORT.get();
@@ -171,7 +171,7 @@ public class StockMarketModBackend implements StockMarketAPI {
                     ServerServerManager.start();
                 }
             }
-        }
+        }*/
     }
     private static void onPostBankSystemDataLoaded()
     {

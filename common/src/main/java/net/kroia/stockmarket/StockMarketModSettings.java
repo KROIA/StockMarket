@@ -19,7 +19,7 @@ public class StockMarketModSettings extends ModSettings {
 
     public final Utilities UTILITIES = createGroup(new Utilities());
     public final Market MARKET = createGroup(new Market());
-    public final Networking NETWORKING = createGroup(new Networking());
+    //public final Networking NETWORKING = createGroup(new Networking());
 
     public StockMarketModSettings() {
         super("StockMarketModSettings");
@@ -64,7 +64,7 @@ public class StockMarketModSettings extends ModSettings {
     }
 
 
-    public static final class Networking extends SettingsGroup
+    /*public static final class Networking extends SettingsGroup
     {
         public final Setting<Boolean> ENABLE_SERVER_SERVER_COMMUNICATION = registerSetting("ENABLE_SERVER_SERVER_COMMUNICATION", false, Boolean.class);
         public final Setting<Boolean> IS_MASTER = registerSetting("IS_MASTER", false, Boolean.class);
@@ -75,7 +75,7 @@ public class StockMarketModSettings extends ModSettings {
 
 
         public Networking() { super("Networking"); }
-    }
+    }*/
 
 
     public ClientSettings getClientSettings()
