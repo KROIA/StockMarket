@@ -45,6 +45,12 @@ public class MarketPriceStream extends StockMarketGenericStream<ItemID, MarketPr
     }
 
     @Override
+    public boolean needsRoutingToMaster()
+    {
+        return true;
+    }
+
+    @Override
     public void onStartStreamSendingOnSever() {
         itemID = getContextData();
         info("MarketPriceStream started for item: " + itemID);
@@ -76,6 +82,7 @@ public class MarketPriceStream extends StockMarketGenericStream<ItemID, MarketPr
 
     @Override
     public ResponseData provideStreamPacketOnServer() {
+        info("MarketPriceStream provided for item: " + itemID + " price: " + lastPrice.marketPrice);
         return lastPrice;
     }
 
