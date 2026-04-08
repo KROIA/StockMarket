@@ -1,7 +1,5 @@
 package net.kroia.stockmarket.networking.request;
 
-import net.kroia.banksystem.api.IBankAccount;
-import net.kroia.banksystem.api.IServerBankManager;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.stockmarket.market.order.Order;

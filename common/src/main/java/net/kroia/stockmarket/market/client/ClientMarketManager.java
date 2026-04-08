@@ -52,7 +52,7 @@ public class ClientMarketManager
     public CompletableFuture<List<ItemID>> requestMarkets()
     {
         CompletableFuture<List<ItemID>> future = new CompletableFuture<>();
-        AsynchronousRequestResponseSystem.sendRequestToServer(BACKEND_INSTANCES.NETWORKING.MARKETS_REQUEST, 0, (response) ->
+        AsynchronousRequestResponseSystem.sendRequestToServer(BACKEND_INSTANCES.NETWORKING.MARKETS_REQUEST, 0).thenAccept((response) ->
         {
             info("Markets request response received with "+response.size()+" markets");
             for(ItemID itemID : response) {
@@ -71,7 +71,7 @@ public class ClientMarketManager
     {
         ActiveOrdersRequest.InputData inp = new ActiveOrdersRequest.InputData(itemIDFilter, bankAccountNr, executorPlayerFilter, timeBegin, timeEnd);
         CompletableFuture<ActiveOrdersRequest.OutputData> future = new CompletableFuture<>();
-        BACKEND_INSTANCES.NETWORKING.ACTIVE_ORDERS_REQUEST.sendRequestToServer(inp, future::complete);
+        BACKEND_INSTANCES.NETWORKING.ACTIVE_ORDERS_REQUEST.sendRequestToServer(inp).thenAccept(future::complete);
         return future;
     }
 

@@ -1,12 +1,11 @@
 package net.kroia.stockmarket.util;
 
-import net.kroia.banksystem.api.IServerBankManager;
+import net.kroia.banksystem.api.IBankManager;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.client_server.arrs.GenericRequest;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.server.Market;
 import net.kroia.stockmarket.market.server.MarketManager;
-import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 
 public abstract class StockMarketGenericRequest<IN, OUT> extends GenericRequest<IN, OUT> {
@@ -24,7 +23,7 @@ public abstract class StockMarketGenericRequest<IN, OUT> extends GenericRequest<
     {
         return BACKEND_INSTANCES.MARKET_MANAGER;
     }
-    protected IServerBankManager getServerBankManager() {return BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager(); }
+    protected IBankManager getServerBankManager() {return BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager(); }
 
     protected final long getCurrentMarketPrice(ItemID id)
     {

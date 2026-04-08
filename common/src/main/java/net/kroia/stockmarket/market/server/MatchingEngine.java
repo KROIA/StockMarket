@@ -620,7 +620,7 @@ public class MatchingEngine
 
     @Nullable IBankAccount getBankAccount(int bankAccountID)
     {
-        return BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getBankAccount(bankAccountID);
+        return BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync().getBankAccount(bankAccountID);
     }
     @Nullable IBank getItemBank(int bankAccountID)
     {

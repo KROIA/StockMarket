@@ -33,10 +33,10 @@ public class Testing {
 
     public boolean setup()
     {
-        moneyID = ItemID.getOrRegisterFromItemStack(BankSystemItems.MONEY.get().getDefaultInstance());
-        bankAccount1 = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getBankAccount(2);
+        moneyID = ItemID.getOrRegisterFromItemStackServerSide_direct(BankSystemItems.MONEY.get().getDefaultInstance());
+        bankAccount1 = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync().getBankAccount(2);
         if(bankAccount1 == null)
-            bankAccount1 = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().createBankAccount("UnitTestAccount_1");
+            bankAccount1 = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync().createBankAccount("UnitTestAccount_1");
         if(bankAccount1 == null)
         {
             error("Can't create UnitTestBankAccount_1");
@@ -44,9 +44,9 @@ public class Testing {
         }
         bankAccountNr1 = bankAccount1.getAccountNumber();
 
-        bankAccount2 = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getBankAccount(3);
+        bankAccount2 = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync().getBankAccount(3);
         if(bankAccount2 == null)
-            bankAccount2 = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().createBankAccount("UnitTestAccount_2");
+            bankAccount2 = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync().createBankAccount("UnitTestAccount_2");
         if(bankAccount2 == null)
         {
             error("Can't create UnitTestBankAccount_2");
@@ -54,7 +54,7 @@ public class Testing {
         }
         bankAccountNr2 = bankAccount2.getAccountNumber();
 
-        ItemID id = ItemID.getOrRegisterFromItemStack(Items.GOLD_INGOT.getDefaultInstance());
+        ItemID id = ItemID.getOrRegisterFromItemStackServerSide_direct(Items.GOLD_INGOT.getDefaultInstance());
         market = BACKEND_INSTANCES.MARKET_MANAGER.createMarket(id);
 
         // Set balance

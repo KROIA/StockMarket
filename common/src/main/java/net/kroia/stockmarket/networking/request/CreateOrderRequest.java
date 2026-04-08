@@ -2,7 +2,7 @@ package net.kroia.stockmarket.networking.request;
 
 import net.kroia.banksystem.api.IBank;
 import net.kroia.banksystem.api.IBankAccount;
-import net.kroia.banksystem.api.IServerBankManager;
+import net.kroia.banksystem.api.IBankManager;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.clientdata.BankUserData;
 import net.kroia.banksystem.util.ItemID;
@@ -91,7 +91,7 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
              return future;
          }
 
-        IServerBankManager  serverBankManager = getServerBankManager();
+        IBankManager serverBankManager = getServerBankManager();
         if(serverBankManager == null) {
             error("No IServerBankManager found ");
             response.status = Status.NO_SERVER_BANK_MANAGER;
@@ -99,7 +99,7 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
             return future;
         }
 
-        IBankAccount bankAccount = serverBankManager.getBankAccount(input.bankAccountNr);
+        IBankAccount bankAccount = serverBankManager.getSync().getBankAccount(input.bankAccountNr);
         if(bankAccount == null) {
             warn("No BankAccount found with BankAccountNr " + input.bankAccountNr);
             response.status = Status.NO_BANK_ACCOUNT;

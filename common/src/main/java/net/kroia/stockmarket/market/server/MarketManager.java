@@ -74,7 +74,7 @@ public class MarketManager
     {
         if(tradingCurrencyID == null)
         {
-            tradingCurrencyID = ItemID.getOrRegisterFromItemStack(BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.CURRENCY.get());
+            tradingCurrencyID = ItemID.getOrRegisterFromItemStackServerSide_direct(BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.CURRENCY.get());
         }
         return tradingCurrencyID;
     }

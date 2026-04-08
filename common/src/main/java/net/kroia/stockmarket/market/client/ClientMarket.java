@@ -73,7 +73,7 @@ public class ClientMarket
     public void requestFullPriceHistoryUpdate(long startTime, long endTime)
     {
         MarketPriceHistoryRequest.InputData priceChunkRequestData = new MarketPriceHistoryRequest.InputData(itemID, startTime, endTime);
-        BACKEND_INSTANCES.NETWORKING.MARKET_PRICE_HISTORY_REQUEST.sendRequestToServer(priceChunkRequestData, (historyData) ->
+        BACKEND_INSTANCES.NETWORKING.MARKET_PRICE_HISTORY_REQUEST.sendRequestToServer(priceChunkRequestData).thenAccept((historyData) ->
         {
             info("Price chunck received for: "+itemID);
             //lastCandleCreationTime = System.currentTimeMillis();
@@ -150,7 +150,7 @@ public class ClientMarket
     {
         CreateOrderRequest.InputData inputData = new CreateOrderRequest.InputData(itemID, bankAccountNr, type, volume, price);
         CompletableFuture<CreateOrderRequest.OutputData> future = new CompletableFuture<>();
-        BACKEND_INSTANCES.NETWORKING.CREATE_ORDER_REQUEST.sendRequestToServer(inputData, future::complete);
+        BACKEND_INSTANCES.NETWORKING.CREATE_ORDER_REQUEST.sendRequestToServer(inputData).thenAccept(future::complete);
         return future;
     }
 
@@ -184,7 +184,7 @@ public class ClientMarket
     {
         ActiveOrdersRequest.InputData inp = new ActiveOrdersRequest.InputData(itemID, bankAccountNr, executorPlayerFilter, timeBegin, timeEnd);
         CompletableFuture<ActiveOrdersRequest.OutputData> future = new CompletableFuture<>();
-        BACKEND_INSTANCES.NETWORKING.ACTIVE_ORDERS_REQUEST.sendRequestToServer(inp, future::complete);
+        BACKEND_INSTANCES.NETWORKING.ACTIVE_ORDERS_REQUEST.sendRequestToServer(inp).thenAccept(future::complete);
         return future;
     }
 
