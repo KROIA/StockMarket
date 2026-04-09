@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.market.server;
 
-import net.kroia.banksystem.api.IBankAccount;
+
+import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.StockMarketModBackend;
@@ -21,9 +22,9 @@ public class Testing {
 
     Market market;
     int bankAccountNr1;
-    IBankAccount bankAccount1;
+    IServerBankAccount bankAccount1;
     int bankAccountNr2;
-    IBankAccount bankAccount2;
+    IServerBankAccount bankAccount2;
     long uniformVolumeDistributionScale = 5;
 
     public Testing()

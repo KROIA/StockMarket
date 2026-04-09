@@ -1,8 +1,10 @@
 package net.kroia.stockmarket.networking.request;
 
-import net.kroia.banksystem.api.IBank;
-import net.kroia.banksystem.api.IBankAccount;
-import net.kroia.banksystem.api.IBankManager;
+
+import net.kroia.banksystem.api.bank.BankStatus;
+import net.kroia.banksystem.api.bank.IServerBank;
+import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
+import net.kroia.banksystem.api.bankmanager.IBankManager;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.clientdata.BankUserData;
 import net.kroia.banksystem.util.ItemID;
@@ -99,7 +101,7 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
             return future;
         }
 
-        IBankAccount bankAccount = serverBankManager.getSync().getBankAccount(input.bankAccountNr);
+        ISyncServerBankAccount bankAccount = serverBankManager.getSync().getBankAccount(input.bankAccountNr);
         if(bankAccount == null) {
             warn("No BankAccount found with BankAccountNr " + input.bankAccountNr);
             response.status = Status.NO_BANK_ACCOUNT;
@@ -135,7 +137,7 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
         }
 
         // Check balance
-        IBank itemBank = bankAccount.getBank(input.itemID);
+        IServerBank itemBank = bankAccount.getBank(input.itemID);
         if(itemBank == null) {
             response.status = Status.NO_ITEM_BANK;
             future.complete(response);
@@ -143,7 +145,7 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
         }
 
         ItemID moneyItemID = getServerMarketManager().getTradingCurrencyID();
-        IBank moneyBank = bankAccount.getBank(moneyItemID);
+        IServerBank moneyBank = bankAccount.getBank(moneyItemID);
         if(moneyBank == null)
         {
             response.status = Status.NO_MONEY_BANK;
@@ -198,8 +200,8 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
         // Reserve balances
         if(input.volume > 0)
         {
-            IBank.Status lockStatus = moneyBank.lockAmount(toLockAmount);
-            if(lockStatus != IBank.Status.SUCCESS)
+            BankStatus lockStatus = moneyBank.lockAmount(toLockAmount);
+            if(lockStatus != BankStatus.SUCCESS)
             {
                 warn("Trying to lock "+toLockAmount+" of "+ moneyItemID + " for bank: " +moneyBank +
                         " of BankAccount: "+ bankAccount.getAccountNumber() + "["+bankAccount.getAccountName()+"]. Got status: "+lockStatus);
@@ -210,8 +212,8 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
         }
         else
         {
-            IBank.Status lockStatus = itemBank.lockAmount(toLockAmount);
-            if(lockStatus != IBank.Status.SUCCESS)
+            BankStatus lockStatus = itemBank.lockAmount(toLockAmount);
+            if(lockStatus != BankStatus.SUCCESS)
             {
                 warn("Trying to lock "+toLockAmount+" of "+ input.itemID + " for bank: " +itemBank +
                         " of BankAccount: "+ bankAccount.getAccountNumber() + "["+bankAccount.getAccountName()+"]. Got status: "+lockStatus);
@@ -228,8 +230,8 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
         if(!market.putOrder(order))
         {
             if(input.volume > 0) {
-                IBank.Status unlockStatus = moneyBank.unlockAmount(toLockAmount);
-                if(unlockStatus != IBank.Status.SUCCESS)
+                BankStatus unlockStatus = moneyBank.unlockAmount(toLockAmount);
+                if(unlockStatus != BankStatus.SUCCESS)
                 {
                     warn("Trying to unlock "+toLockAmount+" of "+ moneyItemID + " for bank: " +moneyBank +
                             " of BankAccount: "+ bankAccount.getAccountNumber() + "["+bankAccount.getAccountName()+"] " +
@@ -241,8 +243,8 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
             }
             else
             {
-                IBank.Status unlockStatus = itemBank.unlockAmount(toLockAmount);
-                if(unlockStatus != IBank.Status.SUCCESS)
+                BankStatus unlockStatus = itemBank.unlockAmount(toLockAmount);
+                if(unlockStatus != BankStatus.SUCCESS)
                 {
                     warn("Trying to unlock "+toLockAmount+" of "+ input.itemID + " for bank: " +itemBank +
                             " of BankAccount: "+ bankAccount.getAccountNumber() + "["+bankAccount.getAccountName()+"] " +

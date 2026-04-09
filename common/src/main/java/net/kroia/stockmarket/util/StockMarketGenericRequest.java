@@ -1,6 +1,8 @@
 package net.kroia.stockmarket.util;
 
-import net.kroia.banksystem.api.IBankManager;
+
+import net.kroia.banksystem.api.bankmanager.IBankManager;
+import net.kroia.banksystem.banking.bankmanager.BankManager;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.client_server.arrs.GenericRequest;
 import net.kroia.stockmarket.StockMarketModBackend;

@@ -1,7 +1,8 @@
 package net.kroia.stockmarket.market.server;
 
-import net.kroia.banksystem.api.IBank;
-import net.kroia.banksystem.api.IBankAccount;
+
+import net.kroia.banksystem.api.bank.IServerBank;
+import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.market.order.InterMarketOrder;
@@ -22,9 +23,9 @@ public class MatchingEngine
     /** Tiny value-holder to return two banks together. */
     private static final class BankPair
     {
-        final IBank itemBank;
-        final IBank moneyBank;
-        BankPair(IBank i, IBank m) { itemBank = i; moneyBank = m; }
+        final IServerBank itemBank;
+        final IServerBank moneyBank;
+        BankPair(IServerBank i, IServerBank m) { itemBank = i; moneyBank = m; }
     }
 
     private final ItemID itemID;
@@ -168,11 +169,11 @@ public class MatchingEngine
     private void processMarketOrder(Order order, long minAcceptedPrice, long maxAcceptedPrice)
     {
         // ── Resolve the submitting player's bank accounts ──────────────────────
-        IBankAccount account = getBankAccount(order.getBankAccountNr());
+        IServerBankAccount account = getBankAccount(order.getBankAccountNr());
         if (account == null) { orderCanceled(order); return; }
 
-        IBank itemBank  = account.getBank(itemID);
-        IBank moneyBank = account.getBank(BACKEND_INSTANCES.MARKET_MANAGER.getTradingCurrencyID());
+        IServerBank itemBank  = account.getBank(itemID);
+        IServerBank moneyBank = account.getBank(BACKEND_INSTANCES.MARKET_MANAGER.getTradingCurrencyID());
         if (itemBank == null || moneyBank == null) { orderCanceled(order); return; }
 
         long orderVolume = order.getRemainingVolume();
@@ -188,7 +189,7 @@ public class MatchingEngine
 //  SELL
 // ═══════════════════════════════════════════════════════════════════════════
 
-    private void processSell(Order order, long orderVolume, IBank itemBank, IBank moneyBank, long minimalAcceptedPrice)
+    private void processSell(Order order, long orderVolume, IServerBank itemBank, IServerBank moneyBank, long minimalAcceptedPrice)
     {
         // Cap sell volume to what the player actually holds
         long available = itemBank.getTotalBalance();
@@ -303,7 +304,7 @@ public class MatchingEngine
 //  BUY
 // ═══════════════════════════════════════════════════════════════════════════
 
-    private void processBuy(Order order, long orderVolume, IBank itemBank, IBank moneyBank, long maximalAcceptedPrice)
+    private void processBuy(Order order, long orderVolume, IServerBank itemBank, IServerBank moneyBank, long maximalAcceptedPrice)
     {
         // Cap buy volume to what the player can afford at the current market price.
         // This is a conservative upper bound; actual cost may be lower if fills happen
@@ -563,7 +564,7 @@ public class MatchingEngine
 
 
     /** Commit a completed (or partially completed) SELL and fire orderConsumed. */
-    private void commitSell(IBank itemBank, IBank moneyBank,
+    private void commitSell(IServerBank itemBank, IServerBank moneyBank,
                             long itemDelta, long moneyDelta, Order order)
     {
         itemBank.withdrawLockedPrefered(-itemDelta);  // itemDelta is negative → withdraw positive
@@ -578,7 +579,7 @@ public class MatchingEngine
     }
 
     /** Commit a completed (or partially completed) BUY and fire orderConsumed. */
-    private void commitBuy(IBank itemBank, IBank moneyBank,
+    private void commitBuy(IServerBank itemBank, IServerBank moneyBank,
                            long itemDelta, long moneyDelta, Order order)
     {
         moneyBank.withdrawLockedPrefered(-moneyDelta);  // moneyDelta is negative → withdraw positive
@@ -595,10 +596,10 @@ public class MatchingEngine
     /** Looks up item + money bank for a counterparty order. Returns null if unavailable. */
     private BankPair resolveCounterpartyBanks(Order counterOrder)
     {
-        IBankAccount acct = getBankAccount(counterOrder.getBankAccountNr());
+        IServerBankAccount acct = getBankAccount(counterOrder.getBankAccountNr());
         if (acct == null) return null;
-        IBank ib = acct.getBank(itemID);
-        IBank mb = acct.getBank(BACKEND_INSTANCES.MARKET_MANAGER.getTradingCurrencyID());
+        IServerBank ib = acct.getBank(itemID);
+        IServerBank mb = acct.getBank(BACKEND_INSTANCES.MARKET_MANAGER.getTradingCurrencyID());
         return (ib == null || mb == null) ? null : new BankPair(ib, mb);
     }
 
@@ -618,16 +619,16 @@ public class MatchingEngine
 
 
 
-    @Nullable IBankAccount getBankAccount(int bankAccountID)
+    @Nullable IServerBankAccount getBankAccount(int bankAccountID)
     {
         return BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync().getBankAccount(bankAccountID);
     }
-    @Nullable IBank getItemBank(int bankAccountID)
+    @Nullable IServerBank getItemBank(int bankAccountID)
     {
-        IBankAccount account = getBankAccount(bankAccountID);
+        IServerBankAccount account = getBankAccount(bankAccountID);
         if(account != null)
         {
-            IBank bank = account.getBank(itemID);
+            IServerBank bank = account.getBank(itemID);
             if(bank == null)
             {
                 error("No bank for item: "+itemID+ " in bank acocunt: "+bankAccountID);
@@ -637,13 +638,13 @@ public class MatchingEngine
         error("No bank account with the accountNR: "+bankAccountID);
         return null;
     }
-    @Nullable IBank getMoneyBank(int bankAccountID)
+    @Nullable IServerBank getMoneyBank(int bankAccountID)
     {
-        IBankAccount account = getBankAccount(bankAccountID);
+        IServerBankAccount account = getBankAccount(bankAccountID);
         ItemID moneyID = BACKEND_INSTANCES.MARKET_MANAGER.getTradingCurrencyID();
         if(account != null && moneyID != null)
         {
-            IBank bank = account.getBank(moneyID);
+            IServerBank bank = account.getBank(moneyID);
             if(bank == null)
             {
                 error("No bank for item: "+moneyID+ " in bank acocunt: "+bankAccountID);
