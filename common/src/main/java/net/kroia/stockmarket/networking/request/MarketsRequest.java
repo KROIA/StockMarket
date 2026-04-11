@@ -32,7 +32,7 @@ public class MarketsRequest extends StockMarketGenericRequest<Integer, List<Item
     }
 
     @Override
-    public CompletableFuture<List<ItemID>> handleOnMasterServer(Integer input, UUID playerSender) {
+    public CompletableFuture<List<ItemID>> handleOnMasterServer(Integer input, String slaveID, UUID playerSender) {
         info("MarketsRequest::handleOnMasterServer");
         CompletableFuture<List<ItemID>> future = new CompletableFuture<>();
         future.complete(getServerMarketManager().getAvailableMarketIDs());

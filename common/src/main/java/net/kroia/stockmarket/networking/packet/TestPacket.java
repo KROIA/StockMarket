@@ -2,7 +2,7 @@ package net.kroia.stockmarket.networking.packet;
 
 import dev.architectury.networking.NetworkManager;
 import io.netty.channel.ChannelHandlerContext;
-import net.kroia.modutilities.networking.server_server.ForwardPacketContext;
+import net.kroia.modutilities.networking.multi_server.ForwardPacketContext;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.util.StockMarketNetworkPacket;
 import net.minecraft.network.RegistryFriendlyByteBuf;

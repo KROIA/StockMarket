@@ -2,12 +2,11 @@ package net.kroia.stockmarket;
 
 import dev.architectury.event.events.client.ClientPlayerEvent;
 import dev.architectury.event.events.client.ClientTickEvent;
-import dev.architectury.event.events.common.LifecycleEvent;
 import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.api.BankSystemAPI;
 import net.kroia.banksystem.util.BankSystemDataHandler;
-import net.kroia.modutilities.networking.server_server.ServerServerManager;
+import net.kroia.modutilities.networking.multi_server.MultiServerManager;
 import net.kroia.stockmarket.api.StockMarketAPI;
 import net.kroia.stockmarket.block.StockMarketBlocks;
 import net.kroia.stockmarket.command.StockMarketCommands;
@@ -160,15 +159,15 @@ public class StockMarketModBackend implements StockMarketAPI {
             String sharedSecret = SERVER_INSTANCES.SERVER_SETTINGS.NETWORKING.SHARED_SECRET.get();
             int port = SERVER_INSTANCES.SERVER_SETTINGS.NETWORKING.MASTER_TCP_PORT.get();
 
-            if(!ServerServerManager.instanceExists()) {
+            if(!MultiServerManager.instanceExists()) {
                 if (isMaster) {
-                    ServerServerManager.createMaster(server, sharedSecret, port);
-                    ServerServerManager.start();
+                    MultiServerManager.createMaster(server, sharedSecret, port);
+                    MultiServerManager.start();
                 } else {
                     String hostIP = SERVER_INSTANCES.SERVER_SETTINGS.NETWORKING.MASTER_IP.get();
                     String thisServerID = SERVER_INSTANCES.SERVER_SETTINGS.NETWORKING.SLAVE_ID.get();
-                    ServerServerManager.createSlave(server, sharedSecret, thisServerID, hostIP, port);
-                    ServerServerManager.start();
+                    MultiServerManager.createSlave(server, sharedSecret, thisServerID, hostIP, port);
+                    MultiServerManager.start();
                 }
             }
         }*/
@@ -199,10 +198,10 @@ public class StockMarketModBackend implements StockMarketAPI {
         TickEvent.SERVER_POST.unregister(StockMarketModBackend::onServerTick);
         saveDataToFiles(server);
 
-        if(ServerServerManager.instanceExists())
+        if(MultiServerManager.instanceExists())
         {
-            ServerServerManager.stop();
-            ServerServerManager.cleanup();
+            MultiServerManager.stop();
+            MultiServerManager.cleanup();
         }
     }
 

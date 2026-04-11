@@ -3,9 +3,9 @@ package net.kroia.stockmarket.util;
 import dev.architectury.networking.NetworkManager;
 import net.kroia.modutilities.networking.client_server.NetworkPacket;
 import net.kroia.modutilities.networking.client_server.PacketHandler;
-import net.kroia.modutilities.networking.server_server.ForwardPacketContext;
-import net.kroia.modutilities.networking.server_server.ForwardPacketHandler;
-import net.kroia.modutilities.networking.server_server.ServerServerManager;
+import net.kroia.modutilities.networking.multi_server.ForwardPacketContext;
+import net.kroia.modutilities.networking.multi_server.ForwardPacketHandler;
+import net.kroia.modutilities.networking.multi_server.MultiServerManager;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -17,11 +17,11 @@ public abstract class StockMarketNetworkPacket extends NetworkPacket {
     {
         @Override
         public void handleServer(StockMarketNetworkPacket packet, NetworkManager.PacketContext context) {
-            if(ServerServerManager.isRunning() && ServerServerManager.isSlave())
+            if(MultiServerManager.isRunning() && MultiServerManager.isSlave())
             {
                 if(packet.needsRoutingToMaster())
                 {
-                    ServerServerManager.sendToMaster(context.getPlayer().getUUID(),  packet);
+                    MultiServerManager.sendToMaster(context.getPlayer().getUUID(),  packet);
                 }
                 else
                     packet.handleOnServer(context);
