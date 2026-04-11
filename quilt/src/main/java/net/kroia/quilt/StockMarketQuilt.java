@@ -19,38 +19,39 @@ public final class StockMarketQuilt implements ModInitializer {
         // Client Events
         if(MinecraftQuiltLoader.getEnvironmentType() == EnvType.CLIENT) {
             ClientLifecycleEvents.READY.register(client -> {
-                StockMarketMod.LOGGER.info("[QuiltSetup] CLIENT READY");
-                StockMarketMod.onClientSetup();
+                StockMarketModBackend.onClientSetup();
             });
         }
 
 
         // Server Events
         ServerLifecycleEvents.STARTING.register(server-> {
-            StockMarketMod.LOGGER.info("[QuiltSetup] SERVER STARTING");
-            StockMarketMod.onServerSetup(); // Handle world load (start)
+            StockMarketModBackend.onServerSetup();
         });
 
-        ServerLifecycleEvents.READY.register(server -> {
-            StockMarketMod.LOGGER.info("[QuiltSetup] SERVER READY");
-            StockMarketServerEvents.onServerStart(server);
+        // Handle world load (start)
+        ServerLifecycleEvents.READY.register((server)->
+        {
+            StockMarketModBackend.onServerStart(server);
+            // Check if NEZNAMY/TAB is present and register placeholders
+            if (Platform.isModLoaded("tab")) {
+                NEZNAMY_TAB_Placeholders.register();
+            }
         });
 
-        // World save event
-        ServerLifecycleEvents.STOPPING.register(server -> {
-            StockMarketMod.LOGGER.info("[QuiltSetup] SERVER STOPPING");
-            StockMarketServerEvents.onServerStop(server); // Handle world save (stop)
-        });
+        // Handle world save (stop)
+        ServerLifecycleEvents.STOPPING.register(StockMarketModBackend::onServerStop);
+
 
         // Player Events
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
-            StockMarketPlayerEvents.onPlayerJoin(handler.getPlayer());
+            StockMarketModBackend.onPlayerJoin(handler.getPlayer());
         });
 
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
-            StockMarketPlayerEvents.onPlayerLeave(handler.getPlayer());
+            StockMarketModBackend.onPlayerLeave(handler.getPlayer());
         });
 
-        StockMarketMod.init();
+        BankSystemMod.init();
     }
 }

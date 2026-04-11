@@ -1,320 +1,217 @@
 package net.kroia.stockmarket.market.client;
 
-import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
-import net.kroia.stockmarket.market.server.order.Order;
-import net.kroia.stockmarket.networking.packet.client_sender.request.RequestManageTradingItemPacket;
-import net.kroia.stockmarket.networking.packet.client_sender.request.RequestBotSettingsPacket;
-import net.kroia.stockmarket.networking.packet.client_sender.request.RequestOrderChangePacket;
-import net.kroia.stockmarket.networking.packet.client_sender.request.RequestTradeItemsPacket;
-import net.kroia.stockmarket.networking.packet.server_sender.update.SyncBotSettingsPacket;
-import net.kroia.stockmarket.networking.packet.server_sender.update.SyncOrderPacket;
-import net.kroia.stockmarket.networking.packet.server_sender.update.SyncPricePacket;
-import net.kroia.stockmarket.networking.packet.server_sender.update.SyncTradeItemsPacket;
-import net.kroia.stockmarket.screen.custom.BotSettingsScreen;
-import net.kroia.stockmarket.screen.custom.TradeScreen;
+import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.networking.client_server.arrs.RequestManager;
+import net.kroia.modutilities.networking.client_server.streaming.StreamSystem;
+import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.market.order.Order;
+import net.kroia.stockmarket.networking.StockMarketNetworking;
+import net.kroia.stockmarket.networking.request.ActiveOrdersRequest;
+import net.kroia.stockmarket.networking.request.CreateOrderRequest;
+import net.kroia.stockmarket.networking.request.MarketPriceHistoryRequest;
+import net.kroia.stockmarket.util.PriceHistoryData;
+import net.kroia.stockmarket.util.StockMarketGuiElement;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
-import java.util.*;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 
-public class ClientMarket {
-
-    private static Map<String, ClientTradeItem> tradeItems = new HashMap<>();
-
-    private static SyncBotSettingsPacket syncBotSettingsPacket;
-    private static SyncTradeItemsPacket syncTradeItemsPacket;
-    private static boolean syncTradeItemsChanged;
-
-    private static boolean syncBotSettingsPacketChanged = false;
-
-
-
-    ClientMarket()
-    {
-
+public class ClientMarket
+{
+    protected static StockMarketModBackend.ClientInstances BACKEND_INSTANCES;
+    public static void setBackend(StockMarketModBackend.ClientInstances backend) {
+        BACKEND_INSTANCES = backend;
+        StockMarketGuiElement.setBackend(backend);
     }
 
-    public static void clear()
+    private final ItemID itemID;
+    private final PriceHistoryData priceHistoryData;
+    private @Nullable UUID marketPriceUpdateStreamID = null;
+
+    private long lastCandleCreationTime = System.currentTimeMillis();
+    private long currentServerTime = lastCandleCreationTime;
+    private long newCandleInterval = BACKEND_INSTANCES.SETTINGS.getCandleTimeMs();
+
+    public ClientMarket(@NotNull ItemID itemID)
     {
-        tradeItems.clear();
-        syncBotSettingsPacket = null;
-        syncTradeItemsPacket = null;
-        syncTradeItemsChanged = false;
-        syncBotSettingsPacketChanged = false;
+        this.itemID = itemID;
+        this.priceHistoryData = new PriceHistoryData(itemID);
     }
 
-    public static void requestTradeItems()
+    public void update()
     {
-        RequestTradeItemsPacket.generateRequest();
-    }
-    public static void requestAllowNewTradingItem(String itemID, int startPrice)
-    {
-        RequestManageTradingItemPacket.sendRequestAllowNewTradingItem(itemID, startPrice);
-    }
-    public static void requestRemoveTradingItem(String itemID)
-    {
-        RequestManageTradingItemPacket.sendRequestRemoveTradingItem(itemID);
-    }
-    public static int getPrice(String itemID)
-    {
-        ClientTradeItem tradeItem = tradeItems.get(itemID);
-        if(tradeItem == null)
-        {
-            msgTradeItemNotFound(itemID);
-            return 0;
-        }
-        return tradeItem.getPrice();
-    }
 
-    public static SyncTradeItemsPacket getSyncTradeItemsPacket()
-    {
-        return syncTradeItemsPacket;
-    }
-    public static boolean hasSyncTradeItemsChanged()
-    {
-        if(syncTradeItemsChanged)
-        {
-            syncTradeItemsChanged = false;
-            return true;
-        }
-        return false;
-    }
+        if(marketPriceUpdateStreamID != null) {
+            //long now = System.currentTimeMillis();
 
-    public static void handlePacket(SyncPricePacket packet)
-    {
-        ClientTradeItem tradeItem = tradeItems.get(packet.getPriceHistory().getItemID());
-        if(tradeItem == null)
-        {
-            msgTradeItemNotFound(packet.getPriceHistory().getItemID());
-            return;
-        }
-        tradeItem.handlePacket(packet);
-        TradeScreen.updatePlotsData();
-        BotSettingsScreen.updatePlotsData();
-    }
-    public static void handlePacket(SyncTradeItemsPacket packet)
-    {
-        syncTradeItemsPacket = packet;
-        syncTradeItemsChanged = true;
-
-        Map<String, ClientTradeItem> tradeItems = new HashMap<>();
-        ArrayList<SyncPricePacket> syncPricePackets = packet.getUpdatePricePackets();
-        StockMarketMod.LOGGER.info("Received " + syncPricePackets.size() + " trade items");
-        for(SyncPricePacket syncPricePacket : syncPricePackets)
-        {
-            ClientTradeItem orgInstance = ClientMarket.tradeItems.get(syncPricePacket.getPriceHistory().getItemID());
-            ClientTradeItem tradeItem;
-            if(orgInstance != null)
-            {
-                tradeItems.put(syncPricePacket.getPriceHistory().getItemID(), orgInstance);
-                orgInstance.handlePacket(syncPricePacket);
-                tradeItem = orgInstance;
-                continue;
-            }
-            else {
-                tradeItem = new ClientTradeItem(syncPricePacket.getPriceHistory().getItemID());
-                tradeItem.handlePacket(syncPricePacket);
-                tradeItems.put(tradeItem.getItemID(), tradeItem);
-            }
-
-            StockMarketMod.LOGGER.info("Trade item: {}", tradeItem.getItemID());
-            if(Objects.equals(syncPricePacket.getPriceHistory().getItemID(), TradeScreen.getItemID()))
-            {
-                TradeScreen.updatePlotsData();
+            // Trying to sync using the server time to get the same candles as the server does
+            // But it does not work 100%as intended
+            if (currentServerTime - lastCandleCreationTime > newCandleInterval) {
+                lastCandleCreationTime = currentServerTime;
+                newCandleInterval = BACKEND_INSTANCES.SETTINGS.getCandleTimeMs();
+                priceHistoryData.startNewCandle();
             }
         }
-        ClientMarket.tradeItems = tradeItems;
-        TradeScreen.onAvailableTradeItemsChanged();
-
-    }
-
-    public static void handlePacket(SyncOrderPacket packet)
-    {
-        ClientTradeItem tradeItem = tradeItems.get(packet.getOrder().getItemID());
-        if(tradeItem == null)
-        {
-            msgTradeItemNotFound(packet.getOrder().getItemID());
-            return;
-        }
-        tradeItem.handlePacket(packet);
     }
 
 
-
-
-    public static ClientTradeItem getTradeItem(String itemID)
+    public @NotNull ItemID getItemID()
     {
-        return tradeItems.get(itemID);
+        return itemID;
     }
-    /*public static PriceHistory getPriceHistory(String itemID)
+    public @NotNull PriceHistoryData getPriceHistoryData()
     {
-        ClientTradeItem tradeItem = tradeItems.get(itemID);
-        if(tradeItem == null)
-        {
-            StockMarketMod.LOGGER.warn("Trade item not found: " + itemID);
-            return null;
-        }
-        return tradeItem.getPriceHistory();
-    }*/
-
-    public static boolean createOrder(String itemID, int quantity, int price)
+        return priceHistoryData;
+    }
+    public void requestFullPriceHistoryUpdate()
     {
-        ClientTradeItem tradeItem = tradeItems.get(itemID);
-        if(tradeItem == null)
+        requestFullPriceHistoryUpdate(0, Long.MAX_VALUE);
+    }
+    public void requestFullPriceHistoryUpdate(long startTime, long endTime)
+    {
+        MarketPriceHistoryRequest.InputData priceChunkRequestData = new MarketPriceHistoryRequest.InputData(itemID, startTime, endTime);
+        BACKEND_INSTANCES.NETWORKING.MARKET_PRICE_HISTORY_REQUEST.sendRequestToServer(priceChunkRequestData).thenAccept((historyData) ->
         {
-            msgTradeItemNotFound(itemID);
+            info("Price chunck received for: "+itemID);
+            //lastCandleCreationTime = System.currentTimeMillis();
+            priceHistoryData.loadFrom(historyData);
+            PriceHistoryData.Candle lastCandle = priceHistoryData.getCurrentCandle();
+            if(lastCandle != null) {
+                lastCandleCreationTime = lastCandle.openTimestamp + newCandleInterval;
+                currentServerTime = lastCandle.openTimestamp;
+            }
+        });
+    }
+    public boolean subscribeToMarketPriceUpdate()
+    {
+        if(marketPriceUpdateStreamID != null)
             return false;
-        }
-        return tradeItem.createOrder(quantity, price);
-    }
-    public static boolean createOrder(String itemID, int quantity)
-    {
-        ClientTradeItem tradeItem = tradeItems.get(itemID);
-        if(tradeItem == null)
+
+        //if(priceHistoryData.getCandles().isEmpty())
         {
-            msgTradeItemNotFound(itemID);
+            // Request historical candle data first
+            requestFullPriceHistoryUpdate(); // lazy update since it replaces all history data points
+        }
+
+        marketPriceUpdateStreamID = StreamSystem.startServerToClientStream(BACKEND_INSTANCES.NETWORKING.MARKET_PRICE_STREAM, itemID, (price)->
+        {
+            info("Price received: " + price.marketPrice);
+            currentServerTime = price.timestamp;
+            priceHistoryData.setCurrentMarketPrice(price.marketPrice);
+        },()->
+        {
+            // Stream stopped
+            info("MARKET_PRICE_STREAM stopped");
+            marketPriceUpdateStreamID  = null;
+        });
+        return marketPriceUpdateStreamID != null;
+    }
+    public boolean unsubscribeFromMarketPriceUpdate()
+    {
+        if(marketPriceUpdateStreamID == null)
             return false;
-        }
-        return tradeItem.createOrder(quantity);
-    }
-    public static void changeOrderPrice(String itemID, long orderID, int newPrice)
-    {
-        RequestOrderChangePacket.sendRequest(itemID, orderID, newPrice);
-    }
-
-    public static Order getOrder(String itemID, long orderID)
-    {
-        ClientTradeItem tradeItem = tradeItems.get(itemID);
-        if(tradeItem == null)
-        {
-            msgTradeItemNotFound(itemID);
-            return null;
-        }
-        return tradeItem.getOrder(orderID);
-    }
-
-    public static ArrayList<Order> getOrders(String itemID)
-    {
-        ClientTradeItem tradeItem = tradeItems.get(itemID);
-        if(tradeItem == null)
-        {
-            msgTradeItemNotFound(itemID);
-            return new ArrayList<>();
-        }
-        return tradeItem.getOrders();
-    }
-    public static void removeOrder(String itemID, long orderID)
-    {
-        ClientTradeItem tradeItem = tradeItems.get(itemID);
-        if(tradeItem == null)
-        {
-            msgTradeItemNotFound(itemID);
-            return;
-        }
-        tradeItem.removeOrder(orderID);
-    }
-
-    public static void cancelOrder(Order order)
-    {
-        cancelOrder(order.getItemID(), order.getOrderID());
-    }
-    public static void cancelOrder(String itemID, long orderID)
-    {
-        ClientTradeItem tradeItem = tradeItems.get(itemID);
-        if(tradeItem == null)
-        {
-            msgTradeItemNotFound(itemID);
-            return;
-        }
-        tradeItem.cancelOrder(orderID);
-    }
-
-    public static void subscribeMarketUpdate(String itemID)
-    {
-        ClientTradeItem tradeItem = tradeItems.get(itemID);
-        if(tradeItem == null)
-        {
-            msgTradeItemNotFound(itemID);
-            return;
-        }
-        tradeItem.subscribe();
-    }
-    public static void unsubscribeMarketUpdate(String itemID)
-    {
-        ClientTradeItem tradeItem = tradeItems.get(itemID);
-        if(tradeItem == null)
-        {
-            msgTradeItemNotFound(itemID);
-            return;
-        }
-        tradeItem.unsubscribe();
+        StreamSystem.stopStream(marketPriceUpdateStreamID);
+        return true;
     }
 
 
-    public static void handlePacket(SyncBotSettingsPacket packet)
+
+
+    public CompletableFuture<CreateOrderRequest.OutputData> createLimitOrder(int bankAccountNr, long volume, long price)
     {
-        syncBotSettingsPacket = packet;
-        syncBotSettingsPacketChanged = true;
+        return createOrder(bankAccountNr, Order.Type.LIMIT, volume, price);
     }
-    public static boolean hasSyncBotSettingsPacketChanged()
+    public CompletableFuture<CreateOrderRequest.OutputData> createLimitBuyOrder(int bankAccountNr, long volume, long price)
     {
-        if(syncBotSettingsPacketChanged)
-        {
-            syncBotSettingsPacketChanged = false;
-            return true;
-        }
-        return false;
+        return createOrder(bankAccountNr, Order.Type.LIMIT, Math.max(0, volume), price);
     }
-    public static ServerVolatilityBot.Settings getBotSettings(String itemID)
+    public CompletableFuture<CreateOrderRequest.OutputData> createLimitSellOrder(int bankAccountNr, long volume, long price)
     {
-        if(syncBotSettingsPacket != null)
-        {
-            if(syncBotSettingsPacket.getItemID().equals(itemID))
-            {
-                return syncBotSettingsPacket.getSettings();
-            }
-        }
-        requestBotSettings(itemID);
-        return null;
+        return createOrder(bankAccountNr, Order.Type.LIMIT, Math.min(0, volume), price);
     }
-    public static void requestBotSettings(String itemID)
+    public CompletableFuture<CreateOrderRequest.OutputData> createMarketOrder(int bankAccountNr, long volume)
     {
-        RequestBotSettingsPacket.sendPacket(itemID);
+        return createOrder(bankAccountNr, Order.Type.MARKET, volume, 0);
     }
-    public static String getBotSettingsItemID()
+    public CompletableFuture<CreateOrderRequest.OutputData> createLimitBuyOrder(int bankAccountNr, long volume)
     {
-        if(syncBotSettingsPacket != null)
-        {
-            return syncBotSettingsPacket.getItemID();
-        }
-        return null;
+        return createOrder(bankAccountNr, Order.Type.MARKET, Math.max(0, volume), 0);
     }
-    public static boolean botExists()
+    public CompletableFuture<CreateOrderRequest.OutputData> createLimitSellOrder(int bankAccountNr, long volume)
     {
-        if(syncBotSettingsPacket != null)
-        {
-            return syncBotSettingsPacket.botExists();
-        }
-        return false;
-    }
-    public static UUID getBotUUID()
-    {
-        if(syncBotSettingsPacket != null)
-        {
-            return syncBotSettingsPacket.getBotUUID();
-        }
-        return null;
-    }
-    public static SyncBotSettingsPacket getSyncBotSettingsPacket()
-    {
-        return syncBotSettingsPacket;
+        return createOrder(bankAccountNr, Order.Type.MARKET, Math.min(0, volume), 0);
     }
 
-    private static void msgTradeItemNotFound(String itemID) {
-        StockMarketMod.LOGGER.warn("[CLIENT] Trade item not found: " + itemID);
+
+    public CompletableFuture<CreateOrderRequest.OutputData> createOrder(int bankAccountNr, Order.Type type, long volume, long price)
+    {
+        CreateOrderRequest.InputData inputData = new CreateOrderRequest.InputData(itemID, bankAccountNr, type, volume, price);
+        CompletableFuture<CreateOrderRequest.OutputData> future = new CompletableFuture<>();
+        BACKEND_INSTANCES.NETWORKING.CREATE_ORDER_REQUEST.sendRequestToServer(inputData).thenAccept(future::complete);
+        return future;
     }
 
-    public static ArrayList<String> getAvailableTradeItemIdList()
+
+
+    public CompletableFuture<ActiveOrdersRequest.OutputData> requestPendingOrders(int bankAccountNr)
     {
-        return new ArrayList<>(tradeItems.keySet());
+        return requestPendingOrders(bankAccountNr, null, 0, Long.MAX_VALUE);
+    }
+    public CompletableFuture<ActiveOrdersRequest.OutputData> requestPendingOrders(@NotNull UUID executorPlayerFilter)
+    {
+        return requestPendingOrders(-1, executorPlayerFilter, 0, Long.MAX_VALUE);
+    }
+    public CompletableFuture<ActiveOrdersRequest.OutputData> requestPendingOrders(long timeBegin, long timeEnd)
+    {
+        return requestPendingOrders(-1, null, timeBegin, timeEnd);
+    }
+    public CompletableFuture<ActiveOrdersRequest.OutputData> requestPendingOrders(@NotNull UUID executorPlayerFilter, long timeBegin, long timeEnd)
+    {
+        return requestPendingOrders(-1, executorPlayerFilter, timeBegin, timeEnd);
+    }
+    public CompletableFuture<ActiveOrdersRequest.OutputData> requestPendingOrders(int bankAccountNr, long timeBegin, long timeEnd)
+    {
+        return requestPendingOrders(bankAccountNr, null, timeBegin, timeEnd);
+    }
+
+    public CompletableFuture<ActiveOrdersRequest.OutputData> requestPendingOrders(int bankAccountNr,
+                                                                                  @Nullable UUID executorPlayerFilter,
+                                                                                  long timeBegin,
+                                                                                  long timeEnd)
+    {
+        ActiveOrdersRequest.InputData inp = new ActiveOrdersRequest.InputData(itemID, bankAccountNr, executorPlayerFilter, timeBegin, timeEnd);
+        CompletableFuture<ActiveOrdersRequest.OutputData> future = new CompletableFuture<>();
+        BACKEND_INSTANCES.NETWORKING.ACTIVE_ORDERS_REQUEST.sendRequestToServer(inp).thenAccept(future::complete);
+        return future;
+    }
+
+
+
+    @Override
+    public String toString()
+    {
+        return "Market:" + itemID + " Price:" + priceHistoryData.getCurrentMarketPrice();
+    }
+
+
+
+
+    protected void info(String message) {
+        BACKEND_INSTANCES.LOGGER.info("[Market:"+itemID+"]: "+message);
+    }
+    protected void error(String message) {
+        BACKEND_INSTANCES.LOGGER.error("[Market:"+itemID+"]: "+message);
+    }
+    protected void error(String message, Throwable throwable) {
+        BACKEND_INSTANCES.LOGGER.error("[Market:"+itemID+"]: "+message, throwable);
+    }
+    protected void warn(String message) {
+        BACKEND_INSTANCES.LOGGER.warn("[Market:"+itemID+"]: "+message);
+    }
+    protected void debug(String message) {
+        BACKEND_INSTANCES.LOGGER.debug("[Market:"+itemID+"]: "+message);
     }
 }

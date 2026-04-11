@@ -1,228 +1,140 @@
 package net.kroia.stockmarket.market.server;
 
-import net.kroia.banksystem.banking.bank.Bank;
-import net.kroia.modutilities.ServerSaveable;
-import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.StockMarketModSettings;
-import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
-import net.kroia.stockmarket.market.server.bot.ServerTradingBotFactory;
-import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
-import net.kroia.stockmarket.market.server.order.Order;
-import net.kroia.stockmarket.util.OrderbookVolume;
-import net.kroia.stockmarket.util.PriceHistory;
-import net.kroia.stockmarket.util.Timestamp;
-import net.minecraft.nbt.CompoundTag;
+import net.kroia.banksystem.util.ItemID;
+import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.data.table.MarketPriceManager;
+import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
-import java.util.UUID;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
-public class MarketManager implements ServerSaveable {
-    private String itemID;
-
-    private MatchingEngine matchingEngine;
-    private ServerTradingBot tradingBot;
-
-    private PriceHistory priceHistory;
-
-    public MarketManager(ServerTradeItem tradeItem, int initialPrice, PriceHistory history)
-    {
-        this.itemID = tradeItem.getItemID();
-        matchingEngine = new MatchingEngine(initialPrice, history);
-        priceHistory = history;
+public class MarketManager
+{
+    private static StockMarketModBackend.ServerInstances BACKEND_INSTANCES;
+    public static void setBackend(StockMarketModBackend.ServerInstances backend) {
+        BACKEND_INSTANCES = backend;
+        Market.setBackend(backend);
     }
 
-    public void clear()
+    private static final boolean ENABLE_DEBUG_PERFORMANCE = false;
+
+
+    private final Map<ItemID, Market> markets = new HashMap<>();
+    private long candleSaveTimer_intervalMs = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.CANDLE_TIME.get();
+    private long candleSaveTimer_lastMs = System.currentTimeMillis();
+    private final Random random = new Random();
+    private AtomicBoolean saveLock = new AtomicBoolean(false);
+    private ItemID tradingCurrencyID = null;
+
+    public MarketManager()
     {
-        if(tradingBot != null)
+
+    }
+
+
+    public Market createMarket(@NotNull ItemID itemID)
+    {
+        Market m = markets.get(itemID);
+        if (m == null)
         {
-            ServerTradingBot bot = tradingBot;
-            bot.clearOrders();
-            removeTradingBot();
+            m = new Market(itemID);
+            markets.put(itemID, m);
         }
-        cancelAllOrders();
+        return m;
+    }
+    public @Nullable Market getMarket(@NotNull ItemID itemID)
+    {
+        return markets.get(itemID);
     }
 
-    public void setTradingBot(ServerTradingBot bot)
+
+    public void update()
     {
-        if(!StockMarketModSettings.MarketBot.ENABLED)
+        for(Market m : markets.values())
         {
-            StockMarketMod.LOGGER.warn("[MarketManager] Trading bots are disabled");
+            // Create random movement for testing
+            long currentPrice = m.getCurrentMarketPrice();
+            long rand = (random.nextLong()%10);
+            currentPrice = Math.max(0, currentPrice + rand);
+            m.test_setCurrentMarketPrice(currentPrice);
+            m.update();
+        }
+
+        long time = System.currentTimeMillis();
+        if(time - candleSaveTimer_lastMs > candleSaveTimer_intervalMs)
+        {
+            candleSaveTimer_lastMs = time;
+            saveCandlesToSQL();
+        }
+    }
+
+    public ItemID getTradingCurrencyID()
+    {
+        if(tradingCurrencyID == null)
+        {
+            tradingCurrencyID = ItemID.getOrRegisterFromItemStackServerSide_direct(BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.CURRENCY.get());
+        }
+        return tradingCurrencyID;
+    }
+    public List<ItemID> getAvailableMarketIDs()
+    {
+        List<ItemID> itemIDs = new ArrayList<>();
+        for(Market m : markets.values())
+        {
+            itemIDs.add(m.getItemID());
+        }
+        return itemIDs;
+    }
+
+    private void saveCandlesToSQL()
+    {
+        if(!saveLock.compareAndSet(false, true))
+        {
+            warn("saveCandlesToSQL(): currently locked!");
             return;
         }
-        if(bot.getParent()!= null)
+        MarketPriceManager manager = BACKEND_INSTANCES.MARKET_PRICE_HISTORY_MANAGER;
+        long saveStartTime = System.nanoTime();
+        List<MarketPriceStruct> candles = new ArrayList<>();
+        for(Map.Entry<ItemID, Market> entry : markets.entrySet())
         {
-            bot.getParent().removeTradingBot();
+            candles.add(entry.getValue().getCurrentMarketPriceStructAndReset());
         }
-        // Check if bot aleady has a item bank
+        long gatheringCandlesTime = System.nanoTime() -saveStartTime;
+        if(ENABLE_DEBUG_PERFORMANCE)
+            info("Gathering time: "+gatheringCandlesTime/1000000.0 + "ms");
+        long finalSaveStartTime = System.nanoTime();
 
-        Bank itemBank = ServerMarket.getBotUser().getBank(itemID);
-        if(itemBank == null)
-        {
-            itemBank = ServerMarket.getBotUser().createItemBank(itemID, 0);
-        }
-        else {
-            if(bot instanceof ServerVolatilityBot volatilityBot)
-            {
-                ServerVolatilityBot.Settings settings = (ServerVolatilityBot.Settings) volatilityBot.getSettings();
-                if(settings != null)
-                {
-                    if(settings.targetItemBalance == 0)
-                    {
-                        settings.targetItemBalance = itemBank.getBalance()/2;
-                    }
-                }
+        manager.save(candles).thenRun(() -> {
+            if(ENABLE_DEBUG_PERFORMANCE) {
+                long finalSaveEndTime = System.nanoTime();
+                long writeTime = finalSaveEndTime - finalSaveStartTime;
+                info("Database write for " + candles.size() + " records took " + writeTime / 1000000.0 + " ms");
+                info("saveCandlesToSQL: took " + (double) (finalSaveEndTime - saveStartTime) / 1000000.0 + " ms");
             }
-        }
-        bot.setParent(this);
-        bot.setMatchingEngine(matchingEngine);
-        tradingBot = bot;
-    }
-    public void removeTradingBot()
-    {
-        if(tradingBot != null) {
-            tradingBot.setEnabled(false);
-            tradingBot.clearOrders();
-            tradingBot.setParent(null);
-            tradingBot.setMatchingEngine(null);
-
-        }
-        tradingBot = null;
-    }
-    public boolean hasTradingBot()
-    {
-        return tradingBot != null;
-    }
-    public ServerTradingBot getTradingBot()
-    {
-        return tradingBot;
-    }
-
-    public void setMarketOpen(boolean open)
-    {
-        matchingEngine.setMarketOpen(open);
-    }
-    public boolean isMarketOpen()
-    {
-        return matchingEngine.isMarketOpen();
-    }
-
-    public void setPriceHistory(PriceHistory priceHistory) {
-        this.priceHistory = priceHistory;
-    }
-    public void setItemID(String itemID) {
-        this.itemID = itemID;
-    }
-
-    public void addOrder(Order order)
-    {
-        StockMarketMod.LOGGER.info("Adding order: " + order.toString());
-        matchingEngine.addOrder(order);
-    }
-    public boolean cancelOrder(long orderID)
-    {
-        return matchingEngine.cancelOrder(orderID);
-    }
-
-    public void cancelAllOrders(UUID playerUUID)
-    {
-        matchingEngine.cancelAllOrders(playerUUID);
-    }
-    public void cancelAllOrders()
-    {
-        matchingEngine.cancelAllOrders();
-    }
-
-    public boolean changeOrderPrice(long orderID, int newPrice)
-    {
-        return matchingEngine.changeOrderPrice(orderID, newPrice);
-    }
-    public ArrayList<Order> getOrders()
-    {
-        return matchingEngine.getOrders();
-    }
-
-    public void getOrders(UUID playerUUID, ArrayList<Order> orders)
-    {
-        matchingEngine.getOrders(playerUUID, orders);
-    }
-
-    public String getItemID()
-    {
-        return itemID;
+            saveLock.set(false);
+        });
     }
 
 
-    public void shiftPriceHistory()
-    {
-        int currentPrice = matchingEngine.getPrice();
-        priceHistory.addPrice(currentPrice, currentPrice, currentPrice, new Timestamp());
+
+
+
+    protected void info(String message) {
+        BACKEND_INSTANCES.LOGGER.info("[MarketManager]: "+message);
     }
-
-    public PriceHistory getPriceHistory() {
-        return priceHistory;
+    protected void error(String message) {
+        BACKEND_INSTANCES.LOGGER.error("[MarketManager]: "+message);
     }
-
-    public int getLowPrice() {
-        return priceHistory.getLowPrice();
+    protected void error(String message, Throwable throwable) {
+        BACKEND_INSTANCES.LOGGER.error("[MarketManager]: "+message, throwable);
     }
-
-    public int getHighPrice() {
-        return priceHistory.getHighPrice();
+    protected void warn(String message) {
+        BACKEND_INSTANCES.LOGGER.warn("[MarketManager]: "+message);
     }
-
-    public int getCurrentPrice() {
-        return matchingEngine.getPrice();
-    }
-
-    public int getVolume() {
-        return matchingEngine.getTradeVolume();
-    }
-
-    public OrderbookVolume getOrderBookVolume(int tiles, int minPrice, int maxPrice)
-    {
-        return matchingEngine.getOrderBookVolume(tiles, minPrice, maxPrice);
-    }
-
-    @Override
-    public boolean save(CompoundTag tag) {
-        boolean success = true;
-        tag.putString("itemID", itemID);
-
-        CompoundTag matchingEngineTag = new CompoundTag();
-        success &= matchingEngine.save(matchingEngineTag);
-        tag.put("matchingEngine", matchingEngineTag);
-
-        CompoundTag botTag = new CompoundTag();
-        if(tradingBot != null)
-        {
-            success &= tradingBot.save(botTag);
-            tag.put("tradingBot", botTag);
-        }
-
-        return success;
-    }
-
-    @Override
-    public boolean load(CompoundTag tag) {
-        if(tag == null)
-            return false;
-        if(     !tag.contains("itemID") ||
-                !tag.contains("matchingEngine"))
-            return false;
-        boolean success = true;
-        itemID = tag.getString("itemID");
-
-        CompoundTag matchingEngineTag = tag.getCompound("matchingEngine");
-        success &= matchingEngine.load(matchingEngineTag);
-
-        if(tag.contains("tradingBot"))
-        {
-            CompoundTag tradingBotTag = tag.getCompound("tradingBot");
-            ServerTradingBot bot = ServerTradingBotFactory.loadFromTag(tradingBotTag);
-            if(bot != null)
-                setTradingBot(bot);
-        }
-
-        return !itemID.isEmpty() && success;
+    protected void debug(String message) {
+        BACKEND_INSTANCES.LOGGER.debug("[MarketManager]: "+message);
     }
 }

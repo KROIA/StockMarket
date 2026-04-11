@@ -1,18 +1,120 @@
 package net.kroia.stockmarket;
 
-import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.item.custom.money.MoneyItem;
-import net.kroia.stockmarket.market.server.bot.ServerTradingBotFactory;
-import net.kroia.stockmarket.util.StockMarketDataHandler;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
-public class StockMarketModSettings {
+import net.kroia.banksystem.item.BankSystemItems;
+import net.kroia.modutilities.setting.ModSettings;
+import net.kroia.modutilities.setting.Setting;
+import net.kroia.modutilities.setting.SettingsGroup;
+import net.kroia.modutilities.setting.parser.ItemStackJsonParser;
+import net.kroia.stockmarket.networking.packet.PlayerJoinSyncPacket;
+import net.kroia.stockmarket.util.ClientSettings;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.ItemStack;
+
+public class StockMarketModSettings extends ModSettings {
+
+    private static StockMarketModBackend.ServerInstances BACKEND_INSTANCES;
+    public static void setBackend(StockMarketModBackend.ServerInstances backend) {
+        BACKEND_INSTANCES = backend;
+    }
+
+    public final Utilities UTILITIES = createGroup(new Utilities());
+    public final Market MARKET = createGroup(new Market());
+    //public final Networking NETWORKING = createGroup(new Networking());
+
+    public StockMarketModSettings() {
+        super("StockMarketModSettings");
+    }
+
     public static void init()
     {
-        Market.init();
+      //  Market.init();
     }
-    public static final class UI
+
+    public static final class Utilities extends SettingsGroup
+    {
+        public final Setting<Long> SAVE_INTERVAL_MINUTES = registerSetting("SAVE_INTERVAL_MINUTES",5L, Long.class); // 5 minutes
+        public final Setting<Boolean> LOGGING_ENABLE_INFO = registerSetting("LOGGING_ENABLE_INFO",true, Boolean.class);
+        public final Setting<Boolean> LOGGING_ENABLE_WARNING = registerSetting("LOGGING_ENABLE_WARNING",true, Boolean.class);
+        public final Setting<Boolean> LOGGING_ENABLE_ERROR = registerSetting("LOGGING_ENABLE_ERROR",true, Boolean.class);
+        public final Setting<Boolean> LOGGING_ENABLE_DEBUG = registerSetting("LOGGING_ENABLE_DEBUG",false, Boolean.class);
+        public final Setting<Integer> ADMIN_PERMISSION_LEVEL = registerSetting("ADMIN_PERMISSION_LEVEL",2, Integer.class);
+
+        public Utilities() { super("Utilities"); }
+
+        public boolean playerIsAdmin(ServerPlayer player)
+        {
+            return player.hasPermissions(ADMIN_PERMISSION_LEVEL.get());
+        }
+    }
+    public static final class Player extends SettingsGroup
+    {
+        public final Setting<Float> STARTING_BALANCE = registerSetting("STARTING_BALANCE", 0.f, Float.class); // Starting balance for new players
+
+        public Player() { super("Player"); }
+    }
+
+
+    public static final class Market extends SettingsGroup
+    {
+        public final Setting<Integer> VIRTUAL_ORDERBOOK_DEFAULT_ARRAY_SIZE = registerSetting("VIRTUAL_ORDERBOOK_DEFAULT_ARRAY_SIZE", 100, Integer.class); // Starting balance for new players
+        public final Setting<ItemStack> CURRENCY = registerSetting("CURRENCY", BankSystemItems.MONEY.get().getDefaultInstance(), ItemStack.class, new ItemStackJsonParser()); // Starting balance for new players
+        public final Setting<Long> CANDLE_TIME = registerSetting("CANDLE_TIME", 10000L, Long.class); // Time interval of candle sticks in ms
+
+        public Market() { super("Market"); }
+    }
+
+
+    /*public static final class Networking extends SettingsGroup
+    {
+        public final Setting<Boolean> ENABLE_SERVER_SERVER_COMMUNICATION = registerSetting("ENABLE_SERVER_SERVER_COMMUNICATION", false, Boolean.class);
+        public final Setting<Boolean> IS_MASTER = registerSetting("IS_MASTER", false, Boolean.class);
+        public final Setting<Integer> MASTER_TCP_PORT = registerSetting("MASTER_TCP_PORT", 25575, Integer.class);
+        public final Setting<String> MASTER_IP = registerSetting("MASTER_IP", "127.0.0.1", String.class);
+        public final Setting<String> SLAVE_ID = registerSetting("SLAVE_ID", "server_a", String.class);
+        public final Setting<String> SHARED_SECRET =  registerSetting("SHARED_SECRET", "change-me-please", String.class);
+
+
+        public Networking() { super("Networking"); }
+    }*/
+
+
+    public ClientSettings getClientSettings()
+    {
+        ClientSettings settings = new ClientSettings();
+        settings.setCandleTimeMs(MARKET.CANDLE_TIME.get());
+
+        return settings;
+    }
+
+    /**
+     * ---------------------------------------------------------------------------------------
+     *                Utilities for creating and managing settings groups
+     * ---------------------------------------------------------------------------------------
+     */
+
+    @Override
+    public boolean saveSettings(String filePath) {
+        boolean success = super.saveSettings(filePath);
+        if (success) {
+            // todo: replace the below
+            //BACKEND_INSTANCES.SERVER_EVENTS.SETTINGS_SAVED_TO_FILE.notifyListeners();
+        }
+        return success;
+    }
+
+    @Override
+    public boolean loadSettings(String filePaht) {
+        boolean success = super.loadSettings(filePaht);
+        if (success) {
+            // todo: replace the below
+            //BACKEND_INSTANCES.SERVER_EVENTS.SETTINGS_LOADED_FROM_FILE.notifyListeners();
+        }
+        return success;
+    }
+
+
+
+   /* public static final class UI
     {
         public static final int PRICE_HISTORY_SIZE = 100;
         public static final int MAX_ORDERBOOK_TILES = 100;
@@ -141,6 +243,6 @@ public class StockMarketModSettings {
         {
             return getBotBuilder().get(item);
         }
-    }
+    }*/
 
 }

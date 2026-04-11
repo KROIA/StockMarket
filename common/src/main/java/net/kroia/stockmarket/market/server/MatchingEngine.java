@@ -1,521 +1,700 @@
 package net.kroia.stockmarket.market.server;
 
-import net.kroia.banksystem.banking.ServerBankManager;
-import net.kroia.banksystem.banking.bank.Bank;
-import net.kroia.modutilities.PlayerUtilities;
-import net.kroia.modutilities.ServerSaveable;
-import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.market.server.order.LimitOrder;
-import net.kroia.stockmarket.market.server.order.MarketOrder;
-import net.kroia.stockmarket.market.server.order.Order;
-import net.kroia.stockmarket.util.OrderbookVolume;
-import net.kroia.stockmarket.util.PriceHistory;
-import net.kroia.stockmarket.util.StockMarketTextMessages;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.ListTag;
-import net.minecraft.server.level.ServerPlayer;
 
-import java.util.ArrayList;
-import java.util.Comparator;
+import net.kroia.banksystem.api.bank.IServerBank;
+import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
+import net.kroia.banksystem.util.ItemID;
+import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.market.order.InterMarketOrder;
+import net.kroia.stockmarket.market.order.Order;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
 import java.util.PriorityQueue;
-import java.util.UUID;
+import java.util.function.Consumer;
 
-/*
-    * The MatchingEngine class is responsible for matching buy and sell orders.
- */
-public class MatchingEngine implements ServerSaveable {
-    private int price;
-    private int tradeVolume;
-
-    private boolean marketOpen = true;
-
-    // Create a sorted queue for buy and sell orders, sorted by price.
-    private final PriorityQueue<LimitOrder> limitBuyOrders = new PriorityQueue<>((o1, o2) -> Double.compare(o2.getPrice(), o1.getPrice()));
-    private final PriorityQueue<LimitOrder> limitSellOrders = new PriorityQueue<>(Comparator.comparingDouble(LimitOrder::getPrice));
-
-    private PriceHistory priceHistory;
-    public MatchingEngine(int initialPrice, PriceHistory priceHistory)
-    {
-        this.priceHistory = priceHistory;
-        this.price = initialPrice;
-        tradeVolume = 0;
+public class MatchingEngine
+{
+    private static StockMarketModBackend.ServerInstances BACKEND_INSTANCES;
+    public static void setBackend(StockMarketModBackend.ServerInstances backend) {
+        BACKEND_INSTANCES = backend;
     }
 
-    public void addOrder(Order order)
+    /** Tiny value-holder to return two banks together. */
+    private static final class BankPair
     {
-        if(order == null)
-            return;
-        if(!marketOpen && !order.isBot())
-        {
-            order.markAsInvalid(StockMarketTextMessages.getOrderInvalidReasonMarketClosedMessage());
-            return;
-        }
-        if(order.getAmount() == 0)
-        {
-            order.markAsProcessed();
-            return;
-        }
-        handleNewOrder(order);
+        final IServerBank itemBank;
+        final IServerBank moneyBank;
+        BankPair(IServerBank i, IServerBank m) { itemBank = i; moneyBank = m; }
     }
 
-    private void handleNewOrder(Order order)
+    private final ItemID itemID;
+    private final Orderbook orderbook;
+    private static final int TIMEOUT_COUNT = 10000;
+
+    private final PriorityQueue<Order> buyMarketOrders_inputBuffer;
+    private final PriorityQueue<Order> selMarketOrders_inputBuffer;
+    private final PriorityQueue<Order> buyLimitOrders_inputBuffer;
+    private final PriorityQueue<Order> sellLimitOrders_inputBuffer;
+    private final PriorityQueue<InterMarketOrder> interMarket_LimitBuyOrders_inputBuffer;
+    private final PriorityQueue<InterMarketOrder> interMarket_MarketBuyOrders_inputBuffer;
+
+    private final @NotNull Consumer<Order> consumedOrderCallback;
+    private final @NotNull Consumer<InterMarketOrder> consumedInterMarketOrderCallback;
+    private final @NotNull Consumer<Order> cancelOrderCallback;
+    private final @NotNull Consumer<InterMarketOrder> cancelInterMarketOrderCallback;
+
+    private final @NotNull Consumer<Long> priceChanged;
+
+
+    private final Orderbook.LongPair pair_cache =  new Orderbook.LongPair();
+    private long currentMarketPrice;
+
+
+    public MatchingEngine(ItemID itemID, Orderbook orderbook,
+                          PriorityQueue<Order> buyMarketOrders_inputBuffer,
+                          PriorityQueue<Order> selMarketOrders_inputBuffer,
+                          PriorityQueue<Order> buyLimitOrders_inputBuffer,
+                          PriorityQueue<Order> sellLimitOrders_inputBuffer,
+                          PriorityQueue<InterMarketOrder> interMarket_LimitBuyOrders_inputBuffer,
+                          PriorityQueue<InterMarketOrder> interMarket_MarketBuyOrders_inputBuffer,
+                          @NotNull Consumer<Order> consumedOrderCallback,
+                          @NotNull Consumer<InterMarketOrder> consumedInterMarketOrderCallback,
+                          @NotNull Consumer<Order> cancelOrderCallback,
+                          @NotNull Consumer<InterMarketOrder> cancelInterMarketOrderCallback,
+                          @NotNull Consumer<Long> priceChanged)
     {
-        if (order instanceof LimitOrder limitOrder)
+        this.itemID = itemID;
+        this.orderbook = orderbook;
+
+        this.buyMarketOrders_inputBuffer = buyMarketOrders_inputBuffer;
+        this.selMarketOrders_inputBuffer = selMarketOrders_inputBuffer;
+        this.buyLimitOrders_inputBuffer = buyLimitOrders_inputBuffer;
+        this.sellLimitOrders_inputBuffer = sellLimitOrders_inputBuffer;
+        this.interMarket_LimitBuyOrders_inputBuffer = interMarket_LimitBuyOrders_inputBuffer;
+        this.interMarket_MarketBuyOrders_inputBuffer = interMarket_MarketBuyOrders_inputBuffer;
+
+        this.consumedOrderCallback = consumedOrderCallback;
+        this.consumedInterMarketOrderCallback = consumedInterMarketOrderCallback;
+        this.cancelOrderCallback = cancelOrderCallback;
+        this.cancelInterMarketOrderCallback = cancelInterMarketOrderCallback;
+
+        this.priceChanged = priceChanged;
+    }
+
+
+
+    public void update(long currentMarketPrice)
+    {
+        this.currentMarketPrice = currentMarketPrice;
+
+        if(!buyLimitOrders_inputBuffer.isEmpty())
         {
-            if(!processLimitOrder(limitOrder))
+            for(Order order : buyLimitOrders_inputBuffer)
             {
-                if (limitOrder.isBuy())
-                {
-                    // Add the limit order to the buyOrders queue
-                    limitBuyOrders.add(limitOrder);
-                }
-                else
-                {
-                    // Add the limit order to the sellOrders queue
-                    limitSellOrders.add(limitOrder);
-                }
-                limitOrder.notifyPlayer();
+                processLimitOrder(order);
             }
-        } else if (order instanceof MarketOrder marketOrder) {
-            processMarketOrder(marketOrder);
-        } else {
-            throw new IllegalArgumentException("Invalid order type");
+            buyLimitOrders_inputBuffer.clear();
+        }
+        if(!sellLimitOrders_inputBuffer.isEmpty())
+        {
+            for(Order order : sellLimitOrders_inputBuffer)
+            {
+                processLimitOrder(order);
+            }
+            sellLimitOrders_inputBuffer.clear();
+        }
+        if(!selMarketOrders_inputBuffer.isEmpty())
+        {
+            for(Order order : selMarketOrders_inputBuffer)
+            {
+                processMarketOrder(order, 0, Long.MAX_VALUE);
+            }
+            selMarketOrders_inputBuffer.clear();
+        }
+        if(!buyMarketOrders_inputBuffer.isEmpty())
+        {
+            for(Order order : buyMarketOrders_inputBuffer)
+            {
+                processMarketOrder(order, 0, Long.MAX_VALUE);
+            }
+            buyMarketOrders_inputBuffer.clear();
+        }
+
+        priceChanged.accept(this.currentMarketPrice);
+    }
+
+    private void processLimitOrder(Order order)
+    {
+        if(order.isBuyOrder())
+        {
+            if(order.getStartPrice() < currentMarketPrice)
+            {
+                orderbook.putOrder(order);
+                return;
+            }
+
+        }
+        else
+        {
+            if(order.getStartPrice() > currentMarketPrice)
+            {
+                orderbook.putOrder(order);
+                return;
+            }
+        }
+        processMarketOrder(order, order.getStartPrice(), order.getStartPrice());
+        if(!order.isFilled())
+        {
+            orderbook.putOrder(order);
         }
     }
 
-    public ArrayList<Order> getOrders()
-    {
-        ArrayList<Order> orders = new ArrayList<>();
-        orders.addAll(limitBuyOrders);
-        orders.addAll(limitSellOrders);
-        return orders;
-    }
+    //private void processInterMarketLimitOrder(InterMarketOrder order)
+    //{
+    //
+    //}
 
-    public void getOrders(UUID playerUUID, ArrayList<Order> orders)
-    {
-        for(LimitOrder order : limitBuyOrders)
-        {
-            if(order.getPlayerUUID().equals(playerUUID))
-                orders.add(order);
-        }
-        for(LimitOrder order : limitSellOrders)
-        {
-            if(order.getPlayerUUID().equals(playerUUID))
-                orders.add(order);
-        }
-    }
-    public PriorityQueue<LimitOrder> getBuyOrders()
-    {
-        return limitBuyOrders;
-    }
-    public PriorityQueue<LimitOrder> getSellOrders()
-    {
-        return limitSellOrders;
-    }
 
     /**
-     * Processes a market order by filling it with the best available limit orders.
-     * @param marketOrder The market order to process.
-     * @return true if the market order has been fully processed, false otherwise.
+     * Executes a market order against the order book.
+     *
+     * Sign convention (preserved from original):
+     *   order.getRemainingVolume() < 0  →  SELL  (player gives items, receives money)
+     *   order.getRemainingVolume() > 0  →  BUY   (player gives money, receives items)
+     *
+     * currentMarketPrice is mutable class-level state; it walks down on SELL, up on BUY.
+     *
      */
-    private boolean processMarketOrder(MarketOrder marketOrder)
+    private void processMarketOrder(Order order, long minAcceptedPrice, long maxAcceptedPrice)
     {
-        PriorityQueue<LimitOrder> limitOrders = marketOrder.isBuy() ? limitSellOrders : limitBuyOrders;
-        ArrayList<LimitOrder> toRemove = new ArrayList<>();
+        // ── Resolve the submitting player's bank accounts ──────────────────────
+        IServerBankAccount account = getBankAccount(order.getBankAccountNr());
+        if (account == null) { orderCanceled(order); return; }
 
-        int fillVolume = Math.abs(marketOrder.getAmount());
-        for(LimitOrder limitOrder : limitOrders)
-        {
-            int filledVolume = TransactionEngine.fill(marketOrder, limitOrder, limitOrder.getPrice());
+        IServerBank itemBank  = account.getBank(itemID);
+        IServerBank moneyBank = account.getBank(BACKEND_INSTANCES.MARKET_MANAGER.getTradingCurrencyID());
+        if (itemBank == null || moneyBank == null) { orderCanceled(order); return; }
 
-            if(limitOrder.isFilled() || limitOrder.getStatus() == Order.Status.CANCELLED || limitOrder.getStatus() == Order.Status.INVALID)
-                toRemove.add(limitOrder);
+        long orderVolume = order.getRemainingVolume();
 
-            if(marketOrder.getStatus() == Order.Status.INVALID || marketOrder.getStatus() == Order.Status.CANCELLED)
-                break;
-
-            if(filledVolume != 0) {
-                setPrice(limitOrder.getPrice());
-            }
-
-            fillVolume -= filledVolume;
-
-            if(fillVolume <= 0)
-            {
-                if(fillVolume<0)
-                {
-                    limitOrders.removeAll(toRemove);
-                    StockMarketMod.LOGGER.error("Market order overfilled: "+marketOrder);
-                }
-                break;
-            }
-        }
-        limitOrders.removeAll(toRemove);
-        if(fillVolume != 0)
-        {
-            marketOrder.markAsInvalid(StockMarketTextMessages.getOrderInvalidReasonOrdersToFillTransactionMessage(marketOrder.isBuy()));
-            return false;
-        }
-        return true;
+        // ── Route by direction ─────────────────────────────────────────────────
+        if (orderVolume < 0)
+            processSell(order, orderVolume, itemBank, moneyBank, minAcceptedPrice);
+        else
+            processBuy(order, orderVolume, itemBank, moneyBank, maxAcceptedPrice);
     }
 
+// ═══════════════════════════════════════════════════════════════════════════
+//  SELL
+// ═══════════════════════════════════════════════════════════════════════════
 
-    private boolean processLimitOrder(LimitOrder limitOrder)
+    private void processSell(Order order, long orderVolume, IServerBank itemBank, IServerBank moneyBank, long minimalAcceptedPrice)
     {
-        // Process the limit order
-        int fillVolume = Math.abs(limitOrder.getAmount()-limitOrder.getFilledAmount());
-        PriorityQueue<LimitOrder> limitOrders = limitOrder.isBuy() ? limitSellOrders : limitBuyOrders;
-        ArrayList<LimitOrder> toRemove = new ArrayList<>();
+        // Cap sell volume to what the player actually holds
+        long available = itemBank.getTotalBalance();
+        if (available < -orderVolume)
+            orderVolume = -available;                         // still negative
 
-        for(LimitOrder otherOrder : limitOrders)
+        // Quick check: is there enough depth to fill at all?
+        //if (!orderbook.getPriceWhenConsumingVolume(orderVolume, pair_cache)) return;
+
+        long itemDelta  = 0;   // items leaving seller's account  (will be negative)
+        long moneyDelta = 0;   // money entering seller's account (will be positive)
+
+        // ── Iterate real BUY order in the matchable price range ──────────────
+        PriorityQueue<Order> buyOrders = orderbook.getBuyLimitOrders();
+
+        for (Order buyOrder : buyOrders)
         {
-            LimitOrder fillWith = null;
-            if(otherOrder.getPrice() == limitOrder.getPrice())
+            // Fill any virtual volume that sits above the buy order's price
+            long[] result = drainVirtualSell(orderVolume, itemDelta, moneyDelta, Math.max(minimalAcceptedPrice, buyOrder.getStartPrice()));
+
+            order.edit(result[1] - itemDelta, result[2] - moneyDelta);
+
+            orderVolume = result[0];
+            itemDelta   = result[1];
+            moneyDelta  = result[2];
+
+            if (orderVolume >= 0 || (currentMarketPrice <= minimalAcceptedPrice && buyOrder.getStartPrice() != minimalAcceptedPrice))
             {
-                fillWith = otherOrder;
+                commitSell(itemBank, moneyBank, itemDelta, moneyDelta, order);
+                return;
+            }
+
+            // ── Match against this real buy order ─────────────────────────────
+            long fillPotential = buyOrder.getRemainingVolume(); // positive
+            if(fillPotential > -orderVolume)
+                fillPotential = -orderVolume;
+
+            if (buyOrder.isPlayerOrder())
+            {
+                // Resolve counterparty accounts
+                BankPair other = resolveCounterpartyBanks(buyOrder);
+                if (other == null)
+                {
+                    orderbook.removeOrder(buyOrder);
+                    orderCanceled(buyOrder);
+                    continue;
+                }
+
+                // Cap fill to what the buyer can actually afford
+                long buyerFunds = other.moneyBank.getTotalBalance();
+                long maxAffordable = buyerFunds / buyOrder.getStartPrice();
+                if (maxAffordable < fillPotential)
+                {
+                    fillPotential = maxAffordable;    // partial – buyer is broke
+                    orderbook.removeOrder(buyOrder);
+                    orderCanceled(buyOrder);          // cancel remainder of buy order
+                }
+
+                long cost = fillPotential * buyOrder.getStartPrice();
+                buyOrder.edit(fillPotential, -cost);
+                order.edit(-fillPotential, cost);
+                other.itemBank.deposit(fillPotential);
+                other.moneyBank.withdrawLockedPrefered(-cost);
+                orderVolume += fillPotential;
+                itemDelta   -= fillPotential;
+                moneyDelta  += cost;
+                currentMarketPrice  = buyOrder.getStartPrice();
+
+                if (buyOrder.isFilled()) {
+                    orderbook.removeOrder(buyOrder);
+                    orderConsumed(buyOrder);
+                }
             }
             else
             {
-                if(limitOrder.isBuy() && limitOrder.getPrice() > otherOrder.getPrice())
+                // Bot / virtual limit order — no counterparty account needed
+                long cost = fillPotential * buyOrder.getStartPrice();
+                buyOrder.edit(fillPotential, -cost);
+                order.edit(-fillPotential, cost);
+                orderVolume += fillPotential;
+                itemDelta   -= fillPotential;
+                moneyDelta  += cost;
+                currentMarketPrice  = buyOrder.getStartPrice();
+                if (buyOrder.isFilled()) {
+                    orderbook.removeOrder(buyOrder);
+                    orderConsumed(buyOrder);
+                }
+            }
+
+            if (orderVolume >= 0)
+            {
+                commitSell(itemBank, moneyBank, itemDelta, moneyDelta, order);
+                return;
+            }
+        }
+
+        // ── Real order exhausted — drain remaining virtual depth ─────────────
+        long[] result = drainVirtualSell(orderVolume, itemDelta, moneyDelta, minimalAcceptedPrice);
+
+        order.edit(result[1] - itemDelta, result[2] - moneyDelta);
+        orderVolume = result[0];
+        itemDelta   = result[1];
+        moneyDelta  = result[2];
+
+
+        commitSell(itemBank, moneyBank, itemDelta, moneyDelta, order);
+        orderbook.setCurrentMarketPrice(currentMarketPrice);
+    }
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  BUY
+// ═══════════════════════════════════════════════════════════════════════════
+
+    private void processBuy(Order order, long orderVolume, IServerBank itemBank, IServerBank moneyBank, long maximalAcceptedPrice)
+    {
+        // Cap buy volume to what the player can afford at the current market price.
+        // This is a conservative upper bound; actual cost may be lower if fills happen
+        // at cheaper ask prices. Any overshoot is harmless — the loop stops when
+        // orderVolume reaches 0.
+        long availableFunds = moneyBank.getTotalBalance();
+        long maxAffordable  = (currentMarketPrice > 0) ? availableFunds / currentMarketPrice : orderVolume;
+        if (maxAffordable < orderVolume)
+            orderVolume = maxAffordable;                      // still positive
+
+        // Quick check: is there enough depth to fill at all?
+        //if (!orderbook.getPriceWhenConsumingVolume(orderVolume, pair_cache)) return;
+
+        long itemDelta  = 0;   // items entering buyer's account  (will be positive)
+        long moneyDelta = 0;   // money leaving  buyer's account  (will be negative)
+
+        // ── Iterate real SELL order in the matchable price range ─────────────
+        PriorityQueue<Order> sellOrders = orderbook.getSellLimitOrders();
+
+        for (Order sellOrder : sellOrders)
+        {
+            // Fill any virtual volume that sits below the sell order's price
+            long[] result = drainVirtualBuy(orderVolume, itemDelta, moneyDelta,
+                    Math.min(maximalAcceptedPrice, sellOrder.getStartPrice()), availableFunds);
+
+            order.edit(result[1] - itemDelta, result[2] - moneyDelta);
+
+            orderVolume    = result[0];
+            itemDelta      = result[1];
+            moneyDelta     = result[2];
+            availableFunds = result[3];
+
+
+
+            if (orderVolume <= 0 || (currentMarketPrice >= maximalAcceptedPrice && sellOrder.getStartPrice() != maximalAcceptedPrice))
+            {
+                commitBuy(itemBank, moneyBank, itemDelta, moneyDelta, order);
+                return;
+            }
+
+            // ── Match against this real sell order ────────────────────────────
+            long fillPotential = sellOrder.getRemainingVolume(); // negative
+            if (-fillPotential > orderVolume)
+                fillPotential = -orderVolume;
+
+            if (sellOrder.isPlayerOrder())
+            {
+                // Resolve counterparty (seller) accounts
+                BankPair other = resolveCounterpartyBanks(sellOrder);
+                if (other == null)
                 {
-                    fillWith = otherOrder;
+                    orderbook.removeOrder(sellOrder);
+                    orderCanceled(sellOrder);
+                    continue;
                 }
-                else if(limitOrder.isSell() && limitOrder.getPrice() < otherOrder.getPrice())
+
+                // Cap fill to what the seller actually has in stock
+                long sellerStock = other.itemBank.getTotalBalance();
+                if (sellerStock < -fillPotential)
                 {
-                    fillWith = otherOrder;
+                    fillPotential = -sellerStock;              // partial – seller is out of stock
+                    orderbook.removeOrder(sellOrder);
+                    orderCanceled(sellOrder);                 // cancel remainder of sell order
                 }
-            }
-            if(fillWith == null)
-                continue;
 
-            int filledVolume = TransactionEngine.fill(limitOrder, fillWith, fillWith.getPrice());
-            if(fillWith.isFilled() || fillWith.getStatus() == Order.Status.CANCELLED || fillWith.getStatus() == Order.Status.INVALID)
-                toRemove.add(fillWith);
-            if(filledVolume != 0)
-            {
-                setPrice(fillWith.getPrice());
-            }
-            fillVolume -= filledVolume;
-
-            if(fillVolume <= 0)
-            {
-                if(fillVolume<0)
+                // Cap fill to what the buyer can still afford
+                long costFull = fillPotential * sellOrder.getStartPrice();
+                if (availableFunds < -costFull)
                 {
-                    limitOrders.removeAll(toRemove);
-                    StockMarketMod.LOGGER.error("Limit order overfilled: "+limitOrder);
+                    fillPotential  = -availableFunds / sellOrder.getStartPrice();
+                    costFull       = fillPotential * sellOrder.getStartPrice();
+                    // Buyer exhausted — order will finish after this fill
                 }
-                break;
-            }
-        }
-        limitOrders.removeAll(toRemove);
-        return fillVolume == 0;
-    }
 
-    public ArrayList<LimitOrder> getLimitBuyOrders() {
-        return new ArrayList<>(limitBuyOrders);
-    }
-    public ArrayList<LimitOrder> getLimitSellOrders() {
-        return new ArrayList<>(limitSellOrders);
-    }
+                if (fillPotential >= 0)
+                    break;  // buyer is completely broke, stop
 
-    private void setPrice(int price)
-    {
-        this.price = price;
-        priceHistory.setCurrentPrice(price);
-    }
+                long cost = fillPotential * sellOrder.getStartPrice();
+                sellOrder.edit(fillPotential, -cost);
+                order.edit(-fillPotential, cost);
+                other.itemBank.withdrawLockedPrefered(-fillPotential);
+                other.moneyBank.deposit(-cost);
+                orderVolume    += fillPotential;
+                itemDelta      -= fillPotential;
+                moneyDelta     += cost;
+                availableFunds += cost;
+                currentMarketPrice  = sellOrder.getStartPrice();
 
-    public int getPrice() {
-        return price;
-    }
-    public int getTradeVolume() {
-        return tradeVolume;
-    }
-    public boolean isMarketOpen() {
-        return marketOpen;
-    }
-    public void setMarketOpen(boolean marketOpen) {
-        this.marketOpen = marketOpen;
-    }
-    public int resetTradeVolume() {
-        int volume = tradeVolume;
-        tradeVolume = 0;
-        return volume;
-    }
-
-    public boolean cancelOrder(long orderID)
-    {
-        for(LimitOrder order : limitBuyOrders)
-        {
-            if(order.getOrderID() == orderID)
-            {
-                order.markAsCancelled();
-                limitBuyOrders.remove(order);
-                return true;
-            }
-        }
-        for(LimitOrder order : limitSellOrders)
-        {
-            if(order.getOrderID() == orderID)
-            {
-                order.markAsCancelled();
-                limitSellOrders.remove(order);
-                return true;
-            }
-        }
-        return false;
-    }
-    public void cancelAllOrders(UUID playerOwner)
-    {
-        ArrayList<LimitOrder> toRemove = new ArrayList<>();
-        for(LimitOrder order : limitBuyOrders)
-        {
-            if(order.getPlayerUUID().equals(playerOwner))
-            {
-                order.markAsCancelled();
-                toRemove.add(order);
-            }
-        }
-        limitBuyOrders.removeAll(toRemove);
-        toRemove.clear();
-        for(LimitOrder order : limitSellOrders)
-        {
-            if(order.getPlayerUUID().equals(playerOwner))
-            {
-                order.markAsCancelled();
-                toRemove.add(order);
-            }
-        }
-        limitSellOrders.removeAll(toRemove);
-    }
-    public void cancelAllOrders()
-    {
-        for(LimitOrder order : limitBuyOrders)
-        {
-            order.markAsCancelled();
-        }
-        limitBuyOrders.clear();
-        for(LimitOrder order : limitSellOrders)
-        {
-            order.markAsCancelled();
-        }
-        limitSellOrders.clear();
-    }
-
-    public boolean changeOrderPrice(long orderID, int newPrice)
-    {
-        if(newPrice < 0)
-            newPrice = 0;
-        LimitOrder targetOrder = null;
-        for(LimitOrder order : limitBuyOrders)
-        {
-            if(order.getOrderID() == orderID)
-            {
-                targetOrder = order;
-                break;
-            }
-        }
-        if(targetOrder == null) {
-            for (LimitOrder order : limitSellOrders) {
-                if (order.getOrderID() == orderID) {
-                    targetOrder = order;
-                    break;
+                if (sellOrder.isFilled()) {
+                    orderbook.removeOrder(sellOrder);
+                    orderConsumed(sellOrder);
                 }
             }
-        }
-        if(targetOrder == null)
-            return false;
+            else
+            {
+                // Bot / virtual limit order — no counterparty account needed
+                // Still cap to buyer's remaining funds
+                long costFull = fillPotential * sellOrder.getStartPrice();
+                if (availableFunds < -costFull)
+                    fillPotential = -availableFunds / sellOrder.getStartPrice();
 
+                if (fillPotential >= 0) break;
 
+                long cost = fillPotential * sellOrder.getStartPrice();
+                sellOrder.edit(fillPotential, -cost);
+                order.edit(-fillPotential, cost);
+                orderVolume    += fillPotential;
+                itemDelta      -= fillPotential;
+                moneyDelta     += cost;
+                availableFunds += cost;
+                currentMarketPrice  = sellOrder.getStartPrice();
 
-        int toFillAmount = targetOrder.getAmount()-targetOrder.getFilledAmount();
-        ServerPlayer player = PlayerUtilities.getOnlinePlayer(targetOrder.getPlayerUUID());
-        boolean canBeMoved = false;
-        if(targetOrder.isBuy())
-        {
-            int toFreeAmount = toFillAmount * targetOrder.getPrice();
-            Bank moneyBank = ServerBankManager.getUser(targetOrder.getPlayerUUID()).getMoneyBank();
-            canBeMoved = moneyBank.getTotalBalance()-toFreeAmount >= 0;
-        }
-        else
-        {
-            Bank itemBank = ServerBankManager.getUser(targetOrder.getPlayerUUID()).getBank(targetOrder.getItemID());
-            canBeMoved = itemBank.getTotalBalance()-toFillAmount >= 0;
-        }
-
-        if(canBeMoved && player != null)
-        {
-            cancelOrder(orderID);
-            LimitOrder newOrder = LimitOrder.create(player, targetOrder.getItemID(), targetOrder.getAmount(), newPrice, targetOrder.getFilledAmount());
-            if(newOrder != null) {
-                addOrder(newOrder);
-                return true;
+                if (sellOrder.isFilled()) {
+                    orderbook.removeOrder(sellOrder);
+                    orderConsumed(sellOrder);
+                }
             }
-            else {
-                LimitOrder oldOrder = LimitOrder.create(player, targetOrder.getItemID(), targetOrder.getAmount(), targetOrder.getPrice(), targetOrder.getFilledAmount());
-                if(oldOrder != null)
-                    addOrder(oldOrder);
-                return false;
+
+            if (orderVolume <= 0)
+            {
+                commitBuy(itemBank, moneyBank, itemDelta, moneyDelta, order);
+                //orderbook.setCurrentMarketPrice(currentMarketPrice);
+                return;
             }
         }
-        return false;
-    }
 
-    public boolean removeOrder_internal(LimitOrder toRemove)
-    {
-        return limitBuyOrders.remove(toRemove) || limitSellOrders.remove(toRemove);
-    }
-    public boolean removeOrder_internal(ArrayList<LimitOrder> orders)
-    {
-        return limitBuyOrders.removeAll(orders) || limitSellOrders.removeAll(orders);
-    }
-    public boolean removeSellOrder_internal(ArrayList<LimitOrder> orders)
-    {
-        return limitSellOrders.removeAll(orders);
-    }
-    public boolean removeBuyOrder_internal(ArrayList<LimitOrder> orders)
-    {
-        return limitBuyOrders.removeAll(orders);
+        // ── Real order exhausted — drain remaining virtual depth ─────────────
+        long[] result = drainVirtualBuy(orderVolume, itemDelta, moneyDelta,
+                maximalAcceptedPrice, availableFunds);
+
+        order.edit(result[1] - itemDelta, result[2] - moneyDelta);
+        orderVolume = result[0];
+        itemDelta   = result[1];
+        moneyDelta  = result[2];
+
+        commitBuy(itemBank, moneyBank, itemDelta, moneyDelta, order);
+        orderbook.setCurrentMarketPrice(currentMarketPrice);
     }
 
 
-    public String toString()
-    {
-        return "MatchingEngine{ Price: " + price + " TradeVolume: " + tradeVolume +
-                "Sell Orders: "+ limitSellOrders.size()+" Buy Orders: "+ limitBuyOrders.size()+" }";
-    }
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Shared helpers
+// ═══════════════════════════════════════════════════════════════════════════
 
     /**
-     * Returns a volume heatmap of the order book in the given price range.
-     * The volume is divided into the given number of tiles.
-     * @param tiles The number of tiles to divide the price range into.
-     * @param minPrice The minimum price of the heatmap.
-     * @param maxPrice The maximum price of the heatmap.
-     * @return An array of integers representing the volume in each tile.
+     * Walk currentMarketPrice downward, consuming virtual volume at each step,
+     * until the remaining sell volume reaches 0 or price hits {@code stopPrice}.
+     *
+     * @param orderVolume  current remaining volume (negative = still needs filling)
+     * @param itemDelta    accumulated item delta so far
+     * @param moneyDelta   accumulated money delta so far
+     * @param stopPrice    do not go below this price (exclusive lower bound)
+     * @return             long[3] = { orderVolume, itemDelta, moneyDelta }
      */
-    public OrderbookVolume getOrderBookVolume(int tiles, int minPrice, int maxPrice)
+    private long[] drainVirtualSell(long orderVolume, long itemDelta, long moneyDelta, long stopPrice)
     {
-        OrderbookVolume orderbookVolume = new OrderbookVolume(tiles, minPrice, maxPrice);
-        int priceRange = maxPrice - minPrice;
-        float priceStep = (float)priceRange / (float)tiles;
-        int[] volume = new int[tiles];
-        for(LimitOrder order : limitBuyOrders)
+        long nextExecutedPrice = currentMarketPrice;
+        long timeout = TIMEOUT_COUNT;
+        while (orderVolume < 0 && nextExecutedPrice >= stopPrice)
         {
-            int index = (int)((float)(order.getPrice() - minPrice) / priceStep);
-            if(index >= 0 && index < tiles)
-                volume[index] += order.getAmount()-order.getFilledAmount();
-        }
-        for(LimitOrder order : limitSellOrders)
-        {
-            int index = (int)((float)(order.getPrice() - minPrice) / priceStep);
-            if(index >= 0 && index < tiles)
-                volume[index] += order.getAmount()-order.getFilledAmount();
-        }
-        orderbookVolume.setVolume(volume);
-        return orderbookVolume;
-    }
-
-    public int getVolume(int price)
-    {
-        int volume = 0;
-        if(price < this.price)
-        {
-            for(LimitOrder order : limitBuyOrders)
+            long virtualVol = orderbook.getVirtualVolumeRounded(nextExecutedPrice);
+            if (virtualVol > 0)
             {
-                if(order.getPrice() == price)
-                    volume += order.getAmount()-order.getFilledAmount();
+                long filled = orderbook.fillVirtual(nextExecutedPrice, orderVolume);
+                itemDelta  += filled;
+                moneyDelta -= nextExecutedPrice * filled;
+                orderVolume -= filled;
+                if(filled != 0)
+                {
+                    currentMarketPrice = nextExecutedPrice;
+                }
+                // If we emptied this price level, step down
+                if (virtualVol + filled == 0 && orderVolume != 0)
+                    nextExecutedPrice -= 1;
+            }
+            else
+            {
+                nextExecutedPrice -= 1;
+            }
+
+            if (nextExecutedPrice <= 0)
+            {
+                nextExecutedPrice = 0;
+                break;
+            }
+            timeout--;
+            if(timeout <= 0)
+            {
+                // timeout
+                break;
             }
         }
-        else
+        orderbook.setCurrentMarketPrice(currentMarketPrice);
+        return new long[]{ orderVolume, itemDelta, moneyDelta };
+    }
+    /**
+     * Walk currentMarketPrice upward, consuming virtual volume at each step,
+     * until the remaining buy volume reaches 0, price hits {@code stopPrice},
+     * or the buyer runs out of funds.
+     *
+     * @param orderVolume    current remaining volume (positive = still needs filling)
+     * @param itemDelta      accumulated item delta so far
+     * @param moneyDelta     accumulated money delta so far  (negative, growing)
+     * @param stopPrice      do not go above this price (exclusive upper bound)
+     * @param availableFunds buyer's remaining spendable balance
+     * @return               long[4] = { orderVolume, itemDelta, moneyDelta, availableFunds }
+     */
+    private long[] drainVirtualBuy(long orderVolume, long itemDelta, long moneyDelta,
+                                   long stopPrice, long availableFunds)
+    {
+        long nextExecutedPrice = currentMarketPrice;
+        long timeout = TIMEOUT_COUNT;
+        while (orderVolume > 0 && nextExecutedPrice <= stopPrice)
         {
-            for(LimitOrder order : limitSellOrders)
+            long virtualVol = orderbook.getVirtualVolumeRounded(nextExecutedPrice);
+            if (virtualVol < 0)
             {
-                if(order.getPrice() == price)
-                    volume += order.getAmount()-order.getFilledAmount();
+                // Also cap to what the buyer can afford at this price level
+                long maxByFunds = (nextExecutedPrice > 0)
+                        ? availableFunds / nextExecutedPrice
+                        : orderVolume;
+                long wantToFill = Math.min(orderVolume, maxByFunds);
+
+                if (wantToFill <= 0)
+                    break;   // buyer is broke
+
+                long filled = orderbook.fillVirtual(nextExecutedPrice, wantToFill);
+                long cost   = nextExecutedPrice * filled;
+                itemDelta      += filled;
+                moneyDelta     -= cost;
+                availableFunds -= cost;
+                orderVolume    -= filled;
+                if(filled != 0)
+                {
+                    currentMarketPrice = nextExecutedPrice;
+                }
+
+                // If we emptied this price level, step up
+                if (virtualVol + filled == 0 && orderVolume != 0)
+                    nextExecutedPrice += 1;
+            }
+            else
+            {
+                nextExecutedPrice += 1;
+            }
+            timeout--;
+            if(timeout <= 0)
+            {
+                // timeout
+                break;
             }
         }
-        return volume;
+        orderbook.setCurrentMarketPrice(currentMarketPrice);
+        return new long[]{ orderVolume, itemDelta, moneyDelta, availableFunds };
     }
-    public int getVolume(int minPrice, int maxPrice)
+
+
+    /** Commit a completed (or partially completed) SELL and fire orderConsumed. */
+    private void commitSell(IServerBank itemBank, IServerBank moneyBank,
+                            long itemDelta, long moneyDelta, Order order)
     {
-        int volume = 0;
-        for(LimitOrder order : limitBuyOrders)
-        {
-            if(order.getPrice() >= minPrice && order.getPrice() <= maxPrice)
-                volume += order.getAmount()-order.getFilledAmount();
-        }
-        for(LimitOrder order : limitSellOrders)
-        {
-            if(order.getPrice() >= minPrice && order.getPrice() <= maxPrice)
-                volume += order.getAmount()-order.getFilledAmount();
-        }
-        return volume;
-    }
-
-
-    @Override
-    public boolean save(CompoundTag tag) {
-        boolean success = true;
-        ListTag buyOrdersList = new ListTag();
-        ListTag sellOrdersList = new ListTag();
-        for(LimitOrder order : limitBuyOrders)
-        {
-            CompoundTag orderTag = new CompoundTag();
-            success &= order.save(orderTag);
-            buyOrdersList.add(orderTag);
-        }
-
-        for(LimitOrder order : limitSellOrders)
-        {
-            CompoundTag orderTag = new CompoundTag();
-            success &= order.save(orderTag);
-            sellOrdersList.add(orderTag);
-        }
-
-        tag.putInt("price", price);
-        tag.putInt("trade_volume", tradeVolume);
-        tag.put("buy_orders", buyOrdersList);
-        tag.put("sell_orders", sellOrdersList);
-        tag.putBoolean("market_open", marketOpen);
-        return success;
-    }
-
-    @Override
-    public boolean load(CompoundTag tag) {
-        if(tag == null)
-            return false;
-        if(     !tag.contains("price") ||
-                !tag.contains("trade_volume") ||
-                !tag.contains("buy_orders") ||
-                !tag.contains("sell_orders"))
-            return false;
-        boolean success = true;
-        price = tag.getInt("price");
-        tradeVolume = tag.getInt("trade_volume");
-        ListTag buyOrdersList = tag.getList("buy_orders", 10);
-        ListTag sellOrdersList = tag.getList("sell_orders", 10);
-        if(tag.contains("market_open"))
-            marketOpen = tag.getBoolean("market_open");
+        itemBank.withdrawLockedPrefered(-itemDelta);  // itemDelta is negative → withdraw positive
+        moneyBank.deposit(moneyDelta);
+        if(order.isFilled())
+            orderConsumed(order);
         else
-            marketOpen = true;
-        for(int i = 0; i < buyOrdersList.size(); i++)
         {
-            CompoundTag orderTag = buyOrdersList.getCompound(i);
-            LimitOrder order = LimitOrder.loadFromTag(orderTag);
-            if(order == null)
-                success = false;
-            else
-                limitBuyOrders.add(order);
+            if(order.isMarketOrder())
+                orderCanceled(order);
         }
+    }
 
-        for(int i = 0; i < sellOrdersList.size(); i++)
+    /** Commit a completed (or partially completed) BUY and fire orderConsumed. */
+    private void commitBuy(IServerBank itemBank, IServerBank moneyBank,
+                           long itemDelta, long moneyDelta, Order order)
+    {
+        moneyBank.withdrawLockedPrefered(-moneyDelta);  // moneyDelta is negative → withdraw positive
+        itemBank.deposit(itemDelta);
+        if(order.isFilled())
+            orderConsumed(order);
+        else
         {
-            CompoundTag orderTag = sellOrdersList.getCompound(i);
-            LimitOrder order = LimitOrder.loadFromTag(orderTag);
-            if(order == null)
-                success = false;
-            else
-                limitSellOrders.add(order);
+            if(order.isMarketOrder())
+                orderCanceled(order);
         }
-        return success;
+    }
+
+    /** Looks up item + money bank for a counterparty order. Returns null if unavailable. */
+    private BankPair resolveCounterpartyBanks(Order counterOrder)
+    {
+        IServerBankAccount acct = getBankAccount(counterOrder.getBankAccountNr());
+        if (acct == null) return null;
+        IServerBank ib = acct.getBank(itemID);
+        IServerBank mb = acct.getBank(BACKEND_INSTANCES.MARKET_MANAGER.getTradingCurrencyID());
+        return (ib == null || mb == null) ? null : new BankPair(ib, mb);
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    @Nullable IServerBankAccount getBankAccount(int bankAccountID)
+    {
+        return BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync().getBankAccount(bankAccountID);
+    }
+    @Nullable IServerBank getItemBank(int bankAccountID)
+    {
+        IServerBankAccount account = getBankAccount(bankAccountID);
+        if(account != null)
+        {
+            IServerBank bank = account.getBank(itemID);
+            if(bank == null)
+            {
+                error("No bank for item: "+itemID+ " in bank acocunt: "+bankAccountID);
+            }
+            return bank;
+        }
+        error("No bank account with the accountNR: "+bankAccountID);
+        return null;
+    }
+    @Nullable IServerBank getMoneyBank(int bankAccountID)
+    {
+        IServerBankAccount account = getBankAccount(bankAccountID);
+        ItemID moneyID = BACKEND_INSTANCES.MARKET_MANAGER.getTradingCurrencyID();
+        if(account != null && moneyID != null)
+        {
+            IServerBank bank = account.getBank(moneyID);
+            if(bank == null)
+            {
+                error("No bank for item: "+moneyID+ " in bank acocunt: "+bankAccountID);
+            }
+            return bank;
+        }
+        if(moneyID == null)
+        {
+            error("No currency set in the settings!");
+        }
+        if(account == null)
+        {
+            error("No bank account with the accountNR: "+bankAccountID);
+        }
+        return null;
+    }
+
+
+    private void orderConsumed(Order order)
+    {
+        consumedOrderCallback.accept(order);
+    }
+    private void orderConsumed(InterMarketOrder order)
+    {
+        consumedInterMarketOrderCallback.accept(order);
+    }
+    private void orderCanceled(Order order)
+    {
+        cancelOrderCallback.accept(order);
+    }
+    private void orderCanceled(InterMarketOrder order)
+    {
+        cancelInterMarketOrderCallback.accept(order);
+    }
+
+
+
+    protected void info(String message) {
+        BACKEND_INSTANCES.LOGGER.info("[MatchingEngine:"+itemID+"]: "+message);
+    }
+    protected void error(String message) {
+        BACKEND_INSTANCES.LOGGER.error("[MatchingEngine:"+itemID+"]: "+message);
+    }
+    protected void error(String message, Throwable throwable) {
+        BACKEND_INSTANCES.LOGGER.error("[MatchingEngine:"+itemID+"]: "+message, throwable);
+    }
+    protected void warn(String message) {
+        BACKEND_INSTANCES.LOGGER.warn("[MatchingEngine:"+itemID+"]: "+message);
+    }
+    protected void debug(String message) {
+        BACKEND_INSTANCES.LOGGER.debug("[MatchingEngine:"+itemID+"]: "+message);
     }
 }

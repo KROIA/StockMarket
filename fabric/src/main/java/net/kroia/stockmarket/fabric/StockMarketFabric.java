@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.fabric;
 
+import dev.architectury.platform.Platform;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.ModInitializer;
 
@@ -7,10 +8,9 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.loader.api.FabricLoader;
-import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.util.StockMarketPlayerEvents;
-import net.kroia.stockmarket.util.StockMarketServerEvents;
+import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.compat.NEZNAMY_TAB_Placeholders;
 
 public final class StockMarketFabric implements ModInitializer {
     @Override
@@ -19,42 +19,59 @@ public final class StockMarketFabric implements ModInitializer {
         // Client Events
         if(FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT) {
             ClientLifecycleEvents.CLIENT_STARTED.register(client -> {
-                StockMarketMod.LOGGER.info("[FabricSetup] CLIENT_STARTED");
-                StockMarketMod.onClientSetup();
+                StockMarketModBackend.onClientSetup();
             });
         }
 
 
-
         // Server Events
         ServerLifecycleEvents.SERVER_STARTING.register(server -> {
-            StockMarketMod.LOGGER.info("[FabricSetup] SERVER_STARTING");
-            StockMarketMod.onServerSetup();
+            StockMarketModBackend.onServerSetup();
         });
 
-        ServerLifecycleEvents.SERVER_STARTED.register(server -> {
-            StockMarketMod.LOGGER.info("[FabricSetup] SERVER_STARTED");
-            StockMarketServerEvents.onServerStart(server); // Handle world load (start)
+        // Handle world load (start)
+        ServerLifecycleEvents.SERVER_STARTED.register((server)->
+        {
+            StockMarketModBackend.onServerStart(server);
+            // Check if NEZNAMY/TAB is present and register placeholders
+            if (Platform.isModLoaded("tab")) {
+                NEZNAMY_TAB_Placeholders.register();
+            }
         });
 
-        // World save
-        ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
-            StockMarketMod.LOGGER.info("[FabricSetup] SERVER_STOPPING");
-            StockMarketServerEvents.onServerStop(server);
-        });
+        ServerLifecycleEvents.SERVER_STOPPING.register(StockMarketModBackend::onServerStop);
 
 
         // Player Events
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
-            StockMarketPlayerEvents.onPlayerJoin(handler.getPlayer());
+            StockMarketModBackend.onPlayerJoin(handler.getPlayer());
         });
 
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
-            StockMarketPlayerEvents.onPlayerLeave(handler.getPlayer());
+            StockMarketModBackend.onPlayerLeave(handler.getPlayer());
         });
+
+
+
+        /*ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+            // code to run when leaving a server
+            StockMarketModBackend.onPlayerLeaveClientSide();
+        });*/
 
 
         // Run our common setup.
         StockMarketMod.init();
+
+
+        if (isJeiLoaded() && Platform.getEnv() == EnvType.CLIENT) {
+            // todo: Replace this function to notify that JEI is active and that the window of container screens
+            //       overlap with the JEI item list view
+            //BankSystemGuiScreen.setJeiModLoaded(true);
+        }
+    }
+
+
+    public static boolean isJeiLoaded() {
+        return FabricLoader.getInstance().isModLoaded("jei");
     }
 }

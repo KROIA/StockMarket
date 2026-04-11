@@ -2,51 +2,50 @@ package net.kroia.stockmarket.command;
 
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
-import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
-import com.mojang.brigadier.arguments.LongArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
-import net.kroia.modutilities.ItemUtilities;
-import net.kroia.modutilities.PlayerUtilities;
-import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.StockMarketModSettings;
-import net.kroia.stockmarket.market.server.ServerMarket;
-import net.kroia.stockmarket.market.server.bot.ServerTradingBot;
-import net.kroia.stockmarket.market.server.bot.ServerVolatilityBot;
-import net.kroia.stockmarket.networking.packet.server_sender.update.OpenScreenPacket;
-import net.kroia.stockmarket.networking.packet.server_sender.update.SyncBotSettingsPacket;
-import net.kroia.stockmarket.util.ServerPlayerList;
-import net.kroia.stockmarket.util.StockMarketDataHandler;
-import net.kroia.stockmarket.util.StockMarketTextMessages;
+import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.data.table.OrderRecordManager;
+import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
+import net.kroia.stockmarket.data.table.MarketPriceManager;
+import net.kroia.stockmarket.data.filter.DateFilter;
+import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
+import net.kroia.stockmarket.networking.packet.OpenUIPacket;
+import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 
-import java.util.ArrayList;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.List;
+import java.util.Optional;
+
 
 public class StockMarketCommands {
+    private static StockMarketModBackend.ServerInstances BACKEND_INSTANCES;
+    public static void setBackend(StockMarketModBackend.ServerInstances backend) {
+        StockMarketCommands.BACKEND_INSTANCES = backend;
+    }
+
+
     // Method to register commands
-    public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
+    public static void register(CommandDispatcher<CommandSourceStack> dispatcher, CommandBuildContext commandBuildContext, Commands.CommandSelection commandSelection) {
 
 
         // /StockMarket setPriceCandleTimeInterval <seconds>                            - Set the interval for the price candles. (Each candle will represent this amount of time)
         // /StockMarket createDefaultBots                                               - Create default bots
         // /StockMarket createDefaultBot <itemID>                                       - Create a default bot for that item if presets are available
-        // /StockMarket order cancelAll                                                 - Cancel all orders
-        // /StockMarket order cancelAll <itemID>                                        - Cancel all orders of an item
-        // /StockMarket order <username> cancelAll                                      - Cancel all orders of a player
-        // /StockMarket order <username> cancelAll <itemID>                             - Cancel all orders of a player for an item
+        // /StockMarket order cancelAll                                                 - Cancel all order
+        // /StockMarket order cancelAll <itemID>                                        - Cancel all order of an item
+        // /StockMarket order <username> cancelAll                                      - Cancel all order of a player
+        // /StockMarket order <username> cancelAll <itemID>                             - Cancel all order of a player for an item
         // /StockMarket BotSettingsGUI                                                  - Open the settings GUI for the market bots
         // /StockMarket ManagementGUI                                                   - Open the management GUI to create and remove trading items
         // /StockMarket <itemID> bot settings get                                       - Get bot settings
         // /StockMarket <itemID> bot settings set enabled                               - Enable bot
         // /StockMarket <itemID> bot settings set disabled                              - Disable bot
         // /StockMarket <itemID> bot settings set volatility <volatility>               - Set volatility
-        // /StockMarket <itemID> bot settings set orderRandomness <randomness>          - Set scale for random market orders
+        // /StockMarket <itemID> bot settings set orderRandomness <randomness>          - Set scale for random market order
         // /StockMarket <itemID> bot settings set targetPriceRange <priceRange>         - Set imbalance price range
         // /StockMarket <itemID> bot settings set targetItemBalance <balance>           - Set target item balance
         // /StockMarket <itemID> bot settings set maxOrderCount <orderCount>            - Set max order count
@@ -70,17 +69,99 @@ public class StockMarketCommands {
         // /StockMarket save                                                            - Save market data
         // /StockMarket load                                                            - Load market data
 
-        dispatcher.register(
-                Commands.literal("StockMarket")
-                        /*.then(Commands.literal("help")
+
+        dispatcher.register(Commands.literal("stockmarket")
+                .then(Commands.literal("testdb")
+                        .then(Commands.argument("table",  StringArgumentType.string())
+                                .suggests((x, y) -> {
+                                    y.suggest("OrderRecord");
+                                    y.suggest("MarketPrice");
+                                    return y.buildFuture();
+                                })
+
+                            .then(Commands.argument("record_count", IntegerArgumentType.integer())
+                        .executes(context -> {
+                            int numRecords = IntegerArgumentType.getInteger(context, "record_count");
+                            String  table = StringArgumentType.getString(context, "table");
+
+                            if("OrderRecord".equals(table)){
+                                List<OrderRecordStruct> exData = OrderRecordStruct.generateExampleData(numRecords);
+                                OrderRecordManager manager = OrderRecordManager.create();
+                                long time = System.currentTimeMillis();
+                                manager.save(exData).thenRun(() -> {
+                                    long writeTime = System.currentTimeMillis() - time;
+                                    context.getSource().getPlayer().sendSystemMessage(Component.literal("Database write for " + numRecords + " records took " + writeTime + " ms"));
+                                    long time2 = System.currentTimeMillis();
+                                    manager.getHistory(Optional.of(new DateFilter(Long.MAX_VALUE, Long.MAX_VALUE)), Optional.empty(),Optional.empty(), Optional.empty())
+                                            .thenRun(() -> {
+                                                long readTime = System.currentTimeMillis() - time2;
+                                                context.getSource().getPlayer().sendSystemMessage(Component.literal("Database read for " + numRecords + " records took " + readTime + " ms"));
+                                                long time3 = System.currentTimeMillis();
+                                                manager.removeHistory(Optional.of(new DateFilter(Long.MAX_VALUE, Long.MAX_VALUE)), Optional.empty(),Optional.empty(), Optional.empty())
+                                                        .thenRun(() -> {
+                                                            long deleteTime = System.currentTimeMillis() - time3;
+                                                            context.getSource().getPlayer().sendSystemMessage(Component.literal("Database delete for " + numRecords + " records took " + deleteTime + " ms"));
+                                                        });
+                                            });
+
+                                });
+                            }
+                            else {
+                                List<MarketPriceStruct> exData = MarketPriceStruct.generateExampleData(numRecords);
+                                MarketPriceManager manager = BACKEND_INSTANCES.MARKET_PRICE_HISTORY_MANAGER;
+                                long time = System.currentTimeMillis();
+                                manager.save(exData).thenRun(() -> {
+                                    long writeTime = System.currentTimeMillis() - time;
+                                    context.getSource().getPlayer().sendSystemMessage(Component.literal("Database write for " + numRecords + " records took " + writeTime + " ms"));
+                                    long time2 = System.currentTimeMillis();
+                                    manager.getHistory(Optional.of(new DateFilter(Long.MAX_VALUE, Long.MAX_VALUE)), Optional.empty(), -1)
+                                            .thenRun(() -> {
+                                                long readTime = System.currentTimeMillis() - time2;
+                                                context.getSource().getPlayer().sendSystemMessage(Component.literal("Database read for " + numRecords + " records took " + readTime + " ms"));
+                                                long time3 = System.currentTimeMillis();
+                                                manager.removeHistory(Optional.of(new DateFilter(Long.MAX_VALUE, Long.MAX_VALUE)), Optional.empty())
+                                                        .thenRun(() -> {
+                                                            long deleteTime = System.currentTimeMillis() - time3;
+                                                            context.getSource().getPlayer().sendSystemMessage(Component.literal("Database delete for " + numRecords + " records took " + deleteTime + " ms"));
+                                                        });
+                                            });
+
+                                });
+                            }
+                            return 1;
+                        }))))
+                .then(Commands.literal("db")
+                        .then(Commands.argument("table", StringArgumentType.string())
+                        .then(Commands.literal("count")
+                                .executes(context -> {
+                                    MarketPriceManager manager = BACKEND_INSTANCES.MARKET_PRICE_HISTORY_MANAGER;
+                                    manager.getRecordCount(Optional.empty(), Optional.empty())
+                                            .thenAccept(count -> {
+                                                context.getSource().getPlayer().sendSystemMessage(Component.literal("MarketPrice table currently has " + count + " records."));
+                                            });
+                                    return 1;
+                                }))))
+
+                .then(Commands.literal("devTestScreen")
+                                .requires(source -> source.hasPermission(2))
                                 .executes(context -> {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
-                                    player.sendSystemMessage(Component.literal("StockMarket commands:"));
+
+                                    // Open screen for settings GUI
+                                    OpenUIPacket.sendToClient(player, OpenUIPacket.GUIType.DEVELOPMENT);
 
                                     return Command.SINGLE_SUCCESS;
                                 })
-                        )*/
+
+                        ));
+
+
+        /*
+
+
+        dispatcher.register(
+                Commands.literal("StockMarket")
                         .then(Commands.literal("setPriceCandleTimeInterval")
                                 .requires(source -> source.hasPermission(2))
                                 .then(Commands.argument("seconds", IntegerArgumentType.integer(1))
@@ -218,15 +299,6 @@ public class StockMarketCommands {
                                     ServerPlayer player = context.getSource().getPlayer();
                                     if(player != null) {
                                         OpenScreenPacket.sendPacket(player, OpenScreenPacket.ScreenType.STOCKMARKET_MANAGEMENT);
-                                        /*
-                                        ArrayList<String> suggestions = ServerMarket.getTradeItemIDs();
-                                        if(!suggestions.isEmpty()) {
-                                            //String itemID = suggestions.get(0);
-                                            //SyncBotSettingsPacket.sendPacket(player, itemID, ServerMarket.getBotUserUUID());
-                                            }
-                                        else {
-                                            PlayerUtilities.printToClientConsole(player, StockMarketTextMessages.getNoTradingItemAvailableMessage());
-                                        }*/
                                     }
                                     return Command.SINGLE_SUCCESS;
                                 })
@@ -736,9 +808,10 @@ public class StockMarketCommands {
                                     return Command.SINGLE_SUCCESS;
                                 })
                         )
-        );
+        );*/
     }
 
+    /*
     private static void bot_set_setting(ServerPlayer executor, ServerVolatilityBot.Settings.Type settingsType, String itemID, double value)
     {
         ServerVolatilityBot bot = bot_set_setting_checkParams(executor, settingsType, itemID);
@@ -885,5 +958,5 @@ public class StockMarketCommands {
         }
         PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotNotExistMessage(itemID));
         return null;
-    }
+    }*/
 }

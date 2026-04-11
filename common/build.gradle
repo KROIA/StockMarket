@@ -3,6 +3,11 @@ architectury {
 }
 repositories {
     maven { url 'https://maven.quiltmc.org/repository/release/' }
+    maven {
+        // location of the maven that hosts JEI files since January 2023
+        name = "Jared's maven"
+        url = "https://maven.blamejared.com/"
+    }
     flatDir {
         dir "../../../BankSystem/mc_${minecraft_version}_BankSystem/common/build/libs"
         dir "../../../MC_ModUtilities/mc_${minecraft_version}_MC_ModUtilities/common/build/libs"
@@ -12,6 +17,7 @@ repositories {
     //maven { url 'https://jitpack.io' }
 
 }
+
 
 dependencies {
     // We depend on Fabric Loader here to use the Fabric @Environment annotations,
@@ -24,4 +30,11 @@ dependencies {
 
     modCompileOnly("net.kroia:banksystem-common:$rootProject.banksystem_version")
     modCompileOnly("net.kroia:modutilities-common:$rootProject.modutilities_version")
+
+    compileOnly("mezz.jei:jei-${minecraft_version}-common-api:${jei_version}")
+    implementation('org.xerial:sqlite-jdbc:3.46.0.0'){
+        exclude group: "org.slf4j"
+    }
+
+
 }
