@@ -4,7 +4,6 @@ import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
-import net.kroia.banksystem.networking.packet.server_sender.SyncOpenGUIPacket;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.data.table.OrderRecordManager;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
