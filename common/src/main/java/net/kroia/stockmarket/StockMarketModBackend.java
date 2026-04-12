@@ -5,7 +5,7 @@ import dev.architectury.event.events.client.ClientTickEvent;
 import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.api.BankSystemAPI;
-import net.kroia.banksystem.util.BankSystemDataHandler;
+import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.networking.multi_server.MultiServerManager;
 import net.kroia.stockmarket.api.StockMarketAPI;
 import net.kroia.stockmarket.block.StockMarketBlocks;
@@ -16,9 +16,10 @@ import net.kroia.stockmarket.entity.StockMarketEntities;
 import net.kroia.stockmarket.event.EventRegistration;
 import net.kroia.stockmarket.item.StockMarketCreativeModeTab;
 import net.kroia.stockmarket.item.StockMarketItems;
-import net.kroia.stockmarket.market.client.ClientMarketManager;
-import net.kroia.stockmarket.market.server.MarketManager;
-import net.kroia.stockmarket.market.server.Testing;
+import net.kroia.stockmarket.stockmarket.marketmanager.ClientMarketManager;
+import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
+import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
+import net.kroia.stockmarket.stockmarket.market.core.Testing;
 import net.kroia.stockmarket.menu.StockMarketMenus;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.kroia.stockmarket.networking.packet.PlayerJoinSyncPacket;
@@ -40,6 +41,7 @@ public class StockMarketModBackend implements StockMarketAPI {
 
     public static class CommonInstances
     {
+        public BankSystemAPI BANK_SYSTEM_API;
         public StockMarketLogger LOGGER;
         public StockMarketNetworking NETWORKING;
     }
@@ -108,14 +110,12 @@ public class StockMarketModBackend implements StockMarketAPI {
     // Called from the server side
     public static void onServerSetup()
     {
-
-    }
-
-
-    // Called from the server side
-    public static void onServerStart(MinecraftServer server)
-    {
         SERVER_INSTANCES =  new ServerInstances();
+        SERVER_INSTANCES.BANK_SYSTEM_API = BankSystemMod.getAPI();
+        SERVER_INSTANCES.LOGGER = COMMON_INSTANCES.LOGGER;
+        SERVER_INSTANCES.NETWORKING = COMMON_INSTANCES.NETWORKING;
+        SERVER_INSTANCES.SERVER_SETTINGS = new StockMarketModSettings();
+        SERVER_INSTANCES.SERVER_SETTINGS.setLogger(SERVER_INSTANCES.LOGGER::error, SERVER_INSTANCES.LOGGER::error, SERVER_INSTANCES.LOGGER::debug);
 
         Testing.setBackend(SERVER_INSTANCES);
         StockMarketModSettings.setBackend(SERVER_INSTANCES);
@@ -124,27 +124,17 @@ public class StockMarketModBackend implements StockMarketAPI {
         NEZNAMY_TAB_Placeholders.setBackend(SERVER_INSTANCES);
         StockMarketCommands.setBackend(SERVER_INSTANCES);
 
+        SERVER_INSTANCES.BANK_SYSTEM_API.getEvents().getBanksystemSetupCompleteSignal().addListener(StockMarketModBackend::onBankSystemSetupComplete, 1);
+        SERVER_INSTANCES.BANK_SYSTEM_API.getEvents().getBankDataLoadedFromFileSignal().addListener(StockMarketModBackend::onPostBankSystemDataLoaded, 1);
+    }
 
 
-        SERVER_INSTANCES.LOGGER = COMMON_INSTANCES.LOGGER;
-        SERVER_INSTANCES.BANK_SYSTEM_API = BankSystemMod.getAPI();
-        SERVER_INSTANCES.NETWORKING = COMMON_INSTANCES.NETWORKING;
-        SERVER_INSTANCES.SERVER_SETTINGS = new StockMarketModSettings();
-        SERVER_INSTANCES.SERVER_SETTINGS.setLogger(SERVER_INSTANCES.LOGGER::error, SERVER_INSTANCES.LOGGER::error, SERVER_INSTANCES.LOGGER::debug);
-        SERVER_INSTANCES.MARKET_PRICE_HISTORY_MANAGER = new MarketPriceManager();
-        SERVER_INSTANCES.MARKET_MANAGER = new MarketManager();
-
-
-
-        loadDataFromFiles(server);
-
-        TickEvent.SERVER_POST.register(StockMarketModBackend::onServerTick);
-
-
-
+    // Called from the server side
+    public static void onServerStart(MinecraftServer server)
+    {
         //INSTANCES.BANK_SYSTEM_API.getEvents().getBankDataLoadedFromFileSignal().addListener();
 
-        if(BankSystemDataHandler.isBankDataLoaded())
+        /*if(BankSystemDataHandler.isBankDataLoaded())
         {
             BankSystemDataHandler.resetBankDataLoaded();
             onPostBankSystemDataLoaded();
@@ -152,7 +142,7 @@ public class StockMarketModBackend implements StockMarketAPI {
         else
         {
             SERVER_INSTANCES.BANK_SYSTEM_API.getEvents().getBankDataLoadedFromFileSignal().addListener(StockMarketModBackend::onPostBankSystemDataLoaded, 1);
-        }
+        }*/
 
         /*if(SERVER_INSTANCES.SERVER_SETTINGS.NETWORKING.ENABLE_SERVER_SERVER_COMMUNICATION.get()) {
             boolean isMaster = SERVER_INSTANCES.SERVER_SETTINGS.NETWORKING.IS_MASTER.get();
@@ -174,20 +164,42 @@ public class StockMarketModBackend implements StockMarketAPI {
     }
     private static void onPostBankSystemDataLoaded()
     {
-        Testing testing = new Testing();
-        if(!testing.setup())
+
+    }
+    private static void onBankSystemSetupComplete()
+    {
+        boolean isMaster = BankSystemMod.getAPI().getServerBankManager().isMaster();
+        if(isMaster)
         {
-            SERVER_INSTANCES.LOGGER.info("Can't setup testing");
-            return;
-        }
-        if(testing.runTests())
-        {
-            SERVER_INSTANCES.LOGGER.info("All tests executed successfully");
+            SERVER_INSTANCES.MARKET_PRICE_HISTORY_MANAGER = new MarketPriceManager();
+            SERVER_INSTANCES.MARKET_MANAGER = MarketManager.createMaster();
+
+            Testing testing = new Testing();
+            if(!testing.setup())
+            {
+                SERVER_INSTANCES.LOGGER.info("Can't setup testing");
+                return;
+            }
+            if(testing.runTests())
+            {
+                SERVER_INSTANCES.LOGGER.info("All tests executed successfully");
+            }
+            else
+            {
+                SERVER_INSTANCES.LOGGER.info("Some tests failed");
+                testing.runTests();
+            }
+
+
+
+
+            loadDataFromFiles(UtilitiesPlatform.getServer());
+            TickEvent.SERVER_POST.register(StockMarketModBackend::onServerTick);
+
         }
         else
         {
-            SERVER_INSTANCES.LOGGER.info("Some tests failed");
-            testing.runTests();
+            SERVER_INSTANCES.MARKET_MANAGER = MarketManager.createSlave();
         }
     }
 
@@ -274,7 +286,7 @@ public class StockMarketModBackend implements StockMarketAPI {
     // Called from the server side
     private static void onServerTick(MinecraftServer server)
     {
-        SERVER_INSTANCES.MARKET_MANAGER.update();
+        SERVER_INSTANCES.MARKET_MANAGER.getSync().update();
     }
 
     public static void loadDataFromFiles(MinecraftServer server)

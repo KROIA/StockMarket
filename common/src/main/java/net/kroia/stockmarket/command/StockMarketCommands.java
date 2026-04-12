@@ -39,13 +39,13 @@ public class StockMarketCommands {
         // /StockMarket order cancelAll <itemID>                                        - Cancel all order of an item
         // /StockMarket order <username> cancelAll                                      - Cancel all order of a player
         // /StockMarket order <username> cancelAll <itemID>                             - Cancel all order of a player for an item
-        // /StockMarket BotSettingsGUI                                                  - Open the settings GUI for the market bots
+        // /StockMarket BotSettingsGUI                                                  - Open the settings GUI for the stockmarket bots
         // /StockMarket ManagementGUI                                                   - Open the management GUI to create and remove trading items
         // /StockMarket <itemID> bot settings get                                       - Get bot settings
         // /StockMarket <itemID> bot settings set enabled                               - Enable bot
         // /StockMarket <itemID> bot settings set disabled                              - Disable bot
         // /StockMarket <itemID> bot settings set volatility <volatility>               - Set volatility
-        // /StockMarket <itemID> bot settings set orderRandomness <randomness>          - Set scale for random market order
+        // /StockMarket <itemID> bot settings set orderRandomness <randomness>          - Set scale for random stockmarket order
         // /StockMarket <itemID> bot settings set targetPriceRange <priceRange>         - Set imbalance price range
         // /StockMarket <itemID> bot settings set targetItemBalance <balance>           - Set target item balance
         // /StockMarket <itemID> bot settings set maxOrderCount <orderCount>            - Set max order count
@@ -66,8 +66,8 @@ public class StockMarketCommands {
         // /StockMarket <itemID> open                                                   - Open the marketplace for trading
         // /StockMarket <itemID> close                                                  - Close the marketplace for trading
         // /StockMarket <itemID> currentPrice                                           - Get current price
-        // /StockMarket save                                                            - Save market data
-        // /StockMarket load                                                            - Load market data
+        // /StockMarket save                                                            - Save stockmarket data
+        // /StockMarket load                                                            - Load stockmarket data
 
 
         dispatcher.register(Commands.literal("stockmarket")

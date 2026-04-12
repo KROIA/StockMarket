@@ -1,4 +1,4 @@
-package net.kroia.stockmarket.market.server;
+package net.kroia.stockmarket.stockmarket.market.core;
 
 import net.kroia.modutilities.persistence.ServerSaveable;
 import net.kroia.stockmarket.StockMarketModBackend;
@@ -53,8 +53,8 @@ public class VirtualOrderbook implements ServerSaveable
 
     /**
      * Sets the given volume at the given price.
-     * The volume will be set positive if the given price is below the current market price
-     * The colume will be set negative if the given price is above the current market price
+     * The volume will be set positive if the given price is below the current stockmarket price
+     * The colume will be set negative if the given price is above the current stockmarket price
      * @param price on which the volume gets applied
      * @param volume to apply. Use the abs value.
      */
@@ -76,7 +76,7 @@ public class VirtualOrderbook implements ServerSaveable
     /**
      * Sets the volume onto the given range.
      * The absolute value of the volume is taken
-     * Flipping to sell order above the current market price is done automatically
+     * Flipping to sell order above the current stockmarket price is done automatically
      * @param startPrice on which the volume needs to be applied
      * @param endPrice to which (including) the volume gets applied
      * @param volume volume to apply. the abs(volume) is taken
@@ -92,10 +92,10 @@ public class VirtualOrderbook implements ServerSaveable
     /**
      * Sets the given volume to the array
      * @apiNote
-     * The volume must match the requirements of having negative values above the current market price
-     * and positive values below the market price!
+     * The volume must match the requirements of having negative values above the current stockmarket price
+     * and positive values below the stockmarket price!
      * @param startPrice to start overwriting the volume
-     * @param volume that has positive values below the current market price and negative above the market price
+     * @param volume that has positive values below the current stockmarket price and negative above the stockmarket price
      */
     public void setVolume(long startPrice, float[] volume)
     {
@@ -129,7 +129,7 @@ public class VirtualOrderbook implements ServerSaveable
 
     /**
      * Adds the absolute value to the existing volume
-     * Above the market price, negative volume gets applied
+     * Above the stockmarket price, negative volume gets applied
      * @param startPrice on which the volume needs to be applied
      * @param endPrice to which (including) the volume gets applied
      * @param volume volume to apply. the abs(volume) is taken
@@ -146,8 +146,8 @@ public class VirtualOrderbook implements ServerSaveable
      * Adds the given volume to the array
      * @apiNote
      * The volume can be positive or negative on every element
-     * The resulting volume after addition will be positive for prices below the current market price
-     * and negative for prices above the current market price.
+     * The resulting volume after addition will be positive for prices below the current stockmarket price
+     * and negative for prices above the current stockmarket price.
      * @param startPrice to start adding the volume
      * @param volume that contains positive and negative values
      */
@@ -175,7 +175,7 @@ public class VirtualOrderbook implements ServerSaveable
     /**
      * Gets the volume in the given price range
      * @apiNote
-     * Reading the volume using a range so that the current market price lays in between the given range
+     * Reading the volume using a range so that the current stockmarket price lays in between the given range
      * will result in a wrong prediction since the buy and sell order cancel each other.
      * @param startPrice
      * @param endPrice inclusive

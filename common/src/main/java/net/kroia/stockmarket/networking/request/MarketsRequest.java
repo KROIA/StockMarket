@@ -2,6 +2,8 @@ package net.kroia.stockmarket.networking.request;
 
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
+import net.kroia.stockmarket.util.MultiServerUtils;
+import net.kroia.stockmarket.util.PriceHistoryData;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -19,21 +21,11 @@ public class MarketsRequest extends StockMarketGenericRequest<Integer, List<Item
         return MarketsRequest.class.getName();
     }
 
-    @Override
-    public boolean needsRoutingToMaster() { return true; }
-
-
-    @Override
-    public CompletableFuture<List<ItemID>> handleOnServer(Integer input, ServerPlayer sender) {
-        info("MarketsRequest::HandleOnServer");
-        CompletableFuture<List<ItemID>> future = new CompletableFuture<>();
-        future.complete(getServerMarketManager().getAvailableMarketIDs());
-        return future;
-    }
 
     @Override
     public CompletableFuture<List<ItemID>> handleOnMasterServer(Integer input, String slaveID, UUID playerSender) {
-        info("MarketsRequest::handleOnMasterServer");
+        if(needsRoutingToMaster() && !MultiServerUtils.canInteractWithStockMarket(playerSender))
+            return CompletableFuture.completedFuture(List.of());
         CompletableFuture<List<ItemID>> future = new CompletableFuture<>();
         future.complete(getServerMarketManager().getAvailableMarketIDs());
         return future;

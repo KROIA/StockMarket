@@ -1,4 +1,4 @@
-package net.kroia.stockmarket.market.order;
+package net.kroia.stockmarket.stockmarket.market.core.order;
 
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
@@ -23,7 +23,7 @@ public class Order implements ServerSaveable
         INTER_MARKET,
     }
 
-    @NotNull ItemID itemID;     // The ID for which Market the item gets traded
+    @NotNull ItemID itemID;     // The ID for which ServerMarket the item gets traded
 
     @Nullable UUID orderExecutor; // The players UUID who executed the order. If null -> bot order
     int bankAccountNr;          // The bank account on which this order gets executed on
@@ -34,11 +34,11 @@ public class Order implements ServerSaveable
                                 //   Positive value -> buy order.
                                 //   Negative value -> sell order.
 
-    long filledVolume;          // The amount of items that have been transferred from/to the market
+    long filledVolume;          // The amount of items that have been transferred from/to the stockmarket
 
     long startPrice;            // The price on which the order has been placed
                                 //   For Limit-Orders this is the limit price
-                                //   For Market-Orders this is the price the market had when the order has
+                                //   For ServerMarket-Orders this is the price the stockmarket had when the order has
                                 //   been placed
 
     long time;                  // The timestamp when the order was placed
@@ -64,63 +64,63 @@ public class Order implements ServerSaveable
      */
 
 
-    public record Data(ItemID itemID, UUID orderExecutor, int bankAccountNr, Type type, long volume, long price,
+    public static final StreamCodec<RegistryFriendlyByteBuf, Order> STREAM_CODEC = new StreamCodec<>() {
+        @Override
+        public void encode(RegistryFriendlyByteBuf buf, Order data) {
+            ItemID.STREAM_CODEC.encode(buf, data.getItemID());
+            ExtraCodecUtils.nullable(UUIDUtil.STREAM_CODEC).encode(buf, data.getExecutorPlayerUUID());
+            ByteBufCodecs.INT.encode(buf, data.getBankAccountNr());
+            ExtraCodecUtils.enumStreamCodec(Type.class).encode(buf, data.getType());
+            ByteBufCodecs.VAR_LONG.encode(buf, data.getTargetVolume());
+            ByteBufCodecs.VAR_LONG.encode(buf, data.getStartPrice());
+            ByteBufCodecs.VAR_LONG.encode(buf, data.getFilledVolume());
+            ByteBufCodecs.VAR_LONG.encode(buf, data.getTransferredMoney());
+            ByteBufCodecs.VAR_LONG.encode(buf, data.getTime());
+        }
+        @Override
+        public @NotNull Order decode(RegistryFriendlyByteBuf buf) {
+            ItemID itemID = ItemID.STREAM_CODEC.decode(buf);
+            @Nullable UUID orderExecutor = ExtraCodecUtils.nullable(UUIDUtil.STREAM_CODEC).decode(buf);
+            int bankAccountNr = ByteBufCodecs.INT.decode(buf);
+            Type type = ExtraCodecUtils.enumStreamCodec(Type.class).decode(buf);
+            long volume = ByteBufCodecs.VAR_LONG.decode(buf);
+            long price = ByteBufCodecs.VAR_LONG.decode(buf);
+            long filledVolume = ByteBufCodecs.VAR_LONG.decode(buf);
+            long transferredMoney = ByteBufCodecs.VAR_LONG.decode(buf);
+            long time = ByteBufCodecs.VAR_LONG.decode(buf);
+            return new Order(itemID, orderExecutor, bankAccountNr, type, volume, filledVolume, price, time, transferredMoney);
+        }
+    };
+   /* public record Data(ItemID itemID, UUID orderExecutor, int bankAccountNr, Type type, long volume, long price,
                        long filledVolume, long transferredMoney, long time)
     {
-        public static final StreamCodec<RegistryFriendlyByteBuf, Data> STREAM_CODEC = new StreamCodec<>() {
-            @Override
-            public @NotNull Data decode(RegistryFriendlyByteBuf buf) {
-                ItemID itemID = ItemID.STREAM_CODEC.decode(buf);
-                UUID orderExecutor = UUIDUtil.STREAM_CODEC.decode(buf);
-                int bankAccountNr = ByteBufCodecs.INT.decode(buf);
-                Type type = ExtraCodecUtils.enumStreamCodec(Type.class).decode(buf);
-                long volume = ByteBufCodecs.VAR_LONG.decode(buf);
-                long price = ByteBufCodecs.VAR_LONG.decode(buf);
-                long filledVolume = ByteBufCodecs.VAR_LONG.decode(buf);
-                long transferredMoney = ByteBufCodecs.VAR_LONG.decode(buf);
-                long time = ByteBufCodecs.VAR_LONG.decode(buf);
-                return new Data(itemID, orderExecutor, bankAccountNr, type, volume, price,
-                        filledVolume, transferredMoney, time);
-            }
 
-            @Override
-            public void encode(RegistryFriendlyByteBuf buf, Data data) {
-                ItemID.STREAM_CODEC.encode(buf, data.itemID());
-                UUIDUtil.STREAM_CODEC.encode(buf, data.orderExecutor());
-                ByteBufCodecs.INT.encode(buf, data.bankAccountNr());
-                ExtraCodecUtils.enumStreamCodec(Type.class).encode(buf, data.type());
-                ByteBufCodecs.VAR_LONG.encode(buf, data.volume());
-                ByteBufCodecs.VAR_LONG.encode(buf, data.price());
-                ByteBufCodecs.VAR_LONG.encode(buf, data.filledVolume());
-                ByteBufCodecs.VAR_LONG.encode(buf, data.transferredMoney());
-                ByteBufCodecs.VAR_LONG.encode(buf, data.time());
-            }
-        };
-    }
+    }*/
 
     // Player order
     public Order(@NotNull ItemID itemID, @NotNull Type type, long volume, long price, long time, @NotNull UUID orderExecutor, int bankAccountNr)
     {
-        this.itemID = itemID;
-        this.type = type;
-        this.targetVolume = volume;
-        this.startPrice = price;
-        this.time = time;
-        this.orderExecutor = orderExecutor;
-        this.bankAccountNr = bankAccountNr;
+        this(itemID, orderExecutor, bankAccountNr, type, volume,0,price,time,0);
     }
 
     // Bot order
     public Order(@NotNull ItemID itemID, @NotNull Type type, long volume, long price, long time) // Bot order
     {
+        this(itemID, null, 0, type, volume,0,price,time,0);
+    }
+    private Order(@NotNull ItemID itemID, @Nullable UUID orderExecutor, int bankAccountNr, Type type, long targetVolume, long filledVolume, long startPrice, long time, long transferredMoney )
+    {
         this.itemID = itemID;
         this.type = type;
-        this.targetVolume = volume;
-        this.startPrice = price;
+        this.targetVolume = targetVolume;
+        this.filledVolume = filledVolume;
+        this.startPrice = startPrice;
         this.time = time;
-        this.orderExecutor = null;
-        this.bankAccountNr = 0;
+        this.orderExecutor = orderExecutor;
+        this.bankAccountNr = bankAccountNr;
+        this.transferredMoney = transferredMoney;
     }
+
 
 
     private Order()
@@ -128,11 +128,11 @@ public class Order implements ServerSaveable
         itemID = null;
     }
 
-    public Order.Data  getData()
+    /*public Order.Data  getData()
     {
         return new Data(itemID, orderExecutor, bankAccountNr, type, targetVolume,
                 startPrice, filledVolume, transferredMoney, time);
-    }
+    }*/
 
     public static Order createFromNBT(CompoundTag tag)
     {
@@ -301,7 +301,7 @@ public class Order implements ServerSaveable
     //
     // --------------------------------------------------------------------------------
     //
-    //                      Market Internal Functions below
+    //                      ServerMarket Internal Functions below
     //                DO NOT USE THEM OUTSIDE THE CORE MARKET CODE!
     //
     // --------------------------------------------------------------------------------
@@ -321,7 +321,7 @@ public class Order implements ServerSaveable
     }
 
     /**
-     * In special usecases (Inter-Market-Trades) this access is needed
+     * In special usecases (Inter-ServerMarket-Trades) this access is needed
      * @param newTargetVolume
      */
     public void editTargetVolume(long newTargetVolume)

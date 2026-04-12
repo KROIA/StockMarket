@@ -2,9 +2,12 @@ package net.kroia.stockmarket.networking.request;
 
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
-import net.kroia.stockmarket.market.order.Order;
-import net.kroia.stockmarket.market.server.Market;
-import net.kroia.stockmarket.market.server.MarketManager;
+import net.kroia.stockmarket.api.market.IServerMarket;
+import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
+import net.kroia.stockmarket.stockmarket.market.core.order.Order;
+import net.kroia.stockmarket.stockmarket.market.ServerMarket;
+import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
+import net.kroia.stockmarket.util.MultiServerUtils;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -54,10 +57,10 @@ public class ActiveOrdersRequest extends StockMarketGenericRequest<ActiveOrdersR
         );
     }
 
-    public record OutputData(List<Order.Data> orders)
+    public record OutputData(List<Order> orders)
     {
         public static final StreamCodec<RegistryFriendlyByteBuf, OutputData> STREAM_CODEC = StreamCodec.composite(
-                ExtraCodecUtils.listStreamCodec(Order.Data.STREAM_CODEC), p -> p.orders,
+                ExtraCodecUtils.listStreamCodec(Order.STREAM_CODEC), p -> p.orders,
                 OutputData::new
         );
     }
@@ -71,9 +74,11 @@ public class ActiveOrdersRequest extends StockMarketGenericRequest<ActiveOrdersR
 
 
     @Override
-    public CompletableFuture<OutputData> handleOnServer(InputData input, ServerPlayer sender) {
+    public CompletableFuture<OutputData> handleOnMasterServer(InputData input, String slaveID, @Nullable UUID playerSender) {
+        if(playerSender == null || (needsRoutingToMaster() && !MultiServerUtils.canInteractWithStockMarket(playerSender)))
+            return CompletableFuture.completedFuture(new OutputData(List.of()));
         CompletableFuture<OutputData>  future = new CompletableFuture<>();
-        List<Order.Data> orderData = new ArrayList<>();
+        List<Order> orderData = new ArrayList<>();
         /*boolean hasPermission = playerIsAdmin(sender);
         IServerBankManager bankManager = getServerBankManager();
         if(!hasPermission)
@@ -146,35 +151,35 @@ public class ActiveOrdersRequest extends StockMarketGenericRequest<ActiveOrdersR
             hasPermission = true;
         }
 
-        MarketManager marketManager = getServerMarketManager();*/
-        MarketManager marketManager = getServerMarketManager();
+        ServerMarketManager serverMarketManager = getServerMarketManager();*/
+        IServerMarketManager serverMarketManager = getServerMarketManager();
         if(input.itemID != null)
         {
-            Market market = marketManager.getMarket(input.itemID);
-            if(market == null) {
+            IServerMarket serverMarket = serverMarketManager.getMarket(input.itemID);
+            if(serverMarket == null) {
                 future.complete(new OutputData(orderData));
                 return future;
             }
-            List<Order> orders = market.getLimitOrders();
+            List<Order> orders = serverMarket.getLimitOrders();
             for(Order order : orders)
             {
-                if(passesFilter(input, sender, order))
+                if(passesFilter(input, playerSender, order))
                 {
-                    orderData.add(order.getData());
+                    orderData.add(order);
                 }
             }
         }
         else
         {
-            List<ItemID> marketIDs = marketManager.getAvailableMarketIDs();
+            List<ItemID> marketIDs = serverMarketManager.getAvailableMarketIDs();
             for(ItemID marketID : marketIDs)
             {
-                List<Order> orders = marketManager.getMarket(marketID).getLimitOrders();
+                List<Order> orders = serverMarketManager.getMarket(marketID).getLimitOrders();
                 for(Order order : orders)
                 {
-                    if(passesFilter(input, sender, order))
+                    if(passesFilter(input, playerSender, order))
                     {
-                        orderData.add(order.getData());
+                        orderData.add(order);
                     }
                 }
             }
@@ -183,7 +188,7 @@ public class ActiveOrdersRequest extends StockMarketGenericRequest<ActiveOrdersR
         return future;
     }
 
-    private boolean passesFilter(InputData input, ServerPlayer sender, Order order)
+    private boolean passesFilter(InputData input, UUID sender, Order order)
     {
         int bankAccountNr = order.getBankAccountNr();
         if(input.bankAccountNr > 0 && bankAccountNr != input.bankAccountNr)
@@ -191,7 +196,7 @@ public class ActiveOrdersRequest extends StockMarketGenericRequest<ActiveOrdersR
         long timestamp = order.getTime();
         if(input.timeBegin > timestamp || timestamp > input.timeEnd)
             return false;
-        return input.executorPlayer == null || input.executorPlayer.equals(sender.getUUID());
+        return input.executorPlayer == null || input.executorPlayer.equals(sender);
     }
 
     @Override

@@ -6,11 +6,14 @@ import net.kroia.banksystem.api.bank.IServerBank;
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IBankManager;
 import net.kroia.banksystem.banking.BankPermission;
+import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.clientdata.BankUserData;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
-import net.kroia.stockmarket.market.order.Order;
-import net.kroia.stockmarket.market.server.Market;
+import net.kroia.stockmarket.api.market.IServerMarket;
+import net.kroia.stockmarket.stockmarket.market.ServerMarket;
+import net.kroia.stockmarket.stockmarket.market.core.order.Order;
+import net.kroia.stockmarket.util.MultiServerUtils;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -18,6 +21,7 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderRequest.InputData, CreateOrderRequest.OutputData> {
@@ -52,18 +56,19 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
         UNABLE_TO_LOCK_MONEY,
         UNABLE_TO_LOCK_ITEM,
         UNABLE_TO_UNLOCK_MONEY,
-        UNABLE_TO_UNLOCK_ITEM
+        UNABLE_TO_UNLOCK_ITEM,
+        NO_PLAYER_SENDER
     }
     public static class OutputData
     {
         public Status status;
-        public Order.@Nullable Data orderEcho;
+        public @Nullable Order orderEcho;
         public static final StreamCodec<RegistryFriendlyByteBuf, OutputData> STREAM_CODEC = StreamCodec.composite(
                 ExtraCodecUtils.enumStreamCodec(Status.class), p -> p.status,
-                ExtraCodecUtils.nullable(Order.Data.STREAM_CODEC), p -> p.orderEcho,
+                ExtraCodecUtils.nullable(Order.STREAM_CODEC), p -> p.orderEcho,
                 OutputData::new
         );
-        public OutputData(Status status, Order.@Nullable Data orderEcho)
+        public OutputData(Status status, @Nullable Order orderEcho)
         {
             this.status = status;
             this.orderEcho = orderEcho;
@@ -77,13 +82,16 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
 
 
     @Override
-    public CompletableFuture<OutputData> handleOnServer(CreateOrderRequest.InputData input, ServerPlayer sender) {
+    public CompletableFuture<OutputData> handleOnMasterServer(CreateOrderRequest.InputData input, String slaveID, @Nullable UUID playerSender) {
+        if(playerSender == null || (needsRoutingToMaster() && !MultiServerUtils.canInteractWithStockMarket(playerSender)))
+            return CompletableFuture.completedFuture(new OutputData(Status.NO_PLAYER_SENDER, null));
+
         CompletableFuture<OutputData> future = new CompletableFuture<>();
         OutputData response = new OutputData(Status.CREATED, null);
-         Market market = getServerMarketManager().getMarket(input.itemID);
-         if(market == null || input.volume == 0 || input.price < 0)
+         IServerMarket serverMarket = getServerMarketManager().getMarket(input.itemID);
+         if(serverMarket == null || input.volume == 0 || input.price < 0)
          {
-             if(market == null)
+             if(serverMarket == null)
                  response.status = Status.NO_SUCH_MARKET;
              if(input.volume == 0)
                  response.status = Status.INVALID_VOLUME;
@@ -109,9 +117,15 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
             return future;
         }
 
-        BankUserData bankUserData = bankAccount.getUserData(sender.getUUID());
+        BankUserData bankUserData = bankAccount.getUserData(playerSender);
         if(bankUserData == null) {
-            warn("No BankUserData found with BankAccountNr " + input.bankAccountNr + " for user: " +sender.getName()+
+            User us = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync().getUserByUUID(playerSender);
+            String userName;
+            if(us != null)
+                userName = us.getName();
+            else
+                userName = playerSender.toString();
+            warn("No BankUserData found with BankAccountNr " + input.bankAccountNr + " for user: " +userName+
                     "\nThis player seems not to be a member of the BankAccount.");
             response.status = Status.NO_BANK_USER;
             future.complete(response);
@@ -153,7 +167,7 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
             return future;
         }
 
-        long currentMarketPrice = market.getCurrentMarketPrice();
+        long currentMarketPrice = serverMarket.getCurrentMarketPrice();
         long toLockAmount = 0;
         if(input.volume > 0)
         {
@@ -225,9 +239,9 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
 
         long time = System.currentTimeMillis();
         Order order = new Order(input.itemID, input.type, input.volume, input.price, time,
-                sender.getUUID(), bankAccount.getAccountNumber());
+                playerSender, bankAccount.getAccountNumber());
 
-        if(!market.putOrder(order))
+        if(!serverMarket.putOrder(order))
         {
             if(input.volume > 0) {
                 BankStatus unlockStatus = moneyBank.unlockAmount(toLockAmount);
@@ -256,7 +270,7 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
             }
         }
         response.status = Status.CREATED;
-        response.orderEcho = order.getData();
+        response.orderEcho = order;
         future.complete(response);
         return future;
     }

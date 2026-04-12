@@ -2,8 +2,11 @@ package net.kroia.stockmarket.networking.stream;
 
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.client_server.streaming.GenericStream;
-import net.kroia.stockmarket.market.server.Market;
-import net.kroia.stockmarket.market.server.MarketManager;
+import net.kroia.stockmarket.api.market.IServerMarket;
+import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
+import net.kroia.stockmarket.stockmarket.market.ServerMarket;
+import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
+import net.kroia.stockmarket.util.MultiServerUtils;
 import net.kroia.stockmarket.util.StockMarketGenericStream;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -44,11 +47,7 @@ public class MarketPriceStream extends StockMarketGenericStream<ItemID, MarketPr
         return MarketPriceStream.class.getName();
     }
 
-    @Override
-    public boolean needsRoutingToMaster()
-    {
-        return true;
-    }
+
 
     @Override
     public void onStartStreamSendingOnSever() {
@@ -65,11 +64,11 @@ public class MarketPriceStream extends StockMarketGenericStream<ItemID, MarketPr
         long now = System.currentTimeMillis();
         if (now - lastTimeMs > updateInterval) {
             lastTimeMs = now;
-            MarketManager manager = getMarketManager();
-            Market market = manager.getMarket(itemID);
-            if(market != null) {
-                 long currentPrice = market.getCurrentMarketPrice();
-                 long currentTime = market.getCurrentTime();
+            IServerMarketManager manager = getMarketManager();
+            IServerMarket serverMarket = manager.getMarket(itemID);
+            if(serverMarket != null) {
+                 long currentPrice = serverMarket.getCurrentMarketPrice();
+                 long currentTime = serverMarket.getCurrentTime();
                  if(currentPrice != lastPrice.marketPrice ||
                     currentTime != lastPrice.timestamp) {
                      lastPrice.marketPrice = currentPrice;

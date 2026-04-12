@@ -16,8 +16,8 @@ import java.util.function.Function;
  * @details
  * This class is used to create a float array.
  * An offset can be defined to shift the array in the used indexing.
- * This is used to dynamically adjust for the current market price to have the used float array
- * always in the area of the current market price.
+ * This is used to dynamically adjust for the current stockmarket price to have the used float array
+ * always in the area of the current stockmarket price.
  */
 public class DynamicIndexedArray implements ServerSaveable {
 

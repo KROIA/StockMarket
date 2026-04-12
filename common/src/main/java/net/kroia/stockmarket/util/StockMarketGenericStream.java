@@ -3,8 +3,10 @@ package net.kroia.stockmarket.util;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.client_server.streaming.GenericStream;
 import net.kroia.stockmarket.StockMarketModBackend;
-import net.kroia.stockmarket.market.server.Market;
-import net.kroia.stockmarket.market.server.MarketManager;
+import net.kroia.stockmarket.api.market.IServerMarket;
+import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
+import net.kroia.stockmarket.stockmarket.market.ServerMarket;
+import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.minecraft.server.level.ServerPlayer;
 
 public abstract class StockMarketGenericStream<IN, OUT> extends GenericStream<IN, OUT> {
@@ -18,17 +20,23 @@ public abstract class StockMarketGenericStream<IN, OUT> extends GenericStream<IN
         return player.hasPermissions(BACKEND_INSTANCES.SERVER_SETTINGS.UTILITIES.ADMIN_PERMISSION_LEVEL.get());
     }
 
-    protected final MarketManager getMarketManager()
+    protected final IServerMarketManager getMarketManager()
     {
-        return BACKEND_INSTANCES.MARKET_MANAGER;
+        return BACKEND_INSTANCES.MARKET_MANAGER.getSync();
     }
     protected final long getCurrentMarketPrice(ItemID id)
     {
-        MarketManager marketManager = BACKEND_INSTANCES.MARKET_MANAGER;
-        Market m =  marketManager.getMarket(id);
+        IServerMarketManager serverMarketManager = BACKEND_INSTANCES.MARKET_MANAGER.getSync();
+        IServerMarket m =  serverMarketManager.getMarket(id);
         if(m == null)
             return 0L;
         return m.getCurrentMarketPrice();
+    }
+
+    @Override
+    public boolean needsRoutingToMaster()
+    {
+        return BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().isSlave();
     }
 
     protected void info(String message) {

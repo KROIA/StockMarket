@@ -1,7 +1,7 @@
 # StockMarket Mod
 
 ## About
-StockMarket is a Minecraft mod that brings a better way for trading to the game. It enables players to trade items on a virtual stock market, making it ideal for multiplayer servers with active economies. For Server that have not enough players or even for single player, a market bot can be added that simulates a large player base and provides liquidity to the market.
+StockMarket is a Minecraft mod that brings a better way for trading to the game. It enables players to trade items on a virtual stock serverMarket, making it ideal for multiplayer servers with active economies. For Server that have not enough players or even for single player, a serverMarket bot can be added that simulates a large player base and provides liquidity to the serverMarket.
 
 <tr>
 <td>
@@ -20,21 +20,21 @@ You want to support me?<br>
 * [Blocks](#blocks)
 * [Items](#items)
 * [Matching Engine](#matching-engine)
-    * [market-order](#market-order)
+    * [serverMarket-order](#serverMarket-order)
     * [Limit Order](#limit-order)
 * [How to use](#how-to-use)
     * [For server player / single player](#for-server-player--single-player)
     * [For admins / single player](#for-admins--single-player)
 * [Commands](#commands)
-* [Stock Market Bot](#stock-market-bot)
+* [Stock Market Bot](#stock-serverMarket-bot)
 * [Discord to help me improve the mod](https://discord.gg/qHNVaDGAyB)
 
 ---
 ## Features
 - Adds a banking system to the game for money and items.
-- Adds new [blocks](#blocks) to interact with the market or bank account.
-- Implementation of a [matching engine](#matching-engine) inspired by the real market.
-- Configurable [bot](#stock-market-bot) which provides the market with liquidity and volatility 
+- Adds new [blocks](#blocks) to interact with the serverMarket or bank account.
+- Implementation of a [matching engine](#matching-engine) inspired by the real serverMarket.
+- Configurable [bot](#stock-serverMarket-bot) which provides the serverMarket with liquidity and volatility 
 
 ## Dependencies
 - [Bank System Mod](https://github.com/KROIA/BankSystem)
@@ -108,7 +108,7 @@ You want to support me?<br>
 <tr>
 <td>
 <b>Stock Market Block</b><br>
-Used to get access to the stock market.<br>
+Used to get access to the stock serverMarket.<br>
 Interaction using right click.<br>
 Right click on a <b>Terminal Block</b> using a <b>Trading Software</b> to create this block.
 </td>
@@ -149,27 +149,27 @@ For simplicity are no special roles implemented. The type of order and the price
 ---
 ### Type of Trades
 #### Market Order
-A market-order requires only the **amount** to buy/sell. The trade is executed on the best available price.<br>
+A serverMarket-order requires only the **amount** to buy/sell. The trade is executed on the best available price.<br>
 
 **Benefits**
 - The trade is executed immediately
 
 **Disadvantages**
-- When buing/selling, the average buy/sell price is mostly higher/lower than the market price before the trade.
+- When buing/selling, the average buy/sell price is mostly higher/lower than the serverMarket price before the trade.
 - Creates high volatility for markets with low liquidity, see: [Order Book Swipe](#order-book-swipe)
-- A market-order can only be executed when there are enough volume present on the opposite side to fill the order. Otherwise the order may only be filled partially.
+- A serverMarket-order can only be executed when there are enough volume present on the opposite side to fill the order. Otherwise the order may only be filled partially.
 
 
 #### Limit Order
-A limit order requires an **amount** and **price** at which the trade gets executed. A buy order gets mostly placed below the current market price. The order is executed when the market price moves towards the order price.
+A limit order requires an **amount** and **price** at which the trade gets executed. A buy order gets mostly placed below the current serverMarket price. The order is executed when the serverMarket price moves towards the order price.
 
 **Benefits**
 - For a buy order, the price a trader has to pay is at the **price** level or lower.
 - For a sell order, the received amount is at least the **price** or higher.
-- Limit orders are important for a market because it provides the required liquidity for the market to be able to process market-orders.
+- Limit orders are important for a serverMarket because it provides the required liquidity for the serverMarket to be able to process serverMarket-orders.
 
 **Disadvantages**
-- The order needs time to be filled by the market.
+- The order needs time to be filled by the serverMarket.
 - When the price never reaches the desired buy/sell price, the order never gets executed and stays pending.
 
 
@@ -177,8 +177,8 @@ A limit order requires an **amount** and **price** at which the trade gets execu
 ## How to use
 ### For server player / single player
 #### Selling Items
-To sell items the item must be available on the market. This is managed by the server admin.<br>
-Assuming the item can be traded on the market, you first have to deposit the item to your bank account. This can be done using the **Bank Terminal Block**.<br>
+To sell items the item must be available on the serverMarket. This is managed by the server admin.<br>
+Assuming the item can be traded on the serverMarket, you first have to deposit the item to your bank account. This can be done using the **Bank Terminal Block**.<br>
 See [Bank System Mod](https://github.com/KROIA/BankSystem) to learn how.
 
 Now open the **Stock Market Terminal Block** using right click.<br>
@@ -188,10 +188,10 @@ On the left edge of the chart is the price axis.<br>
 On the right edge of the chart is the [Order Book](#order-book) volume displayed.<br>
 On the right side of the window is the interaction panel. There you can select the desired item to be traded. Just click on the button and a list of all tradable items will appear.<br>
 Type the amount of items you want to buy/sell.<br>
-Decide whether you want to execute a market-order or a limit order.<br>
+Decide whether you want to execute a serverMarket-order or a limit order.<br>
 If you want to create a limt order, you have to type in the desired price.<br>
-Click on the **sell** button for market or limit order to execute the trade.<br>
-A market-order is executet directly but the limit order will be listed on the left side until it is filled or gets canceled.<br>
+Click on the **sell** button for serverMarket or limit order to execute the trade.<br>
+A serverMarket-order is executet directly but the limit order will be listed on the left side until it is filled or gets canceled.<br>
 <div align="center">
     <img src="documentation/images/tradingView.png" > 
 </div>
@@ -204,13 +204,13 @@ Assuming you have money, open the **Stock Market Terminal Block**<br>
 Select the item you want to trade by pressing the button on the top right with the Label "Price: XX".<br>
 Type the amount you want to buy, type a limit price if you want to execute a limit order.<br>
 Click on the **buy** button.<br>
-A market-order gets executed directly but a limit order may take some time until it gets filled by the market.<br>
+A serverMarket-order gets executed directly but a limit order may take some time until it gets filled by the serverMarket.<br>
 
 Once you have received the items, you can go to the **Bank Terminal Block** receive the bought items.<br>
 
 ### Changing an order
 A limit order can be changed by clicking on the marker on the position of the order. There is a small botton on the left sinde of <br>
-the market. Drag and drop the order to the new price level. <br>
+the serverMarket. Drag and drop the order to the new price level. <br>
 If you do not have enough money to move a buy order higher, the order will not be moved to that location.
 
 <tr>
@@ -230,18 +230,18 @@ Each player receives its bank account with 0 balance.
     <summary> 
       <b>Quickstart</b>
     </summary>
-    <b>Setting up the market bots</b><br>
+    <b>Setting up the serverMarket bots</b><br>
     The simplest way to setup the bots is by calling the command bellow.<br>
-    This command creats a bot for each market which was added by default from the mod.<br>
+    This command creats a bot for each serverMarket which was added by default from the mod.<br>
     You may want to change the settings for the bots later.<br>
 <code>/StockMarket createDefaultBots</code>
 </details>
 
 <details close> 
     <summary> 
-      <b>Create a new market</b>
+      <b>Create a new serverMarket</b>
     </summary>
-    Replace the <b>[itemID]</b> with the minecraft item ID for which you want to create a market.<br>
+    Replace the <b>[itemID]</b> with the minecraft item ID for which you want to create a serverMarket.<br>
     Check out the website <a href="https://minecraftitemids.com/">https://minecraftitemids.com/</a> to find the item ID you need.<br>
     <code>/StockMarket [itemID] create</code><br>
     You may need to type the <b>"</b> in order to type a string that contains <b>:</b>.<br>
@@ -249,9 +249,9 @@ Each player receives its bank account with 0 balance.
 </details>
 <details close> 
     <summary> 
-      <b>Remove a market</b>
+      <b>Remove a serverMarket</b>
     </summary>
-    Replace the <b>[itemID]</b> with the minecraft item ID for which you want to remove the market.<br>
+    Replace the <b>[itemID]</b> with the minecraft item ID for which you want to remove the serverMarket.<br>
     Check out the website <a href="https://minecraftitemids.com/">https://minecraftitemids.com/</a> to find the item ID you need.<br>
     <code>/StockMarket [itemID] remove</code><br>
     You may need to type the <b>"</b> in order to type a string that contains <b>:</b>.<br>
@@ -265,7 +265,7 @@ Each player receives its bank account with 0 balance.
     </summary>
     <b><br>There is now a GUI that lets you create and manage the bots. No complicate command line usage is needed any more.<br>
     Go to the next expandable section "Change bot settings" to learn about that</b><br><br>
-    To create a bot from scratch make sure the market, for which you want to create the bot, already exists. <br>
+    To create a bot from scratch make sure the serverMarket, for which you want to create the bot, already exists. <br>
     Type the following command, replace the item ID with your markets item ID.<br>
     <code>/StockMarket "minecraft:copper_ingot" bot create</code><br>
     The bot gets created but is not active, you have to configure it first.<br>
@@ -284,7 +284,7 @@ Each player receives its bank account with 0 balance.
     <code>/StockMarket "minecraft:copper_ingot" bot settings set targetPriceRange 200</code><br>
     Before the bot can be enabled, you have to overwrite the item balance of the bot.<br>
     <code>/bank "StockMarketBot" setBalance "minecraft:copper_ingot" 1000</code><br>
-    If you want the bot to start the market at the <b>target_price_range_value/2</b> you must give the bot the same amount of items as you have set the <b>Target Item Balance</b>.<br>
+    If you want the bot to start the serverMarket at the <b>target_price_range_value/2</b> you must give the bot the same amount of items as you have set the <b>Target Item Balance</b>.<br>
     If you want to create an artificial demand from the bot at the start, you can give less to the bot.<br><br>
    <div style="border-left: 7px solid #f39c12; background-color: #fcf8e3; padding: 20px; margin: 10px 0;">
       <p><strong>⚠️ Warning:</strong> Do not set the item balance to 0 since this will break the bot.</br>
@@ -302,26 +302,26 @@ Each player receives its bank account with 0 balance.
     <!-- <span class="icon">🚧</span> -->
     Just type the command <code>/StockMarket BotSettingsGUI</code><br>
     This opens a gui that lets you change all settings from a bot.<br>
-    - <b>Change Item</b> to select a market.<br>
+    - <b>Change Item</b> to select a serverMarket.<br>
     - <b>Save Settings</b> to save the current settings which are listed below.<br>
-    - <b>Market Open</b> Open/Close the market for players to trade in order to safely change settings without players exploiting the market movements.<br>
-        Players can not place new orders when a market is closed. Already placed orders will still get processed when the market is closed.<br>
+    - <b>Market Open</b> Open/Close the serverMarket for players to trade in order to safely change settings without players exploiting the serverMarket movements.<br>
+        Players can not place new orders when a serverMarket is closed. Already placed orders will still get processed when the serverMarket is closed.<br>
     - <b>Destroy Bot/Create Bot</b> to delete or create a bot for that item.<br>
-    - <b>Bot Setup</b> Opens a setup guide, that asks questions about desired market behavior in order to find the correct bot settings.<br>
+    - <b>Bot Setup</b> Opens a setup guide, that asks questions about desired serverMarket behavior in order to find the correct bot settings.<br>
     - <b>Bot Bank</b> to access the bank account of the bot to set its balance.<br>
     <br>
-    <b>1)</b> Close the market so players can't exploit the market when you change settings. <b>Click Save</b><br>
+    <b>1)</b> Close the serverMarket so players can't exploit the serverMarket when you change settings. <b>Click Save</b><br>
     <b>2)</b> Click on <b>Bot Setup</b> and follow the instructions.<br>
     <b>3)</b> You can now ajust the settings from the setup guide to make more individual changes if you want.<br>
-    <b>4)</b> Click on <b>Save Settings</b> to apply the settings to the bot and watch the market ajusts for the new settigns.<br>
-    <b>5)</b> Once you are happy with the result, Open the market again to enable trading for players.<br>  
+    <b>4)</b> Click on <b>Save Settings</b> to apply the settings to the bot and watch the serverMarket ajusts for the new settigns.<br>
+    <b>5)</b> Once you are happy with the result, Open the serverMarket again to enable trading for players.<br>  
     <br>
     Some Informations about ajusting settings manually:<br>
     <div style="border-left: 7px solid #f39c12; background-color: #fcf8e3; padding: 20px; margin: 10px 0;">
       <p><strong>⚠️ Warning:</strong> Do not set the item balance to 0 since this will break the bot.</br>
        The bot must always have some items and money, otherwise it can't place orders.</p>
     </div>
-    ⚠️ Be aware, when changing settings to other values, depending on the scale it can lead to large market change.<br>
+    ⚠️ Be aware, when changing settings to other values, depending on the scale it can lead to large serverMarket change.<br>
     I reccoment to try it on a single player to get a feeling for it. There are so many differend possibilities the bot can react to it.<br>
     🚧A detaild explanation for each setting will come soon.
     <div align="center">
@@ -341,7 +341,7 @@ Each player receives its bank account with 0 balance.
 | /StockMarket order cancelAll [itemID]                                     | Cancel all orders of an item                  |  |
 | /StockMarket order [username] cancelAll                                   | Cancel all orders of a player                 | :heavy_check_mark: |
 | /StockMarket order [username] cancelAll [itemID]                          | Cancel all orders of a player for an item     | :heavy_check_mark: |
-| /StockMarket BotSettingsGUI                                               | Open the settings GUI for the market bots     | :heavy_check_mark: |
+| /StockMarket BotSettingsGUI                                               | Open the settings GUI for the serverMarket bots     | :heavy_check_mark: |
 | /StockMarket ManagementGUI                                                | Open the management GUI to create and remove trading items | :heavy_check_mark: |
 | /StockMarket save                                                         | Save the Stockmarket data                     | :heavy_check_mark: |
 | /StockMarket load                                                         | Load the Stockamrket data                     | :heavy_check_mark: |
@@ -386,12 +386,12 @@ Each player receives its bank account with 0 balance.
 
 ## Stock Market Bot
 The StockMarketBot has multiple purposes. 
-- Providing the market with liquidity
+- Providing the serverMarket with liquidity
 - Changing price depending on supply and demand
 - Source for capital for players (if they start with 0 money)
 
 #### Providing liquidity
-Liquidity is a very important part of every market. 
+Liquidity is a very important part of every serverMarket. 
 For example if player A wants to buy wood, someone has to sell the same amount.
 Without the counterpart, a trade can't be made.
 Since it is unlikely that a server creates enough sell/buy orders to create this
@@ -403,7 +403,7 @@ The bot always needs some balance of items and money. Without that its function 
 #### Changing price
 The bot is responsible for the most price movements you see on the chart.
 The bot is always buying and selling to it self. 
-Using a combination of [limit](#limit-order) and [market](#market-order) -orders will create 
+Using a combination of [limit](#limit-order) and [serverMarket](#serverMarket-order) -orders will create 
 movements in price.<br>
 To create a random price chart that also stays in its realistic bounds, multiple stages are needed.
 1) **Defining parameters**
@@ -411,7 +411,7 @@ To create a random price chart that also stays in its realistic bounds, multiple
     - target price range
     - Others...
 
-2) **Defining a target price the market should move to**
+2) **Defining a target price the serverMarket should move to**
     Depending on how many items the bot holds and what its target item balance is,
     it will try to rise or lower the price.
     For example if the bot holds 1000 items, wants to hold 500,
@@ -428,12 +428,12 @@ To create a random price chart that also stays in its realistic bounds, multiple
     This noise is added to the target price and is generated using a 
     [Random Walk](#random-walk) generator.
 
-3) **Move the market to the target price**
-    To change the price the bot creates market- sell/buy -orders. 
-    The market oder will fill the previously placed limit orders from the bot or a player.
+3) **Move the serverMarket to the target price**
+    To change the price the bot creates serverMarket- sell/buy -orders. 
+    The serverMarket oder will fill the previously placed limit orders from the bot or a player.
     [Click here to learn why a price moves](#why-does-a-price-move).
-    The size of the market-order defines how fast the price will change.
-    A [PID-Controller](#pid-controller) is used to generate the buy/sell market-orders.
+    The size of the serverMarket-order defines how fast the price will change.
+    A [PID-Controller](#pid-controller) is used to generate the buy/sell serverMarket-orders.
     The PID-Controller will make sure to generate the right amount of orders until the 
     target price is reached.
 
@@ -443,20 +443,20 @@ To create a random price chart that also stays in its realistic bounds, multiple
 ## Why does a price move?
 If you don't know what a [Order Book](#order-book) is, learn the basics first and come back later.<br>
 A price can move in two ways:
-* market-order 
+* serverMarket-order 
 * Limit on oposite price
-A market-order is always executed at the current price. 
-Example with a buy market-order:
-1) A player places a market buy order with a volume of 8.
+A serverMarket-order is always executed at the current price. 
+Example with a buy serverMarket-order:
+1) A player places a serverMarket buy order with a volume of 8.
 2) The matching engine will search a sell limit order with the lowest price.
-3) The market-order gets filled by the sell order. 
+3) The serverMarket-order gets filled by the sell order. 
 4) If the buy order is not filled completly, the matching engine searches again for the best sell order
-5) The fill-search process gets repeated until the complete market-order is filled.
-6) If no more sell orders can be found to fill the buy order, the buy order can not be filled completly. No one is selling, so the remainings of the order will get canceled. To avoid this problem, enough liquidity is needed for the market.
+5) The fill-search process gets repeated until the complete serverMarket-order is filled.
+6) If no more sell orders can be found to fill the buy order, the buy order can not be filled completly. No one is selling, so the remainings of the order will get canceled. To avoid this problem, enough liquidity is needed for the serverMarket.
 
 Example with a buy limit order:
-1) A player places a limit order with a volume of 8 above the current market price.
-2) The matching engine will search a sell limit order with the lowest price to fill the buy order, just like the market-order. But the engine will not search for higher limit orders than the limit price of the buy order.
+1) A player places a limit order with a volume of 8 above the current serverMarket price.
+2) The matching engine will search a sell limit order with the lowest price to fill the buy order, just like the serverMarket-order. But the engine will not search for higher limit orders than the limit price of the buy order.
 3) If the order was not filled completly, the remaining amount will stay at that position as a normal limit buy order.
 
 As you can see in the pictures below, the current price is always that price, where the matching engine has last processed 2 orders.
@@ -465,11 +465,11 @@ As you can see in the pictures below, the current price is always that price, wh
 ## Terminology
 ---
 ### Order Book
-The Order Book is a list with all limit orders waiting to be processed. A buy order is always on a lower or equal price as the current market price and sell orders above or at the same price.
+The Order Book is a list with all limit orders waiting to be processed. A buy order is always on a lower or equal price as the current serverMarket price and sell orders above or at the same price.
 When a buy order is at the same price like a sell order, they will get matched by the matching engine.
 The spread is the price difference from the last executed sell to the last executed buy price.
 The smaller the spread the better.
-Buy/Sell orders which are placed nearer to the current market price will get processed first.
+Buy/Sell orders which are placed nearer to the current serverMarket price will get processed first.
 
 <div align="center">
     <img src="documentation/images/OrderBook.png" width=300> 
@@ -477,9 +477,9 @@ Buy/Sell orders which are placed nearer to the current market price will get pro
 
 ---
 ### Order Book Swipe
-A order book swipe can occure when a market does not provide enough liquidity to fill large market-orders.
+A order book swipe can occure when a serverMarket does not provide enough liquidity to fill large serverMarket-orders.
 The image above shows that in an example for a large buy order and to less sell limit orders.
-Since the matching engine try's to fill the market-order, the market price can rise extremly high when the market-order is large enough and the sell volume is low enough.
+Since the matching engine try's to fill the serverMarket-order, the serverMarket price can rise extremly high when the serverMarket-order is large enough and the sell volume is low enough.
 For the player who executed the buy order, this is bad since all sell orders are on different prices, the average buy price can rise much higher than expected.
 The same can happen for sell orders, in that case the player will not receive as much money for the selled goods as expected.
 <div align="center">
@@ -494,13 +494,13 @@ The timescale can't be changed in the mod.
 A admin can change the time for each candle, default is 1 min.
 A cancle can be defined with 4 values:
 - **Open Price**
-  The current price the market had when the new candle was created.
+  The current price the serverMarket had when the new candle was created.
 - **High Price**
-  The highest price the market had since the candle was created.
+  The highest price the serverMarket had since the candle was created.
 - **Low Price**
-  The lowest price the market had since the candle was created. 
+  The lowest price the serverMarket had since the candle was created. 
 - **Close Price**
-  The current price the market had when the candle was finished.
+  The current price the serverMarket had when the candle was finished.
 
 <div align="center">
     <img src="documentation/images/Candle.png" width=200> 
@@ -515,7 +515,7 @@ Below is a short animation to show how a price movement can be visualized using 
 
 ### Random Walk
 A random walk is a way to generate pseudorandom values ​​that depend on the previous values.
-This value is a great source to create random market prive movements.
+This value is a great source to create random serverMarket prive movements.
 
 
 

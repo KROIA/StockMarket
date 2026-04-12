@@ -1,11 +1,10 @@
-package net.kroia.stockmarket.market.client;
+package net.kroia.stockmarket.stockmarket.market;
 
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.networking.client_server.arrs.RequestManager;
 import net.kroia.modutilities.networking.client_server.streaming.StreamSystem;
 import net.kroia.stockmarket.StockMarketModBackend;
-import net.kroia.stockmarket.market.order.Order;
-import net.kroia.stockmarket.networking.StockMarketNetworking;
+import net.kroia.stockmarket.api.market.IClientMarket;
+import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.networking.request.ActiveOrdersRequest;
 import net.kroia.stockmarket.networking.request.CreateOrderRequest;
 import net.kroia.stockmarket.networking.request.MarketPriceHistoryRequest;
@@ -14,12 +13,10 @@ import net.kroia.stockmarket.util.StockMarketGuiElement;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
 
-public class ClientMarket
+public class ClientMarket implements IClientMarket
 {
     protected static StockMarketModBackend.ClientInstances BACKEND_INSTANCES;
     public static void setBackend(StockMarketModBackend.ClientInstances backend) {
@@ -193,25 +190,25 @@ public class ClientMarket
     @Override
     public String toString()
     {
-        return "Market:" + itemID + " Price:" + priceHistoryData.getCurrentMarketPrice();
+        return "ServerMarket:" + itemID + " Price:" + priceHistoryData.getCurrentMarketPrice();
     }
 
 
 
 
     protected void info(String message) {
-        BACKEND_INSTANCES.LOGGER.info("[Market:"+itemID+"]: "+message);
+        BACKEND_INSTANCES.LOGGER.info("[ServerMarket:"+itemID+"]: "+message);
     }
     protected void error(String message) {
-        BACKEND_INSTANCES.LOGGER.error("[Market:"+itemID+"]: "+message);
+        BACKEND_INSTANCES.LOGGER.error("[ServerMarket:"+itemID+"]: "+message);
     }
     protected void error(String message, Throwable throwable) {
-        BACKEND_INSTANCES.LOGGER.error("[Market:"+itemID+"]: "+message, throwable);
+        BACKEND_INSTANCES.LOGGER.error("[ServerMarket:"+itemID+"]: "+message, throwable);
     }
     protected void warn(String message) {
-        BACKEND_INSTANCES.LOGGER.warn("[Market:"+itemID+"]: "+message);
+        BACKEND_INSTANCES.LOGGER.warn("[ServerMarket:"+itemID+"]: "+message);
     }
     protected void debug(String message) {
-        BACKEND_INSTANCES.LOGGER.debug("[Market:"+itemID+"]: "+message);
+        BACKEND_INSTANCES.LOGGER.debug("[ServerMarket:"+itemID+"]: "+message);
     }
 }

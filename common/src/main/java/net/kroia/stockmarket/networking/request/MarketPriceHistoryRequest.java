@@ -5,6 +5,7 @@ import net.kroia.modutilities.networking.client_server.streaming.GenericStream;
 import net.kroia.stockmarket.data.filter.DateFilter;
 import net.kroia.stockmarket.data.filter.EqualityFilter;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
+import net.kroia.stockmarket.util.MultiServerUtils;
 import net.kroia.stockmarket.util.PriceHistoryData;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
 import net.kroia.stockmarket.util.StockMarketGenericStream;
@@ -12,9 +13,11 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.server.level.ServerPlayer;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 public class MarketPriceHistoryRequest extends StockMarketGenericRequest<MarketPriceHistoryRequest.InputData, PriceHistoryData>
@@ -37,8 +40,10 @@ public class MarketPriceHistoryRequest extends StockMarketGenericRequest<MarketP
 
 
     @Override
-    public CompletableFuture<PriceHistoryData> handleOnServer(InputData input, ServerPlayer sender)
+    public CompletableFuture<PriceHistoryData> handleOnMasterServer(InputData input, String slaveID, @Nullable UUID playerSender)
     {
+        if(needsRoutingToMaster() && !MultiServerUtils.canInteractWithStockMarket(playerSender))
+            return CompletableFuture.completedFuture(new PriceHistoryData(input.item));
         CompletableFuture<PriceHistoryData> future = new CompletableFuture<>();
         info("MarketPriceHistoryRequest started for item: " + input);
         CompletableFuture<List<MarketPriceStruct>>  fut = BACKEND_INSTANCES.MARKET_PRICE_HISTORY_MANAGER.getHistory(

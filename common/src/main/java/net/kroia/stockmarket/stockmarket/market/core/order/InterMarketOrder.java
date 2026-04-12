@@ -1,11 +1,17 @@
-package net.kroia.stockmarket.market.order;
+package net.kroia.stockmarket.stockmarket.market.core.order;
 
 import com.ibm.icu.impl.Pair;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.modutilities.persistence.ServerSaveable;
 import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
+import net.minecraft.core.UUIDUtil;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
 
@@ -13,6 +19,21 @@ public class InterMarketOrder implements ServerSaveable
 {
     private final Order buyOrder;
     private final Order sellOrder;
+
+
+    public static final StreamCodec<RegistryFriendlyByteBuf, InterMarketOrder> STREAM_CODEC = new StreamCodec<>() {
+        @Override
+        public void encode(RegistryFriendlyByteBuf buf, InterMarketOrder data) {
+            Order.STREAM_CODEC.encode(buf, data.buyOrder);
+            Order.STREAM_CODEC.encode(buf, data.sellOrder);
+        }
+        @Override
+        public @NotNull InterMarketOrder decode(RegistryFriendlyByteBuf buf) {
+            Order buyOrder = Order.STREAM_CODEC.decode(buf);
+            Order sellOrder = Order.STREAM_CODEC.decode(buf);
+            return new InterMarketOrder(buyOrder, sellOrder);
+        }
+    };
 
 
     // Player order

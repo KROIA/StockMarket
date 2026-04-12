@@ -3,8 +3,6 @@ package net.kroia.stockmarket.screen;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.market.client.ClientMarketManager;
-import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.kroia.stockmarket.networking.packet.TestPacket;
 import net.kroia.stockmarket.util.StockMarketGuiScreen;
 import net.minecraft.network.chat.Component;

@@ -1,0 +1,368 @@
+package net.kroia.stockmarket.stockmarket.marketmanager;
+
+import net.kroia.banksystem.banking.bank.AsyncBank;
+import net.kroia.banksystem.util.ItemID;
+import net.kroia.banksystem.util.MultiServerUtils;
+import net.kroia.banksystem.util.async_function_forwarding.AsyncForwardingRequest;
+import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionDataCodecs;
+import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionInputData;
+import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionOutputData;
+import net.kroia.modutilities.networking.ExtraCodecUtils;
+import net.kroia.modutilities.networking.client_server.arrs.AsynchronousRequestResponseSystem;
+import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.api.market.IAsyncMarket;
+import net.kroia.stockmarket.api.market.IServerMarket;
+import net.kroia.stockmarket.api.marketmanager.IAsyncMarketManager;
+import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
+import net.kroia.stockmarket.stockmarket.market.AsyncMarket;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+
+public class AsyncMarketManager implements IAsyncMarketManager {
+    private static StockMarketModBackend.ServerInstances BACKEND_INSTANCES;
+    public static void setBackend(StockMarketModBackend.ServerInstances backend) {
+        BACKEND_INSTANCES = backend;
+        AsyncMarket.setBackend(backend);
+    }
+    private final boolean isClientSide;
+    private AsyncMarketManager(boolean clientSide) {
+        this.isClientSide = clientSide;
+    }
+
+    public static AsyncMarketManager createClientManager()
+    {
+        return new AsyncMarketManager(true);
+    }
+    public static AsyncMarketManager createSlaveServerManager()
+    {
+        return new AsyncMarketManager(false);
+    }
+    private AsyncMarket createMarket(ItemID itemID)
+    {
+        return AsyncMarket.createMarket(itemID, isClientSide);
+    }
+
+
+
+    /**
+     * Enumeration to specify each function that can be forwarded
+     */
+    public enum FunctionType
+    {
+        GetTradingCurrencyID,
+        GetAvailableMarketIDs,
+        MarketExists,
+        CreateMarket,
+        DeleteMarket,
+        GetMarket,
+    }
+
+
+    /**
+     * Map of codec pairs for each function
+     * If a codec is set to null, that means the argument is not available.
+     *      -> inputParamsCodec  == null: The function does not take any parameters
+     *      -> outputParamsCodec == null: The function does not return any value
+     */
+    private static AsyncFunctionDataCodecs codecPacket(@Nullable StreamCodec<RegistryFriendlyByteBuf, ?> inputParamsCodec, @Nullable StreamCodec<RegistryFriendlyByteBuf, ?> outputParamsCodec)
+    {
+        return new AsyncFunctionDataCodecs(inputParamsCodec, outputParamsCodec);
+    }
+    public static final Map<FunctionType, AsyncFunctionDataCodecs> codecs = new HashMap<>(){{
+        //put(FunctionType.GetItemID,                             codecPacket(null, ItemID.STREAM_CODEC));
+        put(FunctionType.GetTradingCurrencyID,                      codecPacket(null, ItemID.STREAM_CODEC));
+        put(FunctionType.GetAvailableMarketIDs,                     codecPacket(null, ExtraCodecUtils.listStreamCodec(ItemID.STREAM_CODEC)));
+        put(FunctionType.MarketExists,                              codecPacket(ItemID.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
+        put(FunctionType.CreateMarket,                              codecPacket(ItemID.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
+        put(FunctionType.DeleteMarket,                              codecPacket(ItemID.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
+        put(FunctionType.GetMarket,                                 codecPacket(ItemID.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
+
+    }};
+    /**
+     * Specialized InputData class, acting as data container for function input arguments
+     */
+    public static class InputData extends AsyncFunctionInputData<FunctionType> {
+        public InputData(FunctionType function, byte[] encodedParams) {
+            super(function, codecs.get(function).inputParamsCodec, encodedParams);
+        }
+        public InputData(FunctionType function) {
+            super(function, codecs.get(function).inputParamsCodec);
+        }
+        public static <T> InputData of(FunctionType functionType, T result)
+        {
+            return (InputData) AsyncFunctionInputData.of(codecs.get(functionType).inputParamsCodec, functionType, result, InputData::new);
+        }
+        public static InputData of(FunctionType functionType)
+        {
+            return (InputData) AsyncFunctionInputData.of(codecs.get(functionType).inputParamsCodec, functionType, null, InputData::new);
+        }
+    }
+
+    /**
+     * Specialized OutputData class, acting as data container for function return values
+     */
+    public static class OutputData extends AsyncFunctionOutputData<FunctionType> {
+
+        public OutputData(FunctionType function, byte[] encodedResult) {
+            super(function, codecs.get(function).outputParamsCodec, encodedResult);
+        }
+        public OutputData(FunctionType function) {
+            super(function, codecs.get(function).outputParamsCodec);
+        }
+        public static <T> OutputData of(FunctionType functionType, T result)
+        {
+            return (OutputData) AsyncFunctionOutputData.of(codecs.get(functionType).outputParamsCodec, functionType, result, OutputData::new);
+        }
+        public static OutputData of(FunctionType functionType)
+        {
+            return (OutputData) AsyncFunctionOutputData.of(functionType, OutputData::new);
+        }
+    }
+
+    /**
+     * Specialized Request class to transport the data packets to the master
+     */
+    public static class Request extends AsyncForwardingRequest<FunctionType, InputData, OutputData>
+    {
+        public static final Request instance = (Request) AsynchronousRequestResponseSystem.register(new Request());
+        public Request() {
+            super(InputData::new, OutputData::new, FunctionType.class);
+        }
+        @Override
+        public String getRequestTypeID() {
+            return Request.class.getName();
+        }
+
+        @Override
+        public CompletableFuture<OutputData> sendRequestToServer(InputData input)
+        {
+            if(AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
+                info("Sending request to server for function: "+input.function.toString());
+            return super.sendRequestToServer(input);
+        }
+
+        /**
+         * Gets called by the Request handler on the master side
+         * @param input the input data provided by the function call
+         * @param playerSender the player. If null, no player has sent the request (server only request)
+         * @return the response data future for to send back to the requestor
+         */
+        @Override
+        public CompletableFuture<OutputData> handleOnMasterServer(InputData input, String slaveID, @Nullable UUID playerSender) {
+            String playerInfo = "";
+            String playerName = "";
+            if(playerSender != null) {
+                playerName = tryGetPlayerName(playerSender);
+                playerInfo = " from player: " + playerName;
+            }
+            if(AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
+                info("Received request to handle on master server for function: "+input.function.toString() + playerInfo);
+            if(playerSender != null)
+            {
+                if(!isAllowedToCallByClient(input))
+                {
+                    warn("The player '"+playerName+"' try's to call the function: '"+input.function.toString()+"' which is not allowed from the client side!");
+                    return CompletableFuture.completedFuture(OutputData.of(input.function));
+                }
+            }
+            IServerMarketManager manager = AsyncMarketManager.BACKEND_INSTANCES.MARKET_MANAGER.getSync();
+            if(manager == null) {
+                if(AsyncMarketManager.BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().isSlave())
+                {
+                    throw new RuntimeException("[]: This server is configured to be a slave server but the slave seems not to be connected to its master.\n" +
+                            "This server instance has no IServerMarketManager!");
+                }
+                throw new RuntimeException("Server market manager not found");
+            }
+
+
+            return CompletableFuture.completedFuture(switch (input.function) {
+                //case FunctionType.GetItemID ->                            OutputData.of(input.function, market.getItemID());
+                case FunctionType.GetTradingCurrencyID ->      OutputData.of(input.function, manager.getTradingCurrencyID());
+                case FunctionType.GetAvailableMarketIDs ->     OutputData.of(input.function, manager.getAvailableMarketIDs());
+                case FunctionType.MarketExists ->              OutputData.of(input.function, manager.marketExists(input.decodeParams()));
+                case FunctionType.CreateMarket ->              OutputData.of(input.function, manager.createMarket(input.decodeParams()) != null);
+                case FunctionType.DeleteMarket ->              OutputData.of(input.function, manager.deleteMarket(input.decodeParams()));
+                case FunctionType.GetMarket ->                 OutputData.of(input.function, manager.getMarket(input.decodeParams()) != null);
+            });
+        }
+        @Override
+        protected boolean isAllowedToCallByClient(InputData input)
+        {
+            return switch (input.function) {
+                case FunctionType.GetTradingCurrencyID,
+                     FunctionType.GetAvailableMarketIDs,
+                     FunctionType.MarketExists,
+                     FunctionType.GetMarket-> true;
+
+                default -> false;
+            };
+        }
+    }
+
+    /**
+     * Makes sure that the instance exists from the beginning on and not only on the first usage
+     */
+    public static void setupNetworkPacket()
+    {
+        Request instance = Request.instance;
+    }
+
+    private CompletableFuture<OutputData> sendRequest(InputData input)
+    {
+        CompletableFuture<OutputData> future = new CompletableFuture<>();
+        CompletableFuture<OutputData> tmpFuture;
+        if(isClientSide)
+            tmpFuture = Request.instance.sendRequestToServer(input);
+        else
+            tmpFuture = Request.instance.sendRequestToMaster(input);
+
+        tmpFuture.thenAccept(outputData ->{
+            if(AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
+                info("Response received for request: "+ input.function.toString());
+            future.complete(outputData);
+        });
+
+        return future;
+    }
+
+
+
+    // ================================================================================================================
+    //
+    //
+    //       Custom Objects to hold multiple parameters, passed by a function call
+    //       These objects are used to bundle the arguments from a function that uses multiple arguments
+    //
+    //
+    // ================================================================================================================
+
+
+   /* private record ParamGroup_UUID_int(UUID uuid, int integer)
+    {
+        public static final StreamCodec<RegistryFriendlyByteBuf, ParamGroup_UUID_int> STREAM_CODEC = StreamCodec.composite(
+                UUIDUtil.STREAM_CODEC, p -> p.uuid,
+                ByteBufCodecs.INT, p -> p.integer,
+                ParamGroup_UUID_int::new
+        );
+    }*/
+
+
+    // ================================================================================================================
+    //
+    //
+    //       Main Interface implementation below
+    //
+    //
+    // ================================================================================================================
+
+    @Override
+    public CompletableFuture<ItemID> getTradingCurrencyIDAsync() {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(ItemID.INVALID_ID);
+        CompletableFuture<ItemID> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.GetTradingCurrencyID);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
+    }
+
+    @Override
+    public CompletableFuture<List<ItemID>> getAvailableMarketIDsAsync() {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(List.of());
+        CompletableFuture<List<ItemID>> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.GetAvailableMarketIDs);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
+    }
+
+    @Override
+    public CompletableFuture<Boolean> marketExistsAsync(@NotNull ItemID marketID) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(false);
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.MarketExists, marketID);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
+    }
+
+    @Override
+    public CompletableFuture<@Nullable IAsyncMarket> createMarketAsync(@NotNull ItemID marketID) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(null);
+        CompletableFuture<@Nullable IAsyncMarket> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.MarketExists, marketID);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> {
+            AsyncMarket market = null;
+            if(outputData.decodeResult())
+                market = createMarket(marketID);
+            future.complete(market);
+        });
+        return future;
+    }
+
+    @Override
+    public CompletableFuture<Boolean> deleteMarketAsync(@NotNull ItemID marketID) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(false);
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.MarketExists, marketID);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
+    }
+
+    @Override
+    public CompletableFuture<@Nullable IAsyncMarket> getMarketAsync(@NotNull ItemID marketID) {
+        if(!MultiServerUtils.checkConnectionToMaster())
+            return CompletableFuture.completedFuture(null);
+        CompletableFuture<@Nullable IAsyncMarket> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.GetMarket, marketID);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> {
+            AsyncMarket market = null;
+            if(outputData.decodeResult())
+                market = createMarket(marketID);
+            future.complete(market);
+        });
+        return future;
+    }
+
+
+
+
+    private static void info(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.info("[AsyncMarketManager] " + msg);
+    }
+    private static void error(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.error("[AsyncMarketManager] " + msg);
+    }
+    private static void error(String msg, Throwable e)
+    {
+        BACKEND_INSTANCES.LOGGER.error("[AsyncMarketManager] " + msg, e);
+    }
+    private static void warn(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.warn("[AsyncMarketManager] " + msg);
+    }
+    private static void debug(String msg)
+    {
+        BACKEND_INSTANCES.LOGGER.debug("[AsyncMarketManager] " + msg);
+    }
+
+}

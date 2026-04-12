@@ -2,13 +2,16 @@ package net.kroia.stockmarket.util;
 
 
 import net.kroia.banksystem.api.bankmanager.IBankManager;
-import net.kroia.banksystem.banking.bankmanager.BankManager;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.client_server.arrs.GenericRequest;
 import net.kroia.stockmarket.StockMarketModBackend;
-import net.kroia.stockmarket.market.server.Market;
-import net.kroia.stockmarket.market.server.MarketManager;
+import net.kroia.stockmarket.api.market.IServerMarket;
+import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
+import net.kroia.stockmarket.stockmarket.market.ServerMarket;
+import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.minecraft.server.level.ServerPlayer;
+
+import java.util.concurrent.CompletableFuture;
 
 public abstract class StockMarketGenericRequest<IN, OUT> extends GenericRequest<IN, OUT> {
     protected static StockMarketModBackend.ServerInstances BACKEND_INSTANCES;
@@ -21,19 +24,30 @@ public abstract class StockMarketGenericRequest<IN, OUT> extends GenericRequest<
         return BACKEND_INSTANCES.SERVER_SETTINGS.UTILITIES.playerIsAdmin(player);
     }
 
-    protected MarketManager getServerMarketManager()
+    protected IServerMarketManager getServerMarketManager()
     {
-        return BACKEND_INSTANCES.MARKET_MANAGER;
+        return BACKEND_INSTANCES.MARKET_MANAGER.getSync();
     }
     protected IBankManager getServerBankManager() {return BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager(); }
 
     protected final long getCurrentMarketPrice(ItemID id)
     {
-        MarketManager marketManager = BACKEND_INSTANCES.MARKET_MANAGER;
-        Market m =  marketManager.getMarket(id);
+        IServerMarketManager serverMarketManager = BACKEND_INSTANCES.MARKET_MANAGER.getSync();
+        IServerMarket m =  serverMarketManager.getMarket(id);
         if(m == null)
             return 0L;
         return m.getCurrentMarketPrice();
+    }
+
+
+
+    public CompletableFuture<OUT> handleOnServer(IN input, ServerPlayer sender) {
+        return handleOnMasterServer(input, "", sender.getUUID());
+    }
+    @Override
+    public boolean needsRoutingToMaster()
+    {
+        return BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().isSlave();
     }
 
 

@@ -70,7 +70,7 @@ public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
             stmt.addBatch();
         }
         catch(SQLException e){
-            StockMarketMod.LOGGER.error("Failed to queue market price record", e);
+            StockMarketMod.LOGGER.error("Failed to queue stockmarket price record", e);
         }
 
     }

@@ -14,6 +14,7 @@ import net.kroia.stockmarket.networking.request.CreateOrderRequest;
 import net.kroia.stockmarket.networking.request.MarketPriceHistoryRequest;
 import net.kroia.stockmarket.networking.request.MarketsRequest;
 import net.kroia.stockmarket.networking.stream.MarketPriceStream;
+import net.kroia.stockmarket.stockmarket.market.AsyncMarket;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
 import net.kroia.stockmarket.util.StockMarketGenericStream;
 import net.kroia.stockmarket.util.StockMarketNetworkPacket;
@@ -45,6 +46,8 @@ public class StockMarketNetworking extends NetworkPacketManager {
 
         setupClientReceiverPackets();
         setupServerReceiverPackets();
+
+        AsyncMarket.setupNetworkPacket();
 
         this.setupARRS(); // Setup the Asynchronous Request Response System (ARRS)
         this.setupStreamSystem();

@@ -1,10 +1,10 @@
-package net.kroia.stockmarket.market.server;
+package net.kroia.stockmarket.stockmarket.market.core;
 
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.persistence.ServerSaveable;
 import net.kroia.stockmarket.StockMarketModBackend;
-import net.kroia.stockmarket.market.order.InterMarketOrder;
-import net.kroia.stockmarket.market.order.Order;
+import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
+import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import org.jetbrains.annotations.NotNull;
@@ -125,7 +125,7 @@ public class Orderbook implements ServerSaveable
         float volume = virtualOrderbook.getVolume(price);
 
         if(currentMarketPrice > price) {
-            // The searched price is inside the buy order since the market price is higher than the searched price
+            // The searched price is inside the buy order since the stockmarket price is higher than the searched price
             for(Order order : buyLimitOrders)
             {
                 long startPrice = order.getStartPrice();
@@ -168,7 +168,7 @@ public class Orderbook implements ServerSaveable
     {
         long volume = VirtualOrderbook.roundConservative(virtualOrderbook.getVolume(price));
         if(currentMarketPrice > price) {
-            // The searched price is inside the buy order since the market price is higher than the searched price
+            // The searched price is inside the buy order since the stockmarket price is higher than the searched price
             for(Order order : buyLimitOrders)
             {
                 long startPrice = order.getStartPrice();
@@ -324,13 +324,13 @@ public class Orderbook implements ServerSaveable
 
 
     /**
-     * Returns the market price that will be if the given volume gets
+     * Returns the stockmarket price that will be if the given volume gets
      * consumed by the order.
      * @param volume can be positive for consuming the sell order
      *               can be negative for consuming the buy order
      * @param resultOut a pair object, who's elements are filled by the function call
-     *                  resultOut.first contains the new market price
-     *                  resultOut.second contains the amount of money that would flow out or into the market.
+     *                  resultOut.first contains the new stockmarket price
+     *                  resultOut.second contains the amount of money that would flow out or into the stockmarket.
      *                                   For positive volume -> consuming sell order -> resultOut.second is negative.
      *                                   For negative volume -> consuming buy order -> resultOut.second is positive.
      * @return true if success
@@ -350,7 +350,7 @@ public class Orderbook implements ServerSaveable
         {
             // Consuming the sell order -> moving price up
 
-            // max only necessary for the current market price since there can be a sell and a buy order
+            // max only necessary for the current stockmarket price since there can be a sell and a buy order
             // We only want sell order
             // Flipping the orderbook volume to be positive for easy comparison with the function
             // provided volume variable
@@ -367,7 +367,7 @@ public class Orderbook implements ServerSaveable
                 }
                 else
                 {
-                    // Fully consume the available market volume
+                    // Fully consume the available stockmarket volume
                     transferedMoney -= currentVolume * newMarketPrice;
                     volume -= currentVolume;
                     newMarketPrice++;
@@ -394,7 +394,7 @@ public class Orderbook implements ServerSaveable
                 }
                 else
                 {
-                    // Fully consume the available market volume
+                    // Fully consume the available stockmarket volume
                     transferedMoney -= currentVolume * newMarketPrice;
                     volume -= currentVolume;
                     newMarketPrice--;

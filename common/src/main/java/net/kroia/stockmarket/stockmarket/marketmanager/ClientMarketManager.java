@@ -1,29 +1,33 @@
-package net.kroia.stockmarket.market.client;
+package net.kroia.stockmarket.stockmarket.marketmanager;
 
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.client_server.arrs.AsynchronousRequestResponseSystem;
 import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.api.marketmanager.IAsyncMarketManager;
+import net.kroia.stockmarket.api.marketmanager.IClientMarketManager;
+import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.networking.request.ActiveOrdersRequest;
-import net.kroia.stockmarket.networking.request.CreateOrderRequest;
 import net.minecraft.client.player.LocalPlayer;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
-public class ClientMarketManager
+public class ClientMarketManager implements IClientMarketManager
 {
     protected static StockMarketModBackend.ClientInstances BACKEND_INSTANCES;
     public static void setBackend(StockMarketModBackend.ClientInstances backend) {
         BACKEND_INSTANCES = backend;
         ClientMarket.setBackend(backend);
     }
+    private final IAsyncMarketManager asyncServerMarketManager;
+
 
     private final Map<ItemID, ClientMarket> clientMarkets = new HashMap<>();
 
     public ClientMarketManager()
     {
-
+        asyncServerMarketManager = AsyncMarketManager.createClientManager();
     }
 
     public void onPlayerJoin(@Nullable LocalPlayer localPlayer)

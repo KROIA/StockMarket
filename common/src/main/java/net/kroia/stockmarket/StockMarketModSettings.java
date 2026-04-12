@@ -27,7 +27,7 @@ public class StockMarketModSettings extends ModSettings {
 
     public static void init()
     {
-      //  Market.init();
+      //  ServerMarket.init();
     }
 
     public static final class Utilities extends SettingsGroup
@@ -60,7 +60,7 @@ public class StockMarketModSettings extends ModSettings {
         public final Setting<ItemStack> CURRENCY = registerSetting("CURRENCY", BankSystemItems.MONEY.get().getDefaultInstance(), ItemStack.class, new ItemStackJsonParser()); // Starting balance for new players
         public final Setting<Long> CANDLE_TIME = registerSetting("CANDLE_TIME", 10000L, Long.class); // Time interval of candle sticks in ms
 
-        public Market() { super("Market"); }
+        public Market() { super("ServerMarket"); }
     }
 
 
@@ -120,7 +120,7 @@ public class StockMarketModSettings extends ModSettings {
         public static final int MAX_ORDERBOOK_TILES = 100;
     }
 
-    public static final class Market
+    public static final class ServerMarket
     {
         public static final long SHIFT_PRICE_CANDLE_INTERVAL_MS = 60000;
         public static HashMap<String, Integer> TRADABLE_ITEMS;

@@ -9,7 +9,7 @@ version = "${version}"
 displayName = "Stock Market"
 authors = "Alex Krieg"
 description = '''
-Stock Market Mod that allows players to buy and sell goods on a virtual market.
+Stock Market Mod that allows players to buy and sell goods on a virtual serverMarket.
 '''
 #logoFile = ""
 

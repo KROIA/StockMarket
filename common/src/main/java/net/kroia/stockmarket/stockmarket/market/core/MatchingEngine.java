@@ -1,12 +1,12 @@
-package net.kroia.stockmarket.market.server;
+package net.kroia.stockmarket.stockmarket.market.core;
 
 
 import net.kroia.banksystem.api.bank.IServerBank;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.StockMarketModBackend;
-import net.kroia.stockmarket.market.order.InterMarketOrder;
-import net.kroia.stockmarket.market.order.Order;
+import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
+import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -157,7 +157,7 @@ public class MatchingEngine
 
 
     /**
-     * Executes a market order against the order book.
+     * Executes a stockmarket order against the order book.
      *
      * Sign convention (preserved from original):
      *   order.getRemainingVolume() < 0  →  SELL  (player gives items, receives money)
@@ -173,7 +173,7 @@ public class MatchingEngine
         if (account == null) { orderCanceled(order); return; }
 
         IServerBank itemBank  = account.getBank(itemID);
-        IServerBank moneyBank = account.getBank(BACKEND_INSTANCES.MARKET_MANAGER.getTradingCurrencyID());
+        IServerBank moneyBank = account.getBank(BACKEND_INSTANCES.MARKET_MANAGER.getSync().getTradingCurrencyID());
         if (itemBank == null || moneyBank == null) { orderCanceled(order); return; }
 
         long orderVolume = order.getRemainingVolume();
@@ -306,7 +306,7 @@ public class MatchingEngine
 
     private void processBuy(Order order, long orderVolume, IServerBank itemBank, IServerBank moneyBank, long maximalAcceptedPrice)
     {
-        // Cap buy volume to what the player can afford at the current market price.
+        // Cap buy volume to what the player can afford at the current stockmarket price.
         // This is a conservative upper bound; actual cost may be lower if fills happen
         // at cheaper ask prices. Any overshoot is harmless — the loop stops when
         // orderVolume reaches 0.
@@ -599,7 +599,7 @@ public class MatchingEngine
         IServerBankAccount acct = getBankAccount(counterOrder.getBankAccountNr());
         if (acct == null) return null;
         IServerBank ib = acct.getBank(itemID);
-        IServerBank mb = acct.getBank(BACKEND_INSTANCES.MARKET_MANAGER.getTradingCurrencyID());
+        IServerBank mb = acct.getBank(BACKEND_INSTANCES.MARKET_MANAGER.getSync().getTradingCurrencyID());
         return (ib == null || mb == null) ? null : new BankPair(ib, mb);
     }
 
@@ -641,7 +641,7 @@ public class MatchingEngine
     @Nullable IServerBank getMoneyBank(int bankAccountID)
     {
         IServerBankAccount account = getBankAccount(bankAccountID);
-        ItemID moneyID = BACKEND_INSTANCES.MARKET_MANAGER.getTradingCurrencyID();
+        ItemID moneyID = BACKEND_INSTANCES.MARKET_MANAGER.getSync().getTradingCurrencyID();
         if(account != null && moneyID != null)
         {
             IServerBank bank = account.getBank(moneyID);

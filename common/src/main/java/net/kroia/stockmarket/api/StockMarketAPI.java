@@ -3,7 +3,7 @@ package net.kroia.stockmarket.api;
 public interface StockMarketAPI {
 
     /**
-     * Returns the mod ID of the Stock Market mod.
+     * Returns the mod ID of the Stock ServerMarket mod.
      *
      * @return The mod ID as a String.
      */
@@ -11,7 +11,7 @@ public interface StockMarketAPI {
 
 
     /**
-     * Returns the version of the Stock Market mod.
+     * Returns the version of the Stock ServerMarket mod.
      *
      * @return The mod version as a String.
      */

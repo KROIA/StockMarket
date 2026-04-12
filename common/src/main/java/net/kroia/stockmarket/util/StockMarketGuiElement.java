@@ -3,8 +3,8 @@ package net.kroia.stockmarket.util;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.stockmarket.StockMarketModBackend;
-import net.kroia.stockmarket.market.client.ClientMarket;
-import net.kroia.stockmarket.market.client.ClientMarketManager;
+import net.kroia.stockmarket.stockmarket.market.ClientMarket;
+import net.kroia.stockmarket.stockmarket.marketmanager.ClientMarketManager;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;

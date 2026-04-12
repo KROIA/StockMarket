@@ -1,21 +1,24 @@
-package net.kroia.stockmarket.market.server;
+package net.kroia.stockmarket.stockmarket.market;
 
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.persistence.ServerSaveable;
 import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
-import net.kroia.stockmarket.market.order.InterMarketOrder;
-import net.kroia.stockmarket.market.order.Order;
+import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
+import net.kroia.stockmarket.stockmarket.market.core.order.Order;
+import net.kroia.stockmarket.stockmarket.market.core.MatchingEngine;
+import net.kroia.stockmarket.stockmarket.market.core.Orderbook;
 import net.minecraft.nbt.CompoundTag;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.PriorityQueue;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 
-public class Market implements ServerSaveable {
+public class ServerMarket implements ServerSaveable, IServerMarket {
     private static StockMarketModBackend.ServerInstances BACKEND_INSTANCES;
     public static void setBackend(StockMarketModBackend.ServerInstances backend) {
         BACKEND_INSTANCES = backend;
@@ -48,7 +51,7 @@ public class Market implements ServerSaveable {
     private final PriorityQueue<InterMarketOrder> interMarket_MarketBuyOrders_inputBuffer = new PriorityQueue<>((o1, o2) -> Long.compare(o2.getTime(), o1.getTime()));
 
 
-    public Market(ItemID itemID, @Nullable Function<Long, Float> volumeProvider, long currentMarketPrice)
+    public ServerMarket(ItemID itemID, @Nullable Function<Long, Float> volumeProvider, long currentMarketPrice)
     {
         this.defaultVolumeProviderFunction =  volumeProvider;
         this.itemID = itemID;
@@ -75,54 +78,107 @@ public class Market implements ServerSaveable {
         candleHighPrice = this.currentMarketPrice;
         candleLowPrice = this.currentMarketPrice;
     }
-    public Market(ItemID itemID)
+
+    public ServerMarket(ItemID itemID)
     {
         this(itemID, null, 10);
     }
 
+    @Override
     public void test_resetVirtualVolumeDistribution()
     {
         orderbook.resetVirtualVolumeDistribution();
     }
+    @Override
     public void test_setCurrentMarketPrice(long currentMarketPrice)
     {
         this.currentMarketPrice = currentMarketPrice;
         this.orderbook.setCurrentMarketPrice(currentMarketPrice);
     }
+    @Override
     public void test_clearOrderbook()
     {
         orderbook.clear();
         orderbook.resetVirtualVolumeDistribution();
     }
+    @Override
     public void test_setDefaultVolumeProviderFunction(Function<Long, Float> defaultVolumeProviderFunction)
     {
         this.defaultVolumeProviderFunction = defaultVolumeProviderFunction;
     }
 
+
+
+
+
+    @Override
     public ItemID getItemID()
     {
         return itemID;
     }
+    @Override
+    public ItemID getItemIDAsync() {
+        return itemID;
+    }
+
+
+
+
+
+    @Override
     public long getCurrentMarketPrice()
     {
         return currentMarketPrice;
     }
+    @Override
+    public CompletableFuture<Long> getCurrentMarketPriceAsync() {
+        return CompletableFuture.completedFuture(currentMarketPrice);
+    }
+
+
+
+
+
+
+    @Override
     public long getCurrentTime()
     {
         return System.currentTimeMillis();
     }
+    @Override
+    public CompletableFuture<Long> getCurrentTimeAsync() {
+        return CompletableFuture.completedFuture(getCurrentTime());
+    }
+
+
+
+
+
+
+    @Override
     public long getVolume(long price)
     {
         return orderbook.getVolumeRounded(price);
     }
+    @Override
+    public CompletableFuture<Long> getVolumeAsync(long price) {
+        return CompletableFuture.completedFuture(getVolume(price));
+    }
+
+
+
+
+
+
 
     // Buffers the incoming order, execution will take place in the update()
+    @Override
     public boolean putOrder(Order order)
     {
         if(order.isFilled() || !marketOpen)
             return false;
         if(!order.getItemID().equals(itemID))
-            return false; // Wrong market for this order
+            return false; // Wrong stockmarket for this order
         if(order.isBuyOrder())
         {
             if(order.isMarketOrder())
@@ -139,13 +195,23 @@ public class Market implements ServerSaveable {
         }
         return true;
     }
+    @Override
+    public CompletableFuture<Boolean> putOrderAsync(Order order) {
+        return CompletableFuture.completedFuture(putOrder(order));
+    }
+
+
+
+
+
     // Buffers the incoming order, execution will take place in the update()
+    @Override
     public boolean putOrder(InterMarketOrder order)
     {
         if(order.isFilled() || !marketOpen)
             return false;
         if(!order.getBuyItemID().equals(itemID))
-            return false; // Wrong market for this order
+            return false; // Wrong stockmarket for this order
 
         if(order.isMarketOrder())
             interMarket_MarketBuyOrders_inputBuffer.add(order);
@@ -153,21 +219,96 @@ public class Market implements ServerSaveable {
             interMarket_LimitBuyOrders_inputBuffer.add(order);
         return true;
     }
+    @Override
+    public CompletableFuture<Boolean> putOrderAsync(InterMarketOrder order) {
+        return CompletableFuture.completedFuture(putOrder(order));
+    }
 
+
+
+
+    @Override
     public List<Order> getLimitOrders()
     {
         return orderbook.getLimitOrders();
     }
+    @Override
+    public CompletableFuture<List<Order>> getLimitOrdersAsync() {
+        return CompletableFuture.completedFuture(getLimitOrders());
+    }
 
+
+
+
+
+    @Override
     public boolean isMarketOpen()
     {
         return marketOpen;
     }
-    public void setMarketOpen(boolean marketOpen)
-    {
-        this.marketOpen = marketOpen;
+    @Override
+    public CompletableFuture<Boolean> isMarketOpenAsync() {
+        return CompletableFuture.completedFuture(marketOpen);
     }
 
+
+
+
+
+    @Override
+    public boolean setMarketOpen(boolean marketOpen)
+    {
+        this.marketOpen = marketOpen;
+        return true;
+    }
+    @Override
+    public CompletableFuture<Boolean> setMarketOpenAsync(boolean marketOpen) {
+        return CompletableFuture.completedFuture(setMarketOpen(marketOpen));
+    }
+
+
+
+
+
+
+    @Override
+    public MarketPriceStruct getCurrentMarketPriceStruct()
+    {
+        return new MarketPriceStruct(itemID.getShort(), candleOpenPrice, candleLowPrice, candleHighPrice, candleStartTime);
+    }
+    @Override
+    public CompletableFuture<MarketPriceStruct> getCurrentMarketPriceStructAsync() {
+        return CompletableFuture.completedFuture(getCurrentMarketPriceStruct());
+    }
+
+
+
+
+
+    @Override
+    public MarketPriceStruct getCurrentMarketPriceStructAndReset()
+    {
+        MarketPriceStruct  currentMarketPriceStruct = new MarketPriceStruct(itemID.getShort(), candleOpenPrice, candleLowPrice, candleHighPrice, candleStartTime);
+        candleStartTime =  System.currentTimeMillis();
+        candleOpenPrice = this.currentMarketPrice;
+        candleHighPrice = this.currentMarketPrice;
+        candleLowPrice = this.currentMarketPrice;
+        return currentMarketPriceStruct;
+    }
+    @Override
+    public CompletableFuture<MarketPriceStruct> getCurrentMarketPriceStructAndResetAsync() {
+        return CompletableFuture.completedFuture(getCurrentMarketPriceStructAndReset());
+    }
+
+
+
+
+
+
+
+
+
+    @Override
     public void update()
     {
         if(!marketOpen)
@@ -179,20 +320,6 @@ public class Market implements ServerSaveable {
         // Update the current candle
         candleLowPrice = Math.min(candleLowPrice, currentMarketPrice);
         candleHighPrice = Math.max(candleHighPrice, currentMarketPrice);
-    }
-
-    public MarketPriceStruct getCurrentMarketPriceStruct()
-    {
-        return new MarketPriceStruct(itemID.getShort(), candleOpenPrice, candleLowPrice, candleHighPrice, candleStartTime);
-    }
-    public MarketPriceStruct getCurrentMarketPriceStructAndReset()
-    {
-        MarketPriceStruct  currentMarketPriceStruct = new MarketPriceStruct(itemID.getShort(), candleOpenPrice, candleLowPrice, candleHighPrice, candleStartTime);
-        candleStartTime =  System.currentTimeMillis();
-        candleOpenPrice = this.currentMarketPrice;
-        candleHighPrice = this.currentMarketPrice;
-        candleLowPrice = this.currentMarketPrice;
-        return currentMarketPriceStruct;
     }
 
     /**
@@ -283,18 +410,20 @@ public class Market implements ServerSaveable {
 
 
     protected void info(String message) {
-        BACKEND_INSTANCES.LOGGER.info("[Market:"+itemID+"]: "+message);
+        BACKEND_INSTANCES.LOGGER.info("[ServerMarket:"+itemID+"]: "+message);
     }
     protected void error(String message) {
-        BACKEND_INSTANCES.LOGGER.error("[Market:"+itemID+"]: "+message);
+        BACKEND_INSTANCES.LOGGER.error("[ServerMarket:"+itemID+"]: "+message);
     }
     protected void error(String message, Throwable throwable) {
-        BACKEND_INSTANCES.LOGGER.error("[Market:"+itemID+"]: "+message, throwable);
+        BACKEND_INSTANCES.LOGGER.error("[ServerMarket:"+itemID+"]: "+message, throwable);
     }
     protected void warn(String message) {
-        BACKEND_INSTANCES.LOGGER.warn("[Market:"+itemID+"]: "+message);
+        BACKEND_INSTANCES.LOGGER.warn("[ServerMarket:"+itemID+"]: "+message);
     }
     protected void debug(String message) {
-        BACKEND_INSTANCES.LOGGER.debug("[Market:"+itemID+"]: "+message);
+        BACKEND_INSTANCES.LOGGER.debug("[ServerMarket:"+itemID+"]: "+message);
     }
+
+
 }

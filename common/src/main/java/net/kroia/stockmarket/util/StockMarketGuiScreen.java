@@ -3,8 +3,8 @@ package net.kroia.stockmarket.util;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.GuiScreen;
 import net.kroia.stockmarket.StockMarketModBackend;
-import net.kroia.stockmarket.market.client.ClientMarket;
-import net.kroia.stockmarket.market.client.ClientMarketManager;
+import net.kroia.stockmarket.stockmarket.market.ClientMarket;
+import net.kroia.stockmarket.stockmarket.marketmanager.ClientMarketManager;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
@@ -25,10 +25,12 @@ public abstract class StockMarketGuiScreen extends GuiScreen {
     protected StockMarketGuiScreen(Component pTitle) {
         super(pTitle);
         setGuiScale(guiScale);
+        BACKEND_INSTANCES.MARKET_MANAGER.requestMarkets();
     }
     protected StockMarketGuiScreen(Component pTitle, Screen parent) {
         super(pTitle, parent);
         setGuiScale(guiScale);
+        BACKEND_INSTANCES.MARKET_MANAGER.requestMarkets();
     }
 
     protected ClientMarketManager getMarketManager()
