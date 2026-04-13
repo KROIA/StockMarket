@@ -56,13 +56,16 @@ public class ClientMarketManager implements IClientMarketManager
     public CompletableFuture<List<ItemID>> requestMarkets()
     {
         CompletableFuture<List<ItemID>> future = new CompletableFuture<>();
-        AsynchronousRequestResponseSystem.sendRequestToServer(BACKEND_INSTANCES.NETWORKING.MARKETS_REQUEST, 0).thenAccept((response) ->
+        BACKEND_INSTANCES.BANK_SYSTEM_API.getClientBankManager().getItemFractionScaleFactor().thenAccept((factor)->
         {
-            info("Markets request response received with "+response.size()+" markets");
-            for(ItemID itemID : response) {
-                createClientMarket(itemID);
-            }
-            future.complete(response);
+            AsynchronousRequestResponseSystem.sendRequestToServer(BACKEND_INSTANCES.NETWORKING.MARKETS_REQUEST, 0).thenAccept((response) ->
+            {
+                info("Markets request response received with "+response.size()+" markets");
+                for(ItemID itemID : response) {
+                    createClientMarket(itemID, factor);
+                }
+                future.complete(response);
+            });
         });
         return future;
     }
@@ -87,13 +90,13 @@ public class ClientMarketManager implements IClientMarketManager
 
 
 
-    private void createClientMarket(ItemID itemID)
+    private void createClientMarket(ItemID itemID, int itemFractionScaleFactor)
     {
         ClientMarket clientMarket = clientMarkets.get(itemID);
         if(clientMarket == null)
         {
             if(itemID.isValid()) {
-                clientMarket = new ClientMarket(itemID);
+                clientMarket = new ClientMarket(itemID, itemFractionScaleFactor);
                 clientMarkets.put(itemID, clientMarket);
                 info("Created ClientMarket with ID: " + itemID);
             }

@@ -32,7 +32,7 @@ public class TradeScreen extends StockMarketGuiScreen {
         super(Texts.TITLE);
         this.blockEntity = blockEntity;
 
-        candlestickChart =  new CandlestickChart();
+        candlestickChart = new CandlestickChart();
         candlestickChart.setData(null);
 
         addElement(candlestickChart);

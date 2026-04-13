@@ -32,10 +32,10 @@ public class ClientMarket implements IClientMarket
     private long currentServerTime = lastCandleCreationTime;
     private long newCandleInterval = BACKEND_INSTANCES.SETTINGS.getCandleTimeMs();
 
-    public ClientMarket(@NotNull ItemID itemID)
+    public ClientMarket(@NotNull ItemID itemID, int itemScaleFactor)
     {
         this.itemID = itemID;
-        this.priceHistoryData = new PriceHistoryData(itemID);
+        this.priceHistoryData = new PriceHistoryData(itemID, itemScaleFactor);
     }
 
     public void update()
@@ -55,6 +55,10 @@ public class ClientMarket implements IClientMarket
     }
 
 
+    public int getItemFractionScaleFactor()
+    {
+        return priceHistoryData.getItemScaleFactor();
+    }
     public @NotNull ItemID getItemID()
     {
         return itemID;

@@ -16,6 +16,7 @@ import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -43,7 +44,7 @@ public class MarketPriceHistoryRequest extends StockMarketGenericRequest<MarketP
     public CompletableFuture<PriceHistoryData> handleOnMasterServer(InputData input, String slaveID, @Nullable UUID playerSender)
     {
         if(needsRoutingToMaster() && !MultiServerUtils.canInteractWithStockMarket(playerSender))
-            return CompletableFuture.completedFuture(new PriceHistoryData(input.item));
+            return CompletableFuture.completedFuture(new PriceHistoryData(input.item, getItemFractionScaleFactor()));
         CompletableFuture<PriceHistoryData> future = new CompletableFuture<>();
         info("MarketPriceHistoryRequest started for item: " + input);
         CompletableFuture<List<MarketPriceStruct>>  fut = BACKEND_INSTANCES.MARKET_PRICE_HISTORY_MANAGER.getHistory(
@@ -51,7 +52,7 @@ public class MarketPriceHistoryRequest extends StockMarketGenericRequest<MarketP
                 Optional.of(new EqualityFilter(input.item.getShort())), -1);
         fut.thenAccept(list -> {
 
-            PriceHistoryData data = PriceHistoryData.fromSqlData(list, getCurrentMarketPrice(input.item));
+            PriceHistoryData data = PriceHistoryData.fromSqlData(list, getCurrentMarketPrice(input.item), getItemFractionScaleFactor());
             if(data == null)
             {
                 warn("MarketPriceHistoryRequest failed to fetch data for item: " + input.item);

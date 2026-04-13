@@ -2,7 +2,6 @@ package net.kroia.stockmarket.api.marketmanager;
 
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.api.market.IServerMarket;
-import net.kroia.stockmarket.stockmarket.market.ServerMarket;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 

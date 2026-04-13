@@ -6,7 +6,6 @@ import net.kroia.banksystem.item.BankSystemItems;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IServerMarket;
-import net.kroia.stockmarket.stockmarket.market.ServerMarket;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.minecraft.world.item.Items;
 

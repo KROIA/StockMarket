@@ -1,7 +1,9 @@
 package net.kroia.stockmarket.util;
 
 
+import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.bankmanager.IBankManager;
+import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.client_server.arrs.GenericRequest;
 import net.kroia.stockmarket.StockMarketModBackend;
@@ -11,6 +13,7 @@ import net.kroia.stockmarket.stockmarket.market.ServerMarket;
 import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
 public abstract class StockMarketGenericRequest<IN, OUT> extends GenericRequest<IN, OUT> {
@@ -29,6 +32,13 @@ public abstract class StockMarketGenericRequest<IN, OUT> extends GenericRequest<
         return BACKEND_INSTANCES.MARKET_MANAGER.getSync();
     }
     protected IBankManager getServerBankManager() {return BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager(); }
+    protected int getItemFractionScaleFactor()
+    {
+        IServerBankManager manager = getServerBankManager().getSync();
+        if(manager == null)
+            return BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+        return manager.getItemFractionScaleFactor();
+    }
 
     protected final long getCurrentMarketPrice(ItemID id)
     {
