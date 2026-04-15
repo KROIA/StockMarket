@@ -20,7 +20,7 @@ public abstract class StockMarketGuiScreen extends GuiScreen {
     }
 
 
-    public static final float guiScale = 0.7f;
+    public static final float guiScale = 0.5f;
 
     protected StockMarketGuiScreen(Component pTitle) {
         super(pTitle);

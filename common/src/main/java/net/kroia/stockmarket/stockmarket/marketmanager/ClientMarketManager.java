@@ -98,6 +98,7 @@ public class ClientMarketManager implements IClientMarketManager
             if(itemID.isValid()) {
                 clientMarket = new ClientMarket(itemID, itemFractionScaleFactor);
                 clientMarkets.put(itemID, clientMarket);
+                clientMarket.requestFullPriceHistoryUpdate();
                 info("Created ClientMarket with ID: " + itemID);
             }
             else

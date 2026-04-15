@@ -79,7 +79,8 @@ public class TradeScreen extends StockMarketGuiScreen {
     protected void updateLayout(Gui gui) {
         int width = getWidth();
         int height = getHeight();
+        int border = 10;
 
-        candlestickChart.setBounds(0, 0, width, height);
+        candlestickChart.setBounds(border, border, width-2*border, height-2*border);
     }
 }

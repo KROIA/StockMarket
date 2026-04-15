@@ -99,13 +99,13 @@ public class ClientMarket implements IClientMarket
 
         marketPriceUpdateStreamID = StreamSystem.startServerToClientStream(BACKEND_INSTANCES.NETWORKING.MARKET_PRICE_STREAM, itemID, (price)->
         {
-            info("Price received: " + price.marketPrice);
+            //info("Price received: " + price.marketPrice);
             currentServerTime = price.timestamp;
             priceHistoryData.setCurrentMarketPrice(price.marketPrice);
         },()->
         {
             // Stream stopped
-            info("MARKET_PRICE_STREAM stopped");
+            info("MARKET_PRICE_STREAM stopped for itemID: "+itemID);
             marketPriceUpdateStreamID  = null;
         });
         return marketPriceUpdateStreamID != null;
@@ -194,25 +194,25 @@ public class ClientMarket implements IClientMarket
     @Override
     public String toString()
     {
-        return "ServerMarket:" + itemID + " Price:" + priceHistoryData.getCurrentMarketPrice();
+        return "ClientMarket:" + itemID + " Price:" + priceHistoryData.getCurrentMarketPrice();
     }
 
 
 
 
     protected void info(String message) {
-        BACKEND_INSTANCES.LOGGER.info("[ServerMarket:"+itemID+"]: "+message);
+        BACKEND_INSTANCES.LOGGER.info("[ClientMarket:"+itemID+"]: "+message);
     }
     protected void error(String message) {
-        BACKEND_INSTANCES.LOGGER.error("[ServerMarket:"+itemID+"]: "+message);
+        BACKEND_INSTANCES.LOGGER.error("[ClientMarket:"+itemID+"]: "+message);
     }
     protected void error(String message, Throwable throwable) {
-        BACKEND_INSTANCES.LOGGER.error("[ServerMarket:"+itemID+"]: "+message, throwable);
+        BACKEND_INSTANCES.LOGGER.error("[ClientMarket:"+itemID+"]: "+message, throwable);
     }
     protected void warn(String message) {
-        BACKEND_INSTANCES.LOGGER.warn("[ServerMarket:"+itemID+"]: "+message);
+        BACKEND_INSTANCES.LOGGER.warn("[ClientMarket:"+itemID+"]: "+message);
     }
     protected void debug(String message) {
-        BACKEND_INSTANCES.LOGGER.debug("[ServerMarket:"+itemID+"]: "+message);
+        BACKEND_INSTANCES.LOGGER.debug("[ClientMarket:"+itemID+"]: "+message);
     }
 }
