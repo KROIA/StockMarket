@@ -121,33 +121,33 @@ public class ClientMarket implements IClientMarket
 
 
 
-    public CompletableFuture<CreateOrderRequest.OutputData> createLimitOrder(int bankAccountNr, long volume, long price)
+    public CompletableFuture<CreateOrderRequest.OutputData> createLimitOrder(int bankAccountNr, double volume, double price)
     {
         return createOrder(bankAccountNr, Order.Type.LIMIT, volume, price);
     }
-    public CompletableFuture<CreateOrderRequest.OutputData> createLimitBuyOrder(int bankAccountNr, long volume, long price)
+    public CompletableFuture<CreateOrderRequest.OutputData> createLimitBuyOrder(int bankAccountNr, double volume, double price)
     {
         return createOrder(bankAccountNr, Order.Type.LIMIT, Math.max(0, volume), price);
     }
-    public CompletableFuture<CreateOrderRequest.OutputData> createLimitSellOrder(int bankAccountNr, long volume, long price)
+    public CompletableFuture<CreateOrderRequest.OutputData> createLimitSellOrder(int bankAccountNr, double volume, double price)
     {
         return createOrder(bankAccountNr, Order.Type.LIMIT, Math.min(0, volume), price);
     }
-    public CompletableFuture<CreateOrderRequest.OutputData> createMarketOrder(int bankAccountNr, long volume)
+    public CompletableFuture<CreateOrderRequest.OutputData> createMarketOrder(int bankAccountNr, double volume)
     {
         return createOrder(bankAccountNr, Order.Type.MARKET, volume, 0);
     }
-    public CompletableFuture<CreateOrderRequest.OutputData> createLimitBuyOrder(int bankAccountNr, long volume)
+    public CompletableFuture<CreateOrderRequest.OutputData> createLimitBuyOrder(int bankAccountNr, double volume)
     {
         return createOrder(bankAccountNr, Order.Type.MARKET, Math.max(0, volume), 0);
     }
-    public CompletableFuture<CreateOrderRequest.OutputData> createLimitSellOrder(int bankAccountNr, long volume)
+    public CompletableFuture<CreateOrderRequest.OutputData> createLimitSellOrder(int bankAccountNr, double volume)
     {
         return createOrder(bankAccountNr, Order.Type.MARKET, Math.min(0, volume), 0);
     }
 
 
-    public CompletableFuture<CreateOrderRequest.OutputData> createOrder(int bankAccountNr, Order.Type type, long volume, long price)
+    public CompletableFuture<CreateOrderRequest.OutputData> createOrder(int bankAccountNr, Order.Type type, double volume, double price)
     {
         CreateOrderRequest.InputData inputData = new CreateOrderRequest.InputData(itemID, bankAccountNr, type, volume, price);
         CompletableFuture<CreateOrderRequest.OutputData> future = new CompletableFuture<>();

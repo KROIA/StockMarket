@@ -1,6 +1,5 @@
 package net.kroia.stockmarket.networking;
 
-import io.netty.buffer.ByteBuf;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.modutilities.networking.NetworkPacketManager;
 import net.kroia.modutilities.networking.client_server.arrs.AsynchronousRequestResponseSystem;
@@ -8,7 +7,6 @@ import net.kroia.modutilities.networking.client_server.streaming.StreamSystem;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.networking.packet.OpenUIPacket;
 import net.kroia.stockmarket.networking.packet.PlayerJoinSyncPacket;
-import net.kroia.stockmarket.networking.packet.TestPacket;
 import net.kroia.stockmarket.networking.request.ActiveOrdersRequest;
 import net.kroia.stockmarket.networking.request.CreateOrderRequest;
 import net.kroia.stockmarket.networking.request.MarketPriceHistoryRequest;
@@ -62,7 +60,7 @@ public class StockMarketNetworking extends NetworkPacketManager {
     @Override
     public void setupServerReceiverPackets() {
 
-        registerC2S(TestPacket.TYPE, TestPacket.STREAM_CODEC);
+        //registerC2S(TestPacket.TYPE, TestPacket.STREAM_CODEC);
 
     }
 

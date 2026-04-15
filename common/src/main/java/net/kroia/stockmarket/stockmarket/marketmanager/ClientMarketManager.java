@@ -56,7 +56,7 @@ public class ClientMarketManager implements IClientMarketManager
     public CompletableFuture<List<ItemID>> requestMarkets()
     {
         CompletableFuture<List<ItemID>> future = new CompletableFuture<>();
-        BACKEND_INSTANCES.BANK_SYSTEM_API.getClientBankManager().getItemFractionScaleFactor().thenAccept((factor)->
+        BACKEND_INSTANCES.BANK_SYSTEM_API.getClientBankManager().getItemFractionScaleFactorAsync().thenAccept((factor)->
         {
             AsynchronousRequestResponseSystem.sendRequestToServer(BACKEND_INSTANCES.NETWORKING.MARKETS_REQUEST, 0).thenAccept((response) ->
             {

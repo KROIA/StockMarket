@@ -3,7 +3,6 @@ package net.kroia.stockmarket.screen;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.screen.widgets.CandlestickChart;
 import net.kroia.stockmarket.util.StockMarketGuiScreen;
@@ -21,16 +20,14 @@ public class TradeScreen extends StockMarketGuiScreen {
         private static final Component TITLE = Component.translatable(PREFIX +"title");
     }
 
-    private final StockMarketBlockEntity blockEntity;
 
 
     private final CandlestickChart  candlestickChart;
     private @Nullable ItemID currentMarketID = null;
 
-    public TradeScreen(StockMarketBlockEntity blockEntity)
+    public TradeScreen()
     {
         super(Texts.TITLE);
-        this.blockEntity = blockEntity;
 
         candlestickChart = new CandlestickChart();
         candlestickChart.setData(null);
@@ -52,9 +49,9 @@ public class TradeScreen extends StockMarketGuiScreen {
     }
 
 
-    public static void openScreen(StockMarketBlockEntity blockEntity)
+    public static void openScreen()
     {
-        TradeScreen screen = new TradeScreen(blockEntity);
+        TradeScreen screen = new TradeScreen();
         Minecraft.getInstance().setScreen(screen);
     }
     @Override

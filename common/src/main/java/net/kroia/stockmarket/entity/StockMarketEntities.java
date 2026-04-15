@@ -6,7 +6,6 @@ import dev.architectury.registry.registries.RegistrarManager;
 import dev.architectury.registry.registries.RegistrySupplier;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.block.StockMarketBlocks;
-import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -30,9 +29,9 @@ public class StockMarketEntities {
         initialized = true;
     }
 
-    public static final RegistrySupplier<BlockEntityType<StockMarketBlockEntity>> STOCK_MARKET_BLOCK_ENTITY =
-            registerBlockEntity("stock_market_block_entity",
-                    () -> BlockEntityType.Builder.of(StockMarketBlockEntity::new, StockMarketBlocks.STOCK_MARKET_BLOCK.get()).build(null));
+    //public static final RegistrySupplier<BlockEntityType<StockMarketBlockEntity>> STOCK_MARKET_BLOCK_ENTITY =
+    //        registerBlockEntity("stock_market_block_entity",
+    //                () -> BlockEntityType.Builder.of(StockMarketBlockEntity::new, StockMarketBlocks.STOCK_MARKET_BLOCK.get()).build(null));
 
 
 

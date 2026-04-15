@@ -43,6 +43,7 @@ public class CandlestickChart extends StockMarketGuiElement
     private int maxTimeDateLabelHeight = 0;
     private final Quaternionf rotation90ccl = new Quaternionf(0,0, -Math.sin(Math.PI/4), Math.sin(Math.PI/4));
     private boolean firstDraw = false;
+    private boolean dragging = false;
 
     public CandlestickChart()
     {
@@ -485,10 +486,17 @@ public class CandlestickChart extends StockMarketGuiElement
     protected boolean mouseClickedOverElement(int button) {
         lastDragMousePos.x = getMouseX();
         lastDragMousePos.y = getMouseY();
-        return false;
+        dragging = true;
+        return true;
+    }
+    @Override
+    protected void mouseReleased(int button) {
+        dragging = false;
     }
     @Override
     protected boolean mouseDragged(int button, double deltaX, double deltaY) {
+        if(!dragging)
+            return false;
         int mouseX = getMouseX();
         int mouseY = getMouseY();
 

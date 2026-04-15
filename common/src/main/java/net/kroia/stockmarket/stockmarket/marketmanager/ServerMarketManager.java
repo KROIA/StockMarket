@@ -166,10 +166,10 @@ public class ServerMarketManager implements ServerSaveable, IServerMarketManager
         for(ServerMarket m : markets.values())
         {
             // Create random movement for testing
-            long currentPrice = m.getCurrentMarketPrice();
-            long rand = (random.nextLong()%10);
-            currentPrice = Math.max(0, currentPrice + rand);
-            m.test_setCurrentMarketPrice(currentPrice);
+            //long currentPrice = m.getCurrentMarketPrice();
+            //long rand = (random.nextLong()%10);
+            //currentPrice = Math.max(0, currentPrice + rand);
+            //m.test_setCurrentMarketPrice(currentPrice);
             m.update();
         }
 
