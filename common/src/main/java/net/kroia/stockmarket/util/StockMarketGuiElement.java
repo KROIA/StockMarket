@@ -20,8 +20,9 @@ public abstract class StockMarketGuiElement extends GuiElement {
     }
 
     public final static float hoverToolTipFontSize = 0.8f;
-    public final static int padding = 5;
-    public final static int spacing = 5;
+    public final static int padding = 4;
+    public final static int spacing = 4;
+    public final static int defaultElementHeight = 20;
 
 
 

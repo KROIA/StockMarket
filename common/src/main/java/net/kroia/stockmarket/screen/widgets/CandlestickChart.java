@@ -2,6 +2,7 @@ package net.kroia.stockmarket.screen.widgets;
 
 import net.kroia.modutilities.gui.geometry.Rectangle;
 import net.kroia.modutilities.gui.geometry.RectangleF;
+import net.kroia.stockmarket.screen.UI_Colors;
 import net.kroia.stockmarket.util.PriceHistoryData;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import org.jetbrains.annotations.Nullable;
@@ -24,10 +25,10 @@ import java.util.Locale;
 public class CandlestickChart extends StockMarketGuiElement
 {
 
-    public static final int colorGreen          = 0x7F00FF00;
-    public static final int colorRed            = 0x7FFF0000;
-    public static final int colorHorizontalLine = 0x20202020;
-    public static final int colorZeroLine       = 0x40202020;
+    public static final int colorGreen          = UI_Colors.buyColorGreen;
+    public static final int colorRed            = UI_Colors.sellColorRed;
+    public static final int colorHorizontalLine = UI_Colors.candlestickChart_horizontalLine;
+    public static final int colorZeroLine       = UI_Colors.candlestickChart_zeroLine;
     public final static SimpleDateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy", Locale.getDefault());
     public final static SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm", Locale.getDefault());
 
