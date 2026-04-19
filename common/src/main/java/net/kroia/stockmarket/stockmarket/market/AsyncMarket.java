@@ -1,9 +1,6 @@
 package net.kroia.stockmarket.stockmarket.market;
 
-import net.kroia.banksystem.banking.bankaccount.AsyncBankAccount;
-import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.banksystem.util.MultiServerUtils;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncForwardingRequest;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionDataCodecs;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionInputData;
@@ -17,6 +14,7 @@ import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
+import net.kroia.stockmarket.util.MultiServerUtils;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
@@ -342,7 +340,7 @@ public class AsyncMarket implements IAsyncMarket{
 
     @Override
     public CompletableFuture<Long> getCurrentMarketPriceAsync() {
-        if(!MultiServerUtils.checkConnectionToMaster())
+        if(!MultiServerUtils.canInteractWithStockMarket())
             return CompletableFuture.completedFuture(0L);
         CompletableFuture<Long> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetCurrentMarketPrice, itemID);
@@ -353,7 +351,7 @@ public class AsyncMarket implements IAsyncMarket{
 
     @Override
     public CompletableFuture<Long> getCurrentTimeAsync() {
-        if(!MultiServerUtils.checkConnectionToMaster())
+        if(!MultiServerUtils.canInteractWithStockMarket())
             return CompletableFuture.completedFuture(0L);
         CompletableFuture<Long> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetCurrentTime, itemID);
@@ -364,7 +362,7 @@ public class AsyncMarket implements IAsyncMarket{
 
     @Override
     public CompletableFuture<Long> getVolumeAsync(long price) {
-        if(!MultiServerUtils.checkConnectionToMaster())
+        if(!MultiServerUtils.canInteractWithStockMarket())
             return CompletableFuture.completedFuture(0L);
         CompletableFuture<Long> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetVolume, itemID, price);
@@ -375,7 +373,7 @@ public class AsyncMarket implements IAsyncMarket{
 
     @Override
     public CompletableFuture<Boolean> putOrderAsync(Order order) {
-        if(!MultiServerUtils.checkConnectionToMaster())
+        if(!MultiServerUtils.canInteractWithStockMarket())
             return CompletableFuture.completedFuture(false);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.PutOrder_1, itemID, order);
@@ -386,7 +384,7 @@ public class AsyncMarket implements IAsyncMarket{
 
     @Override
     public CompletableFuture<Boolean> putOrderAsync(InterMarketOrder order) {
-        if(!MultiServerUtils.checkConnectionToMaster())
+        if(!MultiServerUtils.canInteractWithStockMarket())
             return CompletableFuture.completedFuture(false);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.PutOrder_2, itemID, order);
@@ -397,7 +395,7 @@ public class AsyncMarket implements IAsyncMarket{
 
     @Override
     public CompletableFuture<List<Order>> getLimitOrdersAsync() {
-        if(!MultiServerUtils.checkConnectionToMaster())
+        if(!MultiServerUtils.canInteractWithStockMarket())
             return CompletableFuture.completedFuture(List.of());
         CompletableFuture<List<Order>> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetLimitOrders, itemID);
@@ -408,7 +406,7 @@ public class AsyncMarket implements IAsyncMarket{
 
     @Override
     public CompletableFuture<Boolean> isMarketOpenAsync() {
-        if(!MultiServerUtils.checkConnectionToMaster())
+        if(!MultiServerUtils.canInteractWithStockMarket())
             return CompletableFuture.completedFuture(false);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.IsMarketOpen, itemID);
@@ -419,7 +417,7 @@ public class AsyncMarket implements IAsyncMarket{
 
     @Override
     public CompletableFuture<Boolean> setMarketOpenAsync(boolean marketOpen) {
-        if(!MultiServerUtils.checkConnectionToMaster())
+        if(!MultiServerUtils.canInteractWithStockMarket())
             return CompletableFuture.completedFuture(false);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.SetMarketOpen, itemID, marketOpen);
@@ -430,7 +428,7 @@ public class AsyncMarket implements IAsyncMarket{
 
     @Override
     public CompletableFuture<MarketPriceStruct> getCurrentMarketPriceStructAsync() {
-        if(!MultiServerUtils.checkConnectionToMaster())
+        if(!MultiServerUtils.canInteractWithStockMarket())
             return CompletableFuture.completedFuture(new MarketPriceStruct(itemID.getShort(), 0,0,0,0));
         CompletableFuture<MarketPriceStruct> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetCurrentMarketPriceStruct, itemID);
@@ -441,7 +439,7 @@ public class AsyncMarket implements IAsyncMarket{
 
     @Override
     public CompletableFuture<MarketPriceStruct> getCurrentMarketPriceStructAndResetAsync() {
-        if(!MultiServerUtils.checkConnectionToMaster())
+        if(!MultiServerUtils.canInteractWithStockMarket())
             return CompletableFuture.completedFuture(new MarketPriceStruct(itemID.getShort(), 0,0,0,0));
         CompletableFuture<MarketPriceStruct> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetCurrentMarketPriceStructAndReset, itemID);

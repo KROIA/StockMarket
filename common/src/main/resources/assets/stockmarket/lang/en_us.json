@@ -144,10 +144,16 @@
   "gui.stockmarket.bot_settings_setup_screen_change_bot_stocks.auto_change_money_balance": "Change the money balance of the bot automatically.\nThis is done in order to have enough liquidity\nto make buy orders.",
   "gui.stockmarket.bot_settings_setup_screen_change_bot_stocks.auto_change_item_balance": "Change the item balance of the bot automatically.\nThis is done in order to have enough item supply\nto make sell orders.",
 
-  "gui.stockmarket.trade_panel.quantity": "Quantity",
+
   "gui.stockmarket.trade_panel.market_order_tab_title": "Market",
   "gui.stockmarket.trade_panel.limit_order_tab_title": "Limit",
-  "gui.stockmarket.trade_panel.buy": "Buy",
-  "gui.stockmarket.trade_panel.sell": "Sell"
+  "gui.stockmarket.market_order_panel.quantity": "Quantity",
+  "gui.stockmarket.market_order_panel.buy": "Buy",
+  "gui.stockmarket.market_order_panel.sell": "Sell",
+  "gui.stockmarket.limit_order_panel.quantity": "Quantity",
+  "gui.stockmarket.limit_order_panel.price": "Price",
+  "gui.stockmarket.limit_order_panel.buy": "Buy",
+  "gui.stockmarket.limit_order_panel.sell": "Sell"
+
 
 }

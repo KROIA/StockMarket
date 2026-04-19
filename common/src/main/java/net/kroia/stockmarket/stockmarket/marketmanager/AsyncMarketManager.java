@@ -2,7 +2,6 @@ package net.kroia.stockmarket.stockmarket.marketmanager;
 
 import net.kroia.banksystem.banking.bank.AsyncBank;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.banksystem.util.MultiServerUtils;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncForwardingRequest;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionDataCodecs;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionInputData;
@@ -15,6 +14,7 @@ import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.api.marketmanager.IAsyncMarketManager;
 import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
 import net.kroia.stockmarket.stockmarket.market.AsyncMarket;
+import net.kroia.stockmarket.util.MultiServerUtils;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
@@ -267,7 +267,7 @@ public class AsyncMarketManager implements IAsyncMarketManager {
 
     @Override
     public CompletableFuture<ItemID> getTradingCurrencyIDAsync() {
-        if(!MultiServerUtils.checkConnectionToMaster())
+        if(!MultiServerUtils.canInteractWithStockMarket())
             return CompletableFuture.completedFuture(ItemID.INVALID_ID);
         CompletableFuture<ItemID> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetTradingCurrencyID);
@@ -278,7 +278,7 @@ public class AsyncMarketManager implements IAsyncMarketManager {
 
     @Override
     public CompletableFuture<List<ItemID>> getAvailableMarketIDsAsync() {
-        if(!MultiServerUtils.checkConnectionToMaster())
+        if(!MultiServerUtils.canInteractWithStockMarket())
             return CompletableFuture.completedFuture(List.of());
         CompletableFuture<List<ItemID>> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetAvailableMarketIDs);
@@ -289,7 +289,7 @@ public class AsyncMarketManager implements IAsyncMarketManager {
 
     @Override
     public CompletableFuture<Boolean> marketExistsAsync(@NotNull ItemID marketID) {
-        if(!MultiServerUtils.checkConnectionToMaster())
+        if(!MultiServerUtils.canInteractWithStockMarket())
             return CompletableFuture.completedFuture(false);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.MarketExists, marketID);
@@ -300,7 +300,7 @@ public class AsyncMarketManager implements IAsyncMarketManager {
 
     @Override
     public CompletableFuture<@Nullable IAsyncMarket> createMarketAsync(@NotNull ItemID marketID) {
-        if(!MultiServerUtils.checkConnectionToMaster())
+        if(!MultiServerUtils.canInteractWithStockMarket())
             return CompletableFuture.completedFuture(null);
         CompletableFuture<@Nullable IAsyncMarket> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.MarketExists, marketID);
@@ -316,7 +316,7 @@ public class AsyncMarketManager implements IAsyncMarketManager {
 
     @Override
     public CompletableFuture<Boolean> deleteMarketAsync(@NotNull ItemID marketID) {
-        if(!MultiServerUtils.checkConnectionToMaster())
+        if(!MultiServerUtils.canInteractWithStockMarket())
             return CompletableFuture.completedFuture(false);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.MarketExists, marketID);
@@ -327,7 +327,7 @@ public class AsyncMarketManager implements IAsyncMarketManager {
 
     @Override
     public CompletableFuture<@Nullable IAsyncMarket> getMarketAsync(@NotNull ItemID marketID) {
-        if(!MultiServerUtils.checkConnectionToMaster())
+        if(!MultiServerUtils.canInteractWithStockMarket())
             return CompletableFuture.completedFuture(null);
         CompletableFuture<@Nullable IAsyncMarket> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetMarket, marketID);

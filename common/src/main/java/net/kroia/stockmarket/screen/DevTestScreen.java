@@ -47,7 +47,8 @@ public class DevTestScreen extends StockMarketGuiScreen {
             });
             if(!allowLetters)
             {
-                textBox.setAllowLetters(false);
+                //textBox.setAllowLetters(false);
+                textBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, true, 100,10));
             }
             addChild(textBox);
             addChild(executeButton);

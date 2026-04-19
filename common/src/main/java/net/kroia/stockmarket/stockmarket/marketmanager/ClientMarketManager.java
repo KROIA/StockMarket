@@ -108,6 +108,11 @@ public class ClientMarketManager implements IClientMarketManager
         }
     }
 
+    public CompletableFuture<ItemID> getTradingCurrencyIDAsync()
+    {
+        return asyncServerMarketManager.getTradingCurrencyIDAsync();
+    }
+
     @Override
     public String toString()
     {
