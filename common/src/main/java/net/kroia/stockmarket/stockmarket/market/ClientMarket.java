@@ -1,6 +1,8 @@
 package net.kroia.stockmarket.stockmarket.market;
 
+import net.kroia.banksystem.banking.bankmanager.BankManager;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.TimerMillis;
 import net.kroia.modutilities.networking.client_server.streaming.StreamSystem;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IClientMarket;
@@ -13,7 +15,7 @@ import net.kroia.stockmarket.util.StockMarketGuiElement;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
 public class ClientMarket implements IClientMarket
@@ -25,31 +27,85 @@ public class ClientMarket implements IClientMarket
     }
 
     private final ItemID itemID;
-    private final PriceHistoryData priceHistoryData;
+
+    public static class PriceHistoryContainer
+    {
+        public final static class ServerRelativeTimer extends TimerMillis
+        {
+            public static long timeOffsetMS = 0;
+            public ServerRelativeTimer(boolean autoRestart) {
+                super(autoRestart);
+            }
+            @Override
+            public long currentTimeMillis()
+            {
+                return timeOffsetMS + System.currentTimeMillis();
+            }
+        }
+        private final ServerRelativeTimer timer;
+        public final PriceHistoryData history;
+
+        public PriceHistoryContainer(ItemID itemID, int itemScaleFactor, long deltaT)
+        {
+            timer = new ServerRelativeTimer(true);
+            timer.start(deltaT);
+            history = new PriceHistoryData(itemID, itemScaleFactor,  new ArrayList<>(), 0);
+        }
+        public void loadFrom(PriceHistoryData other, long currentServerTime, boolean createEmptyCandleForTimeGaps)
+        {
+            history.loadFrom(other, timer.getDuration(), currentServerTime, createEmptyCandleForTimeGaps);
+        }
+        public void update(long serverTime)
+        {
+            if(timer.check())
+            {
+                history.startNewCandle(serverTime);
+            }
+        }
+        public long getDeltaT()
+        {
+            return timer.getDuration();
+        }
+    }
+    private final Map<Long, PriceHistoryContainer> priceHistoryDataMap = new HashMap<>(); // Map with an individual buffer for the key: candle delta time
+    public static final long CANDLE_TIME_1_MIN = 1000*60;
+    public static final long CANDLE_TIME_5_MIN = CANDLE_TIME_1_MIN * 5;
+    public static final long CANDLE_TIME_15_MIN = CANDLE_TIME_1_MIN * 15;
+    public static final long CANDLE_TIME_1_HOUR = CANDLE_TIME_1_MIN * 60;
+    public static final long CANDLE_TIME_4_HOUR = CANDLE_TIME_1_HOUR * 4;
+    public static final long CANDLE_TIME_1_DAY = CANDLE_TIME_1_HOUR * 24;
+    public static final long[] AVAILABLE_CANDLE_TIME_DELTAS =
+            {
+                    CANDLE_TIME_1_MIN,
+                    CANDLE_TIME_5_MIN,
+                    CANDLE_TIME_15_MIN,
+                    CANDLE_TIME_1_HOUR,
+                    CANDLE_TIME_4_HOUR,
+                    CANDLE_TIME_1_DAY
+            };
+
     private @Nullable UUID marketPriceUpdateStreamID = null;
 
-    private long lastCandleCreationTime = System.currentTimeMillis();
-    private long currentServerTime = lastCandleCreationTime;
-    private long newCandleInterval = BACKEND_INSTANCES.SETTINGS.getCandleTimeMs();
+    private final int itemScaleFactor;
+    private long currentMarketPrice;
 
     public ClientMarket(@NotNull ItemID itemID, int itemScaleFactor)
     {
+        this.itemScaleFactor =  itemScaleFactor;
         this.itemID = itemID;
-        this.priceHistoryData = new PriceHistoryData(itemID, itemScaleFactor);
+
+        for (long delta : AVAILABLE_CANDLE_TIME_DELTAS) {
+            priceHistoryDataMap.put(delta, new PriceHistoryContainer(itemID, itemScaleFactor, delta));
+        }
     }
 
-    public void update()
+    public void update(long serverTime)
     {
-
         if(marketPriceUpdateStreamID != null) {
-            //long now = System.currentTimeMillis();
 
-            // Trying to sync using the server time to get the same candles as the server does
-            // But it does not work 100%as intended
-            if (currentServerTime - lastCandleCreationTime > newCandleInterval) {
-                lastCandleCreationTime = currentServerTime;
-                newCandleInterval = BACKEND_INSTANCES.SETTINGS.getCandleTimeMs();
-                priceHistoryData.startNewCandle();
+            for(PriceHistoryContainer priceHistoryContainer : priceHistoryDataMap.values())
+            {
+                priceHistoryContainer.update(serverTime);
             }
         }
     }
@@ -57,15 +113,31 @@ public class ClientMarket implements IClientMarket
 
     public int getItemFractionScaleFactor()
     {
-        return priceHistoryData.getItemScaleFactor();
+        return itemScaleFactor;
     }
     public @NotNull ItemID getItemID()
     {
         return itemID;
     }
-    public @NotNull PriceHistoryData getPriceHistoryData()
+
+    public static long[] getAvailableCandleTimeDeltas()
     {
-        return priceHistoryData;
+        return AVAILABLE_CANDLE_TIME_DELTAS;
+    }
+    public @Nullable PriceHistoryData getPriceHistoryData(long candleTimeDelta)
+    {
+        PriceHistoryContainer historyContainer = priceHistoryDataMap.get(candleTimeDelta);
+        if(historyContainer == null)
+            return null;
+        return historyContainer.history;
+    }
+    public long getCurrentMarketPrice()
+    {
+        return currentMarketPrice;
+    }
+    public double getCurrentMarketRealPrice()
+    {
+        return BankManager.convertToRealAmountStatic(currentMarketPrice, itemScaleFactor);
     }
     public void requestFullPriceHistoryUpdate()
     {
@@ -73,18 +145,32 @@ public class ClientMarket implements IClientMarket
     }
     public void requestFullPriceHistoryUpdate(long startTime, long endTime)
     {
-        MarketPriceHistoryRequest.InputData priceChunkRequestData = new MarketPriceHistoryRequest.InputData(itemID, startTime, endTime);
-        BACKEND_INSTANCES.NETWORKING.MARKET_PRICE_HISTORY_REQUEST.sendRequestToServer(priceChunkRequestData).thenAccept((historyData) ->
+        // Update time reference from server
+        BACKEND_INSTANCES.NETWORKING.SERVER_TIME_REQUEST.sendRequestToServer(System.currentTimeMillis()).thenAccept(serverTime ->
         {
-            info("Price chunck received for: "+itemID);
-            //lastCandleCreationTime = System.currentTimeMillis();
-            priceHistoryData.loadFrom(historyData);
-            PriceHistoryData.Candle lastCandle = priceHistoryData.getCurrentCandle();
-            if(lastCandle != null) {
-                lastCandleCreationTime = lastCandle.openTimestamp + newCandleInterval;
-                currentServerTime = lastCandle.openTimestamp;
-            }
+            long currentTime = System.currentTimeMillis();
+            long turnaroundTime = currentTime - serverTime.clientTimeEcho();
+            // Assuming the packet uses the same amount of time for both ways
+            long currentServerTime = serverTime.serverTime() + turnaroundTime/2;
+            PriceHistoryContainer.ServerRelativeTimer.timeOffsetMS = currentServerTime - currentTime;
+
+            MarketPriceHistoryRequest.InputData priceChunkRequestData = new MarketPriceHistoryRequest.InputData(itemID, startTime, endTime);
+            BACKEND_INSTANCES.NETWORKING.MARKET_PRICE_HISTORY_REQUEST.sendRequestToServer(priceChunkRequestData).thenAccept((historyData) ->
+            {
+                info("Price chunck received for: "+itemID);
+                for(PriceHistoryContainer priceHistoryContainer : priceHistoryDataMap.values())
+                {
+                    priceHistoryContainer.loadFrom(historyData,
+                            PriceHistoryContainer.ServerRelativeTimer.timeOffsetMS + System.currentTimeMillis(),
+                            BACKEND_INSTANCES.SETTINGS.isFillMissingCandlesticks());
+
+
+                }
+            });
         });
+
+
+
     }
     public boolean subscribeToMarketPriceUpdate()
     {
@@ -99,9 +185,9 @@ public class ClientMarket implements IClientMarket
 
         marketPriceUpdateStreamID = StreamSystem.startServerToClientStream(BACKEND_INSTANCES.NETWORKING.MARKET_PRICE_STREAM, itemID, (price)->
         {
-            //info("Price received: " + price.marketPrice);
-            currentServerTime = price.timestamp;
-            priceHistoryData.setCurrentMarketPrice(price.marketPrice);
+            currentMarketPrice = price.marketPrice;
+            for(PriceHistoryContainer priceHistoryContainer : priceHistoryDataMap.values())
+                priceHistoryContainer.history.setCurrentMarketPrice(currentMarketPrice);
         },()->
         {
             // Stream stopped
@@ -194,7 +280,7 @@ public class ClientMarket implements IClientMarket
     @Override
     public String toString()
     {
-        return "ClientMarket:" + itemID + " Price:" + priceHistoryData.getCurrentMarketPrice();
+        return "ClientMarket:" + itemID + " Price:" + BankManager.convertToRealAmountStatic(currentMarketPrice, itemScaleFactor);
     }
 
 

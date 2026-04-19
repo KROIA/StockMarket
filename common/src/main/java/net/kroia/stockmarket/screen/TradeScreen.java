@@ -38,7 +38,7 @@ public class TradeScreen extends StockMarketGuiScreen {
         super(Texts.TITLE);
 
         candlestickChart = new CandlestickChart();
-        candlestickChart.setData(null);
+        candlestickChart.setMarket(null);
 
         tradingPanel = new TradingPanel(this::onBuyMarket, this::onSellMarket, this::onBuyLimit,  this::onSellLimit);
 
@@ -60,9 +60,9 @@ public class TradeScreen extends StockMarketGuiScreen {
         ClientMarket market = getMarket(currentMarketID);
         if(market != null) {
             market.subscribeToMarketPriceUpdate();
-            candlestickChart.setData(market.getPriceHistoryData());
+            candlestickChart.setMarket(market);
             tradingPanel.setItemName(ClientPlayerUtilities.getItemDisplayText(currentMarketID.getStack()));
-            tradingPanel.setLimitPrice(market.getPriceHistoryData().getCurrentMarketRealPrice());
+            tradingPanel.setLimitPrice(market.getCurrentMarketRealPrice());
         }
         getMarketManager().getTradingCurrencyIDAsync().thenAccept(currencyID -> {
             if(currentMarketID == null)
@@ -95,7 +95,7 @@ public class TradeScreen extends StockMarketGuiScreen {
                 market.unsubscribeFromMarketPriceUpdate();
             }
 
-            candlestickChart.setData(null);
+            candlestickChart.setMarket(null);
             currentMarketID = null;
         }
         super.onClose();

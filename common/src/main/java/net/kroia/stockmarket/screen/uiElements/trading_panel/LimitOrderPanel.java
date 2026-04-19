@@ -101,6 +101,10 @@ public class LimitOrderPanel extends StockMarketGuiElement
         add32Button.setOutlineColor(darkerBuyColor1);
         add64Button.setOutlineColor(darkerBuyColor1);
         add128Button.setOutlineColor(darkerBuyColor1);
+        add10Button.setTextFontScale(1.3f);
+        add32Button.setTextFontScale(1.3f);
+        add64Button.setTextFontScale(1.3f);
+        add128Button.setTextFontScale(1.3f);
         //add10Button.setIdleColor(ColorUtilities.setBrightness(DEFAULT_BACKGROUND_COLOR, 0.7f));
         //add32Button.setIdleColor(ColorUtilities.setBrightness(DEFAULT_BACKGROUND_COLOR, 0.7f));
         // add64Button.setIdleColor(ColorUtilities.setBrightness(DEFAULT_BACKGROUND_COLOR, 0.7f));
@@ -114,6 +118,10 @@ public class LimitOrderPanel extends StockMarketGuiElement
         remove32Button.setOutlineColor(darkerSellColor1);
         remove64Button.setOutlineColor(darkerSellColor1);
         remove128Button.setOutlineColor(darkerSellColor1);
+        remove10Button.setTextFontScale(1.3f);
+        remove32Button.setTextFontScale(1.3f);
+        remove64Button.setTextFontScale(1.3f);
+        remove128Button.setTextFontScale(1.3f);
 
         //quantitySlider = new HorizontalSlider();
         //quantitySlider.setSliderValue(0);
@@ -128,6 +136,7 @@ public class LimitOrderPanel extends StockMarketGuiElement
         sellButton.setHoverColor(darkerSellColor2);
         sellButton.setPressedColor(darkerSellColor3);
         sellButton.setOutlineColor(darkerSellColor4);
+
 
         addChild(quantityTextBox);
         addChild(quantityLabel);

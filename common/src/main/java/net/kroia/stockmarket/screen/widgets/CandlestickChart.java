@@ -1,8 +1,11 @@
 package net.kroia.stockmarket.screen.widgets;
 
+import net.kroia.modutilities.ColorUtilities;
+import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.geometry.Rectangle;
 import net.kroia.modutilities.gui.geometry.RectangleF;
 import net.kroia.stockmarket.screen.UI_Colors;
+import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.util.PriceHistoryData;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import org.jetbrains.annotations.Nullable;
@@ -11,6 +14,7 @@ import org.lwjgl.glfw.GLFW;
 
 import java.awt.*;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
@@ -29,13 +33,21 @@ public class CandlestickChart extends StockMarketGuiElement
     public static final int colorRed            = UI_Colors.sellColorRed;
     public static final int colorHorizontalLine = UI_Colors.candlestickChart_horizontalLine;
     public static final int colorZeroLine       = UI_Colors.candlestickChart_zeroLine;
-    public final static SimpleDateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy", Locale.getDefault());
+    public final static SimpleDateFormat dayFormat = new SimpleDateFormat("dd.", Locale.getDefault());
+    public final static SimpleDateFormat monthFormat = new SimpleDateFormat(" MMMM ", Locale.getDefault());
+    public final static SimpleDateFormat yearFormat = new SimpleDateFormat("yyyy", Locale.getDefault());
     public final static SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm", Locale.getDefault());
 
+    private final static long MILLISECONDS_PER_DAY = 86400000;
+
+
+    private @Nullable ClientMarket market;
     private @Nullable PriceHistoryData data;
+    private int currentCandleTimeIdx = 0;
 
     int candleWidth = 12;
     private final Rectangle canvasRect = new Rectangle(1,1,0,0);
+    private double rawWithScrollValue = 200;
     private final RectangleF chartviewRect = new RectangleF(200,0,200,500);
     private final Point lastDragMousePos = new Point();
     private int maxPriceLabelTextWidth = 0;
@@ -46,33 +58,95 @@ public class CandlestickChart extends StockMarketGuiElement
     private boolean firstDraw = false;
     private boolean dragging = false;
 
+    private final List<Button> candleTimeSelectButtons = new ArrayList<>();
+    private final int defaultButtonBackgroundColor = ColorUtilities.setAlpha(DEFAULT_BACKGROUND_COLOR, 1.0f);
+
     public CandlestickChart()
     {
+        long[] candleTimes = ClientMarket.getAvailableCandleTimeDeltas();
+        float buttonFontSizeScale = 1.0f;
+        for(int i = 0; i < candleTimes.length; i++)
+        {
+            String timeStr = timeToShortString(candleTimes[i]);
+            int finalI = i;
+            Button button = new Button(timeStr, ()-> {
+                selectCandleTimeDeltaByIndex(finalI);
+            });
 
+            button.setTextFontScale(buttonFontSizeScale);
+            int textWidth = getTextWidth(timeStr);
+            int textHeight = button.getTextHeight();
+            button.setWidth(textWidth+2*padding);
+            button.setHeight(textHeight+2*padding);
+            int backgroundColor = button.getBackgroundColor();
+            backgroundColor = ColorUtilities.setAlpha(backgroundColor, 1.0f);
+            button.setBackgroundColor(backgroundColor);
+
+            int pressedColor = button.getPressedColor();
+            pressedColor = ColorUtilities.setAlpha(pressedColor, 1.0f);
+            button.setPressedColor(pressedColor);
+
+            int hoverColor = button.getHoverColor();
+            hoverColor = ColorUtilities.setAlpha(hoverColor, 1.0f);
+            button.setHoverColor(hoverColor);
+
+
+            candleTimeSelectButtons.add(button);
+            addChild(button);
+        }
+
+        selectCandleTimeDeltaByIndex(currentCandleTimeIdx);
     }
 
-    /**
-     * Sets the reference to the client markets price history data to visualize as candle stick chart
-     * @param data
-     */
-    public void setData(@Nullable PriceHistoryData data)
+    public void setMarket(@Nullable ClientMarket market)
     {
-        this.data = data;
-        firstDraw = true;
-        /*if(data != null) {
-            if(data.getCandles().size() > 10) {
-                canvasRect.width = Math.max(2, ((getWidth())/2)*2);
-                canvasRect.height = Math.max(1, (getHeight()));
-                candleWidth = Math.max(1, Math.abs((canvasRect.width/ (int)chartviewRect.width)));
-                lastVisibleCandleIndex = Math.min(canvasRect.width / candleWidth, data.getCandles().size() - 1);
-                firstVisibleCandleIndex = 0;
-                autoCenterView();
-            }
-        }*/
+        this.market = market;
+        this.data = null;
+        if(market != null) {
+            selectCandleTimeDeltaByIndex(currentCandleTimeIdx);
+            firstDraw = true;
+        }
+    }
+    public void selectCandleTimeDelta(int timeDeltaMs)
+    {
+        if(market != null) {
+            PriceHistoryData newData = market.getPriceHistoryData(timeDeltaMs);
+            if(newData != null)
+                this.data  = newData;
+        }
+    }
+    public void selectCandleTimeDeltaByIndex(int index)
+    {
+        currentCandleTimeIdx = index;
+        if(market != null) {
+            long deltaTime = ClientMarket.getAvailableCandleTimeDeltas()[index];
+            this.data = market.getPriceHistoryData(deltaTime);
+        }
+        for(int i = 0; i < candleTimeSelectButtons.size(); i++)
+        {
+            Button button = candleTimeSelectButtons.get(i);
+            int buttonColor = defaultButtonBackgroundColor;
+            if(i==index)
+                buttonColor = button.getPressedColor();
+            candleTimeSelectButtons.get(i).setBackgroundColor(buttonColor);
+        }
     }
 
     @Override
     protected void layoutChanged() {
+        int padding = StockMarketGuiElement.padding;
+        //int width = getWidth() - 2*padding;
+        //int height = getHeight() - 2*padding;
+        int selectTimingButtonSpacing = spacing;
+
+        int currentXPos = padding;
+        int currentYPos = padding;
+        for(Button candleTimeSelectButton : candleTimeSelectButtons)
+        {
+            candleTimeSelectButton.setPosition(currentXPos, currentYPos);
+            currentXPos += candleTimeSelectButton.getWidth() + selectTimingButtonSpacing;
+        }
+
         //canvasRect.width = getWidth() - maxPriceLabelTextWidth;
 
 
@@ -97,11 +171,16 @@ public class CandlestickChart extends StockMarketGuiElement
         disableScissor();
         renderChartVerticalBackground();
 
-
+        renderCandles();
     }
 
     @Override
     protected void render()
+    {
+
+    }
+
+    private void renderCandles()
     {
         if(data==null || data.getCandles().isEmpty())
             return;
@@ -112,20 +191,24 @@ public class CandlestickChart extends StockMarketGuiElement
         lastVisibleCandleIndex = 0;
         firstVisibleCandleIndex = 0;
         List<PriceHistoryData.Candle> candles =  data.getCandles();
+
         if(!candles.isEmpty())
         {
             double closePrice = data.getCurrentMarketRealPrice();
             int candleCount = candles.size();
+           // int lastCandleXPos = toCanvasSpaceX(0) - candleWidth;
 
             boolean startedVisible = false;
             for(int i=candleCount-1; i>=0; i--)
             {
                 PriceHistoryData.Candle candle = candles.get(i);
-                boolean isVisible = renderCandlestick(candleCount-1 - i,
+                int candlePos = toCanvasSpaceX(candleCount-1-i) - candleWidth;
+                boolean isVisible = renderCandlestick(candleCount-1 - i, candlePos,
                         data.toRealPrice(candle.open),
                         data.toRealPrice(candle.high),
                         data.toRealPrice(candle.low),
                         closePrice);
+               // lastCandleXPos -= candleWidth;
                 if(isVisible && !startedVisible) {
                     lastVisibleCandleIndex = i;
                     startedVisible = true;
@@ -227,27 +310,47 @@ public class CandlestickChart extends StockMarketGuiElement
         int offset = Math.max(1,(lastVisibleCandleIndex-firstVisibleCandleIndex) /  targetLineCount);
         //long currentTime = System.currentTimeMillis();
 
-        long lastTime = 0;
+        Date lastTime = new Date(0);
+        long lastMillis = 0;
         int xOffset = (candleWidth+getTextHeight())/2;
         maxTimeDateLabelHeight = 0;
         int canvasY = toCanvasSpaceY(0);
         canvasY = canvasRect.y + canvasRect.height;
         int i=firstVisibleCandleIndex;
-        for(; i<=lastVisibleCandleIndex; i+=offset)
+        for(; i<lastVisibleCandleIndex; i+=offset)
         {
             PriceHistoryData.Candle candle = candles.get(i);
             int canvasX = toCanvasSpaceX(candleCount-i-1);
 
-            long currentTime = candle.openTimestamp;
-            boolean useDate = currentTime / 86400000 != lastTime / 86400000;
-            String timeDateStr = timestampToTimeDate(currentTime, useDate);
+            Date currentTime = new Date(candle.openTimestamp);
+
+
+            String[] timeDateStr = timestampToTimeDate(currentTime, lastTime);
             lastTime = currentTime;
-            int textWidth = getTextWidth(timeDateStr);
-            maxTimeDateLabelHeight = Math.max(maxTimeDateLabelHeight, textWidth);
-            int yPos = Math.max(canvasRect.x,  canvasX - (xOffset+(useDate?getTextHeight()/2:0)));
-            drawText(timeDateStr, -canvasY-textWidth -5, yPos);
+            //lastMillis = candle.openTimestamp;
+            int maxTextWidth = 0;
+            if(timeDateStr.length == 1)
+            {
+                int yPos = Math.max(canvasRect.x,  canvasX - xOffset);
+                maxTextWidth = Math.max(maxTextWidth, getTextWidth(timeDateStr[0]));
+                drawText(timeDateStr[0], -canvasY-maxTextWidth -5, yPos);
+            }
+            else if(timeDateStr.length == 2)
+            {
+                int yPos = Math.max(canvasRect.x,  canvasX - (xOffset + getTextHeight()/2));
+                int textWidth = getTextWidth(timeDateStr[0]);
+                maxTextWidth = Math.max(maxTextWidth, textWidth);
+                drawText(timeDateStr[0], -canvasY-textWidth -5, yPos);
+                textWidth = getTextWidth(timeDateStr[1]);
+                maxTextWidth = Math.max(maxTextWidth, textWidth);
+                yPos += getTextHeight();
+                drawText(timeDateStr[1], -canvasY-textWidth -5, yPos);
+            }
+
+            maxTimeDateLabelHeight = Math.max(maxTimeDateLabelHeight, maxTextWidth);
+
         }
-        if(i != lastVisibleCandleIndex)
+        if(i >= lastVisibleCandleIndex)
         {
             i = lastVisibleCandleIndex;
             if(i>=candles.size())
@@ -255,15 +358,37 @@ public class CandlestickChart extends StockMarketGuiElement
                 int wait = 0;
             }
             PriceHistoryData.Candle candle = candles.get(i);
+            Date currentTime = new Date(candle.openTimestamp);
             int canvasX = toCanvasSpaceX(candleCount-i-1);
+            String[] timeDateStr = timestampToTimeDate(currentTime, lastTime);
+            int maxTextWidth = 0;
+            if(timeDateStr.length == 1)
+            {
+                int yPos = Math.max(canvasRect.x,  canvasX - xOffset);
+                maxTextWidth = Math.max(maxTextWidth, getTextWidth(timeDateStr[0]));
+                drawText(timeDateStr[0], -canvasY-maxTextWidth -5, yPos);
+            }
+            else if(timeDateStr.length == 2)
+            {
+                int yPos = Math.max(canvasRect.x,  canvasX - (xOffset + getTextHeight()/2));
+                int textWidth = getTextWidth(timeDateStr[0]);
+                maxTextWidth = Math.max(maxTextWidth, textWidth);
+                drawText(timeDateStr[0], -canvasY-textWidth -5, yPos);
+                textWidth = getTextWidth(timeDateStr[1]);
+                maxTextWidth = Math.max(maxTextWidth, textWidth);
+                yPos += getTextHeight();
+                drawText(timeDateStr[1], -canvasY-textWidth -5, yPos);
+            }
 
+            maxTimeDateLabelHeight = Math.max(maxTimeDateLabelHeight, maxTextWidth);
+/*
             long currentTime = candle.openTimestamp;
-            boolean useDate = currentTime / 86400000 != lastTime / 86400000;
+            boolean useDate = currentTime / MILLISECONDS_PER_DAY != lastTime / MILLISECONDS_PER_DAY;
             String timeDateStr = timestampToTimeDate(currentTime, useDate);
             int textWidth = getTextWidth(timeDateStr);
             maxTimeDateLabelHeight = Math.max(maxTimeDateLabelHeight, textWidth);
             int yPos = Math.max(canvasRect.x,  canvasX - (xOffset+(useDate?getTextHeight()/2:0)));
-            drawText(timeDateStr, -canvasY-textWidth -5, yPos);
+            drawText(timeDateStr, -canvasY-textWidth -5, yPos);*/
         }
         maxTimeDateLabelHeight += 10;
         graphicsPopPose();
@@ -308,12 +433,28 @@ public class CandlestickChart extends StockMarketGuiElement
         drawRect(canvasRect.x, yPos-1, canvasRect.width, 2, colorHorizontalLine);
     }
 
-    private String timestampToTimeDate(long time, boolean useDate) {
-        Date date = new Date(time);
-        String timeDate = timeFormat.format(date);
-        if(useDate)
-            timeDate = dateFormat.format(date) + "\n" + timeDate;
-        return timeDate;
+    private String[] timestampToTimeDate(Date currentTime, Date lastTime) {
+
+        String currentTimeStr= timeFormat.format(currentTime);
+        String currentDayStr = dayFormat.format(currentTime);
+        String currentMonthStr = monthFormat.format(currentTime);
+        String currentYearStr = yearFormat.format(currentTime);
+
+        String lastDayStr = dayFormat.format(lastTime);
+        String lastMonthStr = monthFormat.format(lastTime);
+        String lastYearStr = yearFormat.format(lastTime);
+
+        String dateStr = "";
+        if(!lastDayStr.equals(currentDayStr))
+            dateStr += currentDayStr;
+        if(!lastMonthStr.equals(currentMonthStr))
+            dateStr += currentMonthStr;
+        if(!lastYearStr.equals(currentYearStr))
+            dateStr += currentYearStr;
+        if(dateStr.isEmpty())
+            return new String[]{currentTimeStr};
+
+        return new String[]{dateStr, currentTimeStr};
     }
     private String formatPrice(double price)
     {
@@ -333,10 +474,10 @@ public class CandlestickChart extends StockMarketGuiElement
         else                   return String.format("%4.2f%s", value, suffix);  // 1.50k
     }
 
-    private boolean renderCandlestick(int candleIndex, double openPrice, double highPrice, double lowPrice, double closePrice)
+    private boolean renderCandlestick(int candleIndex, int lastCandleXPos, double openPrice, double highPrice, double lowPrice, double closePrice)
     {
-        int xOffset = toCanvasSpaceX(candleIndex) - candleWidth;
-        if(xOffset < canvasRect.x || (xOffset+candleWidth) > canvasRect.x + canvasRect.width)
+        int xOffset = lastCandleXPos + canvasRect.x; //toCanvasSpaceX(candleIndex) - candleWidth;
+        if(xOffset < 0 || (xOffset+candleWidth-1) > (canvasRect.x + canvasRect.width))
             return false; // candle outside canvas
 
         int color = openPrice > closePrice ? colorRed : colorGreen;
@@ -407,14 +548,14 @@ public class CandlestickChart extends StockMarketGuiElement
         if (!isKeyPressed(GLFW.GLFW_KEY_LEFT_CONTROL))
         {
             // Scale the rect
-            double newWidth = chartviewRect.width*zoomFactor;
-            if(newWidth < Long.MAX_VALUE && newWidth > 1)
+            rawWithScrollValue = rawWithScrollValue*zoomFactor;
+            if(rawWithScrollValue < Long.MAX_VALUE && rawWithScrollValue > 5)
             {
-                int newCandleWidth = ((Math.abs((canvasRect.width/ (int)newWidth))));
+                int newCandleWidth = (Math.abs(canvasRect.width/ (int)rawWithScrollValue)/2)*2;
                 if(newCandleWidth > 0)
-                    chartviewRect.width = (double)((long)(newWidth*newCandleWidth))/newCandleWidth;
+                    chartviewRect.width = (double)(((long)rawWithScrollValue*newCandleWidth)/newCandleWidth);
                 else
-                    chartviewRect.width = (int)newWidth;
+                    chartviewRect.width = (int)rawWithScrollValue;
 
                 // Shift the rect so the point under the mouse stays fixed:
                 // mouseWorldX must satisfy: mouseWorldX = chartviewRect.x + mouseNormX * newWidth
@@ -430,7 +571,7 @@ public class CandlestickChart extends StockMarketGuiElement
             }
             else
             {
-                chartviewRect.width = Math.max(Math.min(newWidth, Long.MAX_VALUE), 1);
+                chartviewRect.width = (int)Math.max(Math.min(rawWithScrollValue, Long.MAX_VALUE), 5);
             }
             consumed = true;
         }
@@ -601,5 +742,37 @@ public class CandlestickChart extends StockMarketGuiElement
         if(in_min == in_max)
             return Long.MAX_VALUE;
         return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+    }
+
+    private String timeToShortString(long timeMs)
+    {
+        long totalSeconds = timeMs / 1000;
+        long minutes      = totalSeconds / 60;
+        long hours        = minutes / 60;
+        long days         = hours / 24;
+        long weeks        = days / 7;
+        long months       = days / 30;
+        long years        = days / 365;
+
+        long remMonths  = months  % 12;
+        long remWeeks   = weeks   % 4;
+        long remDays    = days    % 7;
+        long remHours   = hours   % 24;
+        long remMinutes = minutes % 60;
+        long remSeconds = totalSeconds % 60;
+
+        StringBuilder sb = new StringBuilder();
+
+        if (years     > 0) sb.append(years).append("Y ");
+        if (remMonths > 0) sb.append(remMonths).append("M ");
+        if (remWeeks  > 0) sb.append(remWeeks).append("W ");
+        if (remDays   > 0) sb.append(remDays).append("D ");
+        if (remHours  > 0) sb.append(remHours).append("h ");
+        if (remMinutes> 0) sb.append(remMinutes).append("m ");
+        if (remSeconds> 0) sb.append(remSeconds).append("s");
+
+        if (sb.isEmpty()) return "0s";
+
+        return sb.toString().trim();
     }
 }

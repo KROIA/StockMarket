@@ -44,7 +44,7 @@ public class MarketPriceHistoryRequest extends StockMarketGenericRequest<MarketP
     public CompletableFuture<PriceHistoryData> handleOnMasterServer(InputData input, String slaveID, @Nullable UUID playerSender)
     {
         if(needsRoutingToMaster() && !MultiServerUtils.canInteractWithStockMarket(playerSender))
-            return CompletableFuture.completedFuture(new PriceHistoryData(input.item, getItemFractionScaleFactor()));
+            return CompletableFuture.completedFuture(new PriceHistoryData(System.currentTimeMillis() , input.item, getItemFractionScaleFactor()));
         CompletableFuture<PriceHistoryData> future = new CompletableFuture<>();
         info("MarketPriceHistoryRequest started for item: " + input);
         CompletableFuture<List<MarketPriceStruct>>  fut = BACKEND_INSTANCES.MARKET_PRICE_HISTORY_MANAGER.getHistory(

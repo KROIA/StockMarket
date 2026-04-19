@@ -81,7 +81,7 @@ public class StockMarketModSettings extends ModSettings {
     public ClientSettings getClientSettings()
     {
         ClientSettings settings = new ClientSettings();
-        settings.setCandleTimeMs(MARKET.CANDLE_TIME.get());
+        //settings.setCandleTimeMs(MARKET.CANDLE_TIME.get());
 
         return settings;
     }

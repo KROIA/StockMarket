@@ -127,7 +127,7 @@ public class DevTestScreen extends StockMarketGuiScreen {
 
 
         candlestickChart = new CandlestickChart();
-        candlestickChart.setData(null);
+        candlestickChart.setMarket(null);
 
 
         addElement(candlestickChart);
@@ -147,7 +147,7 @@ public class DevTestScreen extends StockMarketGuiScreen {
                 market = getMarket(currentMarketID);
                 if(market != null) {
                     market.subscribeToMarketPriceUpdate();
-                    candlestickChart.setData(market.getPriceHistoryData());
+                    candlestickChart.setMarket(market);
                 }
             }
         });

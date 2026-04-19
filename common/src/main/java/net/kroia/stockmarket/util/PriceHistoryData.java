@@ -4,19 +4,20 @@ import net.kroia.banksystem.banking.bankmanager.BankManager;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
+import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
+import java.text.SimpleDateFormat;
+import java.util.*;
 
 public class PriceHistoryData
 {
     public static class Candle
     {
+        public final static SimpleDateFormat dateTimeFormat = new SimpleDateFormat("dd.MM.yyyy HH:mm:ss:SSS", Locale.getDefault());
         public static final StreamCodec<RegistryFriendlyByteBuf, Candle> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.VAR_LONG, p -> p.openTimestamp,
                 ByteBufCodecs.VAR_LONG, p -> p.open,
@@ -51,6 +52,36 @@ public class PriceHistoryData
             high = sqlData.high();
             low = sqlData.low();
         }
+        public static Candle merge(List<Candle> candles, long timestamp, int begin, int count)
+        {
+            long open = 0;
+            long high = -Long.MAX_VALUE;
+            long low  = Long.MAX_VALUE;
+            if(candles.size() > begin)
+            {
+                Candle candle = candles.get(begin);
+                open = candle.open;
+            }
+            int end = begin+count;
+            for(int i=begin; i<end; i++)
+            {
+                Candle candle = candles.get(i);
+                high = Math.max(high, candle.high);
+                low = Math.min(low, candle.low);
+            }
+            return new Candle(timestamp, open, high, low);
+        }
+
+        @Override
+        public String toString()
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.append("Time: ").append(dateTimeFormat.format(openTimestamp)).append("\n");
+            sb.append("Open: ").append(open).append("\n");
+            sb.append("High: ").append(high).append("\n");
+            sb.append("Low: ").append(low);
+            return sb.toString();
+        }
     }
 
     public static final StreamCodec<RegistryFriendlyByteBuf, PriceHistoryData> STREAM_CODEC = StreamCodec.composite(
@@ -67,13 +98,13 @@ public class PriceHistoryData
     private long currentMarketPrice;
 
 
-    public PriceHistoryData(ItemID itemID, int itemScaleFactor)
+    public PriceHistoryData(long currentServerTime, ItemID itemID, int itemScaleFactor)
     {
         this.itemID = itemID;
         this.itemScaleFactor = itemScaleFactor;
         candles = new ArrayList<>();
         currentMarketPrice = 0;
-        startNewCandle();
+        startNewCandle(currentServerTime);
     }
     public PriceHistoryData(ItemID itemID, int itemScaleFactor, List<Candle> candles, long currentMarketPrice)
     {
@@ -81,6 +112,12 @@ public class PriceHistoryData
         this.itemScaleFactor = itemScaleFactor;
         this.candles = candles;
         this.currentMarketPrice = currentMarketPrice;
+    }
+    public PriceHistoryData createFromDifferentCandleDeltaTime(long currentServerTime, long candleDeltaTimeMs, boolean createEmptyCandleForTimeGaps)
+    {
+        PriceHistoryData newData = new PriceHistoryData(itemID, itemScaleFactor, new ArrayList<>(), 0);
+        newData.loadFrom(this, candleDeltaTimeMs, currentServerTime, createEmptyCandleForTimeGaps);
+        return newData;
     }
 
     public static @Nullable PriceHistoryData fromSqlData(List<MarketPriceStruct> sqlData, long currentMarketPrice, int itemScaleFactor)
@@ -101,17 +138,85 @@ public class PriceHistoryData
         candles.addAll(other.candles);
         candles.sort(Comparator.comparingLong(a -> a.openTimestamp));
     }
-    public void clear()
+    public void clear(long currentServerTime)
     {
         candles.clear();
         currentMarketPrice = 0;
-        startNewCandle();
+        startNewCandle(currentServerTime);
     }
     public void loadFrom(PriceHistoryData other)
     {
         candles.clear();
         candles.addAll(other.candles);
         currentMarketPrice = other.currentMarketPrice;
+    }
+    public void loadFrom(PriceHistoryData other, long candleDeltaTimeMs, long currentServerTime, boolean createEmptyCandleForTimeGaps)
+    {
+        candles.clear();
+        this.currentMarketPrice = other.currentMarketPrice;
+        if(other.candles.isEmpty())
+            return;
+
+        // Floor the start time by a whole "candleDeltaTimeMs" number
+        long startTime = floorTime(other.candles.getFirst().openTimestamp, candleDeltaTimeMs);
+
+        long nextTime = startTime + candleDeltaTimeMs;
+        int startCandleIndex = 0;
+        int newCandleCount = 0;
+
+        for(int i=0; i<other.candles.size(); i++)
+        {
+            Candle candle = other.candles.get(i);
+            if(candle.openTimestamp > nextTime)
+            {
+                Candle newCandle = Candle.merge(other.candles, startTime, startCandleIndex, newCandleCount);
+                candles.add(newCandle);
+                newCandleCount = 1;
+                startCandleIndex = i;
+                startTime = nextTime;
+                nextTime += candleDeltaTimeMs;
+                if(createEmptyCandleForTimeGaps) {
+                    while (candle.openTimestamp > nextTime) {
+                        startNewCandle(nextTime);
+                        nextTime += candleDeltaTimeMs;
+                        //nextTime = floorTime(candle.openTimestamp + candleDeltaTimeMs, candleDeltaTimeMs);
+                    }
+                }
+                else
+                {
+                    if(candle.openTimestamp + candleDeltaTimeMs > nextTime)
+                        nextTime = floorTime(candle.openTimestamp + candleDeltaTimeMs, candleDeltaTimeMs);
+                }
+            }
+            else {
+                newCandleCount++;
+            }
+        }
+        Candle lastCandle = other.candles.getLast();
+        if(lastCandle != null && newCandleCount > 0) {
+            Candle lastCandleToAdd = Candle.merge(other.candles, startTime, startCandleIndex, newCandleCount);
+            candles.add(lastCandleToAdd);
+        }
+
+        if(createEmptyCandleForTimeGaps) {
+            while (currentServerTime > nextTime) {
+                startNewCandle(nextTime);
+                nextTime += candleDeltaTimeMs;
+            }
+        }
+        else
+        {
+            Candle thisLastCandle = candles.getLast();
+            if (thisLastCandle != null) {
+                long currentServerTimeFloored = PriceHistoryData.floorTime(currentServerTime, candleDeltaTimeMs);
+                if (currentServerTimeFloored > thisLastCandle.openTimestamp)
+                    startNewCandle(currentServerTime);
+            }
+            else
+            {
+                startNewCandle(currentServerTime);
+            }
+        }
     }
 
     public void setCurrentMarketPrice(long currentMarketPrice)
@@ -125,9 +230,9 @@ public class PriceHistoryData
             candle.low = Math.min(this.currentMarketPrice, candle.low);
         }
     }
-    public void startNewCandle()
+    public void startNewCandle(long currentServerTime)
     {
-        candles.add(new Candle(currentMarketPrice,currentMarketPrice,currentMarketPrice));
+        candles.add(new Candle(currentServerTime, currentMarketPrice,currentMarketPrice,currentMarketPrice));
     }
 
     public List<Candle> getCandles()
@@ -196,4 +301,10 @@ public class PriceHistoryData
     {
         return BankManager.convertToRawAmountStatic(realPrice, itemScaleFactor);
     }
+    public static long floorTime(long inputTime, long roundingTimeBase)
+    {
+        return (inputTime / roundingTimeBase) * roundingTimeBase;
+    }
+
+
 }

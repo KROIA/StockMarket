@@ -42,9 +42,10 @@ public class ClientMarketManager implements IClientMarketManager
 
     public void update()
     {
+        long serverTime = ClientMarket.PriceHistoryContainer.ServerRelativeTimer.timeOffsetMS + System.currentTimeMillis();
         for(ClientMarket clientMarket : clientMarkets.values())
         {
-            clientMarket.update();
+            clientMarket.update(serverTime);
         }
     }
 

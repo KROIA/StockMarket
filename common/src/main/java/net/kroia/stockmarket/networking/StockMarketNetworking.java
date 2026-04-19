@@ -7,10 +7,7 @@ import net.kroia.modutilities.networking.client_server.streaming.StreamSystem;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.networking.packet.OpenUIPacket;
 import net.kroia.stockmarket.networking.packet.PlayerJoinSyncPacket;
-import net.kroia.stockmarket.networking.request.ActiveOrdersRequest;
-import net.kroia.stockmarket.networking.request.CreateOrderRequest;
-import net.kroia.stockmarket.networking.request.MarketPriceHistoryRequest;
-import net.kroia.stockmarket.networking.request.MarketsRequest;
+import net.kroia.stockmarket.networking.request.*;
 import net.kroia.stockmarket.networking.stream.MarketPriceStream;
 import net.kroia.stockmarket.stockmarket.market.AsyncMarket;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
@@ -36,6 +33,7 @@ public class StockMarketNetworking extends NetworkPacketManager {
     public final MarketsRequest MARKETS_REQUEST = (MarketsRequest) AsynchronousRequestResponseSystem.register(new MarketsRequest());
     public final CreateOrderRequest CREATE_ORDER_REQUEST = (CreateOrderRequest) AsynchronousRequestResponseSystem.register(new CreateOrderRequest());
     public final ActiveOrdersRequest ACTIVE_ORDERS_REQUEST = (ActiveOrdersRequest) AsynchronousRequestResponseSystem.register(new ActiveOrdersRequest());
+    public final ServerTimeRequest SERVER_TIME_REQUEST = (ServerTimeRequest) AsynchronousRequestResponseSystem.register(new ServerTimeRequest());
 
 
     public StockMarketNetworking()

@@ -6,29 +6,29 @@ import net.minecraft.network.codec.StreamCodec;
 
 public class ClientSettings {
     public static final StreamCodec<RegistryFriendlyByteBuf, ClientSettings> STREAM_CODEC = StreamCodec.composite(
-            ByteBufCodecs.VAR_LONG, p -> p.candleTimeMs,
+            ByteBufCodecs.BOOL, p -> p.dummy,
             ClientSettings::new
     );
 
-    private long candleTimeMs;
+    boolean dummy;
 
-    public ClientSettings()
-    {
+    boolean fillMissingCandlesticks = true;
 
+    public ClientSettings() {
     }
-    public ClientSettings(long candleTimeMs) {
-        this.candleTimeMs = candleTimeMs;
+    public ClientSettings(boolean dummy) {
+        this.dummy = dummy;
     }
     public void loadFrom(ClientSettings settings)
     {
-        this.candleTimeMs = settings.candleTimeMs;
+
     }
 
+    public void setFillMissingCandlesticks(boolean fillMissingCandlesticks) {
+        this.fillMissingCandlesticks = fillMissingCandlesticks;
+    }
+    public boolean isFillMissingCandlesticks() {
+        return fillMissingCandlesticks;
+    }
 
-    public long getCandleTimeMs() {
-        return candleTimeMs;
-    }
-    public void setCandleTimeMs(long candleTimeMs) {
-        this.candleTimeMs = candleTimeMs;
-    }
 }
