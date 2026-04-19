@@ -167,7 +167,7 @@ public class ServerMarketManager implements ServerSaveable, IServerMarketManager
         for(ServerMarket m : markets.values())
         {
             // Create random movement for testing
-            tmpValue += 10+Math.sin((double)System.currentTimeMillis()/10000.0);
+            tmpValue += Math.sin((double)System.currentTimeMillis()/10000.0);
             long rand = (random.nextLong()%10);
             if(tmpValue > 1) {
                 rand += 1;

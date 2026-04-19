@@ -208,7 +208,7 @@ public class LimitOrderPanel extends StockMarketGuiElement
         currencyLabel.setBounds(priceLabel.getRight(), priceLabel.getTop(), width/2, priceLabel.getHeight());
         priceTextBox.setBounds(padding, priceLabel.getBottom(), width, StockMarketGuiElement.defaultElementHeight);
 
-        quantityLabel.setBounds(padding, priceTextBox.getBottom()+spacing, width/2, StockMarketGuiElement.defaultElementHeight/2);
+        quantityLabel.setBounds(padding, priceTextBox.getBottom()+spacing*2, width/2, StockMarketGuiElement.defaultElementHeight/2);
         itemNameLabel.setBounds(quantityLabel.getRight(), quantityLabel.getTop(), width/2, quantityLabel.getHeight());
         quantityTextBox.setBounds(padding, quantityLabel.getBottom(), width, StockMarketGuiElement.defaultElementHeight);
 
@@ -224,7 +224,7 @@ public class LimitOrderPanel extends StockMarketGuiElement
         remove128Button.setBounds(remove64Button.getRight()+spacing, remove64Button.getTop(), buttonWidth, remove64Button.getHeight());
 
         buyButton.setBounds(padding, height-(StockMarketGuiElement.defaultElementHeight-padding), (width-spacing)/2, StockMarketGuiElement.defaultElementHeight);
-        sellButton.setBounds(buyButton.getRight()+spacing/2, buyButton.getTop(), buyButton.getWidth(), buyButton.getHeight());
+        sellButton.setBounds(buyButton.getRight()+spacing, buyButton.getTop(), buyButton.getWidth(), buyButton.getHeight());
 
 
     }

@@ -54,7 +54,7 @@ public class CandlestickChart extends StockMarketGuiElement
     private int maxPriceLabelTextWidth = 0;
     private int firstVisibleCandleIndex = 0;
     private int lastVisibleCandleIndex = 0;
-    private int maxTimeDateLabelHeight = 0;
+    private int maxTimeDateLabelWidth = 0;
     private final Quaternionf rotation90ccl = new Quaternionf(0,0, -Math.sin(Math.PI/4), Math.sin(Math.PI/4));
     private boolean firstDraw = false;
     private boolean dragging = false;
@@ -269,7 +269,7 @@ public class CandlestickChart extends StockMarketGuiElement
         scissorResume();
         maxPriceLabelTextWidth += 10;
         canvasRect.width = Math.max(2, ((getWidth() - maxPriceLabelTextWidth)/2)*2);
-        canvasRect.height = Math.max(1, (getHeight()- maxTimeDateLabelHeight));
+        canvasRect.height = Math.max(1, (getHeight()- maxTimeDateLabelWidth));
         canvasScissorRect.width = canvasRect.width-1;
         canvasScissorRect.x = canvasRect.x+1;
         canvasScissorRect.y = canvasRect.y+1;
@@ -281,10 +281,10 @@ public class CandlestickChart extends StockMarketGuiElement
     }
     private void renderChartVerticalBackground()
     {
-        graphicsPushPose();
+        //graphicsPushPose();
         //rotation90ccl.setAngleAxis(System.currentTimeMillis()/1000.0, 0,0,1);
 
-        graphicsRotateAround(rotation90ccl, canvasRect.x, canvasRect.y, 0);
+        //graphicsRotateAround(rotation90ccl, canvasRect.x, canvasRect.y, 0);
 
 
         int targetLineCount = 10; // how many lines you want roughly visible
@@ -304,32 +304,30 @@ public class CandlestickChart extends StockMarketGuiElement
         else if (normalized < 7.5) niceStep = (int)(5  * magnitude);
         else                       niceStep = (int)(10 * magnitude);
 
-        // Find the first price level just below the visible bottom
-        int firstTime = (int)Math.floor(chartviewRect.x / niceStep) * niceStep;
 
-        // Draw all lines within the visible range
-        //double lastTime = chartviewRect.x + chartviewRect.height;
         maxPriceLabelTextWidth = 0;
-        /*for (int time = firstTime; time <= lastTime; time += niceStep)
-        {
-            int canvasX = toCanvasSpaceX(time);
-            int canvasY = toCanvasSpaceY(0);
-            drawText(""+time,  canvasY, -canvasX);
-        }*/
         List<PriceHistoryData.Candle> candles =  data.getCandles();
         int candleCount = candles.size();
         int offset = Math.max(1,(lastVisibleCandleIndex-firstVisibleCandleIndex) /  targetLineCount);
-        //long currentTime = System.currentTimeMillis();
 
         Date lastTime = new Date(0);
-        long lastMillis = 0;
         int xOffset = -candleWidth/2;
-        maxTimeDateLabelHeight = 0;
-        int canvasY = toCanvasSpaceY(0);
-        canvasY = canvasRect.y + canvasRect.height;
+        maxTimeDateLabelWidth = 0;
+        //int canvasY = toCanvasSpaceY(0);
+        int canvasY = canvasRect.y + canvasRect.height;
         int i=firstVisibleCandleIndex;
-        for(; i<lastVisibleCandleIndex; i+=offset)
+        for(; i<=lastVisibleCandleIndex; i+=offset)
         {
+            if(i>=lastVisibleCandleIndex-offset && offset > 1)
+            {
+                i = lastVisibleCandleIndex;
+                // Check if the label would overlap with the label of the newest candle
+               //int possibleSpaceNeeded = maxTimeDateLabelWidth;
+               //int neededCandles = possibleSpaceNeeded / candleWidth;
+               //if(candleCount - i > neededCandles/2)
+               //    break; // Skip this label
+            }
+
             PriceHistoryData.Candle candle = candles.get(i);
             int canvasX = toCanvasSpaceX(candleCount-i-1);
 
@@ -342,89 +340,38 @@ public class CandlestickChart extends StockMarketGuiElement
             lastTime = currentTime;
 
             int textHeight = getTextHeight();
-            int lineOffset = Math.max(canvasRect.x, canvasX - (timeDateStr.length * textHeight + candleWidth)/2);
+            int lineOffset = Math.max(canvasY, canvasY + 1);
+
             for(int j=0;j<timeDateStr.length;j++)
             {
                 // yPos = Math.max(canvasRect.x,  canvasX + (xOffset + (j * textHeight)));
                 int yPos = lineOffset + (j * textHeight);
                 int textWidth = getTextWidth(timeDateStr[j]);
-                maxTimeDateLabelHeight = Math.max(maxTimeDateLabelHeight, textWidth);
-                drawText(timeDateStr[j], -canvasY-textWidth -5, yPos);
+                maxTimeDateLabelWidth = Math.max(maxTimeDateLabelWidth, textWidth);
+                drawText(timeDateStr[j], Math.max(canvasRect.x, canvasX - (candleWidth + textWidth)/2), yPos);
             }
-
-            /*//lastMillis = candle.openTimestamp;
-            int maxTextWidth = 0;
-            if(timeDateStr.length == 1)
-            {
-                int yPos = Math.max(canvasRect.x,  canvasX - xOffset);
-                maxTextWidth = Math.max(maxTextWidth, getTextWidth(timeDateStr[0]));
-                drawText(timeDateStr[0], -canvasY-maxTextWidth -5, yPos);
-            }
-            else if(timeDateStr.length == 2)
-            {
-                int yPos = Math.max(canvasRect.x,  canvasX - (xOffset + getTextHeight()/2));
-                int textWidth = getTextWidth(timeDateStr[0]);
-                maxTextWidth = Math.max(maxTextWidth, textWidth);
-                drawText(timeDateStr[0], -canvasY-textWidth -5, yPos);
-                textWidth = getTextWidth(timeDateStr[1]);
-                maxTextWidth = Math.max(maxTextWidth, textWidth);
-                yPos += getTextHeight();
-                drawText(timeDateStr[1], -canvasY-textWidth -5, yPos);
-            }
-
-            maxTimeDateLabelHeight = Math.max(maxTimeDateLabelHeight, maxTextWidth);*/
-
         }
-        if(lastVisibleCandleIndex >= 0)
+        /*if(lastVisibleCandleIndex >= 0)
         {
             i = lastVisibleCandleIndex;
-            if(i>=candles.size())
-            {
-                int wait = 0;
-            }
             PriceHistoryData.Candle candle = candles.get(i);
             Date currentTime = new Date(candle.openTimestamp);
             int canvasX = toCanvasSpaceX(candleCount-i-1);
             String[] timeDateStr = timestampToTimeDate(currentTime, lastTime);
 
-
+            int textHeight = getTextHeight();
+            int lineOffset = Math.max(canvasY, canvasY + 1);
             for(int j=0;j<timeDateStr.length;j++)
             {
-                int yPos = Math.max(canvasRect.x,  canvasX - (xOffset + (j * getTextHeight())/2));
+                // yPos = Math.max(canvasRect.x,  canvasX + (xOffset + (j * textHeight)));
+                int yPos = lineOffset + (j * textHeight);
                 int textWidth = getTextWidth(timeDateStr[j]);
-                maxTimeDateLabelHeight = Math.max(maxTimeDateLabelHeight, textWidth);
-                drawText(timeDateStr[j], -canvasY-textWidth -5, yPos);
+                maxTimeDateLabelWidth = Math.max(maxTimeDateLabelWidth, textWidth);
+                drawText(timeDateStr[j], Math.max(canvasRect.x, canvasX - (candleWidth + textWidth)/2), yPos);
             }
-
-
-           /* if(timeDateStr.length == 1)
-            {
-
-            }
-            else if(timeDateStr.length == 2)
-            {
-                int yPos = Math.max(canvasRect.x,  canvasX - (xOffset + lineXOffset));
-                int textWidth = getTextWidth(timeDateStr[0]);
-                maxTextWidth = Math.max(maxTextWidth, textWidth);
-                drawText(timeDateStr[0], -canvasY-textWidth -5, yPos);
-                textWidth = getTextWidth(timeDateStr[1]);
-                maxTextWidth = Math.max(maxTextWidth, textWidth);
-                yPos += getTextHeight();
-                drawText(timeDateStr[1], -canvasY-textWidth -5, yPos);
-            }
-
-            maxTimeDateLabelHeight = Math.max(maxTimeDateLabelHeight, maxTextWidth);*/
-/*
-            long currentTime = candle.openTimestamp;
-            boolean useDate = currentTime / MILLISECONDS_PER_DAY != lastTime / MILLISECONDS_PER_DAY;
-            String timeDateStr = timestampToTimeDate(currentTime, useDate);
-            int textWidth = getTextWidth(timeDateStr);
-            maxTimeDateLabelHeight = Math.max(maxTimeDateLabelHeight, textWidth);
-            int yPos = Math.max(canvasRect.x,  canvasX - (xOffset+(useDate?getTextHeight()/2:0)));
-            drawText(timeDateStr, -canvasY-textWidth -5, yPos);*/
-        }
-        maxTimeDateLabelHeight += 10;
-        graphicsPopPose();
+        }*/
+        maxTimeDateLabelWidth += 10;
+        //graphicsPopPose();
     }
     @Override
     public int getTextWidth(String text)

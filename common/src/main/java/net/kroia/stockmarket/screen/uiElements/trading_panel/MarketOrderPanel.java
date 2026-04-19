@@ -178,7 +178,7 @@ class MarketOrderPanel extends StockMarketGuiElement
         remove128Button.setBounds(remove64Button.getRight()+spacing, remove64Button.getTop(), buttonWidth, remove64Button.getHeight());
 
         buyButton.setBounds(padding, height-(StockMarketGuiElement.defaultElementHeight-padding), (width-spacing)/2, StockMarketGuiElement.defaultElementHeight);
-        sellButton.setBounds(buyButton.getRight()+spacing/2, buyButton.getTop(), buyButton.getWidth(), buyButton.getHeight());
+        sellButton.setBounds(buyButton.getRight()+spacing, buyButton.getTop(), buyButton.getWidth(), buyButton.getHeight());
 
 
     }
