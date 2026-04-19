@@ -47,6 +47,7 @@ public class CandlestickChart extends StockMarketGuiElement
 
     int candleWidth = 12;
     private final Rectangle canvasRect = new Rectangle(1,1,0,0);
+    private final Rectangle canvasScissorRect = new Rectangle(1,1,0,0);
     private double rawWithScrollValue = 200;
     private final RectangleF chartviewRect = new RectangleF(200,0,200,500);
     private final Point lastDragMousePos = new Point();
@@ -63,6 +64,8 @@ public class CandlestickChart extends StockMarketGuiElement
 
     public CandlestickChart()
     {
+
+        this.setTextFontScale(0.8f);
         long[] candleTimes = ClientMarket.getAvailableCandleTimeDeltas();
         float buttonFontSizeScale = 1.0f;
         for(int i = 0; i < candleTimes.length; i++)
@@ -121,6 +124,7 @@ public class CandlestickChart extends StockMarketGuiElement
         if(market != null) {
             long deltaTime = ClientMarket.getAvailableCandleTimeDeltas()[index];
             this.data = market.getPriceHistoryData(deltaTime);
+            autoCenterView();
         }
         for(int i = 0; i < candleTimeSelectButtons.size(); i++)
         {
@@ -162,8 +166,8 @@ public class CandlestickChart extends StockMarketGuiElement
             return;
         lastVisibleCandleIndex = Math.min(data.getCandles().size() - 1, lastVisibleCandleIndex);
         firstVisibleCandleIndex = Math.min(data.getCandles().size() - 1, firstVisibleCandleIndex);
-        drawFrame(canvasRect, colorZeroLine, 1);
-        enableScissor(canvasRect);
+
+        enableScissor(canvasScissorRect);
         drawRect(canvasRect.x, toCanvasSpaceY(0)-2 , canvasRect.width, 2, colorZeroLine); // Horizontal zero line
 
 
@@ -171,7 +175,9 @@ public class CandlestickChart extends StockMarketGuiElement
         disableScissor();
         renderChartVerticalBackground();
 
+
         renderCandles();
+        drawFrame(canvasRect, ColorUtilities.setAlpha(colorZeroLine,1.0f), 1);
     }
 
     @Override
@@ -184,11 +190,11 @@ public class CandlestickChart extends StockMarketGuiElement
     {
         if(data==null || data.getCandles().isEmpty())
             return;
-        enableScissor(canvasRect);
+        enableScissor(canvasScissorRect);
         candleWidth = (Math.abs((canvasRect.width/ (int)chartviewRect.width)));
 
 
-        lastVisibleCandleIndex = 0;
+        lastVisibleCandleIndex = -1;
         firstVisibleCandleIndex = 0;
         List<PriceHistoryData.Candle> candles =  data.getCandles();
 
@@ -196,18 +202,19 @@ public class CandlestickChart extends StockMarketGuiElement
         {
             double closePrice = data.getCurrentMarketRealPrice();
             int candleCount = candles.size();
-           // int lastCandleXPos = toCanvasSpaceX(0) - candleWidth;
+            int lastCandleXPos = toCanvasSpaceX(0) - candleWidth*2;
 
             boolean startedVisible = false;
             for(int i=candleCount-1; i>=0; i--)
             {
                 PriceHistoryData.Candle candle = candles.get(i);
-                int candlePos = toCanvasSpaceX(candleCount-1-i) - candleWidth;
-                boolean isVisible = renderCandlestick(candleCount-1 - i, candlePos,
+                int newCandleXPos = toCanvasSpaceX(candleCount-i-1) - candleWidth;
+                boolean isVisible = renderCandlestick(newCandleXPos, lastCandleXPos,
                         data.toRealPrice(candle.open),
                         data.toRealPrice(candle.high),
                         data.toRealPrice(candle.low),
                         closePrice);
+                lastCandleXPos = newCandleXPos;
                // lastCandleXPos -= candleWidth;
                 if(isVisible && !startedVisible) {
                     lastVisibleCandleIndex = i;
@@ -263,6 +270,10 @@ public class CandlestickChart extends StockMarketGuiElement
         maxPriceLabelTextWidth += 10;
         canvasRect.width = Math.max(2, ((getWidth() - maxPriceLabelTextWidth)/2)*2);
         canvasRect.height = Math.max(1, (getHeight()- maxTimeDateLabelHeight));
+        canvasScissorRect.width = canvasRect.width-1;
+        canvasScissorRect.x = canvasRect.x+1;
+        canvasScissorRect.y = canvasRect.y+1;
+        canvasScissorRect.height = canvasRect.height-1;
         for (double price = firstLine; price <= topPrice; price += niceStep)
         {
             renderHorizontalValueLine(price);
@@ -312,7 +323,7 @@ public class CandlestickChart extends StockMarketGuiElement
 
         Date lastTime = new Date(0);
         long lastMillis = 0;
-        int xOffset = (candleWidth+getTextHeight())/2;
+        int xOffset = -candleWidth/2;
         maxTimeDateLabelHeight = 0;
         int canvasY = toCanvasSpaceY(0);
         canvasY = canvasRect.y + canvasRect.height;
@@ -325,9 +336,23 @@ public class CandlestickChart extends StockMarketGuiElement
             Date currentTime = new Date(candle.openTimestamp);
 
 
+
+
             String[] timeDateStr = timestampToTimeDate(currentTime, lastTime);
             lastTime = currentTime;
-            //lastMillis = candle.openTimestamp;
+
+            int textHeight = getTextHeight();
+            int lineOffset = Math.max(canvasRect.x, canvasX - (timeDateStr.length * textHeight + candleWidth)/2);
+            for(int j=0;j<timeDateStr.length;j++)
+            {
+                // yPos = Math.max(canvasRect.x,  canvasX + (xOffset + (j * textHeight)));
+                int yPos = lineOffset + (j * textHeight);
+                int textWidth = getTextWidth(timeDateStr[j]);
+                maxTimeDateLabelHeight = Math.max(maxTimeDateLabelHeight, textWidth);
+                drawText(timeDateStr[j], -canvasY-textWidth -5, yPos);
+            }
+
+            /*//lastMillis = candle.openTimestamp;
             int maxTextWidth = 0;
             if(timeDateStr.length == 1)
             {
@@ -347,10 +372,10 @@ public class CandlestickChart extends StockMarketGuiElement
                 drawText(timeDateStr[1], -canvasY-textWidth -5, yPos);
             }
 
-            maxTimeDateLabelHeight = Math.max(maxTimeDateLabelHeight, maxTextWidth);
+            maxTimeDateLabelHeight = Math.max(maxTimeDateLabelHeight, maxTextWidth);*/
 
         }
-        if(i >= lastVisibleCandleIndex)
+        if(lastVisibleCandleIndex >= 0)
         {
             i = lastVisibleCandleIndex;
             if(i>=candles.size())
@@ -361,16 +386,24 @@ public class CandlestickChart extends StockMarketGuiElement
             Date currentTime = new Date(candle.openTimestamp);
             int canvasX = toCanvasSpaceX(candleCount-i-1);
             String[] timeDateStr = timestampToTimeDate(currentTime, lastTime);
-            int maxTextWidth = 0;
-            if(timeDateStr.length == 1)
+
+
+            for(int j=0;j<timeDateStr.length;j++)
             {
-                int yPos = Math.max(canvasRect.x,  canvasX - xOffset);
-                maxTextWidth = Math.max(maxTextWidth, getTextWidth(timeDateStr[0]));
-                drawText(timeDateStr[0], -canvasY-maxTextWidth -5, yPos);
+                int yPos = Math.max(canvasRect.x,  canvasX - (xOffset + (j * getTextHeight())/2));
+                int textWidth = getTextWidth(timeDateStr[j]);
+                maxTimeDateLabelHeight = Math.max(maxTimeDateLabelHeight, textWidth);
+                drawText(timeDateStr[j], -canvasY-textWidth -5, yPos);
+            }
+
+
+           /* if(timeDateStr.length == 1)
+            {
+
             }
             else if(timeDateStr.length == 2)
             {
-                int yPos = Math.max(canvasRect.x,  canvasX - (xOffset + getTextHeight()/2));
+                int yPos = Math.max(canvasRect.x,  canvasX - (xOffset + lineXOffset));
                 int textWidth = getTextWidth(timeDateStr[0]);
                 maxTextWidth = Math.max(maxTextWidth, textWidth);
                 drawText(timeDateStr[0], -canvasY-textWidth -5, yPos);
@@ -380,7 +413,7 @@ public class CandlestickChart extends StockMarketGuiElement
                 drawText(timeDateStr[1], -canvasY-textWidth -5, yPos);
             }
 
-            maxTimeDateLabelHeight = Math.max(maxTimeDateLabelHeight, maxTextWidth);
+            maxTimeDateLabelHeight = Math.max(maxTimeDateLabelHeight, maxTextWidth);*/
 /*
             long currentTime = candle.openTimestamp;
             boolean useDate = currentTime / MILLISECONDS_PER_DAY != lastTime / MILLISECONDS_PER_DAY;
@@ -445,16 +478,18 @@ public class CandlestickChart extends StockMarketGuiElement
         String lastYearStr = yearFormat.format(lastTime);
 
         String dateStr = "";
-        if(!lastDayStr.equals(currentDayStr))
-            dateStr += currentDayStr;
-        if(!lastMonthStr.equals(currentMonthStr))
-            dateStr += currentMonthStr;
         if(!lastYearStr.equals(currentYearStr))
-            dateStr += currentYearStr;
+            dateStr += currentYearStr+"\n";
+        if(!lastMonthStr.equals(currentMonthStr))
+            dateStr += currentMonthStr+"\n";
+        if(!lastDayStr.equals(currentDayStr))
+            dateStr += currentDayStr+"\n";
+
+
         if(dateStr.isEmpty())
             return new String[]{currentTimeStr};
 
-        return new String[]{dateStr, currentTimeStr};
+        return (dateStr+currentTimeStr).split("\n");
     }
     private String formatPrice(double price)
     {
@@ -474,10 +509,12 @@ public class CandlestickChart extends StockMarketGuiElement
         else                   return String.format("%4.2f%s", value, suffix);  // 1.50k
     }
 
-    private boolean renderCandlestick(int candleIndex, int lastCandleXPos, double openPrice, double highPrice, double lowPrice, double closePrice)
+    private boolean renderCandlestick(int newCandleXPos, int lastCandleXPos, double openPrice, double highPrice, double lowPrice, double closePrice)
     {
-        int xOffset = lastCandleXPos + canvasRect.x; //toCanvasSpaceX(candleIndex) - candleWidth;
-        if(xOffset < 0 || (xOffset+candleWidth-1) > (canvasRect.x + canvasRect.width))
+        int xOffset = newCandleXPos;
+        int localCandleWidth = Math.abs(newCandleXPos - lastCandleXPos);
+
+        if(xOffset < 0 || (xOffset+localCandleWidth-1) > (canvasRect.x + canvasRect.width))
             return false; // candle outside canvas
 
         int color = openPrice > closePrice ? colorRed : colorGreen;
@@ -497,7 +534,7 @@ public class CandlestickChart extends StockMarketGuiElement
             bodyYMax--;
         }
 
-        int wickWidth = candleWidth / 4;
+        int wickWidth = localCandleWidth / 4;
         if(wickWidth < 1)
         {
             wickWidth = 1;
@@ -508,7 +545,7 @@ public class CandlestickChart extends StockMarketGuiElement
         }
         wickWidth |= 1; // Make sure it is odd
 
-        int wickOffset = (candleWidth - wickWidth) / 2;
+        int wickOffset = (localCandleWidth - wickWidth) / 2;
         if(wickOffset <= 0)
         {
             wickOffset = 0;
@@ -531,7 +568,7 @@ public class CandlestickChart extends StockMarketGuiElement
         }
 
         drawRect(xOffset, bodyYMin,
-                candleWidth, bodyYMax-bodyYMin, color);
+                localCandleWidth, bodyYMax-bodyYMin, color);
 
         return true;
     }
@@ -539,6 +576,9 @@ public class CandlestickChart extends StockMarketGuiElement
 
     @Override
     protected boolean mouseScrolledOverElement(double delta) {
+        if(data == null)
+            return false;
+
         double zoomFactor = (delta > 0) ? 0.9 : 1.1; // scroll up = zoom in (shrink rect)
         // Get mouse position in world space BEFORE zooming
         double mouseWorldX = fromCanvasSpaceX(getMouseX());
@@ -548,8 +588,10 @@ public class CandlestickChart extends StockMarketGuiElement
         if (!isKeyPressed(GLFW.GLFW_KEY_LEFT_CONTROL))
         {
             // Scale the rect
-            rawWithScrollValue = rawWithScrollValue*zoomFactor;
-            if(rawWithScrollValue < Long.MAX_VALUE && rawWithScrollValue > 5)
+            double minScrollValue = Math.min(canvasRect.width/3.f, data.getCandles().size());
+            rawWithScrollValue = Math.max(Math.min(rawWithScrollValue*zoomFactor, minScrollValue), 5.0f);
+
+            if(rawWithScrollValue < minScrollValue && rawWithScrollValue > 5)
             {
                 int newCandleWidth = (Math.abs(canvasRect.width/ (int)rawWithScrollValue)/2)*2;
                 if(newCandleWidth > 0)
@@ -560,19 +602,22 @@ public class CandlestickChart extends StockMarketGuiElement
                 // Shift the rect so the point under the mouse stays fixed:
                 // mouseWorldX must satisfy: mouseWorldX = chartviewRect.x + mouseNormX * newWidth
                 // where mouseNormX = (mouseWorldX - oldX) / oldWidth  (preserved)
-                double mouseNormX = (mouseWorldX - chartviewRect.x) / (chartviewRect.width / zoomFactor);
+
                 //double mouseNormY = (mouseWorldY - chartviewRect.y) / (chartviewRect.height / zoomFactor);
-
+                double mouseNormX = (mouseWorldX - chartviewRect.x) / (chartviewRect.width / zoomFactor);
                 chartviewRect.x = mouseWorldX - mouseNormX * chartviewRect.width;
-                //chartviewRect.y = mouseWorldY - mouseNormY * chartviewRect.height;
-
                 if(chartviewRect.x < chartviewRect.width)
                     chartviewRect.x = chartviewRect.width;
+
             }
             else
             {
-                chartviewRect.width = (int)Math.max(Math.min(rawWithScrollValue, Long.MAX_VALUE), 5);
+                rawWithScrollValue = Math.max(Math.min(rawWithScrollValue, minScrollValue), 5.0f);
+                chartviewRect.width = (int)rawWithScrollValue;
+                chartviewRect.x = chartviewRect.width;
             }
+
+
             consumed = true;
         }
         if (!isKeyPressed(GLFW.GLFW_KEY_LEFT_SHIFT))
@@ -637,7 +682,7 @@ public class CandlestickChart extends StockMarketGuiElement
     }
     @Override
     protected boolean mouseDragged(int button, double deltaX, double deltaY) {
-        if(!dragging)
+        if(!dragging || data == null)
             return false;
         int mouseX = getMouseX();
         int mouseY = getMouseY();
@@ -659,6 +704,11 @@ public class CandlestickChart extends StockMarketGuiElement
 
             if(chartviewRect.x < chartviewRect.width)
                 chartviewRect.x = chartviewRect.width;
+            else if(chartviewRect.x > data.getCandles().size() + chartviewRect.width - 1)
+            {
+                chartviewRect.x = data.getCandles().size() + chartviewRect.width - 1;
+            }
+
             return true;
         }
         return false;
@@ -699,13 +749,14 @@ public class CandlestickChart extends StockMarketGuiElement
             double minPrice = data.toRealPrice(data.getMinPrice(firstIndex, lastIndex));
 
             double priceDifference = maxPrice - minPrice;
-            //double labelOffset = (fromCanvasSpaceY(maxTimeDateLabelHight)-fromCanvasSpaceY(0));
-            chartviewRect.y = Math.max(0, minPrice - priceDifference * 0.1) /*- labelOffset*/;
+
+            chartviewRect.y = Math.max(0, minPrice - priceDifference * 0.1);
             chartviewRect.height = (maxPrice + priceDifference * 0.1) - chartviewRect.y;
             if(chartviewRect.width > lastIndex)
             {
                 chartviewRect.width = lastIndex;
             }
+            rawWithScrollValue = chartviewRect.width;
             chartviewRect.x = chartviewRect.width; // Move to the newest candle
         }
     }
@@ -718,23 +769,27 @@ public class CandlestickChart extends StockMarketGuiElement
         //    in2 = (in2 * candleWidth) / candleWidth;
         //    in1 = (in1 * candleWidth) / candleWidth;
         //}
-        return (int)map(time, in1, in2, canvasRect.x, canvasRect.x+canvasRect.width);
+        return (int)map(time, in1, in2, canvasRect.x+1, canvasRect.x+canvasRect.width-1);
         //return canvasRect.x + (int)(((time - (long)chartviewRect.x) * (long)canvasRect.width) / ((long)chartviewRect.width)) * candleWidth;
     }
 
     private int toCanvasSpaceY(double price)
     {
-        return canvasRect.y - (int)(((price - (chartviewRect.y + chartviewRect.height)) * canvasRect.height) / (chartviewRect.height));
+        return (canvasRect.y+1) - (int)(((price - (chartviewRect.y + chartviewRect.height)) * (canvasRect.height-2)) / (chartviewRect.height));
     }
 
     private double fromCanvasSpaceX(int time)
     {
-        return chartviewRect.x - (double)(time - canvasRect.x) * (chartviewRect.width) / canvasRect.width;
+        //double in2 = (chartviewRect.x - chartviewRect.width);
+        //double in1 = (chartviewRect.x);
+        //double xStartPos = mapF(time, in1, in2, canvasRect.x, canvasRect.x+canvasRect.width);
+        //return (time-xStartPos)/(double)candleWidth;
+        return chartviewRect.x - (double)(time - (canvasRect.x+1)) * (chartviewRect.width) / (canvasRect.width-1);
     }
 
     private double fromCanvasSpaceY(int yPos)
     {
-        return chartviewRect.y+chartviewRect.height - (double)(yPos - canvasRect.y) * (chartviewRect.height) / canvasRect.height;
+        return chartviewRect.y+chartviewRect.height - (double)(yPos - (canvasRect.y+1)) * (chartviewRect.height) / (canvasRect.height-2);
     }
 
     long map(long x, long in_min, long in_max, long out_min, long out_max)
@@ -743,6 +798,13 @@ public class CandlestickChart extends StockMarketGuiElement
             return Long.MAX_VALUE;
         return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
     }
+    double mapF(double x, double in_min, double in_max, double out_min, double out_max)
+    {
+        if(in_min == in_max)
+            return Double.MAX_VALUE;
+        return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+    }
+
 
     private String timeToShortString(long timeMs)
     {

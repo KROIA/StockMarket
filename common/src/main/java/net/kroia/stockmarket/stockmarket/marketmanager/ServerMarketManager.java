@@ -33,7 +33,7 @@ public class ServerMarketManager implements ServerSaveable, IServerMarketManager
 
     private final Map<ItemID, ServerMarket> markets = new HashMap<>();
     private final long candleSaveTimer_intervalMs = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.CANDLE_TIME.get();
-    private long candleSaveTimer_lastMs = System.currentTimeMillis();
+    private long candleSaveTimer_lastMs = (System.currentTimeMillis()/60000)*60000;
     private final Random random = new Random();
     private final AtomicBoolean saveLock = new AtomicBoolean(false);
     private ItemID tradingCurrencyID = null;
@@ -160,14 +160,25 @@ public class ServerMarketManager implements ServerSaveable, IServerMarketManager
 
 
 
+    private static double tmpValue = 100;
     @Override
     public void update()
     {
         for(ServerMarket m : markets.values())
         {
             // Create random movement for testing
-            long currentPrice = m.getCurrentMarketPrice();
+            tmpValue += 10+Math.sin((double)System.currentTimeMillis()/10000.0);
             long rand = (random.nextLong()%10);
+            if(tmpValue > 1) {
+                rand += 1;
+                tmpValue -= 1;
+            }
+            else if(tmpValue < 0) {
+                rand -= 1;
+                tmpValue += 1;
+            }
+            long currentPrice = m.getCurrentMarketPrice();
+
             currentPrice = Math.max(0, currentPrice + rand);
             m.test_setCurrentMarketPrice(currentPrice);
             m.update();

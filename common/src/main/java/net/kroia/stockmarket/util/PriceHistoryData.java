@@ -153,7 +153,7 @@ public class PriceHistoryData
     public void loadFrom(PriceHistoryData other, long candleDeltaTimeMs, long currentServerTime, boolean createEmptyCandleForTimeGaps)
     {
         candles.clear();
-        this.currentMarketPrice = other.currentMarketPrice;
+
         if(other.candles.isEmpty())
             return;
 
@@ -177,6 +177,18 @@ public class PriceHistoryData
                 nextTime += candleDeltaTimeMs;
                 if(createEmptyCandleForTimeGaps) {
                     while (candle.openTimestamp > nextTime) {
+
+                        long nextMarketPrice = 0;
+                        for(int j=i+1; j<other.candles.size(); j++)
+                        {
+                            Candle jCandle = other.candles.get(j);
+                            if(jCandle.openTimestamp < nextTime)
+                            {
+                                nextMarketPrice = jCandle.open;
+                                break;
+                            }
+                        }
+                        this.currentMarketPrice = nextMarketPrice;
                         startNewCandle(nextTime);
                         nextTime += candleDeltaTimeMs;
                         //nextTime = floorTime(candle.openTimestamp + candleDeltaTimeMs, candleDeltaTimeMs);
@@ -197,7 +209,7 @@ public class PriceHistoryData
             Candle lastCandleToAdd = Candle.merge(other.candles, startTime, startCandleIndex, newCandleCount);
             candles.add(lastCandleToAdd);
         }
-
+        this.currentMarketPrice = other.currentMarketPrice;
         if(createEmptyCandleForTimeGaps) {
             while (currentServerTime > nextTime) {
                 startNewCandle(nextTime);
@@ -217,6 +229,7 @@ public class PriceHistoryData
                 startNewCandle(currentServerTime);
             }
         }
+
     }
 
     public void setCurrentMarketPrice(long currentMarketPrice)

@@ -380,6 +380,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         CompoundTag orderbookTag = new CompoundTag();
         success &= orderbook.save(orderbookTag);
         tag.put("orderbook", orderbookTag);
+        tag.putLong("currentMarketPrice", currentMarketPrice);
 
 
 
@@ -401,6 +402,10 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
             error("Can't load Orderbook from NBT tag");
         }
 
+        if(tag.contains("currentMarketPrice"))
+        {
+            currentMarketPrice =  tag.getLong("currentMarketPrice");
+        }
 
 
         return success;
