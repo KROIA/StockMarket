@@ -1,6 +1,5 @@
 package net.kroia.stockmarket.data;
 
-import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.persistence.DataPersistence;
 import net.kroia.modutilities.persistence.ServerSaveableChunked;
 import net.kroia.stockmarket.StockMarketModBackend;
@@ -29,8 +28,8 @@ public class DataManager extends DataPersistence {
     private static final boolean ENABLE_DEBUG_PERFORMANCE = false;
 
 
-    public static final Path BASE_PATH = Path.of("data", "stockmarket");
-    public static final Path SQL_DATABASE = BASE_PATH.resolve("database");
+    public static final Path BASE_PATH = Path.of("data", "StockMarket");
+    public static final Path SQL_DATABASE = BASE_PATH.resolve("Database");
 
     private static final String MARKET_MANAGER_FOLDER = "MarketManager";
     private static final String SETTINGS_FILE = "settings.json";
