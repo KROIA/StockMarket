@@ -1,25 +1,20 @@
 package net.kroia.stockmarket.stockmarket.marketmanager;
 
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.persistence.ServerSaveable;
 import net.kroia.modutilities.persistence.ServerSaveableChunked;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IAsyncMarket;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
-import net.kroia.stockmarket.data.table.MarketPriceManager;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import net.kroia.stockmarket.stockmarket.market.ServerMarket;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
-import net.minecraft.nbt.Tag;
-import net.minecraft.server.MinecraftServer;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 public class ServerMarketManager implements ServerSaveableChunked, IServerMarketManager
 {
@@ -189,6 +184,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
 
             currentPrice = Math.max(0, currentPrice + rand);
             m.test_setCurrentMarketPrice(currentPrice);
+            m.test_resetVirtualOrderBookVolume();
             m.update();
         }
 

@@ -15,6 +15,7 @@ import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.util.MultiServerUtils;
+import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
@@ -64,7 +65,8 @@ public class AsyncMarket implements IAsyncMarket{
         //GetItemID,
         GetCurrentMarketPrice,
         GetCurrentTime,
-        GetVolume,
+        GetVolume_1,
+        GetVolume_2,
         PutOrder_1,
         PutOrder_2,
         GetLimitOrders,
@@ -89,7 +91,8 @@ public class AsyncMarket implements IAsyncMarket{
         //put(FunctionType.GetItemID,                             codecPacket(null, ItemID.STREAM_CODEC));
         put(FunctionType.GetCurrentMarketPrice,                 codecPacket(null, ByteBufCodecs.VAR_LONG.cast()));
         put(FunctionType.GetCurrentTime,                        codecPacket(null, ByteBufCodecs.VAR_LONG.cast()));
-        put(FunctionType.GetVolume,                             codecPacket(null, ByteBufCodecs.VAR_LONG.cast()));
+        put(FunctionType.GetVolume_1,                           codecPacket(ByteBufCodecs.VAR_LONG.cast(), ByteBufCodecs.VAR_LONG.cast()));
+        put(FunctionType.GetVolume_2,                           codecPacket(ParamGroup_long_long.STREAM_CODEC.cast(), ByteBufCodecs.FLOAT.cast()));
         put(FunctionType.PutOrder_1,                            codecPacket(Order.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
         put(FunctionType.PutOrder_2,                            codecPacket(InterMarketOrder.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
         put(FunctionType.GetLimitOrders,                        codecPacket(null, ExtraCodecUtils.listStreamCodec(Order.STREAM_CODEC)));
@@ -208,7 +211,11 @@ public class AsyncMarket implements IAsyncMarket{
                 //case FunctionType.GetItemID ->                            OutputData.of(input.function, market.getItemID());
                 case FunctionType.GetCurrentMarketPrice ->                OutputData.of(input.function, market.getCurrentMarketPrice());
                 case FunctionType.GetCurrentTime ->                       OutputData.of(input.function, market.getCurrentTime());
-                case FunctionType.GetVolume ->                            OutputData.of(input.function, market.getVolume((Long)inputData.extra));
+                case FunctionType.GetVolume_1 ->                          OutputData.of(input.function, market.getVolume((Long)inputData.extra));
+                case FunctionType.GetVolume_2 ->                          {
+                    ParamGroup_long_long params = (ParamGroup_long_long)inputData.extra;
+                    yield OutputData.of(input.function, market.getVolume(params.longValue1, params.longValue2));
+                }
                 case FunctionType.PutOrder_1 ->                           OutputData.of(input.function, market.putOrder((Order)inputData.extra));
                 case FunctionType.PutOrder_2 ->                           OutputData.of(input.function, market.putOrder((InterMarketOrder)inputData.extra));
                 case FunctionType.GetLimitOrders ->                       OutputData.of(input.function, market.getLimitOrders());
@@ -225,7 +232,8 @@ public class AsyncMarket implements IAsyncMarket{
                 case //FunctionType.GetItemID,
                      FunctionType.GetCurrentMarketPrice,
                      FunctionType.GetCurrentTime,
-                     FunctionType.GetVolume,
+                     FunctionType.GetVolume_1,
+                     FunctionType.GetVolume_2,
                      //FunctionType.PutOrder_1,
                      //FunctionType.PutOrder_2,
                      //FunctionType.GetLimitOrders,
@@ -315,6 +323,15 @@ public class AsyncMarket implements IAsyncMarket{
         }
     }
 
+    private record ParamGroup_long_long(long longValue1, long longValue2)
+    {
+        public static final StreamCodec<RegistryFriendlyByteBuf, ParamGroup_long_long> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_LONG, p -> p.longValue1,
+                ByteBufCodecs.VAR_LONG, p -> p.longValue2,
+                ParamGroup_long_long::new
+        );
+    }
+
    /* private record ParamGroup_UUID_int(UUID uuid, int integer)
     {
         public static final StreamCodec<RegistryFriendlyByteBuf, ParamGroup_UUID_int> STREAM_CODEC = StreamCodec.composite(
@@ -365,11 +382,24 @@ public class AsyncMarket implements IAsyncMarket{
         if(!MultiServerUtils.canInteractWithStockMarket())
             return CompletableFuture.completedFuture(0L);
         CompletableFuture<Long> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.GetVolume, itemID, price);
+        InputData inputData = InputData.of(FunctionType.GetVolume_1, itemID, price);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;
     }
+
+    @Override
+    public CompletableFuture<Float> getVolumeAsync(long startPrice, long endPrice)
+    {
+        if(!MultiServerUtils.canInteractWithStockMarket())
+            return CompletableFuture.completedFuture(0.0f);
+        CompletableFuture<Float> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.GetVolume_2, itemID, new ParamGroup_long_long(startPrice, endPrice));
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
+    }
+
 
     @Override
     public CompletableFuture<Boolean> putOrderAsync(Order order) {

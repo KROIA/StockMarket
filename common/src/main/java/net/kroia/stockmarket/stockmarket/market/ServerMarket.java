@@ -43,7 +43,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
      * Temporary order buffers for collecting order async and only process the order on update
      * These order are not saved to NBT
      */
-    private final PriorityQueue<Order> buyMarketOders_inputBuffer = new PriorityQueue<>((o1, o2) -> Long.compare(o2.getStartPrice(), o1.getStartPrice()));
+    private final PriorityQueue<Order> buyMarketOrders_inputBuffer = new PriorityQueue<>((o1, o2) -> Long.compare(o2.getStartPrice(), o1.getStartPrice()));
     private final PriorityQueue<Order> sellMarketOrders_inputBuffer = new PriorityQueue<>(Comparator.comparingLong(Order::getStartPrice));
     private final PriorityQueue<Order> buyLimitOrders_inputBuffer = new PriorityQueue<>((o1, o2) -> Long.compare(o2.getStartPrice(), o1.getStartPrice()));
     private final PriorityQueue<Order> sellLimitOrders_inputBuffer = new PriorityQueue<>(Comparator.comparingLong(Order::getStartPrice));
@@ -60,7 +60,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
                                         this::onOrderCanceled, this::onOrderCanceled,
                                         this::defaultVolumeProvider);
         this.matchingEngine = new MatchingEngine(this.itemID, this.orderbook,
-                buyMarketOders_inputBuffer,
+                buyMarketOrders_inputBuffer,
                 sellMarketOrders_inputBuffer,
                 buyLimitOrders_inputBuffer,
                 sellLimitOrders_inputBuffer,
@@ -105,6 +105,11 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     public void test_setDefaultVolumeProviderFunction(Function<Long, Float> defaultVolumeProviderFunction)
     {
         this.defaultVolumeProviderFunction = defaultVolumeProviderFunction;
+    }
+    @Override
+    public void test_resetVirtualOrderBookVolume()
+    {
+        orderbook.resetVirtualVolumeDistribution();
     }
 
 
@@ -167,6 +172,19 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
 
 
 
+    @Override
+    public float getVolume(long startPrice, long endPrice)
+    {
+        return orderbook.getVolume(startPrice, endPrice);
+    }
+
+    @Override
+    public CompletableFuture<Float> getVolumeAsync(long startPrice, long endPrice)
+    {
+        return CompletableFuture.completedFuture(getVolume(startPrice, endPrice));
+    }
+
+
 
 
 
@@ -182,7 +200,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         if(order.isBuyOrder())
         {
             if(order.isMarketOrder())
-                buyMarketOders_inputBuffer.add(order);
+                buyMarketOrders_inputBuffer.add(order);
             else
                 buyLimitOrders_inputBuffer.add(order);
         }

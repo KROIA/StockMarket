@@ -15,12 +15,14 @@ public interface ISyncServerMarket {
     void test_setCurrentMarketPrice(long currentMarketPrice);
     void test_clearOrderbook();
     void test_setDefaultVolumeProviderFunction(Function<Long, Float> defaultVolumeProviderFunction);
+    void test_resetVirtualOrderBookVolume();
 
 
     ItemID getItemID();
     long getCurrentMarketPrice();
     long getCurrentTime();
     long getVolume(long price);
+    float getVolume(long startPrice, long endPrice);
 
     boolean putOrder(Order order);
     boolean putOrder(InterMarketOrder order);

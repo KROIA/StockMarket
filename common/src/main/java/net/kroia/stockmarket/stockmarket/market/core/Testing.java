@@ -84,6 +84,8 @@ public class Testing {
         success &= printTestResult(limitOrderTest_4(), "limitOrderTest_4");
         success &= printTestResult(mixedOrderTest_1(), "mixedOrderTest_1");
 
+        serverMarket.test_setDefaultVolumeProviderFunction(this::uniformVolumeDistribution);
+        serverMarket.test_resetVirtualOrderBookVolume();
         return success;
     }
 

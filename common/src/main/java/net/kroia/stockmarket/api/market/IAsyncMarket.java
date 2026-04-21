@@ -14,6 +14,7 @@ public interface IAsyncMarket {
     CompletableFuture<Long> getCurrentMarketPriceAsync();
     CompletableFuture<Long> getCurrentTimeAsync();
     CompletableFuture<Long> getVolumeAsync(long price);
+    CompletableFuture<Float> getVolumeAsync(long startPrice, long endPrice);
 
     CompletableFuture<Boolean> putOrderAsync(Order order);
     CompletableFuture<Boolean> putOrderAsync(InterMarketOrder order);

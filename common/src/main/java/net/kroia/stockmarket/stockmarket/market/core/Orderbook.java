@@ -129,18 +129,21 @@ public class Orderbook implements ServerSaveable
             for(Order order : buyLimitOrders)
             {
                 long startPrice = order.getStartPrice();
+                if(startPrice < price)
+                    break;
                 if(startPrice == price) {
                     volume += order.getRemainingVolume();
-                    break;
                 }
             }
         }
         else if(currentMarketPrice < price){
             // The searched price is inside the sell order
             for (Order order : sellLimitOrders) {
-                if (order.getStartPrice() == price) {
-                    volume += order.getRemainingVolume();
+                long startPrice = order.getStartPrice();
+                if(startPrice > price)
                     break;
+                if (startPrice == price) {
+                    volume += order.getRemainingVolume();
                 }
             }
         }
@@ -172,18 +175,21 @@ public class Orderbook implements ServerSaveable
             for(Order order : buyLimitOrders)
             {
                 long startPrice = order.getStartPrice();
+                if(startPrice < price)
+                    break;
                 if(startPrice == price) {
                     volume += order.getRemainingVolume();
-                    break;
                 }
             }
         }
         else if(currentMarketPrice < price){
             // The searched price is inside the sell order
             for (Order order : sellLimitOrders) {
-                if (order.getStartPrice() == price) {
-                    volume += order.getRemainingVolume();
+                long startPrice = order.getStartPrice();
+                if(startPrice > price)
                     break;
+                if (startPrice == price) {
+                    volume += order.getRemainingVolume();
                 }
             }
         }
@@ -224,18 +230,18 @@ public class Orderbook implements ServerSaveable
         for(Order order : buyLimitOrders)
         {
             long orderPrice = order.getStartPrice();
-            if(orderPrice >= startPrice && orderPrice <= endPrice)
-                volume += order.getRemainingVolume();
-            else
+            if(orderPrice < startPrice)
                 break;
+            if(orderPrice <= endPrice)
+                volume += order.getRemainingVolume();
         }
         for(Order order : sellLimitOrders)
         {
             long orderPrice = order.getStartPrice();
-            if(orderPrice >= startPrice && orderPrice <= endPrice)
-                volume += order.getRemainingVolume();
-            else
+            if(orderPrice > endPrice)
                 break;
+            if(orderPrice >= startPrice)
+                volume += order.getRemainingVolume();
         }
         return volume;
     }
@@ -245,18 +251,18 @@ public class Orderbook implements ServerSaveable
         for(Order order : buyLimitOrders)
         {
             long orderPrice = order.getStartPrice();
-            if(orderPrice >= startPrice && orderPrice <= endPrice)
-                volume += order.getRemainingVolume();
-            else
+            if(orderPrice < startPrice)
                 break;
+            if(orderPrice <= endPrice)
+                volume += order.getRemainingVolume();
         }
         for(Order order : sellLimitOrders)
         {
             long orderPrice = order.getStartPrice();
-            if(orderPrice >= startPrice && orderPrice <= endPrice)
-                volume += order.getRemainingVolume();
-            else
+            if(orderPrice > endPrice)
                 break;
+            if(orderPrice >= startPrice)
+                volume += order.getRemainingVolume();
         }
         return volume;
     }
@@ -285,18 +291,18 @@ public class Orderbook implements ServerSaveable
         for(Order order : buyLimitOrders)
         {
             long orderPrice = order.getStartPrice();
-            if(orderPrice >= startPrice && orderPrice <= endPrice)
-                capital += order.getRemainingVolume() * orderPrice;
-            else
+            if(orderPrice < startPrice)
                 break;
+            if(orderPrice <= endPrice)
+                capital += order.getRemainingVolume() * orderPrice;
         }
         for(Order order : sellLimitOrders)
         {
             long orderPrice = order.getStartPrice();
-            if(orderPrice >= startPrice && orderPrice <= endPrice)
-                capital += order.getRemainingVolume() * orderPrice;
-            else
+            if(orderPrice > endPrice)
                 break;
+            if(orderPrice >= startPrice)
+                capital += order.getRemainingVolume() * orderPrice;
         }
         return capital;
     }
@@ -306,18 +312,18 @@ public class Orderbook implements ServerSaveable
         for(Order order : buyLimitOrders)
         {
             long orderPrice = order.getStartPrice();
-            if(orderPrice >= startPrice && orderPrice <= endPrice)
-                volume += order.getRemainingVolume() *  orderPrice;
-            else
+            if(orderPrice < startPrice)
                 break;
+            if(orderPrice <= endPrice)
+                volume += order.getRemainingVolume() *  orderPrice;
         }
         for(Order order : sellLimitOrders)
         {
             long orderPrice = order.getStartPrice();
-            if(orderPrice >= startPrice && orderPrice <= endPrice)
-                volume += order.getRemainingVolume() *  orderPrice;
-            else
+            if(orderPrice > endPrice)
                 break;
+            if(orderPrice >= startPrice)
+                volume += order.getRemainingVolume() *  orderPrice;
         }
         return volume;
     }

@@ -19,13 +19,6 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
-/**
- * todo:
- * - Scaling the price data is currently done very simple
- *   Improvement is needed in order to be able to translate and scale the chart view
- *
- * - Vertical and maybe horizontal axis is not implemented yet
- */
 public class CandlestickChart extends StockMarketGuiElement
 {
 
@@ -110,6 +103,20 @@ public class CandlestickChart extends StockMarketGuiElement
             firstDraw = true;
         }
     }
+    public @Nullable ClientMarket getMarket()
+    {
+        return market;
+    }
+    public double getMinVisiblePrice()
+    {
+        return fromCanvasSpaceY(canvasRect.y+canvasRect.height);
+    }
+    public double getMaxVisiblePrice()
+    {
+        return fromCanvasSpaceY(canvasRect.y+1);
+    }
+
+
     public void selectCandleTimeDelta(int timeDeltaMs)
     {
         if(market != null) {
@@ -708,7 +715,7 @@ public class CandlestickChart extends StockMarketGuiElement
         }
     }
 
-    private int toCanvasSpaceX(long time)
+    public int toCanvasSpaceX(long time)
     {
         long in2 = ((long)chartviewRect.x - (long)chartviewRect.width);
         long in1 = (long)(chartviewRect.x);
@@ -720,12 +727,12 @@ public class CandlestickChart extends StockMarketGuiElement
         //return canvasRect.x + (int)(((time - (long)chartviewRect.x) * (long)canvasRect.width) / ((long)chartviewRect.width)) * candleWidth;
     }
 
-    private int toCanvasSpaceY(double price)
+    public int toCanvasSpaceY(double price)
     {
         return (canvasRect.y+1) - (int)(((price - (chartviewRect.y + chartviewRect.height)) * (canvasRect.height-2)) / (chartviewRect.height));
     }
 
-    private double fromCanvasSpaceX(int time)
+    public double fromCanvasSpaceX(int time)
     {
         //double in2 = (chartviewRect.x - chartviewRect.width);
         //double in1 = (chartviewRect.x);
@@ -734,7 +741,7 @@ public class CandlestickChart extends StockMarketGuiElement
         return chartviewRect.x - (double)(time - (canvasRect.x+1)) * (chartviewRect.width) / (canvasRect.width-1);
     }
 
-    private double fromCanvasSpaceY(int yPos)
+    public double fromCanvasSpaceY(int yPos)
     {
         return chartviewRect.y+chartviewRect.height - (double)(yPos - (canvasRect.y+1)) * (chartviewRect.height) / (canvasRect.height-2);
     }

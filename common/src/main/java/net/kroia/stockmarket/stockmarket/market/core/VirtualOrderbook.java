@@ -179,7 +179,7 @@ public class VirtualOrderbook implements ServerSaveable
      * will result in a wrong prediction since the buy and sell order cancel each other.
      * @param startPrice
      * @param endPrice inclusive
-     * @return the sum of volume inbetween the given range
+     * @return the sum of volume in between the given range
      */
     public float getVolume(long startPrice, long endPrice)
     {

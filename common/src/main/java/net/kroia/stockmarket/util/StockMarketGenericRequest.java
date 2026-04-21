@@ -4,16 +4,14 @@ package net.kroia.stockmarket.util;
 import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.bankmanager.IBankManager;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
+import net.kroia.banksystem.banking.bankmanager.BankManager;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.client_server.arrs.GenericRequest;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
-import net.kroia.stockmarket.stockmarket.market.ServerMarket;
-import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.minecraft.server.level.ServerPlayer;
 
-import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
 public abstract class StockMarketGenericRequest<IN, OUT> extends GenericRequest<IN, OUT> {
@@ -47,6 +45,15 @@ public abstract class StockMarketGenericRequest<IN, OUT> extends GenericRequest<
         if(m == null)
             return 0L;
         return m.getCurrentMarketPrice();
+    }
+
+    protected long realToBackendValue(double realValue)
+    {
+        return BankManager.convertToRawAmountStatic(realValue, getItemFractionScaleFactor());
+    }
+    protected double backendToRealValue(long realValue)
+    {
+        return BankManager.convertToRealAmountStatic(realValue, getItemFractionScaleFactor());
     }
 
 

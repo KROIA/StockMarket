@@ -6,8 +6,10 @@ import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.elements.Frame;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.screen.uiElements.trading_panel.TradingPanel;
+import net.kroia.stockmarket.screen.widgets.OrderbookVolumeHistogram;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.screen.widgets.CandlestickChart;
+import net.kroia.stockmarket.stockmarket.market.core.Orderbook;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.kroia.stockmarket.util.StockMarketGuiScreen;
 import net.minecraft.client.Minecraft;
@@ -27,6 +29,7 @@ public class TradeScreen extends StockMarketGuiScreen {
 
 
     private final CandlestickChart  candlestickChart;
+    private final OrderbookVolumeHistogram  orderbookVolumeHistogram;
     private final Frame placeholder1;
     private final Frame placeholder2;
     private final TradingPanel tradingPanel;
@@ -39,6 +42,7 @@ public class TradeScreen extends StockMarketGuiScreen {
 
         candlestickChart = new CandlestickChart();
         candlestickChart.setMarket(null);
+        orderbookVolumeHistogram = new OrderbookVolumeHistogram(candlestickChart);
 
         tradingPanel = new TradingPanel(this::onBuyMarket, this::onSellMarket, this::onBuyLimit,  this::onSellLimit);
 
@@ -46,6 +50,7 @@ public class TradeScreen extends StockMarketGuiScreen {
         placeholder2 = new Frame();
 
         addElement(candlestickChart);
+        addElement(orderbookVolumeHistogram);
         addElement(placeholder1);
         addElement(placeholder2);
         addElement(tradingPanel);
@@ -109,9 +114,11 @@ public class TradeScreen extends StockMarketGuiScreen {
         int width = getWidth() - padding*2;
         int height = getHeight() - padding*2;
 
-        candlestickChart.setBounds(padding, padding, (width*3)/4, (height*2)/3);
-        placeholder1.setBounds(candlestickChart.getRight()+spacing, padding, width - (candlestickChart.getRight()), (height-spacing)/2);
-        tradingPanel.setBounds(candlestickChart.getRight()+spacing, placeholder1.getBottom()+spacing, placeholder1.getWidth(), height - (placeholder1.getBottom()));
+        int orderbookVolumeWidth = width/10;
+        candlestickChart.setBounds(padding, padding, (width*3)/4 - orderbookVolumeWidth, (height*2)/3);
+        orderbookVolumeHistogram.setBounds(candlestickChart.getRight(), candlestickChart.getTop(), orderbookVolumeWidth, candlestickChart.getHeight());
+        placeholder1.setBounds(orderbookVolumeHistogram.getRight()+spacing, padding, width - (orderbookVolumeHistogram.getRight()), (height-spacing)/2);
+        tradingPanel.setBounds(orderbookVolumeHistogram.getRight()+spacing, placeholder1.getBottom()+spacing, placeholder1.getWidth(), height - (placeholder1.getBottom()));
         placeholder2.setBounds(padding, candlestickChart.getBottom()+spacing, tradingPanel.getLeft()-spacing-padding, height- (candlestickChart.getBottom()));
     }
 

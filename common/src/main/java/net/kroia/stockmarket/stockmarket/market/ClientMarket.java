@@ -6,6 +6,7 @@ import net.kroia.modutilities.TimerMillis;
 import net.kroia.modutilities.networking.client_server.streaming.StreamSystem;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IClientMarket;
+import net.kroia.stockmarket.networking.request.OrderbookVolumeRequest;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.networking.request.ActiveOrdersRequest;
 import net.kroia.stockmarket.networking.request.CreateOrderRequest;
@@ -67,6 +68,10 @@ public class ClientMarket implements IClientMarket
             return timer.getDuration();
         }
     }
+    /*public static class OrderbookVolumeContainer
+    {
+
+    }*/
     private final Map<Long, PriceHistoryContainer> priceHistoryDataMap = new HashMap<>(); // Map with an individual buffer for the key: candle delta time
     public static final long CANDLE_TIME_1_MIN = 1000*60;
     public static final long CANDLE_TIME_5_MIN = CANDLE_TIME_1_MIN * 5;
@@ -270,11 +275,18 @@ public class ClientMarket implements IClientMarket
                                                                                   long timeEnd)
     {
         ActiveOrdersRequest.InputData inp = new ActiveOrdersRequest.InputData(itemID, bankAccountNr, executorPlayerFilter, timeBegin, timeEnd);
-        CompletableFuture<ActiveOrdersRequest.OutputData> future = new CompletableFuture<>();
-        BACKEND_INSTANCES.NETWORKING.ACTIVE_ORDERS_REQUEST.sendRequestToServer(inp).thenAccept(future::complete);
-        return future;
+        return BACKEND_INSTANCES.NETWORKING.ACTIVE_ORDERS_REQUEST.sendRequestToServer(inp);
     }
 
+    public CompletableFuture<OrderbookVolumeRequest.OutputData> requestOrderbookVolume(double startPrice, double endPrice)
+    {
+        return requestOrderbookVolume(startPrice, endPrice, 20);
+    }
+    public CompletableFuture<OrderbookVolumeRequest.OutputData> requestOrderbookVolume(double startPrice, double endPrice, int chunkCount)
+    {
+        OrderbookVolumeRequest.InputData inp = new OrderbookVolumeRequest.InputData(itemID, startPrice, endPrice, chunkCount);
+        return BACKEND_INSTANCES.NETWORKING.ORDERBOOK_VOLUME_REQUEST.sendRequestToServer(inp);
+    }
 
 
     @Override
