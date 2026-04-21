@@ -11,6 +11,7 @@ import net.kroia.stockmarket.api.StockMarketAPI;
 import net.kroia.stockmarket.block.StockMarketBlocks;
 import net.kroia.stockmarket.command.StockMarketCommands;
 import net.kroia.stockmarket.compat.NEZNAMY_TAB_Placeholders;
+import net.kroia.stockmarket.data.DataManager;
 import net.kroia.stockmarket.data.table.MarketPriceManager;
 import net.kroia.stockmarket.entity.StockMarketEntities;
 import net.kroia.stockmarket.event.EventRegistration;
@@ -18,7 +19,6 @@ import net.kroia.stockmarket.item.StockMarketCreativeModeTab;
 import net.kroia.stockmarket.item.StockMarketItems;
 import net.kroia.stockmarket.stockmarket.marketmanager.ClientMarketManager;
 import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
-import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.kroia.stockmarket.stockmarket.market.core.Testing;
 import net.kroia.stockmarket.menu.StockMarketMenus;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
@@ -31,10 +31,7 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.level.storage.LevelResource;
 import org.jetbrains.annotations.Nullable;
-
-import java.nio.file.Path;
 
 public class StockMarketModBackend implements StockMarketAPI {
 
@@ -50,6 +47,7 @@ public class StockMarketModBackend implements StockMarketAPI {
     {
         public BankSystemAPI BANK_SYSTEM_API;
         public StockMarketModSettings SERVER_SETTINGS;
+        public DataManager DATA_MANAGER;
         public MarketManager MARKET_MANAGER;
 
         public MarketPriceManager MARKET_PRICE_HISTORY_MANAGER;
@@ -118,11 +116,11 @@ public class StockMarketModBackend implements StockMarketAPI {
         SERVER_INSTANCES.SERVER_SETTINGS.setLogger(SERVER_INSTANCES.LOGGER::error, SERVER_INSTANCES.LOGGER::error, SERVER_INSTANCES.LOGGER::debug);
 
         Testing.setBackend(SERVER_INSTANCES);
-        StockMarketModSettings.setBackend(SERVER_INSTANCES);
         MarketManager.setBackend(SERVER_INSTANCES);
         StockMarketNetworking.setBackend(SERVER_INSTANCES);
         NEZNAMY_TAB_Placeholders.setBackend(SERVER_INSTANCES);
         StockMarketCommands.setBackend(SERVER_INSTANCES);
+        DataManager.setBackend(SERVER_INSTANCES);
 
         SERVER_INSTANCES.BANK_SYSTEM_API.getEvents().getBanksystemSetupCompleteSignal().addListener(StockMarketModBackend::onBankSystemSetupComplete, 1);
         SERVER_INSTANCES.BANK_SYSTEM_API.getEvents().getBankDataLoadedFromFileSignal().addListener(StockMarketModBackend::onPostBankSystemDataLoaded, 1);
@@ -173,6 +171,7 @@ public class StockMarketModBackend implements StockMarketAPI {
         {
             SERVER_INSTANCES.MARKET_PRICE_HISTORY_MANAGER = new MarketPriceManager();
             SERVER_INSTANCES.MARKET_MANAGER = MarketManager.createMaster();
+            SERVER_INSTANCES.DATA_MANAGER = new DataManager();
 
             Testing testing = new Testing();
             if(!testing.setup())
@@ -291,17 +290,13 @@ public class StockMarketModBackend implements StockMarketAPI {
 
     public static void loadDataFromFiles(MinecraftServer server)
     {
-        // Load data from the root save folder
-        Path worldPath = server.getWorldPath(LevelResource.ROOT);
-        Path path = worldPath.resolve(Path.of("data", "stockmarket", "settings.json"));
-        SERVER_INSTANCES.SERVER_SETTINGS.loadSettings(path.toAbsolutePath().toString());
-
+        if(SERVER_INSTANCES != null && SERVER_INSTANCES.DATA_MANAGER != null)
+            SERVER_INSTANCES.DATA_MANAGER.load(server);
     }
     public static void saveDataToFiles(MinecraftServer server)
     {
-        Path worldPath = server.getWorldPath(LevelResource.ROOT);
-        Path path = worldPath.resolve(Path.of("data", "stockmarket", "settings.json"));
-        SERVER_INSTANCES.SERVER_SETTINGS.saveSettings(path.toAbsolutePath().toString());
+        if(SERVER_INSTANCES != null && SERVER_INSTANCES.DATA_MANAGER != null)
+            SERVER_INSTANCES.DATA_MANAGER.save(server);
     }
 
 

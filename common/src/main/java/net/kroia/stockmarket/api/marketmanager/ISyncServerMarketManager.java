@@ -2,6 +2,7 @@ package net.kroia.stockmarket.api.marketmanager;
 
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.api.market.IServerMarket;
+import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -19,5 +20,7 @@ public interface ISyncServerMarketManager {
 
 
 
+
+    List<MarketPriceStruct>  getCurrentMarketPricesAndStartNewCandle();
     void update();
 }

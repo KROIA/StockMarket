@@ -1,8 +1,8 @@
 package net.kroia.stockmarket.stockmarket.marketmanager;
 
-import com.ibm.icu.impl.units.MeasureUnitImpl;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.persistence.ServerSaveable;
+import net.kroia.modutilities.persistence.ServerSaveableChunked;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IAsyncMarket;
 import net.kroia.stockmarket.api.market.IServerMarket;
@@ -13,6 +13,7 @@ import net.kroia.stockmarket.stockmarket.market.ServerMarket;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.server.MinecraftServer;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -20,7 +21,7 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class ServerMarketManager implements ServerSaveable, IServerMarketManager
+public class ServerMarketManager implements ServerSaveableChunked, IServerMarketManager
 {
     private static StockMarketModBackend.ServerInstances BACKEND_INSTANCES;
     public static void setBackend(StockMarketModBackend.ServerInstances backend) {
@@ -28,14 +29,12 @@ public class ServerMarketManager implements ServerSaveable, IServerMarketManager
         ServerMarket.setBackend(backend);
     }
 
-    private static final boolean ENABLE_DEBUG_PERFORMANCE = false;
 
 
     private final Map<ItemID, ServerMarket> markets = new HashMap<>();
     private final long candleSaveTimer_intervalMs = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.CANDLE_TIME.get();
     private long candleSaveTimer_lastMs = (System.currentTimeMillis()/60000)*60000;
     private final Random random = new Random();
-    private final AtomicBoolean saveLock = new AtomicBoolean(false);
     private ItemID tradingCurrencyID = null;
 
     public ServerMarketManager()
@@ -156,7 +155,16 @@ public class ServerMarketManager implements ServerSaveable, IServerMarketManager
 
 
 
-
+    @Override
+    public List<MarketPriceStruct>  getCurrentMarketPricesAndStartNewCandle()
+    {
+        List<MarketPriceStruct> candles = new ArrayList<>();
+        for(Map.Entry<ItemID, ServerMarket> entry : markets.entrySet())
+        {
+            candles.add(entry.getValue().getCurrentMarketPriceStructAndReset());
+        }
+        return candles;
+    }
 
 
 
@@ -188,45 +196,16 @@ public class ServerMarketManager implements ServerSaveable, IServerMarketManager
         if(time - candleSaveTimer_lastMs > candleSaveTimer_intervalMs)
         {
             candleSaveTimer_lastMs = time;
-            saveCandlesToSQL();
+            BACKEND_INSTANCES.DATA_MANAGER.savePriceCandlesToSQL();
         }
     }
 
 
 
-    private void saveCandlesToSQL()
-    {
-        if(!saveLock.compareAndSet(false, true))
-        {
-            warn("saveCandlesToSQL(): currently locked!");
-            return;
-        }
-        MarketPriceManager manager = BACKEND_INSTANCES.MARKET_PRICE_HISTORY_MANAGER;
-        long saveStartTime = System.nanoTime();
-        List<MarketPriceStruct> candles = new ArrayList<>();
-        for(Map.Entry<ItemID, ServerMarket> entry : markets.entrySet())
-        {
-            candles.add(entry.getValue().getCurrentMarketPriceStructAndReset());
-        }
-        long gatheringCandlesTime = System.nanoTime() -saveStartTime;
-        if(ENABLE_DEBUG_PERFORMANCE)
-            info("Gathering time: "+gatheringCandlesTime/1000000.0 + "ms");
-        long finalSaveStartTime = System.nanoTime();
-
-        manager.save(candles).thenRun(() -> {
-            if(ENABLE_DEBUG_PERFORMANCE) {
-                long finalSaveEndTime = System.nanoTime();
-                long writeTime = finalSaveEndTime - finalSaveStartTime;
-                info("Database write for " + candles.size() + " records took " + writeTime / 1000000.0 + " ms");
-                info("saveCandlesToSQL: took " + (double) (finalSaveEndTime - saveStartTime) / 1000000.0 + " ms");
-            }
-            saveLock.set(false);
-        });
-    }
 
 
     @Override
-    public boolean save(CompoundTag tag) {
+    public boolean save(Map<String, ListTag> listTags) {
         boolean success = true;
         ListTag marketListTag = new ListTag();
         for(Map.Entry<ItemID, ServerMarket> entry : markets.entrySet())
@@ -236,16 +215,20 @@ public class ServerMarketManager implements ServerSaveable, IServerMarketManager
             entry.getValue().save(marketTag);
             marketListTag.add(marketTag);
         }
-        tag.put("markets", marketListTag);
+        listTags.put("markets", marketListTag);
         return success;
     }
 
     @Override
-    public boolean load(CompoundTag tag) {
+    public boolean load(Map<String, ListTag> listTags) {
         boolean success = true;
-        if(!tag.contains("markets"))
+        ListTag marketListTag =  listTags.get("markets");
+        if(marketListTag == null)
+        {
+            error("markets list tag is null while loading Market Manager");
             return false;
-        ListTag marketListTag = tag.getList("markets", Tag.TAG_COMPOUND);
+        }
+
         for (int i = 0; i < marketListTag.size(); i++)
         {
             CompoundTag marketTag = marketListTag.getCompound(i);

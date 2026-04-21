@@ -28,7 +28,7 @@ public class DatabaseManager {
     });
 
 
-    public static final Path DATABASE_PATH = Path.of("data", "stockmarket", "database");
+    public static final Path DATABASE_PATH = DataManager.SQL_DATABASE;
 
 
     /**
