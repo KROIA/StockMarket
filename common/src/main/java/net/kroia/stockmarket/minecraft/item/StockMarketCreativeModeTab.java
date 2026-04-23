@@ -1,4 +1,4 @@
-package net.kroia.stockmarket.item;
+package net.kroia.stockmarket.minecraft.item;
 
 
 import dev.architectury.registry.registries.RegistrySupplier;

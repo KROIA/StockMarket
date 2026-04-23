@@ -1,4 +1,4 @@
-package net.kroia.stockmarket.menu;
+package net.kroia.stockmarket.minecraft.menu;
 
 import com.google.common.base.Suppliers;
 import dev.architectury.registry.registries.Registrar;

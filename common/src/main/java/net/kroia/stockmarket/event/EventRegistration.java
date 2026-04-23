@@ -3,7 +3,7 @@ package net.kroia.stockmarket.event;
 import dev.architectury.event.events.common.CommandRegistrationEvent;
 import dev.architectury.event.events.common.LifecycleEvent;
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.command.StockMarketCommands;
+import net.kroia.stockmarket.minecraft.command.StockMarketCommands;
 import net.kroia.stockmarket.data.DatabaseManager;
 
 public class EventRegistration {

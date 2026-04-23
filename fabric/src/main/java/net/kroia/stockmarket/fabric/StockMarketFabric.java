@@ -10,7 +10,7 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
-import net.kroia.stockmarket.compat.NEZNAMY_TAB_Placeholders;
+import net.kroia.stockmarket.minecraft.compat.NEZNAMY_TAB_Placeholders;
 
 public final class StockMarketFabric implements ModInitializer {
     @Override

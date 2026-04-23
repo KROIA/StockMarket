@@ -1,4 +1,4 @@
-package net.kroia.stockmarket.block;
+package net.kroia.stockmarket.minecraft.block;
 
 import com.google.common.base.Suppliers;
 import dev.architectury.registry.registries.Registrar;
@@ -6,8 +6,8 @@ import dev.architectury.registry.registries.RegistrarManager;
 import dev.architectury.registry.registries.RegistrySupplier;
 import net.kroia.banksystem.block.custom.TerminalBlock;
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.block.custom.StockMarketBlock;
-import net.kroia.stockmarket.item.StockMarketItems;
+import net.kroia.stockmarket.minecraft.block.custom.StockMarketBlock;
+import net.kroia.stockmarket.minecraft.item.StockMarketItems;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Block;

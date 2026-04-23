@@ -1,4 +1,4 @@
-package net.kroia.stockmarket.compat;
+package net.kroia.stockmarket.minecraft.compat;
 
 import mezz.jei.api.IModPlugin;
 import mezz.jei.api.JeiPlugin;

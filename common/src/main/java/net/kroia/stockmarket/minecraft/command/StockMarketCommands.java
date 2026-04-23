@@ -1,4 +1,4 @@
-package net.kroia.stockmarket.command;
+package net.kroia.stockmarket.minecraft.command;
 
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;

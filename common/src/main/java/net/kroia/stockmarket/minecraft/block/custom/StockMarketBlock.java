@@ -1,4 +1,4 @@
-package net.kroia.stockmarket.block.custom;
+package net.kroia.stockmarket.minecraft.block.custom;
 
 import net.kroia.banksystem.block.custom.TerminalBlock;
 import net.kroia.stockmarket.util.StockMarketClientHooks;

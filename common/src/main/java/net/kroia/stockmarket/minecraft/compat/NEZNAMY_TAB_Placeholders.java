@@ -1,4 +1,4 @@
-package net.kroia.stockmarket.compat;
+package net.kroia.stockmarket.minecraft.compat;
 
 import me.neznamy.tab.api.TabAPI;
 import me.neznamy.tab.api.placeholder.PlaceholderManager;

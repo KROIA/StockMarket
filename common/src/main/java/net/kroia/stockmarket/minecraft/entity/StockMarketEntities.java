@@ -1,11 +1,10 @@
-package net.kroia.stockmarket.entity;
+package net.kroia.stockmarket.minecraft.entity;
 
 import com.google.common.base.Suppliers;
 import dev.architectury.registry.registries.Registrar;
 import dev.architectury.registry.registries.RegistrarManager;
 import dev.architectury.registry.registries.RegistrySupplier;
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.block.StockMarketBlocks;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.entity.BlockEntityType;
