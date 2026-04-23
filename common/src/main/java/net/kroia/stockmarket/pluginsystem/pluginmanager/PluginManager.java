@@ -2,10 +2,10 @@ package net.kroia.stockmarket.pluginsystem.pluginmanager;
 
 import net.kroia.modutilities.persistence.ServerSaveableChunked;
 import net.kroia.stockmarket.StockMarketModBackend;
-import net.kroia.stockmarket.api.pluginsystem.IAsyncPluginManager;
-import net.kroia.stockmarket.api.pluginsystem.IClientPluginManager;
-import net.kroia.stockmarket.api.pluginsystem.IPluginManager;
-import net.kroia.stockmarket.api.pluginsystem.IServerPluginManager;
+import net.kroia.stockmarket.api.pluginmanager.IAsyncPluginManager;
+import net.kroia.stockmarket.api.pluginmanager.IClientPluginManager;
+import net.kroia.stockmarket.api.pluginmanager.IPluginManager;
+import net.kroia.stockmarket.api.pluginmanager.IServerPluginManager;
 import net.kroia.stockmarket.util.MultiServerUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;

@@ -1,14 +1,12 @@
 package net.kroia.stockmarket.util;
 
 import net.kroia.banksystem.api.bankmanager.IClientBankManager;
-import net.kroia.banksystem.banking.bankmanager.ClientBankManager;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.GuiScreen;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.marketmanager.IClientMarketManager;
-import net.kroia.stockmarket.api.pluginsystem.IClientPluginManager;
+import net.kroia.stockmarket.api.pluginmanager.IClientPluginManager;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
-import net.kroia.stockmarket.stockmarket.marketmanager.ClientMarketManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.player.LocalPlayer;

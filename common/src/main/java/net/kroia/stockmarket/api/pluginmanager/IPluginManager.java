@@ -1,7 +1,5 @@
-package net.kroia.stockmarket.api.pluginsystem;
+package net.kroia.stockmarket.api.pluginmanager;
 
-import net.kroia.stockmarket.api.marketmanager.IAsyncMarketManager;
-import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
 import org.jetbrains.annotations.Nullable;
 
 public interface IPluginManager {

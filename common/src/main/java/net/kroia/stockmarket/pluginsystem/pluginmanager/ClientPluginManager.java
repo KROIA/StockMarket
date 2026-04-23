@@ -1,17 +1,16 @@
 package net.kroia.stockmarket.pluginsystem.pluginmanager;
 
 import net.kroia.stockmarket.StockMarketModBackend;
-import net.kroia.stockmarket.api.pluginsystem.IAsyncPluginManager;
-import net.kroia.stockmarket.api.pluginsystem.IClientPluginManager;
-import net.kroia.stockmarket.stockmarket.market.ClientMarket;
-
+import net.kroia.stockmarket.api.pluginmanager.IAsyncPluginManager;
+import net.kroia.stockmarket.api.pluginmanager.IClientPluginManager;
+import net.kroia.stockmarket.pluginsystem.plugin.ClientPlugin;
 
 public class ClientPluginManager implements IClientPluginManager {
 
     protected static StockMarketModBackend.ClientInstances BACKEND_INSTANCES;
     public static void setBackend(StockMarketModBackend.ClientInstances backend) {
         BACKEND_INSTANCES = backend;
-        ClientMarket.setBackend(backend);
+        ClientPlugin.setBackend(backend);
     }
     private final IAsyncPluginManager asyncPluginManager;
 

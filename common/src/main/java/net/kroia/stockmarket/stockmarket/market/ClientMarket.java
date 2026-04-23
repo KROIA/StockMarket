@@ -24,7 +24,6 @@ public class ClientMarket implements IClientMarket
     protected static StockMarketModBackend.ClientInstances BACKEND_INSTANCES;
     public static void setBackend(StockMarketModBackend.ClientInstances backend) {
         BACKEND_INSTANCES = backend;
-        StockMarketGuiElement.setBackend(backend);
     }
 
     private final ItemID itemID;

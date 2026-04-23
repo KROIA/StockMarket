@@ -2,8 +2,8 @@ package net.kroia.stockmarket.pluginsystem.pluginmanager;
 
 import net.kroia.modutilities.persistence.ServerSaveableChunked;
 import net.kroia.stockmarket.StockMarketModBackend;
-import net.kroia.stockmarket.api.pluginsystem.IServerPluginManager;
-import net.kroia.stockmarket.stockmarket.market.ServerMarket;
+import net.kroia.stockmarket.api.pluginmanager.IServerPluginManager;
+import net.kroia.stockmarket.pluginsystem.plugin.ServerPlugin;
 import net.minecraft.nbt.ListTag;
 
 import java.util.Map;
@@ -18,7 +18,7 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
     private static StockMarketModBackend.ServerInstances BACKEND_INSTANCES;
     public static void setBackend(StockMarketModBackend.ServerInstances backend) {
         BACKEND_INSTANCES = backend;
-        ServerMarket.setBackend(backend);
+        ServerPlugin.setBackend(backend);
     }
 
 

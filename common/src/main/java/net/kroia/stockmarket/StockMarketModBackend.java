@@ -9,7 +9,7 @@ import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.networking.multi_server.MultiServerManager;
 import net.kroia.stockmarket.api.StockMarketAPI;
 import net.kroia.stockmarket.api.marketmanager.IClientMarketManager;
-import net.kroia.stockmarket.api.pluginsystem.IClientPluginManager;
+import net.kroia.stockmarket.api.pluginmanager.IClientPluginManager;
 import net.kroia.stockmarket.minecraft.block.StockMarketBlocks;
 import net.kroia.stockmarket.minecraft.command.StockMarketCommands;
 import net.kroia.stockmarket.minecraft.compat.NEZNAMY_TAB_Placeholders;
@@ -27,15 +27,11 @@ import net.kroia.stockmarket.stockmarket.market.core.Testing;
 import net.kroia.stockmarket.minecraft.menu.StockMarketMenus;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.kroia.stockmarket.networking.packet.PlayerJoinSyncPacket;
-import net.kroia.stockmarket.util.ClientSettings;
-import net.kroia.stockmarket.util.StockMarketGuiScreen;
-import net.kroia.stockmarket.util.StockMarketLogger;
-import net.kroia.stockmarket.util.StockMarketTextMessages;
+import net.kroia.stockmarket.util.*;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import org.apache.logging.log4j.core.config.plugins.Plugin;
 import org.jetbrains.annotations.Nullable;
 
 public class StockMarketModBackend implements StockMarketAPI {
@@ -247,8 +243,8 @@ public class StockMarketModBackend implements StockMarketAPI {
             return;
         CLIENT_INSTANCES = new ClientInstances();
 
-        StockMarketNetworking.setBackend(CLIENT_INSTANCES);
         StockMarketGuiScreen.setBackend(CLIENT_INSTANCES);
+        StockMarketNetworking.setBackend(CLIENT_INSTANCES);
         ClientMarketManager.setBackend(CLIENT_INSTANCES);
         ClientPluginManager.setBackend(CLIENT_INSTANCES);
         StockMarketTextMessages.setBackend(CLIENT_INSTANCES);
@@ -295,13 +291,11 @@ public class StockMarketModBackend implements StockMarketAPI {
         CLIENT_INSTANCES.MARKET_MANAGER.update();
     }
 
-    // Called from the server side
+    // Called from the master side
     private static void onServerTick(MinecraftServer server)
     {
-        if(SERVER_INSTANCES.PLUGIN_MANAGER.hasSyncAccess())
-            SERVER_INSTANCES.PLUGIN_MANAGER.getSync().update();
-        if(SERVER_INSTANCES.MARKET_MANAGER.hasSyncAccess())
-            SERVER_INSTANCES.MARKET_MANAGER.getSync().update();
+        SERVER_INSTANCES.PLUGIN_MANAGER.getSync().update();
+        SERVER_INSTANCES.MARKET_MANAGER.getSync().update();
     }
 
     public static void loadDataFromFiles(MinecraftServer server)

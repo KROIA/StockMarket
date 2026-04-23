@@ -8,9 +8,7 @@ import net.kroia.modutilities.networking.client_server.streaming.GenericStream;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
-import net.kroia.stockmarket.api.pluginsystem.IServerPluginManager;
-import net.kroia.stockmarket.stockmarket.market.ServerMarket;
-import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
+import net.kroia.stockmarket.api.pluginmanager.IServerPluginManager;
 import net.minecraft.server.level.ServerPlayer;
 
 public abstract class StockMarketGenericStream<IN, OUT> extends GenericStream<IN, OUT> {
