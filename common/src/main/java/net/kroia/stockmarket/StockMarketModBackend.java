@@ -8,6 +8,8 @@ import net.kroia.banksystem.api.BankSystemAPI;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.networking.multi_server.MultiServerManager;
 import net.kroia.stockmarket.api.StockMarketAPI;
+import net.kroia.stockmarket.api.marketmanager.IClientMarketManager;
+import net.kroia.stockmarket.api.pluginsystem.IClientPluginManager;
 import net.kroia.stockmarket.minecraft.block.StockMarketBlocks;
 import net.kroia.stockmarket.minecraft.command.StockMarketCommands;
 import net.kroia.stockmarket.minecraft.compat.NEZNAMY_TAB_Placeholders;
@@ -17,6 +19,8 @@ import net.kroia.stockmarket.minecraft.entity.StockMarketEntities;
 import net.kroia.stockmarket.event.EventRegistration;
 import net.kroia.stockmarket.minecraft.item.StockMarketCreativeModeTab;
 import net.kroia.stockmarket.minecraft.item.StockMarketItems;
+import net.kroia.stockmarket.pluginsystem.pluginmanager.ClientPluginManager;
+import net.kroia.stockmarket.pluginsystem.pluginmanager.PluginManager;
 import net.kroia.stockmarket.stockmarket.marketmanager.ClientMarketManager;
 import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
 import net.kroia.stockmarket.stockmarket.market.core.Testing;
@@ -31,6 +35,7 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import org.apache.logging.log4j.core.config.plugins.Plugin;
 import org.jetbrains.annotations.Nullable;
 
 public class StockMarketModBackend implements StockMarketAPI {
@@ -49,6 +54,7 @@ public class StockMarketModBackend implements StockMarketAPI {
         public StockMarketModSettings SERVER_SETTINGS;
         public DataManager DATA_MANAGER;
         public MarketManager MARKET_MANAGER;
+        public PluginManager PLUGIN_MANAGER;
 
         public MarketPriceManager MARKET_PRICE_HISTORY_MANAGER;
 
@@ -59,7 +65,8 @@ public class StockMarketModBackend implements StockMarketAPI {
     {
         public BankSystemAPI BANK_SYSTEM_API;
 
-        public ClientMarketManager MARKET_MANAGER;
+        public IClientMarketManager MARKET_MANAGER;
+        public IClientPluginManager PLUGIN_MANAGER;
         public StockMarketNetworking NETWORKING;
         public StockMarketLogger LOGGER;
         public ClientSettings SETTINGS;
@@ -117,6 +124,7 @@ public class StockMarketModBackend implements StockMarketAPI {
 
         Testing.setBackend(SERVER_INSTANCES);
         MarketManager.setBackend(SERVER_INSTANCES);
+        PluginManager.setBackend(SERVER_INSTANCES);
         StockMarketNetworking.setBackend(SERVER_INSTANCES);
         NEZNAMY_TAB_Placeholders.setBackend(SERVER_INSTANCES);
         StockMarketCommands.setBackend(SERVER_INSTANCES);
@@ -171,6 +179,7 @@ public class StockMarketModBackend implements StockMarketAPI {
         {
             SERVER_INSTANCES.MARKET_PRICE_HISTORY_MANAGER = new MarketPriceManager();
             SERVER_INSTANCES.MARKET_MANAGER = MarketManager.createMaster();
+            SERVER_INSTANCES.PLUGIN_MANAGER = PluginManager.createMaster();
             SERVER_INSTANCES.DATA_MANAGER = new DataManager();
 
             Testing testing = new Testing();
@@ -199,6 +208,7 @@ public class StockMarketModBackend implements StockMarketAPI {
         else
         {
             SERVER_INSTANCES.MARKET_MANAGER = MarketManager.createSlave();
+            SERVER_INSTANCES.PLUGIN_MANAGER = PluginManager.createSlave();
         }
     }
 
@@ -240,13 +250,15 @@ public class StockMarketModBackend implements StockMarketAPI {
         StockMarketNetworking.setBackend(CLIENT_INSTANCES);
         StockMarketGuiScreen.setBackend(CLIENT_INSTANCES);
         ClientMarketManager.setBackend(CLIENT_INSTANCES);
+        ClientPluginManager.setBackend(CLIENT_INSTANCES);
         StockMarketTextMessages.setBackend(CLIENT_INSTANCES);
 
 
         CLIENT_INSTANCES.LOGGER = COMMON_INSTANCES.LOGGER;
         CLIENT_INSTANCES.NETWORKING = COMMON_INSTANCES.NETWORKING;
         CLIENT_INSTANCES.BANK_SYSTEM_API = BankSystemMod.getAPI();
-        CLIENT_INSTANCES.MARKET_MANAGER = new ClientMarketManager();
+        CLIENT_INSTANCES.MARKET_MANAGER = MarketManager.createClient();
+        CLIENT_INSTANCES.PLUGIN_MANAGER = new ClientPluginManager();
         CLIENT_INSTANCES.SETTINGS = new ClientSettings();
 
 
@@ -264,6 +276,7 @@ public class StockMarketModBackend implements StockMarketAPI {
         StockMarketNetworking.setBackend((ClientInstances)null);
         StockMarketGuiScreen.setBackend(null);
         ClientMarketManager.setBackend(null);
+        ClientPluginManager.setBackend(null);
         StockMarketTextMessages.setBackend(null);
         CLIENT_INSTANCES = null;
 
@@ -285,7 +298,10 @@ public class StockMarketModBackend implements StockMarketAPI {
     // Called from the server side
     private static void onServerTick(MinecraftServer server)
     {
-        SERVER_INSTANCES.MARKET_MANAGER.getSync().update();
+        if(SERVER_INSTANCES.PLUGIN_MANAGER.hasSyncAccess())
+            SERVER_INSTANCES.PLUGIN_MANAGER.getSync().update();
+        if(SERVER_INSTANCES.MARKET_MANAGER.hasSyncAccess())
+            SERVER_INSTANCES.MARKET_MANAGER.getSync().update();
     }
 
     public static void loadDataFromFiles(MinecraftServer server)

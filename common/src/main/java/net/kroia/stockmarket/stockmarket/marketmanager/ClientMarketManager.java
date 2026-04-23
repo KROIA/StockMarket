@@ -20,26 +20,18 @@ public class ClientMarketManager implements IClientMarketManager
         BACKEND_INSTANCES = backend;
         ClientMarket.setBackend(backend);
     }
-    private final IAsyncMarketManager asyncServerMarketManager;
+    private final IAsyncMarketManager asyncMarketManager;
 
 
     private final Map<ItemID, ClientMarket> clientMarkets = new HashMap<>();
 
     public ClientMarketManager()
     {
-        asyncServerMarketManager = AsyncMarketManager.createClientManager();
+        asyncMarketManager = AsyncMarketManager.createClientManager();
     }
 
-    public void onPlayerJoin(@Nullable LocalPlayer localPlayer)
-    {
-        requestMarkets();
-    }
 
-    public void onPlayerLeave(@Nullable LocalPlayer localPlayer)
-    {
-
-    }
-
+    @Override
     public void update()
     {
         long serverTime = ClientMarket.PriceHistoryContainer.ServerRelativeTimer.timeOffsetMS + System.currentTimeMillis();
@@ -49,11 +41,25 @@ public class ClientMarketManager implements IClientMarketManager
         }
     }
 
+    @Override
+    public void onPlayerJoin(@Nullable LocalPlayer localPlayer)
+    {
+        requestMarkets();
+    }
+
+    @Override
+    public void onPlayerLeave(@Nullable LocalPlayer localPlayer)
+    {
+
+    }
+
+    @Override
     public @Nullable ClientMarket getMarket(ItemID itemID)
     {
         return clientMarkets.get(itemID);
     }
 
+    @Override
     public CompletableFuture<List<ItemID>> requestMarkets()
     {
         CompletableFuture<List<ItemID>> future = new CompletableFuture<>();
@@ -71,6 +77,7 @@ public class ClientMarketManager implements IClientMarketManager
         return future;
     }
 
+    @Override
     public CompletableFuture<ActiveOrdersRequest.OutputData> requestPendingOrders(@Nullable ItemID itemIDFilter,
                                                                                   int bankAccountNr,
                                                                                   @Nullable UUID executorPlayerFilter,
@@ -83,11 +90,18 @@ public class ClientMarketManager implements IClientMarketManager
         return future;
     }
 
-
+    @Override
     public List<ItemID> getAvailableMarkets()
     {
         return clientMarkets.keySet().stream().toList();
     }
+
+    @Override
+    public CompletableFuture<ItemID> getTradingCurrencyIDAsync()
+    {
+        return asyncMarketManager.getTradingCurrencyIDAsync();
+    }
+
 
 
 
@@ -107,11 +121,6 @@ public class ClientMarketManager implements IClientMarketManager
                 error("Can't create ClientMarket with ID: " + itemID + ". ID is invalid");
             }
         }
-    }
-
-    public CompletableFuture<ItemID> getTradingCurrencyIDAsync()
-    {
-        return asyncServerMarketManager.getTradingCurrencyIDAsync();
     }
 
     @Override

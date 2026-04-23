@@ -4,6 +4,8 @@ import net.kroia.banksystem.api.bankmanager.IClientBankManager;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.api.marketmanager.IClientMarketManager;
+import net.kroia.stockmarket.api.pluginsystem.IClientPluginManager;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.stockmarket.marketmanager.ClientMarketManager;
 import net.minecraft.client.Minecraft;
@@ -34,7 +36,7 @@ public abstract class StockMarketGuiElement extends GuiElement {
         super(x, y, width, height);
     }
 
-    protected ClientMarketManager getMarketManager()
+    protected IClientMarketManager getMarketManager()
     {
         return BACKEND_INSTANCES.MARKET_MANAGER;
     }
@@ -45,6 +47,10 @@ public abstract class StockMarketGuiElement extends GuiElement {
     protected List<ItemID> getAvailableMarkets()
     {
         return BACKEND_INSTANCES.MARKET_MANAGER.getAvailableMarkets();
+    }
+    protected IClientPluginManager getPluginManager()
+    {
+        return BACKEND_INSTANCES.PLUGIN_MANAGER;
     }
 
     protected LocalPlayer getThisPlayer()

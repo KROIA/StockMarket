@@ -10,6 +10,7 @@ import net.kroia.modutilities.networking.client_server.arrs.GenericRequest;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
+import net.kroia.stockmarket.api.pluginsystem.IServerPluginManager;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.concurrent.CompletableFuture;
@@ -25,11 +26,23 @@ public abstract class StockMarketGenericRequest<IN, OUT> extends GenericRequest<
         return BACKEND_INSTANCES.SERVER_SETTINGS.UTILITIES.playerIsAdmin(player);
     }
 
+    /**
+     * Only call this function on the master server!
+     */
     protected IServerMarketManager getServerMarketManager()
     {
         return BACKEND_INSTANCES.MARKET_MANAGER.getSync();
     }
+
+    /**
+     * Only call this function on the master server!
+     */
+    protected final IServerPluginManager getPluginManager() { return BACKEND_INSTANCES.PLUGIN_MANAGER.getSync(); }
     protected IBankManager getServerBankManager() {return BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager(); }
+
+    /**
+     * Only call this function on the master server!
+     */
     protected int getItemFractionScaleFactor()
     {
         IServerBankManager manager = getServerBankManager().getSync();
@@ -38,6 +51,9 @@ public abstract class StockMarketGenericRequest<IN, OUT> extends GenericRequest<
         return manager.getItemFractionScaleFactor();
     }
 
+    /**
+     * Only call this function on the master server!
+     */
     protected final long getCurrentMarketPrice(ItemID id)
     {
         IServerMarketManager serverMarketManager = BACKEND_INSTANCES.MARKET_MANAGER.getSync();

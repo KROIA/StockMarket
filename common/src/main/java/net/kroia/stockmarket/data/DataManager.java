@@ -32,6 +32,7 @@ public class DataManager extends DataPersistence {
     public static final Path SQL_DATABASE = BASE_PATH.resolve("Database");
 
     private static final String MARKET_MANAGER_FOLDER = "MarketManager";
+    private static final String PLUGIN_MANAGER_FOLDER = "PluginManager";
     private static final String SETTINGS_FILE = "settings.json";
 
 
@@ -51,6 +52,7 @@ public class DataManager extends DataPersistence {
         boolean success = true;
         success &= saveSettings();
         success &= saveMarketManager();
+        success &= savePluginManager();
 
 
         if(!success)
@@ -66,6 +68,7 @@ public class DataManager extends DataPersistence {
         boolean success = true;
         success &= loadSettings();
         success &= loadMarketManager();
+        success &= loadPluginManager();
 
 
 
@@ -86,12 +89,12 @@ public class DataManager extends DataPersistence {
         Map<String, ListTag> dataListMap = new HashMap<>();
         ServerSaveableChunked marketManager = BACKEND_INSTANCES.MARKET_MANAGER.getServerMarketManagerPersistenceInterface();
         if(marketManager == null) {
-            error("saveMarketManager(): No marketmanager found!");
+            error("saveMarketManager(): No MarketManager found!");
             return false;
         }
         if(!marketManager.save(dataListMap))
         {
-            error("saveMarketManager(): Failed to save marketmanager! Can't save Markets to NBT data");
+            error("saveMarketManager(): Failed to save MarketManager! Can't save Markets to NBT data");
             return false;
         }
         Path absPath = getAbsoluteSavePath(MARKET_MANAGER_FOLDER);
@@ -110,12 +113,53 @@ public class DataManager extends DataPersistence {
         }
         ServerSaveableChunked marketManager = BACKEND_INSTANCES.MARKET_MANAGER.getServerMarketManagerPersistenceInterface();
         if(marketManager == null) {
-            error("loadMarketManager(): No marketmanager found!");
+            error("loadMarketManager(): No MarketManager found!");
             return false;
         }
         Path absPath = getAbsoluteSavePath(MARKET_MANAGER_FOLDER);
         Map<String, ListTag> dataListMap = readDataCompoundListMap(absPath);
         return marketManager.load(dataListMap);
+    }
+
+    private boolean savePluginManager()
+    {
+        if(BACKEND_INSTANCES == null || BACKEND_INSTANCES.PLUGIN_MANAGER == null) {
+            error("savePluginManager(): Backend is not set up to call this method.");
+            return false;
+        }
+        Map<String, ListTag> dataListMap = new HashMap<>();
+        ServerSaveableChunked pluginManager = BACKEND_INSTANCES.PLUGIN_MANAGER.getServerPluginManagerPersistenceInterface();
+        if(pluginManager == null) {
+            error("savePluginManager(): No PluginManager found!");
+            return false;
+        }
+        if(!pluginManager.save(dataListMap))
+        {
+            error("savePluginManager(): Failed to save PluginManager! Can't save Markets to NBT data");
+            return false;
+        }
+        Path absPath = getAbsoluteSavePath(PLUGIN_MANAGER_FOLDER);
+        if(!saveDataCompoundListMap(absPath, dataListMap))
+        {
+            error("savePluginManager(): Failed to save Plugins to NBT files");
+            return false;
+        }
+        return true;
+    }
+    private boolean loadPluginManager()
+    {
+        if(BACKEND_INSTANCES == null || BACKEND_INSTANCES.PLUGIN_MANAGER == null) {
+            error("loadPluginManager(): Backend is not set up to call this method.");
+            return false;
+        }
+        ServerSaveableChunked pluginManager = BACKEND_INSTANCES.PLUGIN_MANAGER.getServerPluginManagerPersistenceInterface();
+        if(pluginManager == null) {
+            error("loadPluginManager(): No PluginManager found!");
+            return false;
+        }
+        Path absPath = getAbsoluteSavePath(PLUGIN_MANAGER_FOLDER);
+        Map<String, ListTag> dataListMap = readDataCompoundListMap(absPath);
+        return pluginManager.load(dataListMap);
     }
 
 
