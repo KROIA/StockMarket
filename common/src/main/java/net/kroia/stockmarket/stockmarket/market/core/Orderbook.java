@@ -1,12 +1,16 @@
 package net.kroia.stockmarket.stockmarket.market.core;
 
+import net.kroia.banksystem.banking.bankmanager.BankManager;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.persistence.ServerSaveable;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
+import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
+import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.util.Tuple;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -169,7 +173,7 @@ public class Orderbook implements ServerSaveable
     }
     public long getVolumeRounded(long price)
     {
-        long volume = VirtualOrderbook.roundConservative(virtualOrderbook.getVolume(price));
+        long volume = virtualOrderbook.roundConservative(virtualOrderbook.getVolume(price));
         if(currentMarketPrice > price) {
             // The searched price is inside the buy order since the stockmarket price is higher than the searched price
             for(Order order : buyLimitOrders)
@@ -220,7 +224,7 @@ public class Orderbook implements ServerSaveable
     }
     public long getVirtualVolumeRounded(long price)
     {
-        return VirtualOrderbook.roundConservative(getVirtualVolume(price));
+        return virtualOrderbook.roundConservative(getVirtualVolume(price));
     }
 
 
@@ -267,6 +271,65 @@ public class Orderbook implements ServerSaveable
         return volume;
     }
 
+    public @NotNull Tuple<@NotNull Double,@NotNull  Double> getEditablePriceRange()
+    {
+        if(virtualOrderbook != null)
+        {
+            long minRawPrice = virtualOrderbook.getMinEditablePrice();
+            long maxRawPrice = virtualOrderbook.getMaxEditablePrice();
+            return new Tuple<>(
+                    MarketManager.convertToRealAmountStatic(minRawPrice),
+                    MarketManager.convertToRealAmountStatic(maxRawPrice)
+            );
+        }
+        return new Tuple<>(0.0, 0.0);
+    }
+    public @NotNull Tuple<@NotNull Long,@NotNull  Long> getEditableBackendPriceRange()
+    {
+        if(virtualOrderbook != null)
+        {
+            long minRawPrice = virtualOrderbook.getMinEditablePrice();
+            long maxRawPrice = virtualOrderbook.getMaxEditablePrice();
+            return new Tuple<>(
+                    minRawPrice,
+                    maxRawPrice
+            );
+        }
+        return new Tuple<>(0L, 0L);
+    }
+    public void setVirtualOrderbookVolume(double minPrice, double maxPrice, float volume)
+    {
+        if(virtualOrderbook == null)
+            return;
+        long rawMinPrice = MarketManager.convertToRawAmountStatic(minPrice);
+        long rawMaxPrice = MarketManager.convertToRawAmountStatic(maxPrice);
+        long rawVolume = MarketManager.convertToRawAmountStatic(volume);
+        virtualOrderbook.setVolume(rawMinPrice, rawMaxPrice, rawVolume);
+    }
+    public void addVirtualOrderbookVolume(double minPrice, double maxPrice, float volume)
+    {
+        if(virtualOrderbook == null)
+            return;
+        long rawMinPrice = MarketManager.convertToRawAmountStatic(minPrice);
+        long rawMaxPrice = MarketManager.convertToRawAmountStatic(maxPrice);
+        long rawVolume = MarketManager.convertToRawAmountStatic(volume);
+        virtualOrderbook.addVolume(rawMinPrice, rawMaxPrice, rawVolume);
+    }
+    public void setVirtualOrderbookVolume(long backendStartPrice, float[] volume)
+    {
+        if(virtualOrderbook == null)
+            return;
+        virtualOrderbook.setVolume(backendStartPrice, volume);
+    }
+    public void addVirtualOrderbookVolume(long backendStartPrice, float[] volume)
+    {
+        if(virtualOrderbook == null)
+            return;
+        virtualOrderbook.addVolume(backendStartPrice, volume);
+    }
+    
+    
+
     /**
      * Retains the money-value of the volume at the given price
      * Calculated using: Floor(volume * price)
@@ -280,7 +343,7 @@ public class Orderbook implements ServerSaveable
     }
     public long getCapitalRounded(long price)
     {
-        long volume = VirtualOrderbook.roundConservative(getVolume(price));
+        long volume = virtualOrderbook.roundConservative(getVolume(price));
         return volume * price;
     }
 

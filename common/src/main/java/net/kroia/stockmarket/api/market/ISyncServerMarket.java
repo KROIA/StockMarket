@@ -2,6 +2,7 @@ package net.kroia.stockmarket.api.market;
 
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
+import net.kroia.stockmarket.stockmarket.market.core.Orderbook;
 import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 
@@ -33,6 +34,8 @@ public interface ISyncServerMarket {
     MarketPriceStruct getCurrentMarketPriceStruct();
     MarketPriceStruct getCurrentMarketPriceStructAndReset();
 
+
+    Orderbook getOrderbook();
 
     void update();
 }

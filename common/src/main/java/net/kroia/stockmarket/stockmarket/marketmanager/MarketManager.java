@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.stockmarket.marketmanager;
 
+import net.kroia.banksystem.BankSystemModSettings;
+import net.kroia.banksystem.banking.bankmanager.BankManager;
 import net.kroia.modutilities.persistence.ServerSaveableChunked;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.marketmanager.IAsyncMarketManager;
@@ -75,5 +77,24 @@ public class MarketManager implements IMarketManager {
 
     public @Nullable ServerSaveableChunked  getServerMarketManagerPersistenceInterface() {
         return serverMarketManagerPersistenceInterface;
+    }
+
+
+
+    public static long convertToRawAmountStatic(double realAmount)
+    {
+        return BankManager.convertToRawAmountStatic(realAmount);
+    }
+    public static long convertToRawAmountStatic(double realAmount, int itemFractionScaleFactor)
+    {
+        return BankManager.convertToRawAmountStatic(realAmount, itemFractionScaleFactor);
+    }
+    public static double convertToRealAmountStatic(long rawAmount)
+    {
+        return BankManager.convertToRealAmountStatic(rawAmount);
+    }
+    public static double convertToRealAmountStatic(long rawAmount, int itemFractionScaleFactor)
+    {
+        return BankManager.convertToRealAmountStatic(rawAmount, itemFractionScaleFactor);
     }
 }

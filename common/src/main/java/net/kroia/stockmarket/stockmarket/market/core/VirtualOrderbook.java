@@ -50,6 +50,15 @@ public class VirtualOrderbook implements ServerSaveable
         dynamicArray.resetToDefaultValues();
     }
 
+    public long getMinEditablePrice()
+    {
+        return dynamicArray.getVirtualIndex(0);
+    }
+    public long getMaxEditablePrice()
+    {
+        return dynamicArray.getVirtualIndex(dynamicArray.getSize()-1);
+    }
+
 
     /**
      * Sets the given volume at the given price.

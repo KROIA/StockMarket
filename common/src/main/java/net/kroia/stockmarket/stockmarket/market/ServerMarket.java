@@ -12,6 +12,7 @@ import net.kroia.stockmarket.stockmarket.market.core.Orderbook;
 import net.minecraft.nbt.CompoundTag;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.PriorityQueue;
@@ -219,6 +220,31 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     }
 
 
+    public PriorityQueue<Order> getIncomingBuyMarketOrders()
+    {
+        return buyMarketOrders_inputBuffer;
+    }
+    public PriorityQueue<Order> getIncomingSelMarketOrders()
+    {
+        return sellMarketOrders_inputBuffer;
+    }
+    public PriorityQueue<Order> getIncomingBuyLimitOrders()
+    {
+        return buyLimitOrders_inputBuffer;
+    }
+    public PriorityQueue<Order> getIncomingSelLimitOrders()
+    {
+        return sellLimitOrders_inputBuffer;
+    }
+    public List<Order> getIncommingOrders()
+    {
+        List<Order> list = new ArrayList<>();
+        list.addAll(buyMarketOrders_inputBuffer);
+        list.addAll(sellMarketOrders_inputBuffer);
+        list.addAll(buyLimitOrders_inputBuffer);
+        list.addAll(sellLimitOrders_inputBuffer);
+        return list;
+    }
 
 
 
@@ -319,6 +345,14 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     }
 
 
+
+
+
+    @Override
+    public Orderbook getOrderbook()
+    {
+        return orderbook;
+    }
 
 
 
