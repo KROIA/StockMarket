@@ -35,7 +35,7 @@ public interface IPluginOrderBook {
      *         The volume is also scaled.
      *         For Items that can be traded in fractions, the volume can be a fraction of 1.
      */
-    double getVolume(double minPrice, double maxPrice);
+    float getVolume(double minPrice, double maxPrice);
 
     /**
      * Gets the total volume of orders at the given price.
@@ -43,7 +43,9 @@ public interface IPluginOrderBook {
      *                     This is the internal unscaled price value!
      * @return Total volume of orders at the given price.
      */
-    double getVolume(long backendPrice);
+    float getVolume(long backendPrice);
+
+    float getVirtualVolume(long backendPrice);
 
 
     /**
@@ -78,7 +80,7 @@ public interface IPluginOrderBook {
      *               Each volume element can be positive or negative but if a negative volume is in the buy side of the order book,
      *               it will be set to 0 and vice versa for the sell side of the order book.
      */
-    void setVolume(int backendStartPrice, float[] volume);
+    void setVolume(long backendStartPrice, float[] volume);
 
 
     /**
@@ -100,7 +102,7 @@ public interface IPluginOrderBook {
      *               Each volume element can be positive or negative but if a negative volume is in the buy side of the order book,
      *               it will be set to 0 and vice versa for the sell side of the order book.
      */
-    void addVolume(int backendStartPrice, float[] volume);
+    void addVolume(long backendStartPrice, float[] volume);
 
 
 

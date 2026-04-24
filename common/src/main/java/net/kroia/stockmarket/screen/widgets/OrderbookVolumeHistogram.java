@@ -51,8 +51,10 @@ public class OrderbookVolumeHistogram extends StockMarketGuiElement {
             double startPrice = parentChart.getMinVisiblePrice();
             double endPrice = parentChart.getMaxVisiblePrice();
             market.requestOrderbookVolume(startPrice, endPrice, 50).thenAccept(response -> {
-                this.startPrice = response.startPrice();
-                this.endPrice = response.endPrice();
+                //this.startPrice = response.startPrice();
+                //this.endPrice = response.endPrice();
+                this.startPrice = startPrice;
+                this.endPrice = endPrice;
                 this.volumeChunks = response.volumes();
             });
         }

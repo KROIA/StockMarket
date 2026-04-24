@@ -19,6 +19,7 @@ import net.kroia.stockmarket.minecraft.entity.StockMarketEntities;
 import net.kroia.stockmarket.event.EventRegistration;
 import net.kroia.stockmarket.minecraft.item.StockMarketCreativeModeTab;
 import net.kroia.stockmarket.minecraft.item.StockMarketItems;
+import net.kroia.stockmarket.pluginsystem.Plugins;
 import net.kroia.stockmarket.pluginsystem.pluginmanager.ClientPluginManager;
 import net.kroia.stockmarket.pluginsystem.pluginmanager.PluginManager;
 import net.kroia.stockmarket.stockmarket.marketmanager.ClientMarketManager;
@@ -106,6 +107,8 @@ public class StockMarketModBackend implements StockMarketAPI {
         ClientPlayerEvent.CLIENT_PLAYER_JOIN.register(StockMarketModBackend::onPlayerJoinClientSide);
         ClientPlayerEvent.CLIENT_PLAYER_RESPAWN.register(StockMarketModBackend::onPlayerRespawnClientSide);
         ClientTickEvent.CLIENT_LEVEL_POST.register(StockMarketModBackend::onClientTickEvent);
+
+        Plugins.clientSetup();
     }
 
     // Called from the server side
@@ -128,6 +131,8 @@ public class StockMarketModBackend implements StockMarketAPI {
 
         SERVER_INSTANCES.BANK_SYSTEM_API.getEvents().getBanksystemSetupCompleteSignal().addListener(StockMarketModBackend::onBankSystemSetupComplete, 1);
         SERVER_INSTANCES.BANK_SYSTEM_API.getEvents().getBankDataLoadedFromFileSignal().addListener(StockMarketModBackend::onPostBankSystemDataLoaded, 1);
+
+        Plugins.serverSetup();
     }
 
 

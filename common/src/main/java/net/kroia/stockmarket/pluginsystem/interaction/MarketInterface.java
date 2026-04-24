@@ -1,4 +1,4 @@
-package net.kroia.stockmarket.pluginsystem.plugin.core;
+package net.kroia.stockmarket.pluginsystem.interaction;
 
 import net.kroia.stockmarket.api.plugin.interaction.IPluginMarket;
 import net.kroia.stockmarket.api.plugin.interaction.IPluginOrderBook;

@@ -63,6 +63,7 @@ public class AsyncMarket implements IAsyncMarket{
     public enum FunctionType
     {
         //GetItemID,
+        GetDefaultPrice,
         GetCurrentMarketPrice,
         GetCurrentTime,
         GetVolume_1,
@@ -89,6 +90,7 @@ public class AsyncMarket implements IAsyncMarket{
     }
     public static final Map<FunctionType, AsyncFunctionDataCodecs> codecs = new HashMap<>(){{
         //put(FunctionType.GetItemID,                             codecPacket(null, ItemID.STREAM_CODEC));
+        put(FunctionType.GetDefaultPrice,                       codecPacket(null, ByteBufCodecs.VAR_LONG.cast()));
         put(FunctionType.GetCurrentMarketPrice,                 codecPacket(null, ByteBufCodecs.VAR_LONG.cast()));
         put(FunctionType.GetCurrentTime,                        codecPacket(null, ByteBufCodecs.VAR_LONG.cast()));
         put(FunctionType.GetVolume_1,                           codecPacket(ByteBufCodecs.VAR_LONG.cast(), ByteBufCodecs.VAR_LONG.cast()));
@@ -209,6 +211,7 @@ public class AsyncMarket implements IAsyncMarket{
 
             return CompletableFuture.completedFuture(switch (input.function) {
                 //case FunctionType.GetItemID ->                            OutputData.of(input.function, market.getItemID());
+                case FunctionType.GetDefaultPrice ->                      OutputData.of(input.function, market.getDefaultPrice());
                 case FunctionType.GetCurrentMarketPrice ->                OutputData.of(input.function, market.getCurrentMarketPrice());
                 case FunctionType.GetCurrentTime ->                       OutputData.of(input.function, market.getCurrentTime());
                 case FunctionType.GetVolume_1 ->                          OutputData.of(input.function, market.getVolume((Long)inputData.extra));
@@ -353,6 +356,17 @@ public class AsyncMarket implements IAsyncMarket{
     @Override
     public ItemID getItemIDAsync() {
         return itemID;
+    }
+
+    @Override
+    public CompletableFuture<Long> getDefaultPriceAsync() {
+        if(!MultiServerUtils.canInteractWithStockMarket())
+            return CompletableFuture.completedFuture(0L);
+        CompletableFuture<Long> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.GetDefaultPrice, itemID);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
     }
 
     @Override

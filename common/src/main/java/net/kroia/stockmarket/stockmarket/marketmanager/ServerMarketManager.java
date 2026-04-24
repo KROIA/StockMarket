@@ -138,6 +138,11 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
         return CompletableFuture.completedFuture(getMarket(marketID));
     }
 
+    public ServerMarket getServerMarket(ItemID marketID)
+    {
+        return markets.get(marketID);
+    }
+
 
 
 
@@ -170,7 +175,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
         for(ServerMarket m : markets.values())
         {
             // Create random movement for testing
-            tmpValue += Math.sin((double)System.currentTimeMillis()/10000.0);
+            /*tmpValue += Math.sin((double)System.currentTimeMillis()/10000.0);
             long rand = (random.nextLong()%10);
             if(tmpValue > 1) {
                 rand += 1;
@@ -184,7 +189,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
 
             currentPrice = Math.max(0, currentPrice + rand);
             m.test_setCurrentMarketPrice(currentPrice);
-            m.test_resetVirtualOrderBookVolume();
+            m.test_resetVirtualOrderBookVolume();*/
             m.update();
         }
 

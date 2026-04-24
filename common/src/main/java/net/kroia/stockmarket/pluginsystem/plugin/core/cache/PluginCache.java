@@ -1,7 +1,7 @@
 package net.kroia.stockmarket.pluginsystem.plugin.core.cache;
 
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.stockmarket.pluginsystem.plugin.core.MarketInterface;
+import net.kroia.stockmarket.pluginsystem.interaction.MarketInterface;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;

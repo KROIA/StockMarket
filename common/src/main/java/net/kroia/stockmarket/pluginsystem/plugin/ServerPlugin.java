@@ -1,17 +1,23 @@
 package net.kroia.stockmarket.pluginsystem.plugin;
 
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.persistence.ServerSaveable;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.plugin.IServerPlugin;
 import net.kroia.stockmarket.pluginsystem.plugin.core.GenericPluginData;
+import net.kroia.stockmarket.pluginsystem.interaction.MarketInterface;
+import net.kroia.stockmarket.pluginsystem.plugin.core.cache.MarketCache;
+import net.kroia.stockmarket.pluginsystem.plugin.core.cache.PluginCache;
 import net.kroia.stockmarket.pluginsystem.pluginmanager.ServerPluginManager;
 import net.kroia.stockmarket.pluginsystem.registry.PluginRegistryObject;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.FriendlyByteBuf;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.List;
 import java.util.UUID;
 
-public class ServerPlugin implements ServerSaveable, IServerPlugin {
+public abstract class ServerPlugin implements ServerSaveable, IServerPlugin {
     private static StockMarketModBackend.ServerInstances BACKEND_INSTANCES;
     public static void setBackend(StockMarketModBackend.ServerInstances backend) {
         BACKEND_INSTANCES = backend;
@@ -34,6 +40,7 @@ public class ServerPlugin implements ServerSaveable, IServerPlugin {
         EXEC_DECODING,
     }
     private @Nullable ServerPluginManager manager = null;
+    private final PluginCache cache = new PluginCache();
 
     private State state = State.NONE;
     private int networkStreamPacketTickInterval = 20;
@@ -72,10 +79,10 @@ public class ServerPlugin implements ServerSaveable, IServerPlugin {
     {
         return genericPluginData.getDescription();
     }
-    public void setEnabled(boolean enabled)
+    /*public void setEnabled(boolean enabled)
     {
         genericPluginData.setEnabled(enabled);
-    }
+    }*/
     public final boolean isEnabled()
     {
         return genericPluginData.isEnabled();
@@ -88,11 +95,152 @@ public class ServerPlugin implements ServerSaveable, IServerPlugin {
     {
         genericPluginData.setRegistrar(registrar);
     }
-    public final @Nullable String getPluginTypeID()
-    {
+    public final @Nullable String getPluginTypeID() {
         return genericPluginData.getPluginTypeID();
     }
 
+
+
+    /* ----------------------------------------------------------------------------------------------------------------
+     *                     UPDATE LOOP
+     * --------------------------------------------------------------------------------------------------------------*/
+
+    public abstract void init();
+    public abstract void deInit();
+    public abstract void update(List<MarketInterface> markets);
+    public abstract void finalize(List<MarketInterface> markets);
+
+
+
+
+    public final List<MarketInterface> getMarketInterfaces()
+    {
+        return cache.getInterfaces();
+    }
+    public final @Nullable MarketInterface getMarketInterface(ItemID marketID)
+    {
+        List<MarketInterface>  marketInterfaces = getMarketInterfaces();
+        for(MarketInterface marketInterface : marketInterfaces)
+            if(marketInterface.market.getMarketID().equals(marketID))
+                return marketInterface;
+        return null;
+    }
+
+
+    /* ----------------------------------------------------------------------------------------------------------------
+     *                     EVENTS
+     * --------------------------------------------------------------------------------------------------------------*/
+    public abstract void onMarketSubscribed(ItemID marketID);
+    public abstract void onMarketUnsubscribed(ItemID marketID);
+    public abstract void onEnable();
+    public abstract void onDisable();
+
+
+
+
+
+    /* ----------------------------------------------------------------------------------------------------------------
+     *                     MANAGEMENT
+     * --------------------------------------------------------------------------------------------------------------*/
+    public void subscribeToMarket(ItemID itemID)
+    {
+        if(state != State.NONE)
+        {
+            // todo: create a temp cache to apply these changes after the update loop
+            error("Subscribing to a market is not allowed from inside the plugin update loop!");
+            return;
+        }
+        if(manager == null)
+        {
+            error("Market behavior plugin has attached to the manager");
+            return;
+        }
+        MarketCache marketCache = manager.createCache(itemID);
+        if(marketCache == null)
+        {
+            error("Can't subscribe to market: " + itemID + " could not create cache");
+            return;
+        }
+        if(cache.putCache(itemID, marketCache))
+        {
+            onMarketSubscribed(itemID);
+        }
+    }
+    public void unsubscribeFromMarket(ItemID itemID)
+    {
+        if(state != State.NONE)
+        {
+            // todo: create a temp cache to apply these changes after the update loop
+            error("Unsubscribing from a market is not allowed from inside the plugin update loop!");
+            return;
+        }
+        if(cache.removeMarketCache(itemID))
+        {
+            onMarketUnsubscribed(itemID);
+        }
+    }
+
+
+    void setNetworkStreamPacketTickInterval(int tickInterval)
+    {
+        this.networkStreamPacketTickInterval = tickInterval;
+    }
+    public int getNetworkStreamPacketTickInterval()
+    {
+        return networkStreamPacketTickInterval;
+    }
+
+    public List<ItemID> getSubscribedMarkets()
+    {
+        return cache.getMarketCaches().keySet().stream().toList();
+    }
+
+
+    /* ----------------------------------------------------------------------------------------------------------------
+     *                     INTERNAL  METHODS
+     * --------------------------------------------------------------------------------------------------------------*/
+
+    //@Override
+    public void setEnabled(boolean enabled)
+    {
+        if(enabled == isEnabled())
+            return;
+        genericPluginData.setEnabled(enabled);
+        //super.setEnabled(enabled);
+        if(enabled)
+        {
+            onEnable();
+        }
+        else
+        {
+            onDisable();
+        }
+    }
+
+    public final void init_internal()
+    {
+        state =  State.EXEC_INIT;
+        init();
+        state  = State.NONE;
+    }
+    public final void deInit_internal()
+    {
+        state  = State.EXEC_DEINIT;
+        deInit();
+        state  = State.NONE;
+    }
+    public final void update_internal()
+    {
+        state  = State.EXEC_UPDATE;
+        update(cache.getInterfaces());
+        state  = State.NONE;
+    }
+    public final void finalize_internal()
+    {
+        state  = State.EXEC_FINALIZE;
+        finalize(cache.getInterfaces());
+        state  = State.NONE;
+    }
 
     public final void setManager(ServerPluginManager manager)
     {
@@ -102,6 +250,11 @@ public class ServerPlugin implements ServerSaveable, IServerPlugin {
     {
         return manager;
     }
+    
+
+    /* ----------------------------------------------------------------------------------------------------------------
+     *                     DATA HANDLING
+     * --------------------------------------------------------------------------------------------------------------*/
 
 
     @Override

@@ -20,6 +20,7 @@ public interface ISyncServerMarket {
 
 
     ItemID getItemID();
+    long getDefaultPrice();
     long getCurrentMarketPrice();
     long getCurrentTime();
     long getVolume(long price);

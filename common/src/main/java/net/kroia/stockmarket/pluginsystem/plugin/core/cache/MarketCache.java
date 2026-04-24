@@ -3,8 +3,8 @@ package net.kroia.stockmarket.pluginsystem.plugin.core.cache;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.api.plugin.interaction.IPluginMarket;
 import net.kroia.stockmarket.api.plugin.interaction.IPluginOrderBook;
-import net.kroia.stockmarket.pluginsystem.plugin.core.PluginMarket;
-import net.kroia.stockmarket.pluginsystem.plugin.core.PluginOrderBook;
+import net.kroia.stockmarket.pluginsystem.interaction.PluginMarket;
+import net.kroia.stockmarket.pluginsystem.interaction.PluginOrderBook;
 import net.kroia.stockmarket.stockmarket.market.ServerMarket;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import org.jetbrains.annotations.NotNull;
@@ -61,7 +61,7 @@ public class MarketCache {
     {
         virtualOrderBookCache.addManipulation(minPrice, maxPrice, volume, operator);
     }
-    public void addManipulation(int backendStartPrice, float[] volume, VirtualOrderBookCache.ManipulationOperator operator)
+    public void addManipulation(long backendStartPrice, float[] volume, VirtualOrderBookCache.ManipulationOperator operator)
     {
         virtualOrderBookCache.addManipulation(backendStartPrice, volume, operator);
     }

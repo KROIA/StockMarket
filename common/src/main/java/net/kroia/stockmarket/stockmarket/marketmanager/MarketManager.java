@@ -20,7 +20,7 @@ public class MarketManager implements IMarketManager {
 
     private final @NotNull IAsyncMarketManager asyncServerMarketManager;
 
-    private final @Nullable IServerMarketManager serverMarketManager;
+    private final @Nullable ServerMarketManager serverMarketManager;
     private final @Nullable ServerSaveableChunked serverMarketManagerPersistenceInterface;
 
     public static MarketManager createMaster()
@@ -38,7 +38,7 @@ public class MarketManager implements IMarketManager {
         return new ClientMarketManager();
     }
 
-    private MarketManager(@NotNull IAsyncMarketManager asyncMarketManager, @Nullable IServerMarketManager syncManager, @Nullable ServerSaveableChunked serverMarketManagerPersistenceInterface)
+    private MarketManager(@NotNull IAsyncMarketManager asyncMarketManager, @Nullable ServerMarketManager syncManager, @Nullable ServerSaveableChunked serverMarketManagerPersistenceInterface)
     {
         asyncServerMarketManager = asyncMarketManager;
         serverMarketManager = syncManager;
@@ -57,6 +57,9 @@ public class MarketManager implements IMarketManager {
 
     @Override
     public @Nullable IServerMarketManager getSync() {
+        return serverMarketManager;
+    }
+    public ServerMarketManager getServerMarketManager() {
         return serverMarketManager;
     }
 

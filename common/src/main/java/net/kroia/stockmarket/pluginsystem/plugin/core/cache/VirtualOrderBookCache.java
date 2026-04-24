@@ -44,7 +44,7 @@ public class VirtualOrderBookCache {
             backendStartPrice = 0;
             arrayVolume = null;
         }
-        public ManipulationData(int backendStartPrice, float[] volume, ManipulationOperator operator)
+        public ManipulationData(long backendStartPrice, float[] volume, ManipulationOperator operator)
         {
             type  = ManipulationType.ARRAY;
             this.backendStartPrice = backendStartPrice;
@@ -85,7 +85,7 @@ public class VirtualOrderBookCache {
         ManipulationData data = new ManipulationData(minPrice, maxPrice, volume, operator);
         manipulationData.add(data);
     }
-    public void addManipulation(int backendStartPrice, float[] volume, ManipulationOperator operator)
+    public void addManipulation(long backendStartPrice, float[] volume, ManipulationOperator operator)
     {
         ManipulationData data = new ManipulationData(backendStartPrice, volume, operator);
         manipulationData.add(data);

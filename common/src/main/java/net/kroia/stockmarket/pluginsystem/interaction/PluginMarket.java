@@ -1,4 +1,4 @@
-package net.kroia.stockmarket.pluginsystem.plugin.core;
+package net.kroia.stockmarket.pluginsystem.interaction;
 
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.api.market.IServerMarket;
@@ -37,10 +37,10 @@ public class PluginMarket implements IPluginMarket
 
     }*/
 
-    /*@Override
-    public double getDefaultPrice() {
-        return serverMarket.getDefaultRealPrice();
-    }*/
+    @Override
+    public double getDefaultRealPrice() {
+        return MarketManager.convertToRealAmountStatic(serverMarket.getDefaultPrice());
+    }
 
     @Override
     public double getPrice() {

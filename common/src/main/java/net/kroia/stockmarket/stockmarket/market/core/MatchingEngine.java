@@ -170,13 +170,21 @@ public class MatchingEngine
     {
         // ── Resolve the submitting player's bank accounts ──────────────────────
         IServerBankAccount account = getBankAccount(order.getBankAccountNr());
-        if (account == null) { orderCanceled(order); return; }
+        long orderVolume = order.getRemainingVolume();
+        if (account == null)
+        {
+            if (orderVolume < 0)
+                processBotSell(order, orderVolume, minAcceptedPrice);
+            else
+                processBotBuy(order, orderVolume, maxAcceptedPrice);
+            return;
+        }
 
         IServerBank itemBank  = account.getBank(itemID);
         IServerBank moneyBank = account.getBank(BACKEND_INSTANCES.MARKET_MANAGER.getSync().getTradingCurrencyID());
         if (itemBank == null || moneyBank == null) { orderCanceled(order); return; }
 
-        long orderVolume = order.getRemainingVolume();
+
 
         // ── Route by direction ─────────────────────────────────────────────────
         if (orderVolume < 0)
@@ -189,12 +197,14 @@ public class MatchingEngine
 //  SELL
 // ═══════════════════════════════════════════════════════════════════════════
 
-    private void processSell(Order order, long orderVolume, IServerBank itemBank, IServerBank moneyBank, long minimalAcceptedPrice)
+    private void processSell(Order order, long orderVolume, @Nullable IServerBank itemBank, @Nullable IServerBank moneyBank, long minimalAcceptedPrice)
     {
-        // Cap sell volume to what the player actually holds
-        long available = itemBank.getTotalBalance();
-        if (available < -orderVolume)
-            orderVolume = -available;                         // still negative
+        if(itemBank != null) {
+            // Cap sell volume to what the player actually holds
+            long available = itemBank.getTotalBalance();
+            if (available < -orderVolume)
+                orderVolume = -available;                         // still negative
+        }
 
         // Quick check: is there enough depth to fill at all?
         //if (!orderbook.getPriceWhenConsumingVolume(orderVolume, pair_cache)) return;
@@ -298,22 +308,29 @@ public class MatchingEngine
         commitSell(itemBank, moneyBank, itemDelta, moneyDelta, order);
         orderbook.setCurrentMarketPrice(currentMarketPrice);
     }
+    private void processBotSell(Order order, long orderVolume, long minimalAcceptedPrice)
+    {
+        processSell(order, orderVolume, null, null, minimalAcceptedPrice);
+    }
 
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  BUY
 // ═══════════════════════════════════════════════════════════════════════════
 
-    private void processBuy(Order order, long orderVolume, IServerBank itemBank, IServerBank moneyBank, long maximalAcceptedPrice)
+    private void processBuy(Order order, long orderVolume, @Nullable IServerBank itemBank, @Nullable IServerBank moneyBank, long maximalAcceptedPrice)
     {
-        // Cap buy volume to what the player can afford at the current stockmarket price.
-        // This is a conservative upper bound; actual cost may be lower if fills happen
-        // at cheaper ask prices. Any overshoot is harmless — the loop stops when
-        // orderVolume reaches 0.
-        long availableFunds = moneyBank.getTotalBalance();
-        long maxAffordable  = (currentMarketPrice > 0) ? availableFunds / currentMarketPrice : orderVolume;
-        if (maxAffordable < orderVolume)
-            orderVolume = maxAffordable;                      // still positive
+        long availableFunds = Long.MAX_VALUE;
+        if(moneyBank != null) {
+            // Cap buy volume to what the player can afford at the current stockmarket price.
+            // This is a conservative upper bound; actual cost may be lower if fills happen
+            // at cheaper ask prices. Any overshoot is harmless — the loop stops when
+            // orderVolume reaches 0.
+            availableFunds = moneyBank.getTotalBalance();
+            long maxAffordable = (currentMarketPrice > 0) ? availableFunds / currentMarketPrice : orderVolume;
+            if (maxAffordable < orderVolume)
+                orderVolume = maxAffordable;                      // still positive
+        }
 
         // Quick check: is there enough depth to fill at all?
         //if (!orderbook.getPriceWhenConsumingVolume(orderVolume, pair_cache)) return;
@@ -443,7 +460,10 @@ public class MatchingEngine
         commitBuy(itemBank, moneyBank, itemDelta, moneyDelta, order);
         orderbook.setCurrentMarketPrice(currentMarketPrice);
     }
-
+    private void processBotBuy(Order order, long orderVolume, long maximalAcceptedPrice)
+    {
+        processBuy(order, orderVolume, null, null, maximalAcceptedPrice);
+    }
 
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -564,11 +584,13 @@ public class MatchingEngine
 
 
     /** Commit a completed (or partially completed) SELL and fire orderConsumed. */
-    private void commitSell(IServerBank itemBank, IServerBank moneyBank,
+    private void commitSell(@Nullable IServerBank itemBank, @Nullable IServerBank moneyBank,
                             long itemDelta, long moneyDelta, Order order)
     {
-        itemBank.withdrawLockedPrefered(-itemDelta);  // itemDelta is negative → withdraw positive
-        moneyBank.deposit(moneyDelta);
+        if(itemBank != null)
+            itemBank.withdrawLockedPrefered(-itemDelta);  // itemDelta is negative → withdraw positive
+        if(moneyBank != null)
+            moneyBank.deposit(moneyDelta);
         if(order.isFilled())
             orderConsumed(order);
         else
@@ -579,11 +601,13 @@ public class MatchingEngine
     }
 
     /** Commit a completed (or partially completed) BUY and fire orderConsumed. */
-    private void commitBuy(IServerBank itemBank, IServerBank moneyBank,
+    private void commitBuy(@Nullable IServerBank itemBank, @Nullable IServerBank moneyBank,
                            long itemDelta, long moneyDelta, Order order)
     {
-        moneyBank.withdrawLockedPrefered(-moneyDelta);  // moneyDelta is negative → withdraw positive
-        itemBank.deposit(itemDelta);
+        if(moneyBank != null)
+            moneyBank.withdrawLockedPrefered(-moneyDelta);  // moneyDelta is negative → withdraw positive
+        if(itemBank != null)
+            itemBank.deposit(itemDelta);
         if(order.isFilled())
             orderConsumed(order);
         else
@@ -596,8 +620,9 @@ public class MatchingEngine
     /** Looks up item + money bank for a counterparty order. Returns null if unavailable. */
     private BankPair resolveCounterpartyBanks(Order counterOrder)
     {
-        IServerBankAccount acct = getBankAccount(counterOrder.getBankAccountNr());
-        if (acct == null) return null;
+        @Nullable IServerBankAccount acct = getBankAccount(counterOrder.getBankAccountNr());
+        if (acct == null)
+            return null;
         IServerBank ib = acct.getBank(itemID);
         IServerBank mb = acct.getBank(BACKEND_INSTANCES.MARKET_MANAGER.getSync().getTradingCurrencyID());
         return (ib == null || mb == null) ? null : new BankPair(ib, mb);

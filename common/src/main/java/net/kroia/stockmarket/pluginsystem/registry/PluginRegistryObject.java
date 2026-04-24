@@ -55,7 +55,7 @@ public class PluginRegistryObject
     public ClientPlugin instantiateClientPlugin(UUID serversInstanceID)
     {
         ClientPlugin plugin = clientPluginFactory.apply(serversInstanceID);
-        //plugin.setRegistrar(this);
+        plugin.setRegistrar(this);
         return plugin;
     }
     public PluginGuiElement instantiatePluginGuiElement(UUID serversInstanceID)

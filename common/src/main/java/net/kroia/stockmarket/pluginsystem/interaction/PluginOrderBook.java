@@ -1,4 +1,4 @@
-package net.kroia.stockmarket.pluginsystem.plugin.core;
+package net.kroia.stockmarket.pluginsystem.interaction;
 
 import net.kroia.stockmarket.api.plugin.interaction.IPluginOrderBook;
 import net.kroia.stockmarket.api.plugin.interaction.IVolumeDistributionCalculator;
@@ -48,7 +48,7 @@ public class PluginOrderBook implements IPluginOrderBook
     }
 
     @Override
-    public double getVolume(double minPrice, double maxPrice) {
+    public float getVolume(double minPrice, double maxPrice) {
         if(minPrice > maxPrice)
         {
             double tmp = minPrice;
@@ -60,8 +60,14 @@ public class PluginOrderBook implements IPluginOrderBook
     }
 
     @Override
-    public double getVolume(long backendPrice) {
-        return orderbook.getVolume(backendPrice, serverMarket.getCurrentMarketPrice());
+    public float getVolume(long backendPrice) {
+        return orderbook.getVolume(backendPrice);
+    }
+
+    @Override
+    public float getVirtualVolume(long backendPrice)
+    {
+        return orderbook.getVirtualVolume(backendPrice);
     }
 
     @Override
@@ -80,7 +86,7 @@ public class PluginOrderBook implements IPluginOrderBook
     }
 
     @Override
-    public void setVolume(int backendStartPrice, float[] volume) {
+    public void setVolume(long backendStartPrice, float[] volume) {
         cache.addManipulation(backendStartPrice, volume, VirtualOrderBookCache.ManipulationOperator.SET);
     }
 
@@ -90,7 +96,7 @@ public class PluginOrderBook implements IPluginOrderBook
     }
 
     @Override
-    public void addVolume(int backendStartPrice, float[] volume) {
+    public void addVolume(long backendStartPrice, float[] volume) {
         cache.addManipulation(backendStartPrice, volume, VirtualOrderBookCache.ManipulationOperator.ADD);
     }
 

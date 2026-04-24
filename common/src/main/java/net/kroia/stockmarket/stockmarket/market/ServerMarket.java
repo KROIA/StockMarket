@@ -33,6 +33,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     private final MatchingEngine matchingEngine;
     private boolean marketOpen;
     private long currentMarketPrice;
+    private long defaultPrice;
     private @Nullable Function<Long, Float> defaultVolumeProviderFunction;
 
     private long candleStartTime = System.currentTimeMillis();
@@ -52,8 +53,9 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     private final PriorityQueue<InterMarketOrder> interMarket_MarketBuyOrders_inputBuffer = new PriorityQueue<>((o1, o2) -> Long.compare(o2.getTime(), o1.getTime()));
 
 
-    public ServerMarket(ItemID itemID, @Nullable Function<Long, Float> volumeProvider, long currentMarketPrice)
+    public ServerMarket(ItemID itemID, @Nullable Function<Long, Float> volumeProvider, long defaultPrice)
     {
+        this.defaultPrice =  defaultPrice;
         this.defaultVolumeProviderFunction =  volumeProvider;
         this.itemID = itemID;
         this.orderbook = new Orderbook(itemID,
@@ -72,17 +74,17 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
                 this::onPriceChanged);
 
         this.marketOpen = true;
-        this.currentMarketPrice = currentMarketPrice;
-        this.orderbook.setCurrentMarketPrice(currentMarketPrice);
+        this.currentMarketPrice = defaultPrice;
+        this.orderbook.setCurrentMarketPrice(defaultPrice);
         this.orderbook.resetVirtualVolumeDistribution();
-        candleOpenPrice = this.currentMarketPrice;
-        candleHighPrice = this.currentMarketPrice;
-        candleLowPrice = this.currentMarketPrice;
+        candleOpenPrice = currentMarketPrice;
+        candleHighPrice = currentMarketPrice;
+        candleLowPrice = currentMarketPrice;
     }
 
     public ServerMarket(ItemID itemID)
     {
-        this(itemID, null, 10);
+        this(itemID, null, 1000);
     }
 
     @Override
@@ -127,6 +129,18 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         return itemID;
     }
 
+
+
+    @Override
+    public long getDefaultPrice()
+    {
+        return defaultPrice;
+    }
+    @Override
+    public CompletableFuture<Long> getDefaultPriceAsync()
+    {
+        return CompletableFuture.completedFuture(defaultPrice);
+    }
 
 
 

@@ -28,7 +28,7 @@ public interface IPluginMarket {
      * Gets the default price of the market as a real price value.
      * @return The default price of the market.
      */
-    //double getDefaultPrice();
+    double getDefaultRealPrice();
 
     /**
      * Gets the current price of the market as a real price value.

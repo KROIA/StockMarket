@@ -11,6 +11,7 @@ import java.util.concurrent.CompletableFuture;
 public interface IAsyncMarket {
 
     ItemID getItemIDAsync();
+    CompletableFuture<Long> getDefaultPriceAsync();
     CompletableFuture<Long> getCurrentMarketPriceAsync();
     CompletableFuture<Long> getCurrentTimeAsync();
     CompletableFuture<Long> getVolumeAsync(long price);
