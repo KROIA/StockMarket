@@ -14,7 +14,7 @@ public class TargetPriceBot extends ServerPlugin {
 
     static class RuntimeData
     {
-        public final PID pid = new PID(0.1f, 0.1f, 0, 0.1f);
+        public final PID pid = new PID(0.5f, 0.1f, 0, 0.1f);
         public int tickCounter = 0;
         public double targetPrice = 0;
     }
@@ -57,7 +57,7 @@ public class TargetPriceBot extends ServerPlugin {
 
         double output = data.pid.update(data.targetPrice - currentPrice);
         double normalized = (Math.min(Math.max(-10, output*5),10));
-        float volumeToTarget = market.oderBook.getVolume(currentPrice, data.targetPrice);
+        float volumeToTarget = market.oderBook.getRealVolume(currentPrice, data.targetPrice);
         if(normalized < 0 && volumeToTarget > 0)
             normalized = Math.max(-volumeToTarget, normalized);
         else if(normalized > 0 && volumeToTarget < 0)

@@ -35,7 +35,7 @@ public interface IPluginOrderBook {
      *         The volume is also scaled.
      *         For Items that can be traded in fractions, the volume can be a fraction of 1.
      */
-    float getVolume(double minPrice, double maxPrice);
+    float getRealVolume(double minPrice, double maxPrice);
 
     /**
      * Gets the total volume of orders at the given price.
@@ -43,9 +43,13 @@ public interface IPluginOrderBook {
      *                     This is the internal unscaled price value!
      * @return Total volume of orders at the given price.
      */
-    float getVolume(long backendPrice);
+    float getRealVolume(long backendPrice);
 
-    float getVirtualVolume(long backendPrice);
+    float getRealVirtualVolume(long backendPrice);
+
+    long getRawVolume(long backendPrice);
+
+    float getRawVirtualVolume(long backendPrice);
 
 
     /**
@@ -70,7 +74,7 @@ public interface IPluginOrderBook {
      *               The volume is always positive.
      *               The backend will determine the correct sign to match the correct side of the order book (Buy/Sell).
      */
-    void setVolume(double minPrice, double maxPrice, float volume);
+    void setRawVolume(double minPrice, double maxPrice, float volume);
 
     /**
      * Sets the volume distribution using the given array of volume values.
@@ -80,7 +84,7 @@ public interface IPluginOrderBook {
      *               Each volume element can be positive or negative but if a negative volume is in the buy side of the order book,
      *               it will be set to 0 and vice versa for the sell side of the order book.
      */
-    void setVolume(long backendStartPrice, float[] volume);
+    void setRawVolume(long backendStartPrice, float[] volume);
 
 
     /**
@@ -92,7 +96,7 @@ public interface IPluginOrderBook {
      *               The volume is always positive.
      *               The backend will determine the correct sign to match the correct side of the order book (Buy/Sell).
      */
-    void addVolume(double minPrice, double maxPrice, float volume);
+    void addRawVolume(double minPrice, double maxPrice, float volume);
 
     /**
      * Adds the volume distribution using the given array of volume values.
@@ -102,7 +106,7 @@ public interface IPluginOrderBook {
      *               Each volume element can be positive or negative but if a negative volume is in the buy side of the order book,
      *               it will be set to 0 and vice versa for the sell side of the order book.
      */
-    void addVolume(long backendStartPrice, float[] volume);
+    void addRawVolume(long backendStartPrice, float[] volume);
 
 
 
@@ -127,7 +131,8 @@ public interface IPluginOrderBook {
      * The value is based on the IVolumeDistributionCalculator objects
      *
      * @param pickPrice the real value price at which the volume gets measured
-     * @return positive volume for buy orders, negative volume for sell orders
+     * @return positive volume for buy orders, negative volume for sell orders.
+     *         The raw volume at the given price
      */
-    float getDefaultVolume(double pickPrice);
+    float getDefaultRawVolume(double pickPrice);
 }

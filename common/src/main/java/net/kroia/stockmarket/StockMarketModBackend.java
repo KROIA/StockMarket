@@ -114,23 +114,10 @@ public class StockMarketModBackend implements StockMarketAPI {
     // Called from the server side
     public static void onServerSetup()
     {
-        SERVER_INSTANCES =  new ServerInstances();
-        SERVER_INSTANCES.BANK_SYSTEM_API = BankSystemMod.getAPI();
-        SERVER_INSTANCES.LOGGER = COMMON_INSTANCES.LOGGER;
-        SERVER_INSTANCES.NETWORKING = COMMON_INSTANCES.NETWORKING;
-        SERVER_INSTANCES.SERVER_SETTINGS = new StockMarketModSettings();
-        SERVER_INSTANCES.SERVER_SETTINGS.setLogger(SERVER_INSTANCES.LOGGER::error, SERVER_INSTANCES.LOGGER::error, SERVER_INSTANCES.LOGGER::debug);
 
-        Testing.setBackend(SERVER_INSTANCES);
-        MarketManager.setBackend(SERVER_INSTANCES);
-        PluginManager.setBackend(SERVER_INSTANCES);
-        StockMarketNetworking.setBackend(SERVER_INSTANCES);
-        NEZNAMY_TAB_Placeholders.setBackend(SERVER_INSTANCES);
-        StockMarketCommands.setBackend(SERVER_INSTANCES);
-        DataManager.setBackend(SERVER_INSTANCES);
 
-        SERVER_INSTANCES.BANK_SYSTEM_API.getEvents().getBanksystemSetupCompleteSignal().addListener(StockMarketModBackend::onBankSystemSetupComplete, 1);
-        SERVER_INSTANCES.BANK_SYSTEM_API.getEvents().getBankDataLoadedFromFileSignal().addListener(StockMarketModBackend::onPostBankSystemDataLoaded, 1);
+        BankSystemMod.getAPI().getEvents().getBanksystemSetupCompleteSignal().addListener(StockMarketModBackend::onBankSystemSetupComplete);
+        BankSystemMod.getAPI().getEvents().getBankDataLoadedFromFileSignal().addListener(StockMarketModBackend::onPostBankSystemDataLoaded);
 
         Plugins.serverSetup();
     }
@@ -139,6 +126,8 @@ public class StockMarketModBackend implements StockMarketAPI {
     // Called from the server side
     public static void onServerStart(MinecraftServer server)
     {
+
+
         //INSTANCES.BANK_SYSTEM_API.getEvents().getBankDataLoadedFromFileSignal().addListener();
 
         /*if(BankSystemDataHandler.isBankDataLoaded())
@@ -175,6 +164,22 @@ public class StockMarketModBackend implements StockMarketAPI {
     }
     private static void onBankSystemSetupComplete()
     {
+        SERVER_INSTANCES =  new ServerInstances();
+        SERVER_INSTANCES.BANK_SYSTEM_API = BankSystemMod.getAPI();
+        SERVER_INSTANCES.LOGGER = COMMON_INSTANCES.LOGGER;
+        SERVER_INSTANCES.NETWORKING = COMMON_INSTANCES.NETWORKING;
+        SERVER_INSTANCES.SERVER_SETTINGS = new StockMarketModSettings();
+        SERVER_INSTANCES.SERVER_SETTINGS.setLogger(SERVER_INSTANCES.LOGGER::error, SERVER_INSTANCES.LOGGER::error, SERVER_INSTANCES.LOGGER::debug);
+
+        Testing.setBackend(SERVER_INSTANCES);
+        MarketManager.setBackend(SERVER_INSTANCES);
+        PluginManager.setBackend(SERVER_INSTANCES);
+        StockMarketNetworking.setBackend(SERVER_INSTANCES);
+        NEZNAMY_TAB_Placeholders.setBackend(SERVER_INSTANCES);
+        StockMarketCommands.setBackend(SERVER_INSTANCES);
+        DataManager.setBackend(SERVER_INSTANCES);
+
+        
         boolean isMaster = BankSystemMod.getAPI().getServerBankManager().isMaster();
         if(isMaster)
         {
@@ -225,6 +230,7 @@ public class StockMarketModBackend implements StockMarketAPI {
             MultiServerManager.stop();
             MultiServerManager.cleanup();
         }
+        SERVER_INSTANCES = null;
     }
 
 

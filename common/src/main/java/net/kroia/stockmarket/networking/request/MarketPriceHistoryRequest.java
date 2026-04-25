@@ -2,6 +2,7 @@ package net.kroia.stockmarket.networking.request;
 
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.client_server.streaming.GenericStream;
+import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.data.filter.DateFilter;
 import net.kroia.stockmarket.data.filter.EqualityFilter;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
@@ -57,7 +58,22 @@ public class MarketPriceHistoryRequest extends StockMarketGenericRequest<MarketP
             {
                 warn("MarketPriceHistoryRequest failed to fetch data for item: " + input.item);
             }
+            else {
+
+                IServerMarket market = getServerMarketManager().getMarket(input.item);
+                if (market != null) {
+                    MarketPriceStruct currentCandleData = market.getCurrentMarketPriceStruct();
+                    if(input.maxTimestamp >= currentCandleData.time()) {
+                        data.startNewCandle(System.currentTimeMillis());
+                        data.setCurrentMarketPrice(currentCandleData.high());
+                        data.setCurrentMarketPrice(currentCandleData.low());
+                        data.setCurrentMarketPrice(market.getCurrentMarketPrice());
+                    }
+                }
+            }
+
             future.complete(data);
+
         });
         return future;
     }

@@ -176,30 +176,59 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
 
 
     @Override
-    public long getVolume(long price)
+    public long getRawVolume(long price)
     {
-        return orderbook.getVolumeRounded(price);
+        return orderbook.getRawVolumeRounded(price);
     }
     @Override
-    public CompletableFuture<Long> getVolumeAsync(long price) {
-        return CompletableFuture.completedFuture(getVolume(price));
+    public CompletableFuture<Long> getRawVolumeAsync(long price) {
+        return CompletableFuture.completedFuture(getRawVolume(price));
     }
 
 
 
     @Override
-    public float getVolume(long startPrice, long endPrice)
+    public long getRawVolume(long startPrice, long endPrice)
     {
-        return orderbook.getVolume(startPrice, endPrice);
+        return orderbook.getRawVolume(startPrice, endPrice);
     }
 
     @Override
-    public CompletableFuture<Float> getVolumeAsync(long startPrice, long endPrice)
+    public CompletableFuture<Long> getRawVolumeAsync(long startPrice, long endPrice)
     {
-        return CompletableFuture.completedFuture(getVolume(startPrice, endPrice));
+        return CompletableFuture.completedFuture(getRawVolume(startPrice, endPrice));
     }
 
 
+
+
+
+    @Override
+    public float getRealVolume(double price)
+    {
+        return orderbook.getRealVolumeRounded(price);
+    }
+    @Override
+    public CompletableFuture<Float> getRealVolumeAsync(double price)
+    {
+        return CompletableFuture.completedFuture(getRealVolume(price));
+    }
+
+
+
+
+
+
+    @Override
+    public float getRealVolume(double startPrice, double endPrice)
+    {
+        return orderbook.getRealVolume(startPrice, endPrice);
+    }
+    @Override
+    public CompletableFuture<Float> getRealVolumeAsync(double startPrice, double endPrice)
+    {
+        return CompletableFuture.completedFuture(getRealVolume(startPrice, endPrice));
+    }
 
 
 
@@ -250,7 +279,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     {
         return sellLimitOrders_inputBuffer;
     }
-    public List<Order> getIncommingOrders()
+    public List<Order> getIncomingOrders()
     {
         List<Order> list = new ArrayList<>();
         list.addAll(buyMarketOrders_inputBuffer);
@@ -432,6 +461,10 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     }
 
 
+    /**
+     * Input: Long: raw price level (backend price)
+     * @return Float: raw volume (backend volume)
+     */
     private float defaultVolumeProvider(long price)
     {
         if(defaultVolumeProviderFunction != null)

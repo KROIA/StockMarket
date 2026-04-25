@@ -82,8 +82,8 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin {
         float[] newVolume = new float[(int)(editableRange.getB() - editableRange.getA()+1)];
         for(long i=editableRange.getA(); i<=editableRange.getB(); i++)
         {
-            float targetAmount = orderBook.getDefaultVolume(market.market.convertBackendPriceToRealPrice(i));
-            float currentVal = orderBook.getVirtualVolume(i);
+            float targetAmount = orderBook.getDefaultRawVolume(market.market.convertBackendPriceToRealPrice(i));
+            float currentVal = orderBook.getRawVirtualVolume(i);
             if(currentVal < 0 && targetAmount > 0 || currentVal > 0 && targetAmount < 0)
             {
                 currentVal = 0;
@@ -110,7 +110,7 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin {
             }
             newVolume[(int)(i - editableRange.getA())] = currentVal + deltaAmount;
         }
-        orderBook.setVolume(editableRange.getA(), newVolume);
+        orderBook.setRawVolume(editableRange.getA(), newVolume);
     }
 
     @Override

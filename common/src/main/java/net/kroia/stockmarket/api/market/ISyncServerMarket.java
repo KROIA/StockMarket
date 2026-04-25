@@ -23,8 +23,10 @@ public interface ISyncServerMarket {
     long getDefaultPrice();
     long getCurrentMarketPrice();
     long getCurrentTime();
-    long getVolume(long price);
-    float getVolume(long startPrice, long endPrice);
+    long getRawVolume(long price);
+    long getRawVolume(long startPrice, long endPrice);
+    float getRealVolume(double price);
+    float getRealVolume(double startPrice, double endPrice);
 
     boolean putOrder(Order order);
     boolean putOrder(InterMarketOrder order);

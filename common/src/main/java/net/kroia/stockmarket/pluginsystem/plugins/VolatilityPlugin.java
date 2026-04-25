@@ -4,7 +4,6 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.TimerMillis;
 import net.kroia.stockmarket.pluginsystem.plugin.ServerPlugin;
 import net.kroia.stockmarket.pluginsystem.interaction.MarketInterface;
-import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
 import net.kroia.stockmarket.util.NormalizedRandomPriceGenerator;
 import net.minecraft.nbt.CompoundTag;
 
@@ -43,7 +42,7 @@ public class VolatilityPlugin extends ServerPlugin {
         for(MarketInterface marketInterfaces : markets)
         {
             double defaultPrice = marketInterfaces.market.getDefaultRealPrice();
-            float randomWalkValue = (float)(priceGenerator.getCurrentValue() * 0.1f * defaultPrice);
+            float randomWalkValue = (float)(priceGenerator.getCurrentValue() * 1.0f * defaultPrice);
             marketInterfaces.market.setTargetPrice(Math.max(0, randomWalkValue + defaultPrice));
         }
     }

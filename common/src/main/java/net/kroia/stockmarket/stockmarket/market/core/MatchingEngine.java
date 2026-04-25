@@ -486,7 +486,7 @@ public class MatchingEngine
         long timeout = TIMEOUT_COUNT;
         while (orderVolume < 0 && nextExecutedPrice >= stopPrice)
         {
-            long virtualVol = orderbook.getVirtualVolumeRounded(nextExecutedPrice);
+            long virtualVol = orderbook.getRawVirtualVolumeRounded(nextExecutedPrice);
             if (virtualVol > 0)
             {
                 long filled = orderbook.fillVirtual(nextExecutedPrice, orderVolume);
@@ -540,7 +540,7 @@ public class MatchingEngine
         long timeout = TIMEOUT_COUNT;
         while (orderVolume > 0 && nextExecutedPrice <= stopPrice)
         {
-            long virtualVol = orderbook.getVirtualVolumeRounded(nextExecutedPrice);
+            long virtualVol = orderbook.getRawVirtualVolumeRounded(nextExecutedPrice);
             if (virtualVol < 0)
             {
                 // Also cap to what the buyer can afford at this price level

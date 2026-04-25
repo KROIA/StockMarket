@@ -135,7 +135,7 @@ public class DataManager extends DataPersistence {
         }
         if(!pluginManager.save(dataListMap))
         {
-            error("savePluginManager(): Failed to save PluginManager! Can't save Markets to NBT data");
+            error("savePluginManager(): Failed to save PluginManager! Can't save Plugins to NBT data");
             return false;
         }
         Path absPath = getAbsoluteSavePath(PLUGIN_MANAGER_FOLDER);

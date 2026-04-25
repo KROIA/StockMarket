@@ -45,6 +45,8 @@ public class OrderbookVolumeRequest extends StockMarketGenericRequest<OrderbookV
     }
 
     public CompletableFuture<OutputData> handleOnMasterServer(InputData input, String slaveID, @Nullable UUID playerSender) {
+        final int maxChunkCount = 1000;
+
         IServerMarket market = getServerMarketManager().getMarket(input.marketID);
         if(market == null || input.chunkCount <= 0)
         {
@@ -61,7 +63,7 @@ public class OrderbookVolumeRequest extends StockMarketGenericRequest<OrderbookV
             endPrice = tmp;
         }
 
-        int chunkCount = Math.min(input.chunkCount, 1000);
+        int chunkCount = Math.min(input.chunkCount, maxChunkCount);
         long priceRange = endPrice - startPrice;
         if(chunkCount > priceRange)
             chunkCount = (int)priceRange;
@@ -74,12 +76,22 @@ public class OrderbookVolumeRequest extends StockMarketGenericRequest<OrderbookV
         // Check if the price range can be split into the chunks, otherwise adjust add some
         // data points by increasing the end price
         long modC = priceRange % chunkCount;
-        if(modC != 0)
-            endPrice += modC;
+        long chunkSize = Math.max(1, priceRange / chunkCount);
+        if(modC != 0) {
+            if(priceRange / chunkSize > maxChunkCount)
+            {
+                chunkSize++;
+            }
+            else
+            {
+                chunkCount = (int)(priceRange / chunkSize);
+            }
+            endPrice = startPrice + chunkSize * chunkCount;
+        }
         priceRange = endPrice - startPrice;
 
         float[] array = new float[chunkCount];
-        long chunkSize = priceRange / chunkCount;
+
         int arrayIndex = 0;
         long p1 = startPrice;
         //for(long price = startPrice; price < endPrice; price+=chunkSize)
@@ -87,9 +99,10 @@ public class OrderbookVolumeRequest extends StockMarketGenericRequest<OrderbookV
         {
 
             long p2 = p1 + chunkSize-1;
-            array[i] = market.getVolume(p1, p2);
+            array[i] = market.getRawVolume(p1, p2);
             p1 = p2+1;
         }
+        endPrice = startPrice + chunkSize * chunkCount;
 
         double realStartPrice = backendToRealValue(startPrice);
         double realEndPrice = backendToRealValue(endPrice);

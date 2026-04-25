@@ -1,13 +1,11 @@
 package net.kroia.stockmarket.stockmarket.market.core;
 
-import net.kroia.banksystem.banking.bankmanager.BankManager;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.persistence.ServerSaveable;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
-import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.util.Tuple;
@@ -124,9 +122,9 @@ public class Orderbook implements ServerSaveable
 
 
 
-    public float getVolume(long price)
+    public long getRawVolume(long price)
     {
-        float volume = virtualOrderbook.getVolume(price);
+        long volume = (long)virtualOrderbook.getVolume(price);
 
         if(currentMarketPrice > price) {
             // The searched price is inside the buy order since the stockmarket price is higher than the searched price
@@ -171,7 +169,7 @@ public class Orderbook implements ServerSaveable
         }
         return volume;
     }
-    public long getVolumeRounded(long price)
+    public long getRawVolumeRounded(long price)
     {
         long volume = virtualOrderbook.roundConservative(virtualOrderbook.getVolume(price));
         if(currentMarketPrice > price) {
@@ -217,18 +215,23 @@ public class Orderbook implements ServerSaveable
         }
         return volume;
     }
-
-    public float getVirtualVolume(long price)
+    public float getRealVolumeRounded(double realPrice)
     {
-        return virtualOrderbook.getVolume(price);
-    }
-    public long getVirtualVolumeRounded(long price)
-    {
-        return virtualOrderbook.roundConservative(getVirtualVolume(price));
+        long rawPrice = MarketManager.convertToRawAmountStatic(realPrice);
+        return (float)MarketManager.convertToRealAmountStatic(getRawVolumeRounded(rawPrice));
     }
 
+    public float getRawVirtualVolume(long rawPrice)
+    {
+        return virtualOrderbook.getVolume(rawPrice);
+    }
+    public long getRawVirtualVolumeRounded(long rawPrice)
+    {
+        return virtualOrderbook.roundConservative(getRawVirtualVolume(rawPrice));
+    }
 
-    public float getVolume(long startPrice, long endPrice)
+
+    public long getRawVolume(long startPrice, long endPrice)
     {
         float volume = virtualOrderbook.getVolume(startPrice, endPrice); // = virtualOrderbook.getVolume(price);
         for(Order order : buyLimitOrders)
@@ -247,9 +250,15 @@ public class Orderbook implements ServerSaveable
             if(orderPrice >= startPrice)
                 volume += order.getRemainingVolume();
         }
-        return volume;
+        return (long)volume;
     }
-    public float getVolumeRounded(long startPrice, long endPrice)
+    public float getRealVolume(double realStartPrice, double realEndPrice)
+    {
+        long rawStartPrice = MarketManager.convertToRawAmountStatic(realStartPrice);
+        long rawEndPrice = MarketManager.convertToRawAmountStatic(realEndPrice);
+        return (float)MarketManager.convertToRealAmountStatic(getRawVolume(rawStartPrice, rawEndPrice));
+    }
+    public long getRawVolumeRounded(long startPrice, long endPrice)
     {
         long volume = virtualOrderbook.getVolumeRounded(startPrice, endPrice); // = virtualOrderbook.getVolume(price);
         for(Order order : buyLimitOrders)
@@ -270,8 +279,14 @@ public class Orderbook implements ServerSaveable
         }
         return volume;
     }
+    public float getRealVolumeRounded(double realStartPrice, double realEndPrice)
+    {
+        long rawStartPrice = MarketManager.convertToRawAmountStatic(realStartPrice);
+        long rawEndPrice = MarketManager.convertToRawAmountStatic(realEndPrice);
+        return (float)MarketManager.convertToRealAmountStatic(getRawVolumeRounded(rawStartPrice, rawEndPrice));
+    }
 
-    public @NotNull Tuple<@NotNull Double,@NotNull  Double> getEditablePriceRange()
+    public @NotNull Tuple<@NotNull Double,@NotNull  Double> getEditableRealPriceRange()
     {
         if(virtualOrderbook != null)
         {
@@ -284,7 +299,7 @@ public class Orderbook implements ServerSaveable
         }
         return new Tuple<>(0.0, 0.0);
     }
-    public @NotNull Tuple<@NotNull Long,@NotNull  Long> getEditableBackendPriceRange()
+    public @NotNull Tuple<@NotNull Long,@NotNull  Long> getEditableRawPriceRange()
     {
         if(virtualOrderbook != null)
         {
@@ -336,14 +351,14 @@ public class Orderbook implements ServerSaveable
      * @param price
      * @return money
      */
-    public float getCapital(long price)
+    public float getRawCapital(long price)
     {
-        float volume = getVolume(price);
+        float volume = getRawVolume(price);
         return volume * price;
     }
-    public long getCapitalRounded(long price)
+    public long getRawCapitalRounded(long price)
     {
-        long volume = virtualOrderbook.roundConservative(getVolume(price));
+        long volume = virtualOrderbook.roundConservative(getRawVolume(price));
         return volume * price;
     }
 
@@ -423,7 +438,7 @@ public class Orderbook implements ServerSaveable
             // We only want sell order
             // Flipping the orderbook volume to be positive for easy comparison with the function
             // provided volume variable
-            long currentVolume = Math.max(0, -getVolumeRounded(newMarketPrice));
+            long currentVolume = Math.max(0, -getRawVolumeRounded(newMarketPrice));
             do
             {
                 if(currentVolume >= volume)
@@ -442,7 +457,7 @@ public class Orderbook implements ServerSaveable
                     newMarketPrice++;
                 }
                 timeoutCount--;
-                currentVolume = -getVolumeRounded(newMarketPrice);
+                currentVolume = -getRawVolumeRounded(newMarketPrice);
             }while(timeoutCount > 0);
         }
         else
@@ -450,7 +465,7 @@ public class Orderbook implements ServerSaveable
             // Consuming the buy order -> moving price down
             // Flipping the orderbook volume to be negatice for easy comparison with the function
             // provided volume variable
-            long currentVolume = Math.min(0, -getVolumeRounded(newMarketPrice));
+            long currentVolume = Math.min(0, -getRawVolumeRounded(newMarketPrice));
             do
             {
                 if(currentVolume <= volume)
@@ -469,7 +484,7 @@ public class Orderbook implements ServerSaveable
                     newMarketPrice--;
                 }
                 timeoutCount--;
-                currentVolume = -getVolumeRounded(newMarketPrice);
+                currentVolume = -getRawVolumeRounded(newMarketPrice);
             }while(timeoutCount > 0);
         }
 

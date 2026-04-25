@@ -31,6 +31,11 @@ public class VirtualOrderbook implements ServerSaveable
         dynamicArray = new DynamicIndexedArray(defaultSize, this::getDefaultVolume);
     }
 
+    /**
+     * Input: Long: raw price level (backend price)
+     * Output: Float: raw volume (backend volume)
+     * @param volumeProvider
+     */
     public void setDefaultVolumeProvider(@Nullable Function<Long, Float> volumeProvider)
     {
         defaultVolumeProvider = volumeProvider;
@@ -40,6 +45,16 @@ public class VirtualOrderbook implements ServerSaveable
     public void setCurrentMarketPrice(long currentMarketPrice)
     {
         this.currentMarketPrice = currentMarketPrice;
+        long currentIndexOffset = dynamicArray.getIndexOffset();
+        int sizeForth = dynamicArray.getSize()/4;
+        if(currentMarketPrice > currentIndexOffset + sizeForth*3)
+        {
+            dynamicArray.setOffset(currentMarketPrice-dynamicArray.getSize()/2);
+        }
+        else if(currentMarketPrice < currentIndexOffset + sizeForth)
+        {
+            dynamicArray.setOffset(currentMarketPrice-dynamicArray.getSize()/2);
+        }
     }
 
     /**
@@ -219,7 +234,7 @@ public class VirtualOrderbook implements ServerSaveable
 
 
     /**
-     * Gets the default volume at a given price
+     * Gets the default raw volume at a given price
      * @apiNote
      * @param price on which the volume needs to be calculatet at
      * @return positive volume vor buy order, negative volume for sell order

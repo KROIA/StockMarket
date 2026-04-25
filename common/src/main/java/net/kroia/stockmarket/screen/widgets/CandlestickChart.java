@@ -568,7 +568,7 @@ public class CandlestickChart extends StockMarketGuiElement
             {
                 rawWithScrollValue = Math.max(Math.min(rawWithScrollValue, minScrollValue), 5.0f);
                 chartviewRect.width = (int)rawWithScrollValue;
-                chartviewRect.x = chartviewRect.width;
+                //chartviewRect.x = chartviewRect.width;
             }
 
 
@@ -710,6 +710,8 @@ public class CandlestickChart extends StockMarketGuiElement
             {
                 chartviewRect.width = lastIndex;
             }
+            if(chartviewRect.width < 1)
+                chartviewRect.width = 1;
             rawWithScrollValue = chartviewRect.width;
             chartviewRect.x = chartviewRect.width; // Move to the newest candle
         }

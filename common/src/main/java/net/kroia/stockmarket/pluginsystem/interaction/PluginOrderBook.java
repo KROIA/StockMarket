@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.pluginsystem.interaction;
 
+import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.plugin.interaction.IPluginOrderBook;
 import net.kroia.stockmarket.api.plugin.interaction.IVolumeDistributionCalculator;
 import net.kroia.stockmarket.pluginsystem.plugin.core.cache.MarketCache;
@@ -16,6 +17,13 @@ import java.util.List;
 
 public class PluginOrderBook implements IPluginOrderBook
 {
+    private static StockMarketModBackend.ServerInstances BACKEND_INSTANCES;
+    public static void setBackend(StockMarketModBackend.ServerInstances backend) {
+        BACKEND_INSTANCES = backend;
+    }
+
+
+
     private final ServerMarket serverMarket;
     private final Orderbook orderbook;
     private final MarketCache cache;
@@ -28,7 +36,7 @@ public class PluginOrderBook implements IPluginOrderBook
     {
         this.serverMarket = serverMarket;
         this.orderbook = serverMarket.getOrderbook();
-        serverMarket.test_setDefaultVolumeProviderFunction(this::getDefaultVolume);
+        serverMarket.test_setDefaultVolumeProviderFunction(this::getDefaultRawVolume);
         this.cache = cache;
     }
 
@@ -44,59 +52,72 @@ public class PluginOrderBook implements IPluginOrderBook
 
     @Override
     public @NotNull List<Order> getNewOrders() {
-        return serverMarket.getIncommingOrders();
+        return serverMarket.getIncomingOrders();
     }
 
     @Override
-    public float getVolume(double minPrice, double maxPrice) {
+    public float getRealVolume(double minPrice, double maxPrice) {
         if(minPrice > maxPrice)
         {
             double tmp = minPrice;
             minPrice = maxPrice;
             maxPrice = tmp;
         }
-        return orderbook.getVolume(MarketManager.convertToRawAmountStatic(minPrice),
-                                   MarketManager.convertToRawAmountStatic(maxPrice));
+        return orderbook.getRealVolume(minPrice, maxPrice);
     }
 
     @Override
-    public float getVolume(long backendPrice) {
-        return orderbook.getVolume(backendPrice);
+    public float getRealVolume(long backendPrice) {
+        return (float)MarketManager.convertToRealAmountStatic(orderbook.getRawVolume(backendPrice));
     }
 
     @Override
-    public float getVirtualVolume(long backendPrice)
+    public float getRealVirtualVolume(long backendPrice)
     {
-        return orderbook.getVirtualVolume(backendPrice);
+        float rawVirtualValue = orderbook.getRawVirtualVolume(backendPrice);
+        int scaleFactor = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync().getItemFractionScaleFactor();
+        return rawVirtualValue/scaleFactor;
+    }
+
+    @Override
+    public long getRawVolume(long backendPrice)
+    {
+        return orderbook.getRawVolume(backendPrice);
+    }
+
+    @Override
+    public float getRawVirtualVolume(long backendPrice)
+    {
+        return orderbook.getRawVirtualVolume(backendPrice);
     }
 
     @Override
     public @NotNull Tuple<@NotNull Double, @NotNull Double> getEditablePriceRange() {
-        return orderbook.getEditablePriceRange();
+        return orderbook.getEditableRealPriceRange();
     }
 
     @Override
     public @NotNull Tuple<@NotNull Long, @NotNull Long> getEditableBackendPriceRange() {
-        return orderbook.getEditableBackendPriceRange();
+        return orderbook.getEditableRawPriceRange();
     }
 
     @Override
-    public void setVolume(double minPrice, double maxPrice, float volume) {
+    public void setRawVolume(double minPrice, double maxPrice, float volume) {
         cache.addManipulation(minPrice, maxPrice, volume, VirtualOrderBookCache.ManipulationOperator.SET);
     }
 
     @Override
-    public void setVolume(long backendStartPrice, float[] volume) {
+    public void setRawVolume(long backendStartPrice, float[] volume) {
         cache.addManipulation(backendStartPrice, volume, VirtualOrderBookCache.ManipulationOperator.SET);
     }
 
     @Override
-    public void addVolume(double minPrice, double maxPrice, float volume) {
+    public void addRawVolume(double minPrice, double maxPrice, float volume) {
         cache.addManipulation(minPrice, maxPrice, volume, VirtualOrderBookCache.ManipulationOperator.ADD);
     }
 
     @Override
-    public void addVolume(long backendStartPrice, float[] volume) {
+    public void addRawVolume(long backendStartPrice, float[] volume) {
         cache.addManipulation(backendStartPrice, volume, VirtualOrderBookCache.ManipulationOperator.ADD);
     }
 
@@ -110,8 +131,12 @@ public class PluginOrderBook implements IPluginOrderBook
         volumeDistributionCalculators.remove(distributionCalculator);
     }
 
+    /**
+     * @param pickPrice the real value price at which the volume gets measured
+     * @return the raw volume at the given price
+     */
     @Override
-    public float getDefaultVolume(double pickPrice)
+    public float getDefaultRawVolume(double pickPrice)
     {
         float volume = 0;
         float currentMarketPrice = (float)MarketManager.convertToRealAmountStatic(serverMarket.getCurrentMarketPrice());
@@ -119,8 +144,10 @@ public class PluginOrderBook implements IPluginOrderBook
         {
             volume += Math.abs(distributionCalculator.getVolume(currentMarketPrice, pickPrice));
         }
+        int scaleFactor = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync().getItemFractionScaleFactor();
+        float rawVolume = scaleFactor * volume;
         if(currentMarketPrice > pickPrice)
-            return volume;
-        return -volume;
+            return rawVolume;
+        return -rawVolume;
     }
 }

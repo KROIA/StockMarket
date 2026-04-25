@@ -6,6 +6,7 @@ import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.api.pluginmanager.IServerPluginManager;
 import net.kroia.stockmarket.pluginsystem.Plugins;
+import net.kroia.stockmarket.pluginsystem.interaction.PluginOrderBook;
 import net.kroia.stockmarket.pluginsystem.plugin.ServerPlugin;
 import net.kroia.stockmarket.pluginsystem.plugin.core.cache.MarketCache;
 import net.kroia.stockmarket.pluginsystem.registry.PluginRegistry;
@@ -28,6 +29,7 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
     public static void setBackend(StockMarketModBackend.ServerInstances backend) {
         BACKEND_INSTANCES = backend;
         ServerPlugin.setBackend(backend);
+        PluginOrderBook.setBackend(backend);
     }
 
     private boolean loggerEnabled = false;
@@ -164,7 +166,7 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
         }
         plugin.setManager(this);
         plugins.put(plugin.getInstanceID(), plugin);
-        plugin.init();
+        plugin.init_internal();
     }
 
     public void removePlugin(@NotNull ServerPlugin plugin)
@@ -179,7 +181,7 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
             return;
         }
         plugin.setEnabled(false);
-        plugin.deInit();
+        plugin.deInit_internal();
         plugins.remove(plugin.getInstanceID());
         plugin.setManager(null);
     }

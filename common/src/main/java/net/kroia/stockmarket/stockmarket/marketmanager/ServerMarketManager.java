@@ -230,28 +230,34 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
             return false;
         }
 
+        Map<ItemID, ServerMarket> newMarkets = new HashMap<>();
+
         for (int i = 0; i < marketListTag.size(); i++)
         {
             CompoundTag marketTag = marketListTag.getCompound(i);
             ItemID id = ItemID.createFromTag(marketTag);
             if(id.isValid())
             {
-                ServerMarket market = markets.get(id);
+                /*ServerMarket market = markets.get(id);
                 if(market != null)
                     success = false;
                 else
+                {*/
+                ServerMarket market = new ServerMarket(id);
+                if(market.load(marketTag))
                 {
-                    market = new ServerMarket(id);
-                    if(market.load(marketTag))
-                    {
-                        markets.put(id, market);
-                    }
-                    else
-                        success = false;
+                    newMarkets.put(id, market);
                 }
+                else
+                    success = false;
+                //}
             }
             else
                 success = false;
+        }
+        if(success) {
+            markets.clear();
+            markets.putAll(newMarkets);
         }
         return success;
     }

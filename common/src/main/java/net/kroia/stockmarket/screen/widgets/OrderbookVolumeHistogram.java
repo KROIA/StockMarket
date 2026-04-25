@@ -51,10 +51,10 @@ public class OrderbookVolumeHistogram extends StockMarketGuiElement {
             double startPrice = parentChart.getMinVisiblePrice();
             double endPrice = parentChart.getMaxVisiblePrice();
             market.requestOrderbookVolume(startPrice, endPrice, 50).thenAccept(response -> {
-                //this.startPrice = response.startPrice();
-                //this.endPrice = response.endPrice();
-                this.startPrice = startPrice;
-                this.endPrice = endPrice;
+                this.startPrice = response.startPrice();
+                this.endPrice = response.endPrice();
+                //this.startPrice = startPrice;
+                //this.endPrice = endPrice;
                 this.volumeChunks = response.volumes();
             });
         }
@@ -77,7 +77,10 @@ public class OrderbookVolumeHistogram extends StockMarketGuiElement {
         int chunkCount = volumeChunks.length;
         if(chunkCount == 0)
             return;
-        double priceDelta = (endPrice - startPrice) / (double)(chunkCount+1);
+
+        //double startPrice = parentChart.getMinVisiblePrice();
+        //double endPrice = parentChart.getMaxVisiblePrice();
+        double priceDelta = (endPrice - startPrice) / (double)(chunkCount);
 
 
         float maxAbsValue = 0;
@@ -97,13 +100,14 @@ public class OrderbookVolumeHistogram extends StockMarketGuiElement {
 
         enableScissor(scissorRect);
 
-        int currentY = parentChart.toCanvasSpaceY(startPrice + priceDelta*0);
+        int currentY = parentChart.toCanvasSpaceY(startPrice);
         for(int i = 0; i < chunkCount; i++)
         {
             float volume = volumeChunks[i];
             float absVolume = Math.abs(volume);
             int chunkWidth = (int)(absVolume * widthF * norm);
-            int endY = parentChart.toCanvasSpaceY(startPrice + priceDelta*(i+1));
+            double price = startPrice + priceDelta*(i+1);
+            int endY = parentChart.toCanvasSpaceY(price);
 
             drawRect(scissorRect.x + width - chunkWidth, currentY, chunkWidth, endY-currentY, (volume>0?greenColor:redColor));
 
