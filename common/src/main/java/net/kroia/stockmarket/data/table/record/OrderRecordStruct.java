@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.UUID;
 
-public record OrderRecordStruct(short itemID, int bankaccountID, UUID user, int type, long amount, long price, long time) {
+public record OrderRecordStruct(/*long orderID, */short itemID, int bankaccountID, UUID user, int type, long amount, long price, long time) {
 
     private static final Random RANDOM = new Random();
 
@@ -19,7 +19,7 @@ public record OrderRecordStruct(short itemID, int bankaccountID, UUID user, int 
         ArrayList<OrderRecordStruct> list = new ArrayList<>();
         for(int i=0;i<num;i++){
             int idx = i*3;
-            list.add(new OrderRecordStruct((short) ints[idx], bankaccountID, uuid,0, ints[idx+1], ints[idx+2], time));
+            list.add(new OrderRecordStruct(/*System.currentTimeMillis(),*/ (short) ints[idx], bankaccountID, uuid,0, ints[idx+1], ints[idx+2], time));
         }
 
         return list;

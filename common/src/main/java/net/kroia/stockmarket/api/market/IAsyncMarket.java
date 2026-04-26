@@ -11,10 +11,13 @@ import java.util.concurrent.CompletableFuture;
 public interface IAsyncMarket {
 
     ItemID getItemIDAsync();
+    CompletableFuture<Long> getDefaultPriceAsync();
     CompletableFuture<Long> getCurrentMarketPriceAsync();
     CompletableFuture<Long> getCurrentTimeAsync();
-    CompletableFuture<Long> getVolumeAsync(long price);
-    CompletableFuture<Float> getVolumeAsync(long startPrice, long endPrice);
+    CompletableFuture<Long> getRawVolumeAsync(long price);
+    CompletableFuture<Long> getRawVolumeAsync(long startPrice, long endPrice);
+    CompletableFuture<Float> getRealVolumeAsync(double price);
+    CompletableFuture<Float> getRealVolumeAsync(double startPrice, double endPrice);
 
     CompletableFuture<Boolean> putOrderAsync(Order order);
     CompletableFuture<Boolean> putOrderAsync(InterMarketOrder order);

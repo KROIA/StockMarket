@@ -63,10 +63,13 @@ public class AsyncMarket implements IAsyncMarket{
     public enum FunctionType
     {
         //GetItemID,
+        GetDefaultPrice,
         GetCurrentMarketPrice,
         GetCurrentTime,
-        GetVolume_1,
-        GetVolume_2,
+        GetRawVolume_1,
+        GetRawVolume_2,
+        GetRealVolume_1,
+        GetRealVolume_2,
         PutOrder_1,
         PutOrder_2,
         GetLimitOrders,
@@ -89,10 +92,13 @@ public class AsyncMarket implements IAsyncMarket{
     }
     public static final Map<FunctionType, AsyncFunctionDataCodecs> codecs = new HashMap<>(){{
         //put(FunctionType.GetItemID,                             codecPacket(null, ItemID.STREAM_CODEC));
+        put(FunctionType.GetDefaultPrice,                       codecPacket(null, ByteBufCodecs.VAR_LONG.cast()));
         put(FunctionType.GetCurrentMarketPrice,                 codecPacket(null, ByteBufCodecs.VAR_LONG.cast()));
         put(FunctionType.GetCurrentTime,                        codecPacket(null, ByteBufCodecs.VAR_LONG.cast()));
-        put(FunctionType.GetVolume_1,                           codecPacket(ByteBufCodecs.VAR_LONG.cast(), ByteBufCodecs.VAR_LONG.cast()));
-        put(FunctionType.GetVolume_2,                           codecPacket(ParamGroup_long_long.STREAM_CODEC.cast(), ByteBufCodecs.FLOAT.cast()));
+        put(FunctionType.GetRawVolume_1,                           codecPacket(ByteBufCodecs.VAR_LONG.cast(), ByteBufCodecs.VAR_LONG.cast()));
+        put(FunctionType.GetRawVolume_2,                           codecPacket(ParamGroup_long_long.STREAM_CODEC.cast(), ByteBufCodecs.VAR_LONG.cast()));
+        put(FunctionType.GetRealVolume_1,                           codecPacket(ByteBufCodecs.DOUBLE.cast(), ByteBufCodecs.FLOAT.cast()));
+        put(FunctionType.GetRealVolume_2,                           codecPacket(ParamGroup_double_double.STREAM_CODEC.cast(), ByteBufCodecs.FLOAT.cast()));
         put(FunctionType.PutOrder_1,                            codecPacket(Order.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
         put(FunctionType.PutOrder_2,                            codecPacket(InterMarketOrder.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
         put(FunctionType.GetLimitOrders,                        codecPacket(null, ExtraCodecUtils.listStreamCodec(Order.STREAM_CODEC)));
@@ -209,12 +215,18 @@ public class AsyncMarket implements IAsyncMarket{
 
             return CompletableFuture.completedFuture(switch (input.function) {
                 //case FunctionType.GetItemID ->                            OutputData.of(input.function, market.getItemID());
+                case FunctionType.GetDefaultPrice ->                      OutputData.of(input.function, market.getDefaultPrice());
                 case FunctionType.GetCurrentMarketPrice ->                OutputData.of(input.function, market.getCurrentMarketPrice());
                 case FunctionType.GetCurrentTime ->                       OutputData.of(input.function, market.getCurrentTime());
-                case FunctionType.GetVolume_1 ->                          OutputData.of(input.function, market.getVolume((Long)inputData.extra));
-                case FunctionType.GetVolume_2 ->                          {
+                case FunctionType.GetRawVolume_1 ->                          OutputData.of(input.function, market.getRawVolume((Long)inputData.extra));
+                case FunctionType.GetRawVolume_2 ->                          {
                     ParamGroup_long_long params = (ParamGroup_long_long)inputData.extra;
-                    yield OutputData.of(input.function, market.getVolume(params.longValue1, params.longValue2));
+                    yield OutputData.of(input.function, market.getRawVolume(params.longValue1, params.longValue2));
+                }
+                case FunctionType.GetRealVolume_1 ->                          OutputData.of(input.function, market.getRealVolume((Long)inputData.extra));
+                case FunctionType.GetRealVolume_2 ->                          {
+                    ParamGroup_double_double params = (ParamGroup_double_double)inputData.extra;
+                    yield OutputData.of(input.function, market.getRealVolume(params.value1, params.value2));
                 }
                 case FunctionType.PutOrder_1 ->                           OutputData.of(input.function, market.putOrder((Order)inputData.extra));
                 case FunctionType.PutOrder_2 ->                           OutputData.of(input.function, market.putOrder((InterMarketOrder)inputData.extra));
@@ -232,8 +244,10 @@ public class AsyncMarket implements IAsyncMarket{
                 case //FunctionType.GetItemID,
                      FunctionType.GetCurrentMarketPrice,
                      FunctionType.GetCurrentTime,
-                     FunctionType.GetVolume_1,
-                     FunctionType.GetVolume_2,
+                     FunctionType.GetRawVolume_1,
+                     FunctionType.GetRawVolume_2,
+                     FunctionType.GetRealVolume_1,
+                     FunctionType.GetRealVolume_2,
                      //FunctionType.PutOrder_1,
                      //FunctionType.PutOrder_2,
                      //FunctionType.GetLimitOrders,
@@ -331,6 +345,14 @@ public class AsyncMarket implements IAsyncMarket{
                 ParamGroup_long_long::new
         );
     }
+    private record ParamGroup_double_double(double value1, double value2)
+    {
+        public static final StreamCodec<RegistryFriendlyByteBuf, ParamGroup_double_double> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.DOUBLE, p -> p.value1,
+                ByteBufCodecs.DOUBLE, p -> p.value2,
+                ParamGroup_double_double::new
+        );
+    }
 
    /* private record ParamGroup_UUID_int(UUID uuid, int integer)
     {
@@ -356,6 +378,17 @@ public class AsyncMarket implements IAsyncMarket{
     }
 
     @Override
+    public CompletableFuture<Long> getDefaultPriceAsync() {
+        if(!MultiServerUtils.canInteractWithStockMarket())
+            return CompletableFuture.completedFuture(0L);
+        CompletableFuture<Long> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.GetDefaultPrice, itemID);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
+    }
+
+    @Override
     public CompletableFuture<Long> getCurrentMarketPriceAsync() {
         if(!MultiServerUtils.canInteractWithStockMarket())
             return CompletableFuture.completedFuture(0L);
@@ -378,23 +411,48 @@ public class AsyncMarket implements IAsyncMarket{
     }
 
     @Override
-    public CompletableFuture<Long> getVolumeAsync(long price) {
+    public CompletableFuture<Long> getRawVolumeAsync(long price) {
         if(!MultiServerUtils.canInteractWithStockMarket())
             return CompletableFuture.completedFuture(0L);
         CompletableFuture<Long> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.GetVolume_1, itemID, price);
+        InputData inputData = InputData.of(FunctionType.GetRawVolume_1, itemID, price);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;
     }
 
     @Override
-    public CompletableFuture<Float> getVolumeAsync(long startPrice, long endPrice)
+    public CompletableFuture<Long> getRawVolumeAsync(long startPrice, long endPrice)
+    {
+        if(!MultiServerUtils.canInteractWithStockMarket())
+            return CompletableFuture.completedFuture(0L);
+        CompletableFuture<Long> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.GetRawVolume_2, itemID, new ParamGroup_long_long(startPrice, endPrice));
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
+    }
+
+
+
+    @Override
+    public CompletableFuture<Float> getRealVolumeAsync(double price) {
+        if(!MultiServerUtils.canInteractWithStockMarket())
+            return CompletableFuture.completedFuture(0.0f);
+        CompletableFuture<Float> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.GetRealVolume_1, itemID, price);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
+    }
+
+    @Override
+    public CompletableFuture<Float> getRealVolumeAsync(double startPrice, double endPrice)
     {
         if(!MultiServerUtils.canInteractWithStockMarket())
             return CompletableFuture.completedFuture(0.0f);
         CompletableFuture<Float> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.GetVolume_2, itemID, new ParamGroup_long_long(startPrice, endPrice));
+        InputData inputData = InputData.of(FunctionType.GetRealVolume_2, itemID, new ParamGroup_double_double(startPrice, endPrice));
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;

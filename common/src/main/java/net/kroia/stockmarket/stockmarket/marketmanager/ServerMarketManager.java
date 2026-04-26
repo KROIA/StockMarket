@@ -138,6 +138,11 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
         return CompletableFuture.completedFuture(getMarket(marketID));
     }
 
+    public ServerMarket getServerMarket(ItemID marketID)
+    {
+        return markets.get(marketID);
+    }
+
 
 
 
@@ -170,7 +175,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
         for(ServerMarket m : markets.values())
         {
             // Create random movement for testing
-            tmpValue += Math.sin((double)System.currentTimeMillis()/10000.0);
+            /*tmpValue += Math.sin((double)System.currentTimeMillis()/10000.0);
             long rand = (random.nextLong()%10);
             if(tmpValue > 1) {
                 rand += 1;
@@ -184,7 +189,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
 
             currentPrice = Math.max(0, currentPrice + rand);
             m.test_setCurrentMarketPrice(currentPrice);
-            m.test_resetVirtualOrderBookVolume();
+            m.test_resetVirtualOrderBookVolume();*/
             m.update();
         }
 
@@ -225,28 +230,34 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
             return false;
         }
 
+        Map<ItemID, ServerMarket> newMarkets = new HashMap<>();
+
         for (int i = 0; i < marketListTag.size(); i++)
         {
             CompoundTag marketTag = marketListTag.getCompound(i);
             ItemID id = ItemID.createFromTag(marketTag);
             if(id.isValid())
             {
-                ServerMarket market = markets.get(id);
+                /*ServerMarket market = markets.get(id);
                 if(market != null)
                     success = false;
                 else
+                {*/
+                ServerMarket market = new ServerMarket(id);
+                if(market.load(marketTag))
                 {
-                    market = new ServerMarket(id);
-                    if(market.load(marketTag))
-                    {
-                        markets.put(id, market);
-                    }
-                    else
-                        success = false;
+                    newMarkets.put(id, market);
                 }
+                else
+                    success = false;
+                //}
             }
             else
                 success = false;
+        }
+        if(success) {
+            markets.clear();
+            markets.putAll(newMarkets);
         }
         return success;
     }

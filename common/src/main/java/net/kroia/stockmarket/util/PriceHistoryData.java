@@ -113,10 +113,10 @@ public class PriceHistoryData
         this.candles = candles;
         this.currentMarketPrice = currentMarketPrice;
     }
-    public PriceHistoryData createFromDifferentCandleDeltaTime(long currentServerTime, long candleDeltaTimeMs, boolean createEmptyCandleForTimeGaps)
+    public PriceHistoryData createFromDifferentCandleDeltaTime(long currentServerTime, long candleDeltaTimeMs, long currentMarketPrice, boolean createEmptyCandleForTimeGaps)
     {
         PriceHistoryData newData = new PriceHistoryData(itemID, itemScaleFactor, new ArrayList<>(), 0);
-        newData.loadFrom(this, candleDeltaTimeMs, currentServerTime, createEmptyCandleForTimeGaps);
+        newData.loadFrom(this, candleDeltaTimeMs, currentServerTime, currentMarketPrice, createEmptyCandleForTimeGaps);
         return newData;
     }
 
@@ -150,7 +150,7 @@ public class PriceHistoryData
         candles.addAll(other.candles);
         currentMarketPrice = other.currentMarketPrice;
     }
-    public void loadFrom(PriceHistoryData other, long candleDeltaTimeMs, long currentServerTime, boolean createEmptyCandleForTimeGaps)
+    public void loadFrom(PriceHistoryData other, long candleDeltaTimeMs, long currentServerTime, long currentMarketPrice, boolean createEmptyCandleForTimeGaps)
     {
         candles.clear();
 
@@ -176,22 +176,24 @@ public class PriceHistoryData
                 startTime = nextTime;
                 nextTime += candleDeltaTimeMs;
                 if(createEmptyCandleForTimeGaps) {
-                    while (candle.openTimestamp > nextTime) {
-
-                        long nextMarketPrice = 0;
-                        for(int j=i+1; j<other.candles.size(); j++)
-                        {
+                    if(candle.openTimestamp > nextTime) {
+                        long nextMarketPrice = candle.open;
+                        /*for (int j = i + 1; j < other.candles.size(); j++) {
                             Candle jCandle = other.candles.get(j);
-                            if(jCandle.openTimestamp < nextTime)
-                            {
+                            if (jCandle.openTimestamp < nextTime) {
                                 nextMarketPrice = jCandle.open;
                                 break;
                             }
+                        }*/
+                        while (candle.openTimestamp > nextTime) {
+
+
+
+                            this.currentMarketPrice = nextMarketPrice;
+                            startNewCandle(nextTime);
+                            nextTime += candleDeltaTimeMs;
+                            //nextTime = floorTime(candle.openTimestamp + candleDeltaTimeMs, candleDeltaTimeMs);
                         }
-                        this.currentMarketPrice = nextMarketPrice;
-                        startNewCandle(nextTime);
-                        nextTime += candleDeltaTimeMs;
-                        //nextTime = floorTime(candle.openTimestamp + candleDeltaTimeMs, candleDeltaTimeMs);
                     }
                 }
                 else
@@ -269,6 +271,8 @@ public class PriceHistoryData
 
     public long getMinPrice(int startIndex, int endIndex)
     {
+        if(candles.isEmpty())
+            return 0;
         long min = Integer.MAX_VALUE;
         if(startIndex > endIndex)
         {
@@ -286,6 +290,8 @@ public class PriceHistoryData
     }
     public long getMaxPrice(int startIndex, int endIndex)
     {
+        if(candles.isEmpty())
+            return 0;
         long max = Integer.MIN_VALUE;
         if(startIndex > endIndex)
         {

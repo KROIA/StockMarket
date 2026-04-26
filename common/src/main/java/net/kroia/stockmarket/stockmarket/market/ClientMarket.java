@@ -24,7 +24,6 @@ public class ClientMarket implements IClientMarket
     protected static StockMarketModBackend.ClientInstances BACKEND_INSTANCES;
     public static void setBackend(StockMarketModBackend.ClientInstances backend) {
         BACKEND_INSTANCES = backend;
-        StockMarketGuiElement.setBackend(backend);
     }
 
     private final ItemID itemID;
@@ -54,7 +53,7 @@ public class ClientMarket implements IClientMarket
         }
         public void loadFrom(PriceHistoryData other, long currentServerTime, boolean createEmptyCandleForTimeGaps)
         {
-            history.loadFrom(other, timer.getDuration(), currentServerTime, createEmptyCandleForTimeGaps);
+            history.loadFrom(other, timer.getDuration(), currentServerTime, other.getCurrentMarketPrice(), createEmptyCandleForTimeGaps);
         }
         public void update(long serverTime)
         {
@@ -146,7 +145,10 @@ public class ClientMarket implements IClientMarket
     }
     public void requestFullPriceHistoryUpdate()
     {
-        requestFullPriceHistoryUpdate(0, Long.MAX_VALUE);
+        long endTime = System.currentTimeMillis();
+        long startTime = endTime - CANDLE_TIME_1_DAY;
+        //requestFullPriceHistoryUpdate(0, Long.MAX_VALUE);
+        requestFullPriceHistoryUpdate(startTime, endTime);
     }
     public void requestFullPriceHistoryUpdate(long startTime, long endTime)
     {
@@ -162,7 +164,7 @@ public class ClientMarket implements IClientMarket
             MarketPriceHistoryRequest.InputData priceChunkRequestData = new MarketPriceHistoryRequest.InputData(itemID, startTime, endTime);
             BACKEND_INSTANCES.NETWORKING.MARKET_PRICE_HISTORY_REQUEST.sendRequestToServer(priceChunkRequestData).thenAccept((historyData) ->
             {
-                info("Price chunck received for: "+itemID);
+                info("Price chunk received for: "+itemID);
                 for(PriceHistoryContainer priceHistoryContainer : priceHistoryDataMap.values())
                 {
                     priceHistoryContainer.loadFrom(historyData,

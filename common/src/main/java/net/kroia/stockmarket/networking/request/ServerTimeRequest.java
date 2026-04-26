@@ -1,6 +1,5 @@
 package net.kroia.stockmarket.networking.request;
 
-import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;

@@ -568,7 +568,7 @@ public class CandlestickChart extends StockMarketGuiElement
             {
                 rawWithScrollValue = Math.max(Math.min(rawWithScrollValue, minScrollValue), 5.0f);
                 chartviewRect.width = (int)rawWithScrollValue;
-                chartviewRect.x = chartviewRect.width;
+                //chartviewRect.x = chartviewRect.width;
             }
 
 
@@ -577,7 +577,7 @@ public class CandlestickChart extends StockMarketGuiElement
         if (!isKeyPressed(GLFW.GLFW_KEY_LEFT_SHIFT))
         {
             double newHeight = chartviewRect.height*zoomFactor;
-            if(newHeight < Long.MAX_VALUE && newHeight > 1)
+            if(newHeight < Long.MAX_VALUE && newHeight > 0.1)
             {
                 chartviewRect.height = newHeight;
 
@@ -592,7 +592,7 @@ public class CandlestickChart extends StockMarketGuiElement
             }
             else
             {
-                chartviewRect.height =  Math.max(Math.min(newHeight, Long.MAX_VALUE), 1);
+                chartviewRect.height =  Math.max(Math.min(newHeight, Long.MAX_VALUE), 0.1);
             }
             //return true;
             consumed = true;
@@ -705,11 +705,13 @@ public class CandlestickChart extends StockMarketGuiElement
             double priceDifference = maxPrice - minPrice;
 
             chartviewRect.y = Math.max(0, minPrice - priceDifference * 0.1);
-            chartviewRect.height = (maxPrice + priceDifference * 0.1) - chartviewRect.y;
+            chartviewRect.height = Math.max((maxPrice + priceDifference * 0.1) - chartviewRect.y,0.1);
             if(chartviewRect.width > lastIndex)
             {
                 chartviewRect.width = lastIndex;
             }
+            if(chartviewRect.width < 1)
+                chartviewRect.width = 1;
             rawWithScrollValue = chartviewRect.width;
             chartviewRect.x = chartviewRect.width; // Move to the newest candle
         }

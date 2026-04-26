@@ -23,6 +23,10 @@ public class Order implements ServerSaveable
         INTER_MARKET,
     }
 
+    //private static long orderIDCounter = System.currentTimeMillis();
+
+
+    //long orderID;               // The ID for this individual order instance
     @NotNull ItemID itemID;     // The ID for which ServerMarket the item gets traded
 
     @Nullable UUID orderExecutor; // The players UUID who executed the order. If null -> bot order
@@ -67,6 +71,7 @@ public class Order implements ServerSaveable
     public static final StreamCodec<RegistryFriendlyByteBuf, Order> STREAM_CODEC = new StreamCodec<>() {
         @Override
         public void encode(RegistryFriendlyByteBuf buf, Order data) {
+            //ByteBufCodecs.VAR_LONG.encode(buf, data.getOrderID());
             ItemID.STREAM_CODEC.encode(buf, data.getItemID());
             ExtraCodecUtils.nullable(UUIDUtil.STREAM_CODEC).encode(buf, data.getExecutorPlayerUUID());
             ByteBufCodecs.INT.encode(buf, data.getBankAccountNr());
@@ -79,6 +84,7 @@ public class Order implements ServerSaveable
         }
         @Override
         public @NotNull Order decode(RegistryFriendlyByteBuf buf) {
+            //long orderID = buf.readLong();
             ItemID itemID = ItemID.STREAM_CODEC.decode(buf);
             @Nullable UUID orderExecutor = ExtraCodecUtils.nullable(UUIDUtil.STREAM_CODEC).decode(buf);
             int bankAccountNr = ByteBufCodecs.INT.decode(buf);
@@ -88,7 +94,7 @@ public class Order implements ServerSaveable
             long filledVolume = ByteBufCodecs.VAR_LONG.decode(buf);
             long transferredMoney = ByteBufCodecs.VAR_LONG.decode(buf);
             long time = ByteBufCodecs.VAR_LONG.decode(buf);
-            return new Order(itemID, orderExecutor, bankAccountNr, type, volume, filledVolume, price, time, transferredMoney);
+            return new Order(/*orderID, */itemID, orderExecutor, bankAccountNr, type, volume, filledVolume, price, time, transferredMoney);
         }
     };
    /* public record Data(ItemID itemID, UUID orderExecutor, int bankAccountNr, Type type, long volume, long price,
@@ -100,16 +106,17 @@ public class Order implements ServerSaveable
     // Player order
     public Order(@NotNull ItemID itemID, @NotNull Type type, long volume, long price, long time, @NotNull UUID orderExecutor, int bankAccountNr)
     {
-        this(itemID, orderExecutor, bankAccountNr, type, volume,0,price,time,0);
+        this(/*orderIDCounter++, */itemID, orderExecutor, bankAccountNr, type, volume,0,price,time,0);
     }
 
     // Bot order
     public Order(@NotNull ItemID itemID, @NotNull Type type, long volume, long price, long time) // Bot order
     {
-        this(itemID, null, 0, type, volume,0,price,time,0);
+        this(/*orderIDCounter++,*/ itemID, null, 0, type, volume,0,price,time,0);
     }
-    private Order(@NotNull ItemID itemID, @Nullable UUID orderExecutor, int bankAccountNr, Type type, long targetVolume, long filledVolume, long startPrice, long time, long transferredMoney )
+    private Order(/*long orderID, */@NotNull ItemID itemID, @Nullable UUID orderExecutor, int bankAccountNr, Type type, long targetVolume, long filledVolume, long startPrice, long time, long transferredMoney )
     {
+        //this.orderID = orderID;
         this.itemID = itemID;
         this.type = type;
         this.targetVolume = targetVolume;
@@ -148,10 +155,14 @@ public class Order implements ServerSaveable
         short itemID_raw = itemID.getShort();
         int typeValue = type.ordinal();
         long averageExecPrice = getAverageExecutionPrice();
-        OrderRecordStruct recordStruct = new OrderRecordStruct(itemID_raw, bankAccountNr, orderExecutor, typeValue, filledVolume, averageExecPrice, time);
+        OrderRecordStruct recordStruct = new OrderRecordStruct(/*orderID, */itemID_raw, bankAccountNr, orderExecutor, typeValue, filledVolume, averageExecPrice, time);
         return recordStruct;
     }
 
+    /*public long getOrderID()
+    {
+        return orderID;
+    }*/
     public @NotNull ItemID getItemID()
     {
         return itemID;

@@ -31,6 +31,11 @@ public class VirtualOrderbook implements ServerSaveable
         dynamicArray = new DynamicIndexedArray(defaultSize, this::getDefaultVolume);
     }
 
+    /**
+     * Input: Long: raw price level (backend price)
+     * Output: Float: raw volume (backend volume)
+     * @param volumeProvider
+     */
     public void setDefaultVolumeProvider(@Nullable Function<Long, Float> volumeProvider)
     {
         defaultVolumeProvider = volumeProvider;
@@ -40,6 +45,16 @@ public class VirtualOrderbook implements ServerSaveable
     public void setCurrentMarketPrice(long currentMarketPrice)
     {
         this.currentMarketPrice = currentMarketPrice;
+        long currentIndexOffset = dynamicArray.getIndexOffset();
+        int sizeForth = dynamicArray.getSize()/4;
+        if(currentMarketPrice > currentIndexOffset + sizeForth*3)
+        {
+            dynamicArray.setOffset(currentMarketPrice-dynamicArray.getSize()/2);
+        }
+        else if(currentMarketPrice < currentIndexOffset + sizeForth)
+        {
+            dynamicArray.setOffset(currentMarketPrice-dynamicArray.getSize()/2);
+        }
     }
 
     /**
@@ -48,6 +63,15 @@ public class VirtualOrderbook implements ServerSaveable
     public void resetVolumeDistribution()
     {
         dynamicArray.resetToDefaultValues();
+    }
+
+    public long getMinEditablePrice()
+    {
+        return dynamicArray.getVirtualIndex(0);
+    }
+    public long getMaxEditablePrice()
+    {
+        return dynamicArray.getVirtualIndex(dynamicArray.getSize()-1);
     }
 
 
@@ -185,6 +209,23 @@ public class VirtualOrderbook implements ServerSaveable
     {
         return dynamicArray.getSum(startPrice, endPrice+1);
     }
+    public float getVolumeInterpolated(long startPrice, long endPrice, int subdevisions)
+    {
+        float volumeSum = 0;
+        long deltaPrice = endPrice - startPrice;
+        if(subdevisions >= Math.abs(deltaPrice))
+        {
+            return getVolume(startPrice, endPrice);
+        }
+
+        long priceIncrement = deltaPrice / (subdevisions);
+        for(int i = 0; i < subdevisions; i++)
+        {
+            volumeSum += getVolume(startPrice + i*priceIncrement)*priceIncrement;
+        }
+
+        return volumeSum;
+    }
     public long getVolumeRounded(long startPrice, long endPrice)
     {
         return dynamicArray.getSumRounded(startPrice, endPrice+1);
@@ -210,7 +251,7 @@ public class VirtualOrderbook implements ServerSaveable
 
 
     /**
-     * Gets the default volume at a given price
+     * Gets the default raw volume at a given price
      * @apiNote
      * @param price on which the volume needs to be calculatet at
      * @return positive volume vor buy order, negative volume for sell order

@@ -414,9 +414,9 @@ public class Testing {
         success &= errorIfFalse(newMoneyBalance - limitOrder.getTransferredMoney() == 1000, "Wrong money amount transfered: "+newMoneyBalance);
         success &= errorIfFalse(newItemBalance == 110, "Wrong end balance of items: "+newItemBalance);
         success &= errorIfFalse(serverMarket.getCurrentMarketPrice() == 12, "Wrong stockmarket end price: "+ serverMarket.getCurrentMarketPrice());
-        success &= errorIfFalse(serverMarket.getVolume(11) == 0, "Virtual orderbook at price=11 should be empty now");
-        success &= errorIfFalse(serverMarket.getVolume(12) == 0, "Virtual orderbook at price=12 should be empty now");
-        success &= errorIfFalse(serverMarket.getVolume(13) == -5, "Virtual orderbook at price=13 should be at -5");
+        success &= errorIfFalse(serverMarket.getRawVolume(11) == 0, "Virtual orderbook at price=11 should be empty now");
+        success &= errorIfFalse(serverMarket.getRawVolume(12) == 0, "Virtual orderbook at price=12 should be empty now");
+        success &= errorIfFalse(serverMarket.getRawVolume(13) == -5, "Virtual orderbook at price=13 should be at -5");
 
         serverMarket.update();
         serverMarket.update();
@@ -464,11 +464,11 @@ public class Testing {
         success &= errorIfFalse(newMoneyBalance - limitOrder.getTransferredMoney() == 1000, "Wrong money amount transfered: "+newMoneyBalance);
         success &= errorIfFalse(newItemBalance == 115, "Wrong end balance of items: "+newItemBalance);
         success &= errorIfFalse(serverMarket.getCurrentMarketPrice() == 13, "Wrong stockmarket end price: "+ serverMarket.getCurrentMarketPrice());
-        success &= errorIfFalse(serverMarket.getVolume(13) == limitOrder.getRemainingVolume(), "limit order may not be placed into the orderbook after not filling it completly.");
-        success &= errorIfFalse(serverMarket.getVolume(11) == 0, "Virtual orderbook at price=11 should be empty now");
-        success &= errorIfFalse(serverMarket.getVolume(12) == 0, "Virtual orderbook at price=12 should be empty now");
-        success &= errorIfFalse(serverMarket.getVolume(13) == limitOrder.getRemainingVolume(), "Virtual orderbook at price=13 should be: "+limitOrder.getRemainingVolume());
-        success &= errorIfFalse(serverMarket.getVolume(14) == -5, "Virtual orderbook at price=14 should be -5 now");
+        success &= errorIfFalse(serverMarket.getRawVolume(13) == limitOrder.getRemainingVolume(), "limit order may not be placed into the orderbook after not filling it completly.");
+        success &= errorIfFalse(serverMarket.getRawVolume(11) == 0, "Virtual orderbook at price=11 should be empty now");
+        success &= errorIfFalse(serverMarket.getRawVolume(12) == 0, "Virtual orderbook at price=12 should be empty now");
+        success &= errorIfFalse(serverMarket.getRawVolume(13) == limitOrder.getRemainingVolume(), "Virtual orderbook at price=13 should be: "+limitOrder.getRemainingVolume());
+        success &= errorIfFalse(serverMarket.getRawVolume(14) == -5, "Virtual orderbook at price=14 should be -5 now");
 
         serverMarket.update();
         serverMarket.update();
@@ -518,9 +518,9 @@ public class Testing {
         success &= errorIfFalse(newMoneyBalance - limitOrder.getTransferredMoney() == 1000, "Wrong money amount transfered: "+newMoneyBalance);
         success &= errorIfFalse(newItemBalance == 90, "Wrong end balance of items: "+newItemBalance);
         success &= errorIfFalse(serverMarket.getCurrentMarketPrice() == 9, "Wrong stockmarket end price: "+ serverMarket.getCurrentMarketPrice());
-        success &= errorIfFalse(serverMarket.getVolume(10) == 0, "Virtual orderbook at price=10 should be empty now");
-        success &= errorIfFalse(serverMarket.getVolume(9) == 0, "Virtual orderbook at price=9 should be empty now");
-        success &= errorIfFalse(serverMarket.getVolume(8) == 5, "Virtual orderbook at price=8 should be at 5");
+        success &= errorIfFalse(serverMarket.getRawVolume(10) == 0, "Virtual orderbook at price=10 should be empty now");
+        success &= errorIfFalse(serverMarket.getRawVolume(9) == 0, "Virtual orderbook at price=9 should be empty now");
+        success &= errorIfFalse(serverMarket.getRawVolume(8) == 5, "Virtual orderbook at price=8 should be at 5");
 
         serverMarket.update();
         serverMarket.update();
@@ -536,9 +536,9 @@ public class Testing {
         success &= errorIfFalse(newMoneyBalance - limitOrder.getTransferredMoney() == 1000, "Wrong money amount transfered: "+newMoneyBalance);
         success &= errorIfFalse(newItemBalance == 90, "Wrong end balance of items: "+newItemBalance);
         success &= errorIfFalse(serverMarket.getCurrentMarketPrice() == 9, "Wrong stockmarket end price: "+ serverMarket.getCurrentMarketPrice());
-        success &= errorIfFalse(serverMarket.getVolume(10) == 0, "Virtual orderbook at price=10 should be empty now");
-        success &= errorIfFalse(serverMarket.getVolume(9) == 0, "Virtual orderbook at price=9 should be empty now");
-        success &= errorIfFalse(serverMarket.getVolume(8) == 5, "Virtual orderbook at price=8 should be at 5");
+        success &= errorIfFalse(serverMarket.getRawVolume(10) == 0, "Virtual orderbook at price=10 should be empty now");
+        success &= errorIfFalse(serverMarket.getRawVolume(9) == 0, "Virtual orderbook at price=9 should be empty now");
+        success &= errorIfFalse(serverMarket.getRawVolume(8) == 5, "Virtual orderbook at price=8 should be at 5");
         return success;
     }
 
@@ -571,10 +571,10 @@ public class Testing {
         success &= errorIfFalse(newMoneyBalance - limitOrder.getTransferredMoney() == 1000, "Wrong money amount transfered: "+newMoneyBalance);
         success &= errorIfFalse(newItemBalance == 80, "Wrong end balance of items: "+newItemBalance);
         success &= errorIfFalse(serverMarket.getCurrentMarketPrice() == 7, "Wrong stockmarket end price: "+ serverMarket.getCurrentMarketPrice());
-        success &= errorIfFalse(serverMarket.getVolume(10) == 0, "Virtual orderbook at price=10 should be empty now");
-        success &= errorIfFalse(serverMarket.getVolume(9) == 0, "Virtual orderbook at price=9 should be empty now");
-        success &= errorIfFalse(serverMarket.getVolume(8) == 0, "Virtual orderbook at price=8 should be empty now");
-        success &= errorIfFalse(serverMarket.getVolume(7) == limitOrder.getRemainingVolume(), "Virtual orderbook at price=7 should be: "+limitOrder.getRemainingVolume());
+        success &= errorIfFalse(serverMarket.getRawVolume(10) == 0, "Virtual orderbook at price=10 should be empty now");
+        success &= errorIfFalse(serverMarket.getRawVolume(9) == 0, "Virtual orderbook at price=9 should be empty now");
+        success &= errorIfFalse(serverMarket.getRawVolume(8) == 0, "Virtual orderbook at price=8 should be empty now");
+        success &= errorIfFalse(serverMarket.getRawVolume(7) == limitOrder.getRemainingVolume(), "Virtual orderbook at price=7 should be: "+limitOrder.getRemainingVolume());
 
         serverMarket.update();
         serverMarket.update();
@@ -590,10 +590,10 @@ public class Testing {
         success &= errorIfFalse(newMoneyBalance - limitOrder.getTransferredMoney() == 1000, "Wrong money amount transfered: "+newMoneyBalance);
         success &= errorIfFalse(newItemBalance == 80, "Wrong end balance of items: "+newItemBalance);
         success &= errorIfFalse(serverMarket.getCurrentMarketPrice() == 7, "Wrong stockmarket end price: "+ serverMarket.getCurrentMarketPrice());
-        success &= errorIfFalse(serverMarket.getVolume(10) == 0, "Virtual orderbook at price=10 should be empty now");
-        success &= errorIfFalse(serverMarket.getVolume(9) == 0, "Virtual orderbook at price=9 should be empty now");
-        success &= errorIfFalse(serverMarket.getVolume(8) == 0, "Virtual orderbook at price=8 should be empty now");
-        success &= errorIfFalse(serverMarket.getVolume(7) == limitOrder.getRemainingVolume(), "Virtual orderbook at price=7 should be: "+limitOrder.getRemainingVolume());
+        success &= errorIfFalse(serverMarket.getRawVolume(10) == 0, "Virtual orderbook at price=10 should be empty now");
+        success &= errorIfFalse(serverMarket.getRawVolume(9) == 0, "Virtual orderbook at price=9 should be empty now");
+        success &= errorIfFalse(serverMarket.getRawVolume(8) == 0, "Virtual orderbook at price=8 should be empty now");
+        success &= errorIfFalse(serverMarket.getRawVolume(7) == limitOrder.getRemainingVolume(), "Virtual orderbook at price=7 should be: "+limitOrder.getRemainingVolume());
         return success;
     }
 
@@ -637,10 +637,10 @@ public class Testing {
         success &= errorIfFalse(newMoneyBalance2 - marketOrder.getTransferredMoney() == 1000, "Wrong money amount transfered: "+newMoneyBalance2);
         success &= errorIfFalse(newItemBalance2 == 110, "Wrong end balance of items: "+newItemBalance2);
         success &= errorIfFalse(serverMarket.getCurrentMarketPrice() == 13, "Wrong stockmarket end price: "+ serverMarket.getCurrentMarketPrice());
-        success &= errorIfFalse(serverMarket.getVolume(10) == 0, "Virtual orderbook at price=10 should be empty now");
-        success &= errorIfFalse(serverMarket.getVolume(11) == 0, "Virtual orderbook at price=11 should be empty now");
-        success &= errorIfFalse(serverMarket.getVolume(12) == 0, "Virtual orderbook at price=12 should be empty now");
-        success &= errorIfFalse(serverMarket.getVolume(13) == 0, "Virtual orderbook at price=13 should be empty now");
+        success &= errorIfFalse(serverMarket.getRawVolume(10) == 0, "Virtual orderbook at price=10 should be empty now");
+        success &= errorIfFalse(serverMarket.getRawVolume(11) == 0, "Virtual orderbook at price=11 should be empty now");
+        success &= errorIfFalse(serverMarket.getRawVolume(12) == 0, "Virtual orderbook at price=12 should be empty now");
+        success &= errorIfFalse(serverMarket.getRawVolume(13) == 0, "Virtual orderbook at price=13 should be empty now");
 
         serverMarket.update();
         serverMarket.update();
@@ -663,20 +663,20 @@ public class Testing {
         success &= errorIfFalse(newMoneyBalance2 - marketOrder.getTransferredMoney() == 1000, "Wrong money amount transfered: "+newMoneyBalance2);
         success &= errorIfFalse(newItemBalance2 == 110, "Wrong end balance of items: "+newItemBalance2);
         success &= errorIfFalse(serverMarket.getCurrentMarketPrice() == 13, "Wrong stockmarket end price: "+ serverMarket.getCurrentMarketPrice());
-        success &= errorIfFalse(serverMarket.getVolume(10) == 0, "Virtual orderbook at price=10 should be empty now");
-        success &= errorIfFalse(serverMarket.getVolume(11) == 0, "Virtual orderbook at price=11 should be empty now");
-        success &= errorIfFalse(serverMarket.getVolume(12) == 0, "Virtual orderbook at price=12 should be empty now");
-        success &= errorIfFalse(serverMarket.getVolume(13) == 0, "Virtual orderbook at price=13 should be empty now");
+        success &= errorIfFalse(serverMarket.getRawVolume(10) == 0, "Virtual orderbook at price=10 should be empty now");
+        success &= errorIfFalse(serverMarket.getRawVolume(11) == 0, "Virtual orderbook at price=11 should be empty now");
+        success &= errorIfFalse(serverMarket.getRawVolume(12) == 0, "Virtual orderbook at price=12 should be empty now");
+        success &= errorIfFalse(serverMarket.getRawVolume(13) == 0, "Virtual orderbook at price=13 should be empty now");
 
         return success;
     }
 
 
-    private float emptyVolumeDistribution(long price)
+    private float emptyVolumeDistribution(double price)
     {
         return 0;
     }
-    private float uniformVolumeDistribution(long price)
+    private float uniformVolumeDistribution(double price)
     {
         return uniformVolumeDistributionScale;
     }
