@@ -209,6 +209,23 @@ public class VirtualOrderbook implements ServerSaveable
     {
         return dynamicArray.getSum(startPrice, endPrice+1);
     }
+    public float getVolumeInterpolated(long startPrice, long endPrice, int subdevisions)
+    {
+        float volumeSum = 0;
+        long deltaPrice = endPrice - startPrice;
+        if(subdevisions >= Math.abs(deltaPrice))
+        {
+            return getVolume(startPrice, endPrice);
+        }
+
+        long priceIncrement = deltaPrice / (subdevisions);
+        for(int i = 0; i < subdevisions; i++)
+        {
+            volumeSum += getVolume(startPrice + i*priceIncrement)*priceIncrement;
+        }
+
+        return volumeSum;
+    }
     public long getVolumeRounded(long startPrice, long endPrice)
     {
         return dynamicArray.getSumRounded(startPrice, endPrice+1);

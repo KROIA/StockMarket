@@ -233,7 +233,8 @@ public class Orderbook implements ServerSaveable
 
     public long getRawVolume(long startPrice, long endPrice)
     {
-        float volume = virtualOrderbook.getVolume(startPrice, endPrice); // = virtualOrderbook.getVolume(price);
+        //float volume = virtualOrderbook.getVolume(startPrice, endPrice); // = virtualOrderbook.getVolume(price);
+        float volume = virtualOrderbook.getVolumeInterpolated(startPrice, endPrice, 10); // = virtualOrderbook.getVolume(price);
         for(Order order : buyLimitOrders)
         {
             long orderPrice = order.getStartPrice();

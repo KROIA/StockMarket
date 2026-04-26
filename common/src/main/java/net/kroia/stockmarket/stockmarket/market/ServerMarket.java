@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.stockmarket.market;
 
+import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.persistence.ServerSaveable;
 import net.kroia.stockmarket.StockMarketModBackend;
@@ -34,7 +35,12 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     private boolean marketOpen;
     private long currentMarketPrice;
     private long defaultPrice;
-    private @Nullable Function<Long, Float> defaultVolumeProviderFunction;
+
+    /**
+     * Input: Real price
+     * Output Real volume at the price
+     */
+    private @Nullable Function<Double, Float> defaultVolumeProviderFunction;
 
     private long candleStartTime = System.currentTimeMillis();
     private long candleOpenPrice;
@@ -53,7 +59,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     private final PriorityQueue<InterMarketOrder> interMarket_MarketBuyOrders_inputBuffer = new PriorityQueue<>((o1, o2) -> Long.compare(o2.getTime(), o1.getTime()));
 
 
-    public ServerMarket(ItemID itemID, @Nullable Function<Long, Float> volumeProvider, long defaultPrice)
+    public ServerMarket(ItemID itemID, @Nullable Function<Double, Float> volumeProvider, long defaultPrice)
     {
         this.defaultPrice =  defaultPrice;
         this.defaultVolumeProviderFunction =  volumeProvider;
@@ -105,7 +111,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         orderbook.resetVirtualVolumeDistribution();
     }
     @Override
-    public void test_setDefaultVolumeProviderFunction(Function<Long, Float> defaultVolumeProviderFunction)
+    public void test_setDefaultVolumeProviderFunction(Function<Double, Float> defaultVolumeProviderFunction)
     {
         this.defaultVolumeProviderFunction = defaultVolumeProviderFunction;
     }
@@ -467,9 +473,13 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
      */
     private float defaultVolumeProvider(long price)
     {
-        if(defaultVolumeProviderFunction != null)
-            return defaultVolumeProviderFunction.apply(price);
-        float volume = Math.min(10, Math.max(-10, currentMarketPrice - price));
+        IServerBankManager bankManager = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync();
+        double realPrice = bankManager.convertToRealAmount(price);
+        if(defaultVolumeProviderFunction != null) {
+            float realVolume = defaultVolumeProviderFunction.apply(realPrice);
+            return bankManager.getItemFractionScaleFactor() * realVolume;
+        }
+        float volume = (float)Math.min(10, Math.max(-10, currentMarketPrice - realPrice));
         return volume;
     }
 

@@ -109,6 +109,8 @@ public interface IPluginOrderBook {
     void addRawVolume(long backendStartPrice, float[] volume);
 
 
+    void resetVirtualVolume();
+
 
 
     /**
@@ -132,7 +134,8 @@ public interface IPluginOrderBook {
      *
      * @param pickPrice the real value price at which the volume gets measured
      * @return positive volume for buy orders, negative volume for sell orders.
-     *         The raw volume at the given price
+     *         The real volume at the given price
      */
+    float getDefaultRealVolume(double pickPrice);
     float getDefaultRawVolume(double pickPrice);
 }

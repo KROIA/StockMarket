@@ -15,7 +15,7 @@ public interface ISyncServerMarket {
     void test_resetVirtualVolumeDistribution();
     void test_setCurrentMarketPrice(long currentMarketPrice);
     void test_clearOrderbook();
-    void test_setDefaultVolumeProviderFunction(Function<Long, Float> defaultVolumeProviderFunction);
+    void test_setDefaultVolumeProviderFunction(Function<Double, Float> defaultVolumeProviderFunction);
     void test_resetVirtualOrderBookVolume();
 
 

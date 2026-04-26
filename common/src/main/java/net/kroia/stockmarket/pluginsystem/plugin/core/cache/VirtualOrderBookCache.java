@@ -74,6 +74,7 @@ public class VirtualOrderBookCache {
     }
 
     private final List<ManipulationData> manipulationData = new ArrayList<ManipulationData>();
+    private boolean resetVirtualVolume = false;
 
     public VirtualOrderBookCache()
     {
@@ -90,10 +91,19 @@ public class VirtualOrderBookCache {
         ManipulationData data = new ManipulationData(backendStartPrice, volume, operator);
         manipulationData.add(data);
     }
+    public void resetVirtualVolume()
+    {
+        this.resetVirtualVolume = true;
+    }
 
     public void apply(IServerMarket serverMarket)
     {
         Orderbook orderBook = serverMarket.getOrderbook();
+        if(resetVirtualVolume)
+        {
+            orderBook.resetVirtualVolumeDistribution();
+            resetVirtualVolume = false;
+        }
         for(ManipulationData data : manipulationData)
         {
             data.apply(orderBook);

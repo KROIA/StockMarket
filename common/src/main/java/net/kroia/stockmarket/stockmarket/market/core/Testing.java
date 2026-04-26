@@ -672,11 +672,11 @@ public class Testing {
     }
 
 
-    private float emptyVolumeDistribution(long price)
+    private float emptyVolumeDistribution(double price)
     {
         return 0;
     }
-    private float uniformVolumeDistribution(long price)
+    private float uniformVolumeDistribution(double price)
     {
         return uniformVolumeDistributionScale;
     }

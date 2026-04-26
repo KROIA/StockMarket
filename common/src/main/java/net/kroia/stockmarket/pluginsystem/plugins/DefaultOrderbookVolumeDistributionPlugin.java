@@ -18,7 +18,7 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin {
 
     static class DistributionCalculator implements IVolumeDistributionCalculator
     {
-
+        private float volumeScale = 1;
         public DistributionCalculator()
         {
 
@@ -26,11 +26,29 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin {
 
         @Override
         public float getVolume(double marketPrice, double volumePickPrice) {
-            float delta = (float)Math.abs(marketPrice - volumePickPrice);
+            float delta = (float)Math.abs(volumePickPrice - marketPrice);
+            float absDelta =  Math.abs(delta);
+            float sign = Math.signum(delta);
+            float volume = 0;
+
+            if(absDelta < 20)
+            {
+                volume += (float) (2/Math.exp(1) * Math.sqrt(absDelta) * sign*Math.exp(-Math.abs(delta*delta/marketPrice+0.5)));
+            }
+
+            volume += 1 * sign;
+
+            if(delta > 0)
+            {
+                volume += (float) (5.0/(1.0+volumePickPrice));
+            }
+
+            return volume * volumeScale;
+
             // Dummy implementation
-            if(delta > 1)
+            /*if(delta > 1)
                 delta = 1;
-            return delta*100;
+            return delta*100;*/
         }
     }
 
@@ -39,6 +57,7 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin {
         public long lastMillis;
         public float currentMarketPrice = 0;
         public final DistributionCalculator calculator;
+        public float speed = 0.05f;
 
         public RuntimeData()
         {
@@ -108,7 +127,7 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin {
             {
                 deltaAmount = -currentVal;
             }
-            newVolume[(int)(i - editableRange.getA())] = currentVal + deltaAmount;
+            newVolume[(int)(i - editableRange.getA())] = currentVal + (deltaAmount * data.speed);
         }
         orderBook.setRawVolume(editableRange.getA(), newVolume);
     }
@@ -124,9 +143,11 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin {
         marketData.put(marketID, data);
 
         MarketInterface interf = getMarketInterface(marketID);
+
         if(interf == null)
             return;
         interf.oderBook.registerDefaultVolumeDistributionCalculator(data.calculator);
+        interf.oderBook.resetVirtualVolume();
     }
 
     @Override

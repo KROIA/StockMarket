@@ -120,7 +120,7 @@ public class DynamicIndexedArray implements ServerSaveable {
         }
 
         // Outside the array
-        for(long i=Math.max(virtualStartIndex, arrayLoopEndIndex); i<virtualEndIndex; i++)
+        for(long i=Math.max(virtualStartIndex, arrayLoopEndIndex + indexOffset); i<virtualEndIndex; i++)
         {
             sum += defaultValueProvider.apply(i);
         }

@@ -65,6 +65,10 @@ public class MarketCache {
     {
         virtualOrderBookCache.addManipulation(backendStartPrice, volume, operator);
     }
+    public void resetVirtualVolume()
+    {
+        virtualOrderBookCache.resetVirtualVolume();
+    }
 
     public void setNextTargetPrice(double nextTargetPrice)
     {

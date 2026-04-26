@@ -36,7 +36,8 @@ public class PluginOrderBook implements IPluginOrderBook
     {
         this.serverMarket = serverMarket;
         this.orderbook = serverMarket.getOrderbook();
-        serverMarket.test_setDefaultVolumeProviderFunction(this::getDefaultRawVolume);
+        serverMarket.test_setDefaultVolumeProviderFunction(this::getDefaultRealVolume);
+        //serverMarket.test_resetVirtualOrderBookVolume();
         this.cache = cache;
     }
 
@@ -122,6 +123,12 @@ public class PluginOrderBook implements IPluginOrderBook
     }
 
     @Override
+    public void resetVirtualVolume()
+    {
+        cache.resetVirtualVolume();
+    }
+
+    @Override
     public void registerDefaultVolumeDistributionCalculator(IVolumeDistributionCalculator distributionCalculator) {
         volumeDistributionCalculators.add(distributionCalculator);
     }
@@ -133,10 +140,10 @@ public class PluginOrderBook implements IPluginOrderBook
 
     /**
      * @param pickPrice the real value price at which the volume gets measured
-     * @return the raw volume at the given price
+     * @return the real volume at the given price
      */
     @Override
-    public float getDefaultRawVolume(double pickPrice)
+    public float getDefaultRealVolume(double pickPrice)
     {
         float volume = 0;
         float currentMarketPrice = (float)MarketManager.convertToRealAmountStatic(serverMarket.getCurrentMarketPrice());
@@ -144,10 +151,13 @@ public class PluginOrderBook implements IPluginOrderBook
         {
             volume += Math.abs(distributionCalculator.getVolume(currentMarketPrice, pickPrice));
         }
-        int scaleFactor = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync().getItemFractionScaleFactor();
-        float rawVolume = scaleFactor * volume;
         if(currentMarketPrice > pickPrice)
-            return rawVolume;
-        return -rawVolume;
+            return volume;
+        return -volume;
+    }
+    @Override
+    public float getDefaultRawVolume(double pickPrice)
+    {
+        return getDefaultRealVolume(pickPrice) * BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync().getItemFractionScaleFactor();
     }
 }
