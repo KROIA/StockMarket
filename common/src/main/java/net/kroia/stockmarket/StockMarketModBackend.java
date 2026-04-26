@@ -237,6 +237,7 @@ public class StockMarketModBackend implements StockMarketAPI {
     // Called from the server side
     public static void onPlayerJoin(ServerPlayer player)
     {
+        SERVER_INSTANCES.MARKET_MANAGER.getAsync().onPlayerJoinAsync(player.getUUID(), player.getName().getString());
         PlayerJoinSyncPacket.send(player);
     }
 

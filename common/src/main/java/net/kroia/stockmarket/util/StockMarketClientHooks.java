@@ -2,6 +2,7 @@ package net.kroia.stockmarket.util;
 
 import net.kroia.stockmarket.networking.packet.OpenUIPacket;
 import net.kroia.stockmarket.screen.DevTestScreen;
+import net.kroia.stockmarket.screen.ManagementScreen;
 import net.kroia.stockmarket.screen.TradeScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
@@ -24,6 +25,11 @@ public class StockMarketClientHooks {
             {
                 DevTestScreen screen = new DevTestScreen();
                 mc.setScreen(screen);
+                break;
+            }
+            case MANAGEMENT:
+            {
+                ManagementScreen.openScreen();
                 break;
             }
         }

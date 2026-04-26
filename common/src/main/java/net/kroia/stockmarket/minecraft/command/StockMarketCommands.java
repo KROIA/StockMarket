@@ -4,6 +4,11 @@ import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.suggestion.Suggestions;
+import com.mojang.brigadier.suggestion.SuggestionsBuilder;
+import net.kroia.banksystem.api.command.IAsyncBankSystemCommandHandler;
+import net.kroia.banksystem.api.command.IServerBankSystemCommandHandler;
+import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.data.table.OrderRecordManager;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
@@ -16,9 +21,12 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 
 public class StockMarketCommands {
@@ -27,6 +35,18 @@ public class StockMarketCommands {
         StockMarketCommands.BACKEND_INSTANCES = backend;
     }
 
+    /*private static IAsyncStockmarketCommandHandler handler()
+    {
+        return BACKEND_INSTANCES.COMMAND_HANDLER.getAsync();
+    }
+    private static IServerStockmarketCommandHandler masterHandler()
+    {
+        return BACKEND_INSTANCES.COMMAND_HANDLER.getSync();
+    }
+    private static boolean isMaster()
+    {
+        return BACKEND_INSTANCES.COMMAND_HANDLER.getSync() != null;
+    }*/
 
     // Method to register commands
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher, CommandBuildContext commandBuildContext, Commands.CommandSelection commandSelection) {
@@ -141,7 +161,96 @@ public class StockMarketCommands {
                                             });
                                     return 1;
                                 }))))
+                .then(Commands.literal("op")
+                        .requires(source -> source.hasPermission(2)) // Admin-only
+                        .executes(context -> {
+                            CommandSourceStack source = context.getSource();
+                            ServerPlayer player = source.getPlayerOrException();
+                            //if(isMaster())
+                                //masterHandler().banksystem_setBankSystemAdminMode(player.getUUID(), true);
+                            //else
+                                //ServerPlayerUtilities.printToClientConsole(player, "This command can only be used on the master server!");
+                            BACKEND_INSTANCES.MARKET_MANAGER.getSync().setStockmarketAdminMode(player.getUUID(), true);
+                            return Command.SINGLE_SUCCESS;
+                        })
+                        .then(Commands.argument("username", StringArgumentType.string()).suggests((context, builder) -> getPlayerNamesSuggestion(builder))
+                                .executes(context -> {
+                                    CommandSourceStack source = context.getSource();
+                                    ServerPlayer player = source.getPlayerOrException();
+                                    String toPlayer = StringArgumentType.getString(context, "username");
+                                    //if(isMaster())
+                                    //    masterHandler().banksystem_setBankSystemAdminMode_user(player.getUUID(), toPlayer, true);
+                                    //else
+                                    //    ServerPlayerUtilities.printToClientConsole(player, "This command can only be used on the master server!");
+                                    @Nullable UUID playerUUID = BACKEND_INSTANCES.MARKET_MANAGER.getSync().getPlayerUUID(toPlayer);
+                                    if(playerUUID == null)
+                                    {
+                                        //sendMessage(executor, "No UUID found for Player: "+userName);
+                                        return Command.SINGLE_SUCCESS;
+                                    }
+                                    if(BACKEND_INSTANCES.MARKET_MANAGER.getSync().setStockmarketAdminMode(playerUUID, true))
+                                    {
+                                        //sendMessage(executor, "Banksystem admin mode set to: "+(isAdmin?"ON":"OFF") + " for player: "+userName);
+                                        //if(!executor.equals(playerUUID))
+                                        //    sendMessage(playerUUID, "Banksystem admin mode set to: "+(isAdmin?"ON":"OFF") + " for player: "+userName);
+                                        //return true;
+                                    }
 
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                        )
+                )
+                .then(Commands.literal("deop")
+                        .requires(source -> source.hasPermission(2)) // Admin-only
+                        .executes(context -> {
+                            CommandSourceStack source = context.getSource();
+                            ServerPlayer player = source.getPlayerOrException();
+                            //if(isMaster())
+                            //    masterHandler().banksystem_setBankSystemAdminMode(player.getUUID(), true);
+                            //else
+                            //    ServerPlayerUtilities.printToClientConsole(player, "This command can only be used on the master server!");
+                            BACKEND_INSTANCES.MARKET_MANAGER.getSync().setStockmarketAdminMode(player.getUUID(), false);
+                            return Command.SINGLE_SUCCESS;
+                        })
+                        .then(Commands.argument("username", StringArgumentType.string()).suggests((context, builder) -> getPlayerNamesSuggestion(builder))
+                                .executes(context -> {
+                                    CommandSourceStack source = context.getSource();
+                                    ServerPlayer player = source.getPlayerOrException();
+                                    String toPlayer = StringArgumentType.getString(context, "username");
+                                    //if(isMaster())
+                                    //    masterHandler().banksystem_setBankSystemAdminMode_user(player.getUUID(), toPlayer, true);
+                                    //else
+                                    //    ServerPlayerUtilities.printToClientConsole(player, "This command can only be used on the master server!");
+                                    @Nullable UUID playerUUID = BACKEND_INSTANCES.MARKET_MANAGER.getSync().getPlayerUUID(toPlayer);
+                                    if(playerUUID == null)
+                                    {
+                                        //sendMessage(executor, "No UUID found for Player: "+userName);
+                                        return Command.SINGLE_SUCCESS;
+                                    }
+                                    if(BACKEND_INSTANCES.MARKET_MANAGER.getSync().setStockmarketAdminMode(playerUUID, false))
+                                    {
+                                        //sendMessage(executor, "Banksystem admin mode set to: "+(isAdmin?"ON":"OFF") + " for player: "+userName);
+                                        //if(!executor.equals(playerUUID))
+                                        //    sendMessage(playerUUID, "Banksystem admin mode set to: "+(isAdmin?"ON":"OFF") + " for player: "+userName);
+                                        //return true;
+                                    }
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                        )
+                )
+                .then(Commands.literal("manage")
+                        .requires(source -> source.hasPermission(2))
+                        .executes(context -> {
+                            CommandSourceStack source = context.getSource();
+                            ServerPlayer player = source.getPlayerOrException();
+
+                            // Open screen for settings GUI
+                            OpenUIPacket.sendToClient(player, OpenUIPacket.GUIType.MANAGEMENT);
+
+                            return Command.SINGLE_SUCCESS;
+                        })
+
+                )
                 .then(Commands.literal("devTestScreen")
                                 .requires(source -> source.hasPermission(2))
                                 .executes(context -> {
@@ -959,4 +1068,18 @@ public class StockMarketCommands {
         PlayerUtilities.printToClientConsole(executor, StockMarketTextMessages.getBotNotExistMessage(itemID));
         return null;
     }*/
+
+
+    private static CompletableFuture<Suggestions> getPlayerNamesSuggestion(SuggestionsBuilder builder)
+    {
+        CompletableFuture<Suggestions> future = new CompletableFuture<>();
+        BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getAsync().getBankManagerUserMapDataAsync().thenAccept(userMapData ->
+        {
+            userMapData.userMap().values().forEach(userData -> {
+                builder.suggest("\""+ userData.userName() +"\"");
+            });
+            future.complete(builder.build());
+        });
+        return future;
+    }
 }

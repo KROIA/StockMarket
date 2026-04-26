@@ -77,6 +77,8 @@ public class AsyncMarket implements IAsyncMarket{
         SetMarketOpen,
         GetCurrentMarketPriceStruct,
         GetCurrentMarketPriceStructAndReset,
+        GetSettings,
+        SetSettings,
     }
 
 
@@ -91,14 +93,14 @@ public class AsyncMarket implements IAsyncMarket{
         return new AsyncFunctionDataCodecs(MarketIdentifyAndDataPacket.streamCodec(inputParamsCodec), outputParamsCodec);
     }
     public static final Map<FunctionType, AsyncFunctionDataCodecs> codecs = new HashMap<>(){{
-        //put(FunctionType.GetItemID,                             codecPacket(null, ItemID.STREAM_CODEC));
+        //put(FunctionType.GetItemID,                           codecPacket(null, ItemID.STREAM_CODEC));
         put(FunctionType.GetDefaultPrice,                       codecPacket(null, ByteBufCodecs.VAR_LONG.cast()));
         put(FunctionType.GetCurrentMarketPrice,                 codecPacket(null, ByteBufCodecs.VAR_LONG.cast()));
         put(FunctionType.GetCurrentTime,                        codecPacket(null, ByteBufCodecs.VAR_LONG.cast()));
-        put(FunctionType.GetRawVolume_1,                           codecPacket(ByteBufCodecs.VAR_LONG.cast(), ByteBufCodecs.VAR_LONG.cast()));
-        put(FunctionType.GetRawVolume_2,                           codecPacket(ParamGroup_long_long.STREAM_CODEC.cast(), ByteBufCodecs.VAR_LONG.cast()));
-        put(FunctionType.GetRealVolume_1,                           codecPacket(ByteBufCodecs.DOUBLE.cast(), ByteBufCodecs.FLOAT.cast()));
-        put(FunctionType.GetRealVolume_2,                           codecPacket(ParamGroup_double_double.STREAM_CODEC.cast(), ByteBufCodecs.FLOAT.cast()));
+        put(FunctionType.GetRawVolume_1,                        codecPacket(ByteBufCodecs.VAR_LONG.cast(), ByteBufCodecs.VAR_LONG.cast()));
+        put(FunctionType.GetRawVolume_2,                        codecPacket(ParamGroup_long_long.STREAM_CODEC.cast(), ByteBufCodecs.VAR_LONG.cast()));
+        put(FunctionType.GetRealVolume_1,                       codecPacket(ByteBufCodecs.DOUBLE.cast(), ByteBufCodecs.FLOAT.cast()));
+        put(FunctionType.GetRealVolume_2,                       codecPacket(ParamGroup_double_double.STREAM_CODEC.cast(), ByteBufCodecs.FLOAT.cast()));
         put(FunctionType.PutOrder_1,                            codecPacket(Order.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
         put(FunctionType.PutOrder_2,                            codecPacket(InterMarketOrder.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
         put(FunctionType.GetLimitOrders,                        codecPacket(null, ExtraCodecUtils.listStreamCodec(Order.STREAM_CODEC)));
@@ -106,7 +108,9 @@ public class AsyncMarket implements IAsyncMarket{
         put(FunctionType.SetMarketOpen,                         codecPacket(ByteBufCodecs.BOOL.cast(), ByteBufCodecs.BOOL.cast()));
         put(FunctionType.GetCurrentMarketPriceStruct,           codecPacket(null, MarketPriceStruct.STREAM_CODEC));
         put(FunctionType.GetCurrentMarketPriceStructAndReset,   codecPacket(null, MarketPriceStruct.STREAM_CODEC));
-        
+        put(FunctionType.GetSettings,                           codecPacket(null, MarketSettings.STREAM_CODEC));
+        put(FunctionType.SetSettings,                           codecPacket(MarketSettings.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
+
     }};
     /**
      * Specialized InputData class, acting as data container for function input arguments
@@ -172,6 +176,10 @@ public class AsyncMarket implements IAsyncMarket{
                 info("Sending request to server for function: "+input.function.toString());
             return super.sendRequestToServer(input);
         }
+        boolean isPlayerAdmin(UUID playerID)
+        {
+            return AsyncMarket.BACKEND_INSTANCES.MARKET_MANAGER.getSync().isStockmarketAdmin(playerID);
+        }
 
         /**
          * Gets called by the Request handler on the master side
@@ -235,6 +243,23 @@ public class AsyncMarket implements IAsyncMarket{
                 case FunctionType.SetMarketOpen ->                        OutputData.of(input.function, market.setMarketOpen((Boolean)inputData.extra));
                 case FunctionType.GetCurrentMarketPriceStruct ->          OutputData.of(input.function, market.getCurrentMarketPriceStruct());
                 case FunctionType.GetCurrentMarketPriceStructAndReset ->  OutputData.of(input.function, market.getCurrentMarketPriceStructAndReset());
+                case FunctionType.GetSettings ->  {
+                    if(playerSender != null)
+                    {
+                        if(!isPlayerAdmin(playerSender))
+                            yield OutputData.of(input.function, new MarketSettings());
+                    }
+                    yield OutputData.of(input.function, market.getSettings());
+                }
+                case FunctionType.SetSettings ->  {
+                    if(playerSender != null)
+                    {
+                        if(!isPlayerAdmin(playerSender))
+                            yield OutputData.of(input.function, false);
+                    }
+                    market.setSettings((MarketSettings)inputData.extra);
+                    yield OutputData.of(input.function, true);
+                }
             });
         }
         @Override
@@ -253,8 +278,10 @@ public class AsyncMarket implements IAsyncMarket{
                      //FunctionType.GetLimitOrders,
                      FunctionType.IsMarketOpen,
                      //FunctionType.SetMarketOpen,
-                     FunctionType.GetCurrentMarketPriceStruct
+                     FunctionType.GetCurrentMarketPriceStruct,
                      //FunctionType.GetCurrentMarketPriceStructAndReset,
+                     FunctionType.GetSettings,
+                     FunctionType.SetSettings
                      -> true;
 
                 default -> false;
@@ -536,6 +563,32 @@ public class AsyncMarket implements IAsyncMarket{
         return future;
     }
 
+
+
+    @Override
+    public CompletableFuture<MarketSettings> getSettingsAsync()
+    {
+        if(!MultiServerUtils.canInteractWithStockMarket())
+            return CompletableFuture.completedFuture(new MarketSettings());
+        CompletableFuture<MarketSettings> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.GetSettings, itemID);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
+    }
+
+
+    @Override
+    public CompletableFuture<Boolean> setSettingsAsync(MarketSettings settings)
+    {
+        if(!MultiServerUtils.canInteractWithStockMarket())
+            return CompletableFuture.completedFuture(false);
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.SetSettings, itemID);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
+    }
 
 
 

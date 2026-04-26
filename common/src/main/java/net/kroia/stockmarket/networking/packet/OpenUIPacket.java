@@ -27,6 +27,7 @@ public class OpenUIPacket extends StockMarketNetworkPacket {
     public enum GUIType
     {
         DEVELOPMENT,
+        MANAGEMENT,
     }
 
 

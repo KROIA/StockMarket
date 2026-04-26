@@ -10,6 +10,7 @@ import net.kroia.stockmarket.pluginsystem.interaction.PluginOrderBook;
 import net.kroia.stockmarket.pluginsystem.plugin.ServerPlugin;
 import net.kroia.stockmarket.pluginsystem.plugin.core.cache.MarketCache;
 import net.kroia.stockmarket.pluginsystem.registry.PluginRegistry;
+import net.kroia.stockmarket.pluginsystem.registry.PluginRegistryObject;
 import net.kroia.stockmarket.stockmarket.market.ServerMarket;
 import net.minecraft.nbt.ListTag;
 import org.jetbrains.annotations.NotNull;
@@ -33,7 +34,7 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
 
     private boolean loggerEnabled = false;
     private final Map<ItemID, MarketCache> marketCaches = new HashMap<>(); // Contains all caches, instance ownership belongs to this class
-    private final Map<UUID, ServerPlugin> plugins = new HashMap<>();    // Contains all plugin instances
+    private final Map<UUID, ServerPlugin> plugins = new HashMap<>();    // Contains all plugin instances. UUID: plugin instanceID
 
     private enum State
     {
@@ -50,16 +51,17 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
     }
     private State state = State.NONE;
 
+
+
+    /* ----------------------------------------------------------------------------------------------------------------
+     *                     UPDATE LOOP
+     * --------------------------------------------------------------------------------------------------------------*/
     @Override
     public void update()
     {
         updatePlugins();
         finalizePlugins();
     }
-
-    /* ----------------------------------------------------------------------------------------------------------------
-     *                     UPDATE LOOP
-     * --------------------------------------------------------------------------------------------------------------*/
     private void updatePlugins()
     {
         state = State.EXEC_INIT;
@@ -153,19 +155,19 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
     }
 
 
-    public void addPlugin(@NotNull ServerPlugin plugin)
+    public ServerPlugin addPlugin(@NotNull PluginRegistryObject pluginRegistryObject)
     {
-        if(plugin.getManager() == this)
-            return;
+        ServerPlugin plugin = PluginRegistry.instantiateServerPlugin(pluginRegistryObject);
         if(state != State.NONE)
         {
             // todo: create a temp cache to apply these changes after the update loop
             error("Cannot add a plugin inside an update loop!");
-            return;
+            return null;
         }
         plugin.setManager(this);
         plugins.put(plugin.getInstanceID(), plugin);
         plugin.init_internal();
+        return plugin;
     }
 
     public void removePlugin(@NotNull ServerPlugin plugin)
@@ -207,13 +209,9 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
         List<ItemID> marketIDs =  BACKEND_INSTANCES.MARKET_MANAGER.getSync().getAvailableMarketIDs();
 
 
-        ServerPlugin plugin1 = PluginRegistry.instantiateServerPlugin(Plugins.VOLATILITY_PLUGIN);
-        ServerPlugin plugin2 = PluginRegistry.instantiateServerPlugin(Plugins.DEFAULT_ORDERBOOK_VOLUME_DISTRIBUTION_PLUGIN);
-        ServerPlugin plugin3 = PluginRegistry.instantiateServerPlugin(Plugins.TARGET_PRICE_BOT_PLUGIN);
-
-        addPlugin(plugin1);
-        addPlugin(plugin2);
-        addPlugin(plugin3);
+        ServerPlugin plugin1 = addPlugin(Plugins.VOLATILITY_PLUGIN);
+        ServerPlugin plugin2 = addPlugin(Plugins.DEFAULT_ORDERBOOK_VOLUME_DISTRIBUTION_PLUGIN);
+        ServerPlugin plugin3 = addPlugin(Plugins.TARGET_PRICE_BOT_PLUGIN);
 
         if(!marketIDs.isEmpty())
         {

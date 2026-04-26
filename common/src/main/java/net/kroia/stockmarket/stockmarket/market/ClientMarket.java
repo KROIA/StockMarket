@@ -27,7 +27,7 @@ public class ClientMarket implements IClientMarket
     }
 
     private final ItemID itemID;
-
+    private final AsyncMarket asyncMarket;
     public static class PriceHistoryContainer
     {
         public final static class ServerRelativeTimer extends TimerMillis
@@ -97,6 +97,7 @@ public class ClientMarket implements IClientMarket
     {
         this.itemScaleFactor =  itemScaleFactor;
         this.itemID = itemID;
+        this.asyncMarket = AsyncMarket.createClientMarket(itemID);
 
         for (long delta : AVAILABLE_CANDLE_TIME_DELTAS) {
             priceHistoryDataMap.put(delta, new PriceHistoryContainer(itemID, itemScaleFactor, delta));
@@ -288,6 +289,16 @@ public class ClientMarket implements IClientMarket
     {
         OrderbookVolumeRequest.InputData inp = new OrderbookVolumeRequest.InputData(itemID, startPrice, endPrice, chunkCount);
         return BACKEND_INSTANCES.NETWORKING.ORDERBOOK_VOLUME_REQUEST.sendRequestToServer(inp);
+    }
+
+
+    public CompletableFuture<MarketSettings> getSettings()
+    {
+        return asyncMarket.getSettingsAsync();
+    }
+    public CompletableFuture<Boolean> setSettings(MarketSettings settings)
+    {
+        return asyncMarket.setSettingsAsync(settings);
     }
 
 

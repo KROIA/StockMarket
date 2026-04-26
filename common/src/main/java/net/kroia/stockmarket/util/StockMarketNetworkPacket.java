@@ -1,13 +1,17 @@
 package net.kroia.stockmarket.util;
 
 import dev.architectury.networking.NetworkManager;
+import net.kroia.banksystem.api.bankmanager.ISyncServerBankManager;
 import net.kroia.modutilities.networking.client_server.NetworkPacket;
 import net.kroia.modutilities.networking.client_server.PacketHandler;
 import net.kroia.modutilities.networking.multi_server.ForwardPacketContext;
 import net.kroia.modutilities.networking.multi_server.ForwardPacketHandler;
 import net.kroia.modutilities.networking.multi_server.MultiServerManager;
 import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.api.marketmanager.ISyncServerMarketManager;
 import net.minecraft.server.level.ServerPlayer;
+
+import java.util.UUID;
 
 public abstract class StockMarketNetworkPacket extends NetworkPacket {
 
@@ -54,7 +58,42 @@ public abstract class StockMarketNetworkPacket extends NetworkPacket {
     protected void handleOnMaster(ForwardPacketContext context) {}
     protected void handleOnSlave(ForwardPacketContext context) {}
 
+    protected ISyncServerMarketManager getSyncMarketManager()
+    {
+        return BACKEND_SERVER_INSTANCES.MARKET_MANAGER.getSync();
+    }
 
+
+    protected boolean sendToMaster()
+    {
+        if(MultiServerManager.isRunning() && MultiServerManager.isSlave())
+        {
+            return MultiServerManager.sendToMaster(null, this);
+        }
+        return false;
+    }
+    protected boolean sendToMaster(UUID senderPlayerUUID)
+    {
+        if(MultiServerManager.isRunning() && MultiServerManager.isSlave())
+        {
+            return MultiServerManager.sendToMaster(senderPlayerUUID, this);
+        }
+        return false;
+    }
+    protected void broadcastToSlaves()
+    {
+        if(MultiServerManager.isRunning() && MultiServerManager.isMaster())
+        {
+            MultiServerManager.broadcastToSlaves(this);
+        }
+    }
+    protected void sendToSlave(String slaveID)
+    {
+        if(MultiServerManager.isRunning() && MultiServerManager.isMaster())
+        {
+            MultiServerManager.sendToSlave(slaveID, this);
+        }
+    }
 
 
 

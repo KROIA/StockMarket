@@ -13,6 +13,7 @@ import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
 import net.kroia.stockmarket.api.pluginmanager.IServerPluginManager;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 public abstract class StockMarketGenericRequest<IN, OUT> extends GenericRequest<IN, OUT> {
@@ -23,7 +24,11 @@ public abstract class StockMarketGenericRequest<IN, OUT> extends GenericRequest<
 
     protected boolean playerIsAdmin(ServerPlayer player)
     {
-        return BACKEND_INSTANCES.SERVER_SETTINGS.UTILITIES.playerIsAdmin(player);
+        return BACKEND_INSTANCES.MARKET_MANAGER.getSync().isStockmarketAdmin(player.getUUID());
+    }
+    protected boolean playerIsAdmin(UUID playerUUID)
+    {
+        return BACKEND_INSTANCES.MARKET_MANAGER.getSync().isStockmarketAdmin(playerUUID);
     }
 
     /**

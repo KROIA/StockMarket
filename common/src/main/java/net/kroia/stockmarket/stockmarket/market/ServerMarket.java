@@ -32,9 +32,9 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     private final ItemID itemID;
     private final Orderbook orderbook;
     private final MatchingEngine matchingEngine;
-    private boolean marketOpen;
     private long currentMarketPrice;
-    private long defaultPrice;
+
+    private MarketSettings settings;
 
     /**
      * Input: Real price
@@ -61,7 +61,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
 
     public ServerMarket(ItemID itemID, @Nullable Function<Double, Float> volumeProvider, long defaultPrice)
     {
-        this.defaultPrice =  defaultPrice;
+        this.settings = new MarketSettings(true, defaultPrice);
         this.defaultVolumeProviderFunction =  volumeProvider;
         this.itemID = itemID;
         this.orderbook = new Orderbook(itemID,
@@ -79,7 +79,6 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
                 this::onOrderCanceled, this::onOrderCanceled,
                 this::onPriceChanged);
 
-        this.marketOpen = true;
         this.currentMarketPrice = defaultPrice;
         this.orderbook.setCurrentMarketPrice(defaultPrice);
         this.orderbook.resetVirtualVolumeDistribution();
@@ -140,12 +139,12 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     @Override
     public long getDefaultPrice()
     {
-        return defaultPrice;
+        return settings.defaultPrice;
     }
     @Override
     public CompletableFuture<Long> getDefaultPriceAsync()
     {
-        return CompletableFuture.completedFuture(defaultPrice);
+        return CompletableFuture.completedFuture(settings.defaultPrice);
     }
 
 
@@ -243,7 +242,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     @Override
     public boolean putOrder(Order order)
     {
-        if(order.isFilled() || !marketOpen)
+        if(order.isFilled() || !settings.marketOpen)
             return false;
         if(!order.getItemID().equals(itemID))
             return false; // Wrong stockmarket for this order
@@ -301,7 +300,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     @Override
     public boolean putOrder(InterMarketOrder order)
     {
-        if(order.isFilled() || !marketOpen)
+        if(order.isFilled() || !settings.marketOpen)
             return false;
         if(!order.getBuyItemID().equals(itemID))
             return false; // Wrong stockmarket for this order
@@ -337,11 +336,11 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     @Override
     public boolean isMarketOpen()
     {
-        return marketOpen;
+        return settings.marketOpen;
     }
     @Override
     public CompletableFuture<Boolean> isMarketOpenAsync() {
-        return CompletableFuture.completedFuture(marketOpen);
+        return CompletableFuture.completedFuture(settings.marketOpen);
     }
 
 
@@ -351,7 +350,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     @Override
     public boolean setMarketOpen(boolean marketOpen)
     {
-        this.marketOpen = marketOpen;
+        this.settings.marketOpen = marketOpen;
         return true;
     }
     @Override
@@ -394,7 +393,32 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     }
 
 
+    @Override
+    public MarketSettings getSettings()
+    {
+        return settings;
+    }
+    @Override
+    public CompletableFuture<MarketSettings> getSettingsAsync()
+    {
+        return CompletableFuture.completedFuture(settings);
+    }
 
+
+
+
+
+    @Override
+    public void setSettings(MarketSettings settings)
+    {
+        this.settings = settings;
+    }
+    @Override
+    public CompletableFuture<Boolean> setSettingsAsync(MarketSettings settings)
+    {
+        setSettings(settings);
+        return CompletableFuture.completedFuture(true);
+    }
 
 
     @Override
@@ -409,10 +433,12 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
 
 
 
+
+
     @Override
     public void update()
     {
-        if(!marketOpen)
+        if(!settings.marketOpen)
             return;
 
         orderbook.setCurrentMarketPrice(currentMarketPrice);

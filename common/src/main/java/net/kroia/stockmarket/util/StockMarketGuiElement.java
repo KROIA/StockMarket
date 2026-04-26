@@ -4,6 +4,7 @@ import net.kroia.banksystem.api.bankmanager.IClientBankManager;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.api.market.IClientMarket;
 import net.kroia.stockmarket.api.marketmanager.IClientMarketManager;
 import net.kroia.stockmarket.api.pluginmanager.IClientPluginManager;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
@@ -19,6 +20,8 @@ public abstract class StockMarketGuiElement extends GuiElement {
     public static void setBackend(StockMarketModBackend.ClientInstances backend) {
         BACKEND_INSTANCES = backend;
     }
+
+    protected static @Nullable ClientMarket selectedMarket;
 
     public final static float hoverToolTipFontSize = 0.8f;
     public final static int padding = 4;
@@ -66,9 +69,19 @@ public abstract class StockMarketGuiElement extends GuiElement {
     }
 
 
-    protected @Nullable ClientMarket getMarket(ItemID itemID)
+    protected @Nullable ClientMarket getMarket(ItemID marketID)
     {
-        return BACKEND_INSTANCES.MARKET_MANAGER.getMarket(itemID);
+        return BACKEND_INSTANCES.MARKET_MANAGER.getMarket(marketID);
+    }
+    public static void selectMarket(ItemID marketID) {
+        if(marketID == null)
+            selectedMarket = null;
+        else
+            selectedMarket = BACKEND_INSTANCES.MARKET_MANAGER.getMarket(marketID);
+    }
+    public static @Nullable ClientMarket getSelectedMarket()
+    {
+        return selectedMarket;
     }
 
     protected void info(String msg)

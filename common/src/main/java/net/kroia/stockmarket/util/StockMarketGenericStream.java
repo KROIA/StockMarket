@@ -11,6 +11,8 @@ import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
 import net.kroia.stockmarket.api.pluginmanager.IServerPluginManager;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.util.UUID;
+
 public abstract class StockMarketGenericStream<IN, OUT> extends GenericStream<IN, OUT> {
     protected static StockMarketModBackend.ServerInstances BACKEND_INSTANCES;
     public static void setBackend(StockMarketModBackend.ServerInstances backend) {
@@ -19,7 +21,11 @@ public abstract class StockMarketGenericStream<IN, OUT> extends GenericStream<IN
 
     protected boolean playerIsAdmin(ServerPlayer player)
     {
-        return player.hasPermissions(BACKEND_INSTANCES.SERVER_SETTINGS.UTILITIES.ADMIN_PERMISSION_LEVEL.get());
+        return BACKEND_INSTANCES.MARKET_MANAGER.getSync().isStockmarketAdmin(player.getUUID());
+    }
+    protected boolean playerIsAdmin(UUID playerUUID)
+    {
+        return BACKEND_INSTANCES.MARKET_MANAGER.getSync().isStockmarketAdmin(playerUUID);
     }
 
     /**

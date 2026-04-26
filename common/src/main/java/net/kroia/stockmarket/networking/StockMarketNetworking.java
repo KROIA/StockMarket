@@ -36,6 +36,8 @@ public class StockMarketNetworking extends NetworkPacketManager {
     public final ServerTimeRequest SERVER_TIME_REQUEST = (ServerTimeRequest) AsynchronousRequestResponseSystem.register(new ServerTimeRequest());
     public final OrderbookVolumeRequest ORDERBOOK_VOLUME_REQUEST = (OrderbookVolumeRequest) AsynchronousRequestResponseSystem.register(new OrderbookVolumeRequest());
 
+    //public final MarketSettingsGetRequest MARKET_SETTINGS_GET_REQUEST = (MarketSettingsGetRequest) AsynchronousRequestResponseSystem.register(new MarketSettingsGetRequest());
+
 
     public StockMarketNetworking()
     {

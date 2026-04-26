@@ -25,8 +25,13 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
     }
 
 
+    /**
+     * Using the player UUID as key
+     */
+    private final Map<UUID, User> userMap = new HashMap<>();
 
     private final Map<ItemID, ServerMarket> markets = new HashMap<>();
+
     private final long candleSaveTimer_intervalMs = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.CANDLE_TIME.get();
     private long candleSaveTimer_lastMs = (System.currentTimeMillis()/60000)*60000;
     private final Random random = new Random();
@@ -138,13 +143,91 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
         return CompletableFuture.completedFuture(getMarket(marketID));
     }
 
-    public ServerMarket getServerMarket(ItemID marketID)
+
+
+
+
+    @Override
+    public void onPlayerJoin(UUID playerUUID, String playerName)
     {
-        return markets.get(marketID);
+        User user = userMap.get(playerUUID);
+        if(user == null)
+        {
+            user = new User(playerUUID, playerName);
+            userMap.put(playerUUID, user);
+            return;
+        }
+        if(!user.getName().equals(playerName))
+        {
+            user = new User(playerUUID, playerName);
+            userMap.put(playerUUID, user);
+        }
+    }
+    @Override
+    public void onPlayerJoinAsync(UUID playerUUID, String playerName)
+    {
+        onPlayerJoin(playerUUID, playerName);
     }
 
 
 
+
+    @Override
+    public @Nullable UUID getPlayerUUID(String playerName)
+    {
+        for(User user : userMap.values())
+        {
+            if(user.getName().equals(playerName))
+            {
+                return user.getUUID();
+            }
+        }
+        return null;
+    }
+
+
+
+
+
+    @Override
+    public boolean setStockmarketAdminMode(UUID playerUUID, boolean isAdmin) {
+        User user = userMap.get(playerUUID);
+        if (user == null)
+            return false;
+        user.setStockMarketAdmin(isAdmin);
+        return true;
+    }
+    @Override
+    public CompletableFuture<Boolean> setStockmarketAdminModeAsync(UUID playerUUID, boolean isAdmin) {
+        return CompletableFuture.completedFuture(setStockmarketAdminMode(playerUUID, isAdmin));
+    }
+
+
+
+
+
+    @Override
+    public boolean isStockmarketAdmin(UUID playerUUID) {
+        User user = userMap.get(playerUUID);
+        if (user == null)
+            return false;
+        return user.isStockMarketAdmin();
+    }
+    @Override
+    public CompletableFuture<Boolean> isStockmarketAdminAsync(UUID playerUUID) {
+        User user = userMap.get(playerUUID);
+        if (user == null)
+            return CompletableFuture.completedFuture(false);
+        return CompletableFuture.completedFuture(user.isStockMarketAdmin());
+    }
+
+
+
+
+    public ServerMarket getServerMarket(ItemID marketID)
+    {
+        return markets.get(marketID);
+    }
 
 
 

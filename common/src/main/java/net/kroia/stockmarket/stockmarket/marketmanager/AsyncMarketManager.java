@@ -13,6 +13,7 @@ import net.kroia.stockmarket.api.marketmanager.IAsyncMarketManager;
 import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
 import net.kroia.stockmarket.stockmarket.market.AsyncMarket;
 import net.kroia.stockmarket.util.MultiServerUtils;
+import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
@@ -62,6 +63,9 @@ public class AsyncMarketManager implements IAsyncMarketManager {
         CreateMarket,
         DeleteMarket,
         GetMarket,
+        OnPlayerJoin,
+        SetStockmarketAdminMode,
+        IsStockmarketAdmin,
     }
 
 
@@ -83,6 +87,9 @@ public class AsyncMarketManager implements IAsyncMarketManager {
         put(FunctionType.CreateMarket,                              codecPacket(ItemID.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
         put(FunctionType.DeleteMarket,                              codecPacket(ItemID.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
         put(FunctionType.GetMarket,                                 codecPacket(ItemID.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
+        put(FunctionType.OnPlayerJoin,                              codecPacket(ParamGroup_UUID_String.STREAM_CODEC, null));
+        put(FunctionType.SetStockmarketAdminMode,                   codecPacket(ParamGroup_UUID_Bool.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
+        put(FunctionType.IsStockmarketAdmin,                        codecPacket(UUIDUtil.STREAM_CODEC.cast(), ByteBufCodecs.BOOL.cast()));
 
     }};
     /**
@@ -191,6 +198,17 @@ public class AsyncMarketManager implements IAsyncMarketManager {
                 case FunctionType.CreateMarket ->              OutputData.of(input.function, manager.createMarket(input.decodeParams()) != null);
                 case FunctionType.DeleteMarket ->              OutputData.of(input.function, manager.deleteMarket(input.decodeParams()));
                 case FunctionType.GetMarket ->                 OutputData.of(input.function, manager.getMarket(input.decodeParams()) != null);
+                case FunctionType.OnPlayerJoin ->              {
+                    ParamGroup_UUID_String data = (ParamGroup_UUID_String)input.decodeParams();
+                    manager.onPlayerJoin(data.uuid, data.text);
+                    yield OutputData.of(input.function);
+                }
+                case FunctionType.SetStockmarketAdminMode ->              {
+                    ParamGroup_UUID_Bool data = (ParamGroup_UUID_Bool)input.decodeParams();
+                    manager.setStockmarketAdminMode(data.uuid, data.bool);
+                    yield OutputData.of(input.function);
+                }
+                case FunctionType.IsStockmarketAdmin ->        OutputData.of(input.function, manager.isStockmarketAdmin(input.decodeParams()));
             });
         }
         @Override
@@ -253,6 +271,22 @@ public class AsyncMarketManager implements IAsyncMarketManager {
                 ParamGroup_UUID_int::new
         );
     }*/
+   private record ParamGroup_UUID_String(UUID uuid, String text)
+   {
+       public static final StreamCodec<RegistryFriendlyByteBuf, ParamGroup_UUID_String> STREAM_CODEC = StreamCodec.composite(
+               UUIDUtil.STREAM_CODEC, p -> p.uuid,
+               ByteBufCodecs.STRING_UTF8, p -> p.text,
+               ParamGroup_UUID_String::new
+       );
+   }
+    private record ParamGroup_UUID_Bool(UUID uuid, boolean bool)
+    {
+        public static final StreamCodec<RegistryFriendlyByteBuf, ParamGroup_UUID_Bool> STREAM_CODEC = StreamCodec.composite(
+                UUIDUtil.STREAM_CODEC, p -> p.uuid,
+                ByteBufCodecs.BOOL, p -> p.bool,
+                ParamGroup_UUID_Bool::new
+        );
+    }
 
 
     // ================================================================================================================
@@ -338,6 +372,40 @@ public class AsyncMarketManager implements IAsyncMarketManager {
         });
         return future;
     }
+
+    @Override
+    public CompletableFuture<Boolean> setStockmarketAdminModeAsync(UUID playerUUID, boolean isAdmin)
+    {
+        if(!MultiServerUtils.canInteractWithStockMarket())
+            return CompletableFuture.completedFuture(false);
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.SetStockmarketAdminMode, new ParamGroup_UUID_Bool(playerUUID, isAdmin));
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
+    }
+    @Override
+    public CompletableFuture<Boolean> isStockmarketAdminAsync(UUID playerUUID)
+    {
+        if(!MultiServerUtils.canInteractWithStockMarket())
+            return CompletableFuture.completedFuture(false);
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.IsStockmarketAdmin, playerUUID);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
+    }
+
+
+    @Override
+    public void onPlayerJoinAsync(UUID playerUUID, String playerName){
+        if(!MultiServerUtils.canInteractWithStockMarket())
+            return;
+        InputData inputData = InputData.of(FunctionType.OnPlayerJoin, new ParamGroup_UUID_String(playerUUID, playerName));
+        sendRequest(inputData);
+    }
+
+
 
 
 

@@ -2,6 +2,7 @@ package net.kroia.stockmarket.api.market;
 
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
+import net.kroia.stockmarket.stockmarket.market.MarketSettings;
 import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 
@@ -27,4 +28,9 @@ public interface IAsyncMarket {
 
     CompletableFuture<MarketPriceStruct> getCurrentMarketPriceStructAsync();
     CompletableFuture<MarketPriceStruct> getCurrentMarketPriceStructAndResetAsync();
+
+    CompletableFuture<MarketSettings> getSettingsAsync();
+    CompletableFuture<Boolean> setSettingsAsync(MarketSettings settings);
+
+
 }
