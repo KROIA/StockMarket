@@ -15,7 +15,6 @@ import net.minecraft.nbt.ListTag;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.nio.file.Path;
 import java.util.*;
 
 /**
@@ -55,7 +54,7 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
     public void update()
     {
         updatePlugins();
-        finalizePlugis();
+        finalizePlugins();
     }
 
     /* ----------------------------------------------------------------------------------------------------------------
@@ -73,7 +72,7 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
         }
         state = State.NONE;
     }
-    private void finalizePlugis()
+    private void finalizePlugins()
     {
         state = State.EXEC_FINALIZE;
         for(ServerPlugin plugin : plugins.values())

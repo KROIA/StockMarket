@@ -11,7 +11,6 @@ import net.kroia.stockmarket.pluginsystem.plugin.core.cache.PluginCache;
 import net.kroia.stockmarket.pluginsystem.pluginmanager.ServerPluginManager;
 import net.kroia.stockmarket.pluginsystem.registry.PluginRegistryObject;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.FriendlyByteBuf;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
