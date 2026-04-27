@@ -11,6 +11,7 @@ import net.kroia.stockmarket.util.StockMarketGenericStream;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
+import org.jetbrains.annotations.Nullable;
 
 public class MarketPriceStream extends StockMarketGenericStream<ItemID, MarketPriceStream.ResponseData>
 {
@@ -64,7 +65,11 @@ public class MarketPriceStream extends StockMarketGenericStream<ItemID, MarketPr
         long now = System.currentTimeMillis();
         if (now - lastTimeMs > updateInterval) {
             lastTimeMs = now;
-            IServerMarketManager manager = getMarketManager();
+            @Nullable IServerMarketManager manager = getMarketManager();
+            if(manager == null) {
+                stopStream();
+                return;
+            }
             IServerMarket serverMarket = manager.getMarket(itemID);
             if(serverMarket != null) {
                  long currentPrice = serverMarket.getCurrentMarketPrice();

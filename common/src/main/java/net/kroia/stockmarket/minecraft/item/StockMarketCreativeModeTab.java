@@ -2,7 +2,7 @@ package net.kroia.stockmarket.minecraft.item;
 
 
 import dev.architectury.registry.registries.RegistrySupplier;
-import net.kroia.banksystem.item.BankSystemCreativeModeTab;
+import net.kroia.banksystem.minecraft.item.BankSystemCreativeModeTab;
 import net.minecraft.world.item.CreativeModeTab;
 
 public class StockMarketCreativeModeTab {

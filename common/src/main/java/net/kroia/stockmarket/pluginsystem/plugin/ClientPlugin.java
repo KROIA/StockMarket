@@ -4,6 +4,7 @@ import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.plugin.IClientPlugin;
 import net.kroia.stockmarket.pluginsystem.plugin.core.GenericPluginData;
 import net.kroia.stockmarket.pluginsystem.registry.PluginRegistryObject;
+import net.kroia.stockmarket.pluginsystem.screen.PluginGuiElement;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
@@ -15,11 +16,18 @@ public class ClientPlugin implements IClientPlugin {
     }
 
     private final GenericPluginData genericPluginData;
-
+    private PluginGuiElement guiElement;
 
     public ClientPlugin(UUID instanceID) {
         genericPluginData  = new GenericPluginData(instanceID);
     }
+
+    public PluginGuiElement getGuiElement() {
+        if(guiElement == null)
+            guiElement = new PluginGuiElement();
+        return guiElement;
+    }
+
     public final void setRegistrar(PluginRegistryObject registrar)
     {
         genericPluginData.setRegistrar(registrar);

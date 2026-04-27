@@ -1,7 +1,7 @@
 package net.kroia.stockmarket.minecraft.item.custom.software;
 
-import net.kroia.banksystem.block.custom.TerminalBlock;
-import net.kroia.banksystem.item.custom.software.Software;
+import net.kroia.banksystem.minecraft.block.custom.TerminalBlock;
+import net.kroia.banksystem.minecraft.item.custom.software.Software;
 import net.kroia.stockmarket.minecraft.block.StockMarketBlocks;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.GameType;

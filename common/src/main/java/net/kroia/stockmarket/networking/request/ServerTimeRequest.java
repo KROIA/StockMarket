@@ -6,6 +6,7 @@ import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
@@ -23,6 +24,11 @@ public class ServerTimeRequest extends StockMarketGenericRequest<Long, ServerTim
     @Override
     public String getRequestTypeID() {
         return ServerTimeRequest.class.getName();
+    }
+
+    @Override
+    protected OutputData getDefaultResponse() {
+        return new OutputData(0,0);
     }
 
     @Override

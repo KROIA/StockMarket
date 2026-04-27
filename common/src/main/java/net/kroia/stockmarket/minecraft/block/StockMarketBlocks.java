@@ -4,7 +4,7 @@ import com.google.common.base.Suppliers;
 import dev.architectury.registry.registries.Registrar;
 import dev.architectury.registry.registries.RegistrarManager;
 import dev.architectury.registry.registries.RegistrySupplier;
-import net.kroia.banksystem.block.custom.TerminalBlock;
+import net.kroia.banksystem.minecraft.block.custom.TerminalBlock;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.minecraft.block.custom.StockMarketBlock;
 import net.kroia.stockmarket.minecraft.item.StockMarketItems;

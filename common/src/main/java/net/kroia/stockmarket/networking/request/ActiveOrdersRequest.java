@@ -72,6 +72,10 @@ public class ActiveOrdersRequest extends StockMarketGenericRequest<ActiveOrdersR
         return ActiveOrdersRequest.class.getName();
     }
 
+    @Override
+    protected OutputData getDefaultResponse() {
+        return new OutputData(List.of());
+    }
 
     @Override
     public CompletableFuture<OutputData> handleOnMasterServer(InputData input, String slaveID, @Nullable UUID playerSender) {

@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.stockmarket.marketmanager;
 
+import net.kroia.banksystem.banking.bankmanager.AsyncBankManager;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncForwardingRequest;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionDataCodecs;
@@ -168,6 +169,14 @@ public class AsyncMarketManager implements IAsyncMarketManager {
             if(playerSender != null) {
                 playerName = tryGetPlayerName(playerSender);
                 playerInfo = " from player: " + playerName;
+            }
+            if(!isAllowedToCallByUntrustedSlaveServer(input))
+            {
+                if(!BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().isSlaveServerTrusted(slaveID))
+                {
+                    warn("The slave server: '"+slaveID+"' try's to call the function: '"+input.function.toString()+"' which is not allowed for an untrusted slave server!");
+                    return CompletableFuture.completedFuture(OutputData.of(input.function));
+                }
             }
             if(AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
                 info("Received request to handle on master server for function: "+input.function.toString() + playerInfo);

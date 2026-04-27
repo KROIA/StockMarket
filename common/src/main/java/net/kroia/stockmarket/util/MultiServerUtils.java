@@ -22,7 +22,7 @@ public class MultiServerUtils {
 
     public static boolean canInteractWithStockMarket()
     {
-        if(BankSystemMod.getAPI().getServerBankManager().isSlave())
+        if(BankSystemMod.getAPI().isSlave())
         {
             return checkConnectionToMaster();
         }
@@ -30,7 +30,7 @@ public class MultiServerUtils {
     }
     public static boolean canInteractWithStockMarket(UUID executor)
     {
-        if(BankSystemMod.getAPI().getServerBankManager().isSlave())
+        if(BankSystemMod.getAPI().isSlave())
         {
             return checkConnectionToMaster(executor);
         }

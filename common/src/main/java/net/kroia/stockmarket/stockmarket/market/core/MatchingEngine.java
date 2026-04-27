@@ -33,7 +33,7 @@ public class MatchingEngine
     private static final int TIMEOUT_COUNT = 10000;
 
     private final PriorityQueue<Order> buyMarketOrders_inputBuffer;
-    private final PriorityQueue<Order> selMarketOrders_inputBuffer;
+    private final PriorityQueue<Order> sellMarketOrders_inputBuffer;
     private final PriorityQueue<Order> buyLimitOrders_inputBuffer;
     private final PriorityQueue<Order> sellLimitOrders_inputBuffer;
     private final PriorityQueue<InterMarketOrder> interMarket_LimitBuyOrders_inputBuffer;
@@ -53,7 +53,7 @@ public class MatchingEngine
 
     public MatchingEngine(ItemID itemID, Orderbook orderbook,
                           PriorityQueue<Order> buyMarketOrders_inputBuffer,
-                          PriorityQueue<Order> selMarketOrders_inputBuffer,
+                          PriorityQueue<Order> sellMarketOrders_inputBuffer,
                           PriorityQueue<Order> buyLimitOrders_inputBuffer,
                           PriorityQueue<Order> sellLimitOrders_inputBuffer,
                           PriorityQueue<InterMarketOrder> interMarket_LimitBuyOrders_inputBuffer,
@@ -68,7 +68,7 @@ public class MatchingEngine
         this.orderbook = orderbook;
 
         this.buyMarketOrders_inputBuffer = buyMarketOrders_inputBuffer;
-        this.selMarketOrders_inputBuffer = selMarketOrders_inputBuffer;
+        this.sellMarketOrders_inputBuffer = sellMarketOrders_inputBuffer;
         this.buyLimitOrders_inputBuffer = buyLimitOrders_inputBuffer;
         this.sellLimitOrders_inputBuffer = sellLimitOrders_inputBuffer;
         this.interMarket_LimitBuyOrders_inputBuffer = interMarket_LimitBuyOrders_inputBuffer;
@@ -104,13 +104,13 @@ public class MatchingEngine
             }
             sellLimitOrders_inputBuffer.clear();
         }
-        if(!selMarketOrders_inputBuffer.isEmpty())
+        if(!sellMarketOrders_inputBuffer.isEmpty())
         {
-            for(Order order : selMarketOrders_inputBuffer)
+            for(Order order : sellMarketOrders_inputBuffer)
             {
                 processMarketOrder(order, 0, Long.MAX_VALUE);
             }
-            selMarketOrders_inputBuffer.clear();
+            sellMarketOrders_inputBuffer.clear();
         }
         if(!buyMarketOrders_inputBuffer.isEmpty())
         {

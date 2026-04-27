@@ -25,6 +25,8 @@ import java.util.concurrent.CompletableFuture;
 public class MarketPriceHistoryRequest extends StockMarketGenericRequest<MarketPriceHistoryRequest.InputData, PriceHistoryData>
 {
 
+
+
     public record InputData(ItemID item, long minTimestamp, long maxTimestamp)
     {
         public static final StreamCodec<RegistryFriendlyByteBuf, InputData> STREAM_CODEC = StreamCodec.composite(
@@ -40,7 +42,10 @@ public class MarketPriceHistoryRequest extends StockMarketGenericRequest<MarketP
         return MarketPriceHistoryRequest.class.getName();
     }
 
-
+    @Override
+    protected PriceHistoryData getDefaultResponse() {
+        return new PriceHistoryData(0, ItemID.INVALID_ID, 100);
+    }
     @Override
     public CompletableFuture<PriceHistoryData> handleOnMasterServer(InputData input, String slaveID, @Nullable UUID playerSender)
     {

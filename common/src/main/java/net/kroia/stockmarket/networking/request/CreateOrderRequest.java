@@ -22,6 +22,7 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
@@ -81,6 +82,10 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
         return CreateOrderRequest.class.getName();
     }
 
+    @Override
+    protected OutputData getDefaultResponse() {
+        return new OutputData(Status.NO_SERVER_BANK_MANAGER, null);
+    }
 
     @Override
     public CompletableFuture<OutputData> handleOnMasterServer(CreateOrderRequest.InputData input, String slaveID, @Nullable UUID playerSender) {

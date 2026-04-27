@@ -21,8 +21,7 @@ public class PluginRegistry
                                       String pluginName,
                                       String pluginDescription,
                                       Supplier<ServerPlugin> serverPluginFactory,
-                                      Function<UUID, ClientPlugin> clientPluginFactory,
-                                                      Supplier<PluginGuiElement> pluginGuiElementFactory)
+                                      Function<UUID, ClientPlugin> clientPluginFactory)
     {
         PluginRegistryObject registryObject = registryObjects.get(pluginTypeID);
         if (registryObject != null)
@@ -34,8 +33,7 @@ public class PluginRegistry
                 pluginName,
                 pluginDescription,
                 serverPluginFactory,
-                clientPluginFactory,
-                pluginGuiElementFactory);
+                clientPluginFactory);
         registryObjects.put(pluginTypeID, registryObject);
         return registryObject;
     }

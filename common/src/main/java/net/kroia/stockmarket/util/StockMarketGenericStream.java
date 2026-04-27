@@ -10,6 +10,7 @@ import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
 import net.kroia.stockmarket.api.pluginmanager.IServerPluginManager;
 import net.minecraft.server.level.ServerPlayer;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
 
@@ -31,7 +32,7 @@ public abstract class StockMarketGenericStream<IN, OUT> extends GenericStream<IN
     /**
      * Only call this function on the master server!
      */
-    protected final IServerMarketManager getMarketManager()
+    protected final @Nullable IServerMarketManager getMarketManager()
     {
         return BACKEND_INSTANCES.MARKET_MANAGER.getSync();
     }

@@ -44,6 +44,11 @@ public class OrderbookVolumeRequest extends StockMarketGenericRequest<OrderbookV
         return OrderbookVolumeRequest.class.getName();
     }
 
+    @Override
+    protected OutputData getDefaultResponse() {
+        return new OutputData(ItemID.INVALID_ID, 0.0,0.0, new float[0]);
+    }
+
     public CompletableFuture<OutputData> handleOnMasterServer(InputData input, String slaveID, @Nullable UUID playerSender) {
         final int maxChunkCount = 1000;
 

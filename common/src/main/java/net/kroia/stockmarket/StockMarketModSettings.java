@@ -1,13 +1,12 @@
 package net.kroia.stockmarket;
 
-import net.kroia.banksystem.item.BankSystemItems;
+
+import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.modutilities.setting.ModSettings;
 import net.kroia.modutilities.setting.Setting;
 import net.kroia.modutilities.setting.SettingsGroup;
 import net.kroia.modutilities.setting.parser.ItemStackJsonParser;
-import net.kroia.stockmarket.networking.packet.PlayerJoinSyncPacket;
 import net.kroia.stockmarket.util.ClientSettings;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 
 public class StockMarketModSettings extends ModSettings {

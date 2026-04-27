@@ -2,7 +2,7 @@ package net.kroia.stockmarket.stockmarket.market.core;
 
 
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
-import net.kroia.banksystem.item.BankSystemItems;
+import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IServerMarket;
@@ -678,7 +678,8 @@ public class Testing {
     }
     private float uniformVolumeDistribution(double price)
     {
-        return uniformVolumeDistributionScale;
+        // Real value volume, not backend value
+        return (float)uniformVolumeDistributionScale/BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync().getItemFractionScaleFactor();
     }
 
 

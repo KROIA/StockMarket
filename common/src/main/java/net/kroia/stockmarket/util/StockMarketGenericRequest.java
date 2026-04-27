@@ -78,8 +78,17 @@ public abstract class StockMarketGenericRequest<IN, OUT> extends GenericRequest<
     }
 
 
+    protected abstract OUT getDefaultResponse();
 
     public CompletableFuture<OUT> handleOnServer(IN input, ServerPlayer sender) {
+        if(needsRoutingToMaster()) {
+            if (getServerMarketManager() != null)
+                return handleOnMasterServer(input, "", sender.getUUID());
+            else {
+                error("Not connected to master server");
+                return CompletableFuture.completedFuture(getDefaultResponse());
+            }
+        }
         return handleOnMasterServer(input, "", sender.getUUID());
     }
     @Override

@@ -15,8 +15,7 @@ public class Plugins {
             "VolatilityPlugin",
             "A plugin that adds random walk based volatility to the target price.",
             VolatilityPlugin::new,
-            ClientPlugin::new,
-            PluginGuiElement::new
+            ClientPlugin::new
     );
 
     public static final PluginRegistryObject TARGET_PRICE_BOT_PLUGIN = PluginRegistry.registerPlugin(
@@ -24,8 +23,7 @@ public class Plugins {
             "TargetPriceBot",
             "A bot that tries to move the price towards a target price using a PID controller.",
             TargetPriceBot::new,
-            ClientPlugin::new,
-            PluginGuiElement::new
+            ClientPlugin::new
     );
 
     public static final PluginRegistryObject DEFAULT_ORDERBOOK_VOLUME_DISTRIBUTION_PLUGIN = PluginRegistry.registerPlugin(
@@ -33,8 +31,7 @@ public class Plugins {
             "DefaultOrderbookVolumeDistributionPlugin",
             "Automatically fills the orderbook with a reasonable volume distribution.",
             DefaultOrderbookVolumeDistributionPlugin::new,
-            ClientPlugin::new,
-            PluginGuiElement::new
+            ClientPlugin::new
     );
 
     public static void serverSetup()

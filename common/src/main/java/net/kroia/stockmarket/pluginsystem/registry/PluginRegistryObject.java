@@ -16,22 +16,19 @@ public class PluginRegistryObject
     private final Supplier<ServerPlugin> serverPluginFactory;
 
     private final Function<UUID, ClientPlugin> clientPluginFactory;
-    private final Supplier<PluginGuiElement> pluginGuiElementFactory;
 
 
     public PluginRegistryObject(String pluginTypeID,
                                 String pluginName,
                                 String pluginDescription,
                                 Supplier<ServerPlugin> serverPluginFactory,
-                                Function<UUID, ClientPlugin> clientPluginFactory,
-                                Supplier<PluginGuiElement> pluginGuiElementFactory)
+                                Function<UUID, ClientPlugin> clientPluginFactory)
     {
         this.pluginTypeID = pluginTypeID;
         this.pluginName = pluginName;
         this.pluginDescription = pluginDescription;
         this.serverPluginFactory = serverPluginFactory;
         this.clientPluginFactory = clientPluginFactory;
-        this.pluginGuiElementFactory = pluginGuiElementFactory;
     }
 
     public String getPluginTypeID()
@@ -57,10 +54,5 @@ public class PluginRegistryObject
         ClientPlugin plugin = clientPluginFactory.apply(serversInstanceID);
         plugin.setRegistrar(this);
         return plugin;
-    }
-    public PluginGuiElement instantiatePluginGuiElement(UUID serversInstanceID)
-    {
-        PluginGuiElement pluginGuiElement = pluginGuiElementFactory.get();
-        return pluginGuiElement;
     }
 }
