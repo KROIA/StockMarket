@@ -9,6 +9,7 @@ import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import net.kroia.banksystem.api.command.IAsyncBankSystemCommandHandler;
 import net.kroia.banksystem.api.command.IServerBankSystemCommandHandler;
 import net.kroia.modutilities.ServerPlayerUtilities;
+import net.kroia.modutilities.testing.TestCommandRegistration;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.data.table.OrderRecordManager;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
@@ -264,6 +265,11 @@ public class StockMarketCommands {
                                 })
 
                         ));
+
+        boolean isSlave = BACKEND_INSTANCES != null
+                && BACKEND_INSTANCES.MARKET_MANAGER != null
+                && BACKEND_INSTANCES.MARKET_MANAGER.getSync() == null;
+        TestCommandRegistration.register(dispatcher, "stockmarket", "StockMarket", isSlave);
 
 
         /*

@@ -24,7 +24,10 @@ import net.kroia.stockmarket.pluginsystem.pluginmanager.ClientPluginManager;
 import net.kroia.stockmarket.pluginsystem.pluginmanager.PluginManager;
 import net.kroia.stockmarket.stockmarket.marketmanager.ClientMarketManager;
 import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
-import net.kroia.stockmarket.stockmarket.market.core.Testing;
+
+import net.kroia.stockmarket.testing.StockMarketTestRegistration;
+import net.kroia.stockmarket.testing.tests.MarketIntegrationTestSuite;
+import net.kroia.modutilities.testing.TestRegistry;
 import net.kroia.stockmarket.minecraft.menu.StockMarketMenus;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.kroia.stockmarket.networking.packet.PlayerJoinSyncPacket;
@@ -171,7 +174,6 @@ public class StockMarketModBackend implements StockMarketAPI {
         SERVER_INSTANCES.SERVER_SETTINGS = new StockMarketModSettings();
         SERVER_INSTANCES.SERVER_SETTINGS.setLogger(SERVER_INSTANCES.LOGGER::error, SERVER_INSTANCES.LOGGER::error, SERVER_INSTANCES.LOGGER::debug);
 
-        Testing.setBackend(SERVER_INSTANCES);
         MarketManager.setBackend(SERVER_INSTANCES);
         PluginManager.setBackend(SERVER_INSTANCES);
         StockMarketNetworking.setBackend(SERVER_INSTANCES);
@@ -179,7 +181,11 @@ public class StockMarketModBackend implements StockMarketAPI {
         StockMarketCommands.setBackend(SERVER_INSTANCES);
         DataManager.setBackend(SERVER_INSTANCES);
 
-        
+        if (TestRegistry.ENABLE_TESTS) {
+            MarketIntegrationTestSuite.setBackend(SERVER_INSTANCES);
+            StockMarketTestRegistration.register();
+        }
+
         boolean isMaster = BankSystemMod.getAPI().getServerBankManager().isMaster();
         if(isMaster)
         {
@@ -187,25 +193,6 @@ public class StockMarketModBackend implements StockMarketAPI {
             SERVER_INSTANCES.MARKET_MANAGER = MarketManager.createMaster();
             SERVER_INSTANCES.PLUGIN_MANAGER = PluginManager.createMaster();
             SERVER_INSTANCES.DATA_MANAGER = new DataManager();
-
-            Testing testing = new Testing();
-            if(!testing.setup())
-            {
-                SERVER_INSTANCES.LOGGER.info("Can't setup testing");
-                return;
-            }
-            if(testing.runTests())
-            {
-                SERVER_INSTANCES.LOGGER.info("All tests executed successfully");
-            }
-            else
-            {
-                SERVER_INSTANCES.LOGGER.info("Some tests failed");
-                testing.runTests();
-            }
-
-
-
 
             loadDataFromFiles(UtilitiesPlatform.getServer());
             TickEvent.SERVER_POST.register(StockMarketModBackend::onServerTick);
