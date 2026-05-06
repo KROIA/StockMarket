@@ -32,7 +32,6 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
 
     private final Map<ItemID, ServerMarket> markets = new HashMap<>();
 
-    private final long candleSaveTimer_intervalMs = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.CANDLE_TIME.get();
     private long candleSaveTimer_lastMs = (System.currentTimeMillis()/60000)*60000;
     private final Random random = new Random();
     private ItemID tradingCurrencyID = null;
@@ -277,7 +276,8 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
         }
 
         long time = System.currentTimeMillis();
-        if(time - candleSaveTimer_lastMs > candleSaveTimer_intervalMs)
+        long candleSaveIntervalMs = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.CANDLE_TIME.get();
+        if(time - candleSaveTimer_lastMs > candleSaveIntervalMs)
         {
             candleSaveTimer_lastMs = time;
             BACKEND_INSTANCES.DATA_MANAGER.savePriceCandlesToSQL();
@@ -300,6 +300,17 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
             marketListTag.add(marketTag);
         }
         listTags.put("markets", marketListTag);
+
+        ListTag userListTag = new ListTag();
+        for(User user : userMap.values())
+        {
+            CompoundTag userTag = new CompoundTag();
+            if(user.save(userTag))
+                userListTag.add(userTag);
+            else
+                success = false;
+        }
+        listTags.put("users", userListTag);
         return success;
     }
 
@@ -321,11 +332,6 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
             ItemID id = ItemID.createFromTag(marketTag);
             if(id.isValid())
             {
-                /*ServerMarket market = markets.get(id);
-                if(market != null)
-                    success = false;
-                else
-                {*/
                 ServerMarket market = new ServerMarket(id);
                 if(market.load(marketTag))
                 {
@@ -333,7 +339,6 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
                 }
                 else
                     success = false;
-                //}
             }
             else
                 success = false;
@@ -341,6 +346,21 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
         if(success) {
             markets.clear();
             markets.putAll(newMarkets);
+        }
+
+        ListTag userListTag = listTags.get("users");
+        if(userListTag != null)
+        {
+            userMap.clear();
+            for(int i = 0; i < userListTag.size(); i++)
+            {
+                CompoundTag userTag = userListTag.getCompound(i);
+                User user = User.createFromTag(userTag);
+                if(user != null)
+                    userMap.put(user.getUUID(), user);
+                else
+                    success = false;
+            }
         }
         return success;
     }

@@ -62,18 +62,18 @@ public class MarketPriceHistoryRequest extends StockMarketGenericRequest<MarketP
             if(data == null)
             {
                 warn("MarketPriceHistoryRequest failed to fetch data for item: " + input.item);
+                future.complete(new PriceHistoryData(System.currentTimeMillis(), input.item, getItemFractionScaleFactor()));
+                return;
             }
-            else {
 
-                IServerMarket market = getServerMarketManager().getMarket(input.item);
-                if (market != null) {
-                    MarketPriceStruct currentCandleData = market.getCurrentMarketPriceStruct();
-                    if(input.maxTimestamp >= currentCandleData.time()) {
-                        data.startNewCandle(System.currentTimeMillis());
-                        data.setCurrentMarketPrice(currentCandleData.high());
-                        data.setCurrentMarketPrice(currentCandleData.low());
-                        data.setCurrentMarketPrice(market.getCurrentMarketPrice());
-                    }
+            IServerMarket market = getServerMarketManager().getMarket(input.item);
+            if (market != null) {
+                MarketPriceStruct currentCandleData = market.getCurrentMarketPriceStruct();
+                if(input.maxTimestamp >= currentCandleData.time()) {
+                    data.startNewCandle(System.currentTimeMillis());
+                    data.setCurrentMarketPrice(currentCandleData.high());
+                    data.setCurrentMarketPrice(currentCandleData.low());
+                    data.setCurrentMarketPrice(market.getCurrentMarketPrice());
                 }
             }
 

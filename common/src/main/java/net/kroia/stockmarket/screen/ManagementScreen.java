@@ -262,6 +262,17 @@ public class ManagementScreen extends StockMarketGuiScreen {
         Minecraft.getInstance().setScreen(screen);
     }
 
+    @Override
+    public void onClose()
+    {
+        ClientMarket currentMarket = StockMarketGuiElement.getSelectedMarket();
+        if(currentMarket != null)
+        {
+            currentMarket.unsubscribeFromMarketPriceUpdate();
+            StockMarketGuiElement.selectMarket(null);
+        }
+        super.onClose();
+    }
 
     @Override
     protected void updateLayout(Gui gui) {

@@ -44,7 +44,16 @@ public class ClientMarketManager implements IClientMarketManager
     @Override
     public void onPlayerJoin(@Nullable LocalPlayer localPlayer)
     {
-        requestMarkets();
+        // Sync the server time offset once on join, then request markets.
+        // Avoids per-market overwrites of the shared static timeOffsetMS (Issue #44).
+        BACKEND_INSTANCES.NETWORKING.SERVER_TIME_REQUEST.sendRequestToServer(System.currentTimeMillis()).thenAccept(serverTime ->
+        {
+            long currentTime = System.currentTimeMillis();
+            long turnaroundTime = currentTime - serverTime.clientTimeEcho();
+            long currentServerTime = serverTime.serverTime() + turnaroundTime / 2;
+            ClientMarket.PriceHistoryContainer.ServerRelativeTimer.timeOffsetMS = currentServerTime - currentTime;
+            requestMarkets();
+        });
     }
 
     @Override

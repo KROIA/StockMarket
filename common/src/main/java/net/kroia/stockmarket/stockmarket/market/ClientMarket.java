@@ -153,28 +153,17 @@ public class ClientMarket implements IClientMarket
     }
     public void requestFullPriceHistoryUpdate(long startTime, long endTime)
     {
-        // Update time reference from server
-        BACKEND_INSTANCES.NETWORKING.SERVER_TIME_REQUEST.sendRequestToServer(System.currentTimeMillis()).thenAccept(serverTime ->
+        // timeOffsetMS is synced once at player join (see ClientMarketManager.onPlayerJoin).
+        MarketPriceHistoryRequest.InputData priceChunkRequestData = new MarketPriceHistoryRequest.InputData(itemID, startTime, endTime);
+        BACKEND_INSTANCES.NETWORKING.MARKET_PRICE_HISTORY_REQUEST.sendRequestToServer(priceChunkRequestData).thenAccept((historyData) ->
         {
-            long currentTime = System.currentTimeMillis();
-            long turnaroundTime = currentTime - serverTime.clientTimeEcho();
-            // Assuming the packet uses the same amount of time for both ways
-            long currentServerTime = serverTime.serverTime() + turnaroundTime/2;
-            PriceHistoryContainer.ServerRelativeTimer.timeOffsetMS = currentServerTime - currentTime;
-
-            MarketPriceHistoryRequest.InputData priceChunkRequestData = new MarketPriceHistoryRequest.InputData(itemID, startTime, endTime);
-            BACKEND_INSTANCES.NETWORKING.MARKET_PRICE_HISTORY_REQUEST.sendRequestToServer(priceChunkRequestData).thenAccept((historyData) ->
+            info("Price chunk received for: "+itemID);
+            for(PriceHistoryContainer priceHistoryContainer : priceHistoryDataMap.values())
             {
-                info("Price chunk received for: "+itemID);
-                for(PriceHistoryContainer priceHistoryContainer : priceHistoryDataMap.values())
-                {
-                    priceHistoryContainer.loadFrom(historyData,
-                            PriceHistoryContainer.ServerRelativeTimer.timeOffsetMS + System.currentTimeMillis(),
-                            BACKEND_INSTANCES.SETTINGS.isFillMissingCandlesticks());
-
-
-                }
-            });
+                priceHistoryContainer.loadFrom(historyData,
+                        PriceHistoryContainer.ServerRelativeTimer.timeOffsetMS + System.currentTimeMillis(),
+                        BACKEND_INSTANCES.SETTINGS.isFillMissingCandlesticks());
+            }
         });
 
 

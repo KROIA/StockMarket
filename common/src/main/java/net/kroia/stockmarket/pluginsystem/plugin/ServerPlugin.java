@@ -32,11 +32,6 @@ public abstract class ServerPlugin implements ServerSaveable, IServerPlugin {
         EXEC_DEINIT,
         EXEC_UPDATE,
         EXEC_FINALIZE,
-        //EXEC_APPLY,
-        EXEC_SAVE,
-        EXEC_LOAD,
-        EXEC_ENCODING,
-        EXEC_DECODING,
     }
     private @Nullable ServerPluginManager manager = null;
     private final PluginCache cache = new PluginCache();

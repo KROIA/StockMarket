@@ -35,14 +35,18 @@ public class DatabaseManager {
      * Should be called only when the database does not currently exist in a world save.
      * Databases need to be saved on a per-world basis so that we don't have to worry
      * about cross-world data.
+     *
+     * @return true if all tables were created successfully, false if any table creation failed.
      */
-    public static void createDatabase(MinecraftServer server) {
+    public static boolean createDatabase(MinecraftServer server) {
         try {
             DatabaseManager.executeSqlFile("/sql/MarketPrice.sql");
             DatabaseManager.executeSqlFile("/sql/OrderHistory.sql");
+            return true;
         }
         catch(SQLException | IOException e){
             StockMarketMod.LOGGER.error("Failed to create database table {}", e.getMessage());
+            return false;
         }
     }
 
@@ -111,8 +115,11 @@ public class DatabaseManager {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-        createDatabase(server);
-        StockMarketMod.LOGGER.info("Successfully connected to database {}", url);
+        if(createDatabase(server)) {
+            StockMarketMod.LOGGER.info("Successfully connected to database {}", url);
+        } else {
+            StockMarketMod.LOGGER.error("Database connected but table creation failed for: {}", url);
+        }
     }
 
 
@@ -139,13 +146,19 @@ public class DatabaseManager {
         return connection;
     }
 
-    public static void commitTransaction() throws SQLException {
+    public static boolean commitTransaction() {
         try{
             connection.commit();
+            return true;
         }
         catch (SQLException e){
-            connection.rollback();
-            StockMarketMod.LOGGER.error("Failed to commit transaction {}",  e.getMessage());
+            try {
+                connection.rollback();
+            } catch (SQLException re) {
+                StockMarketMod.LOGGER.error("Failed to rollback transaction {}", re.getMessage());
+            }
+            StockMarketMod.LOGGER.error("Failed to commit transaction, rolled back {}", e.getMessage());
+            return false;
         }
     }
 

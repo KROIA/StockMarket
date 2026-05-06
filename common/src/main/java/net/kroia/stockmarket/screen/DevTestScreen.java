@@ -157,6 +157,19 @@ public class DevTestScreen extends StockMarketGuiScreen {
     }
 
     @Override
+    public void onClose()
+    {
+        if(market != null)
+        {
+            market.unsubscribeFromMarketPriceUpdate();
+            candlestickChart.setMarket(null);
+            market = null;
+            currentMarketID = null;
+        }
+        super.onClose();
+    }
+
+    @Override
     protected void updateLayout(Gui gui) {
         int width = getWidth();
         int height = getHeight();
@@ -168,12 +181,22 @@ public class DevTestScreen extends StockMarketGuiScreen {
 
     private void createLimitOrder(double amount, double price)
     {
+        if(market == null)
+        {
+            warn("Cannot create limit order: market not loaded yet");
+            return;
+        }
         market.createLimitOrder(selfBankAccountNr, amount, price).thenAccept(result->{
            info("Order creation response: "+result.status);
         });
     }
     private void createMarketOrder(int amount)
     {
+        if(market == null)
+        {
+            warn("Cannot create market order: market not loaded yet");
+            return;
+        }
         market.createMarketOrder(selfBankAccountNr, amount).thenAccept(result->{
             info("Order creation response: "+result.status);
         });

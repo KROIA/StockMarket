@@ -26,12 +26,10 @@ public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
 
     public CompletableFuture<Void> save(MarketPriceStruct data) {
         return CompletableFuture.runAsync(() -> {
-            try {
-                PreparedStatement preparedStatement = DatabaseManager.getConnection().prepareStatement(INSERT);
+            try (PreparedStatement preparedStatement = DatabaseManager.getConnection().prepareStatement(INSERT)) {
                 queueRecord(preparedStatement, data);
                 preparedStatement.execute();
                 DatabaseManager.commitTransaction();
-
             } catch (SQLException e) {
                 throw new RuntimeException(e);
             }
@@ -41,12 +39,10 @@ public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
 
     public CompletableFuture<Void> save(List<MarketPriceStruct> data) {
         return CompletableFuture.runAsync(() -> {
-            try {
-                PreparedStatement preparedStatement = DatabaseManager.getConnection().prepareStatement(INSERT);
+            try (PreparedStatement preparedStatement = DatabaseManager.getConnection().prepareStatement(INSERT)) {
                 data.forEach(d -> queueRecord(preparedStatement, d));
                 preparedStatement.executeBatch();
                 DatabaseManager.commitTransaction();
-
             } catch (SQLException e) {
                 throw new RuntimeException(e);
             }
@@ -92,10 +88,10 @@ public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
                     statement += " WHERE " + marketFilter.get().getClause("marketid");
                 }
 
-                PreparedStatement preparedStatement = DatabaseManager.getConnection().prepareStatement(statement);
-                preparedStatement.executeUpdate();
-                DatabaseManager.commitTransaction();
-
+                try (PreparedStatement preparedStatement = DatabaseManager.getConnection().prepareStatement(statement)) {
+                    preparedStatement.executeUpdate();
+                    DatabaseManager.commitTransaction();
+                }
             } catch (SQLException e) {
                 throw new RuntimeException(e);
             }
@@ -118,11 +114,14 @@ public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
                     statement = statement + " LIMIT " + limit;
                 }
                 List<MarketPriceStruct> result = new ArrayList<>();
-                PreparedStatement preparedStatement = DatabaseManager.getConnection().prepareStatement(statement);
-                ResultSet resultSet = preparedStatement.executeQuery();
-                DatabaseManager.commitTransaction();
-                while(resultSet.next()){
-                    result.add(mapRow(resultSet));
+                try (PreparedStatement preparedStatement = DatabaseManager.getConnection().prepareStatement(statement);
+                     ResultSet resultSet = preparedStatement.executeQuery()) {
+                    DatabaseManager.commitTransaction();
+                    while (resultSet.next()) {
+                        MarketPriceStruct row = mapRow(resultSet);
+                        if (row != null)
+                            result.add(row);
+                    }
                 }
                 return result;
 
@@ -155,12 +154,13 @@ public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
                 } else if (marketFilter.isPresent()) {
                     statement += " WHERE " + marketFilter.get().getClause("marketid");
                 }
-                PreparedStatement preparedStatement = DatabaseManager.getConnection().prepareStatement(statement);
-                ResultSet resultSet = preparedStatement.executeQuery();
-                DatabaseManager.commitTransaction();
-                if (resultSet.next()){
-                    return resultSet.getInt(1);
-                };
+                try (PreparedStatement preparedStatement = DatabaseManager.getConnection().prepareStatement(statement);
+                     ResultSet resultSet = preparedStatement.executeQuery()) {
+                    DatabaseManager.commitTransaction();
+                    if (resultSet.next()) {
+                        return resultSet.getInt(1);
+                    }
+                }
                 return 0;
 
             } catch (SQLException e) {

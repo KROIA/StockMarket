@@ -126,25 +126,18 @@ public class Orderbook implements ServerSaveable
     {
         long volume = (long)virtualOrderbook.getVolume(price);
 
+        // PriorityQueue iterator does NOT traverse in priority order — must scan all orders.
         if(currentMarketPrice > price) {
-            // The searched price is inside the buy order since the stockmarket price is higher than the searched price
             for(Order order : buyLimitOrders)
             {
-                long startPrice = order.getStartPrice();
-                if(startPrice < price)
-                    break;
-                if(startPrice == price) {
+                if(order.getStartPrice() == price) {
                     volume += order.getRemainingVolume();
                 }
             }
         }
         else if(currentMarketPrice < price){
-            // The searched price is inside the sell order
             for (Order order : sellLimitOrders) {
-                long startPrice = order.getStartPrice();
-                if(startPrice > price)
-                    break;
-                if (startPrice == price) {
+                if (order.getStartPrice() == price) {
                     volume += order.getRemainingVolume();
                 }
             }
@@ -172,25 +165,18 @@ public class Orderbook implements ServerSaveable
     public long getRawVolumeRounded(long price)
     {
         long volume = virtualOrderbook.roundConservative(virtualOrderbook.getVolume(price));
+        // PriorityQueue iterator does NOT traverse in priority order — must scan all orders.
         if(currentMarketPrice > price) {
-            // The searched price is inside the buy order since the stockmarket price is higher than the searched price
             for(Order order : buyLimitOrders)
             {
-                long startPrice = order.getStartPrice();
-                if(startPrice < price)
-                    break;
-                if(startPrice == price) {
+                if(order.getStartPrice() == price) {
                     volume += order.getRemainingVolume();
                 }
             }
         }
         else if(currentMarketPrice < price){
-            // The searched price is inside the sell order
             for (Order order : sellLimitOrders) {
-                long startPrice = order.getStartPrice();
-                if(startPrice > price)
-                    break;
-                if (startPrice == price) {
+                if (order.getStartPrice() == price) {
                     volume += order.getRemainingVolume();
                 }
             }
@@ -235,20 +221,17 @@ public class Orderbook implements ServerSaveable
     {
         //float volume = virtualOrderbook.getVolume(startPrice, endPrice); // = virtualOrderbook.getVolume(price);
         float volume = virtualOrderbook.getVolumeInterpolated(startPrice, endPrice, 10); // = virtualOrderbook.getVolume(price);
+        // PriorityQueue iterator does NOT traverse in priority order — must scan all orders.
         for(Order order : buyLimitOrders)
         {
             long orderPrice = order.getStartPrice();
-            if(orderPrice < startPrice)
-                break;
-            if(orderPrice <= endPrice)
+            if(orderPrice >= startPrice && orderPrice <= endPrice)
                 volume += order.getRemainingVolume();
         }
         for(Order order : sellLimitOrders)
         {
             long orderPrice = order.getStartPrice();
-            if(orderPrice > endPrice)
-                break;
-            if(orderPrice >= startPrice)
+            if(orderPrice >= startPrice && orderPrice <= endPrice)
                 volume += order.getRemainingVolume();
         }
         return (long)volume;
@@ -262,20 +245,17 @@ public class Orderbook implements ServerSaveable
     public long getRawVolumeRounded(long startPrice, long endPrice)
     {
         long volume = virtualOrderbook.getVolumeRounded(startPrice, endPrice); // = virtualOrderbook.getVolume(price);
+        // PriorityQueue iterator does NOT traverse in priority order — must scan all orders.
         for(Order order : buyLimitOrders)
         {
             long orderPrice = order.getStartPrice();
-            if(orderPrice < startPrice)
-                break;
-            if(orderPrice <= endPrice)
+            if(orderPrice >= startPrice && orderPrice <= endPrice)
                 volume += order.getRemainingVolume();
         }
         for(Order order : sellLimitOrders)
         {
             long orderPrice = order.getStartPrice();
-            if(orderPrice > endPrice)
-                break;
-            if(orderPrice >= startPrice)
+            if(orderPrice >= startPrice && orderPrice <= endPrice)
                 volume += order.getRemainingVolume();
         }
         return volume;
@@ -367,20 +347,17 @@ public class Orderbook implements ServerSaveable
     public float getCapital(long startPrice, long endPrice)
     {
         float capital = virtualOrderbook.getCapital(startPrice, endPrice); // = virtualOrderbook.getVolume(price);
+        // PriorityQueue iterator does NOT traverse in priority order — must scan all orders.
         for(Order order : buyLimitOrders)
         {
             long orderPrice = order.getStartPrice();
-            if(orderPrice < startPrice)
-                break;
-            if(orderPrice <= endPrice)
+            if(orderPrice >= startPrice && orderPrice <= endPrice)
                 capital += order.getRemainingVolume() * orderPrice;
         }
         for(Order order : sellLimitOrders)
         {
             long orderPrice = order.getStartPrice();
-            if(orderPrice > endPrice)
-                break;
-            if(orderPrice >= startPrice)
+            if(orderPrice >= startPrice && orderPrice <= endPrice)
                 capital += order.getRemainingVolume() * orderPrice;
         }
         return capital;
@@ -388,20 +365,17 @@ public class Orderbook implements ServerSaveable
     public long getCapitalRounded(long startPrice, long endPrice)
     {
         long volume = virtualOrderbook.getCapitalRounded(startPrice, endPrice); // = virtualOrderbook.getVolume(price);
+        // PriorityQueue iterator does NOT traverse in priority order — must scan all orders.
         for(Order order : buyLimitOrders)
         {
             long orderPrice = order.getStartPrice();
-            if(orderPrice < startPrice)
-                break;
-            if(orderPrice <= endPrice)
+            if(orderPrice >= startPrice && orderPrice <= endPrice)
                 volume += order.getRemainingVolume() *  orderPrice;
         }
         for(Order order : sellLimitOrders)
         {
             long orderPrice = order.getStartPrice();
-            if(orderPrice > endPrice)
-                break;
-            if(orderPrice >= startPrice)
+            if(orderPrice >= startPrice && orderPrice <= endPrice)
                 volume += order.getRemainingVolume() *  orderPrice;
         }
         return volume;

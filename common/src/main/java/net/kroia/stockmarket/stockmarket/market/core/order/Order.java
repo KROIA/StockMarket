@@ -214,6 +214,7 @@ public class Order implements ServerSaveable
 
     public long getAverageExecutionPrice()
     {
+        if (filledVolume == 0) return 0;
         return -transferredMoney / filledVolume;
     }
 
@@ -297,7 +298,10 @@ public class Order implements ServerSaveable
             orderExecutor = tag.getUUID("orderExecutor");
         else
             orderExecutor = null;
-        type = Type.values()[tag.getInt("Type")];
+        int typeOrdinal = tag.getInt("Type");
+        if (typeOrdinal < 0 || typeOrdinal >= Type.values().length)
+            return false;
+        type = Type.values()[typeOrdinal];
         targetVolume = tag.getLong("TargetVolume");
         filledVolume = tag.getLong("FilledVolume");
         startPrice = tag.getLong("StartPrice");

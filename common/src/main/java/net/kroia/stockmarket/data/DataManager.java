@@ -186,7 +186,7 @@ public class DataManager extends DataPersistence {
         }
 
         Path path = getAbsoluteSavePath(SETTINGS_FILE);
-        if(BACKEND_INSTANCES.SERVER_SETTINGS.loadSettings(path.toAbsolutePath().toString()))
+        if(!BACKEND_INSTANCES.SERVER_SETTINGS.loadSettings(path.toAbsolutePath().toString()))
         {
             error("loadSettings(): Failed to load settings from Json file");
             return false;

@@ -122,30 +122,54 @@ public class TradeScreen extends StockMarketGuiScreen {
         placeholder2.setBounds(padding, candlestickChart.getBottom()+spacing, tradingPanel.getLeft()-spacing-padding, height- (candlestickChart.getBottom()));
     }
 
+    private @Nullable ClientMarket getValidMarketForOrder()
+    {
+        if(currentMarketID == null)
+        {
+            warn("No market selected");
+            return null;
+        }
+        if(selectedBankAccountNr == -1)
+        {
+            warn("No bank account selected yet");
+            return null;
+        }
+        ClientMarket market = getMarket(currentMarketID);
+        if(market == null)
+        {
+            warn("Market is no longer available: " + currentMarketID);
+            return null;
+        }
+        return market;
+    }
     private void onBuyMarket(double quantity)
     {
-        ClientMarket market = getMarket(currentMarketID);
+        ClientMarket market = getValidMarketForOrder();
+        if(market == null) return;
         market.createMarketOrder(selectedBankAccountNr, quantity).thenAccept(result->{
             info("Order creation response: "+result.status);
         });
     }
     private void onSellMarket(double quantity)
     {
-        ClientMarket market = getMarket(currentMarketID);
+        ClientMarket market = getValidMarketForOrder();
+        if(market == null) return;
         market.createMarketOrder(selectedBankAccountNr, -quantity).thenAccept(result->{
             info("Order creation response: "+result.status);
         });
     }
     private void onBuyLimit(double quantity, double price)
     {
-        ClientMarket market = getMarket(currentMarketID);
+        ClientMarket market = getValidMarketForOrder();
+        if(market == null) return;
         market.createLimitOrder(selectedBankAccountNr, quantity, price).thenAccept(result->{
             info("Order creation response: "+result.status);
         });
     }
     private void onSellLimit(double quantity, double price)
     {
-        ClientMarket market = getMarket(currentMarketID);
+        ClientMarket market = getValidMarketForOrder();
+        if(market == null) return;
         market.createLimitOrder(selectedBankAccountNr, -quantity, price).thenAccept(result->{
             info("Order creation response: "+result.status);
         });

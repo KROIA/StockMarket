@@ -104,6 +104,7 @@ public class StockMarketCommands {
                         .executes(context -> {
                             int numRecords = IntegerArgumentType.getInteger(context, "record_count");
                             String  table = StringArgumentType.getString(context, "table");
+                            CommandSourceStack source = context.getSource();
 
                             if("OrderRecord".equals(table)){
                                 List<OrderRecordStruct> exData = OrderRecordStruct.generateExampleData(numRecords);
@@ -111,17 +112,17 @@ public class StockMarketCommands {
                                 long time = System.currentTimeMillis();
                                 manager.save(exData).thenRun(() -> {
                                     long writeTime = System.currentTimeMillis() - time;
-                                    context.getSource().getPlayer().sendSystemMessage(Component.literal("Database write for " + numRecords + " records took " + writeTime + " ms"));
+                                    source.sendSystemMessage(Component.literal("Database write for " + numRecords + " records took " + writeTime + " ms"));
                                     long time2 = System.currentTimeMillis();
                                     manager.getHistory(Optional.of(new DateFilter(Long.MAX_VALUE, Long.MAX_VALUE)), Optional.empty(),Optional.empty(), Optional.empty())
                                             .thenRun(() -> {
                                                 long readTime = System.currentTimeMillis() - time2;
-                                                context.getSource().getPlayer().sendSystemMessage(Component.literal("Database read for " + numRecords + " records took " + readTime + " ms"));
+                                                source.sendSystemMessage(Component.literal("Database read for " + numRecords + " records took " + readTime + " ms"));
                                                 long time3 = System.currentTimeMillis();
                                                 manager.removeHistory(Optional.of(new DateFilter(Long.MAX_VALUE, Long.MAX_VALUE)), Optional.empty(),Optional.empty(), Optional.empty())
                                                         .thenRun(() -> {
                                                             long deleteTime = System.currentTimeMillis() - time3;
-                                                            context.getSource().getPlayer().sendSystemMessage(Component.literal("Database delete for " + numRecords + " records took " + deleteTime + " ms"));
+                                                            source.sendSystemMessage(Component.literal("Database delete for " + numRecords + " records took " + deleteTime + " ms"));
                                                         });
                                             });
 
@@ -133,17 +134,17 @@ public class StockMarketCommands {
                                 long time = System.currentTimeMillis();
                                 manager.save(exData).thenRun(() -> {
                                     long writeTime = System.currentTimeMillis() - time;
-                                    context.getSource().getPlayer().sendSystemMessage(Component.literal("Database write for " + numRecords + " records took " + writeTime + " ms"));
+                                    source.sendSystemMessage(Component.literal("Database write for " + numRecords + " records took " + writeTime + " ms"));
                                     long time2 = System.currentTimeMillis();
                                     manager.getHistory(Optional.of(new DateFilter(Long.MAX_VALUE, Long.MAX_VALUE)), Optional.empty(), -1)
                                             .thenRun(() -> {
                                                 long readTime = System.currentTimeMillis() - time2;
-                                                context.getSource().getPlayer().sendSystemMessage(Component.literal("Database read for " + numRecords + " records took " + readTime + " ms"));
+                                                source.sendSystemMessage(Component.literal("Database read for " + numRecords + " records took " + readTime + " ms"));
                                                 long time3 = System.currentTimeMillis();
                                                 manager.removeHistory(Optional.of(new DateFilter(Long.MAX_VALUE, Long.MAX_VALUE)), Optional.empty())
                                                         .thenRun(() -> {
                                                             long deleteTime = System.currentTimeMillis() - time3;
-                                                            context.getSource().getPlayer().sendSystemMessage(Component.literal("Database delete for " + numRecords + " records took " + deleteTime + " ms"));
+                                                            source.sendSystemMessage(Component.literal("Database delete for " + numRecords + " records took " + deleteTime + " ms"));
                                                         });
                                             });
 
@@ -153,13 +154,24 @@ public class StockMarketCommands {
                         }))))
                 .then(Commands.literal("db")
                         .then(Commands.argument("table", StringArgumentType.string())
+                                .suggests((x, y) -> {
+                                    y.suggest("OrderRecord");
+                                    y.suggest("MarketPrice");
+                                    return y.buildFuture();
+                                })
                         .then(Commands.literal("count")
                                 .executes(context -> {
-                                    MarketPriceManager manager = BACKEND_INSTANCES.MARKET_PRICE_HISTORY_MANAGER;
-                                    manager.getRecordCount(Optional.empty(), Optional.empty())
-                                            .thenAccept(count -> {
-                                                context.getSource().getPlayer().sendSystemMessage(Component.literal("MarketPrice table currently has " + count + " records."));
-                                            });
+                                    String table = StringArgumentType.getString(context, "table");
+                                    CommandSourceStack source = context.getSource();
+                                    if("OrderRecord".equals(table)) {
+                                        OrderRecordManager.create().getRecordCount(Optional.empty(), Optional.empty())
+                                                .thenAccept(count -> source.sendSystemMessage(Component.literal("OrderRecord table currently has " + count + " records.")));
+                                    } else if("MarketPrice".equals(table)) {
+                                        BACKEND_INSTANCES.MARKET_PRICE_HISTORY_MANAGER.getRecordCount(Optional.empty(), Optional.empty())
+                                                .thenAccept(count -> source.sendSystemMessage(Component.literal("MarketPrice table currently has " + count + " records.")));
+                                    } else {
+                                        source.sendFailure(Component.literal("Unknown table: " + table + " (expected OrderRecord or MarketPrice)"));
+                                    }
                                     return 1;
                                 }))))
                 .then(Commands.literal("op")

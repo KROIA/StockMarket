@@ -43,11 +43,6 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
         EXEC_DEINIT,
         EXEC_UPDATE,
         EXEC_FINALIZE,
-        //EXEC_APPLY,
-        EXEC_SAVE,
-        EXEC_LOAD,
-        EXEC_ENCODING,
-        EXEC_DECODING,
     }
     private State state = State.NONE;
 

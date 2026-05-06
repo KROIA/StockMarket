@@ -156,6 +156,12 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
             }
         }
 
+        if(input.type == Order.Type.INTER_MARKET) {
+            response.status = Status.NO_SUCH_MARKET;
+            future.complete(response);
+            return future;
+        }
+
         // Check balance
         IServerBank itemBank = bankAccount.getBank(input.itemID);
         if(itemBank == null) {
@@ -187,7 +193,13 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
             switch(input.type)
             {
                 case Order.Type.LIMIT:
-                    toLockAmount = toRawAmount(input.volume) * toRawAmount(input.price);
+                    try {
+                        toLockAmount = Math.multiplyExact(toRawAmount(input.volume), toRawAmount(input.price));
+                    } catch (ArithmeticException e) {
+                        response.status = Status.INVALID_VOLUME;
+                        future.complete(response);
+                        return future;
+                    }
                     if(moneyBank.getBalance() < toLockAmount) {
                         response.status = Status.NOT_ENOUGH_MONEY;
                         future.complete(response);
@@ -195,7 +207,13 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
                     }
                     break;
                 case Order.Type.MARKET:
-                    toLockAmount  = toRawAmount(input.volume) * currentMarketPrice;
+                    try {
+                        toLockAmount = Math.multiplyExact(toRawAmount(input.volume), currentMarketPrice);
+                    } catch (ArithmeticException e) {
+                        response.status = Status.INVALID_VOLUME;
+                        future.complete(response);
+                        return future;
+                    }
                     if(moneyBank.getBalance() < toLockAmount) {
                         response.status = Status.NOT_ENOUGH_MONEY;
                         future.complete(response);
@@ -219,9 +237,6 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
                 break;
             }
         }
-
-        if(input.type == Order.Type.INTER_MARKET)
-            throw new RuntimeException("CreateOrderRequest::handleOnServer not implemented for Order.Type.INTER_MARKET");
 
         // Reserve balances
         if(input.volume > 0)

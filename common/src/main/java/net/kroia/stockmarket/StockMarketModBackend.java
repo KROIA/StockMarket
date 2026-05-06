@@ -287,7 +287,8 @@ public class StockMarketModBackend implements StockMarketAPI {
 
     private static void onClientTickEvent(ClientLevel clientLevel)
     {
-        CLIENT_INSTANCES.MARKET_MANAGER.update();
+        if (CLIENT_INSTANCES != null)
+            CLIENT_INSTANCES.MARKET_MANAGER.update();
     }
 
     // Called from the master side

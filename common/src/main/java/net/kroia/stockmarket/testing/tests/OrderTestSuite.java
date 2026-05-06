@@ -30,15 +30,17 @@ public class OrderTestSuite extends TestSuite {
         addTest("is_sell_order", this::test_isSellOrder);
         addTest("save_load_round_trip", this::test_save_load_roundTrip);
         addTest("load_enum_out_of_bounds", this::test_load_enumOutOfBounds);
+        addTest("load_enum_negative_ordinal", this::test_load_enumNegativeOrdinal);
         addTest("bot_order_null_executor", this::test_botOrder_nullExecutor);
     }
 
     private TestResult test_getAverageExecutionPrice_zeroDivision() {
         Order order = new Order(DUMMY_ITEM_ID, Order.Type.MARKET, 10, 100, 0, UUID.randomUUID(), 1);
-        return assertThrows(
-                "Fresh order with filledVolume==0 should throw ArithmeticException on getAverageExecutionPrice",
-                ArithmeticException.class,
-                order::getAverageExecutionPrice
+        long avgPrice = order.getAverageExecutionPrice();
+        return assertEquals(
+                "Fresh order with filledVolume==0 should return 0 instead of throwing ArithmeticException",
+                0L,
+                avgPrice
         );
     }
 
@@ -121,10 +123,27 @@ public class OrderTestSuite extends TestSuite {
         tag.putLong("Time", 0);
         tag.putLong("TransferredMoney", 0);
 
-        return assertThrows(
-                "Loading an Order with Type ordinal=99 should throw ArrayIndexOutOfBoundsException",
-                ArrayIndexOutOfBoundsException.class,
-                () -> Order.createFromNBT(tag)
+        Order loaded = Order.createFromNBT(tag);
+        return assertNull(
+                "Loading an Order with out-of-bounds Type ordinal should return null instead of crashing",
+                loaded
+        );
+    }
+
+    private TestResult test_load_enumNegativeOrdinal() {
+        CompoundTag tag = new CompoundTag();
+        tag.putShort("ItemID", (short) 1);
+        tag.putInt("Type", -1);
+        tag.putLong("TargetVolume", 10);
+        tag.putLong("FilledVolume", 0);
+        tag.putLong("StartPrice", 100);
+        tag.putLong("Time", 0);
+        tag.putLong("TransferredMoney", 0);
+
+        Order loaded = Order.createFromNBT(tag);
+        return assertNull(
+                "Loading an Order with negative Type ordinal should return null instead of crashing",
+                loaded
         );
     }
 

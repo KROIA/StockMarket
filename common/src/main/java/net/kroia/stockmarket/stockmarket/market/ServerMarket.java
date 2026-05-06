@@ -272,7 +272,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     {
         return buyMarketOrders_inputBuffer;
     }
-    public PriorityQueue<Order> getIncomingSelMarketOrders()
+    public PriorityQueue<Order> getIncomingSellMarketOrders()
     {
         return sellMarketOrders_inputBuffer;
     }
@@ -280,7 +280,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     {
         return buyLimitOrders_inputBuffer;
     }
-    public PriorityQueue<Order> getIncomingSelLimitOrders()
+    public PriorityQueue<Order> getIncomingSellLimitOrders()
     {
         return sellLimitOrders_inputBuffer;
     }
@@ -502,7 +502,8 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         IServerBankManager bankManager = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync();
         double realPrice = bankManager.convertToRealAmount(price);
         if(defaultVolumeProviderFunction != null) {
-            float realVolume = defaultVolumeProviderFunction.apply(realPrice);
+            Float realVolume = defaultVolumeProviderFunction.apply(realPrice);
+            if (realVolume == null) return 0;
             return bankManager.getItemFractionScaleFactor() * realVolume;
         }
         float volume = (float)Math.min(10, Math.max(-10, currentMarketPrice - realPrice));

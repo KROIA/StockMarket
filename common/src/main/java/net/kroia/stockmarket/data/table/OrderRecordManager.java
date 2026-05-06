@@ -7,7 +7,6 @@ import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
 import net.kroia.stockmarket.data.filter.DateFilter;
 import net.kroia.stockmarket.data.filter.EqualityFilter;
 
-import java.nio.ByteBuffer;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -23,17 +22,16 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
     public static final String INSERT = "INSERT INTO OrderHistory (itemid, marketid, userid_one, userid_two, type, amount, price, time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
     public static final String SELECT = "SELECT itemid, marketid, userid_one, userid_two, type, amount, price, time FROM OrderHistory";
     public static final String DELETE = "DELETE FROM OrderHistory";
+    public static final String COUNT  = "SELECT COUNT(*) FROM OrderHistory";
 
 
 
     public CompletableFuture<Void> save(OrderRecordStruct data) {
         return CompletableFuture.runAsync(() -> {
-            try {
-                PreparedStatement preparedStatement = DatabaseManager.getConnection().prepareStatement(INSERT);
+            try (PreparedStatement preparedStatement = DatabaseManager.getConnection().prepareStatement(INSERT)) {
                 queueRecord(preparedStatement, data);
                 preparedStatement.execute();
                 DatabaseManager.commitTransaction();
-
             } catch (SQLException e) {
                 throw new RuntimeException(e);
             }
@@ -43,12 +41,10 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
 
     public CompletableFuture<Void> save(List<OrderRecordStruct> data) {
         return CompletableFuture.runAsync(() -> {
-            try {
-                PreparedStatement preparedStatement = DatabaseManager.getConnection().prepareStatement(INSERT);
+            try (PreparedStatement preparedStatement = DatabaseManager.getConnection().prepareStatement(INSERT)) {
                 data.forEach(d -> queueRecord(preparedStatement, d));
                 preparedStatement.executeBatch();
                 DatabaseManager.commitTransaction();
-
             } catch (SQLException e) {
                 throw new RuntimeException(e);
             }
@@ -69,7 +65,7 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
             stmt.addBatch();
         }
         catch(SQLException e){
-
+            StockMarketMod.LOGGER.error("Failed to queue order record", e);
         }
     }
 
@@ -100,10 +96,10 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
                     statement += (started ? " AND " : " WHERE ") + marketFilter.get().getClause("itemid");
                 }
 
-                PreparedStatement preparedStatement = DatabaseManager.getConnection().prepareStatement(statement);
-                preparedStatement.executeUpdate();
-                DatabaseManager.commitTransaction();
-
+                try (PreparedStatement preparedStatement = DatabaseManager.getConnection().prepareStatement(statement)) {
+                    preparedStatement.executeUpdate();
+                    DatabaseManager.commitTransaction();
+                }
             } catch (SQLException e) {
                 throw new RuntimeException(e);
             }
@@ -131,11 +127,14 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
                     statement += (started ? " AND " : " WHERE ") + marketFilter.get().getClause("itemid");
                 }
                 List<OrderRecordStruct> result = new ArrayList<>();
-                PreparedStatement preparedStatement = DatabaseManager.getConnection().prepareStatement(statement);
-                ResultSet resultSet = preparedStatement.executeQuery();
-                DatabaseManager.commitTransaction();
-                while(resultSet.next()){
-                    result.add(mapRow(resultSet));
+                try (PreparedStatement preparedStatement = DatabaseManager.getConnection().prepareStatement(statement);
+                     ResultSet resultSet = preparedStatement.executeQuery()) {
+                    DatabaseManager.commitTransaction();
+                    while (resultSet.next()) {
+                        OrderRecordStruct row = mapRow(resultSet);
+                        if (row != null)
+                            result.add(row);
+                    }
                 }
                 return result;
 
@@ -146,6 +145,32 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
         }, DatabaseManager.getDatabaseThread());
     }
 
+
+    public CompletableFuture<Integer> getRecordCount(Optional<DateFilter> dateFilter, Optional<EqualityFilter> marketFilter){
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                String statement = COUNT;
+                if (dateFilter.isPresent()) {
+                    statement += " WHERE " + dateFilter.get().getClause("time");
+                    if (marketFilter.isPresent()) {
+                        statement += " AND " + marketFilter.get().getClause("itemid");
+                    }
+                } else if (marketFilter.isPresent()) {
+                    statement += " WHERE " + marketFilter.get().getClause("itemid");
+                }
+                try (PreparedStatement preparedStatement = DatabaseManager.getConnection().prepareStatement(statement);
+                     ResultSet resultSet = preparedStatement.executeQuery()) {
+                    DatabaseManager.commitTransaction();
+                    if (resultSet.next()) {
+                        return resultSet.getInt(1);
+                    }
+                }
+                return 0;
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
+            }
+        }, DatabaseManager.getDatabaseThread());
+    }
 
     public OrderRecordStruct mapRow(ResultSet rs){
         try {
