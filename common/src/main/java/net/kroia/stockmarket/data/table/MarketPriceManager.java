@@ -15,46 +15,42 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
-    //private static MarketPriceManager instance;
+
+    private final DatabaseManager databaseManager;
 
     public static final String INSERT = "INSERT INTO MarketPrice (marketid, open, low, high, time) VALUES (?, ?, ?, ?, ?)";
     public static final String SELECT = "SELECT marketid, open, low, high, time FROM MarketPrice";
     public static final String DELETE = "DELETE FROM MarketPrice";
     public static final String COUNT =  "SELECT COUNT(*) FROM MarketPrice";
 
-
+    public MarketPriceManager(DatabaseManager databaseManager) {
+        this.databaseManager = databaseManager;
+    }
 
     public CompletableFuture<Void> save(MarketPriceStruct data) {
         return CompletableFuture.runAsync(() -> {
-            try (PreparedStatement preparedStatement = DatabaseManager.getConnection().prepareStatement(INSERT)) {
+            try (PreparedStatement preparedStatement = databaseManager.getConnection().prepareStatement(INSERT)) {
                 queueRecord(preparedStatement, data);
                 preparedStatement.execute();
-                DatabaseManager.commitTransaction();
+                databaseManager.commitTransaction();
             } catch (SQLException e) {
                 throw new RuntimeException(e);
             }
-        }, DatabaseManager.getDatabaseThread());
+        }, databaseManager.getDatabaseThread());
     }
 
 
     public CompletableFuture<Void> save(List<MarketPriceStruct> data) {
         return CompletableFuture.runAsync(() -> {
-            try (PreparedStatement preparedStatement = DatabaseManager.getConnection().prepareStatement(INSERT)) {
+            try (PreparedStatement preparedStatement = databaseManager.getConnection().prepareStatement(INSERT)) {
                 data.forEach(d -> queueRecord(preparedStatement, d));
                 preparedStatement.executeBatch();
-                DatabaseManager.commitTransaction();
+                databaseManager.commitTransaction();
             } catch (SQLException e) {
                 throw new RuntimeException(e);
             }
-        }, DatabaseManager.getDatabaseThread());
+        }, databaseManager.getDatabaseThread());
     }
-
-    //public static MarketPriceManager create(){
-    //    if(instance == null){
-    //        instance = new MarketPriceManager();
-    //    }
-    //    return instance;
-    //}
 
     public void queueRecord(PreparedStatement stmt, MarketPriceStruct data){
         try {
@@ -88,14 +84,21 @@ public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
                     statement += " WHERE " + marketFilter.get().getClause("marketid");
                 }
 
-                try (PreparedStatement preparedStatement = DatabaseManager.getConnection().prepareStatement(statement)) {
+                try (PreparedStatement preparedStatement = databaseManager.getConnection().prepareStatement(statement)) {
+                    int idx = 1;
+                    if (dateFilter.isPresent()) {
+                        idx = dateFilter.get().bindParameters(preparedStatement, idx);
+                    }
+                    if (marketFilter.isPresent()) {
+                        idx = marketFilter.get().bindParameters(preparedStatement, idx);
+                    }
                     preparedStatement.executeUpdate();
-                    DatabaseManager.commitTransaction();
+                    databaseManager.commitTransaction();
                 }
             } catch (SQLException e) {
                 throw new RuntimeException(e);
             }
-        }, DatabaseManager.getDatabaseThread());
+        }, databaseManager.getDatabaseThread());
     }
 
     public CompletableFuture<List<MarketPriceStruct>> query(Optional<DateFilter> dateFilter, Optional<EqualityFilter> marketFilter, String stmt, int limit){
@@ -111,16 +114,27 @@ public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
                     statement += " WHERE " + marketFilter.get().getClause("marketid");
                 }
                 if(limit > 0){
-                    statement = statement + " LIMIT " + limit;
+                    statement = statement + " LIMIT ?";
                 }
                 List<MarketPriceStruct> result = new ArrayList<>();
-                try (PreparedStatement preparedStatement = DatabaseManager.getConnection().prepareStatement(statement);
-                     ResultSet resultSet = preparedStatement.executeQuery()) {
-                    DatabaseManager.commitTransaction();
-                    while (resultSet.next()) {
-                        MarketPriceStruct row = mapRow(resultSet);
-                        if (row != null)
-                            result.add(row);
+                try (PreparedStatement preparedStatement = databaseManager.getConnection().prepareStatement(statement)) {
+                    int idx = 1;
+                    if (dateFilter.isPresent()) {
+                        idx = dateFilter.get().bindParameters(preparedStatement, idx);
+                    }
+                    if (marketFilter.isPresent()) {
+                        idx = marketFilter.get().bindParameters(preparedStatement, idx);
+                    }
+                    if (limit > 0) {
+                        preparedStatement.setInt(idx, limit);
+                    }
+                    try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                        databaseManager.commitTransaction();
+                        while (resultSet.next()) {
+                            MarketPriceStruct row = mapRow(resultSet);
+                            if (row != null)
+                                result.add(row);
+                        }
                     }
                 }
                 return result;
@@ -129,7 +143,7 @@ public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
                 throw new RuntimeException(e);
             }
 
-        }, DatabaseManager.getDatabaseThread());
+        }, databaseManager.getDatabaseThread());
     }
 
     public MarketPriceStruct mapRow(ResultSet rs){
@@ -154,11 +168,19 @@ public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
                 } else if (marketFilter.isPresent()) {
                     statement += " WHERE " + marketFilter.get().getClause("marketid");
                 }
-                try (PreparedStatement preparedStatement = DatabaseManager.getConnection().prepareStatement(statement);
-                     ResultSet resultSet = preparedStatement.executeQuery()) {
-                    DatabaseManager.commitTransaction();
-                    if (resultSet.next()) {
-                        return resultSet.getInt(1);
+                try (PreparedStatement preparedStatement = databaseManager.getConnection().prepareStatement(statement)) {
+                    int idx = 1;
+                    if (dateFilter.isPresent()) {
+                        idx = dateFilter.get().bindParameters(preparedStatement, idx);
+                    }
+                    if (marketFilter.isPresent()) {
+                        idx = marketFilter.get().bindParameters(preparedStatement, idx);
+                    }
+                    try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                        databaseManager.commitTransaction();
+                        if (resultSet.next()) {
+                            return resultSet.getInt(1);
+                        }
                     }
                 }
                 return 0;
@@ -167,6 +189,6 @@ public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
                 throw new RuntimeException(e);
             }
 
-        }, DatabaseManager.getDatabaseThread());
+        }, databaseManager.getDatabaseThread());
     }
 }

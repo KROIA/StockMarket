@@ -14,7 +14,9 @@ import net.kroia.stockmarket.minecraft.block.StockMarketBlocks;
 import net.kroia.stockmarket.minecraft.command.StockMarketCommands;
 import net.kroia.stockmarket.minecraft.compat.NEZNAMY_TAB_Placeholders;
 import net.kroia.stockmarket.data.DataManager;
+import net.kroia.stockmarket.data.DatabaseManager;
 import net.kroia.stockmarket.data.table.MarketPriceManager;
+import net.kroia.stockmarket.data.table.OrderRecordManager;
 import net.kroia.stockmarket.minecraft.entity.StockMarketEntities;
 import net.kroia.stockmarket.event.EventRegistration;
 import net.kroia.stockmarket.minecraft.item.StockMarketCreativeModeTab;
@@ -53,10 +55,12 @@ public class StockMarketModBackend implements StockMarketAPI {
         public BankSystemAPI BANK_SYSTEM_API;
         public StockMarketModSettings SERVER_SETTINGS;
         public DataManager DATA_MANAGER;
+        public DatabaseManager DATABASE_MANAGER;
         public MarketManager MARKET_MANAGER;
         public PluginManager PLUGIN_MANAGER;
 
         public MarketPriceManager MARKET_PRICE_HISTORY_MANAGER;
+        public OrderRecordManager ORDER_RECORD_MANAGER;
 
         public StockMarketNetworking NETWORKING;
         public StockMarketLogger LOGGER;
@@ -189,7 +193,10 @@ public class StockMarketModBackend implements StockMarketAPI {
         boolean isMaster = BankSystemMod.getAPI().getServerBankManager().isMaster();
         if(isMaster)
         {
-            SERVER_INSTANCES.MARKET_PRICE_HISTORY_MANAGER = new MarketPriceManager();
+            SERVER_INSTANCES.DATABASE_MANAGER = new DatabaseManager();
+            SERVER_INSTANCES.DATABASE_MANAGER.connectToDatabase(UtilitiesPlatform.getServer());
+            SERVER_INSTANCES.MARKET_PRICE_HISTORY_MANAGER = new MarketPriceManager(SERVER_INSTANCES.DATABASE_MANAGER);
+            SERVER_INSTANCES.ORDER_RECORD_MANAGER = new OrderRecordManager(SERVER_INSTANCES.DATABASE_MANAGER);
             SERVER_INSTANCES.MARKET_MANAGER = MarketManager.createMaster();
             SERVER_INSTANCES.PLUGIN_MANAGER = PluginManager.createMaster();
             SERVER_INSTANCES.DATA_MANAGER = new DataManager();
@@ -211,6 +218,11 @@ public class StockMarketModBackend implements StockMarketAPI {
     {
         TickEvent.SERVER_POST.unregister(StockMarketModBackend::onServerTick);
         saveDataToFiles(server);
+
+        if(SERVER_INSTANCES != null && SERVER_INSTANCES.DATABASE_MANAGER != null) {
+            SERVER_INSTANCES.DATABASE_MANAGER.close();
+            SERVER_INSTANCES.DATABASE_MANAGER = null;
+        }
 
         if(MultiServerManager.instanceExists())
         {

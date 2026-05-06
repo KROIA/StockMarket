@@ -3,7 +3,6 @@ package net.kroia.stockmarket.data;
 import net.kroia.stockmarket.StockMarketMod;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
-import org.sqlite.JDBC;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -13,15 +12,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 
 public class DatabaseManager {
-    private static Connection connection;
-    private static Statement statement;
-    private static ResultSet resultSet;
-    private static PreparedStatement preparedStatement;
+    private Connection connection;
 
-    private static final ExecutorService executor = Executors.newSingleThreadExecutor( r -> {
+    private final ExecutorService executor = Executors.newSingleThreadExecutor( r -> {
         Thread t = new Thread(r, "db-worker");
         t.setDaemon(true);
         return t;
@@ -38,10 +35,10 @@ public class DatabaseManager {
      *
      * @return true if all tables were created successfully, false if any table creation failed.
      */
-    public static boolean createDatabase(MinecraftServer server) {
+    public boolean createDatabase(MinecraftServer server) {
         try {
-            DatabaseManager.executeSqlFile("/sql/MarketPrice.sql");
-            DatabaseManager.executeSqlFile("/sql/OrderHistory.sql");
+            executeSqlFile("/sql/MarketPrice.sql");
+            executeSqlFile("/sql/OrderHistory.sql");
             return true;
         }
         catch(SQLException | IOException e){
@@ -52,7 +49,7 @@ public class DatabaseManager {
 
 
 
-    public static void executeSqlFile(String resourcePath) throws IOException, SQLException {
+    public void executeSqlFile(String resourcePath) throws IOException, SQLException {
         try (InputStream is = DatabaseManager.class.getResourceAsStream(resourcePath)) {
             if (is == null) throw new IOException("SQL file not found: " + resourcePath);
 
@@ -69,7 +66,7 @@ public class DatabaseManager {
         }
     }
 
-    public static void connectToDatabase(MinecraftServer server){
+    public void connectToDatabase(MinecraftServer server){
 
         Path worldPath = server.getWorldPath(LevelResource.ROOT);
         Path dbPath = worldPath.resolve(DATABASE_PATH);
@@ -123,30 +120,43 @@ public class DatabaseManager {
     }
 
 
-    public static void shutdownDatabase(MinecraftServer server){
+    /**
+     * Closes the database connection and shuts down the executor service.
+     * Should be called when the server stops or this instance is no longer needed.
+     */
+    public void close(){
         try{
             if(connection != null && !connection.isClosed()) {
                 connection.commit();
                 connection.close();
-                StockMarketMod.LOGGER.info("Successfully closed database connection {}", connection.getCatalog());
+                StockMarketMod.LOGGER.info("Successfully closed database connection");
             }
         }
         catch (SQLException e) {
-                StockMarketMod.LOGGER.error("Failed to shutdown database {}",  e.getMessage());
-            }
+            StockMarketMod.LOGGER.error("Failed to close database connection {}",  e.getMessage());
+        }
 
+        executor.shutdown();
+        try {
+            if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                executor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            executor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 
 
-    public static ExecutorService getDatabaseThread(){
+    public ExecutorService getDatabaseThread(){
         return executor;
     }
 
-    public static Connection getConnection(){
+    public Connection getConnection(){
         return connection;
     }
 
-    public static boolean commitTransaction() {
+    public boolean commitTransaction() {
         try{
             connection.commit();
             return true;

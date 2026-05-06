@@ -265,7 +265,15 @@ public class MatchingEngine
                     orderCanceled(buyOrder);          // cancel remainder of buy order
                 }
 
-                long cost = fillPotential * buyOrder.getStartPrice();
+                long cost;
+                try {
+                    cost = Math.multiplyExact(fillPotential, buyOrder.getStartPrice());
+                } catch (ArithmeticException e) {
+                    warn("Overflow in sell-vs-player-buy cost calculation — canceling buy order " + buyOrder.getOrderID());
+                    buyOrdersToRemove.add(buyOrder);
+                    orderCanceled(buyOrder);
+                    continue;
+                }
                 buyOrder.edit(fillPotential, -cost);
                 order.edit(-fillPotential, cost);
                 other.itemBank.deposit(fillPotential);
@@ -283,7 +291,15 @@ public class MatchingEngine
             else
             {
                 // Bot / virtual limit order — no counterparty account needed
-                long cost = fillPotential * buyOrder.getStartPrice();
+                long cost;
+                try {
+                    cost = Math.multiplyExact(fillPotential, buyOrder.getStartPrice());
+                } catch (ArithmeticException e) {
+                    warn("Overflow in sell-vs-bot-buy cost calculation — canceling buy order " + buyOrder.getOrderID());
+                    buyOrdersToRemove.add(buyOrder);
+                    orderCanceled(buyOrder);
+                    continue;
+                }
                 buyOrder.edit(fillPotential, -cost);
                 order.edit(-fillPotential, cost);
                 orderVolume += fillPotential;
@@ -410,18 +426,40 @@ public class MatchingEngine
                 }
 
                 // Cap fill to what the buyer can still afford
-                long costFull = fillPotential * sellOrder.getStartPrice();
+                long costFull;
+                try {
+                    costFull = Math.multiplyExact(fillPotential, sellOrder.getStartPrice());
+                } catch (ArithmeticException e) {
+                    warn("Overflow in buy-vs-player-sell costFull calculation — canceling sell order " + sellOrder.getOrderID());
+                    sellOrdersToRemove.add(sellOrder);
+                    orderCanceled(sellOrder);
+                    continue;
+                }
                 if (availableFunds < -costFull)
                 {
                     fillPotential  = -availableFunds / sellOrder.getStartPrice();
-                    costFull       = fillPotential * sellOrder.getStartPrice();
+                    try {
+                        costFull = Math.multiplyExact(fillPotential, sellOrder.getStartPrice());
+                    } catch (ArithmeticException e) {
+                        warn("Overflow in buy-vs-player-sell recalculated costFull — canceling order " + order.getOrderID());
+                        orderCanceled(order);
+                        break;
+                    }
                     // Buyer exhausted — order will finish after this fill
                 }
 
                 if (fillPotential >= 0)
                     break;  // buyer is completely broke, stop
 
-                long cost = fillPotential * sellOrder.getStartPrice();
+                long cost;
+                try {
+                    cost = Math.multiplyExact(fillPotential, sellOrder.getStartPrice());
+                } catch (ArithmeticException e) {
+                    warn("Overflow in buy-vs-player-sell cost calculation — canceling sell order " + sellOrder.getOrderID());
+                    sellOrdersToRemove.add(sellOrder);
+                    orderCanceled(sellOrder);
+                    continue;
+                }
                 sellOrder.edit(fillPotential, -cost);
                 order.edit(-fillPotential, cost);
                 other.itemBank.withdrawLockedPrefered(-fillPotential);
@@ -441,13 +479,29 @@ public class MatchingEngine
             {
                 // Bot / virtual limit order — no counterparty account needed
                 // Still cap to buyer's remaining funds
-                long costFull = fillPotential * sellOrder.getStartPrice();
+                long costFull;
+                try {
+                    costFull = Math.multiplyExact(fillPotential, sellOrder.getStartPrice());
+                } catch (ArithmeticException e) {
+                    warn("Overflow in buy-vs-bot-sell costFull calculation — canceling sell order " + sellOrder.getOrderID());
+                    sellOrdersToRemove.add(sellOrder);
+                    orderCanceled(sellOrder);
+                    continue;
+                }
                 if (availableFunds < -costFull)
                     fillPotential = -availableFunds / sellOrder.getStartPrice();
 
                 if (fillPotential >= 0) break;
 
-                long cost = fillPotential * sellOrder.getStartPrice();
+                long cost;
+                try {
+                    cost = Math.multiplyExact(fillPotential, sellOrder.getStartPrice());
+                } catch (ArithmeticException e) {
+                    warn("Overflow in buy-vs-bot-sell cost calculation — canceling sell order " + sellOrder.getOrderID());
+                    sellOrdersToRemove.add(sellOrder);
+                    orderCanceled(sellOrder);
+                    continue;
+                }
                 sellOrder.edit(fillPotential, -cost);
                 order.edit(-fillPotential, cost);
                 orderVolume    += fillPotential;
@@ -521,8 +575,15 @@ public class MatchingEngine
             if (virtualVol > 0)
             {
                 long filled = orderbook.fillVirtual(nextExecutedPrice, orderVolume);
+                long virtualCost;
+                try {
+                    virtualCost = Math.multiplyExact(nextExecutedPrice, filled);
+                } catch (ArithmeticException e) {
+                    warn("Overflow in drainVirtualSell cost calculation at price " + nextExecutedPrice);
+                    break;
+                }
                 itemDelta  += filled;
-                moneyDelta -= nextExecutedPrice * filled;
+                moneyDelta -= virtualCost;
                 orderVolume -= filled;
                 if(filled != 0)
                 {
@@ -584,7 +645,13 @@ public class MatchingEngine
                     break;   // buyer is broke
 
                 long filled = orderbook.fillVirtual(nextExecutedPrice, wantToFill);
-                long cost   = nextExecutedPrice * filled;
+                long cost;
+                try {
+                    cost = Math.multiplyExact(nextExecutedPrice, filled);
+                } catch (ArithmeticException e) {
+                    warn("Overflow in drainVirtualBuy cost calculation at price " + nextExecutedPrice);
+                    break;
+                }
                 itemDelta      += filled;
                 moneyDelta     -= cost;
                 availableFunds -= cost;

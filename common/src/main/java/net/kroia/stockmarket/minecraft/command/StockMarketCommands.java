@@ -11,7 +11,6 @@ import net.kroia.banksystem.api.command.IServerBankSystemCommandHandler;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.testing.TestCommandRegistration;
 import net.kroia.stockmarket.StockMarketModBackend;
-import net.kroia.stockmarket.data.table.OrderRecordManager;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import net.kroia.stockmarket.data.table.MarketPriceManager;
 import net.kroia.stockmarket.data.filter.DateFilter;
@@ -108,7 +107,7 @@ public class StockMarketCommands {
 
                             if("OrderRecord".equals(table)){
                                 List<OrderRecordStruct> exData = OrderRecordStruct.generateExampleData(numRecords);
-                                OrderRecordManager manager = OrderRecordManager.create();
+                                var manager = BACKEND_INSTANCES.ORDER_RECORD_MANAGER;
                                 long time = System.currentTimeMillis();
                                 manager.save(exData).thenRun(() -> {
                                     long writeTime = System.currentTimeMillis() - time;
@@ -164,7 +163,7 @@ public class StockMarketCommands {
                                     String table = StringArgumentType.getString(context, "table");
                                     CommandSourceStack source = context.getSource();
                                     if("OrderRecord".equals(table)) {
-                                        OrderRecordManager.create().getRecordCount(Optional.empty(), Optional.empty())
+                                        BACKEND_INSTANCES.ORDER_RECORD_MANAGER.getRecordCount(Optional.empty(), Optional.empty())
                                                 .thenAccept(count -> source.sendSystemMessage(Component.literal("OrderRecord table currently has " + count + " records.")));
                                     } else if("MarketPrice".equals(table)) {
                                         BACKEND_INSTANCES.MARKET_PRICE_HISTORY_MANAGER.getRecordCount(Optional.empty(), Optional.empty())

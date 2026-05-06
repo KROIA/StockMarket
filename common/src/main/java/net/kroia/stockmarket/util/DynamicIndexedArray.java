@@ -105,22 +105,22 @@ public class DynamicIndexedArray implements ServerSaveable {
     {
         float sum = 0;
 
-        // Outside the array
+        // Outside the array (below)
         for(long i=virtualStartIndex; i<Math.min(indexOffset, virtualEndIndex); ++i)
         {
             sum += defaultValueProvider.apply(i);
         }
 
-        // Inside the array range
-        int arrayLoopEndIndex = (int)Math.min(virtualEndIndex - indexOffset, array.length);
-        int arrayLoopStartIndex = (int)Math.max(virtualStartIndex - indexOffset, 0);
+        // Inside the array range — clamp to [0, array.length] in long arithmetic before casting
+        int arrayLoopEndIndex = (int)Math.max(0, Math.min(virtualEndIndex - indexOffset, array.length));
+        int arrayLoopStartIndex = (int)Math.max(0, Math.min(virtualStartIndex - indexOffset, array.length));
         for(int i=arrayLoopStartIndex; i<arrayLoopEndIndex; ++i)
         {
             sum += array[i];
         }
 
-        // Outside the array
-        for(long i=Math.max(virtualStartIndex, arrayLoopEndIndex + indexOffset); i<virtualEndIndex; i++)
+        // Outside the array (above)
+        for(long i=Math.max(virtualStartIndex, (long)arrayLoopEndIndex + indexOffset); i<virtualEndIndex; i++)
         {
             sum += defaultValueProvider.apply(i);
         }
@@ -130,22 +130,22 @@ public class DynamicIndexedArray implements ServerSaveable {
     {
         long sum = 0;
 
-        // Outside the array
-        for(long i=virtualStartIndex; i<indexOffset; ++i)
+        // Outside the array (below)
+        for(long i=virtualStartIndex; i<Math.min(indexOffset, virtualEndIndex); ++i)
         {
             sum += roundConservative(defaultValueProvider.apply(i));
         }
 
-        // Inside the array range
-        int arrayLoopEndIndex = (int)Math.min(virtualEndIndex - indexOffset, array.length);
-        int arrayLoopStartIndex = (int)Math.max(virtualStartIndex - indexOffset, 0);
+        // Inside the array range — clamp to [0, array.length] in long arithmetic before casting
+        int arrayLoopEndIndex = (int)Math.max(0, Math.min(virtualEndIndex - indexOffset, array.length));
+        int arrayLoopStartIndex = (int)Math.max(0, Math.min(virtualStartIndex - indexOffset, array.length));
         for(int i=arrayLoopStartIndex; i<arrayLoopEndIndex; ++i)
         {
             sum += roundConservative(array[i]);
         }
 
-        // Outside the array
-        for(long i=array.length + indexOffset; i<virtualEndIndex; i++)
+        // Outside the array (above)
+        for(long i=Math.max(virtualStartIndex, (long)array.length + indexOffset); i<virtualEndIndex; i++)
         {
             sum += roundConservative(defaultValueProvider.apply(i));
         }
@@ -163,21 +163,22 @@ public class DynamicIndexedArray implements ServerSaveable {
     {
         float sum = 0;
 
-        // Outside the array
-        for(long i=virtualStartIndex; i<indexOffset; ++i)
+        // Outside the array (below)
+        for(long i=virtualStartIndex; i<Math.min(indexOffset, virtualEndIndex); ++i)
         {
             sum += defaultValueProvider.apply(i) * i;
         }
 
-        // Inside the array range
-        int arrayLoopEndIndex = (int)Math.min(virtualEndIndex - indexOffset, array.length);
-        for(int i=0; i<arrayLoopEndIndex; ++i)
+        // Inside the array range — clamp to [0, array.length] in long arithmetic before casting
+        int arrayLoopEndIndex = (int)Math.max(0, Math.min(virtualEndIndex - indexOffset, array.length));
+        int arrayLoopStartIndex = (int)Math.max(0, Math.min(virtualStartIndex - indexOffset, array.length));
+        for(int i=arrayLoopStartIndex; i<arrayLoopEndIndex; ++i)
         {
             sum += array[i] * (indexOffset + i);
         }
 
-        // Outside the array
-        for(long i=virtualStartIndex + arrayLoopEndIndex; i<virtualEndIndex; i++)
+        // Outside the array (above)
+        for(long i=Math.max(virtualStartIndex, (long)arrayLoopEndIndex + indexOffset); i<virtualEndIndex; i++)
         {
             sum += defaultValueProvider.apply(i) * i;
         }
@@ -187,21 +188,22 @@ public class DynamicIndexedArray implements ServerSaveable {
     {
         long sum = 0;
 
-        // Outside the array
-        for(long i=virtualStartIndex; i<indexOffset; ++i)
+        // Outside the array (below)
+        for(long i=virtualStartIndex; i<Math.min(indexOffset, virtualEndIndex); ++i)
         {
             sum += roundConservative(defaultValueProvider.apply(i)) * i;
         }
 
-        // Inside the array range
-        int arrayLoopEndIndex = (int)Math.min(virtualEndIndex - indexOffset, array.length);
-        for(int i=0; i<arrayLoopEndIndex; ++i)
+        // Inside the array range — clamp to [0, array.length] in long arithmetic before casting
+        int arrayLoopEndIndex = (int)Math.max(0, Math.min(virtualEndIndex - indexOffset, array.length));
+        int arrayLoopStartIndex = (int)Math.max(0, Math.min(virtualStartIndex - indexOffset, array.length));
+        for(int i=arrayLoopStartIndex; i<arrayLoopEndIndex; ++i)
         {
             sum += roundConservative(array[i]) * (indexOffset + i);
         }
 
-        // Outside the array
-        for(long i=virtualStartIndex + arrayLoopEndIndex; i<virtualEndIndex; i++)
+        // Outside the array (above)
+        for(long i=Math.max(virtualStartIndex, (long)arrayLoopEndIndex + indexOffset); i<virtualEndIndex; i++)
         {
             sum += roundConservative(defaultValueProvider.apply(i)) * i;
         }
@@ -460,12 +462,14 @@ public class DynamicIndexedArray implements ServerSaveable {
     {
         if(offset > 0)
         {
-            // Move the array to the a lower index
-            int upperBound = (int)((long)array.length - offset);
             indexOffset += offset;
-            if(upperBound>0) {
+            if(offset < (long)array.length) {
+                // offset fits in int since it's < array.length (which is int)
+                int intOffset = (int) offset;
+                int upperBound = array.length - intOffset;
+                // Move the array to a lower index
                 for (int i = 0; i < upperBound; i++) {
-                    array[i] = array[(int)((long)i + offset)];
+                    array[i] = array[i + intOffset];
                 }
 
                 // Fill the rest with default values
@@ -474,6 +478,7 @@ public class DynamicIndexedArray implements ServerSaveable {
                 }
             }
             else {
+                // Offset >= array.length: all old data is displaced, reset everything
                 for (int i = 0; i < array.length; i++) {
                     array[i] = defaultValueProvider.apply((long)i + indexOffset);
                 }
@@ -483,18 +488,21 @@ public class DynamicIndexedArray implements ServerSaveable {
         {
             indexOffset += offset;
             if(offset > (long)-array.length) {
+                // |offset| fits in int since |offset| < array.length (which is int)
+                int intNegOffset = (int) -offset; // positive value representing shift amount
                 // Move the array to the right
-                for (int i = array.length - 1; i >= -offset; i--) {
-                    array[i] = array[(int)(i + offset)];
+                for (int i = array.length - 1; i >= intNegOffset; i--) {
+                    array[i] = array[i - intNegOffset];
                 }
                 // Fill the rest with default values
-                for (int i = 0; i < -offset; i++) {
-                    array[i] = defaultValueProvider.apply(i + indexOffset);
+                for (int i = 0; i < intNegOffset; i++) {
+                    array[i] = defaultValueProvider.apply((long)i + indexOffset);
                 }
             }
             else {
+                // |offset| >= array.length: all old data is displaced, reset everything
                 for (int i = 0; i < array.length; i++) {
-                    array[i] = defaultValueProvider.apply(i + indexOffset);
+                    array[i] = defaultValueProvider.apply((long)i + indexOffset);
                 }
             }
         }
@@ -505,13 +513,25 @@ public class DynamicIndexedArray implements ServerSaveable {
     }
     public boolean isInRange(long virtualIndex)
     {
-        long arrayIndex = getArrayIndex(virtualIndex);
+        long arrayIndex = getArrayIndexLong(virtualIndex);
         return arrayIndex >= 0 && arrayIndex < (long)array.length;
+    }
+
+    private long getArrayIndexLong(long virtualIndex)
+    {
+        return virtualIndex - indexOffset;
     }
 
     private int getArrayIndex(long virtualIndex)
     {
-        return (int)(virtualIndex - indexOffset);
+        long idx = virtualIndex - indexOffset;
+        if(idx < Integer.MIN_VALUE || idx > Integer.MAX_VALUE)
+        {
+            // Out of any representable int range; callers must bounds-check before using the result as an array index.
+            // Return a deliberately out-of-range value so bounds checks catch it.
+            return (idx < 0) ? Integer.MIN_VALUE : Integer.MAX_VALUE;
+        }
+        return (int) idx;
     }
     public long getVirtualIndex(int arrayIndex)
     {
