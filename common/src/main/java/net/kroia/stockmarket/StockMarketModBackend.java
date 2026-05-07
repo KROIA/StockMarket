@@ -28,7 +28,16 @@ import net.kroia.stockmarket.stockmarket.marketmanager.ClientMarketManager;
 import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
 
 import net.kroia.stockmarket.testing.StockMarketTestRegistration;
+import net.kroia.stockmarket.testing.tests.ActiveOrdersRequestTestSuite;
+import net.kroia.stockmarket.testing.tests.CreateOrderRequestTestSuite;
+import net.kroia.stockmarket.testing.tests.DatabaseTestSuite;
 import net.kroia.stockmarket.testing.tests.MarketIntegrationTestSuite;
+import net.kroia.stockmarket.testing.tests.MarketPriceManagerTestSuite;
+import net.kroia.stockmarket.testing.tests.MatchingEngineTestSuite;
+import net.kroia.stockmarket.testing.tests.OrderRecordManagerTestSuite;
+import net.kroia.stockmarket.testing.tests.OrderbookTestSuite;
+import net.kroia.stockmarket.testing.tests.PluginTestSuite;
+import net.kroia.stockmarket.testing.tests.ServerMarketTestSuite;
 import net.kroia.modutilities.testing.TestRegistry;
 import net.kroia.stockmarket.minecraft.menu.StockMarketMenus;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
@@ -191,8 +200,7 @@ public class StockMarketModBackend implements StockMarketAPI {
         }
 
         boolean isMaster = BankSystemMod.getAPI().getServerBankManager().isMaster();
-        if(isMaster)
-        {
+        if(isMaster) {
             SERVER_INSTANCES.DATABASE_MANAGER = new DatabaseManager();
             SERVER_INSTANCES.DATABASE_MANAGER.connectToDatabase(UtilitiesPlatform.getServer());
             SERVER_INSTANCES.MARKET_PRICE_HISTORY_MANAGER = new MarketPriceManager(SERVER_INSTANCES.DATABASE_MANAGER);
@@ -204,6 +212,17 @@ public class StockMarketModBackend implements StockMarketAPI {
             loadDataFromFiles(UtilitiesPlatform.getServer());
             TickEvent.SERVER_POST.register(StockMarketModBackend::onServerTick);
 
+            if (TestRegistry.ENABLE_TESTS) {
+                MatchingEngineTestSuite.setBackend(SERVER_INSTANCES);
+                OrderbookTestSuite.setBackend(SERVER_INSTANCES);
+                CreateOrderRequestTestSuite.setBackend(SERVER_INSTANCES);
+                ActiveOrdersRequestTestSuite.setBackend(SERVER_INSTANCES);
+                DatabaseTestSuite.setBackend(SERVER_INSTANCES);
+                MarketPriceManagerTestSuite.setBackend(SERVER_INSTANCES);
+                OrderRecordManagerTestSuite.setBackend(SERVER_INSTANCES);
+                ServerMarketTestSuite.setBackend(SERVER_INSTANCES);
+                PluginTestSuite.setBackend(SERVER_INSTANCES);
+            }
         }
         else
         {

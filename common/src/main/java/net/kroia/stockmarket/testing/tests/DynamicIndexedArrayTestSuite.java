@@ -26,6 +26,23 @@ public class DynamicIndexedArrayTestSuite extends TestSuite {
         addTest("move_offset_larger_than_array_length", this::test_moveOffset_largerThanArrayLength);
         addTest("get_sum_entire_range", this::test_getSum_entireRange);
         addTest("save_load_round_trip", this::test_save_load_roundTrip);
+        addTest("get_outside_range", this::test_get_outsideRange);
+        addTest("set_within_range", this::test_set_withinRange);
+        addTest("get_array_index_overflow_long_to_int", this::test_getArrayIndex_overflowLongToInt);
+        addTest("is_in_range_near_integer_max_boundary", this::test_isInRange_nearIntegerMaxBoundary);
+        addTest("move_offset_small_negative", this::test_moveOffset_smallNegative);
+        addTest("move_offset_negative_larger_than_array_length", this::test_moveOffset_negativeLargerThanArrayLength);
+        addTest("move_offset_int_overflow", this::test_moveOffset_intOverflow);
+        addTest("set_offset_delegates", this::test_setOffset_delegates);
+        addTest("get_sum_partial_range", this::test_getSum_partialRange);
+        addTest("get_sum_rounded", this::test_getSumRounded);
+        addTest("get_sum_product", this::test_getSumProduct);
+        addTest("set_float_array", this::test_set_floatArray);
+        addTest("load_invalid_byte_array_length", this::test_load_invalidByteArrayLength);
+        addTest("load_missing_fields", this::test_load_missingFields);
+        addTest("reset_to_default_values", this::test_resetToDefaultValues);
+        addTest("add_within_range", this::test_add_withinRange);
+        addTest("multiply_within_range", this::test_multiply_withinRange);
     }
 
     private TestResult test_get_withinRange() {
@@ -150,5 +167,276 @@ public class DynamicIndexedArrayTestSuite extends TestSuite {
             }
         }
         return pass("Save/load round-trip preserves offset and data");
+    }
+
+    private TestResult test_get_outsideRange() {
+        DynamicIndexedArray arr = new DynamicIndexedArray(10, idx -> 42.0f);
+        float val = arr.get(20); // outside range [0, 9]
+        if (Math.abs(val - 42.0f) > DELTA) {
+            return fail("get() outside range should return default value 42.0 but got " + val);
+        }
+        return pass("get() outside range returns default value from provider");
+    }
+
+    private TestResult test_set_withinRange() {
+        DynamicIndexedArray arr = new DynamicIndexedArray(10, idx -> 0.0f);
+        boolean result = arr.set(5, 3.14f);
+        TestResult r = assertTrue("Setting within range should return true", result);
+        if (!r.passed()) return r;
+        float val = arr.get(5);
+        if (Math.abs(val - 3.14f) > DELTA) {
+            return fail("Value at index 5 should be 3.14 but was " + val);
+        }
+        return pass("set() within range succeeds and stores the value");
+    }
+
+    private TestResult test_getArrayIndex_overflowLongToInt() {
+        DynamicIndexedArray arr = new DynamicIndexedArray(10, idx -> -1.0f);
+        // Virtual index very far from offset (0) causes potential overflow
+        // The fixed getArrayIndex should handle this by returning a clamped value
+        long farIndex = (long) Integer.MAX_VALUE + 100L;
+        boolean inRange = arr.isInRange(farIndex);
+        TestResult r = assertFalse("Index far beyond int range should not be in range", inRange);
+        if (!r.passed()) return r;
+        // Should return default, not crash
+        float val = arr.get(farIndex);
+        if (Math.abs(val - (-1.0f)) > DELTA) {
+            return fail("get() at overflow index should return default -1.0 but got " + val);
+        }
+        return pass("getArrayIndex handles long-to-int overflow safely");
+    }
+
+    private TestResult test_isInRange_nearIntegerMaxBoundary() {
+        DynamicIndexedArray arr = new DynamicIndexedArray(10, idx -> 0.0f);
+        // offset = 0, array length = 10, so valid range is [0, 9]
+        // Test near Integer.MAX_VALUE
+        long nearMax = (long) Integer.MAX_VALUE - 1;
+        TestResult r = assertFalse("Index near Integer.MAX_VALUE should be out of range", arr.isInRange(nearMax));
+        if (!r.passed()) return r;
+        // Test that valid boundary works
+        r = assertTrue("Index 0 should be in range", arr.isInRange(0));
+        if (!r.passed()) return r;
+        r = assertTrue("Index 9 should be in range", arr.isInRange(9));
+        if (!r.passed()) return r;
+        return assertFalse("Index 10 should be out of range", arr.isInRange(10));
+    }
+
+    private TestResult test_moveOffset_smallNegative() {
+        DynamicIndexedArray arr = new DynamicIndexedArray(5, idx -> -1.0f);
+        for (int i = 0; i < 5; i++) {
+            arr.set(i, (float) (i * 10)); // [0, 10, 20, 30, 40]
+        }
+        arr.moveOffset(-2);
+        // After moveOffset(-2), offset becomes -2
+        // Old data shifts right: virtual indices -2,-1 get defaults, 0->0, 1->10, 2->20
+        float valNeg2 = arr.get(-2);
+        if (Math.abs(valNeg2 - (-1.0f)) > DELTA) {
+            return fail("After moveOffset(-2), get(-2) should be default -1.0 but was " + valNeg2);
+        }
+        float val0 = arr.get(0);
+        if (Math.abs(val0 - 0.0f) > DELTA) {
+            return fail("After moveOffset(-2), get(0) should be 0.0 but was " + val0);
+        }
+        float val1 = arr.get(1);
+        if (Math.abs(val1 - 10.0f) > DELTA) {
+            return fail("After moveOffset(-2), get(1) should be 10.0 but was " + val1);
+        }
+        return pass("moveOffset with small negative shifts data correctly");
+    }
+
+    private TestResult test_moveOffset_negativeLargerThanArrayLength() {
+        DynamicIndexedArray arr = new DynamicIndexedArray(5, idx -> 55.0f);
+        for (int i = 0; i < 5; i++) {
+            arr.set(i, (float) i);
+        }
+        arr.moveOffset(-10);
+        long offset = arr.getIndexOffset();
+        if (offset != -10) {
+            return fail("Offset should be -10 but was " + offset);
+        }
+        for (int i = -10; i < -5; i++) {
+            float val = arr.get(i);
+            if (Math.abs(val - 55.0f) > DELTA) {
+                return fail("After large negative moveOffset, index " + i + " should be default 55.0 but was " + val);
+            }
+        }
+        return pass("moveOffset with large negative resets all elements to defaults");
+    }
+
+    private TestResult test_moveOffset_intOverflow() {
+        DynamicIndexedArray arr = new DynamicIndexedArray(5, idx -> 0.0f);
+        arr.set(0, 1.0f);
+        // Move by a value larger than Integer.MAX_VALUE
+        long bigOffset = (long) Integer.MAX_VALUE + 10L;
+        arr.moveOffset(bigOffset);
+        // All old data should be displaced; elements should be default
+        long newOffset = arr.getIndexOffset();
+        if (newOffset != bigOffset) {
+            return fail("Offset should be " + bigOffset + " but was " + newOffset);
+        }
+        for (int i = 0; i < 5; i++) {
+            float val = arr.get(newOffset + i);
+            if (Math.abs(val) > DELTA) {
+                return fail("After huge moveOffset, all elements should be default 0.0 but index " + (newOffset + i) + " was " + val);
+            }
+        }
+        return pass("moveOffset larger than Integer.MAX_VALUE handles overflow correctly");
+    }
+
+    private TestResult test_setOffset_delegates() {
+        DynamicIndexedArray arr1 = new DynamicIndexedArray(5, idx -> 0.0f);
+        DynamicIndexedArray arr2 = new DynamicIndexedArray(5, idx -> 0.0f);
+        for (int i = 0; i < 5; i++) {
+            arr1.set(i, (float) (i + 1));
+            arr2.set(i, (float) (i + 1));
+        }
+        // setOffset(x) should be equivalent to moveOffset(x - currentOffset)
+        arr1.moveOffset(3); // offset 0 -> 3, so moveOffset(3)
+        arr2.setOffset(3);  // should do the same thing
+
+        TestResult r = assertEquals("offsets should match", arr1.getIndexOffset(), arr2.getIndexOffset());
+        if (!r.passed()) return r;
+        for (long i = 3; i < 8; i++) {
+            float v1 = arr1.get(i);
+            float v2 = arr2.get(i);
+            if (Math.abs(v1 - v2) > DELTA) {
+                return fail("Values differ at index " + i + ": moveOffset=" + v1 + ", setOffset=" + v2);
+            }
+        }
+        return pass("setOffset(x) is equivalent to moveOffset(x - currentOffset)");
+    }
+
+    private TestResult test_getSum_partialRange() {
+        DynamicIndexedArray arr = new DynamicIndexedArray(10, idx -> 0.0f);
+        for (int i = 0; i < 10; i++) {
+            arr.set(i, (float) i); // [0,1,2,3,4,5,6,7,8,9]
+        }
+        float sum = arr.getSum(2, 5); // 2+3+4 = 9
+        if (Math.abs(sum - 9.0f) > DELTA) {
+            return fail("Sum of indices [2,5) should be 9.0 but was " + sum);
+        }
+        return pass("getSum over partial range returns correct sum");
+    }
+
+    private TestResult test_getSumRounded() {
+        DynamicIndexedArray arr = new DynamicIndexedArray(5, idx -> 0.0f);
+        arr.set(0, 1.7f);  // roundConservative -> 1
+        arr.set(1, -2.3f); // roundConservative -> -2
+        arr.set(2, 3.9f);  // roundConservative -> 3
+        arr.set(3, -0.5f); // roundConservative -> 0
+        arr.set(4, 4.1f);  // roundConservative -> 4
+        long sum = arr.getSumRounded(0, 5); // 1 + (-2) + 3 + 0 + 4 = 6
+        return assertEquals("getSumRounded should individually round then sum", 6L, sum);
+    }
+
+    private TestResult test_getSumProduct() {
+        DynamicIndexedArray arr = new DynamicIndexedArray(5, idx -> 0.0f);
+        // offset=0, so virtualIndex == arrayIndex
+        arr.set(0, 2.0f);
+        arr.set(1, 3.0f);
+        arr.set(2, 1.0f);
+        arr.set(3, 0.0f);
+        arr.set(4, 5.0f);
+        // getSumProduct: sum of (element * virtualIndex)
+        // = 2*0 + 3*1 + 1*2 + 0*3 + 5*4 = 0+3+2+0+20 = 25
+        float sumProduct = arr.getSumProduct(0, 5);
+        if (Math.abs(sumProduct - 25.0f) > DELTA) {
+            return fail("getSumProduct should be 25.0 but was " + sumProduct);
+        }
+        return pass("getSumProduct correctly multiplies each element by its virtual index and sums");
+    }
+
+    private TestResult test_set_floatArray() {
+        DynamicIndexedArray arr = new DynamicIndexedArray(10, idx -> 0.0f);
+        float[] values = {10.0f, 20.0f, 30.0f};
+        boolean result = arr.set(2, values);
+        TestResult r = assertTrue("set(virtualIndex, float[]) should return true for valid range", result);
+        if (!r.passed()) return r;
+        if (Math.abs(arr.get(2) - 10.0f) > DELTA) {
+            return fail("Index 2 should be 10.0 but was " + arr.get(2));
+        }
+        if (Math.abs(arr.get(3) - 20.0f) > DELTA) {
+            return fail("Index 3 should be 20.0 but was " + arr.get(3));
+        }
+        if (Math.abs(arr.get(4) - 30.0f) > DELTA) {
+            return fail("Index 4 should be 30.0 but was " + arr.get(4));
+        }
+        return pass("set(virtualIndex, float[]) overwrites range correctly");
+    }
+
+    private TestResult test_load_invalidByteArrayLength() {
+        DynamicIndexedArray arr = new DynamicIndexedArray(5, idx -> 0.0f);
+        CompoundTag tag = new CompoundTag();
+        tag.putLong("indexOffset", 0);
+        tag.putByteArray("array", new byte[]{1, 2, 3}); // 3 bytes, not divisible by 4
+        boolean loaded = arr.load(tag);
+        return assertFalse("load() with byte array length not divisible by 4 should return false", loaded);
+    }
+
+    private TestResult test_load_missingFields() {
+        DynamicIndexedArray arr = new DynamicIndexedArray(5, idx -> 0.0f);
+        CompoundTag tag = new CompoundTag();
+        // Missing both indexOffset and array
+        boolean loaded = arr.load(tag);
+        TestResult r = assertFalse("load() with missing fields should return false", loaded);
+        if (!r.passed()) return r;
+
+        // Missing only array
+        CompoundTag tag2 = new CompoundTag();
+        tag2.putLong("indexOffset", 0);
+        boolean loaded2 = arr.load(tag2);
+        r = assertFalse("load() with missing array field should return false", loaded2);
+        if (!r.passed()) return r;
+
+        return pass("load() correctly rejects tags with missing required fields");
+    }
+
+    private TestResult test_resetToDefaultValues() {
+        DynamicIndexedArray arr = new DynamicIndexedArray(5, idx -> (float) (idx * 2));
+        // Set custom values
+        for (int i = 0; i < 5; i++) {
+            arr.set(i, 999.0f);
+        }
+        arr.resetToDefaultValues();
+        // After reset, each element should be defaultValueProvider(i + offset)
+        // offset=0, so element[i] = i*2
+        for (int i = 0; i < 5; i++) {
+            float expected = i * 2.0f;
+            float actual = arr.get(i);
+            if (Math.abs(actual - expected) > DELTA) {
+                return fail("After reset, index " + i + " should be " + expected + " but was " + actual);
+            }
+        }
+        return pass("resetToDefaultValues sets all elements to provider output");
+    }
+
+    private TestResult test_add_withinRange() {
+        DynamicIndexedArray arr = new DynamicIndexedArray(10, idx -> 0.0f);
+        arr.set(3, 10.0f);
+        boolean result = arr.add(3, 5.0f);
+        TestResult r = assertTrue("add() within range should return true", result);
+        if (!r.passed()) return r;
+        float val = arr.get(3);
+        if (Math.abs(val - 15.0f) > DELTA) {
+            return fail("After adding 5.0 to 10.0, value should be 15.0 but was " + val);
+        }
+        // Test add outside range
+        boolean outsideResult = arr.add(20, 1.0f);
+        return assertFalse("add() outside range should return false", outsideResult);
+    }
+
+    private TestResult test_multiply_withinRange() {
+        DynamicIndexedArray arr = new DynamicIndexedArray(10, idx -> 0.0f);
+        arr.set(4, 6.0f);
+        boolean result = arr.multyply(4, 3.0f);
+        TestResult r = assertTrue("multyply() within range should return true", result);
+        if (!r.passed()) return r;
+        float val = arr.get(4);
+        if (Math.abs(val - 18.0f) > DELTA) {
+            return fail("After multiplying 6.0 by 3.0, value should be 18.0 but was " + val);
+        }
+        // Test multiply outside range
+        boolean outsideResult = arr.multyply(20, 2.0f);
+        return assertFalse("multyply() outside range should return false", outsideResult);
     }
 }

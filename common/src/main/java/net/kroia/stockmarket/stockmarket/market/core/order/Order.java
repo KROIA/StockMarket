@@ -3,6 +3,7 @@ package net.kroia.stockmarket.stockmarket.market.core.order;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.modutilities.persistence.ServerSaveable;
+import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.nbt.CompoundTag;
@@ -281,8 +282,10 @@ public class Order implements ServerSaveable
 
     @Override
     public boolean load(CompoundTag tag) {
-        if(tag == null)
+        if(tag == null) {
+            StockMarketMod.LOGGER.error("[Order]: Can't load Order from NBT tag: tag is null");
             return false;
+        }
 
         if(!tag.contains("ItemID") ||
            !tag.contains("Type") ||
@@ -290,8 +293,10 @@ public class Order implements ServerSaveable
            !tag.contains("FilledVolume") ||
            !tag.contains("StartPrice") ||
            !tag.contains("Time") ||
-           !tag.contains("TransferredMoney"))
+           !tag.contains("TransferredMoney")) {
+            StockMarketMod.LOGGER.error("[Order]: Can't load Order from NBT tag: missing required fields");
             return false;
+        }
 
         itemID = new ItemID(tag.getShort("ItemID"));
         if(tag.contains("orderExecutor"))

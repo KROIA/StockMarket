@@ -201,8 +201,8 @@ public class MarketIntegrationTestSuite extends TestSuite {
             return fail("Wrong market end price: " + serverMarket.getCurrentMarketPrice());
         if (limitOrder.getFilledVolume() + o1.getFilledVolume() != 0)
             return fail("Filled volumes should cancel out");
-        if (!limitOrder.isFilled() == true)
-            return fail("Limit order should NOT be filled");
+        if (limitOrder.isFilled())
+            return fail("Limit order should NOT be filled (only partially matched)");
 
         serverMarket.update();
         serverMarket.update();

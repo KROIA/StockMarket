@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.util;
 
 import net.kroia.modutilities.persistence.ServerSaveable;
+import net.kroia.stockmarket.StockMarketMod;
 import net.minecraft.nbt.CompoundTag;
 import org.jetbrains.annotations.NotNull;
 
@@ -548,13 +549,16 @@ public class DynamicIndexedArray implements ServerSaveable {
 
     @Override
     public boolean load(CompoundTag tag) {
-        if(!tag.contains("indexOffset") || !tag.contains("array"))
+        if(!tag.contains("indexOffset") || !tag.contains("array")) {
+            StockMarketMod.LOGGER.error("[DynamicIndexedArray]: Can't load from NBT tag: missing required fields");
             return false;
+        }
 
         indexOffset = tag.getLong("indexOffset");
         byte[] byteArray = tag.getByteArray("array");
         if(byteArray.length % 4 != 0) {
-            return false; // Invalid byte array length for floats
+            StockMarketMod.LOGGER.error("[DynamicIndexedArray]: Can't load from NBT tag: invalid byte array length for floats");
+            return false;
         }
         array = byteArrayToFloatArray(byteArray);
         return true;

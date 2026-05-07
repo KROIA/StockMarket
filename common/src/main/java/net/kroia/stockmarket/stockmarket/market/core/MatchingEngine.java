@@ -269,7 +269,7 @@ public class MatchingEngine
                 try {
                     cost = Math.multiplyExact(fillPotential, buyOrder.getStartPrice());
                 } catch (ArithmeticException e) {
-                    warn("Overflow in sell-vs-player-buy cost calculation — canceling buy order " + buyOrder.getOrderID());
+                    warn("Overflow in sell-vs-player-buy cost calculation — canceling buy order " + buyOrder.hashCode());
                     buyOrdersToRemove.add(buyOrder);
                     orderCanceled(buyOrder);
                     continue;
@@ -295,7 +295,7 @@ public class MatchingEngine
                 try {
                     cost = Math.multiplyExact(fillPotential, buyOrder.getStartPrice());
                 } catch (ArithmeticException e) {
-                    warn("Overflow in sell-vs-bot-buy cost calculation — canceling buy order " + buyOrder.getOrderID());
+                    warn("Overflow in sell-vs-bot-buy cost calculation — canceling buy order " + buyOrder.hashCode());
                     buyOrdersToRemove.add(buyOrder);
                     orderCanceled(buyOrder);
                     continue;
@@ -430,7 +430,7 @@ public class MatchingEngine
                 try {
                     costFull = Math.multiplyExact(fillPotential, sellOrder.getStartPrice());
                 } catch (ArithmeticException e) {
-                    warn("Overflow in buy-vs-player-sell costFull calculation — canceling sell order " + sellOrder.getOrderID());
+                    warn("Overflow in buy-vs-player-sell costFull calculation — canceling sell order " + sellOrder.hashCode());
                     sellOrdersToRemove.add(sellOrder);
                     orderCanceled(sellOrder);
                     continue;
@@ -441,7 +441,7 @@ public class MatchingEngine
                     try {
                         costFull = Math.multiplyExact(fillPotential, sellOrder.getStartPrice());
                     } catch (ArithmeticException e) {
-                        warn("Overflow in buy-vs-player-sell recalculated costFull — canceling order " + order.getOrderID());
+                        warn("Overflow in buy-vs-player-sell recalculated costFull — canceling order " + order.hashCode());
                         orderCanceled(order);
                         break;
                     }
@@ -455,7 +455,7 @@ public class MatchingEngine
                 try {
                     cost = Math.multiplyExact(fillPotential, sellOrder.getStartPrice());
                 } catch (ArithmeticException e) {
-                    warn("Overflow in buy-vs-player-sell cost calculation — canceling sell order " + sellOrder.getOrderID());
+                    warn("Overflow in buy-vs-player-sell cost calculation — canceling sell order " + sellOrder.hashCode());
                     sellOrdersToRemove.add(sellOrder);
                     orderCanceled(sellOrder);
                     continue;
@@ -483,7 +483,7 @@ public class MatchingEngine
                 try {
                     costFull = Math.multiplyExact(fillPotential, sellOrder.getStartPrice());
                 } catch (ArithmeticException e) {
-                    warn("Overflow in buy-vs-bot-sell costFull calculation — canceling sell order " + sellOrder.getOrderID());
+                    warn("Overflow in buy-vs-bot-sell costFull calculation — canceling sell order " + sellOrder.hashCode());
                     sellOrdersToRemove.add(sellOrder);
                     orderCanceled(sellOrder);
                     continue;
@@ -497,7 +497,7 @@ public class MatchingEngine
                 try {
                     cost = Math.multiplyExact(fillPotential, sellOrder.getStartPrice());
                 } catch (ArithmeticException e) {
-                    warn("Overflow in buy-vs-bot-sell cost calculation — canceling sell order " + sellOrder.getOrderID());
+                    warn("Overflow in buy-vs-bot-sell cost calculation — canceling sell order " + sellOrder.hashCode());
                     sellOrdersToRemove.add(sellOrder);
                     orderCanceled(sellOrder);
                     continue;

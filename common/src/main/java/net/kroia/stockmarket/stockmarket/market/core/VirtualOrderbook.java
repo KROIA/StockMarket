@@ -295,10 +295,7 @@ public class VirtualOrderbook implements ServerSaveable
      */
     public static long roundConservative(float value)
     {
-        if(value < 0)
-            return (long)Math.ceil(value);
-        else
-            return (long)Math.floor(value);
+        return DynamicIndexedArray.roundConservative(value);
     }
 
     @Override

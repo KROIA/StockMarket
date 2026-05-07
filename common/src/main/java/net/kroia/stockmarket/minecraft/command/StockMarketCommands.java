@@ -275,7 +275,8 @@ public class StockMarketCommands {
                                     return Command.SINGLE_SUCCESS;
                                 })
 
-                        ));
+                        )
+        );
 
         boolean isSlave = BACKEND_INSTANCES != null
                 && BACKEND_INSTANCES.MARKET_MANAGER != null
