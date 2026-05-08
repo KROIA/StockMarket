@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.util;
 
 import net.kroia.modutilities.persistence.ServerSaveable;
+import net.kroia.stockmarket.StockMarketMod;
 import net.minecraft.nbt.CompoundTag;
 
 public class NormalizedRandomPriceGenerator implements ServerSaveable {
@@ -69,6 +70,7 @@ public class NormalizedRandomPriceGenerator implements ServerSaveable {
     public boolean load(CompoundTag tag) {
         int order = tag.getInt("order");
         if (order <= 0) {
+            StockMarketMod.LOGGER.error("NormalizedRandomPriceGenerator.load: invalid order ({})", order);
             return false; // Invalid order
         }
         randomWalk = new MeanRevertingRandomWalk[order];

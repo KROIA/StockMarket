@@ -111,17 +111,26 @@ public class StockMarketCommands {
                                 long time = System.currentTimeMillis();
                                 manager.save(exData).thenRun(() -> {
                                     long writeTime = System.currentTimeMillis() - time;
-                                    source.sendSystemMessage(Component.literal("Database write for " + numRecords + " records took " + writeTime + " ms"));
+                                    try {
+                                        source.sendSystemMessage(Component.literal("Database write for " + numRecords + " records took " + writeTime + " ms"));
+                                    } catch (Exception e) {
+                                    }
                                     long time2 = System.currentTimeMillis();
                                     manager.getHistory(Optional.of(new DateFilter(Long.MAX_VALUE, Long.MAX_VALUE)), Optional.empty(),Optional.empty(), Optional.empty())
                                             .thenRun(() -> {
                                                 long readTime = System.currentTimeMillis() - time2;
-                                                source.sendSystemMessage(Component.literal("Database read for " + numRecords + " records took " + readTime + " ms"));
+                                                try {
+                                                    source.sendSystemMessage(Component.literal("Database read for " + numRecords + " records took " + readTime + " ms"));
+                                                } catch (Exception e) {
+                                                }
                                                 long time3 = System.currentTimeMillis();
                                                 manager.removeHistory(Optional.of(new DateFilter(Long.MAX_VALUE, Long.MAX_VALUE)), Optional.empty(),Optional.empty(), Optional.empty())
                                                         .thenRun(() -> {
                                                             long deleteTime = System.currentTimeMillis() - time3;
-                                                            source.sendSystemMessage(Component.literal("Database delete for " + numRecords + " records took " + deleteTime + " ms"));
+                                                            try {
+                                                                source.sendSystemMessage(Component.literal("Database delete for " + numRecords + " records took " + deleteTime + " ms"));
+                                                            } catch (Exception e) {
+                                                            }
                                                         });
                                             });
 
@@ -133,17 +142,26 @@ public class StockMarketCommands {
                                 long time = System.currentTimeMillis();
                                 manager.save(exData).thenRun(() -> {
                                     long writeTime = System.currentTimeMillis() - time;
-                                    source.sendSystemMessage(Component.literal("Database write for " + numRecords + " records took " + writeTime + " ms"));
+                                    try {
+                                        source.sendSystemMessage(Component.literal("Database write for " + numRecords + " records took " + writeTime + " ms"));
+                                    } catch (Exception e) {
+                                    }
                                     long time2 = System.currentTimeMillis();
                                     manager.getHistory(Optional.of(new DateFilter(Long.MAX_VALUE, Long.MAX_VALUE)), Optional.empty(), -1)
                                             .thenRun(() -> {
                                                 long readTime = System.currentTimeMillis() - time2;
-                                                source.sendSystemMessage(Component.literal("Database read for " + numRecords + " records took " + readTime + " ms"));
+                                                try {
+                                                    source.sendSystemMessage(Component.literal("Database read for " + numRecords + " records took " + readTime + " ms"));
+                                                } catch (Exception e) {
+                                                }
                                                 long time3 = System.currentTimeMillis();
                                                 manager.removeHistory(Optional.of(new DateFilter(Long.MAX_VALUE, Long.MAX_VALUE)), Optional.empty())
                                                         .thenRun(() -> {
                                                             long deleteTime = System.currentTimeMillis() - time3;
-                                                            source.sendSystemMessage(Component.literal("Database delete for " + numRecords + " records took " + deleteTime + " ms"));
+                                                            try {
+                                                                source.sendSystemMessage(Component.literal("Database delete for " + numRecords + " records took " + deleteTime + " ms"));
+                                                            } catch (Exception e) {
+                                                            }
                                                         });
                                             });
 

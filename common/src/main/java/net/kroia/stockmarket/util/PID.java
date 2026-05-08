@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.util;
 
 import net.kroia.modutilities.persistence.ServerSaveable;
+import net.kroia.stockmarket.StockMarketMod;
 import net.minecraft.nbt.CompoundTag;
 
 public class PID implements ServerSaveable {
@@ -41,8 +42,10 @@ public class PID implements ServerSaveable {
 
     @Override
     public boolean load(CompoundTag tag) {
-        if(!tag.contains("kp") || !tag.contains("ki") || !tag.contains("kd") || !tag.contains("i") || !tag.contains("lastError") || !tag.contains("iBound"))
+        if(!tag.contains("kp") || !tag.contains("ki") || !tag.contains("kd") || !tag.contains("i") || !tag.contains("lastError") || !tag.contains("iBound")) {
+            StockMarketMod.LOGGER.error("PID.load: missing required fields");
             return false;
+        }
 
         kp = tag.getDouble("kp");
         ki = tag.getDouble("ki");

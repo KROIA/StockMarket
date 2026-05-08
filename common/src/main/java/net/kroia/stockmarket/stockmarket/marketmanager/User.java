@@ -4,6 +4,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.kroia.modutilities.JsonUtilities;
 import net.kroia.modutilities.persistence.ServerSaveable;
+import net.kroia.stockmarket.StockMarketMod;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -79,6 +80,7 @@ public class User implements ServerSaveable {
     @Override
     public boolean load(CompoundTag tag) {
         if(!tag.contains("userUUID") || !tag.contains("userName")) {
+            StockMarketMod.LOGGER.error("User.load: missing required fields");
             return false; // Invalid data
         }
         this.userUUID = tag.getUUID("userUUID");
