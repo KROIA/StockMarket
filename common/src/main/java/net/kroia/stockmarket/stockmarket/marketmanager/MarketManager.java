@@ -1,6 +1,5 @@
 package net.kroia.stockmarket.stockmarket.marketmanager;
 
-import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.banking.bankmanager.BankManager;
 import net.kroia.modutilities.persistence.ServerSaveableChunked;
 import net.kroia.stockmarket.StockMarketModBackend;
@@ -8,6 +7,7 @@ import net.kroia.stockmarket.api.marketmanager.IAsyncMarketManager;
 import net.kroia.stockmarket.api.marketmanager.IClientMarketManager;
 import net.kroia.stockmarket.api.marketmanager.IMarketManager;
 import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
+import net.kroia.stockmarket.stockmarket.market.AsyncMarket;
 import net.kroia.stockmarket.util.MultiServerUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -15,7 +15,10 @@ import org.jetbrains.annotations.Nullable;
 public class MarketManager implements IMarketManager {
     public static void setBackend(StockMarketModBackend.ServerInstances backend) {
         ServerMarketManager.setBackend(backend);
-        AsyncMarketManager.setBackend(backend);
+        AsyncMarketManager.setServerBackend(backend);
+    }
+    public static void setClientBackend(StockMarketModBackend.ClientInstances backend) {
+        AsyncMarketManager.setClientBackend(backend);
     }
 
     private final @NotNull IAsyncMarketManager asyncServerMarketManager;

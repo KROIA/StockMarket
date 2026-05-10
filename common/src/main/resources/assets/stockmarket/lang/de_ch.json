@@ -142,6 +142,18 @@
   "gui.stockmarket.bot_settings_setup_screen_market_speed.high": "Schnell",
 
   "gui.stockmarket.bot_settings_setup_screen_change_bot_stocks.auto_change_money_balance": "Ändere de Geldbetrag uf de Bank vom Bot automatisch.\nDas wird gmacht zum gnueg geld z ha\ndamit Items kauft werde chönd",
-  "gui.stockmarket.bot_settings_setup_screen_change_bot_stocks.auto_change_item_balance": "Ändere d Anzahl Items uf de Bank vom Bot automatisch.\nDas wird gmacht zum gnueg Items z ha\ndamit Items verkauft werde chönd"
+  "gui.stockmarket.bot_settings_setup_screen_change_bot_stocks.auto_change_item_balance": "Ändere d Anzahl Items uf de Bank vom Bot automatisch.\nDas wird gmacht zum gnueg Items z ha\ndamit Items verkauft werde chönd",
+
+  "gui.stockmarket.management_screen.plugins.title": "Plugins",
+  "gui.stockmarket.management_screen.plugins.enabled": "aktiviert",
+  "gui.stockmarket.management_screen.plugins.manage": "Plugins verwalte",
+  "gui.stockmarket.plugin_management_screen.title": "Plugin-Verwautig",
+  "gui.stockmarket.plugin_management_screen.enabled": "Aktiviert",
+  "gui.stockmarket.plugin_management_screen.open_plugin_screen": "Plugin-Iistellige öffne",
+  "gui.stockmarket.plugin_detail_screen.title": "Plugin-Details",
+
+  "gui.stockmarket.target_price_bot.settings_title": "PID-Iistellige",
+  "gui.stockmarket.target_price_bot.settings_placeholder": "(Live-Date chömed no)",
+  "gui.stockmarket.target_price_bot.markets_title": "Abonnierti Märkt"
 
 }

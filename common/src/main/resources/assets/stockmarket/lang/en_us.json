@@ -173,7 +173,19 @@
   "gui.stockmarket.limit_order_panel.quantity": "Quantity",
   "gui.stockmarket.limit_order_panel.price": "Price",
   "gui.stockmarket.limit_order_panel.buy": "Buy",
-  "gui.stockmarket.limit_order_panel.sell": "Sell"
+  "gui.stockmarket.limit_order_panel.sell": "Sell",
+
+  "gui.stockmarket.management_screen.plugins.title": "Plugins",
+  "gui.stockmarket.management_screen.plugins.enabled": "enabled",
+  "gui.stockmarket.management_screen.plugins.manage": "Manage Plugins",
+  "gui.stockmarket.plugin_management_screen.title": "Plugin Management",
+  "gui.stockmarket.plugin_management_screen.enabled": "Enabled",
+  "gui.stockmarket.plugin_management_screen.open_plugin_screen": "Open Plugin Settings",
+  "gui.stockmarket.plugin_detail_screen.title": "Plugin Details",
+
+  "gui.stockmarket.target_price_bot.settings_title": "PID Settings",
+  "gui.stockmarket.target_price_bot.settings_placeholder": "(Live data coming soon)",
+  "gui.stockmarket.target_price_bot.markets_title": "Subscribed Markets"
 
 
 }

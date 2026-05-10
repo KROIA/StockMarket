@@ -6,6 +6,8 @@ import net.kroia.stockmarket.pluginsystem.plugin.ServerPlugin;
 import net.kroia.stockmarket.util.PID;
 import net.minecraft.nbt.CompoundTag;
 
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -97,6 +99,43 @@ public class TargetPriceBot extends ServerPlugin {
     @Override
     public void onDisable() {
 
+    }
+
+    /**
+     * Encodes the current target prices for all subscribed markets into a binary payload.
+     * Format: [count:int] then for each market: [itemID:short, targetPrice:double].
+     *
+     * @return encoded runtime data bytes, or null if no markets are tracked
+     */
+    @Override
+    public byte[] provideRuntimeData() {
+        if (marketData.isEmpty()) return null;
+
+        try {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            DataOutputStream dos = new DataOutputStream(baos);
+            dos.writeInt(marketData.size());
+            for (Map.Entry<ItemID, RuntimeData> entry : marketData.entrySet()) {
+                dos.writeShort(entry.getKey().getShort());
+                dos.writeDouble(entry.getValue().targetPrice);
+            }
+            dos.flush();
+            return baos.toByteArray();
+        } catch (Exception e) {
+            error("Failed to encode runtime data", e);
+            return null;
+        }
+    }
+
+    /**
+     * Returns the update interval for the runtime data stream.
+     * Uses 200ms for fast target price visualization updates.
+     *
+     * @return stream update interval in ms
+     */
+    @Override
+    public long getRuntimeDataStreamInterval() {
+        return 200;
     }
 
     @Override

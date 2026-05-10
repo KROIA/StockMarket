@@ -24,4 +24,12 @@ public interface IClientMarketManager {
                                                                            long timeEnd);
     List<ItemID> getAvailableMarkets();
     CompletableFuture<ItemID> getTradingCurrencyIDAsync();
+
+    /**
+     * Requests the server to create a new market for the given item.
+     *
+     * @param itemID the item to create a market for
+     * @return a future that completes with {@code true} if the market was created successfully
+     */
+    CompletableFuture<Boolean> requestCreateMarket(ItemID itemID);
 }

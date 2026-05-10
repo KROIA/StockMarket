@@ -34,7 +34,7 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
 
     private boolean loggerEnabled = false;
     private final Map<ItemID, MarketCache> marketCaches = new HashMap<>(); // Contains all caches, instance ownership belongs to this class
-    private final Map<UUID, ServerPlugin> plugins = new HashMap<>();    // Contains all plugin instances. UUID: plugin instanceID
+    private Map<UUID, ServerPlugin> plugins = new LinkedHashMap<>();    // Contains all plugin instances. UUID: plugin instanceID
 
     private enum State
     {
@@ -186,6 +186,36 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
     public Map<UUID, ServerPlugin> getPlugins()
     {
         return plugins;
+    }
+
+    /**
+     * Reorders a plugin in the execution order.
+     * @param instanceID The UUID of the plugin to move
+     * @param direction -1 = move up (earlier), +1 = move down (later)
+     * @return true if reorder succeeded, false if already at boundary or plugin not found
+     */
+    public boolean reorderPlugin(UUID instanceID, int direction)
+    {
+        if(!plugins.containsKey(instanceID))
+            return false;
+
+        List<UUID> keys = new ArrayList<>(plugins.keySet());
+        int index = keys.indexOf(instanceID);
+        int newIndex = index + direction;
+        if(newIndex < 0 || newIndex >= keys.size())
+            return false;
+
+        // Swap
+        UUID temp = keys.get(newIndex);
+        keys.set(newIndex, keys.get(index));
+        keys.set(index, temp);
+
+        // Rebuild the LinkedHashMap in new order
+        Map<UUID, ServerPlugin> reordered = new LinkedHashMap<>();
+        for(UUID key : keys)
+            reordered.put(key, plugins.get(key));
+        plugins = reordered;
+        return true;
     }
 
     /* ----------------------------------------------------------------------------------------------------------------

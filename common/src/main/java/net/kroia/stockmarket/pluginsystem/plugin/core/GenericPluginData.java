@@ -51,6 +51,7 @@ public class GenericPluginData {
         this.name = name;
         this.description = description;
         this.loggerEnabled = loggerEnabled;
+        this.enabled = enabled;
     }
     public GenericPluginData(UUID instanceID)
     {

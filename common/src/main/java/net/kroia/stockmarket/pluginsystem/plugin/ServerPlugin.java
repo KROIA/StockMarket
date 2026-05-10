@@ -92,6 +92,9 @@ public abstract class ServerPlugin implements ServerSaveable, IServerPlugin {
     public final @Nullable String getPluginTypeID() {
         return genericPluginData.getPluginTypeID();
     }
+    public GenericPluginData getGenericPluginData() {
+        return genericPluginData;
+    }
 
 
 
@@ -245,6 +248,32 @@ public abstract class ServerPlugin implements ServerSaveable, IServerPlugin {
         return manager;
     }
     
+
+    /* ----------------------------------------------------------------------------------------------------------------
+     *                     RUNTIME DATA STREAMING
+     * --------------------------------------------------------------------------------------------------------------*/
+
+    /**
+     * Provides a snapshot of this plugin's runtime data for streaming to the client.
+     * Override to send live debug/monitoring data to the PluginGuiElement.
+     * Return null if this plugin has no runtime data to stream.
+     *
+     * @return encoded runtime data bytes, or null if no data available
+     */
+    public byte[] provideRuntimeData() {
+        return null;
+    }
+
+    /**
+     * Returns the update interval in milliseconds for the runtime data stream.
+     * This is a server-side constant defined by the plugin developer.
+     *
+     * @return stream update interval in ms (default 500)
+     */
+    public long getRuntimeDataStreamInterval() {
+        return 500;
+    }
+
 
     /* ----------------------------------------------------------------------------------------------------------------
      *                     DATA HANDLING
