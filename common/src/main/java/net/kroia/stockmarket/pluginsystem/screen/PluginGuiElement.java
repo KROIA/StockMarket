@@ -4,6 +4,7 @@ import net.kroia.modutilities.networking.client_server.streaming.StreamSystem;
 import net.kroia.stockmarket.networking.stream.PluginRuntimeDataStream;
 import net.kroia.stockmarket.pluginsystem.plugin.core.PluginSyncData;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
 
@@ -108,6 +109,32 @@ public class PluginGuiElement extends StockMarketGuiElement {
      */
     protected void onRuntimeDataReceived(PluginRuntimeDataStream.RuntimeData data) {
         // Default: no-op. Subclasses override to process data.
+    }
+
+    /**
+     * Sends custom settings to the server for this plugin.
+     * Subclasses call this when the user changes plugin-specific settings.
+     * The response is delivered via {@link #onCustomSettingsResponse}.
+     *
+     * @param payload the encoded custom settings bytes
+     */
+    protected void sendCustomSettings(byte[] payload) {
+        UUID id = getPluginInstanceID();
+        if (id == null) return;
+        getPluginManager().requestUpdateCustomSettings(id, payload).thenAccept(response -> {
+            onCustomSettingsResponse(response.success(), response.confirmedPayload());
+        });
+    }
+
+    /**
+     * Called when the server responds to a custom settings update request.
+     * Override to handle confirmation or rejection of settings changes.
+     *
+     * @param success          true if the settings were applied on the server
+     * @param confirmedPayload the server's confirmed settings bytes, or null on failure
+     */
+    protected void onCustomSettingsResponse(boolean success, @Nullable byte[] confirmedPayload) {
+        // Default: no-op. Subclasses override to react to settings confirmation.
     }
 
 

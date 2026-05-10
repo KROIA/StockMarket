@@ -7,6 +7,10 @@ import net.kroia.stockmarket.pluginsystem.interaction.MarketInterface;
 import net.kroia.stockmarket.util.NormalizedRandomPriceGenerator;
 import net.minecraft.nbt.CompoundTag;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.util.List;
 import java.util.Random;
 
@@ -14,6 +18,7 @@ public class VolatilityPlugin extends ServerPlugin {
     private static final Random random = new Random();
     private final TimerMillis randomWalkTimer = new TimerMillis(false);
     private final NormalizedRandomPriceGenerator priceGenerator;
+    private float volatilityScale = 1.0f;
 
     public VolatilityPlugin()
     {
@@ -42,7 +47,7 @@ public class VolatilityPlugin extends ServerPlugin {
         for(MarketInterface marketInterfaces : markets)
         {
             double defaultPrice = marketInterfaces.market.getDefaultRealPrice();
-            float randomWalkValue = (float)(priceGenerator.getCurrentValue() * 1.0f * defaultPrice);
+            float randomWalkValue = (float)(priceGenerator.getCurrentValue() * volatilityScale * defaultPrice);
             marketInterfaces.market.setTargetPrice(Math.max(0, randomWalkValue + defaultPrice));
         }
     }
@@ -80,5 +85,29 @@ public class VolatilityPlugin extends ServerPlugin {
     @Override
     public boolean load(CompoundTag tag) {
         return false;
+    }
+
+    @Override
+    public byte[] provideCustomSettings() {
+        try {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            DataOutputStream dos = new DataOutputStream(baos);
+            dos.writeFloat(volatilityScale);
+            dos.flush();
+            return baos.toByteArray();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    @Override
+    public boolean applyCustomSettings(byte[] payload) {
+        try {
+            DataInputStream dis = new DataInputStream(new ByteArrayInputStream(payload));
+            volatilityScale = dis.readFloat();
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 }

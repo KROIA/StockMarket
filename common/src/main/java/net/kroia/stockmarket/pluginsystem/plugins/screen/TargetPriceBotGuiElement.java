@@ -16,7 +16,9 @@ import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -41,14 +43,26 @@ public class TargetPriceBotGuiElement extends PluginGuiElement {
     private static class Texts {
         private static final String PREFIX = "gui." + StockMarketMod.MOD_ID + ".target_price_bot.";
         public static final Component SETTINGS_TITLE = Component.translatable(PREFIX + "settings_title");
-        public static final Component SETTINGS_PLACEHOLDER = Component.translatable(PREFIX + "settings_placeholder");
+        public static final Component LABEL_P_GAIN = Component.translatable(PREFIX + "p_gain");
+        public static final Component LABEL_I_GAIN = Component.translatable(PREFIX + "i_gain");
+        public static final Component LABEL_D_GAIN = Component.translatable(PREFIX + "d_gain");
+        public static final Component LABEL_RATE = Component.translatable(PREFIX + "rate");
+        public static final Component APPLY_BUTTON = Component.translatable(PREFIX + "apply");
     }
 
     private final CandlestickChart candlestickChart;
     private final ItemSelectionView marketSelectionView;
     private final ListView settingsListView;
     private final Label settingsTitle;
-    private final Label settingsPlaceholder;
+    private final Label pGainLabel;
+    private final TextBox pGainTextBox;
+    private final Label iGainLabel;
+    private final TextBox iGainTextBox;
+    private final Label dGainLabel;
+    private final TextBox dGainTextBox;
+    private final Label rateLabel;
+    private final TextBox rateTextBox;
+    private final Button applyButton;
     private List<ItemID> subscribedMarkets = new ArrayList<>();
     private @Nullable ItemID selectedMarketID;
     private @Nullable ClientMarket currentMarket;
@@ -76,8 +90,34 @@ public class TargetPriceBotGuiElement extends PluginGuiElement {
         settingsTitle.setAlignment(Label.Alignment.CENTER);
         settingsListView.addChild(settingsTitle);
 
-        settingsPlaceholder = new Label(Texts.SETTINGS_PLACEHOLDER.getString());
-        settingsListView.addChild(settingsPlaceholder);
+        // PID gain inputs
+        pGainLabel = new Label(Texts.LABEL_P_GAIN.getString());
+        pGainTextBox = new TextBox();
+        pGainTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, true, 10, 6));
+
+        iGainLabel = new Label(Texts.LABEL_I_GAIN.getString());
+        iGainTextBox = new TextBox();
+        iGainTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, true, 10, 6));
+
+        dGainLabel = new Label(Texts.LABEL_D_GAIN.getString());
+        dGainTextBox = new TextBox();
+        dGainTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, true, 10, 6));
+
+        rateLabel = new Label(Texts.LABEL_RATE.getString());
+        rateTextBox = new TextBox();
+        rateTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, true, 10, 6));
+
+        applyButton = new Button(Texts.APPLY_BUTTON.getString(), this::onApplySettings);
+
+        settingsListView.addChild(pGainLabel);
+        settingsListView.addChild(pGainTextBox);
+        settingsListView.addChild(iGainLabel);
+        settingsListView.addChild(iGainTextBox);
+        settingsListView.addChild(dGainLabel);
+        settingsListView.addChild(dGainTextBox);
+        settingsListView.addChild(rateLabel);
+        settingsListView.addChild(rateTextBox);
+        settingsListView.addChild(applyButton);
 
         addChild(candlestickChart);
         addChild(marketSelectionView);
@@ -108,6 +148,20 @@ public class TargetPriceBotGuiElement extends PluginGuiElement {
             }
         }
         marketSelectionView.setItems(stacks);
+
+        // Populate settings from custom settings payload
+        byte[] settings = data.getCustomSettings();
+        if (settings != null) {
+            try {
+                DataInputStream dis = new DataInputStream(new ByteArrayInputStream(settings));
+                pGainTextBox.setText(dis.readFloat());
+                iGainTextBox.setText(dis.readFloat());
+                dGainTextBox.setText(dis.readFloat());
+                rateTextBox.setText(dis.readFloat());
+            } catch (Exception e) {
+                // Ignore decode errors — keep default values
+            }
+        }
 
         // Start the runtime data stream for live target price updates
         startDataStream();
@@ -160,6 +214,24 @@ public class TargetPriceBotGuiElement extends PluginGuiElement {
             }
         } catch (Exception e) {
             // Ignore decode errors silently
+        }
+    }
+
+    /**
+     * Encodes the current PID gain input values and sends them to the server.
+     */
+    private void onApplySettings() {
+        try {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            DataOutputStream dos = new DataOutputStream(baos);
+            dos.writeFloat((float) pGainTextBox.getDouble());
+            dos.writeFloat((float) iGainTextBox.getDouble());
+            dos.writeFloat((float) dGainTextBox.getDouble());
+            dos.writeFloat((float) rateTextBox.getDouble());
+            dos.flush();
+            sendCustomSettings(baos.toByteArray());
+        } catch (Exception e) {
+            // Ignore encode errors
         }
     }
 

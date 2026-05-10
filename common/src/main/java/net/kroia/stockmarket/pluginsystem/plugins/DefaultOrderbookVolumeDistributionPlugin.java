@@ -10,6 +10,10 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.util.Tuple;
 import org.jetbrains.annotations.NotNull;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -66,6 +70,8 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin {
         }
     }
     private final Map<ItemID, RuntimeData> marketData = new HashMap<>();
+    private float volumeScale = 1.0f;
+    private float speed = 0.05f;
 
     public DefaultOrderbookVolumeDistributionPlugin()
     {
@@ -141,10 +147,11 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin {
     @Override
     public void onMarketSubscribed(ItemID marketID) {
         RuntimeData data = new RuntimeData();
+        data.speed = this.speed;
+        data.calculator.volumeScale = this.volumeScale;
         marketData.put(marketID, data);
 
         MarketInterface interf = getMarketInterface(marketID);
-
         if(interf == null)
             return;
         interf.oderBook.registerDefaultVolumeDistributionCalculator(data.calculator);
@@ -181,5 +188,36 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin {
     @Override
     public boolean load(CompoundTag tag) {
         return false;
+    }
+
+    @Override
+    public byte[] provideCustomSettings() {
+        try {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            DataOutputStream dos = new DataOutputStream(baos);
+            dos.writeFloat(volumeScale);
+            dos.writeFloat(speed);
+            dos.flush();
+            return baos.toByteArray();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    @Override
+    public boolean applyCustomSettings(byte[] payload) {
+        try {
+            DataInputStream dis = new DataInputStream(new ByteArrayInputStream(payload));
+            volumeScale = dis.readFloat();
+            speed = dis.readFloat();
+            // Update all existing market runtimes
+            for (RuntimeData data : marketData.values()) {
+                data.calculator.volumeScale = volumeScale;
+                data.speed = speed;
+            }
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 }

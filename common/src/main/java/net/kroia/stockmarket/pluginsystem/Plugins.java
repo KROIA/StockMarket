@@ -46,5 +46,11 @@ public class Plugins {
         TARGET_PRICE_BOT_PLUGIN.setGuiElementFactory(
                 net.kroia.stockmarket.pluginsystem.plugins.screen.TargetPriceBotGuiElement::new
         );
+        VOLATILITY_PLUGIN.setGuiElementFactory(
+                net.kroia.stockmarket.pluginsystem.plugins.screen.VolatilityPluginGuiElement::new
+        );
+        DEFAULT_ORDERBOOK_VOLUME_DISTRIBUTION_PLUGIN.setGuiElementFactory(
+                net.kroia.stockmarket.pluginsystem.plugins.screen.VolumeDistributionGuiElement::new
+        );
     }
 }

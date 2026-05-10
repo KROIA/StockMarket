@@ -41,6 +41,7 @@ public class StockMarketNetworking extends NetworkPacketManager {
     public final PluginListRequest PLUGIN_LIST_REQUEST = (PluginListRequest) AsynchronousRequestResponseSystem.register(new PluginListRequest());
     public final PluginSettingsRequest PLUGIN_SETTINGS_REQUEST = (PluginSettingsRequest) AsynchronousRequestResponseSystem.register(new PluginSettingsRequest());
     public final PluginReorderRequest PLUGIN_REORDER_REQUEST = (PluginReorderRequest) AsynchronousRequestResponseSystem.register(new PluginReorderRequest());
+    public final PluginCustomSettingsRequest PLUGIN_CUSTOM_SETTINGS_REQUEST = (PluginCustomSettingsRequest) AsynchronousRequestResponseSystem.register(new PluginCustomSettingsRequest());
 
     //public final MarketSettingsGetRequest MARKET_SETTINGS_GET_REQUEST = (MarketSettingsGetRequest) AsynchronousRequestResponseSystem.register(new MarketSettingsGetRequest());
 

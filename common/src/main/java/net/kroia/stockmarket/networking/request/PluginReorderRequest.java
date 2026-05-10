@@ -90,7 +90,7 @@ public class PluginReorderRequest extends StockMarketGenericRequest<PluginReorde
         }
         List<PluginSyncData> list = new ArrayList<>();
         for (ServerPlugin plugin : pluginManager.getPlugins().values()) {
-            list.add(new PluginSyncData(plugin.getGenericPluginData(), plugin.getSubscribedMarkets()));
+            list.add(PluginSyncData.fromServerPlugin(plugin));
         }
         return list;
     }

@@ -150,12 +150,24 @@
   "gui.stockmarket.management_screen.plugins.manage": "Plugins verwalten",
   "gui.stockmarket.plugin_management_screen.title": "Plugin-Verwaltung",
   "gui.stockmarket.plugin_management_screen.enabled": "Aktiviert",
+  "gui.stockmarket.plugin_management_screen.all_markets": "Alle Märkte",
   "gui.stockmarket.plugin_management_screen.open_plugin_screen": "Plugin-Einstellungen öffnen",
+  "gui.stockmarket.plugin_management_screen.filter_title": "Nach Markt filtern",
   "gui.stockmarket.plugin_detail_screen.title": "Plugin-Details",
 
   "gui.stockmarket.target_price_bot.settings_title": "PID-Einstellungen",
-  "gui.stockmarket.target_price_bot.settings_placeholder": "(Live-Daten folgen)",
-  "gui.stockmarket.target_price_bot.markets_title": "Abonnierte Marktplätze"
+  "gui.stockmarket.target_price_bot.p_gain": "P Verstärkung",
+  "gui.stockmarket.target_price_bot.i_gain": "I Verstärkung",
+  "gui.stockmarket.target_price_bot.d_gain": "D Verstärkung",
+  "gui.stockmarket.target_price_bot.rate": "Rate",
+  "gui.stockmarket.target_price_bot.apply": "Anwenden",
+  "gui.stockmarket.target_price_bot.markets_title": "Abonnierte Marktplätze",
+
+  "gui.stockmarket.volatility_plugin.scale": "Volatilitätsskala",
+  "gui.stockmarket.volatility_plugin.apply": "Anwenden",
+  "gui.stockmarket.volume_distribution.volume_scale": "Volumenskalierung",
+  "gui.stockmarket.volume_distribution.speed": "Geschwindigkeit",
+  "gui.stockmarket.volume_distribution.apply": "Anwenden"
 
 
 }

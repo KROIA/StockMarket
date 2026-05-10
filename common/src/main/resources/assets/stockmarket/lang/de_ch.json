@@ -149,11 +149,23 @@
   "gui.stockmarket.management_screen.plugins.manage": "Plugins verwalte",
   "gui.stockmarket.plugin_management_screen.title": "Plugin-Verwautig",
   "gui.stockmarket.plugin_management_screen.enabled": "Aktiviert",
+  "gui.stockmarket.plugin_management_screen.all_markets": "Alli Märkt",
   "gui.stockmarket.plugin_management_screen.open_plugin_screen": "Plugin-Iistellige öffne",
+  "gui.stockmarket.plugin_management_screen.filter_title": "Nach Märt filtere",
   "gui.stockmarket.plugin_detail_screen.title": "Plugin-Details",
 
   "gui.stockmarket.target_price_bot.settings_title": "PID-Iistellige",
-  "gui.stockmarket.target_price_bot.settings_placeholder": "(Live-Date chömed no)",
-  "gui.stockmarket.target_price_bot.markets_title": "Abonnierti Märkt"
+  "gui.stockmarket.target_price_bot.p_gain": "P Verstärchig",
+  "gui.stockmarket.target_price_bot.i_gain": "I Verstärchig",
+  "gui.stockmarket.target_price_bot.d_gain": "D Verstärchig",
+  "gui.stockmarket.target_price_bot.rate": "Rate",
+  "gui.stockmarket.target_price_bot.apply": "Awände",
+  "gui.stockmarket.target_price_bot.markets_title": "Abonnierti Märkt",
+
+  "gui.stockmarket.volatility_plugin.scale": "Volatilitätsskala",
+  "gui.stockmarket.volatility_plugin.apply": "Awände",
+  "gui.stockmarket.volume_distribution.volume_scale": "Volume-Skalierig",
+  "gui.stockmarket.volume_distribution.speed": "Gschwindikeit",
+  "gui.stockmarket.volume_distribution.apply": "Awände"
 
 }

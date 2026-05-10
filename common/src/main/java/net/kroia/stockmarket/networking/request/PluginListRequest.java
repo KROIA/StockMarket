@@ -36,7 +36,7 @@ public class PluginListRequest extends StockMarketGenericRequest<Integer, List<P
         List<PluginSyncData> list = new ArrayList<>();
         if(pluginManager != null) {
             for (ServerPlugin plugin : pluginManager.getPlugins().values()) {
-                list.add(new PluginSyncData(plugin.getGenericPluginData(), plugin.getSubscribedMarkets()));
+                list.add(PluginSyncData.fromServerPlugin(plugin));
             }
         }
         return CompletableFuture.completedFuture(list);

@@ -4,6 +4,7 @@ import net.kroia.modutilities.networking.client_server.arrs.AsynchronousRequestR
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.pluginmanager.IAsyncPluginManager;
 import net.kroia.stockmarket.api.pluginmanager.IClientPluginManager;
+import net.kroia.stockmarket.networking.request.PluginCustomSettingsRequest;
 import net.kroia.stockmarket.networking.request.PluginReorderRequest;
 import net.kroia.stockmarket.networking.request.PluginSettingsRequest;
 import net.kroia.stockmarket.pluginsystem.plugin.ClientPlugin;
@@ -66,6 +67,12 @@ public class ClientPluginManager implements IClientPluginManager {
     public CompletableFuture<PluginSettingsRequest.OutputData> requestUpdateSettings(UUID instanceID, GenericPluginData updatedData) {
         PluginSettingsRequest.InputData input = new PluginSettingsRequest.InputData(instanceID, updatedData);
         return AsynchronousRequestResponseSystem.sendRequestToServer(BACKEND_INSTANCES.NETWORKING.PLUGIN_SETTINGS_REQUEST, input);
+    }
+
+    @Override
+    public CompletableFuture<PluginCustomSettingsRequest.OutputData> requestUpdateCustomSettings(UUID instanceID, byte[] payload) {
+        PluginCustomSettingsRequest.InputData input = new PluginCustomSettingsRequest.InputData(instanceID, payload);
+        return AsynchronousRequestResponseSystem.sendRequestToServer(BACKEND_INSTANCES.NETWORKING.PLUGIN_CUSTOM_SETTINGS_REQUEST, input);
     }
 
     @Override

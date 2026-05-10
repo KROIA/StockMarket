@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.api.pluginmanager;
 
+import net.kroia.stockmarket.networking.request.PluginCustomSettingsRequest;
 import net.kroia.stockmarket.networking.request.PluginSettingsRequest;
 import net.kroia.stockmarket.pluginsystem.plugin.core.GenericPluginData;
 import net.kroia.stockmarket.pluginsystem.plugin.core.PluginSyncData;
@@ -31,4 +32,7 @@ public interface IClientPluginManager {
 
     /** Sends a reorder request to move a plugin up or down in the execution order. */
     CompletableFuture<List<PluginSyncData>> requestReorderPlugin(UUID instanceID, int direction);
+
+    /** Sends a custom settings update request for a plugin instance to the server. */
+    CompletableFuture<PluginCustomSettingsRequest.OutputData> requestUpdateCustomSettings(UUID instanceID, byte[] payload);
 }

@@ -274,6 +274,28 @@ public abstract class ServerPlugin implements ServerSaveable, IServerPlugin {
         return 500;
     }
 
+    /**
+     * Provides a snapshot of this plugin's custom settings for network transfer.
+     * Override to send plugin-specific settings to the client GUI.
+     * Return null if this plugin has no custom settings.
+     *
+     * @return encoded custom settings bytes, or null if not supported
+     */
+    public byte[] provideCustomSettings() {
+        return null;
+    }
+
+    /**
+     * Applies custom settings received from the client GUI.
+     * Override to decode and apply plugin-specific settings.
+     *
+     * @param payload the encoded custom settings bytes from the client
+     * @return true if settings were applied successfully
+     */
+    public boolean applyCustomSettings(byte[] payload) {
+        return false;
+    }
+
 
     /* ----------------------------------------------------------------------------------------------------------------
      *                     DATA HANDLING
