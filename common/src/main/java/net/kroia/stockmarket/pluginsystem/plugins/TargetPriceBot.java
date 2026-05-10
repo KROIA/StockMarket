@@ -1,24 +1,79 @@
 package net.kroia.stockmarket.pluginsystem.plugins;
 
+import io.netty.buffer.ByteBuf;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.pluginsystem.interaction.MarketInterface;
 import net.kroia.stockmarket.pluginsystem.plugin.ServerPlugin;
 import net.kroia.stockmarket.util.PID;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class TargetPriceBot extends ServerPlugin {
+public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, TargetPriceBot.RuntimeStreamData> {
+
+    /**
+     * Custom settings record for the TargetPriceBot PID controller gains.
+     */
+    public record Settings(float pidP, float pidI, float pidD, float pidRate) {
+        public static final StreamCodec<ByteBuf, Settings> CODEC = StreamCodec.composite(
+                ByteBufCodecs.FLOAT, Settings::pidP,
+                ByteBufCodecs.FLOAT, Settings::pidI,
+                ByteBufCodecs.FLOAT, Settings::pidD,
+                ByteBufCodecs.FLOAT, Settings::pidRate,
+                Settings::new
+        );
+    }
+
+    /**
+     * Runtime data record containing target prices for all subscribed markets.
+     */
+    public record RuntimeStreamData(List<MarketTargetPrice> entries) {
+        public record MarketTargetPrice(short itemId, double targetPrice) {}
+
+        public static final StreamCodec<ByteBuf, RuntimeStreamData> CODEC = new StreamCodec<>() {
+            @Override
+            public RuntimeStreamData decode(ByteBuf buf) {
+                int count = buf.readInt();
+                List<MarketTargetPrice> entries = new ArrayList<>();
+                for (int i = 0; i < count; i++) {
+                    entries.add(new MarketTargetPrice(buf.readShort(), buf.readDouble()));
+                }
+                return new RuntimeStreamData(entries);
+            }
+            @Override
+            public void encode(ByteBuf buf, RuntimeStreamData data) {
+                buf.writeInt(data.entries().size());
+                for (MarketTargetPrice e : data.entries()) {
+                    buf.writeShort(e.itemId());
+                    buf.writeDouble(e.targetPrice());
+                }
+            }
+        };
+    }
 
     static class RuntimeData
     {
-        public final PID pid = new PID(0.5f, 0.1f, 0, 0.1f);
+        public PID pid;
         public int tickCounter = 0;
         public double targetPrice = 0;
+
+        RuntimeData(float p, float i, float d, float rate) {
+            this.pid = new PID(p, i, d, rate);
+        }
     }
     private final Map<ItemID, RuntimeData> marketData = new HashMap<>();
+
+    // Default PID gains — configurable via custom settings
+    private float pidP = 0.5f;
+    private float pidI = 0.1f;
+    private float pidD = 0.0f;
+    private float pidRate = 0.1f;
 
 
 
@@ -80,7 +135,7 @@ public class TargetPriceBot extends ServerPlugin {
 
     @Override
     public void onMarketSubscribed(ItemID marketID) {
-        RuntimeData data = new RuntimeData();
+        RuntimeData data = new RuntimeData(pidP, pidI, pidD, pidRate);
         marketData.put(marketID, data);
     }
 
@@ -100,12 +155,102 @@ public class TargetPriceBot extends ServerPlugin {
     }
 
     @Override
+    protected StreamCodec<ByteBuf, RuntimeStreamData> runtimeDataCodec() {
+        return RuntimeStreamData.CODEC;
+    }
+
+    @Override
+    protected RuntimeStreamData provideRuntimeData() {
+        if (marketData.isEmpty()) return null;
+        List<RuntimeStreamData.MarketTargetPrice> entries = new ArrayList<>();
+        for (Map.Entry<ItemID, RuntimeData> entry : marketData.entrySet()) {
+            entries.add(new RuntimeStreamData.MarketTargetPrice(
+                    entry.getKey().getShort(), entry.getValue().targetPrice));
+        }
+        return new RuntimeStreamData(entries);
+    }
+
+    /**
+     * Returns the update interval for the runtime data stream.
+     * Uses 200ms for fast target price visualization updates.
+     */
+    @Override
+    public long getRuntimeDataStreamInterval() {
+        return 200;
+    }
+
+    @Override
+    protected StreamCodec<ByteBuf, Settings> customSettingsCodec() {
+        return Settings.CODEC;
+    }
+
+    @Override
+    protected Settings provideCustomSettings() {
+        return new Settings(pidP, pidI, pidD, pidRate);
+    }
+
+    @Override
+    protected boolean applyCustomSettings(Settings settings) {
+        pidP = settings.pidP();
+        pidI = settings.pidI();
+        pidD = settings.pidD();
+        pidRate = settings.pidRate();
+
+        // Update all existing market PIDs with the new gains
+        for (RuntimeData data : marketData.values()) {
+            data.pid = new PID(pidP, pidI, pidD, pidRate);
+        }
+        return true;
+    }
+
+    @Override
     public boolean save(CompoundTag tag) {
-        return false;
+        tag.putFloat("pidP", pidP);
+        tag.putFloat("pidI", pidI);
+        tag.putFloat("pidD", pidD);
+        tag.putFloat("pidRate", pidRate);
+
+        // Save per-market PID state, target prices, and tick counters
+        ListTag marketsTag = new ListTag();
+        for (Map.Entry<ItemID, RuntimeData> entry : marketData.entrySet()) {
+            CompoundTag marketTag = new CompoundTag();
+            entry.getKey().save(marketTag);
+            RuntimeData data = entry.getValue();
+            marketTag.putDouble("targetPrice", data.targetPrice);
+            marketTag.putInt("tickCounter", data.tickCounter);
+            CompoundTag pidTag = new CompoundTag();
+            data.pid.save(pidTag);
+            marketTag.put("pid", pidTag);
+            marketsTag.add(marketTag);
+        }
+        tag.put("marketData", marketsTag);
+        return true;
     }
 
     @Override
     public boolean load(CompoundTag tag) {
-        return false;
+        if (tag.contains("pidP")) pidP = tag.getFloat("pidP");
+        if (tag.contains("pidI")) pidI = tag.getFloat("pidI");
+        if (tag.contains("pidD")) pidD = tag.getFloat("pidD");
+        if (tag.contains("pidRate")) pidRate = tag.getFloat("pidRate");
+
+        // Restore per-market PID state (marketData map is already populated
+        // because subscribeToMarket() is called before load() in ServerPluginManager)
+        if (tag.contains("marketData")) {
+            ListTag marketsTag = tag.getList("marketData", 10);
+            for (int i = 0; i < marketsTag.size(); i++) {
+                CompoundTag marketTag = marketsTag.getCompound(i);
+                ItemID marketID = ItemID.createFromTag(marketTag);
+                if (marketID != null && marketID.isValid()) {
+                    RuntimeData data = marketData.get(marketID);
+                    if (data != null) {
+                        if (marketTag.contains("targetPrice")) data.targetPrice = marketTag.getDouble("targetPrice");
+                        if (marketTag.contains("tickCounter")) data.tickCounter = marketTag.getInt("tickCounter");
+                        if (marketTag.contains("pid")) data.pid.load(marketTag.getCompound("pid"));
+                    }
+                }
+            }
+        }
+        return true;
     }
 }

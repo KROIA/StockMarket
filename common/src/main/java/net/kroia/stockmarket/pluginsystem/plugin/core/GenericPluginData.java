@@ -2,6 +2,7 @@ package net.kroia.stockmarket.pluginsystem.plugin.core;
 
 import net.kroia.stockmarket.pluginsystem.registry.PluginRegistryObject;
 import net.minecraft.core.UUIDUtil;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
@@ -36,7 +37,7 @@ public class GenericPluginData {
     };
 
     private String pluginTypeID;
-    private final UUID instanceID;
+    private UUID instanceID;
     private String name;
     private String description;
     private boolean loggerEnabled;
@@ -51,6 +52,7 @@ public class GenericPluginData {
         this.name = name;
         this.description = description;
         this.loggerEnabled = loggerEnabled;
+        this.enabled = enabled;
     }
     public GenericPluginData(UUID instanceID)
     {
@@ -96,10 +98,9 @@ public class GenericPluginData {
         return enabled;
     }
 
-    /*protected final void setInstanceID(UUID id)
-    {
+    public void setInstanceID(UUID id) {
         this.instanceID = id;
-    }*/
+    }
     public final UUID getInstanceID()
     {
         return instanceID;
@@ -122,5 +123,41 @@ public class GenericPluginData {
     public final @Nullable String getPluginTypeID()
     {
         return pluginTypeID;
+    }
+
+    /**
+     * Saves the generic plugin data to an NBT compound tag.
+     *
+     * @param tag the compound tag to save into
+     * @return true if the save succeeded
+     */
+    public boolean save(CompoundTag tag) {
+        if (pluginTypeID != null) tag.putString("pluginTypeID", pluginTypeID);
+        tag.putUUID("instanceID", instanceID);
+        if (name != null) tag.putString("name", name);
+        if (description != null) tag.putString("description", description);
+        tag.putBoolean("loggerEnabled", loggerEnabled);
+        tag.putBoolean("enabled", enabled);
+        return true;
+    }
+
+    /**
+     * Loads the generic plugin data from an NBT compound tag.
+     * Requires at least the instanceID key to be present.
+     *
+     * @param tag the compound tag to load from
+     * @return true if the load succeeded, false if instanceID is missing
+     */
+    public boolean load(CompoundTag tag) {
+        if (!tag.contains("instanceID")) {
+            return false;
+        }
+        instanceID = tag.getUUID("instanceID");
+        if (tag.contains("pluginTypeID")) pluginTypeID = tag.getString("pluginTypeID");
+        if (tag.contains("name")) name = tag.getString("name");
+        if (tag.contains("description")) description = tag.getString("description");
+        if (tag.contains("loggerEnabled")) loggerEnabled = tag.getBoolean("loggerEnabled");
+        if (tag.contains("enabled")) enabled = tag.getBoolean("enabled");
+        return true;
     }
 }

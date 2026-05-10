@@ -9,7 +9,9 @@ import net.kroia.stockmarket.networking.packet.OpenUIPacket;
 import net.kroia.stockmarket.networking.packet.PlayerJoinSyncPacket;
 import net.kroia.stockmarket.networking.request.*;
 import net.kroia.stockmarket.networking.stream.MarketPriceStream;
+import net.kroia.stockmarket.networking.stream.PluginRuntimeDataStream;
 import net.kroia.stockmarket.stockmarket.market.AsyncMarket;
+import net.kroia.stockmarket.stockmarket.marketmanager.AsyncMarketManager;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
 import net.kroia.stockmarket.util.StockMarketGenericStream;
 import net.kroia.stockmarket.util.StockMarketNetworkPacket;
@@ -28,6 +30,7 @@ public class StockMarketNetworking extends NetworkPacketManager {
     }
 
     public final MarketPriceStream MARKET_PRICE_STREAM = (MarketPriceStream) StreamSystem.register(new MarketPriceStream());
+    public final PluginRuntimeDataStream PLUGIN_RUNTIME_DATA_STREAM = (PluginRuntimeDataStream) StreamSystem.register(new PluginRuntimeDataStream());
 
     public final MarketPriceHistoryRequest MARKET_PRICE_HISTORY_REQUEST = (MarketPriceHistoryRequest) AsynchronousRequestResponseSystem.register(new MarketPriceHistoryRequest());
     public final MarketsRequest MARKETS_REQUEST = (MarketsRequest) AsynchronousRequestResponseSystem.register(new MarketsRequest());
@@ -35,6 +38,11 @@ public class StockMarketNetworking extends NetworkPacketManager {
     public final ActiveOrdersRequest ACTIVE_ORDERS_REQUEST = (ActiveOrdersRequest) AsynchronousRequestResponseSystem.register(new ActiveOrdersRequest());
     public final ServerTimeRequest SERVER_TIME_REQUEST = (ServerTimeRequest) AsynchronousRequestResponseSystem.register(new ServerTimeRequest());
     public final OrderbookVolumeRequest ORDERBOOK_VOLUME_REQUEST = (OrderbookVolumeRequest) AsynchronousRequestResponseSystem.register(new OrderbookVolumeRequest());
+    public final PluginListRequest PLUGIN_LIST_REQUEST = (PluginListRequest) AsynchronousRequestResponseSystem.register(new PluginListRequest());
+    public final PluginSettingsRequest PLUGIN_SETTINGS_REQUEST = (PluginSettingsRequest) AsynchronousRequestResponseSystem.register(new PluginSettingsRequest());
+    public final PluginReorderRequest PLUGIN_REORDER_REQUEST = (PluginReorderRequest) AsynchronousRequestResponseSystem.register(new PluginReorderRequest());
+    public final PluginCustomSettingsRequest PLUGIN_CUSTOM_SETTINGS_REQUEST = (PluginCustomSettingsRequest) AsynchronousRequestResponseSystem.register(new PluginCustomSettingsRequest());
+    public final PluginSubscriptionRequest PLUGIN_SUBSCRIPTION_REQUEST = (PluginSubscriptionRequest) AsynchronousRequestResponseSystem.register(new PluginSubscriptionRequest());
 
     //public final MarketSettingsGetRequest MARKET_SETTINGS_GET_REQUEST = (MarketSettingsGetRequest) AsynchronousRequestResponseSystem.register(new MarketSettingsGetRequest());
 
@@ -47,6 +55,7 @@ public class StockMarketNetworking extends NetworkPacketManager {
         setupServerReceiverPackets();
 
         AsyncMarket.setupNetworkPacket();
+        AsyncMarketManager.setupNetworkPacket();
 
         this.setupARRS(); // Setup the Asynchronous Request Response System (ARRS)
         this.setupStreamSystem();

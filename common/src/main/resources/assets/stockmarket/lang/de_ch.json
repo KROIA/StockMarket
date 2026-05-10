@@ -142,6 +142,31 @@
   "gui.stockmarket.bot_settings_setup_screen_market_speed.high": "Schnell",
 
   "gui.stockmarket.bot_settings_setup_screen_change_bot_stocks.auto_change_money_balance": "Ändere de Geldbetrag uf de Bank vom Bot automatisch.\nDas wird gmacht zum gnueg geld z ha\ndamit Items kauft werde chönd",
-  "gui.stockmarket.bot_settings_setup_screen_change_bot_stocks.auto_change_item_balance": "Ändere d Anzahl Items uf de Bank vom Bot automatisch.\nDas wird gmacht zum gnueg Items z ha\ndamit Items verkauft werde chönd"
+  "gui.stockmarket.bot_settings_setup_screen_change_bot_stocks.auto_change_item_balance": "Ändere d Anzahl Items uf de Bank vom Bot automatisch.\nDas wird gmacht zum gnueg Items z ha\ndamit Items verkauft werde chönd",
+
+  "gui.stockmarket.management_screen.plugins.title": "Plugins",
+  "gui.stockmarket.management_screen.plugins.enabled": "aktiviert",
+  "gui.stockmarket.management_screen.plugins.manage": "Plugins verwalte",
+  "gui.stockmarket.plugin_management_screen.title": "Plugin-Verwautig",
+  "gui.stockmarket.plugin_management_screen.enabled": "Aktiviert",
+  "gui.stockmarket.plugin_management_screen.all_markets": "Alli Märkt",
+  "gui.stockmarket.plugin_management_screen.open_plugin_screen": "Plugin-Iistellige öffne",
+  "gui.stockmarket.plugin_management_screen.filter_title": "Nach Märt filtere",
+  "gui.stockmarket.plugin_management_screen.subscribe_market_title": "Märt abonniere",
+  "gui.stockmarket.plugin_detail_screen.title": "Plugin-Details",
+
+  "gui.stockmarket.target_price_bot.settings_title": "PID-Iistellige",
+  "gui.stockmarket.target_price_bot.p_gain": "P Verstärchig",
+  "gui.stockmarket.target_price_bot.i_gain": "I Verstärchig",
+  "gui.stockmarket.target_price_bot.d_gain": "D Verstärchig",
+  "gui.stockmarket.target_price_bot.rate": "Rate",
+  "gui.stockmarket.target_price_bot.apply": "Awände",
+  "gui.stockmarket.target_price_bot.markets_title": "Abonnierti Märkt",
+
+  "gui.stockmarket.volatility_plugin.scale": "Volatilitätsskala",
+  "gui.stockmarket.volatility_plugin.apply": "Awände",
+  "gui.stockmarket.volume_distribution.volume_scale": "Volume-Skalierig",
+  "gui.stockmarket.volume_distribution.speed": "Gschwindikeit",
+  "gui.stockmarket.volume_distribution.apply": "Awände"
 
 }

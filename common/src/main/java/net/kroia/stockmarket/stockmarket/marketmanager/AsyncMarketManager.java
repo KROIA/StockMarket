@@ -1,6 +1,5 @@
 package net.kroia.stockmarket.stockmarket.marketmanager;
 
-import net.kroia.banksystem.banking.bankmanager.AsyncBankManager;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncForwardingRequest;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionDataCodecs;
@@ -8,12 +7,14 @@ import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionInputDat
 import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionOutputData;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.modutilities.networking.client_server.arrs.AsynchronousRequestResponseSystem;
+import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IAsyncMarket;
 import net.kroia.stockmarket.api.marketmanager.IAsyncMarketManager;
 import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
 import net.kroia.stockmarket.stockmarket.market.AsyncMarket;
 import net.kroia.stockmarket.util.MultiServerUtils;
+import net.kroia.stockmarket.util.StockMarketLogger;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -28,10 +29,15 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 public class AsyncMarketManager implements IAsyncMarketManager {
-    private static StockMarketModBackend.ServerInstances BACKEND_INSTANCES;
-    public static void setBackend(StockMarketModBackend.ServerInstances backend) {
-        BACKEND_INSTANCES = backend;
-        AsyncMarket.setBackend(backend);
+    private static StockMarketModBackend.ServerInstances SERVER_BACKEND_INSTANCES;
+    private static StockMarketModBackend.ClientInstances CLIENT_BACKEND_INSTANCES;
+    public static void setServerBackend(StockMarketModBackend.ServerInstances backend) {
+        SERVER_BACKEND_INSTANCES = backend;
+        AsyncMarket.setServerBackend(backend);
+    }
+    public static void setClientBackend(StockMarketModBackend.ClientInstances backend) {
+        CLIENT_BACKEND_INSTANCES = backend;
+        AsyncMarket.setClientBackend(backend);
     }
     private final boolean isClientSide;
     private AsyncMarketManager(boolean clientSide) {
@@ -170,27 +176,14 @@ public class AsyncMarketManager implements IAsyncMarketManager {
                 playerName = tryGetPlayerName(playerSender);
                 playerInfo = " from player: " + playerName;
             }
-            if(!isAllowedToCallByUntrustedSlaveServer(input))
-            {
-                if(!BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().isSlaveServerTrusted(slaveID))
-                {
-                    warn("The slave server: '"+slaveID+"' try's to call the function: '"+input.function.toString()+"' which is not allowed for an untrusted slave server!");
-                    return CompletableFuture.completedFuture(OutputData.of(input.function));
-                }
-            }
+            if(!isRequestAllowed(input, slaveID, playerSender, playerName))
+                return CompletableFuture.completedFuture(OutputData.of(input.function));
+
             if(AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
                 info("Received request to handle on master server for function: "+input.function.toString() + playerInfo);
-            if(playerSender != null)
-            {
-                if(!isAllowedToCallByClient(input))
-                {
-                    warn("The player '"+playerName+"' try's to call the function: '"+input.function.toString()+"' which is not allowed from the client side!");
-                    return CompletableFuture.completedFuture(OutputData.of(input.function));
-                }
-            }
-            IServerMarketManager manager = AsyncMarketManager.BACKEND_INSTANCES.MARKET_MANAGER.getSync();
+            IServerMarketManager manager = AsyncMarketManager.SERVER_BACKEND_INSTANCES.MARKET_MANAGER.getSync();
             if(manager == null) {
-                if(AsyncMarketManager.BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().isSlave())
+                if(AsyncMarketManager.SERVER_BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().isSlave())
                 {
                     throw new RuntimeException("[]: This server is configured to be a slave server but the slave seems not to be connected to its master.\n" +
                             "This server instance has no IServerMarketManager!");
@@ -227,6 +220,21 @@ public class AsyncMarketManager implements IAsyncMarketManager {
                 case FunctionType.GetTradingCurrencyID,
                      FunctionType.GetAvailableMarketIDs,
                      FunctionType.MarketExists,
+                     FunctionType.CreateMarket,
+                     FunctionType.DeleteMarket,
+                     FunctionType.GetMarket-> true;
+
+                default -> false;
+            };
+        }
+
+        @Override
+        protected boolean isAllowedToCallByUntrustedSlaveServer(InputData input)
+        {
+            return switch (input.function) {
+                case FunctionType.GetTradingCurrencyID,
+                     FunctionType.GetAvailableMarketIDs,
+                     FunctionType.MarketExists,
                      FunctionType.GetMarket-> true;
 
                 default -> false;
@@ -252,9 +260,16 @@ public class AsyncMarketManager implements IAsyncMarketManager {
             tmpFuture = Request.instance.sendRequestToMaster(input);
 
         tmpFuture.thenAccept(outputData ->{
-            if(AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
-                info("Response received for request: "+ input.function.toString());
-            future.complete(outputData);
+            try{
+                if(AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
+                    info("Response received for request: "+ input.function.toString());
+                future.complete(outputData);
+            }
+            catch(Exception ex)
+            {
+                error("Exception while sending request to server for function: "+input.function.toString(), ex);
+                future.completeExceptionally(ex);
+            }
         });
 
         return future;
@@ -344,7 +359,7 @@ public class AsyncMarketManager implements IAsyncMarketManager {
         if(!MultiServerUtils.canInteractWithStockMarket())
             return CompletableFuture.completedFuture(null);
         CompletableFuture<@Nullable IAsyncMarket> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.MarketExists, marketID);
+        InputData inputData = InputData.of(FunctionType.CreateMarket, marketID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> {
             AsyncMarket market = null;
@@ -360,7 +375,7 @@ public class AsyncMarketManager implements IAsyncMarketManager {
         if(!MultiServerUtils.canInteractWithStockMarket())
             return CompletableFuture.completedFuture(false);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.MarketExists, marketID);
+        InputData inputData = InputData.of(FunctionType.DeleteMarket, marketID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;
@@ -421,23 +436,41 @@ public class AsyncMarketManager implements IAsyncMarketManager {
 
     private static void info(String msg)
     {
-        BACKEND_INSTANCES.LOGGER.info("[AsyncMarketManager] " + msg);
+        StockMarketLogger logger = getLogger();
+        if(logger != null)
+            logger.info("[AsyncMarketManager] "+msg);
     }
     private static void error(String msg)
     {
-        BACKEND_INSTANCES.LOGGER.error("[AsyncMarketManager] " + msg);
+        StockMarketLogger logger = getLogger();
+        if(logger != null)
+            logger.error("[AsyncMarketManager] "+msg);
     }
     private static void error(String msg, Throwable e)
     {
-        BACKEND_INSTANCES.LOGGER.error("[AsyncMarketManager] " + msg, e);
+        StockMarketLogger logger = getLogger();
+        if(logger != null)
+            logger.error("[AsyncMarketManager] "+msg,e);
     }
     private static void warn(String msg)
     {
-        BACKEND_INSTANCES.LOGGER.warn("[AsyncMarketManager] " + msg);
+        StockMarketLogger logger = getLogger();
+        if(logger != null)
+            logger.warn("[AsyncMarketManager] "+msg);
     }
     private static void debug(String msg)
     {
-        BACKEND_INSTANCES.LOGGER.debug("[AsyncMarketManager] " + msg);
+        StockMarketLogger logger = getLogger();
+        if(logger != null)
+            logger.debug("[AsyncMarketManager] "+msg);
+    }
+    private static StockMarketLogger getLogger()
+    {
+        if(SERVER_BACKEND_INSTANCES != null)
+            return SERVER_BACKEND_INSTANCES.LOGGER;
+        else if (CLIENT_BACKEND_INSTANCES != null)
+            return CLIENT_BACKEND_INSTANCES.LOGGER;
+        return null;
     }
 
 }

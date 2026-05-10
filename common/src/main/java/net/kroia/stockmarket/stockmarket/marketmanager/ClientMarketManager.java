@@ -111,6 +111,27 @@ public class ClientMarketManager implements IClientMarketManager
         return asyncMarketManager.getTradingCurrencyIDAsync();
     }
 
+    @Override
+    public CompletableFuture<Boolean> requestCreateMarket(ItemID itemID)
+    {
+        return asyncMarketManager.createMarketAsync(itemID).thenCompose(market -> {
+            if (market != null) {
+                info("Market created on server for: " + itemID);
+                return BACKEND_INSTANCES.BANK_SYSTEM_API.getClientBankManager()
+                        .getItemFractionScaleFactorAsync()
+                        .thenApply(factor -> {
+                            createClientMarket(itemID, factor);
+                            return true;
+                        });
+            }
+            warn("Server returned null for createMarketAsync: " + itemID);
+            return CompletableFuture.completedFuture(false);
+        }).exceptionally(ex -> {
+            error("Exception during market creation for: " + itemID, (Exception) ex);
+            return false;
+        });
+    }
+
 
 
 

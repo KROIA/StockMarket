@@ -8,10 +8,12 @@ import net.kroia.stockmarket.api.pluginmanager.IServerPluginManager;
 import net.kroia.stockmarket.pluginsystem.Plugins;
 import net.kroia.stockmarket.pluginsystem.interaction.PluginOrderBook;
 import net.kroia.stockmarket.pluginsystem.plugin.ServerPlugin;
+import net.kroia.stockmarket.pluginsystem.plugin.core.GenericPluginData;
 import net.kroia.stockmarket.pluginsystem.plugin.core.cache.MarketCache;
 import net.kroia.stockmarket.pluginsystem.registry.PluginRegistry;
 import net.kroia.stockmarket.pluginsystem.registry.PluginRegistryObject;
 import net.kroia.stockmarket.stockmarket.market.ServerMarket;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -34,7 +36,8 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
 
     private boolean loggerEnabled = false;
     private final Map<ItemID, MarketCache> marketCaches = new HashMap<>(); // Contains all caches, instance ownership belongs to this class
-    private final Map<UUID, ServerPlugin> plugins = new HashMap<>();    // Contains all plugin instances. UUID: plugin instanceID
+    @SuppressWarnings("rawtypes")
+    private Map<UUID, ServerPlugin> plugins = new LinkedHashMap<>();    // Contains all plugin instances. UUID: plugin instanceID
 
     private enum State
     {
@@ -188,6 +191,36 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
         return plugins;
     }
 
+    /**
+     * Reorders a plugin in the execution order.
+     * @param instanceID The UUID of the plugin to move
+     * @param direction -1 = move up (earlier), +1 = move down (later)
+     * @return true if reorder succeeded, false if already at boundary or plugin not found
+     */
+    public boolean reorderPlugin(UUID instanceID, int direction)
+    {
+        if(!plugins.containsKey(instanceID))
+            return false;
+
+        List<UUID> keys = new ArrayList<>(plugins.keySet());
+        int index = keys.indexOf(instanceID);
+        int newIndex = index + direction;
+        if(newIndex < 0 || newIndex >= keys.size())
+            return false;
+
+        // Swap
+        UUID temp = keys.get(newIndex);
+        keys.set(newIndex, keys.get(index));
+        keys.set(index, temp);
+
+        // Rebuild the LinkedHashMap in new order
+        Map<UUID, ServerPlugin> reordered = new LinkedHashMap<>();
+        for(UUID key : keys)
+            reordered.put(key, plugins.get(key));
+        plugins = reordered;
+        return true;
+    }
+
     /* ----------------------------------------------------------------------------------------------------------------
      *                     DATA HANDLING
      * --------------------------------------------------------------------------------------------------------------*/
@@ -196,20 +229,145 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
 
     @Override
     public boolean save(Map<String, ListTag> listTags) {
-        return false;
+        ListTag pluginsTag = new ListTag();
+        for (ServerPlugin<?, ?> plugin : plugins.values()) {
+            CompoundTag pluginTag = new CompoundTag();
+
+            // Generic data (pluginTypeID, instanceID, name, description, enabled, loggerEnabled)
+            plugin.getGenericPluginData().save(pluginTag);
+
+            // Subscribed markets
+            ListTag marketsTag = new ListTag();
+            for (ItemID marketID : plugin.getSubscribedMarkets()) {
+                CompoundTag marketTag = new CompoundTag();
+                marketID.save(marketTag);
+                marketsTag.add(marketTag);
+            }
+            pluginTag.put("subscribedMarkets", marketsTag);
+
+            // Custom settings (opaque byte[] encoded by the plugin's codec)
+            byte[] customSettings = plugin.encodeCustomSettings();
+            if (customSettings != null) {
+                pluginTag.putByteArray("customSettings", customSettings);
+            }
+
+            // Plugin-specific NBT data
+            CompoundTag pluginDataTag = new CompoundTag();
+            plugin.save(pluginDataTag);
+            if (!pluginDataTag.isEmpty()) {
+                pluginTag.put("pluginData", pluginDataTag);
+            }
+
+            pluginsTag.add(pluginTag);
+        }
+        listTags.put("plugins", pluginsTag);
+        return true;
     }
 
     @Override
     public boolean load(Map<String, ListTag> listTags) {
-        List<ItemID> marketIDs =  BACKEND_INSTANCES.MARKET_MANAGER.getSync().getAvailableMarketIDs();
+        ListTag pluginsTag = listTags.get("plugins");
 
+        // First-run fallback: no save data exists, create default plugins
+        if (pluginsTag == null || pluginsTag.isEmpty()) {
+            return loadDefaults();
+        }
+
+        boolean success = true;
+        for (int i = 0; i < pluginsTag.size(); i++) {
+            CompoundTag pluginTag = pluginsTag.getCompound(i);
+
+            // Read plugin type ID to find the registry entry
+            if (!pluginTag.contains("pluginTypeID")) {
+                warn("load(): Plugin at index " + i + " missing pluginTypeID, skipping");
+                success = false;
+                continue;
+            }
+            String pluginTypeID = pluginTag.getString("pluginTypeID");
+            PluginRegistryObject registryObject = PluginRegistry.findPlugin(pluginTypeID);
+            if (registryObject == null) {
+                warn("load(): Unknown plugin type '" + pluginTypeID + "', skipping");
+                success = false;
+                continue;
+            }
+
+            // Read saved instanceID
+            UUID savedInstanceID = pluginTag.contains("instanceID") ? pluginTag.getUUID("instanceID") : null;
+
+            // Instantiate and register the plugin
+            ServerPlugin plugin = addPluginFromSave(registryObject, savedInstanceID);
+            if (plugin == null) {
+                warn("load(): Failed to instantiate plugin '" + pluginTypeID + "'");
+                success = false;
+                continue;
+            }
+
+            // Restore generic data fields (name, description, loggerEnabled — NOT enabled yet)
+            GenericPluginData genericData = plugin.getGenericPluginData();
+            if (pluginTag.contains("name")) plugin.setName(pluginTag.getString("name"));
+            if (pluginTag.contains("description")) plugin.setDescription(pluginTag.getString("description"));
+            if (pluginTag.contains("loggerEnabled")) plugin.setLoggerEnabled(pluginTag.getBoolean("loggerEnabled"));
+
+            // Restore subscribed markets
+            if (pluginTag.contains("subscribedMarkets")) {
+                ListTag marketsTag = pluginTag.getList("subscribedMarkets", 10); // 10 = CompoundTag type
+                for (int j = 0; j < marketsTag.size(); j++) {
+                    CompoundTag marketTag = marketsTag.getCompound(j);
+                    ItemID marketID = ItemID.createFromTag(marketTag);
+                    if (marketID != null && marketID.isValid()) {
+                        plugin.subscribeToMarket(marketID);
+                    } else {
+                        warn("load(): Invalid market at plugin '" + pluginTypeID + "' index " + j + ", skipping");
+                    }
+                }
+            }
+
+            // Restore custom settings
+            if (pluginTag.contains("customSettings")) {
+                byte[] customSettings = pluginTag.getByteArray("customSettings");
+                plugin.decodeAndApplyCustomSettings(customSettings);
+            }
+
+            // Restore plugin-specific NBT data
+            if (pluginTag.contains("pluginData")) {
+                CompoundTag pluginDataTag = pluginTag.getCompound("pluginData");
+                plugin.load(pluginDataTag);
+            }
+
+            // Set enabled state LAST (triggers onEnable which may need markets subscribed)
+            if (pluginTag.contains("enabled")) {
+                plugin.setEnabled(pluginTag.getBoolean("enabled"));
+            }
+        }
+        return success;
+    }
+
+    /**
+     * Instantiates a plugin from save data, setting the instanceID before map insertion.
+     */
+    @Nullable ServerPlugin addPluginFromSave(@NotNull PluginRegistryObject registryObject, @Nullable UUID savedInstanceID) {
+        ServerPlugin plugin = PluginRegistry.instantiateServerPlugin(registryObject);
+        if (plugin == null) return null;
+        if (savedInstanceID != null) {
+            plugin.setInstanceID(savedInstanceID);
+        }
+        plugin.setManager(this);
+        plugins.put(plugin.getInstanceID(), plugin);
+        plugin.init_internal();
+        return plugin;
+    }
+
+    /**
+     * Creates the default set of plugins for a fresh world (no save data).
+     */
+    private boolean loadDefaults() {
+        List<ItemID> marketIDs = BACKEND_INSTANCES.MARKET_MANAGER.getSync().getAvailableMarketIDs();
 
         ServerPlugin plugin1 = addPlugin(Plugins.VOLATILITY_PLUGIN);
         ServerPlugin plugin2 = addPlugin(Plugins.DEFAULT_ORDERBOOK_VOLUME_DISTRIBUTION_PLUGIN);
         ServerPlugin plugin3 = addPlugin(Plugins.TARGET_PRICE_BOT_PLUGIN);
 
-        if(!marketIDs.isEmpty())
-        {
+        if (!marketIDs.isEmpty()) {
             ItemID pair = marketIDs.getFirst();
             plugin1.subscribeToMarket(pair);
             plugin2.subscribeToMarket(pair);

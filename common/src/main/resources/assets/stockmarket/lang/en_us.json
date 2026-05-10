@@ -173,7 +173,32 @@
   "gui.stockmarket.limit_order_panel.quantity": "Quantity",
   "gui.stockmarket.limit_order_panel.price": "Price",
   "gui.stockmarket.limit_order_panel.buy": "Buy",
-  "gui.stockmarket.limit_order_panel.sell": "Sell"
+  "gui.stockmarket.limit_order_panel.sell": "Sell",
+
+  "gui.stockmarket.management_screen.plugins.title": "Plugins",
+  "gui.stockmarket.management_screen.plugins.enabled": "enabled",
+  "gui.stockmarket.management_screen.plugins.manage": "Manage Plugins",
+  "gui.stockmarket.plugin_management_screen.title": "Plugin Management",
+  "gui.stockmarket.plugin_management_screen.enabled": "Enabled",
+  "gui.stockmarket.plugin_management_screen.all_markets": "All Markets",
+  "gui.stockmarket.plugin_management_screen.open_plugin_screen": "Open Plugin Settings",
+  "gui.stockmarket.plugin_management_screen.filter_title": "Filter by Market",
+  "gui.stockmarket.plugin_management_screen.subscribe_market_title": "Subscribe to Market",
+  "gui.stockmarket.plugin_detail_screen.title": "Plugin Details",
+
+  "gui.stockmarket.target_price_bot.settings_title": "PID Settings",
+  "gui.stockmarket.target_price_bot.p_gain": "P Gain",
+  "gui.stockmarket.target_price_bot.i_gain": "I Gain",
+  "gui.stockmarket.target_price_bot.d_gain": "D Gain",
+  "gui.stockmarket.target_price_bot.rate": "Rate",
+  "gui.stockmarket.target_price_bot.apply": "Apply",
+  "gui.stockmarket.target_price_bot.markets_title": "Subscribed Markets",
+
+  "gui.stockmarket.volatility_plugin.scale": "Volatility Scale",
+  "gui.stockmarket.volatility_plugin.apply": "Apply",
+  "gui.stockmarket.volume_distribution.volume_scale": "Volume Scale",
+  "gui.stockmarket.volume_distribution.speed": "Speed",
+  "gui.stockmarket.volume_distribution.apply": "Apply"
 
 
 }

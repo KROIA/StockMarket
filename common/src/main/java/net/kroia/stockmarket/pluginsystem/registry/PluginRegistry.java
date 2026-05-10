@@ -1,7 +1,5 @@
 package net.kroia.stockmarket.pluginsystem.registry;
 
-import net.kroia.stockmarket.StockMarketModBackend;
-import net.kroia.stockmarket.pluginsystem.plugin.ClientPlugin;
 import net.kroia.stockmarket.pluginsystem.plugin.ServerPlugin;
 import net.kroia.stockmarket.pluginsystem.screen.PluginGuiElement;
 import org.jetbrains.annotations.NotNull;
@@ -9,86 +7,77 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
-import java.util.function.Function;
 import java.util.function.Supplier;
 
-public class PluginRegistry
-{
+/**
+ * Static registry for all plugin types.
+ * Registration happens at class load time with server-safe factories only.
+ * GUI element factories are registered separately via clientSetup().
+ */
+public class PluginRegistry {
     private static final Map<String, PluginRegistryObject> registryObjects = new HashMap<>();
 
+    /**
+     * Registers a plugin type with its server factory.
+     * Safe to call from shared code — no client class references.
+     * GUI element factory must be set separately via {@link PluginRegistryObject#setGuiElementFactory}.
+     */
+    @SuppressWarnings("rawtypes")
     public static PluginRegistryObject registerPlugin(String pluginTypeID,
-                                      String pluginName,
-                                      String pluginDescription,
-                                      Supplier<ServerPlugin> serverPluginFactory,
-                                      Function<UUID, ClientPlugin> clientPluginFactory)
-    {
+                                                      String pluginName,
+                                                      String pluginDescription,
+                                                      Supplier<ServerPlugin> serverPluginFactory) {
         PluginRegistryObject registryObject = registryObjects.get(pluginTypeID);
-        if (registryObject != null)
-        {
+        if (registryObject != null) {
             return registryObject;
         }
-        registryObject = new PluginRegistryObject(
-                pluginTypeID,
-                pluginName,
-                pluginDescription,
-                serverPluginFactory,
-                clientPluginFactory);
+        registryObject = new PluginRegistryObject(pluginTypeID, pluginName, pluginDescription, serverPluginFactory);
         registryObjects.put(pluginTypeID, registryObject);
         return registryObject;
     }
 
-    public static PluginRegistryObject findPlugin(String pluginTypeID)
-    {
+    /** Finds a registered plugin by its type ID. */
+    public static @Nullable PluginRegistryObject findPlugin(String pluginTypeID) {
         return registryObjects.get(pluginTypeID);
     }
 
-    public static @Nullable ServerPlugin instantiateServerPlugin(String pluginTypeID)
-    {
+    /** Creates a server plugin instance by type ID. */
+    @SuppressWarnings("rawtypes")
+    public static @Nullable ServerPlugin instantiateServerPlugin(String pluginTypeID) {
         PluginRegistryObject registryObject = registryObjects.get(pluginTypeID);
-        if (registryObject != null)
-        {
+        if (registryObject != null) {
             return registryObject.instantiateServerPlugin();
         }
         return null;
     }
-    public static @Nullable ServerPlugin instantiateServerPlugin(PluginRegistryObject registryObject)
-    {
-        // Check if the given registry object exists in this registry
-        for(Map.Entry<String,PluginRegistryObject> entry : registryObjects.entrySet())
-        {
-            if(entry.getValue().equals(registryObject))
-            {
+
+    /** Creates a server plugin instance from a registry object. */
+    @SuppressWarnings("rawtypes")
+    public static @Nullable ServerPlugin instantiateServerPlugin(PluginRegistryObject registryObject) {
+        for (Map.Entry<String, PluginRegistryObject> entry : registryObjects.entrySet()) {
+            if (entry.getValue().equals(registryObject)) {
                 return registryObject.instantiateServerPlugin();
             }
         }
         return null;
     }
 
-    public static @Nullable ClientPlugin instantiateClientPlugin(String pluginTypeID, UUID serverInstanceID)
-    {
+    /**
+     * Creates a PluginGuiElement for the given plugin type.
+     * Returns null if the plugin type is not registered.
+     * Returns a default PluginGuiElement if no custom factory was set.
+     */
+    @SuppressWarnings("rawtypes")
+    public static @Nullable PluginGuiElement createGuiElement(String pluginTypeID) {
         PluginRegistryObject registryObject = registryObjects.get(pluginTypeID);
-        if(registryObject != null)
-        {
-            return registryObject.instantiateClientPlugin(serverInstanceID);
-        }
-        return null;
-    }
-    public static @Nullable ClientPlugin instantiateClientPlugin(PluginRegistryObject registryObject, UUID serverInstanceID)
-    {
-        // Check if the given registry object exists in this registry
-        for(Map.Entry<String,PluginRegistryObject> entry : registryObjects.entrySet())
-        {
-            if(entry.getValue().equals(registryObject))
-            {
-                return registryObject.instantiateClientPlugin(serverInstanceID);
-            }
+        if (registryObject != null) {
+            return registryObject.createGuiElement();
         }
         return null;
     }
 
-    public static @NotNull Map<String, PluginRegistryObject>  getRegistryObjects()
-    {
+    /** Returns all registered plugin types. */
+    public static @NotNull Map<String, PluginRegistryObject> getRegistryObjects() {
         return registryObjects;
     }
 }

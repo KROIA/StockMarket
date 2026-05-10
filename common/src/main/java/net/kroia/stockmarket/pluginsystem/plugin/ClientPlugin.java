@@ -16,15 +16,17 @@ public class ClientPlugin implements IClientPlugin {
     }
 
     private final GenericPluginData genericPluginData;
+    @SuppressWarnings("rawtypes")
     private PluginGuiElement guiElement;
 
     public ClientPlugin(UUID instanceID) {
         genericPluginData  = new GenericPluginData(instanceID);
     }
 
+    @SuppressWarnings("rawtypes")
     public PluginGuiElement getGuiElement() {
         if(guiElement == null)
-            guiElement = new PluginGuiElement();
+            guiElement = new PluginGuiElement<>();
         return guiElement;
     }
 

@@ -278,6 +278,7 @@ public class StockMarketModBackend implements StockMarketAPI {
         ClientMarketManager.setBackend(CLIENT_INSTANCES);
         ClientPluginManager.setBackend(CLIENT_INSTANCES);
         StockMarketTextMessages.setBackend(CLIENT_INSTANCES);
+        MarketManager.setClientBackend(CLIENT_INSTANCES);
 
 
         CLIENT_INSTANCES.LOGGER = COMMON_INSTANCES.LOGGER;

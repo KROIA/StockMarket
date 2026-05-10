@@ -116,6 +116,14 @@ public class CandlestickChart extends StockMarketGuiElement
         return fromCanvasSpaceY(canvasRect.y+1);
     }
 
+    /**
+     * Returns a copy of the canvas drawing area bounds.
+     * Plugin developers can use this together with toCanvasSpaceX/Y
+     * to draw custom overlays on top of the chart.
+     */
+    public Rectangle getCanvasBounds() {
+        return new Rectangle(canvasRect.x, canvasRect.y, canvasRect.width, canvasRect.height);
+    }
 
     public void selectCandleTimeDelta(int timeDeltaMs)
     {

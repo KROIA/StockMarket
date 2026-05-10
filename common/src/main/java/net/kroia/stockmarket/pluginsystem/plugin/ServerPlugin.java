@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.pluginsystem.plugin;
 
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.persistence.ServerSaveable;
 import net.kroia.stockmarket.StockMarketModBackend;
@@ -11,12 +13,14 @@ import net.kroia.stockmarket.pluginsystem.plugin.core.cache.PluginCache;
 import net.kroia.stockmarket.pluginsystem.pluginmanager.ServerPluginManager;
 import net.kroia.stockmarket.pluginsystem.registry.PluginRegistryObject;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.codec.StreamCodec;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.UUID;
 
-public abstract class ServerPlugin implements ServerSaveable, IServerPlugin {
+public abstract class ServerPlugin<TSettings, TRuntimeData> implements ServerSaveable, IServerPlugin {
     private static StockMarketModBackend.ServerInstances BACKEND_INSTANCES;
     public static void setBackend(StockMarketModBackend.ServerInstances backend) {
         BACKEND_INSTANCES = backend;
@@ -91,6 +95,18 @@ public abstract class ServerPlugin implements ServerSaveable, IServerPlugin {
     }
     public final @Nullable String getPluginTypeID() {
         return genericPluginData.getPluginTypeID();
+    }
+    public GenericPluginData getGenericPluginData() {
+        return genericPluginData;
+    }
+
+    /**
+     * Restores the plugin's instance ID from saved data.
+     * Only used during load to preserve identity across server restarts.
+     * Public for cross-package access from ServerPluginManager — not part of the plugin API.
+     */
+    public void setInstanceID(UUID id) {
+        genericPluginData.setInstanceID(id);
     }
 
 
@@ -245,6 +261,122 @@ public abstract class ServerPlugin implements ServerSaveable, IServerPlugin {
         return manager;
     }
     
+
+    /* ----------------------------------------------------------------------------------------------------------------
+     *                     RUNTIME DATA STREAMING
+     * --------------------------------------------------------------------------------------------------------------*/
+
+    /**
+     * Returns the StreamCodec for this plugin's runtime data type.
+     * Override to enable runtime data streaming to the client GUI.
+     * Return null if this plugin does not stream runtime data.
+     */
+    protected @Nullable StreamCodec<ByteBuf, TRuntimeData> runtimeDataCodec() {
+        return null;
+    }
+
+    /**
+     * Provides the current runtime data snapshot for streaming to the client.
+     * Only called if runtimeDataCodec() returns non-null.
+     */
+    protected @Nullable TRuntimeData provideRuntimeData() {
+        return null;
+    }
+
+    /**
+     * Returns the update interval in milliseconds for the runtime data stream.
+     */
+    public long getRuntimeDataStreamInterval() {
+        return 500;
+    }
+
+    /**
+     * Framework method: encodes runtime data to bytes using the plugin's codec.
+     * Called by the streaming infrastructure — plugin developers should not call this directly.
+     */
+    public final byte[] encodeRuntimeData() {
+        StreamCodec<ByteBuf, TRuntimeData> codec = runtimeDataCodec();
+        TRuntimeData data = provideRuntimeData();
+        if (codec == null || data == null) return null;
+        ByteBuf buf = Unpooled.buffer();
+        try {
+            codec.encode(buf, data);
+            byte[] bytes = new byte[buf.readableBytes()];
+            buf.readBytes(bytes);
+            return bytes;
+        } finally {
+            buf.release();
+        }
+    }
+
+
+    /* ----------------------------------------------------------------------------------------------------------------
+     *                     CUSTOM SETTINGS
+     * --------------------------------------------------------------------------------------------------------------*/
+
+    /**
+     * Returns the StreamCodec for this plugin's custom settings type.
+     * Override to enable custom settings editing via the management UI.
+     * Return null if this plugin has no custom settings.
+     */
+    protected @Nullable StreamCodec<ByteBuf, TSettings> customSettingsCodec() {
+        return null;
+    }
+
+    /**
+     * Provides the current custom settings for network transfer to the client.
+     * Only called if customSettingsCodec() returns non-null.
+     */
+    protected @Nullable TSettings provideCustomSettings() {
+        return null;
+    }
+
+    /**
+     * Applies custom settings received from the client GUI.
+     * Only called if customSettingsCodec() returns non-null.
+     */
+    protected boolean applyCustomSettings(@NotNull TSettings settings) {
+        return false;
+    }
+
+    /**
+     * Framework method: encodes custom settings to bytes using the plugin's codec.
+     * Called by the networking infrastructure — plugin developers should not call this directly.
+     */
+    public final byte[] encodeCustomSettings() {
+        StreamCodec<ByteBuf, TSettings> codec = customSettingsCodec();
+        TSettings settings = provideCustomSettings();
+        if (codec == null || settings == null) return null;
+        ByteBuf buf = Unpooled.buffer();
+        try {
+            codec.encode(buf, settings);
+            byte[] bytes = new byte[buf.readableBytes()];
+            buf.readBytes(bytes);
+            return bytes;
+        } finally {
+            buf.release();
+        }
+    }
+
+    /**
+     * Framework method: decodes and applies custom settings from bytes.
+     * Called by the networking infrastructure — plugin developers should not call this directly.
+     */
+    public final boolean decodeAndApplyCustomSettings(byte[] data) {
+        StreamCodec<ByteBuf, TSettings> codec = customSettingsCodec();
+        if (codec == null || data == null) return false;
+        ByteBuf buf = Unpooled.wrappedBuffer(data);
+        try {
+            TSettings settings = codec.decode(buf);
+            return applyCustomSettings(settings);
+        } catch (Exception e) {
+            error("Failed to decode custom settings", e);
+            return false;
+        } finally {
+            buf.release();
+        }
+    }
+
 
     /* ----------------------------------------------------------------------------------------------------------------
      *                     DATA HANDLING

@@ -1,12 +1,15 @@
 package net.kroia.stockmarket.pluginsystem.plugins;
 
 
+import io.netty.buffer.ByteBuf;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.api.plugin.interaction.IPluginOrderBook;
 import net.kroia.stockmarket.api.plugin.interaction.IVolumeDistributionCalculator;
 import net.kroia.stockmarket.pluginsystem.interaction.MarketInterface;
 import net.kroia.stockmarket.pluginsystem.plugin.ServerPlugin;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.util.Tuple;
 import org.jetbrains.annotations.NotNull;
 
@@ -14,7 +17,18 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin {
+public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<DefaultOrderbookVolumeDistributionPlugin.Settings, Void> {
+
+    /**
+     * Custom settings record for volume scale and convergence speed parameters.
+     */
+    public record Settings(float volumeScale, float speed) {
+        public static final StreamCodec<ByteBuf, Settings> CODEC = StreamCodec.composite(
+                ByteBufCodecs.FLOAT, Settings::volumeScale,
+                ByteBufCodecs.FLOAT, Settings::speed,
+                Settings::new
+        );
+    }
 
     static class DistributionCalculator implements IVolumeDistributionCalculator
     {
@@ -66,6 +80,8 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin {
         }
     }
     private final Map<ItemID, RuntimeData> marketData = new HashMap<>();
+    private float volumeScale = 1.0f;
+    private float speed = 0.05f;
 
     public DefaultOrderbookVolumeDistributionPlugin()
     {
@@ -141,10 +157,11 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin {
     @Override
     public void onMarketSubscribed(ItemID marketID) {
         RuntimeData data = new RuntimeData();
+        data.speed = this.speed;
+        data.calculator.volumeScale = this.volumeScale;
         marketData.put(marketID, data);
 
         MarketInterface interf = getMarketInterface(marketID);
-
         if(interf == null)
             return;
         interf.oderBook.registerDefaultVolumeDistributionCalculator(data.calculator);
@@ -175,11 +192,37 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin {
 
     @Override
     public boolean save(CompoundTag tag) {
-        return false;
+        tag.putFloat("volumeScale", volumeScale);
+        tag.putFloat("speed", speed);
+        return true;
     }
 
     @Override
     public boolean load(CompoundTag tag) {
-        return false;
+        if (tag.contains("volumeScale")) volumeScale = tag.getFloat("volumeScale");
+        if (tag.contains("speed")) speed = tag.getFloat("speed");
+        return true;
+    }
+
+    @Override
+    protected StreamCodec<ByteBuf, Settings> customSettingsCodec() {
+        return Settings.CODEC;
+    }
+
+    @Override
+    protected Settings provideCustomSettings() {
+        return new Settings(volumeScale, speed);
+    }
+
+    @Override
+    protected boolean applyCustomSettings(Settings settings) {
+        volumeScale = settings.volumeScale();
+        speed = settings.speed();
+        // Update all existing market runtimes
+        for (RuntimeData data : marketData.values()) {
+            data.calculator.volumeScale = volumeScale;
+            data.speed = speed;
+        }
+        return true;
     }
 }
