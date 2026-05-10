@@ -73,8 +73,8 @@ public class PluginCustomSettingsRequest extends StockMarketGenericRequest<Plugi
             return CompletableFuture.completedFuture(new OutputData(false, null));
         }
 
-        boolean applied = plugin.applyCustomSettings(input.payload());
-        byte[] confirmed = applied ? plugin.provideCustomSettings() : null;
+        boolean applied = plugin.decodeAndApplyCustomSettings(input.payload());
+        byte[] confirmed = applied ? plugin.encodeCustomSettings() : null;
         return CompletableFuture.completedFuture(new OutputData(applied, confirmed));
     }
 

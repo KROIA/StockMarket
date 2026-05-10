@@ -1,21 +1,20 @@
 package net.kroia.stockmarket.pluginsystem.plugins.screen;
 
+import io.netty.buffer.ByteBuf;
 import net.kroia.modutilities.gui.elements.*;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.pluginsystem.plugin.core.PluginSyncData;
+import net.kroia.stockmarket.pluginsystem.plugins.DefaultOrderbookVolumeDistributionPlugin;
 import net.kroia.stockmarket.pluginsystem.screen.PluginGuiElement;
 import net.minecraft.network.chat.Component;
-
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
+import net.minecraft.network.codec.StreamCodec;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Inline settings GUI for the DefaultOrderbookVolumeDistributionPlugin.
  * Displays volume scale and convergence speed inputs with an Apply button.
  */
-public class VolumeDistributionGuiElement extends PluginGuiElement {
+public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderbookVolumeDistributionPlugin.Settings, Void> {
 
     private static class Texts {
         private static final String PREFIX = "gui." + StockMarketMod.MOD_ID + ".volume_distribution.";
@@ -49,30 +48,23 @@ public class VolumeDistributionGuiElement extends PluginGuiElement {
     }
 
     @Override
-    protected void onPluginSyncDataReceived(PluginSyncData data) {
-        byte[] settings = data.getCustomSettings();
-        if (settings != null) {
-            try {
-                DataInputStream dis = new DataInputStream(new ByteArrayInputStream(settings));
-                volumeScaleTextBox.setText(dis.readFloat());
-                speedTextBox.setText(dis.readFloat());
-            } catch (Exception e) {
-                // Keep defaults
-            }
+    protected StreamCodec<ByteBuf, DefaultOrderbookVolumeDistributionPlugin.Settings> customSettingsCodec() {
+        return DefaultOrderbookVolumeDistributionPlugin.Settings.CODEC;
+    }
+
+    @Override
+    protected void onPluginSyncDataReceived(PluginSyncData data, @Nullable DefaultOrderbookVolumeDistributionPlugin.Settings customSettings) {
+        if (customSettings != null) {
+            volumeScaleTextBox.setText(customSettings.volumeScale());
+            speedTextBox.setText(customSettings.speed());
         }
     }
 
     private void onApply() {
-        try {
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            DataOutputStream dos = new DataOutputStream(baos);
-            dos.writeFloat((float) volumeScaleTextBox.getDouble());
-            dos.writeFloat((float) speedTextBox.getDouble());
-            dos.flush();
-            sendCustomSettings(baos.toByteArray());
-        } catch (Exception e) {
-            // Ignore
-        }
+        sendCustomSettings(new DefaultOrderbookVolumeDistributionPlugin.Settings(
+                (float) volumeScaleTextBox.getDouble(),
+                (float) speedTextBox.getDouble()
+        ));
     }
 
     @Override

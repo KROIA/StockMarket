@@ -12,6 +12,7 @@ import java.util.function.Supplier;
  * GUI element factory is set separately in clientSetup() to avoid loading
  * client-only classes on the server.
  */
+@SuppressWarnings("rawtypes")
 public class PluginRegistryObject {
     private final String pluginTypeID;
     private final String pluginName;
@@ -65,6 +66,6 @@ public class PluginRegistryObject {
         if (guiElementFactory != null) {
             return guiElementFactory.get();
         }
-        return new PluginGuiElement();
+        return new PluginGuiElement<>();
     }
 }

@@ -1,24 +1,22 @@
 package net.kroia.stockmarket.pluginsystem.plugins.screen;
 
+import io.netty.buffer.ByteBuf;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.elements.*;
 import net.kroia.modutilities.gui.elements.base.ListView;
 import net.kroia.modutilities.gui.geometry.Rectangle;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.networking.stream.PluginRuntimeDataStream;
 import net.kroia.stockmarket.pluginsystem.plugin.core.PluginSyncData;
+import net.kroia.stockmarket.pluginsystem.plugins.TargetPriceBot;
 import net.kroia.stockmarket.pluginsystem.screen.PluginGuiElement;
 import net.kroia.stockmarket.screen.widgets.CandlestickChart;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -38,7 +36,7 @@ import java.util.List;
  * +-------------------+-------------------+
  * </pre>
  */
-public class TargetPriceBotGuiElement extends PluginGuiElement {
+public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Settings, TargetPriceBot.RuntimeStreamData> {
 
     private static class Texts {
         private static final String PREFIX = "gui." + StockMarketMod.MOD_ID + ".target_price_bot.";
@@ -129,14 +127,25 @@ public class TargetPriceBotGuiElement extends PluginGuiElement {
         return true;
     }
 
+    @Override
+    protected StreamCodec<ByteBuf, TargetPriceBot.Settings> customSettingsCodec() {
+        return TargetPriceBot.Settings.CODEC;
+    }
+
+    @Override
+    protected StreamCodec<ByteBuf, TargetPriceBot.RuntimeStreamData> runtimeDataCodec() {
+        return TargetPriceBot.RuntimeStreamData.CODEC;
+    }
+
     /**
      * Populates the market selection view from the plugin's sync data
      * and starts the runtime data stream for live target price updates.
      *
-     * @param data the plugin sync data containing subscribed markets
+     * @param data           the plugin sync data containing subscribed markets
+     * @param customSettings the decoded PID settings, or null if not available
      */
     @Override
-    protected void onPluginSyncDataReceived(PluginSyncData data) {
+    protected void onPluginSyncDataReceived(PluginSyncData data, @Nullable TargetPriceBot.Settings customSettings) {
         this.subscribedMarkets = data.getSubscribedMarkets();
 
         // Populate the item selection view with subscribed market items
@@ -149,18 +158,12 @@ public class TargetPriceBotGuiElement extends PluginGuiElement {
         }
         marketSelectionView.setItems(stacks);
 
-        // Populate settings from custom settings payload
-        byte[] settings = data.getCustomSettings();
-        if (settings != null) {
-            try {
-                DataInputStream dis = new DataInputStream(new ByteArrayInputStream(settings));
-                pGainTextBox.setText(dis.readFloat());
-                iGainTextBox.setText(dis.readFloat());
-                dGainTextBox.setText(dis.readFloat());
-                rateTextBox.setText(dis.readFloat());
-            } catch (Exception e) {
-                // Ignore decode errors — keep default values
-            }
+        // Populate settings from decoded custom settings
+        if (customSettings != null) {
+            pGainTextBox.setText(customSettings.pidP());
+            iGainTextBox.setText(customSettings.pidI());
+            dGainTextBox.setText(customSettings.pidD());
+            rateTextBox.setText(customSettings.pidRate());
         }
 
         // Start the runtime data stream for live target price updates
@@ -192,47 +195,30 @@ public class TargetPriceBotGuiElement extends PluginGuiElement {
     }
 
     /**
-     * Decodes runtime data from the server plugin to extract target prices.
-     * Format: [count:int] then for each market: [itemID:short, targetPrice:double].
+     * Processes decoded runtime data to extract target prices.
      *
-     * @param data the runtime data payload from the server
+     * @param data the decoded runtime data containing target prices per market
      */
     @Override
-    protected void onRuntimeDataReceived(PluginRuntimeDataStream.RuntimeData data) {
-        try {
-            ByteArrayInputStream bais = new ByteArrayInputStream(data.payload);
-            DataInputStream dis = new DataInputStream(bais);
-            int count = dis.readInt();
-            for (int i = 0; i < count; i++) {
-                short itemId = dis.readShort();
-                double price = dis.readDouble();
-                // Match against the currently selected market
-                if (selectedMarketID != null && itemId == selectedMarketID.getShort()) {
-                    targetPrice = price;
-                    hasTargetPrice = true;
-                }
+    protected void onRuntimeDataReceived(TargetPriceBot.RuntimeStreamData data) {
+        for (TargetPriceBot.RuntimeStreamData.MarketTargetPrice entry : data.entries()) {
+            if (selectedMarketID != null && entry.itemId() == selectedMarketID.getShort()) {
+                targetPrice = entry.targetPrice();
+                hasTargetPrice = true;
             }
-        } catch (Exception e) {
-            // Ignore decode errors silently
         }
     }
 
     /**
-     * Encodes the current PID gain input values and sends them to the server.
+     * Sends the current PID gain input values to the server as typed settings.
      */
     private void onApplySettings() {
-        try {
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            DataOutputStream dos = new DataOutputStream(baos);
-            dos.writeFloat((float) pGainTextBox.getDouble());
-            dos.writeFloat((float) iGainTextBox.getDouble());
-            dos.writeFloat((float) dGainTextBox.getDouble());
-            dos.writeFloat((float) rateTextBox.getDouble());
-            dos.flush();
-            sendCustomSettings(baos.toByteArray());
-        } catch (Exception e) {
-            // Ignore encode errors
-        }
+        sendCustomSettings(new TargetPriceBot.Settings(
+                (float) pGainTextBox.getDouble(),
+                (float) iGainTextBox.getDouble(),
+                (float) dGainTextBox.getDouble(),
+                (float) rateTextBox.getDouble()
+        ));
     }
 
     @Override

@@ -273,6 +273,7 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         private final CheckBox enabledCheckBox;
         private final Button moveUpButton;
         private final Button moveDownButton;
+        @SuppressWarnings("rawtypes")
         private final PluginGuiElement pluginGuiElement;  // may be null if registry lookup fails
         private final Button openPluginScreenButton;      // only used if needsCustomScreen() is true
 

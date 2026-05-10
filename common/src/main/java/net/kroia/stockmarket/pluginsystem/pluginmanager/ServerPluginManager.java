@@ -36,6 +36,7 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
 
     private boolean loggerEnabled = false;
     private final Map<ItemID, MarketCache> marketCaches = new HashMap<>(); // Contains all caches, instance ownership belongs to this class
+    @SuppressWarnings("rawtypes")
     private Map<UUID, ServerPlugin> plugins = new LinkedHashMap<>();    // Contains all plugin instances. UUID: plugin instanceID
 
     private enum State
@@ -229,7 +230,7 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
     @Override
     public boolean save(Map<String, ListTag> listTags) {
         ListTag pluginsTag = new ListTag();
-        for (ServerPlugin plugin : plugins.values()) {
+        for (ServerPlugin<?, ?> plugin : plugins.values()) {
             CompoundTag pluginTag = new CompoundTag();
 
             // Generic data (pluginTypeID, instanceID, name, description, enabled, loggerEnabled)
@@ -244,8 +245,8 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
             }
             pluginTag.put("subscribedMarkets", marketsTag);
 
-            // Custom settings (opaque byte[] from the plugin)
-            byte[] customSettings = plugin.provideCustomSettings();
+            // Custom settings (opaque byte[] encoded by the plugin's codec)
+            byte[] customSettings = plugin.encodeCustomSettings();
             if (customSettings != null) {
                 pluginTag.putByteArray("customSettings", customSettings);
             }
@@ -324,7 +325,7 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
             // Restore custom settings
             if (pluginTag.contains("customSettings")) {
                 byte[] customSettings = pluginTag.getByteArray("customSettings");
-                plugin.applyCustomSettings(customSettings);
+                plugin.decodeAndApplyCustomSettings(customSettings);
             }
 
             // Restore plugin-specific NBT data

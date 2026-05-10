@@ -110,7 +110,7 @@ public class PluginRuntimeDataStream extends StockMarketGenericStream<UUID, Plug
             return;
         }
 
-        byte[] newPayload = plugin.provideRuntimeData();
+        byte[] newPayload = plugin.encodeRuntimeData();
         if (newPayload == null) return;
 
         // Only send if data changed

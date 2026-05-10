@@ -25,6 +25,7 @@ public class PluginDetailScreen extends StockMarketGuiScreen {
     private final PluginSyncData pluginData;
     private final Label nameLabel;
     private final Label descriptionLabel;
+    @SuppressWarnings("rawtypes")
     private final PluginGuiElement pluginGuiElement;
 
     /**
@@ -34,6 +35,7 @@ public class PluginDetailScreen extends StockMarketGuiScreen {
      * @param pluginData      the plugin sync data containing name and description
      * @param pluginGuiElement the plugin's GUI element to display
      */
+    @SuppressWarnings("rawtypes")
     public PluginDetailScreen(StockMarketGuiScreen parent, PluginSyncData pluginData, PluginGuiElement pluginGuiElement) {
         super(Texts.TITLE);
         this.parent = parent;

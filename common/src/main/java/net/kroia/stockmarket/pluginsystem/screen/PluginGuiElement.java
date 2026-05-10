@@ -1,9 +1,12 @@
 package net.kroia.stockmarket.pluginsystem.screen;
 
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import net.kroia.modutilities.networking.client_server.streaming.StreamSystem;
 import net.kroia.stockmarket.networking.stream.PluginRuntimeDataStream;
 import net.kroia.stockmarket.pluginsystem.plugin.core.PluginSyncData;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
+import net.minecraft.network.codec.StreamCodec;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
@@ -13,15 +16,20 @@ import java.util.UUID;
  * Plugin developers extend this to provide custom settings UI and/or
  * live runtime data visualization.
  *
+ * <p>Type parameters correspond to the server-side {@code ServerPlugin<TSettings, TRuntimeData>}.</p>
+ *
  * <p>The framework calls {@link #setPluginSyncData(PluginSyncData)} internally
  * to pass the plugin's metadata and subscribed markets. Subclasses override
- * {@link #onPluginSyncDataReceived(PluginSyncData)} to react to this data.</p>
+ * {@link #onPluginSyncDataReceived(PluginSyncData, Object)} to react to this data.</p>
  *
  * <p>Runtime data streaming is managed via {@link #startDataStream()} and
  * {@link #stopDataStream()}. Override {@link #onRuntimeDataReceived} to
  * process incoming data.</p>
+ *
+ * @param <TSettings>    the custom settings type (use Void if no settings)
+ * @param <TRuntimeData> the runtime data type (use Void if no runtime data)
  */
-public class PluginGuiElement extends StockMarketGuiElement {
+public class PluginGuiElement<TSettings, TRuntimeData> extends StockMarketGuiElement {
 
     private UUID runtimeStreamID = null;
     private PluginSyncData pluginSyncData = null;
@@ -40,24 +48,45 @@ public class PluginGuiElement extends StockMarketGuiElement {
     }
 
     /**
+     * Returns the StreamCodec for this plugin's custom settings type.
+     * Must match the server-side plugin's codec.
+     * Return null if this plugin has no custom settings.
+     */
+    protected @Nullable StreamCodec<ByteBuf, TSettings> customSettingsCodec() {
+        return null;
+    }
+
+    /**
+     * Returns the StreamCodec for this plugin's runtime data type.
+     * Must match the server-side plugin's codec.
+     * Return null if this plugin does not stream runtime data.
+     */
+    protected @Nullable StreamCodec<ByteBuf, TRuntimeData> runtimeDataCodec() {
+        return null;
+    }
+
+    /**
      * Called internally by the framework to provide plugin sync data.
-     * Stores the data and forwards to {@link #onPluginSyncDataReceived(PluginSyncData)}.
+     * Stores the data, decodes custom settings, and forwards to
+     * {@link #onPluginSyncDataReceived(PluginSyncData, Object)}.
      * Do not override — override {@link #onPluginSyncDataReceived} instead.
      *
      * @param data the plugin sync data containing subscribed markets and metadata
      */
     public final void setPluginSyncData(PluginSyncData data) {
         this.pluginSyncData = data;
-        onPluginSyncDataReceived(data);
+        TSettings settings = decodeSettings(data.getCustomSettings());
+        onPluginSyncDataReceived(data, settings);
     }
 
     /**
      * Called when the plugin's sync data is received from the server.
      * Override to initialize the element with market data, subscriptions, etc.
      *
-     * @param data the plugin sync data containing subscribed markets and metadata
+     * @param data           the plugin sync data containing subscribed markets and metadata
+     * @param customSettings the decoded custom settings, or null if not available
      */
-    protected void onPluginSyncDataReceived(PluginSyncData data) {
+    protected void onPluginSyncDataReceived(PluginSyncData data, @Nullable TSettings customSettings) {
         // Default: no-op. Subclasses override.
     }
 
@@ -83,11 +112,27 @@ public class PluginGuiElement extends StockMarketGuiElement {
         runtimeStreamID = StreamSystem.startServerToClientStream(
                 BACKEND_INSTANCES.NETWORKING.PLUGIN_RUNTIME_DATA_STREAM,
                 instanceID,
-                this::onRuntimeDataReceived,
+                this::handleRuntimeDataInternal,
                 () -> {
                     runtimeStreamID = null;
                 }
         );
+    }
+
+    /**
+     * Internal handler that decodes the raw runtime data payload and forwards
+     * the typed result to {@link #onRuntimeDataReceived(Object)}.
+     */
+    private void handleRuntimeDataInternal(PluginRuntimeDataStream.RuntimeData data) {
+        StreamCodec<ByteBuf, TRuntimeData> codec = runtimeDataCodec();
+        if (codec == null) return;
+        ByteBuf buf = Unpooled.wrappedBuffer(data.payload);
+        try {
+            TRuntimeData decoded = codec.decode(buf);
+            onRuntimeDataReceived(decoded);
+        } finally {
+            buf.release();
+        }
     }
 
     /**
@@ -105,9 +150,9 @@ public class PluginGuiElement extends StockMarketGuiElement {
      * Called when runtime data is received from the server.
      * Override to process plugin-specific runtime data.
      *
-     * @param data the runtime data payload
+     * @param data the decoded runtime data
      */
-    protected void onRuntimeDataReceived(PluginRuntimeDataStream.RuntimeData data) {
+    protected void onRuntimeDataReceived(TRuntimeData data) {
         // Default: no-op. Subclasses override to process data.
     }
 
@@ -116,25 +161,56 @@ public class PluginGuiElement extends StockMarketGuiElement {
      * Subclasses call this when the user changes plugin-specific settings.
      * The response is delivered via {@link #onCustomSettingsResponse}.
      *
-     * @param payload the encoded custom settings bytes
+     * @param settings the typed custom settings to send
      */
-    protected void sendCustomSettings(byte[] payload) {
+    protected final void sendCustomSettings(TSettings settings) {
+        StreamCodec<ByteBuf, TSettings> codec = customSettingsCodec();
         UUID id = getPluginInstanceID();
-        if (id == null) return;
-        getPluginManager().requestUpdateCustomSettings(id, payload).thenAccept(response -> {
-            onCustomSettingsResponse(response.success(), response.confirmedPayload());
-        });
+        if (codec == null || id == null || settings == null) return;
+        ByteBuf buf = Unpooled.buffer();
+        try {
+            codec.encode(buf, settings);
+            byte[] bytes = new byte[buf.readableBytes()];
+            buf.readBytes(bytes);
+            getPluginManager().requestUpdateCustomSettings(id, bytes).thenAccept(response -> {
+                if (response.success() && response.confirmedPayload() != null) {
+                    TSettings confirmed = decodeSettings(response.confirmedPayload());
+                    onCustomSettingsResponse(true, confirmed);
+                } else {
+                    onCustomSettingsResponse(false, null);
+                }
+            });
+        } finally {
+            buf.release();
+        }
     }
 
     /**
      * Called when the server responds to a custom settings update request.
      * Override to handle confirmation or rejection of settings changes.
      *
-     * @param success          true if the settings were applied on the server
-     * @param confirmedPayload the server's confirmed settings bytes, or null on failure
+     * @param success           true if the settings were applied on the server
+     * @param confirmedSettings the server's confirmed decoded settings, or null on failure
      */
-    protected void onCustomSettingsResponse(boolean success, @Nullable byte[] confirmedPayload) {
+    protected void onCustomSettingsResponse(boolean success, @Nullable TSettings confirmedSettings) {
         // Default: no-op. Subclasses override to react to settings confirmation.
+    }
+
+    /**
+     * Decodes custom settings bytes using this element's settings codec.
+     *
+     * @param data the raw settings bytes, or null
+     * @return the decoded settings, or null if codec is null or data is null
+     */
+    private @Nullable TSettings decodeSettings(byte[] data) {
+        StreamCodec<ByteBuf, TSettings> codec = customSettingsCodec();
+        if (codec == null || data == null) return null;
+        ByteBuf buf = Unpooled.wrappedBuffer(data);
+        try {
+            return codec.decode(buf);
+        } finally {
+            buf.release();
+        }
     }
 
 

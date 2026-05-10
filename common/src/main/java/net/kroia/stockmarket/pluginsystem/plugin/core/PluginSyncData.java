@@ -40,8 +40,8 @@ public class PluginSyncData {
      * @param plugin the server plugin to snapshot
      * @return a new PluginSyncData with current generic data, subscriptions, and custom settings
      */
-    public static PluginSyncData fromServerPlugin(ServerPlugin plugin) {
-        return new PluginSyncData(plugin.getGenericPluginData(), plugin.getSubscribedMarkets(), plugin.provideCustomSettings());
+    public static PluginSyncData fromServerPlugin(ServerPlugin<?, ?> plugin) {
+        return new PluginSyncData(plugin.getGenericPluginData(), plugin.getSubscribedMarkets(), plugin.encodeCustomSettings());
     }
 
     public GenericPluginData getGenericData() { return genericData; }

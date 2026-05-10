@@ -22,6 +22,7 @@ public class PluginRegistry {
      * Safe to call from shared code — no client class references.
      * GUI element factory must be set separately via {@link PluginRegistryObject#setGuiElementFactory}.
      */
+    @SuppressWarnings("rawtypes")
     public static PluginRegistryObject registerPlugin(String pluginTypeID,
                                                       String pluginName,
                                                       String pluginDescription,
@@ -41,6 +42,7 @@ public class PluginRegistry {
     }
 
     /** Creates a server plugin instance by type ID. */
+    @SuppressWarnings("rawtypes")
     public static @Nullable ServerPlugin instantiateServerPlugin(String pluginTypeID) {
         PluginRegistryObject registryObject = registryObjects.get(pluginTypeID);
         if (registryObject != null) {
@@ -50,6 +52,7 @@ public class PluginRegistry {
     }
 
     /** Creates a server plugin instance from a registry object. */
+    @SuppressWarnings("rawtypes")
     public static @Nullable ServerPlugin instantiateServerPlugin(PluginRegistryObject registryObject) {
         for (Map.Entry<String, PluginRegistryObject> entry : registryObjects.entrySet()) {
             if (entry.getValue().equals(registryObject)) {
@@ -64,6 +67,7 @@ public class PluginRegistry {
      * Returns null if the plugin type is not registered.
      * Returns a default PluginGuiElement if no custom factory was set.
      */
+    @SuppressWarnings("rawtypes")
     public static @Nullable PluginGuiElement createGuiElement(String pluginTypeID) {
         PluginRegistryObject registryObject = registryObjects.get(pluginTypeID);
         if (registryObject != null) {
