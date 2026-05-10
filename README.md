@@ -533,7 +533,7 @@ Since this is a complex field from control theory, I will not cover this here.
 
 | Version | Status | Highlights |
 |---|---|---|
-| [v2.0.0_ALPHA_1](changelog/v2.0.0_ALPHA_1.md) | In Development | Plugin system, management UI, security hardening, 33 bug fixes |
+| [v2.0.1](changelog/v2.0.1.md) | In Development | Plugin system, management UI, security hardening, 45 bug fixes |
 | v1.3.1 | Stable | Multi-version support (MC 1.19.2–1.21.1), bot settings GUI, market management |
 | v1.3.0 | Stable | |
 | v1.2.x | Legacy | |
