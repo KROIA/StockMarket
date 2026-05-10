@@ -1,15 +1,20 @@
 package net.kroia.stockmarket.util;
 
+import net.kroia.banksystem.api.bankmanager.IClientBankManager;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.GuiScreen;
 import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.api.marketmanager.IClientMarketManager;
+import net.kroia.stockmarket.api.pluginmanager.IClientPluginManager;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
-import net.kroia.stockmarket.stockmarket.marketmanager.ClientMarketManager;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.UUID;
 
 public abstract class StockMarketGuiScreen extends GuiScreen {
 
@@ -20,7 +25,7 @@ public abstract class StockMarketGuiScreen extends GuiScreen {
     }
 
 
-    public static final float guiScale = 0.7f;
+    public static final float guiScale = 0.5f;
 
     protected StockMarketGuiScreen(Component pTitle) {
         super(pTitle);
@@ -33,19 +38,41 @@ public abstract class StockMarketGuiScreen extends GuiScreen {
         BACKEND_INSTANCES.MARKET_MANAGER.requestMarkets();
     }
 
-    protected ClientMarketManager getMarketManager()
+    protected IClientMarketManager getMarketManager()
     {
         return BACKEND_INSTANCES.MARKET_MANAGER;
+    }
+    protected IClientBankManager getBankManager()
+    {
+        return BACKEND_INSTANCES.BANK_SYSTEM_API.getClientBankManager();
     }
     protected List<ItemID> getAvailableMarkets()
     {
         return BACKEND_INSTANCES.MARKET_MANAGER.getAvailableMarkets();
+    }
+    protected IClientPluginManager getPluginManager()
+    {
+        return BACKEND_INSTANCES.PLUGIN_MANAGER;
     }
 
     protected @Nullable ClientMarket getMarket(ItemID itemID)
     {
         return BACKEND_INSTANCES.MARKET_MANAGER.getMarket(itemID);
     }
+
+    protected LocalPlayer getThisPlayer()
+    {
+        return Minecraft.getInstance().player;
+    }
+    protected UUID getThisPlayerUUID()
+    {
+        return getThisPlayer().getUUID();
+    }
+    protected String getThisPlayerName()
+    {
+        return getThisPlayer().getDisplayName().getString();
+    }
+
 
 
 

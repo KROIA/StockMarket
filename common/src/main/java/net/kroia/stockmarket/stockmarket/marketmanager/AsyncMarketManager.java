@@ -1,8 +1,7 @@
 package net.kroia.stockmarket.stockmarket.marketmanager;
 
-import net.kroia.banksystem.banking.bank.AsyncBank;
+import net.kroia.banksystem.banking.bankmanager.AsyncBankManager;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.banksystem.util.MultiServerUtils;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncForwardingRequest;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionDataCodecs;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionInputData;
@@ -11,10 +10,11 @@ import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.modutilities.networking.client_server.arrs.AsynchronousRequestResponseSystem;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IAsyncMarket;
-import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.api.marketmanager.IAsyncMarketManager;
 import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
 import net.kroia.stockmarket.stockmarket.market.AsyncMarket;
+import net.kroia.stockmarket.util.MultiServerUtils;
+import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
@@ -64,6 +64,9 @@ public class AsyncMarketManager implements IAsyncMarketManager {
         CreateMarket,
         DeleteMarket,
         GetMarket,
+        OnPlayerJoin,
+        SetStockmarketAdminMode,
+        IsStockmarketAdmin,
     }
 
 
@@ -85,6 +88,9 @@ public class AsyncMarketManager implements IAsyncMarketManager {
         put(FunctionType.CreateMarket,                              codecPacket(ItemID.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
         put(FunctionType.DeleteMarket,                              codecPacket(ItemID.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
         put(FunctionType.GetMarket,                                 codecPacket(ItemID.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
+        put(FunctionType.OnPlayerJoin,                              codecPacket(ParamGroup_UUID_String.STREAM_CODEC, null));
+        put(FunctionType.SetStockmarketAdminMode,                   codecPacket(ParamGroup_UUID_Bool.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
+        put(FunctionType.IsStockmarketAdmin,                        codecPacket(UUIDUtil.STREAM_CODEC.cast(), ByteBufCodecs.BOOL.cast()));
 
     }};
     /**
@@ -164,6 +170,14 @@ public class AsyncMarketManager implements IAsyncMarketManager {
                 playerName = tryGetPlayerName(playerSender);
                 playerInfo = " from player: " + playerName;
             }
+            if(!isAllowedToCallByUntrustedSlaveServer(input))
+            {
+                if(!BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().isSlaveServerTrusted(slaveID))
+                {
+                    warn("The slave server: '"+slaveID+"' try's to call the function: '"+input.function.toString()+"' which is not allowed for an untrusted slave server!");
+                    return CompletableFuture.completedFuture(OutputData.of(input.function));
+                }
+            }
             if(AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
                 info("Received request to handle on master server for function: "+input.function.toString() + playerInfo);
             if(playerSender != null)
@@ -193,6 +207,17 @@ public class AsyncMarketManager implements IAsyncMarketManager {
                 case FunctionType.CreateMarket ->              OutputData.of(input.function, manager.createMarket(input.decodeParams()) != null);
                 case FunctionType.DeleteMarket ->              OutputData.of(input.function, manager.deleteMarket(input.decodeParams()));
                 case FunctionType.GetMarket ->                 OutputData.of(input.function, manager.getMarket(input.decodeParams()) != null);
+                case FunctionType.OnPlayerJoin ->              {
+                    ParamGroup_UUID_String data = (ParamGroup_UUID_String)input.decodeParams();
+                    manager.onPlayerJoin(data.uuid, data.text);
+                    yield OutputData.of(input.function);
+                }
+                case FunctionType.SetStockmarketAdminMode ->              {
+                    ParamGroup_UUID_Bool data = (ParamGroup_UUID_Bool)input.decodeParams();
+                    manager.setStockmarketAdminMode(data.uuid, data.bool);
+                    yield OutputData.of(input.function);
+                }
+                case FunctionType.IsStockmarketAdmin ->        OutputData.of(input.function, manager.isStockmarketAdmin(input.decodeParams()));
             });
         }
         @Override
@@ -255,6 +280,22 @@ public class AsyncMarketManager implements IAsyncMarketManager {
                 ParamGroup_UUID_int::new
         );
     }*/
+   private record ParamGroup_UUID_String(UUID uuid, String text)
+   {
+       public static final StreamCodec<RegistryFriendlyByteBuf, ParamGroup_UUID_String> STREAM_CODEC = StreamCodec.composite(
+               UUIDUtil.STREAM_CODEC, p -> p.uuid,
+               ByteBufCodecs.STRING_UTF8, p -> p.text,
+               ParamGroup_UUID_String::new
+       );
+   }
+    private record ParamGroup_UUID_Bool(UUID uuid, boolean bool)
+    {
+        public static final StreamCodec<RegistryFriendlyByteBuf, ParamGroup_UUID_Bool> STREAM_CODEC = StreamCodec.composite(
+                UUIDUtil.STREAM_CODEC, p -> p.uuid,
+                ByteBufCodecs.BOOL, p -> p.bool,
+                ParamGroup_UUID_Bool::new
+        );
+    }
 
 
     // ================================================================================================================
@@ -267,7 +308,7 @@ public class AsyncMarketManager implements IAsyncMarketManager {
 
     @Override
     public CompletableFuture<ItemID> getTradingCurrencyIDAsync() {
-        if(!MultiServerUtils.checkConnectionToMaster())
+        if(!MultiServerUtils.canInteractWithStockMarket())
             return CompletableFuture.completedFuture(ItemID.INVALID_ID);
         CompletableFuture<ItemID> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetTradingCurrencyID);
@@ -278,7 +319,7 @@ public class AsyncMarketManager implements IAsyncMarketManager {
 
     @Override
     public CompletableFuture<List<ItemID>> getAvailableMarketIDsAsync() {
-        if(!MultiServerUtils.checkConnectionToMaster())
+        if(!MultiServerUtils.canInteractWithStockMarket())
             return CompletableFuture.completedFuture(List.of());
         CompletableFuture<List<ItemID>> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetAvailableMarketIDs);
@@ -289,7 +330,7 @@ public class AsyncMarketManager implements IAsyncMarketManager {
 
     @Override
     public CompletableFuture<Boolean> marketExistsAsync(@NotNull ItemID marketID) {
-        if(!MultiServerUtils.checkConnectionToMaster())
+        if(!MultiServerUtils.canInteractWithStockMarket())
             return CompletableFuture.completedFuture(false);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.MarketExists, marketID);
@@ -300,7 +341,7 @@ public class AsyncMarketManager implements IAsyncMarketManager {
 
     @Override
     public CompletableFuture<@Nullable IAsyncMarket> createMarketAsync(@NotNull ItemID marketID) {
-        if(!MultiServerUtils.checkConnectionToMaster())
+        if(!MultiServerUtils.canInteractWithStockMarket())
             return CompletableFuture.completedFuture(null);
         CompletableFuture<@Nullable IAsyncMarket> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.MarketExists, marketID);
@@ -316,7 +357,7 @@ public class AsyncMarketManager implements IAsyncMarketManager {
 
     @Override
     public CompletableFuture<Boolean> deleteMarketAsync(@NotNull ItemID marketID) {
-        if(!MultiServerUtils.checkConnectionToMaster())
+        if(!MultiServerUtils.canInteractWithStockMarket())
             return CompletableFuture.completedFuture(false);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.MarketExists, marketID);
@@ -327,7 +368,7 @@ public class AsyncMarketManager implements IAsyncMarketManager {
 
     @Override
     public CompletableFuture<@Nullable IAsyncMarket> getMarketAsync(@NotNull ItemID marketID) {
-        if(!MultiServerUtils.checkConnectionToMaster())
+        if(!MultiServerUtils.canInteractWithStockMarket())
             return CompletableFuture.completedFuture(null);
         CompletableFuture<@Nullable IAsyncMarket> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetMarket, marketID);
@@ -340,6 +381,40 @@ public class AsyncMarketManager implements IAsyncMarketManager {
         });
         return future;
     }
+
+    @Override
+    public CompletableFuture<Boolean> setStockmarketAdminModeAsync(UUID playerUUID, boolean isAdmin)
+    {
+        if(!MultiServerUtils.canInteractWithStockMarket())
+            return CompletableFuture.completedFuture(false);
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.SetStockmarketAdminMode, new ParamGroup_UUID_Bool(playerUUID, isAdmin));
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
+    }
+    @Override
+    public CompletableFuture<Boolean> isStockmarketAdminAsync(UUID playerUUID)
+    {
+        if(!MultiServerUtils.canInteractWithStockMarket())
+            return CompletableFuture.completedFuture(false);
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.IsStockmarketAdmin, playerUUID);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
+    }
+
+
+    @Override
+    public void onPlayerJoinAsync(UUID playerUUID, String playerName){
+        if(!MultiServerUtils.canInteractWithStockMarket())
+            return;
+        InputData inputData = InputData.of(FunctionType.OnPlayerJoin, new ParamGroup_UUID_String(playerUUID, playerName));
+        sendRequest(inputData);
+    }
+
+
 
 
 

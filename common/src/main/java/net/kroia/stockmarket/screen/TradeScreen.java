@@ -1,11 +1,16 @@
 package net.kroia.stockmarket.screen;
 
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.ClientPlayerUtilities;
 import net.kroia.modutilities.gui.Gui;
+import net.kroia.modutilities.gui.elements.Frame;
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.entity.custom.StockMarketBlockEntity;
+import net.kroia.stockmarket.screen.uiElements.trading_panel.TradingPanel;
+import net.kroia.stockmarket.screen.widgets.OrderbookVolumeHistogram;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.screen.widgets.CandlestickChart;
+import net.kroia.stockmarket.stockmarket.market.core.Orderbook;
+import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.kroia.stockmarket.util.StockMarketGuiScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
@@ -21,21 +26,34 @@ public class TradeScreen extends StockMarketGuiScreen {
         private static final Component TITLE = Component.translatable(PREFIX +"title");
     }
 
-    private final StockMarketBlockEntity blockEntity;
 
 
     private final CandlestickChart  candlestickChart;
+    private final OrderbookVolumeHistogram  orderbookVolumeHistogram;
+    private final Frame placeholder1;
+    private final Frame placeholder2;
+    private final TradingPanel tradingPanel;
     private @Nullable ItemID currentMarketID = null;
+    private int selectedBankAccountNr = -1;
 
-    public TradeScreen(StockMarketBlockEntity blockEntity)
+    public TradeScreen()
     {
         super(Texts.TITLE);
-        this.blockEntity = blockEntity;
 
-        candlestickChart =  new CandlestickChart();
-        candlestickChart.setData(null);
+        candlestickChart = new CandlestickChart();
+        candlestickChart.setMarket(null);
+        orderbookVolumeHistogram = new OrderbookVolumeHistogram(candlestickChart);
+
+        tradingPanel = new TradingPanel(this::onBuyMarket, this::onSellMarket, this::onBuyLimit,  this::onSellLimit);
+
+        placeholder1 = new Frame();
+        placeholder2 = new Frame();
 
         addElement(candlestickChart);
+        addElement(orderbookVolumeHistogram);
+        addElement(placeholder1);
+        addElement(placeholder2);
+        addElement(tradingPanel);
 
         List<ItemID> markets = getAvailableMarkets();
         if(markets.isEmpty())
@@ -47,14 +65,28 @@ public class TradeScreen extends StockMarketGuiScreen {
         ClientMarket market = getMarket(currentMarketID);
         if(market != null) {
             market.subscribeToMarketPriceUpdate();
-            candlestickChart.setData(market.getPriceHistoryData());
+            candlestickChart.setMarket(market);
+            tradingPanel.setItemName(ClientPlayerUtilities.getItemDisplayText(currentMarketID.getStack()));
+            tradingPanel.setLimitPrice(market.getCurrentMarketRealPrice());
         }
+        getMarketManager().getTradingCurrencyIDAsync().thenAccept(currencyID -> {
+            if(currentMarketID == null)
+                tradingPanel.setCurrencyName("?");
+            else
+                tradingPanel.setCurrencyName(ClientPlayerUtilities.getItemDisplayText(currencyID.getStack()));
+        });
+
+        getBankManager().getPersonalBankAccountDataAsync(getThisPlayerUUID()).thenAccept(bankAccountData -> {
+            if(bankAccountData != null) {
+                selectedBankAccountNr = bankAccountData.accountNumber;
+            }
+        });
     }
 
 
-    public static void openScreen(StockMarketBlockEntity blockEntity)
+    public static void openScreen()
     {
-        TradeScreen screen = new TradeScreen(blockEntity);
+        TradeScreen screen = new TradeScreen();
         Minecraft.getInstance().setScreen(screen);
     }
     @Override
@@ -68,7 +100,7 @@ public class TradeScreen extends StockMarketGuiScreen {
                 market.unsubscribeFromMarketPriceUpdate();
             }
 
-            candlestickChart.setData(null);
+            candlestickChart.setMarket(null);
             currentMarketID = null;
         }
         super.onClose();
@@ -77,9 +109,70 @@ public class TradeScreen extends StockMarketGuiScreen {
 
     @Override
     protected void updateLayout(Gui gui) {
-        int width = getWidth();
-        int height = getHeight();
+        int padding = StockMarketGuiElement.padding;
+        int spacing =  StockMarketGuiElement.spacing;
+        int width = getWidth() - padding*2;
+        int height = getHeight() - padding*2;
 
-        candlestickChart.setBounds(0, 0, width, height);
+        int orderbookVolumeWidth = width/10;
+        candlestickChart.setBounds(padding, padding, (width*3)/4 - orderbookVolumeWidth, (height*2)/3);
+        orderbookVolumeHistogram.setBounds(candlestickChart.getRight(), candlestickChart.getTop(), orderbookVolumeWidth, candlestickChart.getHeight());
+        placeholder1.setBounds(orderbookVolumeHistogram.getRight()+spacing, padding, width - (orderbookVolumeHistogram.getRight()), (height-spacing)/2);
+        tradingPanel.setBounds(orderbookVolumeHistogram.getRight()+spacing, placeholder1.getBottom()+spacing, placeholder1.getWidth(), height - (placeholder1.getBottom()));
+        placeholder2.setBounds(padding, candlestickChart.getBottom()+spacing, tradingPanel.getLeft()-spacing-padding, height- (candlestickChart.getBottom()));
     }
+
+    private @Nullable ClientMarket getValidMarketForOrder()
+    {
+        if(currentMarketID == null)
+        {
+            warn("No market selected");
+            return null;
+        }
+        if(selectedBankAccountNr == -1)
+        {
+            warn("No bank account selected yet");
+            return null;
+        }
+        ClientMarket market = getMarket(currentMarketID);
+        if(market == null)
+        {
+            warn("Market is no longer available: " + currentMarketID);
+            return null;
+        }
+        return market;
+    }
+    private void onBuyMarket(double quantity)
+    {
+        ClientMarket market = getValidMarketForOrder();
+        if(market == null) return;
+        market.createMarketOrder(selectedBankAccountNr, quantity).thenAccept(result->{
+            info("Order creation response: "+result.status);
+        });
+    }
+    private void onSellMarket(double quantity)
+    {
+        ClientMarket market = getValidMarketForOrder();
+        if(market == null) return;
+        market.createMarketOrder(selectedBankAccountNr, -quantity).thenAccept(result->{
+            info("Order creation response: "+result.status);
+        });
+    }
+    private void onBuyLimit(double quantity, double price)
+    {
+        ClientMarket market = getValidMarketForOrder();
+        if(market == null) return;
+        market.createLimitOrder(selectedBankAccountNr, quantity, price).thenAccept(result->{
+            info("Order creation response: "+result.status);
+        });
+    }
+    private void onSellLimit(double quantity, double price)
+    {
+        ClientMarket market = getValidMarketForOrder();
+        if(market == null) return;
+        market.createLimitOrder(selectedBankAccountNr, -quantity, price).thenAccept(result->{
+            info("Order creation response: "+result.status);
+        });
+    }
+
 }

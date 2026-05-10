@@ -8,33 +8,46 @@ import net.kroia.banksystem.api.BankSystemAPI;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.networking.multi_server.MultiServerManager;
 import net.kroia.stockmarket.api.StockMarketAPI;
-import net.kroia.stockmarket.block.StockMarketBlocks;
-import net.kroia.stockmarket.command.StockMarketCommands;
-import net.kroia.stockmarket.compat.NEZNAMY_TAB_Placeholders;
+import net.kroia.stockmarket.api.marketmanager.IClientMarketManager;
+import net.kroia.stockmarket.api.pluginmanager.IClientPluginManager;
+import net.kroia.stockmarket.minecraft.block.StockMarketBlocks;
+import net.kroia.stockmarket.minecraft.command.StockMarketCommands;
+import net.kroia.stockmarket.minecraft.compat.NEZNAMY_TAB_Placeholders;
+import net.kroia.stockmarket.data.DataManager;
+import net.kroia.stockmarket.data.DatabaseManager;
 import net.kroia.stockmarket.data.table.MarketPriceManager;
-import net.kroia.stockmarket.entity.StockMarketEntities;
+import net.kroia.stockmarket.data.table.OrderRecordManager;
+import net.kroia.stockmarket.minecraft.entity.StockMarketEntities;
 import net.kroia.stockmarket.event.EventRegistration;
-import net.kroia.stockmarket.item.StockMarketCreativeModeTab;
-import net.kroia.stockmarket.item.StockMarketItems;
+import net.kroia.stockmarket.minecraft.item.StockMarketCreativeModeTab;
+import net.kroia.stockmarket.minecraft.item.StockMarketItems;
+import net.kroia.stockmarket.pluginsystem.Plugins;
+import net.kroia.stockmarket.pluginsystem.pluginmanager.ClientPluginManager;
+import net.kroia.stockmarket.pluginsystem.pluginmanager.PluginManager;
 import net.kroia.stockmarket.stockmarket.marketmanager.ClientMarketManager;
 import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
-import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
-import net.kroia.stockmarket.stockmarket.market.core.Testing;
-import net.kroia.stockmarket.menu.StockMarketMenus;
+
+import net.kroia.stockmarket.testing.StockMarketTestRegistration;
+import net.kroia.stockmarket.testing.tests.ActiveOrdersRequestTestSuite;
+import net.kroia.stockmarket.testing.tests.CreateOrderRequestTestSuite;
+import net.kroia.stockmarket.testing.tests.DatabaseTestSuite;
+import net.kroia.stockmarket.testing.tests.MarketIntegrationTestSuite;
+import net.kroia.stockmarket.testing.tests.MarketPriceManagerTestSuite;
+import net.kroia.stockmarket.testing.tests.MatchingEngineTestSuite;
+import net.kroia.stockmarket.testing.tests.OrderRecordManagerTestSuite;
+import net.kroia.stockmarket.testing.tests.OrderbookTestSuite;
+import net.kroia.stockmarket.testing.tests.PluginTestSuite;
+import net.kroia.stockmarket.testing.tests.ServerMarketTestSuite;
+import net.kroia.modutilities.testing.TestRegistry;
+import net.kroia.stockmarket.minecraft.menu.StockMarketMenus;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.kroia.stockmarket.networking.packet.PlayerJoinSyncPacket;
-import net.kroia.stockmarket.util.ClientSettings;
-import net.kroia.stockmarket.util.StockMarketGuiScreen;
-import net.kroia.stockmarket.util.StockMarketLogger;
-import net.kroia.stockmarket.util.StockMarketTextMessages;
+import net.kroia.stockmarket.util.*;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.level.storage.LevelResource;
 import org.jetbrains.annotations.Nullable;
-
-import java.nio.file.Path;
 
 public class StockMarketModBackend implements StockMarketAPI {
 
@@ -50,9 +63,13 @@ public class StockMarketModBackend implements StockMarketAPI {
     {
         public BankSystemAPI BANK_SYSTEM_API;
         public StockMarketModSettings SERVER_SETTINGS;
+        public DataManager DATA_MANAGER;
+        public DatabaseManager DATABASE_MANAGER;
         public MarketManager MARKET_MANAGER;
+        public PluginManager PLUGIN_MANAGER;
 
         public MarketPriceManager MARKET_PRICE_HISTORY_MANAGER;
+        public OrderRecordManager ORDER_RECORD_MANAGER;
 
         public StockMarketNetworking NETWORKING;
         public StockMarketLogger LOGGER;
@@ -61,7 +78,8 @@ public class StockMarketModBackend implements StockMarketAPI {
     {
         public BankSystemAPI BANK_SYSTEM_API;
 
-        public ClientMarketManager MARKET_MANAGER;
+        public IClientMarketManager MARKET_MANAGER;
+        public IClientPluginManager PLUGIN_MANAGER;
         public StockMarketNetworking NETWORKING;
         public StockMarketLogger LOGGER;
         public ClientSettings SETTINGS;
@@ -105,33 +123,27 @@ public class StockMarketModBackend implements StockMarketAPI {
         ClientPlayerEvent.CLIENT_PLAYER_JOIN.register(StockMarketModBackend::onPlayerJoinClientSide);
         ClientPlayerEvent.CLIENT_PLAYER_RESPAWN.register(StockMarketModBackend::onPlayerRespawnClientSide);
         ClientTickEvent.CLIENT_LEVEL_POST.register(StockMarketModBackend::onClientTickEvent);
+
+        Plugins.clientSetup();
     }
 
     // Called from the server side
     public static void onServerSetup()
     {
-        SERVER_INSTANCES =  new ServerInstances();
-        SERVER_INSTANCES.BANK_SYSTEM_API = BankSystemMod.getAPI();
-        SERVER_INSTANCES.LOGGER = COMMON_INSTANCES.LOGGER;
-        SERVER_INSTANCES.NETWORKING = COMMON_INSTANCES.NETWORKING;
-        SERVER_INSTANCES.SERVER_SETTINGS = new StockMarketModSettings();
-        SERVER_INSTANCES.SERVER_SETTINGS.setLogger(SERVER_INSTANCES.LOGGER::error, SERVER_INSTANCES.LOGGER::error, SERVER_INSTANCES.LOGGER::debug);
 
-        Testing.setBackend(SERVER_INSTANCES);
-        StockMarketModSettings.setBackend(SERVER_INSTANCES);
-        MarketManager.setBackend(SERVER_INSTANCES);
-        StockMarketNetworking.setBackend(SERVER_INSTANCES);
-        NEZNAMY_TAB_Placeholders.setBackend(SERVER_INSTANCES);
-        StockMarketCommands.setBackend(SERVER_INSTANCES);
 
-        SERVER_INSTANCES.BANK_SYSTEM_API.getEvents().getBanksystemSetupCompleteSignal().addListener(StockMarketModBackend::onBankSystemSetupComplete, 1);
-        SERVER_INSTANCES.BANK_SYSTEM_API.getEvents().getBankDataLoadedFromFileSignal().addListener(StockMarketModBackend::onPostBankSystemDataLoaded, 1);
+        BankSystemMod.getAPI().getEvents().getBanksystemSetupCompleteSignal().addListener(StockMarketModBackend::onBankSystemSetupComplete);
+        BankSystemMod.getAPI().getEvents().getBankDataLoadedFromFileSignal().addListener(StockMarketModBackend::onPostBankSystemDataLoaded);
+
+        Plugins.serverSetup();
     }
 
 
     // Called from the server side
     public static void onServerStart(MinecraftServer server)
     {
+
+
         //INSTANCES.BANK_SYSTEM_API.getEvents().getBankDataLoadedFromFileSignal().addListener();
 
         /*if(BankSystemDataHandler.isBankDataLoaded())
@@ -168,38 +180,54 @@ public class StockMarketModBackend implements StockMarketAPI {
     }
     private static void onBankSystemSetupComplete()
     {
+        SERVER_INSTANCES =  new ServerInstances();
+        SERVER_INSTANCES.BANK_SYSTEM_API = BankSystemMod.getAPI();
+        SERVER_INSTANCES.LOGGER = COMMON_INSTANCES.LOGGER;
+        SERVER_INSTANCES.NETWORKING = COMMON_INSTANCES.NETWORKING;
+        SERVER_INSTANCES.SERVER_SETTINGS = new StockMarketModSettings();
+        SERVER_INSTANCES.SERVER_SETTINGS.setLogger(SERVER_INSTANCES.LOGGER::error, SERVER_INSTANCES.LOGGER::error, SERVER_INSTANCES.LOGGER::debug);
+
+        MarketManager.setBackend(SERVER_INSTANCES);
+        PluginManager.setBackend(SERVER_INSTANCES);
+        StockMarketNetworking.setBackend(SERVER_INSTANCES);
+        NEZNAMY_TAB_Placeholders.setBackend(SERVER_INSTANCES);
+        StockMarketCommands.setBackend(SERVER_INSTANCES);
+        DataManager.setBackend(SERVER_INSTANCES);
+
+        if (TestRegistry.ENABLE_TESTS) {
+            MarketIntegrationTestSuite.setBackend(SERVER_INSTANCES);
+            StockMarketTestRegistration.register();
+        }
+
         boolean isMaster = BankSystemMod.getAPI().getServerBankManager().isMaster();
-        if(isMaster)
-        {
-            SERVER_INSTANCES.MARKET_PRICE_HISTORY_MANAGER = new MarketPriceManager();
+        if(isMaster) {
+            SERVER_INSTANCES.DATABASE_MANAGER = new DatabaseManager();
+            SERVER_INSTANCES.DATABASE_MANAGER.connectToDatabase(UtilitiesPlatform.getServer());
+            SERVER_INSTANCES.MARKET_PRICE_HISTORY_MANAGER = new MarketPriceManager(SERVER_INSTANCES.DATABASE_MANAGER);
+            SERVER_INSTANCES.ORDER_RECORD_MANAGER = new OrderRecordManager(SERVER_INSTANCES.DATABASE_MANAGER);
             SERVER_INSTANCES.MARKET_MANAGER = MarketManager.createMaster();
-
-            Testing testing = new Testing();
-            if(!testing.setup())
-            {
-                SERVER_INSTANCES.LOGGER.info("Can't setup testing");
-                return;
-            }
-            if(testing.runTests())
-            {
-                SERVER_INSTANCES.LOGGER.info("All tests executed successfully");
-            }
-            else
-            {
-                SERVER_INSTANCES.LOGGER.info("Some tests failed");
-                testing.runTests();
-            }
-
-
-
+            SERVER_INSTANCES.PLUGIN_MANAGER = PluginManager.createMaster();
+            SERVER_INSTANCES.DATA_MANAGER = new DataManager();
 
             loadDataFromFiles(UtilitiesPlatform.getServer());
             TickEvent.SERVER_POST.register(StockMarketModBackend::onServerTick);
 
+            if (TestRegistry.ENABLE_TESTS) {
+                MatchingEngineTestSuite.setBackend(SERVER_INSTANCES);
+                OrderbookTestSuite.setBackend(SERVER_INSTANCES);
+                CreateOrderRequestTestSuite.setBackend(SERVER_INSTANCES);
+                ActiveOrdersRequestTestSuite.setBackend(SERVER_INSTANCES);
+                DatabaseTestSuite.setBackend(SERVER_INSTANCES);
+                MarketPriceManagerTestSuite.setBackend(SERVER_INSTANCES);
+                OrderRecordManagerTestSuite.setBackend(SERVER_INSTANCES);
+                ServerMarketTestSuite.setBackend(SERVER_INSTANCES);
+                PluginTestSuite.setBackend(SERVER_INSTANCES);
+            }
         }
         else
         {
             SERVER_INSTANCES.MARKET_MANAGER = MarketManager.createSlave();
+            SERVER_INSTANCES.PLUGIN_MANAGER = PluginManager.createSlave();
         }
     }
 
@@ -210,17 +238,24 @@ public class StockMarketModBackend implements StockMarketAPI {
         TickEvent.SERVER_POST.unregister(StockMarketModBackend::onServerTick);
         saveDataToFiles(server);
 
+        if(SERVER_INSTANCES != null && SERVER_INSTANCES.DATABASE_MANAGER != null) {
+            SERVER_INSTANCES.DATABASE_MANAGER.close();
+            SERVER_INSTANCES.DATABASE_MANAGER = null;
+        }
+
         if(MultiServerManager.instanceExists())
         {
             MultiServerManager.stop();
             MultiServerManager.cleanup();
         }
+        SERVER_INSTANCES = null;
     }
 
 
     // Called from the server side
     public static void onPlayerJoin(ServerPlayer player)
     {
+        SERVER_INSTANCES.MARKET_MANAGER.getAsync().onPlayerJoinAsync(player.getUUID(), player.getName().getString());
         PlayerJoinSyncPacket.send(player);
     }
 
@@ -238,16 +273,18 @@ public class StockMarketModBackend implements StockMarketAPI {
             return;
         CLIENT_INSTANCES = new ClientInstances();
 
-        StockMarketNetworking.setBackend(CLIENT_INSTANCES);
         StockMarketGuiScreen.setBackend(CLIENT_INSTANCES);
+        StockMarketNetworking.setBackend(CLIENT_INSTANCES);
         ClientMarketManager.setBackend(CLIENT_INSTANCES);
+        ClientPluginManager.setBackend(CLIENT_INSTANCES);
         StockMarketTextMessages.setBackend(CLIENT_INSTANCES);
 
 
         CLIENT_INSTANCES.LOGGER = COMMON_INSTANCES.LOGGER;
         CLIENT_INSTANCES.NETWORKING = COMMON_INSTANCES.NETWORKING;
         CLIENT_INSTANCES.BANK_SYSTEM_API = BankSystemMod.getAPI();
-        CLIENT_INSTANCES.MARKET_MANAGER = new ClientMarketManager();
+        CLIENT_INSTANCES.MARKET_MANAGER = MarketManager.createClient();
+        CLIENT_INSTANCES.PLUGIN_MANAGER = new ClientPluginManager();
         CLIENT_INSTANCES.SETTINGS = new ClientSettings();
 
 
@@ -265,6 +302,7 @@ public class StockMarketModBackend implements StockMarketAPI {
         StockMarketNetworking.setBackend((ClientInstances)null);
         StockMarketGuiScreen.setBackend(null);
         ClientMarketManager.setBackend(null);
+        ClientPluginManager.setBackend(null);
         StockMarketTextMessages.setBackend(null);
         CLIENT_INSTANCES = null;
 
@@ -280,28 +318,26 @@ public class StockMarketModBackend implements StockMarketAPI {
 
     private static void onClientTickEvent(ClientLevel clientLevel)
     {
-        CLIENT_INSTANCES.MARKET_MANAGER.update();
+        if (CLIENT_INSTANCES != null)
+            CLIENT_INSTANCES.MARKET_MANAGER.update();
     }
 
-    // Called from the server side
+    // Called from the master side
     private static void onServerTick(MinecraftServer server)
     {
+        SERVER_INSTANCES.PLUGIN_MANAGER.getSync().update();
         SERVER_INSTANCES.MARKET_MANAGER.getSync().update();
     }
 
     public static void loadDataFromFiles(MinecraftServer server)
     {
-        // Load data from the root save folder
-        Path worldPath = server.getWorldPath(LevelResource.ROOT);
-        Path path = worldPath.resolve(Path.of("data", "stockmarket", "settings.json"));
-        SERVER_INSTANCES.SERVER_SETTINGS.loadSettings(path.toAbsolutePath().toString());
-
+        if(SERVER_INSTANCES != null && SERVER_INSTANCES.DATA_MANAGER != null)
+            SERVER_INSTANCES.DATA_MANAGER.load(server);
     }
     public static void saveDataToFiles(MinecraftServer server)
     {
-        Path worldPath = server.getWorldPath(LevelResource.ROOT);
-        Path path = worldPath.resolve(Path.of("data", "stockmarket", "settings.json"));
-        SERVER_INSTANCES.SERVER_SETTINGS.saveSettings(path.toAbsolutePath().toString());
+        if(SERVER_INSTANCES != null && SERVER_INSTANCES.DATA_MANAGER != null)
+            SERVER_INSTANCES.DATA_MANAGER.save(server);
     }
 
 

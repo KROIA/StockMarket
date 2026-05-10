@@ -1,32 +1,32 @@
 package net.kroia.stockmarket.networking.request;
 
+import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
+import net.kroia.banksystem.api.bankmanager.IBankManager;
+import net.kroia.banksystem.banking.clientdata.BankUserData;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
-import net.kroia.stockmarket.stockmarket.market.ServerMarket;
-import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.kroia.stockmarket.util.MultiServerUtils;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 /**
  * @brief
  * Requests for pending orders which are waiting in the order book.
- * The current implementation does not check if the requestor is permitted to read the order data.
- * todo: Implement a permission check to only send orders which the requestor is allowed to see.
- *       - Only orders that belong to bank accounts the requestor has access to
+ * Non-admin players only receive orders that belong to bank accounts they are a member of.
  *
  * todo: Add InterMarketOrders to this packet
  */
@@ -72,6 +72,10 @@ public class ActiveOrdersRequest extends StockMarketGenericRequest<ActiveOrdersR
         return ActiveOrdersRequest.class.getName();
     }
 
+    @Override
+    protected OutputData getDefaultResponse() {
+        return new OutputData(List.of());
+    }
 
     @Override
     public CompletableFuture<OutputData> handleOnMasterServer(InputData input, String slaveID, @Nullable UUID playerSender) {
@@ -79,79 +83,11 @@ public class ActiveOrdersRequest extends StockMarketGenericRequest<ActiveOrdersR
             return CompletableFuture.completedFuture(new OutputData(List.of()));
         CompletableFuture<OutputData>  future = new CompletableFuture<>();
         List<Order> orderData = new ArrayList<>();
-        /*boolean hasPermission = playerIsAdmin(sender);
-        IServerBankManager bankManager = getServerBankManager();
-        if(!hasPermission)
-        {
-            if(input.executorPlayer != null)
-            {
-                if(input.bankAccountNr > 0)
-                {
-                    IBankAccount bankAccount = bankManager.getBankAccount(input.bankAccountNr);
-                    if(bankAccount == null)
-                    {
-                        // Bank account does not exist
-                        return new OutputData(orders);
-                    }
-                    if(!bankAccount.hasUser(sender.getUUID()))
-                    {
-                        // The requestor is not a member of the bank account and therefore is not permitted
-                        // to request any order information from that account
-                        return new OutputData(orders);
-                    }
 
-                    return getFiltered(input, sender);
-                }
-                else
-                {
-                    List<IBankAccount> bankAccounts = bankManager.getBankAccounts(input.executorPlayer);
-                    for(IBankAccount bankAccount : bankAccounts)
-                    {
-                        if(bankAccount.hasUser(sender.getUUID()))
-                        {
-                            return getFiltered(input, sender);
-                        }
-                    }
-                }
-            }
-            else
-            {
-                if(input.bankAccountNr > 0)
-                {
+        boolean isAdmin = playerIsAdmin(playerSender);
+        IBankManager bankManager = getServerBankManager();
+        Map<Integer, Boolean> bankAccountMembershipCache = new HashMap<>();
 
-                }
-                else
-                {
-
-                }
-            }
-        }
-
-        if(!hasPermission && input.executorPlayer != null)
-        {
-            hasPermission = sender.getUUID().equals(input.executorPlayer);
-        }
-
-        if(!hasPermission && input.bankAccountNr > 0)
-        {
-            // Check if the requestor is a member of the given bank account
-            IBankAccount bankAccount = bankManager.getBankAccount(input.bankAccountNr);
-            if(bankAccount == null)
-            {
-                // Bank account does not exist
-                return new OutputData(orders);
-            }
-
-            if(!bankAccount.hasUser(sender.getUUID()))
-            {
-                // The requestor is not a member of the bank account and therefore is not permitted
-                // to request any order information from that account
-                return new OutputData(orders);
-            }
-            hasPermission = true;
-        }
-
-        ServerMarketManager serverMarketManager = getServerMarketManager();*/
         IServerMarketManager serverMarketManager = getServerMarketManager();
         if(input.itemID != null)
         {
@@ -163,7 +99,7 @@ public class ActiveOrdersRequest extends StockMarketGenericRequest<ActiveOrdersR
             List<Order> orders = serverMarket.getLimitOrders();
             for(Order order : orders)
             {
-                if(passesFilter(input, playerSender, order))
+                if(passesFilter(input, order) && hasReadPermission(playerSender, isAdmin, bankManager, bankAccountMembershipCache, order))
                 {
                     orderData.add(order);
                 }
@@ -177,7 +113,7 @@ public class ActiveOrdersRequest extends StockMarketGenericRequest<ActiveOrdersR
                 List<Order> orders = serverMarketManager.getMarket(marketID).getLimitOrders();
                 for(Order order : orders)
                 {
-                    if(passesFilter(input, playerSender, order))
+                    if(passesFilter(input, order) && hasReadPermission(playerSender, isAdmin, bankManager, bankAccountMembershipCache, order))
                     {
                         orderData.add(order);
                     }
@@ -188,7 +124,7 @@ public class ActiveOrdersRequest extends StockMarketGenericRequest<ActiveOrdersR
         return future;
     }
 
-    private boolean passesFilter(InputData input, UUID sender, Order order)
+    private boolean passesFilter(InputData input, Order order)
     {
         int bankAccountNr = order.getBankAccountNr();
         if(input.bankAccountNr > 0 && bankAccountNr != input.bankAccountNr)
@@ -196,7 +132,29 @@ public class ActiveOrdersRequest extends StockMarketGenericRequest<ActiveOrdersR
         long timestamp = order.getTime();
         if(input.timeBegin > timestamp || timestamp > input.timeEnd)
             return false;
-        return input.executorPlayer == null || input.executorPlayer.equals(sender);
+        return input.executorPlayer == null || input.executorPlayer.equals(order.getExecutorPlayerUUID());
+    }
+
+    private boolean hasReadPermission(UUID sender, boolean isAdmin, IBankManager bankManager,
+                                      Map<Integer, Boolean> cache, Order order)
+    {
+        if(isAdmin)
+            return true;
+        if(bankManager == null)
+            return false;
+        int bankAccountNr = order.getBankAccountNr();
+        Boolean cached = cache.get(bankAccountNr);
+        if(cached != null)
+            return cached;
+        ISyncServerBankAccount bankAccount = bankManager.getSync().getBankAccount(bankAccountNr);
+        boolean isMember = false;
+        if(bankAccount != null)
+        {
+            BankUserData userData = bankAccount.getUserData(sender);
+            isMember = userData != null;
+        }
+        cache.put(bankAccountNr, isMember);
+        return isMember;
     }
 
     @Override

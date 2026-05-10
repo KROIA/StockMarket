@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.stockmarket.market;
 
+import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.persistence.ServerSaveable;
 import net.kroia.stockmarket.StockMarketModBackend;
@@ -12,6 +13,7 @@ import net.kroia.stockmarket.stockmarket.market.core.Orderbook;
 import net.minecraft.nbt.CompoundTag;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.PriorityQueue;
@@ -30,9 +32,15 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     private final ItemID itemID;
     private final Orderbook orderbook;
     private final MatchingEngine matchingEngine;
-    private boolean marketOpen;
     private long currentMarketPrice;
-    private @Nullable Function<Long, Float> defaultVolumeProviderFunction;
+
+    private MarketSettings settings;
+
+    /**
+     * Input: Real price
+     * Output Real volume at the price
+     */
+    private @Nullable Function<Double, Float> defaultVolumeProviderFunction;
 
     private long candleStartTime = System.currentTimeMillis();
     private long candleOpenPrice;
@@ -43,7 +51,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
      * Temporary order buffers for collecting order async and only process the order on update
      * These order are not saved to NBT
      */
-    private final PriorityQueue<Order> buyMarketOders_inputBuffer = new PriorityQueue<>((o1, o2) -> Long.compare(o2.getStartPrice(), o1.getStartPrice()));
+    private final PriorityQueue<Order> buyMarketOrders_inputBuffer = new PriorityQueue<>((o1, o2) -> Long.compare(o2.getStartPrice(), o1.getStartPrice()));
     private final PriorityQueue<Order> sellMarketOrders_inputBuffer = new PriorityQueue<>(Comparator.comparingLong(Order::getStartPrice));
     private final PriorityQueue<Order> buyLimitOrders_inputBuffer = new PriorityQueue<>((o1, o2) -> Long.compare(o2.getStartPrice(), o1.getStartPrice()));
     private final PriorityQueue<Order> sellLimitOrders_inputBuffer = new PriorityQueue<>(Comparator.comparingLong(Order::getStartPrice));
@@ -51,8 +59,9 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     private final PriorityQueue<InterMarketOrder> interMarket_MarketBuyOrders_inputBuffer = new PriorityQueue<>((o1, o2) -> Long.compare(o2.getTime(), o1.getTime()));
 
 
-    public ServerMarket(ItemID itemID, @Nullable Function<Long, Float> volumeProvider, long currentMarketPrice)
+    public ServerMarket(ItemID itemID, @Nullable Function<Double, Float> volumeProvider, long defaultPrice)
     {
+        this.settings = new MarketSettings(true, defaultPrice);
         this.defaultVolumeProviderFunction =  volumeProvider;
         this.itemID = itemID;
         this.orderbook = new Orderbook(itemID,
@@ -60,7 +69,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
                                         this::onOrderCanceled, this::onOrderCanceled,
                                         this::defaultVolumeProvider);
         this.matchingEngine = new MatchingEngine(this.itemID, this.orderbook,
-                buyMarketOders_inputBuffer,
+                buyMarketOrders_inputBuffer,
                 sellMarketOrders_inputBuffer,
                 buyLimitOrders_inputBuffer,
                 sellLimitOrders_inputBuffer,
@@ -70,18 +79,17 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
                 this::onOrderCanceled, this::onOrderCanceled,
                 this::onPriceChanged);
 
-        this.marketOpen = true;
-        this.currentMarketPrice = currentMarketPrice;
-        this.orderbook.setCurrentMarketPrice(currentMarketPrice);
+        this.currentMarketPrice = defaultPrice;
+        this.orderbook.setCurrentMarketPrice(defaultPrice);
         this.orderbook.resetVirtualVolumeDistribution();
-        candleOpenPrice = this.currentMarketPrice;
-        candleHighPrice = this.currentMarketPrice;
-        candleLowPrice = this.currentMarketPrice;
+        candleOpenPrice = currentMarketPrice;
+        candleHighPrice = currentMarketPrice;
+        candleLowPrice = currentMarketPrice;
     }
 
     public ServerMarket(ItemID itemID)
     {
-        this(itemID, null, 10);
+        this(itemID, null, 1000);
     }
 
     @Override
@@ -102,9 +110,14 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         orderbook.resetVirtualVolumeDistribution();
     }
     @Override
-    public void test_setDefaultVolumeProviderFunction(Function<Long, Float> defaultVolumeProviderFunction)
+    public void test_setDefaultVolumeProviderFunction(Function<Double, Float> defaultVolumeProviderFunction)
     {
         this.defaultVolumeProviderFunction = defaultVolumeProviderFunction;
+    }
+    @Override
+    public void test_resetVirtualOrderBookVolume()
+    {
+        orderbook.resetVirtualVolumeDistribution();
     }
 
 
@@ -121,6 +134,18 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         return itemID;
     }
 
+
+
+    @Override
+    public long getDefaultPrice()
+    {
+        return settings.defaultPrice;
+    }
+    @Override
+    public CompletableFuture<Long> getDefaultPriceAsync()
+    {
+        return CompletableFuture.completedFuture(settings.defaultPrice);
+    }
 
 
 
@@ -156,17 +181,59 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
 
 
     @Override
-    public long getVolume(long price)
+    public long getRawVolume(long price)
     {
-        return orderbook.getVolumeRounded(price);
+        return orderbook.getRawVolumeRounded(price);
     }
     @Override
-    public CompletableFuture<Long> getVolumeAsync(long price) {
-        return CompletableFuture.completedFuture(getVolume(price));
+    public CompletableFuture<Long> getRawVolumeAsync(long price) {
+        return CompletableFuture.completedFuture(getRawVolume(price));
     }
 
 
 
+    @Override
+    public long getRawVolume(long startPrice, long endPrice)
+    {
+        return orderbook.getRawVolume(startPrice, endPrice);
+    }
+
+    @Override
+    public CompletableFuture<Long> getRawVolumeAsync(long startPrice, long endPrice)
+    {
+        return CompletableFuture.completedFuture(getRawVolume(startPrice, endPrice));
+    }
+
+
+
+
+
+    @Override
+    public float getRealVolume(double price)
+    {
+        return orderbook.getRealVolumeRounded(price);
+    }
+    @Override
+    public CompletableFuture<Float> getRealVolumeAsync(double price)
+    {
+        return CompletableFuture.completedFuture(getRealVolume(price));
+    }
+
+
+
+
+
+
+    @Override
+    public float getRealVolume(double startPrice, double endPrice)
+    {
+        return orderbook.getRealVolume(startPrice, endPrice);
+    }
+    @Override
+    public CompletableFuture<Float> getRealVolumeAsync(double startPrice, double endPrice)
+    {
+        return CompletableFuture.completedFuture(getRealVolume(startPrice, endPrice));
+    }
 
 
 
@@ -175,14 +242,14 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     @Override
     public boolean putOrder(Order order)
     {
-        if(order.isFilled() || !marketOpen)
+        if(order.isFilled() || !settings.marketOpen)
             return false;
         if(!order.getItemID().equals(itemID))
             return false; // Wrong stockmarket for this order
         if(order.isBuyOrder())
         {
             if(order.isMarketOrder())
-                buyMarketOders_inputBuffer.add(order);
+                buyMarketOrders_inputBuffer.add(order);
             else
                 buyLimitOrders_inputBuffer.add(order);
         }
@@ -201,6 +268,31 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     }
 
 
+    public PriorityQueue<Order> getIncomingBuyMarketOrders()
+    {
+        return buyMarketOrders_inputBuffer;
+    }
+    public PriorityQueue<Order> getIncomingSellMarketOrders()
+    {
+        return sellMarketOrders_inputBuffer;
+    }
+    public PriorityQueue<Order> getIncomingBuyLimitOrders()
+    {
+        return buyLimitOrders_inputBuffer;
+    }
+    public PriorityQueue<Order> getIncomingSellLimitOrders()
+    {
+        return sellLimitOrders_inputBuffer;
+    }
+    public List<Order> getIncomingOrders()
+    {
+        List<Order> list = new ArrayList<>();
+        list.addAll(buyMarketOrders_inputBuffer);
+        list.addAll(sellMarketOrders_inputBuffer);
+        list.addAll(buyLimitOrders_inputBuffer);
+        list.addAll(sellLimitOrders_inputBuffer);
+        return list;
+    }
 
 
 
@@ -208,7 +300,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     @Override
     public boolean putOrder(InterMarketOrder order)
     {
-        if(order.isFilled() || !marketOpen)
+        if(order.isFilled() || !settings.marketOpen)
             return false;
         if(!order.getBuyItemID().equals(itemID))
             return false; // Wrong stockmarket for this order
@@ -244,11 +336,11 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     @Override
     public boolean isMarketOpen()
     {
-        return marketOpen;
+        return settings.marketOpen;
     }
     @Override
     public CompletableFuture<Boolean> isMarketOpenAsync() {
-        return CompletableFuture.completedFuture(marketOpen);
+        return CompletableFuture.completedFuture(settings.marketOpen);
     }
 
 
@@ -258,7 +350,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     @Override
     public boolean setMarketOpen(boolean marketOpen)
     {
-        this.marketOpen = marketOpen;
+        this.settings.marketOpen = marketOpen;
         return true;
     }
     @Override
@@ -301,6 +393,41 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     }
 
 
+    @Override
+    public MarketSettings getSettings()
+    {
+        return settings;
+    }
+    @Override
+    public CompletableFuture<MarketSettings> getSettingsAsync()
+    {
+        return CompletableFuture.completedFuture(settings);
+    }
+
+
+
+
+
+    @Override
+    public void setSettings(MarketSettings settings)
+    {
+        this.settings = settings;
+    }
+    @Override
+    public CompletableFuture<Boolean> setSettingsAsync(MarketSettings settings)
+    {
+        setSettings(settings);
+        return CompletableFuture.completedFuture(true);
+    }
+
+
+    @Override
+    public Orderbook getOrderbook()
+    {
+        return orderbook;
+    }
+
+
 
 
 
@@ -311,7 +438,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     @Override
     public void update()
     {
-        if(!marketOpen)
+        if(!settings.marketOpen)
             return;
 
         orderbook.setCurrentMarketPrice(currentMarketPrice);
@@ -366,11 +493,20 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     }
 
 
+    /**
+     * Input: Long: raw price level (backend price)
+     * @return Float: raw volume (backend volume)
+     */
     private float defaultVolumeProvider(long price)
     {
-        if(defaultVolumeProviderFunction != null)
-            return defaultVolumeProviderFunction.apply(price);
-        float volume = Math.min(10, Math.max(-10, currentMarketPrice - price));
+        IServerBankManager bankManager = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync();
+        double realPrice = bankManager.convertToRealAmount(price);
+        if(defaultVolumeProviderFunction != null) {
+            Float realVolume = defaultVolumeProviderFunction.apply(realPrice);
+            if (realVolume == null) return 0;
+            return bankManager.getItemFractionScaleFactor() * realVolume;
+        }
+        float volume = (float)Math.min(10, Math.max(-10, currentMarketPrice - realPrice));
         return volume;
     }
 
@@ -380,6 +516,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         CompoundTag orderbookTag = new CompoundTag();
         success &= orderbook.save(orderbookTag);
         tag.put("orderbook", orderbookTag);
+        tag.putLong("currentMarketPrice", currentMarketPrice);
 
 
 
@@ -401,7 +538,16 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
             error("Can't load Orderbook from NBT tag");
         }
 
+        if(tag.contains("currentMarketPrice"))
+        {
+            currentMarketPrice =  tag.getLong("currentMarketPrice");
+        }
 
+        // Initialize candle state from loaded price to prevent false spike on first candle
+        candleOpenPrice = currentMarketPrice;
+        candleHighPrice = currentMarketPrice;
+        candleLowPrice = currentMarketPrice;
+        candleStartTime = System.currentTimeMillis();
 
         return success;
     }

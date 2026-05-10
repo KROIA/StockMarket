@@ -1,17 +1,13 @@
 package net.kroia.stockmarket.event;
 
 import dev.architectury.event.events.common.CommandRegistrationEvent;
-import dev.architectury.event.events.common.LifecycleEvent;
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.command.StockMarketCommands;
-import net.kroia.stockmarket.data.DatabaseManager;
+import net.kroia.stockmarket.minecraft.command.StockMarketCommands;
 
 public class EventRegistration {
 
     public static void init(){
-        StockMarketMod.LOGGER.info("Registering database events");
-        LifecycleEvent.SERVER_STARTED.register(DatabaseManager::connectToDatabase);
-        LifecycleEvent.SERVER_STOPPING.register(DatabaseManager::shutdownDatabase);
+        StockMarketMod.LOGGER.info("Registering events");
         CommandRegistrationEvent.EVENT.register(StockMarketCommands::register);
     }
 

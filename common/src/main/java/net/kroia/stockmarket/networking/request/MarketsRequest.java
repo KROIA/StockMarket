@@ -21,6 +21,10 @@ public class MarketsRequest extends StockMarketGenericRequest<Integer, List<Item
         return MarketsRequest.class.getName();
     }
 
+    @Override
+    protected List<ItemID> getDefaultResponse() {
+        return List.of();
+    }
 
     @Override
     public CompletableFuture<List<ItemID>> handleOnMasterServer(Integer input, String slaveID, UUID playerSender) {

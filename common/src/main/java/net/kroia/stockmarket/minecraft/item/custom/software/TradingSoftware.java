@@ -1,0 +1,31 @@
+package net.kroia.stockmarket.minecraft.item.custom.software;
+
+import net.kroia.banksystem.minecraft.block.custom.TerminalBlock;
+import net.kroia.banksystem.minecraft.item.custom.software.Software;
+import net.kroia.stockmarket.minecraft.block.StockMarketBlocks;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.GameType;
+
+public class TradingSoftware extends Software {
+    public static final String NAME = "trading_software";
+    public TradingSoftware() {
+        super();
+    }
+
+    @Override
+    public TerminalBlock getProgrammedBlock()
+    {
+        return StockMarketBlocks.STOCK_MARKET_BLOCK.get();
+    }
+
+
+    @Override
+    protected void onRightClickedServerSide(ServerPlayer player)
+    {
+        if(player.gameMode.getGameModeForPlayer() == GameType.CREATIVE) {
+            // todo: replace the functions below
+            //SyncTradeItemsPacket.sendPacket(player);
+            //OpenScreenPacket.sendPacket(player, OpenScreenPacket.ScreenType.STOCK_MARKET);
+        }
+    }
+}

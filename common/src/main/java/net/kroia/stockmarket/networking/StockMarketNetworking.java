@@ -1,6 +1,5 @@
 package net.kroia.stockmarket.networking;
 
-import io.netty.buffer.ByteBuf;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.modutilities.networking.NetworkPacketManager;
 import net.kroia.modutilities.networking.client_server.arrs.AsynchronousRequestResponseSystem;
@@ -8,11 +7,7 @@ import net.kroia.modutilities.networking.client_server.streaming.StreamSystem;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.networking.packet.OpenUIPacket;
 import net.kroia.stockmarket.networking.packet.PlayerJoinSyncPacket;
-import net.kroia.stockmarket.networking.packet.TestPacket;
-import net.kroia.stockmarket.networking.request.ActiveOrdersRequest;
-import net.kroia.stockmarket.networking.request.CreateOrderRequest;
-import net.kroia.stockmarket.networking.request.MarketPriceHistoryRequest;
-import net.kroia.stockmarket.networking.request.MarketsRequest;
+import net.kroia.stockmarket.networking.request.*;
 import net.kroia.stockmarket.networking.stream.MarketPriceStream;
 import net.kroia.stockmarket.stockmarket.market.AsyncMarket;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
@@ -38,6 +33,10 @@ public class StockMarketNetworking extends NetworkPacketManager {
     public final MarketsRequest MARKETS_REQUEST = (MarketsRequest) AsynchronousRequestResponseSystem.register(new MarketsRequest());
     public final CreateOrderRequest CREATE_ORDER_REQUEST = (CreateOrderRequest) AsynchronousRequestResponseSystem.register(new CreateOrderRequest());
     public final ActiveOrdersRequest ACTIVE_ORDERS_REQUEST = (ActiveOrdersRequest) AsynchronousRequestResponseSystem.register(new ActiveOrdersRequest());
+    public final ServerTimeRequest SERVER_TIME_REQUEST = (ServerTimeRequest) AsynchronousRequestResponseSystem.register(new ServerTimeRequest());
+    public final OrderbookVolumeRequest ORDERBOOK_VOLUME_REQUEST = (OrderbookVolumeRequest) AsynchronousRequestResponseSystem.register(new OrderbookVolumeRequest());
+
+    //public final MarketSettingsGetRequest MARKET_SETTINGS_GET_REQUEST = (MarketSettingsGetRequest) AsynchronousRequestResponseSystem.register(new MarketSettingsGetRequest());
 
 
     public StockMarketNetworking()
@@ -62,7 +61,7 @@ public class StockMarketNetworking extends NetworkPacketManager {
     @Override
     public void setupServerReceiverPackets() {
 
-        registerC2S(TestPacket.TYPE, TestPacket.STREAM_CODEC);
+        //registerC2S(TestPacket.TYPE, TestPacket.STREAM_CODEC);
 
     }
 

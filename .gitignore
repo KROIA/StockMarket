@@ -26,3 +26,6 @@ run
 forge*changelog.txt
 
 *.bat
+
+.claude
+CLAUDE.md

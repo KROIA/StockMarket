@@ -27,6 +27,7 @@ You want to support me?<br>
     * [For admins / single player](#for-admins--single-player)
 * [Commands](#commands)
 * [Stock Market Bot](#stock-serverMarket-bot)
+* [Changelog](#changelog)
 * [Discord to help me improve the mod](https://discord.gg/qHNVaDGAyB)
 
 ---
@@ -526,5 +527,16 @@ Since this is a complex field from control theory, I will not cover this here.
     <img src="https://upload.wikimedia.org/wikipedia/commons/4/43/PID_en.svg" width=500> 
 </div>
 
+---
+
+## Changelog
+
+| Version | Status | Highlights |
+|---|---|---|
+| [v2.0.1](changelog/v2.0.1.md) | In Development | Plugin system, management UI, security hardening, 45 bug fixes |
+| v1.3.1 | Stable | Multi-version support (MC 1.19.2–1.21.1), bot settings GUI, market management |
+| v1.3.0 | Stable | |
+| v1.2.x | Legacy | |
+| v1.1.x | Legacy | |
 
 

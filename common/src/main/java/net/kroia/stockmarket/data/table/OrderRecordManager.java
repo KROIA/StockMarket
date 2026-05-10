@@ -7,7 +7,6 @@ import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
 import net.kroia.stockmarket.data.filter.DateFilter;
 import net.kroia.stockmarket.data.filter.EqualityFilter;
 
-import java.nio.ByteBuffer;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -18,41 +17,41 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
-    private static OrderRecordManager instance;
+
+    private final DatabaseManager databaseManager;
 
     public static final String INSERT = "INSERT INTO OrderHistory (itemid, marketid, userid_one, userid_two, type, amount, price, time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
     public static final String SELECT = "SELECT itemid, marketid, userid_one, userid_two, type, amount, price, time FROM OrderHistory";
     public static final String DELETE = "DELETE FROM OrderHistory";
+    public static final String COUNT  = "SELECT COUNT(*) FROM OrderHistory";
 
-
+    public OrderRecordManager(DatabaseManager databaseManager) {
+        this.databaseManager = databaseManager;
+    }
 
     public CompletableFuture<Void> save(OrderRecordStruct data) {
         return CompletableFuture.runAsync(() -> {
-            try {
-                PreparedStatement preparedStatement = DatabaseManager.getConnection().prepareStatement(INSERT);
+            try (PreparedStatement preparedStatement = databaseManager.getConnection().prepareStatement(INSERT)) {
                 queueRecord(preparedStatement, data);
                 preparedStatement.execute();
-                DatabaseManager.commitTransaction();
-
+                databaseManager.commitTransaction();
             } catch (SQLException e) {
                 throw new RuntimeException(e);
             }
-        }, DatabaseManager.getDatabaseThread());
+        }, databaseManager.getDatabaseThread());
     }
 
 
     public CompletableFuture<Void> save(List<OrderRecordStruct> data) {
         return CompletableFuture.runAsync(() -> {
-            try {
-                PreparedStatement preparedStatement = DatabaseManager.getConnection().prepareStatement(INSERT);
+            try (PreparedStatement preparedStatement = databaseManager.getConnection().prepareStatement(INSERT)) {
                 data.forEach(d -> queueRecord(preparedStatement, d));
                 preparedStatement.executeBatch();
-                DatabaseManager.commitTransaction();
-
+                databaseManager.commitTransaction();
             } catch (SQLException e) {
                 throw new RuntimeException(e);
             }
-        }, DatabaseManager.getDatabaseThread());
+        }, databaseManager.getDatabaseThread());
     }
 
     @Override
@@ -69,7 +68,7 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
             stmt.addBatch();
         }
         catch(SQLException e){
-
+            StockMarketMod.LOGGER.error("Failed to queue order record", e);
         }
     }
 
@@ -100,14 +99,27 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
                     statement += (started ? " AND " : " WHERE ") + marketFilter.get().getClause("itemid");
                 }
 
-                PreparedStatement preparedStatement = DatabaseManager.getConnection().prepareStatement(statement);
-                preparedStatement.executeUpdate();
-                DatabaseManager.commitTransaction();
-
+                try (PreparedStatement preparedStatement = databaseManager.getConnection().prepareStatement(statement)) {
+                    int idx = 1;
+                    if (dateFilter.isPresent()) {
+                        idx = dateFilter.get().bindParameters(preparedStatement, idx);
+                    }
+                    if (accountFilter.isPresent()) {
+                        idx = accountFilter.get().bindParameters(preparedStatement, idx);
+                    }
+                    if (userFilter.isPresent()) {
+                        idx = userFilter.get().bindUUIDParameters(preparedStatement, idx);
+                    }
+                    if (marketFilter.isPresent()) {
+                        idx = marketFilter.get().bindParameters(preparedStatement, idx);
+                    }
+                    preparedStatement.executeUpdate();
+                    databaseManager.commitTransaction();
+                }
             } catch (SQLException e) {
                 throw new RuntimeException(e);
             }
-        }, DatabaseManager.getDatabaseThread());
+        }, databaseManager.getDatabaseThread());
     }
 
     public CompletableFuture<List<OrderRecordStruct>> query(Optional<DateFilter> dateFilter, Optional<EqualityFilter> accountFilter, Optional<UUIDFilter> userFilter, Optional<EqualityFilter> marketFilter, String stmt){
@@ -131,11 +143,28 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
                     statement += (started ? " AND " : " WHERE ") + marketFilter.get().getClause("itemid");
                 }
                 List<OrderRecordStruct> result = new ArrayList<>();
-                PreparedStatement preparedStatement = DatabaseManager.getConnection().prepareStatement(statement);
-                ResultSet resultSet = preparedStatement.executeQuery();
-                DatabaseManager.commitTransaction();
-                while(resultSet.next()){
-                    result.add(mapRow(resultSet));
+                try (PreparedStatement preparedStatement = databaseManager.getConnection().prepareStatement(statement)) {
+                    int idx = 1;
+                    if (dateFilter.isPresent()) {
+                        idx = dateFilter.get().bindParameters(preparedStatement, idx);
+                    }
+                    if (accountFilter.isPresent()) {
+                        idx = accountFilter.get().bindParameters(preparedStatement, idx);
+                    }
+                    if (userFilter.isPresent()) {
+                        idx = userFilter.get().bindUUIDParameters(preparedStatement, idx);
+                    }
+                    if (marketFilter.isPresent()) {
+                        idx = marketFilter.get().bindParameters(preparedStatement, idx);
+                    }
+                    try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                        databaseManager.commitTransaction();
+                        while (resultSet.next()) {
+                            OrderRecordStruct row = mapRow(resultSet);
+                            if (row != null)
+                                result.add(row);
+                        }
+                    }
                 }
                 return result;
 
@@ -143,9 +172,43 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
                 throw new RuntimeException(e);
             }
 
-        }, DatabaseManager.getDatabaseThread());
+        }, databaseManager.getDatabaseThread());
     }
 
+
+    public CompletableFuture<Integer> getRecordCount(Optional<DateFilter> dateFilter, Optional<EqualityFilter> marketFilter){
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                String statement = COUNT;
+                if (dateFilter.isPresent()) {
+                    statement += " WHERE " + dateFilter.get().getClause("time");
+                    if (marketFilter.isPresent()) {
+                        statement += " AND " + marketFilter.get().getClause("itemid");
+                    }
+                } else if (marketFilter.isPresent()) {
+                    statement += " WHERE " + marketFilter.get().getClause("itemid");
+                }
+                try (PreparedStatement preparedStatement = databaseManager.getConnection().prepareStatement(statement)) {
+                    int idx = 1;
+                    if (dateFilter.isPresent()) {
+                        idx = dateFilter.get().bindParameters(preparedStatement, idx);
+                    }
+                    if (marketFilter.isPresent()) {
+                        idx = marketFilter.get().bindParameters(preparedStatement, idx);
+                    }
+                    try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                        databaseManager.commitTransaction();
+                        if (resultSet.next()) {
+                            return resultSet.getInt(1);
+                        }
+                    }
+                }
+                return 0;
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
+            }
+        }, databaseManager.getDatabaseThread());
+    }
 
     public OrderRecordStruct mapRow(ResultSet rs){
         try {
@@ -155,12 +218,5 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
             StockMarketMod.LOGGER.warn("Failed to read MarketPrice record, is the data corrupt?");
             return null;
         }
-    }
-
-    public static OrderRecordManager create(){
-        if(instance == null){
-            instance = new OrderRecordManager();
-        }
-        return instance;
     }
 }

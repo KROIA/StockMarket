@@ -20,53 +20,73 @@ public class ClientMarketManager implements IClientMarketManager
         BACKEND_INSTANCES = backend;
         ClientMarket.setBackend(backend);
     }
-    private final IAsyncMarketManager asyncServerMarketManager;
+    private final IAsyncMarketManager asyncMarketManager;
 
 
     private final Map<ItemID, ClientMarket> clientMarkets = new HashMap<>();
 
     public ClientMarketManager()
     {
-        asyncServerMarketManager = AsyncMarketManager.createClientManager();
+        asyncMarketManager = AsyncMarketManager.createClientManager();
     }
 
+
+    @Override
+    public void update()
+    {
+        long serverTime = ClientMarket.PriceHistoryContainer.ServerRelativeTimer.timeOffsetMS + System.currentTimeMillis();
+        for(ClientMarket clientMarket : clientMarkets.values())
+        {
+            clientMarket.update(serverTime);
+        }
+    }
+
+    @Override
     public void onPlayerJoin(@Nullable LocalPlayer localPlayer)
     {
-        requestMarkets();
+        // Sync the server time offset once on join, then request markets.
+        // Avoids per-market overwrites of the shared static timeOffsetMS (Issue #44).
+        BACKEND_INSTANCES.NETWORKING.SERVER_TIME_REQUEST.sendRequestToServer(System.currentTimeMillis()).thenAccept(serverTime ->
+        {
+            long currentTime = System.currentTimeMillis();
+            long turnaroundTime = currentTime - serverTime.clientTimeEcho();
+            long currentServerTime = serverTime.serverTime() + turnaroundTime / 2;
+            ClientMarket.PriceHistoryContainer.ServerRelativeTimer.timeOffsetMS = currentServerTime - currentTime;
+            requestMarkets();
+        });
     }
 
+    @Override
     public void onPlayerLeave(@Nullable LocalPlayer localPlayer)
     {
 
     }
 
-    public void update()
-    {
-        for(ClientMarket clientMarket : clientMarkets.values())
-        {
-            clientMarket.update();
-        }
-    }
-
+    @Override
     public @Nullable ClientMarket getMarket(ItemID itemID)
     {
         return clientMarkets.get(itemID);
     }
 
+    @Override
     public CompletableFuture<List<ItemID>> requestMarkets()
     {
         CompletableFuture<List<ItemID>> future = new CompletableFuture<>();
-        AsynchronousRequestResponseSystem.sendRequestToServer(BACKEND_INSTANCES.NETWORKING.MARKETS_REQUEST, 0).thenAccept((response) ->
+        BACKEND_INSTANCES.BANK_SYSTEM_API.getClientBankManager().getItemFractionScaleFactorAsync().thenAccept((factor)->
         {
-            info("Markets request response received with "+response.size()+" markets");
-            for(ItemID itemID : response) {
-                createClientMarket(itemID);
-            }
-            future.complete(response);
+            AsynchronousRequestResponseSystem.sendRequestToServer(BACKEND_INSTANCES.NETWORKING.MARKETS_REQUEST, 0).thenAccept((response) ->
+            {
+                info("Markets request response received with "+response.size()+" markets");
+                for(ItemID itemID : response) {
+                    createClientMarket(itemID, factor);
+                }
+                future.complete(response);
+            });
         });
         return future;
     }
 
+    @Override
     public CompletableFuture<ActiveOrdersRequest.OutputData> requestPendingOrders(@Nullable ItemID itemIDFilter,
                                                                                   int bankAccountNr,
                                                                                   @Nullable UUID executorPlayerFilter,
@@ -79,22 +99,30 @@ public class ClientMarketManager implements IClientMarketManager
         return future;
     }
 
-
+    @Override
     public List<ItemID> getAvailableMarkets()
     {
         return clientMarkets.keySet().stream().toList();
     }
 
+    @Override
+    public CompletableFuture<ItemID> getTradingCurrencyIDAsync()
+    {
+        return asyncMarketManager.getTradingCurrencyIDAsync();
+    }
 
 
-    private void createClientMarket(ItemID itemID)
+
+
+    private void createClientMarket(ItemID itemID, int itemFractionScaleFactor)
     {
         ClientMarket clientMarket = clientMarkets.get(itemID);
         if(clientMarket == null)
         {
             if(itemID.isValid()) {
-                clientMarket = new ClientMarket(itemID);
+                clientMarket = new ClientMarket(itemID, itemFractionScaleFactor);
                 clientMarkets.put(itemID, clientMarket);
+                clientMarket.requestFullPriceHistoryUpdate();
                 info("Created ClientMarket with ID: " + itemID);
             }
             else

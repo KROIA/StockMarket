@@ -5,7 +5,7 @@ import dev.architectury.platform.Platform;
 import dev.architectury.utils.Env;
 import net.kroia.modutilities.ModUtilitiesMod;
 import net.kroia.stockmarket.StockMarketModBackend;
-import net.kroia.stockmarket.compat.NEZNAMY_TAB_Placeholders;
+import net.kroia.stockmarket.minecraft.compat.NEZNAMY_TAB_Placeholders;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;

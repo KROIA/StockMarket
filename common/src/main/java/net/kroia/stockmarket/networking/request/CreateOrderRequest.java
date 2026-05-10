@@ -8,6 +8,7 @@ import net.kroia.banksystem.api.bankmanager.IBankManager;
 import net.kroia.banksystem.banking.BankPermission;
 import net.kroia.banksystem.banking.User;
 import net.kroia.banksystem.banking.clientdata.BankUserData;
+import net.kroia.banksystem.banking.clientdata.UserData;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.stockmarket.api.market.IServerMarket;
@@ -21,19 +22,20 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderRequest.InputData, CreateOrderRequest.OutputData> {
 
-    public record InputData(ItemID itemID, int bankAccountNr, Order.Type type, long volume, long price)
+    public record InputData(ItemID itemID, int bankAccountNr, Order.Type type, double volume, double price)
     {
         public static final StreamCodec<RegistryFriendlyByteBuf, CreateOrderRequest.InputData> STREAM_CODEC = StreamCodec.composite(
                 ItemID.STREAM_CODEC, p -> p.itemID,
                 ByteBufCodecs.INT, p -> p.bankAccountNr,
                 ExtraCodecUtils.enumStreamCodec(Order.Type.class), p -> p.type,
-                ByteBufCodecs.VAR_LONG, p -> p.volume,
-                ByteBufCodecs.VAR_LONG, p -> p.price,
+                ByteBufCodecs.DOUBLE, p -> p.volume,
+                ByteBufCodecs.DOUBLE, p -> p.price,
                 InputData::new
         );
     }
@@ -80,6 +82,10 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
         return CreateOrderRequest.class.getName();
     }
 
+    @Override
+    protected OutputData getDefaultResponse() {
+        return new OutputData(Status.NO_SERVER_BANK_MANAGER, null);
+    }
 
     @Override
     public CompletableFuture<OutputData> handleOnMasterServer(CreateOrderRequest.InputData input, String slaveID, @Nullable UUID playerSender) {
@@ -119,43 +125,55 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
 
         BankUserData bankUserData = bankAccount.getUserData(playerSender);
         if(bankUserData == null) {
-            User us = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync().getUserByUUID(playerSender);
-            String userName;
-            if(us != null)
-                userName = us.getName();
-            else
-                userName = playerSender.toString();
-            warn("No BankUserData found with BankAccountNr " + input.bankAccountNr + " for user: " +userName+
-                    "\nThis player seems not to be a member of the BankAccount.");
-            response.status = Status.NO_BANK_USER;
+            UserData userData = bankAccount.getPersonalBankOwnerData();
+            if(userData == null) {
+                User us = getServerBankManager().getSync().getUserByUUID(playerSender);
+                String userName;
+                if(us != null)
+                    userName = us.getName();
+                else
+                    userName = playerSender.toString();
+                warn("No BankUserData found with BankAccountNr " + input.bankAccountNr + " for user: " +userName+
+                        "\nThis player seems not to be a member of the BankAccount.");
+                response.status = Status.NO_BANK_USER;
+                future.complete(response);
+                return future;
+            }
+        }
+        else {
+            if (input.volume > 0) {
+                if (!BankPermission.hasPermission(bankUserData.permissions, BankPermission.DEPOSIT)) {
+                    response.status = Status.NO_PERMISSION_TO_DEPOSIT;
+                    future.complete(response);
+                    return future; // User is not allowed to deposit items by buying
+                }
+            } else {
+                if (!BankPermission.hasPermission(bankUserData.permissions, BankPermission.WITHDRAW)) {
+                    response.status = Status.NO_PERMISSION_TO_WITHDRAW;
+                    future.complete(response);
+                    return future; // User is not allowed to withdraw items by selling
+                }
+            }
+        }
+
+        if(input.type == Order.Type.INTER_MARKET) {
+            response.status = Status.NO_SUCH_MARKET;
             future.complete(response);
             return future;
-        }
-
-
-        if(input.volume > 0)
-        {
-            if(!BankPermission.hasPermission(bankUserData.permissions, BankPermission.DEPOSIT)) {
-                response.status = Status.NO_PERMISSION_TO_DEPOSIT;
-                future.complete(response);
-                return future; // User is not allowed to deposit items by buying
-            }
-        }
-        else
-        {
-            if(!BankPermission.hasPermission(bankUserData.permissions, BankPermission.WITHDRAW)) {
-                response.status = Status.NO_PERMISSION_TO_WITHDRAW;
-                future.complete(response);
-                return future; // User is not allowed to withdraw items by selling
-            }
         }
 
         // Check balance
         IServerBank itemBank = bankAccount.getBank(input.itemID);
         if(itemBank == null) {
-            response.status = Status.NO_ITEM_BANK;
-            future.complete(response);
-            return future;
+            if(input.volume < 0) {
+                response.status = Status.NO_ITEM_BANK;
+                future.complete(response);
+                return future;
+            }
+            else
+            {
+                itemBank = bankAccount.createBank(input.itemID, 0);
+            }
         }
 
         ItemID moneyItemID = getServerMarketManager().getTradingCurrencyID();
@@ -175,7 +193,13 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
             switch(input.type)
             {
                 case Order.Type.LIMIT:
-                    toLockAmount = input.volume * input.price;
+                    try {
+                        toLockAmount = Math.multiplyExact(toRawAmount(input.volume), toRawAmount(input.price));
+                    } catch (ArithmeticException e) {
+                        response.status = Status.INVALID_VOLUME;
+                        future.complete(response);
+                        return future;
+                    }
                     if(moneyBank.getBalance() < toLockAmount) {
                         response.status = Status.NOT_ENOUGH_MONEY;
                         future.complete(response);
@@ -183,7 +207,13 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
                     }
                     break;
                 case Order.Type.MARKET:
-                    toLockAmount  = input.volume * currentMarketPrice;
+                    try {
+                        toLockAmount = Math.multiplyExact(toRawAmount(input.volume), currentMarketPrice);
+                    } catch (ArithmeticException e) {
+                        response.status = Status.INVALID_VOLUME;
+                        future.complete(response);
+                        return future;
+                    }
                     if(moneyBank.getBalance() < toLockAmount) {
                         response.status = Status.NOT_ENOUGH_MONEY;
                         future.complete(response);
@@ -198,7 +228,7 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
             {
                 case Order.Type.LIMIT:
                 case Order.Type.MARKET:
-                    toLockAmount = -input.volume;
+                    toLockAmount = toRawAmount(-input.volume);
                     if(itemBank.getBalance() < toLockAmount) {
                         response.status = Status.NOT_ENOUGH_ITEM;
                         future.complete(response);
@@ -207,9 +237,6 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
                 break;
             }
         }
-
-        if(input.type == Order.Type.INTER_MARKET)
-            throw new RuntimeException("CreateOrderRequest::handleOnServer not implemented for Order.Type.INTER_MARKET");
 
         // Reserve balances
         if(input.volume > 0)
@@ -238,7 +265,7 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
         }
 
         long time = System.currentTimeMillis();
-        Order order = new Order(input.itemID, input.type, input.volume, input.price, time,
+        Order order = new Order(input.itemID, input.type, toRawAmount(input.volume), toRawAmount(input.price), time,
                 playerSender, bankAccount.getAccountNumber());
 
         if(!serverMarket.putOrder(order))
@@ -273,6 +300,11 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
         response.orderEcho = order;
         future.complete(response);
         return future;
+    }
+
+    private long toRawAmount(double realAmount)
+    {
+        return getServerBankManager().getSync().convertToRawAmount(realAmount);
     }
 
     @Override
