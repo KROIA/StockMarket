@@ -79,12 +79,14 @@ public class VolatilityPlugin extends ServerPlugin {
 
     @Override
     public boolean save(CompoundTag tag) {
-        return false;
+        tag.putFloat("volatilityScale", volatilityScale);
+        return true;
     }
 
     @Override
     public boolean load(CompoundTag tag) {
-        return false;
+        if (tag.contains("volatilityScale")) volatilityScale = tag.getFloat("volatilityScale");
+        return true;
     }
 
     @Override

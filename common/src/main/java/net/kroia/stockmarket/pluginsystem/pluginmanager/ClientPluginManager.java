@@ -4,9 +4,11 @@ import net.kroia.modutilities.networking.client_server.arrs.AsynchronousRequestR
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.pluginmanager.IAsyncPluginManager;
 import net.kroia.stockmarket.api.pluginmanager.IClientPluginManager;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.networking.request.PluginCustomSettingsRequest;
 import net.kroia.stockmarket.networking.request.PluginReorderRequest;
 import net.kroia.stockmarket.networking.request.PluginSettingsRequest;
+import net.kroia.stockmarket.networking.request.PluginSubscriptionRequest;
 import net.kroia.stockmarket.pluginsystem.plugin.ClientPlugin;
 import net.kroia.stockmarket.pluginsystem.plugin.core.GenericPluginData;
 import net.kroia.stockmarket.pluginsystem.plugin.core.PluginSyncData;
@@ -73,6 +75,12 @@ public class ClientPluginManager implements IClientPluginManager {
     public CompletableFuture<PluginCustomSettingsRequest.OutputData> requestUpdateCustomSettings(UUID instanceID, byte[] payload) {
         PluginCustomSettingsRequest.InputData input = new PluginCustomSettingsRequest.InputData(instanceID, payload);
         return AsynchronousRequestResponseSystem.sendRequestToServer(BACKEND_INSTANCES.NETWORKING.PLUGIN_CUSTOM_SETTINGS_REQUEST, input);
+    }
+
+    @Override
+    public CompletableFuture<PluginSubscriptionRequest.OutputData> requestUpdateSubscription(UUID instanceID, ItemID marketID, boolean subscribe) {
+        PluginSubscriptionRequest.InputData input = new PluginSubscriptionRequest.InputData(instanceID, marketID, subscribe);
+        return AsynchronousRequestResponseSystem.sendRequestToServer(BACKEND_INSTANCES.NETWORKING.PLUGIN_SUBSCRIPTION_REQUEST, input);
     }
 
     @Override

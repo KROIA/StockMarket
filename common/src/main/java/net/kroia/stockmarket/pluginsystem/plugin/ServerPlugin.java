@@ -96,6 +96,15 @@ public abstract class ServerPlugin implements ServerSaveable, IServerPlugin {
         return genericPluginData;
     }
 
+    /**
+     * Restores the plugin's instance ID from saved data.
+     * Only used during load to preserve identity across server restarts.
+     * Public for cross-package access from ServerPluginManager — not part of the plugin API.
+     */
+    public void setInstanceID(UUID id) {
+        genericPluginData.setInstanceID(id);
+    }
+
 
 
     /* ----------------------------------------------------------------------------------------------------------------

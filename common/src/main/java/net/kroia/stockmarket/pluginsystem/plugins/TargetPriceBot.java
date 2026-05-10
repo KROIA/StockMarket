@@ -203,11 +203,19 @@ public class TargetPriceBot extends ServerPlugin {
 
     @Override
     public boolean save(CompoundTag tag) {
-        return false;
+        tag.putFloat("pidP", pidP);
+        tag.putFloat("pidI", pidI);
+        tag.putFloat("pidD", pidD);
+        tag.putFloat("pidRate", pidRate);
+        return true;
     }
 
     @Override
     public boolean load(CompoundTag tag) {
-        return false;
+        if (tag.contains("pidP")) pidP = tag.getFloat("pidP");
+        if (tag.contains("pidI")) pidI = tag.getFloat("pidI");
+        if (tag.contains("pidD")) pidD = tag.getFloat("pidD");
+        if (tag.contains("pidRate")) pidRate = tag.getFloat("pidRate");
+        return true;
     }
 }

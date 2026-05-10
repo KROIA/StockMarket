@@ -1,7 +1,9 @@
 package net.kroia.stockmarket.api.pluginmanager;
 
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.networking.request.PluginCustomSettingsRequest;
 import net.kroia.stockmarket.networking.request.PluginSettingsRequest;
+import net.kroia.stockmarket.networking.request.PluginSubscriptionRequest;
 import net.kroia.stockmarket.pluginsystem.plugin.core.GenericPluginData;
 import net.kroia.stockmarket.pluginsystem.plugin.core.PluginSyncData;
 
@@ -35,4 +37,7 @@ public interface IClientPluginManager {
 
     /** Sends a custom settings update request for a plugin instance to the server. */
     CompletableFuture<PluginCustomSettingsRequest.OutputData> requestUpdateCustomSettings(UUID instanceID, byte[] payload);
+
+    /** Sends a subscription change request for a plugin instance to the server. */
+    CompletableFuture<PluginSubscriptionRequest.OutputData> requestUpdateSubscription(UUID instanceID, ItemID marketID, boolean subscribe);
 }

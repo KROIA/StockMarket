@@ -20,6 +20,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Dedicated screen for managing all plugin instances.
@@ -267,6 +268,8 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         private final Label nameLabel;
         private final Label descriptionLabel;
         private final List<ItemView> marketItemViews = new ArrayList<>();
+        private final List<Button> unsubscribeButtons = new ArrayList<>();
+        private final Button subscribeButton;
         private final CheckBox enabledCheckBox;
         private final Button moveUpButton;
         private final Button moveDownButton;
@@ -295,7 +298,7 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             // Description label
             descriptionLabel = new Label(data.getDescription() != null ? data.getDescription() : "");
 
-            // Item icons for subscribed markets (positioned manually in layoutChanged)
+            // Item icons for subscribed markets with unsubscribe buttons (positioned manually in layoutChanged)
             for (ItemID marketID : data.getSubscribedMarkets()) {
                 ItemStack stack = marketID.getStack();
                 if (stack != null) {
@@ -303,8 +306,16 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
                     itemView.setItemStack(stack);
                     itemView.setSize(16, 16);
                     marketItemViews.add(itemView);
+
+                    // Small "x" button to unsubscribe from this market
+                    ItemID currentMarketID = marketID; // capture for lambda
+                    Button unsubBtn = new Button("x", () -> onUnsubscribeClicked(currentMarketID));
+                    unsubscribeButtons.add(unsubBtn);
                 }
             }
+
+            // "+" button to subscribe to a new market
+            subscribeButton = new Button("+", this::onSubscribeClicked);
 
             // Enabled checkbox — set state before attaching callback to avoid triggering a request loop
             enabledCheckBox = new CheckBox(Texts.ENABLED.getString());
@@ -321,6 +332,10 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             for (ItemView iv : marketItemViews) {
                 this.addChild(iv);
             }
+            for (Button unsubBtn : unsubscribeButtons) {
+                this.addChild(unsubBtn);
+            }
+            this.addChild(subscribeButton);
             this.addChild(enabledCheckBox);
             this.addChild(moveUpButton);
             this.addChild(moveDownButton);
@@ -379,13 +394,19 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             // Row 2: description label (full width)
             descriptionLabel.setBounds(padding, nameLabel.getBottom() + spacing, width, defaultElementHeight);
 
-            // Row 3: market item icons (positioned horizontally)
+            // Row 3: market item icons with unsubscribe buttons, plus subscribe button
             int iconX = padding;
             int iconY = descriptionLabel.getBottom() + spacing;
-            for (ItemView iv : marketItemViews) {
+            for (int idx = 0; idx < marketItemViews.size(); idx++) {
+                ItemView iv = marketItemViews.get(idx);
                 iv.setBounds(iconX, iconY, 16, 16);
-                iconX += 16 + 2; // 16px icon + 2px spacing
+                if (idx < unsubscribeButtons.size()) {
+                    Button unsubBtn = unsubscribeButtons.get(idx);
+                    unsubBtn.setBounds(iconX + 16, iconY, 12, 16);
+                }
+                iconX += 16 + 12 + 2; // icon + x button + spacing
             }
+            subscribeButton.setBounds(iconX, iconY, 20, 16);
 
             // Row 4: PluginGuiElement (inline) or "Open Plugin" button
             int row4Y = iconY + 18 + spacing;
@@ -437,6 +458,100 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             getPluginManager().requestReorderPlugin(pluginData.getInstanceID(), 1).thenAccept(list -> {
                 parentScreen.rebuildPluginList(list);
             });
+        }
+
+        /**
+         * Called when the subscribe "+" button is clicked.
+         * Opens a MarketSubscribeScreen popup showing available markets not yet subscribed.
+         */
+        private void onSubscribeClicked() {
+            List<ItemStack> marketStacks = new ArrayList<>();
+            for (ItemID marketID : getAvailableMarkets()) {
+                // Skip markets already subscribed
+                if (!pluginData.getSubscribedMarkets().contains(marketID)) {
+                    ItemStack stack = marketID.getStack();
+                    if (stack != null) {
+                        marketStacks.add(stack);
+                    }
+                }
+            }
+            setScreen(new MarketSubscribeScreen(parentScreen, pluginData.getInstanceID(), marketStacks));
+        }
+
+        /**
+         * Called when an unsubscribe "x" button is clicked for a specific market.
+         * Sends an unsubscribe request to the server and refreshes the plugin list on success.
+         */
+        private void onUnsubscribeClicked(ItemID marketID) {
+            getPluginManager().requestUpdateSubscription(pluginData.getInstanceID(), marketID, false).thenAccept(result -> {
+                if (result.success()) {
+                    parentScreen.refreshPluginList();
+                }
+            });
+        }
+    }
+
+    /**
+     * Popup screen for selecting a market to subscribe a plugin to.
+     * Shows an ItemSelectionView with available markets that the plugin is not yet subscribed to.
+     */
+    private static class MarketSubscribeScreen extends StockMarketGuiScreen {
+        private static final String PREFIX = "gui." + StockMarketMod.MOD_ID + ".plugin_management_screen.";
+        private static final Component SUBSCRIBE_TITLE = Component.translatable(PREFIX + "subscribe_market_title");
+
+        private final PluginManagementScreen parentScreen;
+        private final UUID pluginInstanceID;
+        private final Label titleLabel;
+        private final ItemSelectionView itemSelectionView;
+
+        MarketSubscribeScreen(PluginManagementScreen parentScreen, UUID pluginInstanceID, List<ItemStack> marketStacks) {
+            super(SUBSCRIBE_TITLE, parentScreen);
+            this.parentScreen = parentScreen;
+            this.pluginInstanceID = pluginInstanceID;
+
+            titleLabel = new Label(SUBSCRIBE_TITLE.getString());
+            titleLabel.setAlignment(Label.Alignment.CENTER);
+
+            itemSelectionView = new ItemSelectionView(this::onMarketSelected);
+            itemSelectionView.setItems(marketStacks);
+
+            addElement(titleLabel);
+            addElement(itemSelectionView);
+        }
+
+        /**
+         * Called when a market item is selected from the ItemSelectionView.
+         * Sends a subscribe request to the server and returns to the parent screen.
+         */
+        private void onMarketSelected(ItemStack item) {
+            ItemID.getOrRegisterFromItemStackClientSide(item).thenAccept(itemID -> {
+                net.minecraft.client.Minecraft.getInstance().execute(() -> {
+                    getPluginManager().requestUpdateSubscription(pluginInstanceID, itemID, true).thenAccept(result -> {
+                        if (result.success()) {
+                            parentScreen.refreshPluginList();
+                        }
+                        net.minecraft.client.Minecraft.getInstance().execute(() -> {
+                            setScreen(parentScreen);
+                        });
+                    });
+                });
+            });
+        }
+
+        @Override
+        protected void updateLayout(Gui gui) {
+            int p = StockMarketGuiElement.padding;
+            int s = StockMarketGuiElement.spacing;
+            int w = getWidth() - 2 * p;
+            int eh = StockMarketGuiElement.defaultElementHeight;
+
+            titleLabel.setBounds(p, p, w, eh);
+            itemSelectionView.setBounds(p, titleLabel.getBottom() + s, w, getHeight() - titleLabel.getBottom() - s - p);
+        }
+
+        @Override
+        public void onClose() {
+            super.onClose();
         }
     }
 }

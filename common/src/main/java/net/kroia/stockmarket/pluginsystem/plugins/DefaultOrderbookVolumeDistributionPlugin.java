@@ -182,12 +182,16 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin {
 
     @Override
     public boolean save(CompoundTag tag) {
-        return false;
+        tag.putFloat("volumeScale", volumeScale);
+        tag.putFloat("speed", speed);
+        return true;
     }
 
     @Override
     public boolean load(CompoundTag tag) {
-        return false;
+        if (tag.contains("volumeScale")) volumeScale = tag.getFloat("volumeScale");
+        if (tag.contains("speed")) speed = tag.getFloat("speed");
+        return true;
     }
 
     @Override

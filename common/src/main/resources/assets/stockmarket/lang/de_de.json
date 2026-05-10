@@ -153,6 +153,7 @@
   "gui.stockmarket.plugin_management_screen.all_markets": "Alle Märkte",
   "gui.stockmarket.plugin_management_screen.open_plugin_screen": "Plugin-Einstellungen öffnen",
   "gui.stockmarket.plugin_management_screen.filter_title": "Nach Markt filtern",
+  "gui.stockmarket.plugin_management_screen.subscribe_market_title": "Markt abonnieren",
   "gui.stockmarket.plugin_detail_screen.title": "Plugin-Details",
 
   "gui.stockmarket.target_price_bot.settings_title": "PID-Einstellungen",
