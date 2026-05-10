@@ -145,16 +145,14 @@ public class Orderbook implements ServerSaveable
         else
         {
             // Can be a sell or a buy order, laying exactly on the current price
-            if(!sellLimitOrders.isEmpty())
+            for (Order order : sellLimitOrders)
             {
-                Order order = sellLimitOrders.peek();
                 if(order.getStartPrice() == price) {
                     volume += order.getRemainingVolume();
                 }
             }
-            else if(!buyLimitOrders.isEmpty())
+            for (Order order : buyLimitOrders)
             {
-                Order order = buyLimitOrders.peek();
                 if(order.getStartPrice() == price) {
                     volume += order.getRemainingVolume();
                 }
@@ -184,16 +182,14 @@ public class Orderbook implements ServerSaveable
         else
         {
             // Can be a sell or a buy order, laying exactly on the current price
-            if(!sellLimitOrders.isEmpty())
+            for (Order order : sellLimitOrders)
             {
-                Order order = sellLimitOrders.peek();
                 if(order.getStartPrice() == price) {
                     volume += order.getRemainingVolume();
                 }
             }
-            else if(!buyLimitOrders.isEmpty())
+            for (Order order : buyLimitOrders)
             {
-                Order order = buyLimitOrders.peek();
                 if(order.getStartPrice() == price) {
                     volume += order.getRemainingVolume();
                 }

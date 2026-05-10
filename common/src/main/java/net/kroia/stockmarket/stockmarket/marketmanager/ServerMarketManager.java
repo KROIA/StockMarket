@@ -337,16 +337,18 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
                 {
                     newMarkets.put(id, market);
                 }
-                else
+                else {
+                    error("load(): Failed to load market for item: " + id);
                     success = false;
+                }
             }
-            else
+            else {
+                error("load(): Invalid ItemID at index " + i + " while loading markets");
                 success = false;
+            }
         }
-        if(success) {
-            markets.clear();
-            markets.putAll(newMarkets);
-        }
+        markets.clear();
+        markets.putAll(newMarkets);
 
         ListTag userListTag = listTags.get("users");
         if(userListTag != null)

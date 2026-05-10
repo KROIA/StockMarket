@@ -43,6 +43,8 @@ public class DynamicIndexedArrayTestSuite extends TestSuite {
         addTest("reset_to_default_values", this::test_resetToDefaultValues);
         addTest("add_within_range", this::test_add_withinRange);
         addTest("multiply_within_range", this::test_multiply_withinRange);
+        addTest("set_float_array_negative_start_index", this::test_set_floatArray_negativeStartIndex);
+        addTest("add_float_array_negative_start_index", this::test_add_floatArray_negativeStartIndex);
     }
 
     private TestResult test_get_withinRange() {
@@ -438,5 +440,72 @@ public class DynamicIndexedArrayTestSuite extends TestSuite {
         // Test multiply outside range
         boolean outsideResult = arr.multyply(20, 2.0f);
         return assertFalse("multyply() outside range should return false", outsideResult);
+    }
+
+    private TestResult test_set_floatArray_negativeStartIndex() {
+        // Create array of size 10, then move offset to 5 so valid range is [5, 14]
+        DynamicIndexedArray arr = new DynamicIndexedArray(10, idx -> 0.0f);
+        arr.setOffset(5);
+
+        // set(3, ...) starts before offset 5, so virtualIndex 3 maps to arrayIndex -2
+        // srcOffset should be 2, meaning we skip the first 2 elements of the input array
+        // and start writing from value[2]=30 at array position 0 (virtualIndex 5)
+        float[] values = {10.0f, 20.0f, 30.0f, 40.0f, 50.0f};
+        boolean result = arr.set(3, values);
+        TestResult r = assertTrue("set() with negative start should still return true", result);
+        if (!r.passed()) return r;
+
+        if (Math.abs(arr.get(5) - 30.0f) > DELTA) {
+            return fail("arr.get(5) should be 30.0 but was " + arr.get(5));
+        }
+        if (Math.abs(arr.get(6) - 40.0f) > DELTA) {
+            return fail("arr.get(6) should be 40.0 but was " + arr.get(6));
+        }
+        if (Math.abs(arr.get(7) - 50.0f) > DELTA) {
+            return fail("arr.get(7) should be 50.0 but was " + arr.get(7));
+        }
+        // Indices before offset should remain default (0.0)
+        if (Math.abs(arr.get(8) - 0.0f) > DELTA) {
+            return fail("arr.get(8) should be unchanged default 0.0 but was " + arr.get(8));
+        }
+        return pass("set(float[]) with negative start index correctly applies srcOffset");
+    }
+
+    private TestResult test_add_floatArray_negativeStartIndex() {
+        // Create array of size 10, then move offset to 5 so valid range is [5, 14]
+        DynamicIndexedArray arr = new DynamicIndexedArray(10, idx -> 0.0f);
+        arr.setOffset(5);
+
+        // Set initial values at indices 5, 6, 7
+        arr.set(5, 100.0f);
+        arr.set(6, 200.0f);
+        arr.set(7, 300.0f);
+
+        // add(3, ...) starts before offset 5, so virtualIndex 3 maps to arrayIndex -2
+        // srcOffset should be 2, meaning we skip the first 2 elements of the input array
+        // and start adding from value[2]=3 at array position 0 (virtualIndex 5)
+        // flipSignAboveVirtualIndex set to 100 so all values stay positive (no sign flip)
+        float[] toAdd = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f};
+        boolean result = arr.add(3, toAdd, 100);
+        TestResult r = assertTrue("add() with negative start should still return true", result);
+        if (!r.passed()) return r;
+
+        // arr[5] was 100, added value[2]=3 → 103
+        if (Math.abs(arr.get(5) - 103.0f) > DELTA) {
+            return fail("arr.get(5) should be 103.0 but was " + arr.get(5));
+        }
+        // arr[6] was 200, added value[3]=4 → 204
+        if (Math.abs(arr.get(6) - 204.0f) > DELTA) {
+            return fail("arr.get(6) should be 204.0 but was " + arr.get(6));
+        }
+        // arr[7] was 300, added value[4]=5 → 305
+        if (Math.abs(arr.get(7) - 305.0f) > DELTA) {
+            return fail("arr.get(7) should be 305.0 but was " + arr.get(7));
+        }
+        // Index 8 should be unchanged (0.0)
+        if (Math.abs(arr.get(8) - 0.0f) > DELTA) {
+            return fail("arr.get(8) should be unchanged default 0.0 but was " + arr.get(8));
+        }
+        return pass("add(float[]) with negative start index correctly applies srcOffset");
     }
 }

@@ -58,6 +58,8 @@ public class OrderbookTestSuite extends TestSuite {
         addTest("getRawVolume_includesVirtual", this::test_getRawVolume_includesVirtual);
         addTest("getRawVolumeRounded_roundsDown", this::test_getRawVolumeRounded_roundsDown);
         addTest("getRawCapital_correctMultiplication", this::test_getRawCapital_correctMultiplication);
+        addTest("getRawVolume_atMarketPrice_multipleOrders", this::test_getRawVolume_atMarketPrice_multipleOrders);
+        addTest("getRawVolumeRounded_atMarketPrice_multipleOrders", this::test_getRawVolumeRounded_atMarketPrice_multipleOrders);
 
         // getPriceWhenConsumingVolume
         addTest("getPriceWhenConsumingVolume_buy_success", this::test_getPriceWhenConsumingVolume_buy_success);
@@ -394,6 +396,71 @@ public class OrderbookTestSuite extends TestSuite {
                     Math.abs(capital - 80.0f) < 1.0f);
             if (!r.passed()) return r;
             return pass("getRawCapital correctly multiplies volume * price");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    private TestResult test_getRawVolume_atMarketPrice_multipleOrders() {
+        try {
+            resetOrderbook(10);
+            // Disable virtual volume so only real orders are counted
+            serverMarket.test_setDefaultVolumeProviderFunction(p -> 0f);
+            serverMarket.test_resetVirtualOrderBookVolume();
+
+            // Add multiple buy orders at exactly the market price (10)
+            Order buy1 = new Order(itemID, Order.Type.LIMIT, 5, 10, 0, UUID.randomUUID(), 1);
+            Order buy2 = new Order(itemID, Order.Type.LIMIT, 3, 10, 0, UUID.randomUUID(), 1);
+            Order buy3 = new Order(itemID, Order.Type.LIMIT, 7, 10, 0, UUID.randomUUID(), 1);
+            orderbook.putOrder(buy1);
+            orderbook.putOrder(buy2);
+            orderbook.putOrder(buy3);
+
+            // Add multiple sell orders at exactly the market price (10)
+            Order sell1 = new Order(itemID, Order.Type.LIMIT, -4, 10, 0, UUID.randomUUID(), 1);
+            Order sell2 = new Order(itemID, Order.Type.LIMIT, -6, 10, 0, UUID.randomUUID(), 1);
+            orderbook.putOrder(sell1);
+            orderbook.putOrder(sell2);
+
+            long volume = orderbook.getRawVolume(10);
+            // Buy volumes: 5+3+7=15, Sell volumes: -4+(-6)=-10, net=5
+            // The bug (peek) would return only a single order's volume
+            TestResult r = assertEquals("getRawVolume at market price should sum all orders (net=5), got " + volume,
+                    5L, volume);
+            if (!r.passed()) return r;
+            return pass("getRawVolume at market price iterates all buy and sell orders");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    private TestResult test_getRawVolumeRounded_atMarketPrice_multipleOrders() {
+        try {
+            resetOrderbook(10);
+            // Disable virtual volume so only real orders are counted
+            serverMarket.test_setDefaultVolumeProviderFunction(p -> 0f);
+            serverMarket.test_resetVirtualOrderBookVolume();
+
+            // Add multiple buy orders at exactly the market price (10)
+            Order buy1 = new Order(itemID, Order.Type.LIMIT, 5, 10, 0, UUID.randomUUID(), 1);
+            Order buy2 = new Order(itemID, Order.Type.LIMIT, 3, 10, 0, UUID.randomUUID(), 1);
+            Order buy3 = new Order(itemID, Order.Type.LIMIT, 7, 10, 0, UUID.randomUUID(), 1);
+            orderbook.putOrder(buy1);
+            orderbook.putOrder(buy2);
+            orderbook.putOrder(buy3);
+
+            // Add multiple sell orders at exactly the market price (10)
+            Order sell1 = new Order(itemID, Order.Type.LIMIT, -4, 10, 0, UUID.randomUUID(), 1);
+            Order sell2 = new Order(itemID, Order.Type.LIMIT, -6, 10, 0, UUID.randomUUID(), 1);
+            orderbook.putOrder(sell1);
+            orderbook.putOrder(sell2);
+
+            long volumeRounded = orderbook.getRawVolumeRounded(10);
+            // With no virtual volume, rounded should equal raw: net=5
+            TestResult r = assertEquals("getRawVolumeRounded at market price should sum all orders (net=5), got " + volumeRounded,
+                    5L, volumeRounded);
+            if (!r.passed()) return r;
+            return pass("getRawVolumeRounded at market price iterates all buy and sell orders");
         } catch (Exception e) {
             return fail("Exception: " + e.getMessage());
         }

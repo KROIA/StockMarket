@@ -210,6 +210,7 @@ public class DataManager extends DataPersistence {
         IServerMarketManager marketManager = BACKEND_INSTANCES.MARKET_MANAGER.getSync();
         if(marketManager == null) {
             error("savePriceCandlesToSQL(): No marketmanager found!");
+            candleDataSQL_saveLock.set(false);
             return CompletableFuture.completedFuture(false);
         }
 
@@ -222,7 +223,13 @@ public class DataManager extends DataPersistence {
         long finalSaveStartTime = System.nanoTime();
 
         CompletableFuture<Boolean> result = new CompletableFuture<>();
-        priceHistoryManager.save(candles).thenRun(() -> {
+        priceHistoryManager.save(candles).whenComplete((unused, throwable) -> {
+            if(throwable != null) {
+                error("savePriceCandlesToSQL(): Async save failed", throwable);
+                candleDataSQL_saveLock.set(false);
+                result.complete(false);
+                return;
+            }
             if(ENABLE_DEBUG_PERFORMANCE) {
                 long finalSaveEndTime = System.nanoTime();
                 long writeTime = finalSaveEndTime - finalSaveStartTime;

@@ -593,7 +593,7 @@ public class AsyncMarket implements IAsyncMarket{
         if(!MultiServerUtils.canInteractWithStockMarket())
             return CompletableFuture.completedFuture(false);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.SetSettings, itemID);
+        InputData inputData = InputData.of(FunctionType.SetSettings, itemID, settings);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;

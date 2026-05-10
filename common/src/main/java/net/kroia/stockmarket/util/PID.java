@@ -103,7 +103,8 @@ public class PID implements ServerSaveable {
         else if(i < -iBound)
             i = -iBound;
 
-        output = 0.5f*lastOutput + 0.5f*(kp*error + i + kd*(error - lastError)/dt);
+        double derivativeTerm = (dt == 0) ? 0 : kd*(error - lastError)/dt;
+        output = 0.5f*lastOutput + 0.5f*(kp*error + i + derivativeTerm);
         lastOutput = output;
         lastError = (error*0.5f + lastError*0.5f);
         return output;

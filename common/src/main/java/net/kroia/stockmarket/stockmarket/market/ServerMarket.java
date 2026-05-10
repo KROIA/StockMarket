@@ -543,6 +543,11 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
             currentMarketPrice =  tag.getLong("currentMarketPrice");
         }
 
+        // Initialize candle state from loaded price to prevent false spike on first candle
+        candleOpenPrice = currentMarketPrice;
+        candleHighPrice = currentMarketPrice;
+        candleLowPrice = currentMarketPrice;
+        candleStartTime = System.currentTimeMillis();
 
         return success;
     }

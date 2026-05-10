@@ -61,6 +61,7 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin {
 
         public RuntimeData()
         {
+            lastMillis = System.currentTimeMillis();
             calculator = new DistributionCalculator();
         }
     }
@@ -153,6 +154,8 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin {
     @Override
     public void onMarketUnsubscribed(ItemID marketID) {
         RuntimeData data = marketData.remove(marketID);
+        if(data == null)
+            return;
 
         MarketInterface interf = getMarketInterface(marketID);
         if(interf == null)

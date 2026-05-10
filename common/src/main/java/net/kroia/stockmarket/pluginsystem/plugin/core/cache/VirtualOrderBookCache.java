@@ -63,11 +63,19 @@ public class VirtualOrderBookCache {
             {
                 case RANGE:
                 {
-                    orderBook.setVirtualOrderbookVolume(minPrice, maxPrice, rangeVolume);
+                    if(operator == ManipulationOperator.ADD)
+                        orderBook.addVirtualOrderbookVolume(minPrice, maxPrice, rangeVolume);
+                    else
+                        orderBook.setVirtualOrderbookVolume(minPrice, maxPrice, rangeVolume);
+                    break;
                 }
                 case ARRAY:
                 {
-                    orderBook.setVirtualOrderbookVolume(backendStartPrice, arrayVolume);
+                    if(operator == ManipulationOperator.ADD)
+                        orderBook.addVirtualOrderbookVolume(backendStartPrice, arrayVolume);
+                    else
+                        orderBook.setVirtualOrderbookVolume(backendStartPrice, arrayVolume);
+                    break;
                 }
             }
         }

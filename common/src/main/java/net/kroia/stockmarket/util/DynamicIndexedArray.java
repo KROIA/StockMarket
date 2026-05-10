@@ -309,8 +309,11 @@ public class DynamicIndexedArray implements ServerSaveable {
     {
         int arrayIndex = getArrayIndex(virtualIndex);
         int endIndex = Math.min(arrayIndex + value.length, array.length);
-        if(arrayIndex < 0)
+        int srcOffset = 0;
+        if(arrayIndex < 0) {
+            srcOffset = -arrayIndex;
             arrayIndex = 0;
+        }
         if(arrayIndex >= array.length)
             return false;
         if(endIndex < 0)
@@ -319,7 +322,7 @@ public class DynamicIndexedArray implements ServerSaveable {
             endIndex = array.length;
 
         if (endIndex - arrayIndex >= 0)
-            System.arraycopy(value, 0, array, arrayIndex, endIndex - arrayIndex);
+            System.arraycopy(value, srcOffset, array, arrayIndex, endIndex - arrayIndex);
         return true;
     }
 
@@ -381,8 +384,11 @@ public class DynamicIndexedArray implements ServerSaveable {
         int arrayIndex = getArrayIndex(virtualIndex);
 
         int endIndex = Math.min(arrayIndex + value.length, array.length);
-        if(arrayIndex < 0)
+        int srcOffset = 0;
+        if(arrayIndex < 0) {
+            srcOffset = -arrayIndex;
             arrayIndex = 0;
+        }
         if(arrayIndex >= array.length)
             return false;
         if(endIndex < 0)
@@ -394,11 +400,11 @@ public class DynamicIndexedArray implements ServerSaveable {
 
         for(int i = arrayIndex; i < flipIndex; i++)
         {
-            array[i] = Math.max(0, array[i] + value[i]);
+            array[i] = Math.max(0, array[i] + value[i + srcOffset]);
         }
         for(int i = flipIndex; i < endIndex; i++)
         {
-            array[i] =  Math.min(0, array[i] + value[i]);
+            array[i] =  Math.min(0, array[i] + value[i + srcOffset]);
         }
         return true;
     }

@@ -127,17 +127,15 @@ public class PIDTestSuite extends TestSuite {
     }
 
     private TestResult test_update_dtDivisionByZero() {
-        // Two calls at the same millisecond should not throw an exception
         PID pid = new PID(1.0, 0.0, 1.0, 100.0);
         pid.setCurrentMillis();
         try {
-            // Call twice immediately - dt may be 0
             double out1 = pid.update(5.0);
             double out2 = pid.update(5.0);
-            // If dt=0, the derivative term (kd*(error-lastError)/dt) produces Infinity or NaN
-            // The test verifies this does not throw an exception
-            // Output may be NaN or Infinity but should not crash
-            return pass("Two updates at same millisecond did not throw an exception");
+            if (Double.isNaN(out2) || Double.isInfinite(out2)) {
+                return fail("Output should not be NaN/Infinite when dt=0, got " + out2);
+            }
+            return pass("dt=0 computes P and I terms without NaN from derivative");
         } catch (Exception e) {
             return fail("Two updates at same millisecond threw: " + e.getClass().getSimpleName() + ": " + e.getMessage());
         }

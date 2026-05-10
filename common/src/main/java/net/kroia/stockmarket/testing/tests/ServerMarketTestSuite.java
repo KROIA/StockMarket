@@ -59,6 +59,7 @@ public class ServerMarketTestSuite extends TestSuite {
         // Save/Load
         addTest("save_load_roundTrip", this::test_save_load_roundTrip);
         addTest("load_missingOrderbook", this::test_load_missingOrderbook);
+        addTest("load_restoresCandleState", this::test_load_restoresCandleState);
 
         // Candle Tracking
         addTest("getCurrentMarketPriceStructAndReset_resets", this::test_getCurrentMarketPriceStructAndReset_resets);
@@ -353,6 +354,38 @@ public class ServerMarketTestSuite extends TestSuite {
             TestResult r = assertFalse("Load should return false when orderbook is missing", loaded);
             if (!r.passed()) return r;
             return pass("Load with missing orderbook returns false and logs error");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    private TestResult test_load_restoresCandleState() {
+        try {
+            resetMarket(250, true);
+
+            CompoundTag tag = new CompoundTag();
+            boolean saved = ((ServerMarket) serverMarket).save(tag);
+            TestResult r = assertTrue("Save should succeed", saved);
+            if (!r.passed()) return r;
+
+            // Reset to a different price so candle fields differ
+            resetMarket(100, true);
+
+            boolean loaded = ((ServerMarket) serverMarket).load(tag);
+            r = assertTrue("Load should succeed", loaded);
+            if (!r.passed()) return r;
+
+            MarketPriceStruct candle = serverMarket.getCurrentMarketPriceStruct();
+            r = assertNotNull("Candle struct should not be null", candle);
+            if (!r.passed()) return r;
+
+            r = assertEquals("Candle open should be loaded price (250)", 250L, candle.open());
+            if (!r.passed()) return r;
+            r = assertEquals("Candle high should be loaded price (250)", 250L, candle.high());
+            if (!r.passed()) return r;
+            r = assertEquals("Candle low should be loaded price (250)", 250L, candle.low());
+            if (!r.passed()) return r;
+            return pass("load() correctly restores candle state fields from loaded price (Issue #48)");
         } catch (Exception e) {
             return fail("Exception: " + e.getMessage());
         }

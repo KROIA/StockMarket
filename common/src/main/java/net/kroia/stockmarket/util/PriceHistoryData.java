@@ -273,7 +273,7 @@ public class PriceHistoryData
     {
         if(candles.isEmpty())
             return 0;
-        long min = Integer.MAX_VALUE;
+        long min = Long.MAX_VALUE;
         if(startIndex > endIndex)
         {
             int tmp = endIndex;
@@ -292,7 +292,7 @@ public class PriceHistoryData
     {
         if(candles.isEmpty())
             return 0;
-        long max = Integer.MIN_VALUE;
+        long max = Long.MIN_VALUE;
         if(startIndex > endIndex)
         {
             int tmp = endIndex;

@@ -43,6 +43,8 @@ public class PriceHistoryTestSuite extends TestSuite {
         addTest("get_max_price_normal", this::test_getMaxPrice_normalRange);
         addTest("get_min_price_inverted", this::test_getMinPrice_invertedRange);
         addTest("get_min_price_empty", this::test_getMinPrice_emptyCandles);
+        addTest("get_min_price_extremeLongValues", this::test_getMinPrice_extremeLongValues);
+        addTest("get_max_price_extremeLongValues", this::test_getMaxPrice_extremeLongValues);
         // Utilities
         addTest("floor_time_rounds_down", this::test_floorTime_roundsDown);
         addTest("floor_time_exact", this::test_floorTime_exact);
@@ -304,6 +306,36 @@ public class PriceHistoryTestSuite extends TestSuite {
         PriceHistoryData data = new PriceHistoryData(DUMMY_ITEM, SCALE_FACTOR, new ArrayList<>(), 0);
         long min = data.getMinPrice(0, 5);
         return assertEquals("Empty candle list should return 0", 0L, min);
+    }
+
+    /**
+     * Extreme long values beyond int range are correctly detected by getMinPrice.
+     */
+    private TestResult test_getMinPrice_extremeLongValues() {
+        List<Candle> candles = new ArrayList<>();
+        candles.add(new Candle(0L, 100, Long.MAX_VALUE - 50, Long.MAX_VALUE - 100));
+        candles.add(new Candle(0L, 100, Long.MAX_VALUE - 50, Long.MAX_VALUE - 200));
+        candles.add(new Candle(0L, 100, Long.MAX_VALUE - 50, Long.MAX_VALUE - 150));
+        PriceHistoryData data = new PriceHistoryData(DUMMY_ITEM, SCALE_FACTOR, candles, 100);
+
+        long min = data.getMinPrice(0, 2);
+        return assertEquals("Min price should be Long.MAX_VALUE - 200 (Issue #54)",
+                Long.MAX_VALUE - 200, min);
+    }
+
+    /**
+     * Extreme long values beyond int range are correctly detected by getMaxPrice.
+     */
+    private TestResult test_getMaxPrice_extremeLongValues() {
+        List<Candle> candles = new ArrayList<>();
+        candles.add(new Candle(0L, 100, Long.MIN_VALUE + 200, Long.MIN_VALUE + 50));
+        candles.add(new Candle(0L, 100, Long.MIN_VALUE + 100, Long.MIN_VALUE + 50));
+        candles.add(new Candle(0L, 100, Long.MIN_VALUE + 150, Long.MIN_VALUE + 50));
+        PriceHistoryData data = new PriceHistoryData(DUMMY_ITEM, SCALE_FACTOR, candles, 100);
+
+        long max = data.getMaxPrice(0, 2);
+        return assertEquals("Max price should be Long.MIN_VALUE + 200 (Issue #54)",
+                Long.MIN_VALUE + 200, max);
     }
 
     // --- Utilities ---

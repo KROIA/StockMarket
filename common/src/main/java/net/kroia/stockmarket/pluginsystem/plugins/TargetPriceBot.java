@@ -42,6 +42,7 @@ public class TargetPriceBot extends ServerPlugin {
         for(MarketInterface market : markets)
         {
             RuntimeData data = marketData.get(market.market.getMarketID());
+            if(data == null) continue;
             updateForMarket(market, data);
         }
     }
