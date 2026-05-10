@@ -14,9 +14,8 @@ import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
-import net.kroia.stockmarket.stockmarket.marketmanager.AsyncMarketManager;
 import net.kroia.stockmarket.util.MultiServerUtils;
-import net.minecraft.core.UUIDUtil;
+import net.kroia.stockmarket.util.StockMarketLogger;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
@@ -29,9 +28,13 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 public class AsyncMarket implements IAsyncMarket{
-    private static StockMarketModBackend.ServerInstances BACKEND_INSTANCES;
-    public static void setBackend(StockMarketModBackend.ServerInstances backend) {
-        BACKEND_INSTANCES = backend;
+    private static StockMarketModBackend.ServerInstances SERVER_BACKEND_INSTANCES;
+    private static StockMarketModBackend.ClientInstances CLIENT_BACKEND_INSTANCES;
+    public static void setServerBackend(StockMarketModBackend.ServerInstances backend) {
+        SERVER_BACKEND_INSTANCES = backend;
+    }
+    public static void setClientBackend(StockMarketModBackend.ClientInstances backend) {
+        CLIENT_BACKEND_INSTANCES = backend;
     }
 
     private final boolean isClientSide;
@@ -179,7 +182,7 @@ public class AsyncMarket implements IAsyncMarket{
         }
         boolean isPlayerAdmin(UUID playerID)
         {
-            return AsyncMarket.BACKEND_INSTANCES.MARKET_MANAGER.getSync().isStockmarketAdmin(playerID);
+            return AsyncMarket.SERVER_BACKEND_INSTANCES.MARKET_MANAGER.getSync().isStockmarketAdmin(playerID);
         }
 
         /**
@@ -196,29 +199,16 @@ public class AsyncMarket implements IAsyncMarket{
                 playerName = tryGetPlayerName(playerSender);
                 playerInfo = " from player: " + playerName;
             }
-            if(!isAllowedToCallByUntrustedSlaveServer(input))
-            {
-                if(!BACKEND_INSTANCES.SERVER_BANK_MANAGER.getSync().isSlaveServerTrusted(slaveID))
-                {
-                    warn("The slave server: '"+slaveID+"' try's to call the function: '"+input.function.toString()+"' which is not allowed for an untrusted slave server!");
-                    return CompletableFuture.completedFuture(OutputData.of(input.function));
-                }
-            }
+            if(!isRequestAllowed(input, slaveID, playerSender, playerName))
+                return CompletableFuture.completedFuture(OutputData.of(input.function));
+
             if(AsyncForwardingRequest.DEBUG_ENABLE_LOGS)
                 info("Received request to handle on master server for function: "+input.function.toString() + playerInfo);
             MarketIdentifyAndDataPacket inputData = input.decodeParams();
-            if(playerSender != null)
-            {
-                if(!isAllowedToCallByClient(input))
-                {
-                    warn("The player '"+playerName+"' try's to call the function: '"+input.function.toString()+"' which is not allowed from the client side!");
-                    return CompletableFuture.completedFuture(OutputData.of(input.function));
-                }
-            }
             ItemID itemID = inputData.itemID;
-            IServerMarketManager serverMarketManager = AsyncMarket.BACKEND_INSTANCES.MARKET_MANAGER.getSync();
+            IServerMarketManager serverMarketManager = AsyncMarket.SERVER_BACKEND_INSTANCES.MARKET_MANAGER.getSync();
             if(serverMarketManager == null) {
-                if(AsyncMarket.BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().isSlave())
+                if(AsyncMarket.SERVER_BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().isSlave())
                 {
                     throw new RuntimeException("[AsyncMarket]: This server is configured to be a slave server but the slave seems not to be connected to its master.\n" +
                             "This server instance has no IServerMarketManager!");
@@ -605,25 +595,43 @@ public class AsyncMarket implements IAsyncMarket{
 
 
 
+
     private static void info(String msg)
     {
-        BACKEND_INSTANCES.LOGGER.info("[AsyncMarket] " + msg);
+        StockMarketLogger logger = getLogger();
+        if(logger != null)
+            logger.info("[AsyncMarket] "+msg);
     }
     private static void error(String msg)
     {
-        BACKEND_INSTANCES.LOGGER.error("[AsyncMarket] " + msg);
+        StockMarketLogger logger = getLogger();
+        if(logger != null)
+            logger.error("[AsyncMarket] "+msg);
     }
     private static void error(String msg, Throwable e)
     {
-        BACKEND_INSTANCES.LOGGER.error("[AsyncMarket] " + msg, e);
+        StockMarketLogger logger = getLogger();
+        if(logger != null)
+            logger.error("[AsyncMarket] "+msg,e);
     }
     private static void warn(String msg)
     {
-        BACKEND_INSTANCES.LOGGER.warn("[AsyncMarket] " + msg);
+        StockMarketLogger logger = getLogger();
+        if(logger != null)
+            logger.warn("[AsyncMarket] "+msg);
     }
     private static void debug(String msg)
     {
-        BACKEND_INSTANCES.LOGGER.debug("[AsyncMarket] " + msg);
+        StockMarketLogger logger = getLogger();
+        if(logger != null)
+            logger.debug("[AsyncMarket] "+msg);
     }
-
+    private static StockMarketLogger getLogger()
+    {
+        if(SERVER_BACKEND_INSTANCES != null)
+            return SERVER_BACKEND_INSTANCES.LOGGER;
+        else if (CLIENT_BACKEND_INSTANCES != null)
+            return CLIENT_BACKEND_INSTANCES.LOGGER;
+        return null;
+    }
 }
