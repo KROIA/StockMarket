@@ -5,6 +5,8 @@ import io.netty.buffer.Unpooled;
 import net.kroia.modutilities.networking.client_server.streaming.StreamSystem;
 import net.kroia.stockmarket.networking.stream.PluginRuntimeDataStream;
 import net.kroia.stockmarket.pluginsystem.plugin.core.PluginSyncData;
+import net.kroia.stockmarket.screen.widgets.CandlestickChart;
+import net.kroia.stockmarket.screen.widgets.OrderbookVolumeHistogram;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.minecraft.network.codec.StreamCodec;
 import org.jetbrains.annotations.Nullable;
@@ -213,6 +215,26 @@ public class PluginGuiElement<TSettings, TRuntimeData> extends StockMarketGuiEle
         }
     }
 
+
+    /**
+     * Called by the screen to provide a reference to the shared candlestick chart.
+     * Subclasses can override to register overlays on the chart.
+     *
+     * @param chart the chart widget, or null to clear
+     */
+    public void setCandlestickChart(@Nullable CandlestickChart chart) {
+        // no-op by default
+    }
+
+    /**
+     * Called by the screen to provide a reference to the shared orderbook volume histogram.
+     * Subclasses can override to register overlays or use the histogram for visualization.
+     *
+     * @param histogram the histogram widget, or null to clear
+     */
+    public void setOrderbookVolumeHistogram(@Nullable OrderbookVolumeHistogram histogram) {
+        // no-op by default
+    }
 
     @Override
     protected void render() {

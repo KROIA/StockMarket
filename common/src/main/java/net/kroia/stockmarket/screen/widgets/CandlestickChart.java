@@ -33,6 +33,15 @@ public class CandlestickChart extends StockMarketGuiElement
 
     private final static long MILLISECONDS_PER_DAY = 86400000;
 
+    @FunctionalInterface
+    public interface Overlay {
+        void render(CandlestickChart chart);
+    }
+
+    private final List<Overlay> overlays = new ArrayList<>();
+
+    public void addOverlay(Overlay overlay) { overlays.add(overlay); }
+    public void removeOverlay(Overlay overlay) { overlays.remove(overlay); }
 
     private @Nullable ClientMarket market;
     private @Nullable PriceHistoryData data;
@@ -193,6 +202,13 @@ public class CandlestickChart extends StockMarketGuiElement
 
         renderCandles();
         drawFrame(canvasRect, ColorUtilities.setAlpha(colorZeroLine,1.0f), 1);
+
+        // Render plugin overlays on top of chart
+        enableScissor(canvasScissorRect);
+        for (Overlay overlay : overlays) {
+            overlay.render(this);
+        }
+        disableScissor();
     }
 
     @Override
