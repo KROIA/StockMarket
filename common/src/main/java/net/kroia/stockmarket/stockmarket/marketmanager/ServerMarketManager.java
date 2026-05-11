@@ -108,6 +108,14 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
             float abundance = (preset != null) ? preset.naturalAbundance() : 10f;
             m = new ServerMarket(marketID, null, defaultPrice, abundance);
             markets.put(marketID, m);
+
+            // Auto-subscribe new market to plugins that opt in
+            if (BACKEND_INSTANCES.PLUGIN_MANAGER != null) {
+                var pluginManager = BACKEND_INSTANCES.PLUGIN_MANAGER.getSync();
+                if (pluginManager != null) {
+                    pluginManager.autoSubscribeNewMarket(marketID);
+                }
+            }
         }
         return m;
     }

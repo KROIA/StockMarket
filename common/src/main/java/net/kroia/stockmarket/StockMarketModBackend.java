@@ -83,6 +83,7 @@ public class StockMarketModBackend implements StockMarketAPI {
 
         public IClientMarketManager MARKET_MANAGER;
         public IClientPluginManager PLUGIN_MANAGER;
+        public MarketPresetManager PRESET_MANAGER;
         public StockMarketNetworking NETWORKING;
         public StockMarketLogger LOGGER;
         public ClientSettings SETTINGS;
@@ -292,6 +293,8 @@ public class StockMarketModBackend implements StockMarketAPI {
         CLIENT_INSTANCES.BANK_SYSTEM_API = BankSystemMod.getAPI();
         CLIENT_INSTANCES.MARKET_MANAGER = MarketManager.createClient();
         CLIENT_INSTANCES.PLUGIN_MANAGER = new ClientPluginManager();
+        CLIENT_INSTANCES.PRESET_MANAGER = new MarketPresetManager();
+        CLIENT_INSTANCES.PRESET_MANAGER.loadOrGenerate();
         CLIENT_INSTANCES.SETTINGS = new ClientSettings();
 
 

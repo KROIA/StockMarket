@@ -39,6 +39,8 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         public static final Component ENABLED = Component.translatable(PREFIX + "enabled");
         public static final Component OPEN_PLUGIN_SCREEN = Component.translatable(PREFIX + "open_plugin_screen");
         public static final Component ALL_MARKETS = Component.translatable(PREFIX + "all_markets");
+        public static final Component AUTO_SUBSCRIBE = Component.translatable(PREFIX + "auto_subscribe");
+        public static final Component SUBSCRIPTION_ORDER = Component.translatable(PREFIX + "subscription_order");
     }
 
     private final StockMarketGuiScreen parent;
@@ -341,6 +343,9 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         private final CheckBox enabledCheckBox;
         private final Button moveUpButton;
         private final Button moveDownButton;
+        private final CheckBox autoSubscribeCheckBox;
+        private final Label subscriptionOrderLabel;
+        private final TextBox subscriptionOrderTextBox;
         @SuppressWarnings("rawtypes")
         private final PluginGuiElement pluginGuiElement;  // may be null if registry lookup fails
         private final Button openPluginScreenButton;      // only used if needsCustomScreen() is true
@@ -392,6 +397,19 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             moveUpButton = new Button("▲", this::onMoveUp);
             moveDownButton = new Button("▼", this::onMoveDown);
 
+            // Auto-subscribe checkbox — set state before attaching callback
+            autoSubscribeCheckBox = new CheckBox(Texts.AUTO_SUBSCRIBE.getString());
+            autoSubscribeCheckBox.setChecked(data.getGenericData().getAutoSubscribeNewMarkets());
+            autoSubscribeCheckBox.setOnStateChanged(this::onAutoSubscribeChanged);
+
+            // Subscription order label + text box
+            subscriptionOrderLabel = new Label(Texts.SUBSCRIPTION_ORDER.getString());
+            subscriptionOrderLabel.setAlignment(Label.Alignment.RIGHT);
+            subscriptionOrderTextBox = new TextBox();
+            subscriptionOrderTextBox.setText(String.valueOf(data.getGenericData().getSubscriptionOrder()));
+            subscriptionOrderTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 4, 0));
+            subscriptionOrderTextBox.setOnTextChanged(this::onSubscriptionOrderChanged);
+
             // Add children
             this.addChild(nameLabel);
             this.addChild(descriptionLabel);
@@ -402,6 +420,9 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             this.addChild(enabledCheckBox);
             this.addChild(moveUpButton);
             this.addChild(moveDownButton);
+            this.addChild(autoSubscribeCheckBox);
+            this.addChild(subscriptionOrderLabel);
+            this.addChild(subscriptionOrderTextBox);
 
             // Create the plugin GUI element from the registry (no ClientPlugin intermediary needed)
             this.pluginGuiElement = PluginRegistry.createGuiElement(data.getPluginTypeID());
@@ -425,8 +446,9 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
                 openPluginScreenButton = null;
             }
 
-            // Set entry height: base 4 rows + optional extra row for button or inline GUI element
-            int baseHeight = 4 * (defaultElementHeight + spacing) + padding;
+            // Set entry height: base 5 rows (name, description, markets, auto-subscribe)
+            // + optional extra row for button or inline GUI element
+            int baseHeight = 5 * (defaultElementHeight + spacing) + padding;
             if (openPluginScreenButton != null) {
                 baseHeight += defaultElementHeight + spacing;
             } else if (pluginGuiElement != null) {
@@ -469,12 +491,21 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             }
             subscribeButton.setBounds(iconX, iconY, 20, 16);
 
-            // Row 4: PluginGuiElement (inline) or "Open Plugin" button
+            // Row 4: auto-subscribe checkbox + subscription order
             int row4Y = iconY + 18 + spacing;
+            int autoSubWidth = width / 2;
+            autoSubscribeCheckBox.setBounds(padding, row4Y, autoSubWidth, defaultElementHeight);
+            int orderLabelWidth = width / 4;
+            int orderFieldWidth = width - autoSubWidth - orderLabelWidth - 2 * spacing;
+            subscriptionOrderLabel.setBounds(autoSubscribeCheckBox.getRight() + spacing, row4Y, orderLabelWidth, defaultElementHeight);
+            subscriptionOrderTextBox.setBounds(subscriptionOrderLabel.getRight() + spacing, row4Y, orderFieldWidth, defaultElementHeight);
+
+            // Row 5: PluginGuiElement (inline) or "Open Plugin" button
+            int row5Y = row4Y + defaultElementHeight + spacing;
             if (openPluginScreenButton != null) {
-                openPluginScreenButton.setBounds(padding, row4Y, width, defaultElementHeight);
+                openPluginScreenButton.setBounds(padding, row5Y, width, defaultElementHeight);
             } else if (pluginGuiElement != null) {
-                pluginGuiElement.setBounds(padding, row4Y, width, 80);
+                pluginGuiElement.setBounds(padding, row5Y, width, 80);
             }
         }
 
@@ -499,6 +530,42 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
                     parentScreen.refreshPluginList();
                 }
             });
+        }
+
+        /**
+         * Called when the auto-subscribe checkbox state changes.
+         * Sends a settings update request to the server.
+         */
+        private void onAutoSubscribeChanged(Boolean value) {
+            GenericPluginData data = pluginData.getGenericData();
+            data.setAutoSubscribeNewMarkets(value);
+            getPluginManager().requestUpdateSettings(pluginData.getInstanceID(), data).thenAccept(result -> {
+                if (result.success()) {
+                    parentScreen.refreshPluginList();
+                }
+            });
+        }
+
+        /**
+         * Called when the subscription order text changes.
+         * Parses the new value and sends a settings update request to the server.
+         */
+        private void onSubscriptionOrderChanged(String text) {
+            if (text == null || text.isEmpty()) return;
+            try {
+                int order = Integer.parseInt(text);
+                GenericPluginData data = pluginData.getGenericData();
+                if (data.getSubscriptionOrder() != order) {
+                    data.setSubscriptionOrder(order);
+                    getPluginManager().requestUpdateSettings(pluginData.getInstanceID(), data).thenAccept(result -> {
+                        if (result.success()) {
+                            parentScreen.refreshPluginList();
+                        }
+                    });
+                }
+            } catch (NumberFormatException e) {
+                // Invalid input, ignore
+            }
         }
 
         /**
