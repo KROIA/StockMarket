@@ -38,16 +38,12 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         private static final Component TITLE = Component.translatable(PREFIX + "title");
         public static final Component ENABLED = Component.translatable(PREFIX + "enabled");
         public static final Component OPEN_PLUGIN_SCREEN = Component.translatable(PREFIX + "open_plugin_screen");
-        public static final Component ALL_MARKETS = Component.translatable(PREFIX + "all_markets");
         public static final Component AUTO_SUBSCRIBE = Component.translatable(PREFIX + "auto_subscribe");
         public static final Component SUBSCRIPTION_ORDER = Component.translatable(PREFIX + "subscription_order");
     }
 
     private final StockMarketGuiScreen parent;
     private final Label titleLabel;
-    private final Button filterButton;
-    private final ItemView filterItemView;
-    private @Nullable ItemID selectedFilterMarket = null;
     final CandlestickChart candlestickChart;
     final OrderbookVolumeHistogram orderbookVolumeHistogram;
     private @Nullable ItemID selectedChartMarket = null;
@@ -68,11 +64,6 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         titleLabel = new Label(Texts.TITLE.getString());
         titleLabel.setAlignment(Label.Alignment.CENTER);
 
-        // Market filter — button opens a popup with ItemSelectionView
-        filterButton = new Button(Texts.ALL_MARKETS.getString(), this::onFilterButtonClicked);
-        filterItemView = new ItemView();
-        filterItemView.setSize(16, 16);
-
         candlestickChart = new CandlestickChart();
         orderbookVolumeHistogram = new OrderbookVolumeHistogram(candlestickChart);
 
@@ -83,8 +74,6 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         listView.setLayout(layout);
 
         addElement(titleLabel);
-        addElement(filterItemView);
-        addElement(filterButton);
         addElement(candlestickChart);
         addElement(orderbookVolumeHistogram);
         addElement(listView);
@@ -113,17 +102,7 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         int height = getHeight() - 2 * padding;
         int eh = StockMarketGuiElement.defaultElementHeight;
 
-        int filterWidth = width / 3;
-        int iconSize = eh;
-        boolean hasFilter = selectedFilterMarket != null;
-
-        titleLabel.setBounds(padding, padding, width - filterWidth - (hasFilter ? iconSize + spacing : 0) - spacing, eh);
-        if (hasFilter) {
-            filterItemView.setBounds(titleLabel.getRight() + spacing, padding + (eh - 16) / 2, 16, 16);
-            filterButton.setBounds(filterItemView.getRight() + spacing, padding, filterWidth - 16 - spacing, eh);
-        } else {
-            filterButton.setBounds(titleLabel.getRight() + spacing, padding, filterWidth, eh);
-        }
+        titleLabel.setBounds(padding, padding, width, eh);
 
         int contentTop = titleLabel.getBottom() + spacing;
         int contentHeight = height - (titleLabel.getBottom() + spacing) + padding;
@@ -156,9 +135,7 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
     }
 
     /**
-     * Filters the displayed plugin list based on the currently selected market filter.
-     * If selectedFilterMarket is null, all plugins are shown.
-     * Otherwise, only plugins subscribed to the selected market are shown.
+     * Rebuilds the plugin entry list from the current data.
      */
     private void applyFilter() {
         for (PluginEntryWidget entry : entryWidgets) {
@@ -168,58 +145,11 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         entryWidgets.clear();
 
         for (PluginSyncData data : allPlugins) {
-            if (selectedFilterMarket != null) {
-                if (!data.getSubscribedMarkets().contains(selectedFilterMarket)) {
-                    continue;
-                }
-            }
             PluginEntryWidget entry = new PluginEntryWidget(data, this);
             entryWidgets.add(entry);
             listView.addChild(entry);
         }
         updateMarketButtonSelection();
-    }
-
-    /**
-     * Opens the MarketFilterScreen popup to select a market filter.
-     * Collects unique market ItemStacks from all plugins and passes them to the popup.
-     */
-    private void onFilterButtonClicked() {
-        List<ItemStack> marketStacks = new ArrayList<>();
-        List<ItemID> seenMarkets = new ArrayList<>();
-        for (PluginSyncData data : allPlugins) {
-            for (ItemID marketID : data.getSubscribedMarkets()) {
-                if (!seenMarkets.contains(marketID)) {
-                    seenMarkets.add(marketID);
-                    ItemStack stack = marketID.getStack();
-                    if (stack != null) {
-                        marketStacks.add(stack);
-                    }
-                }
-            }
-        }
-        setScreen(new MarketFilterScreen(this, marketStacks));
-    }
-
-    /**
-     * Called by MarketFilterScreen when a market is selected.
-     * Sets the filter and updates the button text and icon.
-     *
-     * @param marketID the selected market, or null for "all markets"
-     */
-    void setMarketFilter(@Nullable ItemID marketID) {
-        this.selectedFilterMarket = marketID;
-        if (marketID != null) {
-            ItemStack stack = marketID.getStack();
-            if (stack != null) {
-                filterButton.setText(stack.getDisplayName().getString());
-                filterItemView.setItemStack(stack);
-            }
-        } else {
-            filterButton.setText(Texts.ALL_MARKETS.getString());
-            filterItemView.setItemStack(null);
-        }
-        applyFilter();
     }
 
     /**
@@ -261,68 +191,6 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             for (MarketItemButton btn : entry.marketItemViews) {
                 btn.setSelected(selectedChartMarket != null && selectedChartMarket.equals(btn.getMarketID()));
             }
-        }
-    }
-
-    /**
-     * Popup screen for selecting a market to filter the plugin list by.
-     * Shows an ItemSelectionView with all available markets and a "Show All" button.
-     */
-    private static class MarketFilterScreen extends StockMarketGuiScreen {
-        private static final String PREFIX = "gui." + StockMarketMod.MOD_ID + ".plugin_management_screen.";
-        private static final Component FILTER_TITLE = Component.translatable(PREFIX + "filter_title");
-
-        private final PluginManagementScreen parentScreen;
-        private final Label titleLabel;
-        private final Button showAllButton;
-        private final ItemSelectionView itemSelectionView;
-
-        MarketFilterScreen(PluginManagementScreen parentScreen, List<ItemStack> marketStacks) {
-            super(FILTER_TITLE, parentScreen);
-            this.parentScreen = parentScreen;
-
-            titleLabel = new Label(FILTER_TITLE.getString());
-            titleLabel.setAlignment(Label.Alignment.CENTER);
-
-            showAllButton = new Button(Texts.ALL_MARKETS.getString(), this::onShowAll);
-
-            itemSelectionView = new ItemSelectionView(this::onMarketSelected);
-            itemSelectionView.setItems(marketStacks);
-
-            addElement(titleLabel);
-            addElement(showAllButton);
-            addElement(itemSelectionView);
-        }
-
-        private void onMarketSelected(ItemStack item) {
-            ItemID.getOrRegisterFromItemStackClientSide(item).thenAccept(itemID -> {
-                net.minecraft.client.Minecraft.getInstance().execute(() -> {
-                    parentScreen.setMarketFilter(itemID);
-                    setScreen(parentScreen);
-                });
-            });
-        }
-
-        private void onShowAll() {
-            parentScreen.setMarketFilter(null);
-            setScreen(parentScreen);
-        }
-
-        @Override
-        protected void updateLayout(Gui gui) {
-            int p = StockMarketGuiElement.padding;
-            int s = StockMarketGuiElement.spacing;
-            int w = getWidth() - 2 * p;
-            int eh = StockMarketGuiElement.defaultElementHeight;
-
-            titleLabel.setBounds(p, p, w, eh);
-            showAllButton.setBounds(p, titleLabel.getBottom() + s, w, eh);
-            itemSelectionView.setBounds(p, showAllButton.getBottom() + s, w, getHeight() - showAllButton.getBottom() - s - p);
-        }
-
-        @Override
-        public void onClose() {
-            super.onClose();
         }
     }
 

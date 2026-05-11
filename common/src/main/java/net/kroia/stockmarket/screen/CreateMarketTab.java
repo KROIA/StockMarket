@@ -73,6 +73,14 @@ public class CreateMarketTab extends StockMarketGuiElement {
     private final LinkedHashSet<String> selectedItemIds = new LinkedHashSet<>();
     // Cached set of existing market item names for "already exists" detection
     private final Set<String> existingMarketNames = new HashSet<>();
+    // Dirty flags — rebuilt in render() to avoid modifying child lists during event handling
+    private boolean selectedListDirty = false;
+    private boolean itemGridDirty = false;
+    private @Nullable Runnable onMarketsChanged;
+
+    public void setOnMarketsChanged(@Nullable Runnable callback) {
+        this.onMarketsChanged = callback;
+    }
 
     public CreateMarketTab() {
         super();
@@ -240,12 +248,12 @@ public class CreateMarketTab extends StockMarketGuiElement {
                 getMarketManager().requestCreateMarket(registeredID).thenAccept(success -> {
                     if (success) {
                         info("Created market for " + itemId);
-                        // Remove from selection on main thread
                         net.minecraft.client.Minecraft.getInstance().execute(() -> {
                             selectedItemIds.remove(itemId);
                             refreshExistingMarkets();
-                            rebuildItemGrid();
-                            rebuildSelectedList();
+                            itemGridDirty = true;
+                            selectedListDirty = true;
+                            if (onMarketsChanged != null) onMarketsChanged.run();
                         });
                     } else {
                         warn("Failed to create market for " + itemId);
@@ -260,21 +268,22 @@ public class CreateMarketTab extends StockMarketGuiElement {
      */
     private void onClearSelectionClicked() {
         selectedItemIds.clear();
-        rebuildItemGrid();
-        rebuildSelectedList();
+        itemGridDirty = true;
+        selectedListDirty = true;
     }
 
     /**
      * Toggles selection state of an item in the grid.
      */
-    private void toggleItemSelection(String itemId) {
+    private void toggleItemSelection(String itemId, SelectableItemView view) {
         if (selectedItemIds.contains(itemId)) {
             selectedItemIds.remove(itemId);
+            view.selected = false;
         } else {
             selectedItemIds.add(itemId);
+            view.selected = true;
         }
-        rebuildItemGrid();
-        rebuildSelectedList();
+        selectedListDirty = true;
     }
 
     /**
@@ -293,6 +302,16 @@ public class CreateMarketTab extends StockMarketGuiElement {
 
     @Override
     protected void render() {
+        // Process deferred rebuilds safely outside event propagation
+        if (itemGridDirty) {
+            itemGridDirty = false;
+            rebuildItemGrid();
+        }
+        if (selectedListDirty) {
+            selectedListDirty = false;
+            rebuildSelectedList();
+        }
+
         // Highlight the selected category button
         for (Button btn : categoryButtons) {
             if (btn.getText().equals(selectedCategory)) {
@@ -400,7 +419,7 @@ public class CreateMarketTab extends StockMarketGuiElement {
         @Override
         protected boolean mouseClickedOverElement(int button) {
             if (button == 0 && !alreadyExists) {
-                toggleItemSelection(itemRegistryId);
+                toggleItemSelection(itemRegistryId, this);
                 return true;
             }
             return false;
@@ -428,8 +447,8 @@ public class CreateMarketTab extends StockMarketGuiElement {
 
             removeButton = new Button("x", () -> {
                 selectedItemIds.remove(itemId);
-                rebuildItemGrid();
-                rebuildSelectedList();
+                itemGridDirty = true;
+                selectedListDirty = true;
             });
             removeButton.setBackgroundColor(0xFFe8711c);
             removeButton.setHoverColor(0xFFe04c12);

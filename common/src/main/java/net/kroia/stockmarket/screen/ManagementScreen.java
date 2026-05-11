@@ -283,6 +283,19 @@ public class ManagementScreen extends StockMarketGuiScreen {
             getPluginManager().requestPluginList();
         }
 
+        public void refreshMarketList() {
+            marketSelectionView.clearItems();
+            getMarketManager().requestMarkets().thenAccept(markets -> {
+                List<ItemStack> stacks = new ArrayList<>();
+                for (ItemID id : markets) {
+                    ItemStack stack = id.getStack();
+                    if (stack != null)
+                        stacks.add(stack);
+                }
+                marketSelectionView.setItems(stacks);
+            });
+        }
+
         @Override
         protected void render() {
             // No custom rendering; children render themselves
@@ -327,6 +340,7 @@ public class ManagementScreen extends StockMarketGuiScreen {
 
         // Create Markets tab -- category-based preset browser
         createMarketTab = new CreateMarketTab();
+        createMarketTab.setOnMarketsChanged(overviewTab::refreshMarketList);
         tabElement.addTab(TAB_CREATE_MARKETS, createMarketTab);
 
         addElement(tabElement);

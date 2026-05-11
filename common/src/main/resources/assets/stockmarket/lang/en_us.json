@@ -198,7 +198,18 @@
   "gui.stockmarket.volatility_plugin.apply": "Apply",
   "gui.stockmarket.volume_distribution.volume_scale": "Volume Scale",
   "gui.stockmarket.volume_distribution.speed": "Speed",
-  "gui.stockmarket.volume_distribution.apply": "Apply"
+  "gui.stockmarket.volume_distribution.apply": "Apply",
 
+  "gui.stockmarket.plugin_management_screen.auto_subscribe": "Auto-subscribe",
+  "gui.stockmarket.plugin_management_screen.subscription_order": "Order",
 
+  "gui.stockmarket.create_market_tab.title": "Create Markets",
+  "gui.stockmarket.create_market_tab.create_all": "Create Selected",
+  "gui.stockmarket.create_market_tab.selected_items": "Selected Items",
+  "gui.stockmarket.create_market_tab.search": "Search",
+  "gui.stockmarket.create_market_tab.no_presets": "No presets available",
+  "gui.stockmarket.create_market_tab.price": "Price",
+  "gui.stockmarket.create_market_tab.abundance": "Abundance",
+  "gui.stockmarket.create_market_tab.already_exists": "Market already exists",
+  "gui.stockmarket.create_market_tab.clear_selection": "Clear Selection"
 }
