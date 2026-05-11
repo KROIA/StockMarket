@@ -10,6 +10,7 @@ import net.kroia.stockmarket.testing.tests.DynamicIndexedArrayTestSuite;
 import net.kroia.stockmarket.testing.tests.InterMarketOrderTestSuite;
 import net.kroia.stockmarket.testing.tests.MarketIntegrationTestSuite;
 import net.kroia.stockmarket.testing.tests.MarketPriceManagerTestSuite;
+import net.kroia.stockmarket.testing.tests.MarketPresetTestSuite;
 import net.kroia.stockmarket.testing.tests.MarketSettingsTestSuite;
 import net.kroia.stockmarket.testing.tests.MatchingEngineTestSuite;
 import net.kroia.stockmarket.testing.tests.OrderRecordManagerTestSuite;
@@ -46,6 +47,7 @@ public class StockMarketTestRegistration {
         TestRegistry.register(new PriceHistoryTestSuite());
         TestRegistry.register(new UserTestSuite());
         TestRegistry.register(new MarketSettingsTestSuite());
+        TestRegistry.register(new MarketPresetTestSuite());
         TestRegistry.register(new ClientMarketTestSuite());
         TestRegistry.register(new NormalizedRandomPriceGeneratorTestSuite());
 
