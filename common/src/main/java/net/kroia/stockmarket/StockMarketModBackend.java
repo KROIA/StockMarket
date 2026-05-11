@@ -5,6 +5,10 @@ import dev.architectury.event.events.client.ClientTickEvent;
 import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.api.BankSystemAPI;
+import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
+import net.kroia.banksystem.util.ItemID;
+import net.kroia.stockmarket.api.market.IServerMarket;
+import net.kroia.stockmarket.api.marketmanager.ISyncServerMarketManager;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.networking.multi_server.MultiServerManager;
 import net.kroia.stockmarket.api.StockMarketAPI;
@@ -217,6 +221,7 @@ public class StockMarketModBackend implements StockMarketAPI {
             SERVER_INSTANCES.DATA_MANAGER = new DataManager();
 
             loadDataFromFiles(UtilitiesPlatform.getServer());
+            registerItemPriceProvider();
             TickEvent.SERVER_POST.register(StockMarketModBackend::onServerTick);
 
             if (TestRegistry.ENABLE_TESTS) {
@@ -239,9 +244,24 @@ public class StockMarketModBackend implements StockMarketAPI {
     }
 
 
+    private static void registerItemPriceProvider() {
+        BankSystemAPI api = SERVER_INSTANCES.BANK_SYSTEM_API;
+        api.setItemPriceProvider(itemId -> {
+            ISyncServerMarketManager marketManager = SERVER_INSTANCES.MARKET_MANAGER.getSync();
+            if (marketManager == null) return 0;
+            IServerMarket market = marketManager.getMarket(new ItemID(itemId));
+            if (market == null) return 0;
+            return market.getCurrentMarketPrice();
+        });
+        api.setPriceCurrencyItem(MoneyItem.getItemID().getShort());
+    }
+
     // Called from the server side
     public static void onServerStop(MinecraftServer server)
     {
+        if (SERVER_INSTANCES != null && SERVER_INSTANCES.BANK_SYSTEM_API != null) {
+            SERVER_INSTANCES.BANK_SYSTEM_API.setItemPriceProvider(null);
+        }
         TickEvent.SERVER_POST.unregister(StockMarketModBackend::onServerTick);
         saveDataToFiles(server);
 
