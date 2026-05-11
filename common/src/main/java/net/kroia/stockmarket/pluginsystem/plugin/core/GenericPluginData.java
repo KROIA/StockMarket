@@ -22,6 +22,8 @@ public class GenericPluginData {
             ByteBufCodecs.STRING_UTF8.encode(buf, data.description);
             ByteBufCodecs.BOOL.encode(buf, data.loggerEnabled);
             ByteBufCodecs.BOOL.encode(buf, data.enabled);
+            ByteBufCodecs.BOOL.encode(buf, data.autoSubscribeNewMarkets);
+            ByteBufCodecs.VAR_INT.encode(buf, data.subscriptionOrder);
         }
         @Override
         public @NotNull GenericPluginData decode(RegistryFriendlyByteBuf buf) {
@@ -31,8 +33,11 @@ public class GenericPluginData {
             String description = ByteBufCodecs.STRING_UTF8.decode(buf);
             boolean loggerEnabled = ByteBufCodecs.BOOL.decode(buf);
             boolean enabled = ByteBufCodecs.BOOL.decode(buf);
+            boolean autoSubscribeNewMarkets = ByteBufCodecs.BOOL.decode(buf);
+            int subscriptionOrder = ByteBufCodecs.VAR_INT.decode(buf);
             return new GenericPluginData(pluginTypeID, instanceID,
-                    name, description, loggerEnabled, enabled);
+                    name, description, loggerEnabled, enabled,
+                    autoSubscribeNewMarkets, subscriptionOrder);
         }
     };
 
@@ -42,10 +47,13 @@ public class GenericPluginData {
     private String description;
     private boolean loggerEnabled;
     private boolean enabled;
+    private boolean autoSubscribeNewMarkets = true;
+    private int subscriptionOrder = 0;
 
 
     private GenericPluginData(String pluginTypeID, UUID instanceID, String name,
-                              String description, boolean loggerEnabled, boolean enabled)
+                              String description, boolean loggerEnabled, boolean enabled,
+                              boolean autoSubscribeNewMarkets, int subscriptionOrder)
     {
         this.pluginTypeID = pluginTypeID;
         this.instanceID = instanceID;
@@ -53,6 +61,8 @@ public class GenericPluginData {
         this.description = description;
         this.loggerEnabled = loggerEnabled;
         this.enabled = enabled;
+        this.autoSubscribeNewMarkets = autoSubscribeNewMarkets;
+        this.subscriptionOrder = subscriptionOrder;
     }
     public GenericPluginData(UUID instanceID)
     {
@@ -98,6 +108,24 @@ public class GenericPluginData {
         return enabled;
     }
 
+    public void setAutoSubscribeNewMarkets(boolean autoSubscribe)
+    {
+        this.autoSubscribeNewMarkets = autoSubscribe;
+    }
+    public boolean getAutoSubscribeNewMarkets()
+    {
+        return autoSubscribeNewMarkets;
+    }
+
+    public void setSubscriptionOrder(int order)
+    {
+        this.subscriptionOrder = order;
+    }
+    public int getSubscriptionOrder()
+    {
+        return subscriptionOrder;
+    }
+
     public void setInstanceID(UUID id) {
         this.instanceID = id;
     }
@@ -138,6 +166,8 @@ public class GenericPluginData {
         if (description != null) tag.putString("description", description);
         tag.putBoolean("loggerEnabled", loggerEnabled);
         tag.putBoolean("enabled", enabled);
+        tag.putBoolean("autoSubscribeNewMarkets", autoSubscribeNewMarkets);
+        tag.putInt("subscriptionOrder", subscriptionOrder);
         return true;
     }
 
@@ -158,6 +188,8 @@ public class GenericPluginData {
         if (tag.contains("description")) description = tag.getString("description");
         if (tag.contains("loggerEnabled")) loggerEnabled = tag.getBoolean("loggerEnabled");
         if (tag.contains("enabled")) enabled = tag.getBoolean("enabled");
+        if (tag.contains("autoSubscribeNewMarkets")) autoSubscribeNewMarkets = tag.getBoolean("autoSubscribeNewMarkets");
+        if (tag.contains("subscriptionOrder")) subscriptionOrder = tag.getInt("subscriptionOrder");
         return true;
     }
 }

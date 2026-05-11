@@ -88,6 +88,8 @@ public class PluginSettingsRequest extends StockMarketGenericRequest<PluginSetti
         plugin.setName(updated.getName());
         plugin.setDescription(updated.getDescription());
         plugin.setLoggerEnabled(updated.isLoggerEnabled());
+        plugin.setAutoSubscribeNewMarkets(updated.getAutoSubscribeNewMarkets());
+        plugin.setSubscriptionOrder(updated.getSubscriptionOrder());
 
         return CompletableFuture.completedFuture(new OutputData(true, plugin.getGenericPluginData()));
     }

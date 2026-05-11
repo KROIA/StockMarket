@@ -18,8 +18,8 @@ public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
 
     private final DatabaseManager databaseManager;
 
-    public static final String INSERT = "INSERT INTO MarketPrice (marketid, open, low, high, time) VALUES (?, ?, ?, ?, ?)";
-    public static final String SELECT = "SELECT marketid, open, low, high, time FROM MarketPrice";
+    public static final String INSERT = "INSERT INTO MarketPrice (marketid, open, low, high, time, traded_volume) VALUES (?, ?, ?, ?, ?, ?)";
+    public static final String SELECT = "SELECT marketid, open, low, high, time, traded_volume FROM MarketPrice";
     public static final String DELETE = "DELETE FROM MarketPrice";
     public static final String COUNT =  "SELECT COUNT(*) FROM MarketPrice";
 
@@ -59,6 +59,7 @@ public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
             stmt.setLong(3, data.low());
             stmt.setLong(4, data.high());
             stmt.setLong(5, data.time());
+            stmt.setFloat(6, data.tradedVolume());
             stmt.addBatch();
         }
         catch(SQLException e){
@@ -148,7 +149,14 @@ public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
 
     public MarketPriceStruct mapRow(ResultSet rs){
         try {
-            return new MarketPriceStruct(rs.getShort(1), rs.getLong(2), rs.getLong(3), rs.getLong(4), rs.getLong(5));
+            short id = rs.getShort(1);
+            long open = rs.getLong(2);
+            long low = rs.getLong(3);
+            long high = rs.getLong(4);
+            long time = rs.getLong(5);
+            float volume = 0f;
+            try { volume = rs.getFloat(6); } catch (SQLException ignored) {}
+            return new MarketPriceStruct(id, open, low, high, time, volume);
         }
         catch(SQLException e){
             StockMarketMod.LOGGER.warn("Failed to read MarketPrice record, is the data corrupt?");

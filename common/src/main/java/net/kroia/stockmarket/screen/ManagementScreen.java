@@ -19,6 +19,12 @@ import net.minecraft.world.item.ItemStack;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Management screen using a TabElement to organize:
+ * - Overview tab: market selector, candlestick chart, market management widgets, plugin overview
+ * - Create Markets tab: category-based preset browser for batch market creation
+ */
+
 public class ManagementScreen extends StockMarketGuiScreen {
 
     private static class Texts{
@@ -63,7 +69,16 @@ public class ManagementScreen extends StockMarketGuiScreen {
     }
     public static final int elementHeight = 20;
 
+    // Tab names
+    private static final String TAB_OVERVIEW = "Overview";
+    private static final String TAB_CREATE_MARKETS = "Create Markets";
 
+    // ---- Inner widget classes (used inside OverviewTab) ----
+
+    /**
+     * Widget for managing the currently selected market.
+     * Shows the selected item icon, remove button, open/close toggle, and settings button.
+     */
     public final class CurrentMarketManagerWidget extends StockMarketGuiElement{
 
         private final ItemView currentItemView;
@@ -93,8 +108,6 @@ public class ManagementScreen extends StockMarketGuiScreen {
             currentItemView = new ItemView();
             currentItemView.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.TOP_RIGHT);
             currentItemView.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
-            //currentTradingItemView.setHoverTooltipSupplier(()-> TEXT.TOOLTIP_SELECTED_TRADING_PAIR.getString() + (tradingPair != null ? tradingPair.getShortDescription() : "None"));
-            //currentItemView.setClickable(false);
 
             marketSettingsButton = new Button(Texts.MARKET_SETTINGS.getString(), this::onMarketSettingsButtonClicked);
 
@@ -118,7 +131,6 @@ public class ManagementScreen extends StockMarketGuiScreen {
         @Override
         protected void layoutChanged() {
             int width = getWidth()-2*padding;
-            //int height = getHeight()-2*padding;
 
             selectedMarketLabel.setBounds(padding, padding, width, elementHeight-spacing);
 
@@ -128,15 +140,12 @@ public class ManagementScreen extends StockMarketGuiScreen {
 
             marketOpenCheckBox.setBounds(currentItemView.getLeft(), currentItemView.getBottom()+spacing, width, elementHeight);
             marketSettingsButton.setBounds(marketOpenCheckBox.getLeft(), marketOpenCheckBox.getBottom()+spacing, width, elementHeight);
-
-
         }
         public void setCurrentMarket(ItemID marketID) {
             if(marketID == null)
                 currentItemView.setItemStack(ItemStack.EMPTY);
             else
                 currentItemView.setItemStack(marketID.getStack());
-            //selectMarket(marketID);
         }
         public void setMarketOpenCheckBoxChecked(boolean isOpen) {
             marketOpenCheckBox.setChecked(isOpen);
@@ -145,20 +154,7 @@ public class ManagementScreen extends StockMarketGuiScreen {
         private void onRemoveTradingPairButtonClicked()
         {
             ClientMarket currentMarket = getSelectedMarket();
-            /*if(currentMarket != null) {
-                AskPopupScreen popup = new AskPopupScreen(parentScreen, () ->
-                {
-                    getMarketManager().requestRemoveMarket(tradingPair, (success)->{
-                        parentScreen.setCurrentTradingPair(null);
-                        updateTradingItems();
-                    });
-                    //BACKEND_INSTANCES.CLIENT_STOCKMARKET_MANAGER.requestRemoveTradingItem(tradingPair);
-
-                }, () -> {}, TEXT.ASK_TITLE.getString() + " "+tradingPair.getShortDescription() + "?", TEXT.ASK_MSG.getString());
-                popup.setSize(400,100);
-                popup.setColors(COLOR.ORANGE, COLOR.ORANGE_HOVER, COLOR.RED, COLOR.GREEN);
-                minecraft.setScreen(popup);
-            }*/
+            // TODO: implement market removal confirmation popup
         }
         private void onMarketSettingsButtonClicked()
         {
@@ -168,109 +164,11 @@ public class ManagementScreen extends StockMarketGuiScreen {
 
             MarketManagementScreen managementScreen = new MarketManagementScreen(parentScreen, currentMarket.getItemID());
             setScreen(managementScreen);
-
-            /*marketSettingsScreen = new MarketSettingsScreen(parentScreen, (settings)->
-            {
-                if(settings != null) {
-                    currentMarketSettingsData = settings;
-                    getSelectedMarket().requestSetMarketSettings(settings, (success) -> {
-                        if (success) {
-                            getSelectedMarket().requestGetMarketSettings(
-                                    (settingsData -> {
-                                        if (settingsData != null) {
-                                            setCurrentTradingPairMarketSettings(settingsData);
-                                            marketSettingsScreen.setSettings(settingsData);
-                                        }
-                                    }));
-                        }
-                    });
-                }
-            });
-            if (currentMarketSettingsData != null) {
-                if(getSelectedMarket() != null)
-                    getSelectedMarket().requestGetMarketSettings(
-                            (settingsData -> {
-                                if (settingsData != null) {
-                                    marketSettingsScreen.setSettings(settingsData);
-                                    minecraft.setScreen(marketSettingsScreen);
-                                }
-                            }));
-            }
-            else
-            {
-                marketSettingsScreen.setSettings(currentMarketSettingsData);
-                minecraft.setScreen(marketSettingsScreen);
-            }*/
-
         }
         private void onMarketOpenCheckBoxChanged(Boolean isOpen)
         {
             ClientMarket currentMarket = getSelectedMarket();
-            /*if(currentMarket == null || currentMarketSettingsData == null)
-                return;
-            if(currentMarketSettingsData.marketOpen != isOpen) {
-                currentMarketSettingsData.marketOpen = isOpen;
-                getSelectedMarket().requestMarketOpen(isOpen, (success) -> {
-                    if (success) {
-                        debug("Market open status updated for trading pair: " + tradingPair.getShortDescription() + " to " + isOpen);
-                    } else {
-                        warn("Failed to update market open status for trading pair: " + tradingPair.getShortDescription());
-                    }
-                });
-            }*/
-        }
-    }
-
-    /**
-     * Widget that provides a button to open the {@link CreateMarketScreen}
-     * where the player can pick an item and create a new market for it.
-     *
-     * <pre>
-     * +---------------------------+
-     * |     Create new Market     |  (title label, centered)
-     * |          [ + ]            |  (button, opens item selection)
-     * +---------------------------+
-     * </pre>
-     */
-    public final class CreateMarketWidget extends StockMarketGuiElement {
-        private final Label titleLabel;
-        private final Button createButton;
-        private final ManagementScreen parentScreen;
-
-        public CreateMarketWidget(ManagementScreen parent) {
-            super();
-            setEnableBackground(false);
-            parentScreen = parent;
-
-            titleLabel = new Label(Texts.NEW_MARKET_TITLE.getString());
-            titleLabel.setAlignment(Label.Alignment.CENTER);
-
-            createButton = new Button(Texts.NEW_CUSTOM_MARKET_BUTTON.getString(), this::onCreateClicked);
-            createButton.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.TOP_RIGHT);
-            createButton.setHoverTooltipSupplier(Texts.TOOLTIP_NEW_CUSTOM_MARKET::getString);
-            createButton.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
-
-            addChild(titleLabel);
-            addChild(createButton);
-
-            setHeight(2 * (defaultElementHeight + spacing));
-        }
-
-        @Override
-        protected void render() {
-            // No dynamic rendering needed
-        }
-
-        @Override
-        protected void layoutChanged() {
-            int width = getWidth() - 2 * padding;
-            titleLabel.setBounds(padding, padding, width, defaultElementHeight - spacing);
-            createButton.setBounds(padding, titleLabel.getBottom() + spacing, width, defaultElementHeight);
-        }
-
-        private void onCreateClicked() {
-            CreateMarketScreen screen = new CreateMarketScreen(parentScreen);
-            setScreen(screen);
+            // TODO: implement market open/close toggle request
         }
     }
 
@@ -279,21 +177,17 @@ public class ManagementScreen extends StockMarketGuiScreen {
      * a button to open the plugin management screen.
      *
      * <pre>
-     * ┌─────────────────────────┐
-     * │       Plugins           │  ← title label (centered)
-     * │   2 / 3 enabled         │  ← status label (live-updated)
-     * │  [ Manage Plugins ]     │  ← button → opens PluginManagementScreen
-     * └─────────────────────────┘
+     * +---------------------------+
+     * |       Plugins             |  (title label, centered)
+     * |   2 / 3 enabled           |  (status label, live-updated)
+     * |  [ Manage Plugins ]       |  (button, opens PluginManagementScreen)
+     * +---------------------------+
      * </pre>
      */
     public final class PluginOverviewWidget extends StockMarketGuiElement {
-        // Title label displaying "Plugins"
         private final Label titleLabel;
-        // Status label showing "X / Y enabled", updated every render tick
         private final Label statusLabel;
-        // Button that will open the PluginManagementScreen
         private final Button managePluginsButton;
-        // Reference to the parent ManagementScreen
         private final ManagementScreen parentScreen;
 
         public PluginOverviewWidget(ManagementScreen parent) {
@@ -338,53 +232,120 @@ public class ManagementScreen extends StockMarketGuiScreen {
         }
     }
 
-    private final CandlestickChart candlestickChart;
-    private final ItemSelectionView marketSelectionView;
+    // ---- Overview tab ----
 
-    private final ListView listView;
-    private final CreateMarketWidget createMarketWidget;
-    private final CurrentMarketManagerWidget currentMarketManagerWidget;
-    private final PluginOverviewWidget pluginOverviewWidget;
+    /**
+     * Container element for the "Overview" tab content.
+     * Holds the candlestick chart, market selector, and the settings/widget list view
+     * (current market manager + plugin overview).
+     */
+    public final class OverviewTab extends StockMarketGuiElement {
+        private final CandlestickChart candlestickChart;
+        private final ItemSelectionView marketSelectionView;
+        private final ListView listView;
+        private final CurrentMarketManagerWidget currentMarketManagerWidget;
+        private final PluginOverviewWidget pluginOverviewWidget;
+
+        public OverviewTab(ManagementScreen parent) {
+            super();
+            setEnableBackground(false);
+
+            candlestickChart = new CandlestickChart();
+            marketSelectionView = new ItemSelectionView(parent::onMarketSelected);
+
+            listView = new VerticalListView();
+            LayoutVertical layout = new LayoutVertical();
+            layout.stretchX = true;
+            layout.stretchY = false;
+            listView.setLayout(layout);
+
+            currentMarketManagerWidget = new CurrentMarketManagerWidget(parent);
+            listView.addChild(currentMarketManagerWidget);
+
+            pluginOverviewWidget = new PluginOverviewWidget(parent);
+            listView.addChild(pluginOverviewWidget);
+
+            addChild(candlestickChart);
+            addChild(marketSelectionView);
+            addChild(listView);
+
+            // Load available markets into the selector
+            marketSelectionView.clearItems();
+            getMarketManager().requestMarkets().thenAccept(markets -> {
+                List<ItemStack> stacks = new ArrayList<>();
+                for (ItemID id : markets) {
+                    ItemStack stack = id.getStack();
+                    if (stack != null)
+                        stacks.add(stack);
+                }
+                marketSelectionView.setItems(stacks);
+            });
+            getPluginManager().requestPluginList();
+        }
+
+        public void refreshMarketList() {
+            marketSelectionView.clearItems();
+            getMarketManager().requestMarkets().thenAccept(markets -> {
+                List<ItemStack> stacks = new ArrayList<>();
+                for (ItemID id : markets) {
+                    ItemStack stack = id.getStack();
+                    if (stack != null)
+                        stacks.add(stack);
+                }
+                marketSelectionView.setItems(stacks);
+            });
+        }
+
+        @Override
+        protected void render() {
+            // No custom rendering; children render themselves
+        }
+
+        @Override
+        protected void layoutChanged() {
+            int w = getWidth() - 2 * padding;
+            int h = getHeight() - 2 * padding;
+
+            candlestickChart.setBounds(padding, padding, w / 2, h / 2);
+            marketSelectionView.setBounds(padding, candlestickChart.getBottom() + spacing,
+                    w / 2, h - (candlestickChart.getBottom() + spacing) + padding);
+
+            listView.setBounds(candlestickChart.getRight() + spacing, padding,
+                    w - (candlestickChart.getRight() + spacing) + padding, h);
+        }
+
+        public CurrentMarketManagerWidget getCurrentMarketManagerWidget() {
+            return currentMarketManagerWidget;
+        }
+
+        public CandlestickChart getCandlestickChart() {
+            return candlestickChart;
+        }
+    }
+
+    // ---- ManagementScreen fields ----
+
+    private final TabElement tabElement;
+    private final OverviewTab overviewTab;
+    private final CreateMarketTab createMarketTab;
 
     public ManagementScreen() {
         super(Texts.TITLE);
 
-        candlestickChart = new CandlestickChart();
-        marketSelectionView = new ItemSelectionView(this::onMarketSelected);
+        tabElement = new TabElement();
 
-        listView = new VerticalListView();
-        LayoutVertical layout = new LayoutVertical();
-        layout.stretchX = true;
-        layout.stretchY = false;
-        listView.setLayout(layout);
+        // Overview tab -- wraps existing chart/selector/widgets
+        overviewTab = new OverviewTab(this);
+        tabElement.addTab(TAB_OVERVIEW, overviewTab);
 
-        createMarketWidget = new CreateMarketWidget(this);
-        listView.addChild(createMarketWidget);
+        // Create Markets tab -- category-based preset browser
+        createMarketTab = new CreateMarketTab();
+        createMarketTab.setOnMarketsChanged(overviewTab::refreshMarketList);
+        tabElement.addTab(TAB_CREATE_MARKETS, createMarketTab);
 
-        currentMarketManagerWidget = new CurrentMarketManagerWidget(this);
-        listView.addChild(currentMarketManagerWidget);
-
-        pluginOverviewWidget = new PluginOverviewWidget(this);
-        listView.addChild(pluginOverviewWidget);
-
-
-        addElement(candlestickChart);
-        addElement(marketSelectionView);
-        addElement(listView);
-
-        marketSelectionView.clearItems();
-        getMarketManager().requestMarkets().thenAccept(markets -> {
-            List<ItemStack> stacks = new ArrayList<>();
-            for(ItemID id : markets)
-            {
-                ItemStack stack = id.getStack();
-                if(stack != null)
-                    stacks.add(stack);
-            }
-            marketSelectionView.setItems(stacks);
-        });
-        getPluginManager().requestPluginList();
+        addElement(tabElement);
     }
+
     public static void openScreen()
     {
         ManagementScreen screen = new ManagementScreen();
@@ -405,17 +366,17 @@ public class ManagementScreen extends StockMarketGuiScreen {
 
     @Override
     protected void updateLayout(Gui gui) {
-        int padding = StockMarketGuiElement.padding;
-        int spacing = StockMarketGuiElement.spacing;
-        int width = getWidth()- 2 * padding;
-        int height = getHeight()- 2 * padding;
+        int p = StockMarketGuiElement.padding;
+        int w = getWidth() - 2 * p;
+        int h = getHeight() - 2 * p;
 
-        candlestickChart.setBounds(padding,padding,width/2,height/2);
-        marketSelectionView.setBounds(padding,candlestickChart.getBottom()+spacing,width/2, height - (candlestickChart.getBottom()+spacing)+padding);
-
-        listView.setBounds(candlestickChart.getRight()+spacing, padding, width-(candlestickChart.getRight()+spacing)+padding, height);
+        // TabElement fills the entire screen area
+        tabElement.setBounds(p, p, w, h);
     }
 
+    /**
+     * Called when a market item is selected in the overview tab's market selector.
+     */
     private void onMarketSelected(ItemStack item)
     {
         ClientMarket currentMarket = StockMarketGuiElement.getSelectedMarket();
@@ -423,7 +384,7 @@ public class ManagementScreen extends StockMarketGuiScreen {
         {
             currentMarket.unsubscribeFromMarketPriceUpdate();
             StockMarketGuiElement.selectMarket(null);
-            currentMarketManagerWidget.setCurrentMarket(null);
+            overviewTab.getCurrentMarketManagerWidget().setCurrentMarket(null);
         }
         ItemID.getOrRegisterFromItemStackClientSide(item).thenAccept(itemID ->
         {
@@ -431,8 +392,8 @@ public class ManagementScreen extends StockMarketGuiScreen {
             if(market != null) {
                 market.subscribeToMarketPriceUpdate();
                 StockMarketGuiElement.selectMarket(itemID);
-                candlestickChart.setMarket(market);
-                currentMarketManagerWidget.setCurrentMarket(itemID);
+                overviewTab.getCandlestickChart().setMarket(market);
+                overviewTab.getCurrentMarketManagerWidget().setCurrentMarket(itemID);
             }
         });
     }

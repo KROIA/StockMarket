@@ -7,10 +7,18 @@ import net.kroia.stockmarket.util.PriceHistoryData;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Function;
 
 public class OrderbookVolumeHistogram extends StockMarketGuiElement {
 
+    @FunctionalInterface
+    public interface Overlay {
+        void render(OrderbookVolumeHistogram histogram);
+    }
+
+    private final List<Overlay> overlays = new ArrayList<>();
 
     private final CandlestickChart parentChart;
 
@@ -23,10 +31,37 @@ public class OrderbookVolumeHistogram extends StockMarketGuiElement {
     private final int greenColor = UI_Colors.buyColorGreen_dark;
     private final int redColor = UI_Colors.sellColorRed;
     private final Rectangle scissorRect = new Rectangle(0,0,0,0);
+    private float maxAbsVolumeCache = 0;
 
     public OrderbookVolumeHistogram(CandlestickChart parentChart)
     {
         this.parentChart = parentChart;
+    }
+
+    public void addOverlay(Overlay overlay) { overlays.add(overlay); }
+    public void removeOverlay(Overlay overlay) { overlays.remove(overlay); }
+
+    public Rectangle getCanvasBounds() {
+        return new Rectangle(scissorRect.x, scissorRect.y, scissorRect.width, scissorRect.height);
+    }
+
+    // Convert absolute volume to X pixel position (bars are right-aligned)
+    public int toCanvasSpaceX(float absVolume) {
+        if (maxAbsVolumeCache <= 0) return scissorRect.x + scissorRect.width;
+        int barWidth = (int)(absVolume * scissorRect.width / maxAbsVolumeCache);
+        return scissorRect.x + scissorRect.width - barWidth;
+    }
+
+    public int toCanvasSpaceY(double price) {
+        return parentChart.toCanvasSpaceY(price);
+    }
+
+    public float getMaxAbsVolume() { return maxAbsVolumeCache; }
+    public double getStartPrice() { return startPrice; }
+    public double getEndPrice() { return endPrice; }
+
+    public @Nullable ClientMarket getMarket() {
+        return parentChart.getMarket();
     }
 
     @Override
@@ -37,6 +72,15 @@ public class OrderbookVolumeHistogram extends StockMarketGuiElement {
         if (market == null)
             return;
         renderHistogram();
+
+        // Render overlays on top of histogram
+        if (market != null) {
+            enableScissor(scissorRect);
+            for (Overlay overlay : overlays) {
+                overlay.render(this);
+            }
+            disableScissor();
+        }
     }
     @Override
     protected void render() {
@@ -83,16 +127,16 @@ public class OrderbookVolumeHistogram extends StockMarketGuiElement {
         double priceDelta = (endPrice - startPrice) / (double)(chunkCount);
 
 
-        float maxAbsValue = 0;
+        maxAbsVolumeCache = 0;
         for(int i = 0; i < chunkCount; i++)
         {
-            maxAbsValue =  Math.max(maxAbsValue, Math.abs(volumeChunks[i]));
+            maxAbsVolumeCache =  Math.max(maxAbsVolumeCache, Math.abs(volumeChunks[i]));
         }
-        if(maxAbsValue <= 0)
+        if(maxAbsVolumeCache <= 0)
             return;
 
 
-        float norm = 1/maxAbsValue;
+        float norm = 1/maxAbsVolumeCache;
         int width = scissorRect.width;
         float widthF = width;
 

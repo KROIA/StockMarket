@@ -46,6 +46,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     private long candleOpenPrice;
     private long candleHighPrice;
     private long candleLowPrice;
+    private float candleTradedVolume = 0;
 
     /**
      * Temporary order buffers for collecting order async and only process the order on update
@@ -59,9 +60,9 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     private final PriorityQueue<InterMarketOrder> interMarket_MarketBuyOrders_inputBuffer = new PriorityQueue<>((o1, o2) -> Long.compare(o2.getTime(), o1.getTime()));
 
 
-    public ServerMarket(ItemID itemID, @Nullable Function<Double, Float> volumeProvider, long defaultPrice)
+    public ServerMarket(ItemID itemID, @Nullable Function<Double, Float> volumeProvider, long defaultPrice, float naturalAbundance)
     {
-        this.settings = new MarketSettings(true, defaultPrice);
+        this.settings = new MarketSettings(true, defaultPrice, naturalAbundance);
         this.defaultVolumeProviderFunction =  volumeProvider;
         this.itemID = itemID;
         this.orderbook = new Orderbook(itemID,
@@ -89,7 +90,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
 
     public ServerMarket(ItemID itemID)
     {
-        this(itemID, null, 1000);
+        this(itemID, null, 1000, 10f);
     }
 
     @Override
@@ -366,7 +367,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     @Override
     public MarketPriceStruct getCurrentMarketPriceStruct()
     {
-        return new MarketPriceStruct(itemID.getShort(), candleOpenPrice, candleLowPrice, candleHighPrice, candleStartTime);
+        return new MarketPriceStruct(itemID.getShort(), candleOpenPrice, candleLowPrice, candleHighPrice, candleStartTime, candleTradedVolume);
     }
     @Override
     public CompletableFuture<MarketPriceStruct> getCurrentMarketPriceStructAsync() {
@@ -380,11 +381,12 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     @Override
     public MarketPriceStruct getCurrentMarketPriceStructAndReset()
     {
-        MarketPriceStruct  currentMarketPriceStruct = new MarketPriceStruct(itemID.getShort(), candleOpenPrice, candleLowPrice, candleHighPrice, candleStartTime);
+        MarketPriceStruct  currentMarketPriceStruct = new MarketPriceStruct(itemID.getShort(), candleOpenPrice, candleLowPrice, candleHighPrice, candleStartTime, candleTradedVolume);
         candleStartTime =  System.currentTimeMillis();
         candleOpenPrice = this.currentMarketPrice;
         candleHighPrice = this.currentMarketPrice;
         candleLowPrice = this.currentMarketPrice;
+        candleTradedVolume = 0;
         return currentMarketPriceStruct;
     }
     @Override
@@ -422,6 +424,12 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
 
 
     @Override
+    public float getCurrentCandleTradedVolume()
+    {
+        return candleTradedVolume;
+    }
+
+    @Override
     public Orderbook getOrderbook()
     {
         return orderbook;
@@ -443,6 +451,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
 
         orderbook.setCurrentMarketPrice(currentMarketPrice);
         matchingEngine.update(currentMarketPrice);
+        candleTradedVolume += matchingEngine.getLastTradedVolume();
 
         // Update the current candle
         candleLowPrice = Math.min(candleLowPrice, currentMarketPrice);
@@ -547,6 +556,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         candleOpenPrice = currentMarketPrice;
         candleHighPrice = currentMarketPrice;
         candleLowPrice = currentMarketPrice;
+        candleTradedVolume = 0;
         candleStartTime = System.currentTimeMillis();
 
         return success;

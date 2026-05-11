@@ -527,6 +527,20 @@ protected void layoutChanged()
 ```
 Override to reposition child elements when the element bounds change.
 
+### Chart Overlay Hooks
+
+```java
+public void setCandlestickChart(@Nullable CandlestickChart chart)
+```
+Called by the screen to provide a reference to the shared candlestick chart. Override to register overlays via `chart.addOverlay()`. Pass `null` to unregister. Default: no-op.
+
+```java
+public void setOrderbookVolumeHistogram(@Nullable OrderbookVolumeHistogram histogram)
+```
+Called by the screen to provide a reference to the shared orderbook volume histogram. Override to register overlays via `histogram.addOverlay()`. Pass `null` to unregister. Default: no-op.
+
+Both hooks are called automatically by the Plugin Management Screen after sync data is set. Plugin developers override these to draw custom visualizations on the shared charts. When the screen rebuilds its plugin list, it calls these with `null` first to remove stale overlays.
+
 ### Inherited Utilities (from StockMarketGuiElement)
 
 ```java
@@ -675,6 +689,179 @@ Creates a new server plugin instance from the factory.
 @Nullable PluginGuiElement createGuiElement()
 ```
 Creates a `PluginGuiElement` from the factory, or a default element if no factory was set.
+
+---
+
+## CandlestickChart.Overlay
+
+`net.kroia.stockmarket.screen.widgets.CandlestickChart.Overlay`
+
+Functional interface for rendering on top of the candlestick chart. Overlays are scissor-clipped to the chart canvas area.
+
+```java
+@FunctionalInterface
+public interface Overlay {
+    void render(CandlestickChart chart);
+}
+```
+
+### Registration
+
+```java
+chart.addOverlay(Overlay overlay)
+```
+Registers an overlay callback.
+
+```java
+chart.removeOverlay(Overlay overlay)
+```
+Removes a previously registered overlay.
+
+### Coordinate Conversion
+
+```java
+Rectangle getCanvasBounds()
+```
+Returns the drawable canvas area in local coordinates.
+
+```java
+int toCanvasSpaceX(long time)
+```
+Converts a time index to an X pixel coordinate.
+
+```java
+int toCanvasSpaceY(double price)
+```
+Converts a price to a Y pixel coordinate.
+
+```java
+@Nullable ClientMarket getMarket()
+```
+Returns the market currently displayed in the chart, or null.
+
+### Drawing
+
+Overlays use the chart's public drawing methods inherited from `GuiElement`:
+
+- `chart.drawRect(x, y, width, height, color)` -- filled rectangle
+- `chart.drawLine(x1, y1, x2, y2, thickness, color)` -- line
+- `chart.drawText(text, x, y)` -- text label
+- `chart.getTextHeight()` -- text metrics
+
+All coordinates are in the chart's local space. The framework applies scissor clipping to the canvas area before calling overlays.
+
+### Example: Target Price Line
+
+```java
+private void renderChartOverlay(CandlestickChart chart) {
+    ClientMarket market = chart.getMarket();
+    if (market == null) return;
+
+    double targetPrice = getTargetForMarket(market);
+    Rectangle bounds = chart.getCanvasBounds();
+    int lineY = chart.toCanvasSpaceY(targetPrice);
+
+    if (lineY >= bounds.y && lineY <= bounds.y + bounds.height) {
+        chart.drawRect(bounds.x, lineY - 1, bounds.width, 2, 0xFFFF6600);
+        chart.drawText("Target", bounds.x + 4, lineY - chart.getTextHeight() - 2);
+    }
+}
+```
+
+---
+
+## OrderbookVolumeHistogram.Overlay
+
+`net.kroia.stockmarket.screen.widgets.OrderbookVolumeHistogram.Overlay`
+
+Functional interface for rendering on top of the orderbook volume histogram. Overlays are scissor-clipped to the histogram canvas area.
+
+```java
+@FunctionalInterface
+public interface Overlay {
+    void render(OrderbookVolumeHistogram histogram);
+}
+```
+
+### Registration
+
+```java
+histogram.addOverlay(Overlay overlay)
+```
+Registers an overlay callback.
+
+```java
+histogram.removeOverlay(Overlay overlay)
+```
+Removes a previously registered overlay.
+
+### Coordinate Conversion
+
+```java
+Rectangle getCanvasBounds()
+```
+Returns the drawable canvas area in local coordinates.
+
+```java
+int toCanvasSpaceX(float absVolume)
+```
+Converts an absolute volume value to an X pixel coordinate (bars are right-aligned).
+
+```java
+int toCanvasSpaceY(double price)
+```
+Converts a price to a Y pixel coordinate (delegates to the parent chart).
+
+```java
+float getMaxAbsVolume()
+```
+Returns the maximum absolute volume value in the current display (used for normalization).
+
+```java
+double getStartPrice()
+double getEndPrice()
+```
+Returns the visible price range of the histogram data.
+
+```java
+@Nullable ClientMarket getMarket()
+```
+Returns the market currently displayed in the histogram, or null.
+
+### Drawing
+
+Same public `GuiElement` methods as `CandlestickChart.Overlay`: `drawRect`, `drawLine`, `drawText`, `getTextHeight`.
+
+### Example: Volume Target Curve
+
+```java
+private void renderVolumeOverlay(OrderbookVolumeHistogram histogram) {
+    ClientMarket market = histogram.getMarket();
+    if (market == null) return;
+
+    float maxAbsVolume = histogram.getMaxAbsVolume();
+    if (maxAbsVolume <= 0) return;
+
+    // Compute target values and find max for self-normalization
+    float[] targets = computeTargetsForRange(
+            histogram.getStartPrice(), histogram.getEndPrice(), 50);
+    float maxTarget = findMax(targets);
+    if (maxTarget <= 0) return;
+
+    // Draw curve scaled to fill histogram width
+    int lastX = -1, lastY = -1;
+    for (int i = 0; i < targets.length; i++) {
+        float normalized = targets[i] / maxTarget * maxAbsVolume;
+        int x = histogram.toCanvasSpaceX(normalized);
+        int y = histogram.toCanvasSpaceY(priceAt(i));
+        if (lastX >= 0) {
+            histogram.drawLine(lastX, lastY, x, y, 1.5f, 0xFFFFAA00);
+        }
+        lastX = x;
+        lastY = y;
+    }
+}
+```
 
 ---
 

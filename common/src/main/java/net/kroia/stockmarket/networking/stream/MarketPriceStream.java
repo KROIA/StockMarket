@@ -20,23 +20,26 @@ public class MarketPriceStream extends StockMarketGenericStream<ItemID, MarketPr
         public static final StreamCodec<RegistryFriendlyByteBuf, ResponseData> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.VAR_LONG, p -> p.timestamp,
                 ByteBufCodecs.VAR_LONG, p -> p.marketPrice,
+                ByteBufCodecs.FLOAT, p -> p.tradedVolume,
                 ResponseData::new
         );
 
         public long timestamp;
         public long marketPrice;
+        public float tradedVolume;
 
-        public ResponseData(long timestamp, long marketPrice)
+        public ResponseData(long timestamp, long marketPrice, float tradedVolume)
         {
             this.timestamp = timestamp;
             this.marketPrice = marketPrice;
+            this.tradedVolume = tradedVolume;
         }
     }
 
     private long updateInterval = 100;
     private long lastTimeMs = System.currentTimeMillis();
     private ItemID itemID;
-    private final ResponseData lastPrice = new ResponseData(-1,-1);
+    private final ResponseData lastPrice = new ResponseData(-1,-1, 0f);
 
     @Override
     public GenericStream<ItemID, ResponseData> copy() {
@@ -74,10 +77,13 @@ public class MarketPriceStream extends StockMarketGenericStream<ItemID, MarketPr
             if(serverMarket != null) {
                  long currentPrice = serverMarket.getCurrentMarketPrice();
                  long currentTime = serverMarket.getCurrentTime();
+                 float currentVolume = serverMarket.getCurrentCandleTradedVolume();
                  if(currentPrice != lastPrice.marketPrice ||
-                    currentTime != lastPrice.timestamp) {
+                    currentTime != lastPrice.timestamp ||
+                    currentVolume != lastPrice.tradedVolume) {
                      lastPrice.marketPrice = currentPrice;
                      lastPrice.timestamp = currentTime;
+                     lastPrice.tradedVolume = currentVolume;
                      sendPacket();
                  }
             }

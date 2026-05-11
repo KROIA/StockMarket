@@ -153,6 +153,26 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
     }
 
 
+    /**
+     * Auto-subscribes a newly created market to all plugins that opt in,
+     * sorted by subscriptionOrder (0 = earliest, ties resolved by list order).
+     *
+     * @param marketID the ID of the newly created market
+     */
+    @Override
+    public void autoSubscribeNewMarket(ItemID marketID)
+    {
+        List<ServerPlugin> sorted = new ArrayList<>(plugins.values());
+        sorted.sort(Comparator.comparingInt(ServerPlugin::getSubscriptionOrder));
+        for (ServerPlugin plugin : sorted)
+        {
+            if (plugin.getAutoSubscribeNewMarkets() && plugin.isEnabled())
+            {
+                plugin.subscribeToMarket(marketID);
+            }
+        }
+    }
+
     public ServerPlugin addPlugin(@NotNull PluginRegistryObject pluginRegistryObject)
     {
         ServerPlugin plugin = PluginRegistry.instantiateServerPlugin(pluginRegistryObject);
@@ -302,11 +322,13 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
                 continue;
             }
 
-            // Restore generic data fields (name, description, loggerEnabled — NOT enabled yet)
+            // Restore generic data fields (name, description, loggerEnabled, auto-subscribe — NOT enabled yet)
             GenericPluginData genericData = plugin.getGenericPluginData();
             if (pluginTag.contains("name")) plugin.setName(pluginTag.getString("name"));
             if (pluginTag.contains("description")) plugin.setDescription(pluginTag.getString("description"));
             if (pluginTag.contains("loggerEnabled")) plugin.setLoggerEnabled(pluginTag.getBoolean("loggerEnabled"));
+            if (pluginTag.contains("autoSubscribeNewMarkets")) plugin.setAutoSubscribeNewMarkets(pluginTag.getBoolean("autoSubscribeNewMarkets"));
+            if (pluginTag.contains("subscriptionOrder")) plugin.setSubscriptionOrder(pluginTag.getInt("subscriptionOrder"));
 
             // Restore subscribed markets
             if (pluginTag.contains("subscribedMarkets")) {

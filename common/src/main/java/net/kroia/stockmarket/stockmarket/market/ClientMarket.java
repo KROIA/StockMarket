@@ -184,7 +184,7 @@ public class ClientMarket implements IClientMarket
         {
             currentMarketPrice = price.marketPrice;
             for(PriceHistoryContainer priceHistoryContainer : priceHistoryDataMap.values())
-                priceHistoryContainer.history.setCurrentMarketPrice(currentMarketPrice);
+                priceHistoryContainer.history.setCurrentMarketPrice(currentMarketPrice, price.tradedVolume);
         },()->
         {
             // Stream stopped

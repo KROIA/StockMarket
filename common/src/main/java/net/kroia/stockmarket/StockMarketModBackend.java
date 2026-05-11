@@ -5,6 +5,10 @@ import dev.architectury.event.events.client.ClientTickEvent;
 import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.api.BankSystemAPI;
+import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
+import net.kroia.banksystem.util.ItemID;
+import net.kroia.stockmarket.api.market.IServerMarket;
+import net.kroia.stockmarket.api.marketmanager.ISyncServerMarketManager;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.networking.multi_server.MultiServerManager;
 import net.kroia.stockmarket.api.StockMarketAPI;
@@ -21,6 +25,7 @@ import net.kroia.stockmarket.minecraft.entity.StockMarketEntities;
 import net.kroia.stockmarket.event.EventRegistration;
 import net.kroia.stockmarket.minecraft.item.StockMarketCreativeModeTab;
 import net.kroia.stockmarket.minecraft.item.StockMarketItems;
+import net.kroia.stockmarket.stockmarket.market.preset.MarketPresetManager;
 import net.kroia.stockmarket.pluginsystem.Plugins;
 import net.kroia.stockmarket.pluginsystem.pluginmanager.ClientPluginManager;
 import net.kroia.stockmarket.pluginsystem.pluginmanager.PluginManager;
@@ -71,6 +76,8 @@ public class StockMarketModBackend implements StockMarketAPI {
         public MarketPriceManager MARKET_PRICE_HISTORY_MANAGER;
         public OrderRecordManager ORDER_RECORD_MANAGER;
 
+        public MarketPresetManager PRESET_MANAGER;
+
         public StockMarketNetworking NETWORKING;
         public StockMarketLogger LOGGER;
     }
@@ -80,6 +87,7 @@ public class StockMarketModBackend implements StockMarketAPI {
 
         public IClientMarketManager MARKET_MANAGER;
         public IClientPluginManager PLUGIN_MANAGER;
+        public MarketPresetManager PRESET_MANAGER;
         public StockMarketNetworking NETWORKING;
         public StockMarketLogger LOGGER;
         public ClientSettings SETTINGS;
@@ -187,6 +195,9 @@ public class StockMarketModBackend implements StockMarketAPI {
         SERVER_INSTANCES.SERVER_SETTINGS = new StockMarketModSettings();
         SERVER_INSTANCES.SERVER_SETTINGS.setLogger(SERVER_INSTANCES.LOGGER::error, SERVER_INSTANCES.LOGGER::error, SERVER_INSTANCES.LOGGER::debug);
 
+        SERVER_INSTANCES.PRESET_MANAGER = new MarketPresetManager();
+        SERVER_INSTANCES.PRESET_MANAGER.loadOrGenerate();
+
         MarketManager.setBackend(SERVER_INSTANCES);
         PluginManager.setBackend(SERVER_INSTANCES);
         StockMarketNetworking.setBackend(SERVER_INSTANCES);
@@ -210,6 +221,7 @@ public class StockMarketModBackend implements StockMarketAPI {
             SERVER_INSTANCES.DATA_MANAGER = new DataManager();
 
             loadDataFromFiles(UtilitiesPlatform.getServer());
+            registerItemPriceProvider();
             TickEvent.SERVER_POST.register(StockMarketModBackend::onServerTick);
 
             if (TestRegistry.ENABLE_TESTS) {
@@ -232,9 +244,24 @@ public class StockMarketModBackend implements StockMarketAPI {
     }
 
 
+    private static void registerItemPriceProvider() {
+        BankSystemAPI api = SERVER_INSTANCES.BANK_SYSTEM_API;
+        api.setItemPriceProvider(itemId -> {
+            ISyncServerMarketManager marketManager = SERVER_INSTANCES.MARKET_MANAGER.getSync();
+            if (marketManager == null) return 0;
+            IServerMarket market = marketManager.getMarket(new ItemID(itemId));
+            if (market == null) return 0;
+            return market.getCurrentMarketPrice();
+        });
+        api.setPriceCurrencyItem(MoneyItem.getItemID().getShort());
+    }
+
     // Called from the server side
     public static void onServerStop(MinecraftServer server)
     {
+        if (SERVER_INSTANCES != null && SERVER_INSTANCES.BANK_SYSTEM_API != null) {
+            SERVER_INSTANCES.BANK_SYSTEM_API.setItemPriceProvider(null);
+        }
         TickEvent.SERVER_POST.unregister(StockMarketModBackend::onServerTick);
         saveDataToFiles(server);
 
@@ -286,6 +313,8 @@ public class StockMarketModBackend implements StockMarketAPI {
         CLIENT_INSTANCES.BANK_SYSTEM_API = BankSystemMod.getAPI();
         CLIENT_INSTANCES.MARKET_MANAGER = MarketManager.createClient();
         CLIENT_INSTANCES.PLUGIN_MANAGER = new ClientPluginManager();
+        CLIENT_INSTANCES.PRESET_MANAGER = new MarketPresetManager();
+        CLIENT_INSTANCES.PRESET_MANAGER.loadOrGenerate();
         CLIENT_INSTANCES.SETTINGS = new ClientSettings();
 
 

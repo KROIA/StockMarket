@@ -47,6 +47,9 @@ public class StockMarketTestCategories {
     public static final TestCategory CLIENT_MARKET = new TestCategory(
             "sm_client_market", "ClientMarket tests", BOTH, false);
 
+    public static final TestCategory MARKET_PRESET = new TestCategory(
+            "sm_market_preset", "Market preset system tests", BOTH, false);
+
     // Master-only tests (ServerType.MASTER_ONLY, needsMinecraftContext=true)
     public static final TestCategory MARKET = new TestCategory(
             "sm_market", "Server market tests", MASTER_ONLY, true);

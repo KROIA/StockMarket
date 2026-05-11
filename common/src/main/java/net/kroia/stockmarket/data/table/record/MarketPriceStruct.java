@@ -8,7 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-public record MarketPriceStruct(short id, long open, long low, long high, long time) {
+public record MarketPriceStruct(short id, long open, long low, long high, long time, float tradedVolume) {
     private static final Random RANDOM = new Random();
 
     public static final StreamCodec<RegistryFriendlyByteBuf, MarketPriceStruct> STREAM_CODEC = StreamCodec.composite(
@@ -17,6 +17,7 @@ public record MarketPriceStruct(short id, long open, long low, long high, long t
             ByteBufCodecs.VAR_LONG, p -> p.low,
             ByteBufCodecs.VAR_LONG, p -> p.high,
             ByteBufCodecs.VAR_LONG, p -> p.time,
+            ByteBufCodecs.FLOAT, p -> p.tradedVolume,
             MarketPriceStruct::new
     );
 
@@ -27,7 +28,7 @@ public record MarketPriceStruct(short id, long open, long low, long high, long t
         ArrayList<MarketPriceStruct> list = new ArrayList<>();
         for(int i=0;i<num;i++){
             int idx = i*4;
-            list.add(new MarketPriceStruct((short) ints[idx], ints[idx+1], ints[idx+2], ints[idx+3], time));
+            list.add(new MarketPriceStruct((short) ints[idx], ints[idx+1], ints[idx+2], ints[idx+3], time, 0f));
         }
 
         return list;

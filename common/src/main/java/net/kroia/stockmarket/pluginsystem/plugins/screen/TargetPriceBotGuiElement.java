@@ -11,6 +11,7 @@ import net.kroia.stockmarket.pluginsystem.plugin.core.PluginSyncData;
 import net.kroia.stockmarket.pluginsystem.plugins.TargetPriceBot;
 import net.kroia.stockmarket.pluginsystem.screen.PluginGuiElement;
 import net.kroia.stockmarket.screen.widgets.CandlestickChart;
+import net.kroia.stockmarket.screen.widgets.OrderbookVolumeHistogram;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.StreamCodec;
@@ -18,7 +19,9 @@ import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Custom GUI element for the TargetPriceBot plugin.
@@ -49,6 +52,7 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
     }
 
     private final CandlestickChart candlestickChart;
+    private final OrderbookVolumeHistogram orderbookVolumeHistogram;
     private final ItemSelectionView marketSelectionView;
     private final ListView settingsListView;
     private final Label settingsTitle;
@@ -62,10 +66,11 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
     private final TextBox rateTextBox;
     private final Button applyButton;
     private List<ItemID> subscribedMarkets = new ArrayList<>();
+    private final Map<Short, Double> marketTargetPrices = new HashMap<>();
     private @Nullable ItemID selectedMarketID;
     private @Nullable ClientMarket currentMarket;
-    private double targetPrice = 0;
-    private boolean hasTargetPrice = false;
+    private @Nullable CandlestickChart sharedChart;
+    private @Nullable CandlestickChart.Overlay chartOverlay;
 
     /**
      * Creates the TargetPriceBot GUI element.
@@ -73,6 +78,8 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
      */
     public TargetPriceBotGuiElement() {
         candlestickChart = new CandlestickChart();
+        candlestickChart.addOverlay(this::renderChartOverlay);
+        orderbookVolumeHistogram = new OrderbookVolumeHistogram(candlestickChart);
 
         // Market selection using ItemSelectionView (same pattern as ManagementScreen)
         marketSelectionView = new ItemSelectionView(this::onMarketSelected);
@@ -118,8 +125,21 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
         settingsListView.addChild(applyButton);
 
         addChild(candlestickChart);
+        addChild(orderbookVolumeHistogram);
         addChild(marketSelectionView);
         addChild(settingsListView);
+    }
+
+    @Override
+    public void setCandlestickChart(@Nullable CandlestickChart chart) {
+        if (sharedChart != null && chartOverlay != null) {
+            sharedChart.removeOverlay(chartOverlay);
+        }
+        sharedChart = chart;
+        if (chart != null) {
+            if (chartOverlay == null) chartOverlay = this::renderChartOverlay;
+            chart.addOverlay(chartOverlay);
+        }
     }
 
     @Override
@@ -201,11 +221,25 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
      */
     @Override
     protected void onRuntimeDataReceived(TargetPriceBot.RuntimeStreamData data) {
+        marketTargetPrices.clear();
         for (TargetPriceBot.RuntimeStreamData.MarketTargetPrice entry : data.entries()) {
-            if (selectedMarketID != null && entry.itemId() == selectedMarketID.getShort()) {
-                targetPrice = entry.targetPrice();
-                hasTargetPrice = true;
-            }
+            marketTargetPrices.put(entry.itemId(), entry.targetPrice());
+        }
+    }
+
+    private void renderChartOverlay(CandlestickChart chart) {
+        ClientMarket market = chart.getMarket();
+        if (market == null) return;
+
+        Double target = marketTargetPrices.get(market.getItemID().getShort());
+        if (target == null) return;
+
+        Rectangle canvasBounds = chart.getCanvasBounds();
+        int lineY = chart.toCanvasSpaceY(target);
+
+        if (lineY >= canvasBounds.y && lineY <= canvasBounds.y + canvasBounds.height) {
+            chart.drawRect(canvasBounds.x, lineY - 1, canvasBounds.width, 2, 0xFFFF6600);
+            chart.drawText("Target", canvasBounds.x + 4, lineY - chart.getTextHeight() - 2);
         }
     }
 
@@ -227,41 +261,16 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
         int h = getHeight();
         int halfW = w / 2;
         int halfH = h / 2;
+        int histW = halfW / 10;
 
-        candlestickChart.setBounds(0, 0, halfW, halfH);
+        candlestickChart.setBounds(0, 0, halfW - histW, halfH);
+        orderbookVolumeHistogram.setBounds(candlestickChart.getRight(), 0, histW, halfH);
         marketSelectionView.setBounds(0, halfH + spacing, halfW, h - halfH - spacing);
         settingsListView.setBounds(halfW + spacing, 0, w - halfW - spacing, h);
     }
 
     @Override
     protected void render() {
-        // Draw target price line on top of the chart using the live-streamed target price.
-        // The chart renders as a child (in renderBackground), so by the time this
-        // parent render() runs, the chart is already drawn and we can overlay on it.
-        //
-        // Coordinate approach:
-        //   - toCanvasSpaceY() returns Y relative to the chart's own local space
-        //   - getLeft()/getTop() gives the chart's offset within this parent element
-        //   - We combine both to get the correct screen-space position for drawing
-        if (currentMarket != null && hasTargetPrice) {
-            Rectangle canvasBounds = candlestickChart.getCanvasBounds();
-            int chartX = candlestickChart.getLeft();
-            int chartY = candlestickChart.getTop();
-
-            int lineY = chartY + candlestickChart.toCanvasSpaceY(targetPrice);
-            int lineX = chartX + canvasBounds.x;
-            int lineWidth = canvasBounds.width;
-
-            // Only draw if within canvas bounds
-            int canvasTop = chartY + canvasBounds.y;
-            int canvasBottom = canvasTop + canvasBounds.height;
-            if (lineY >= canvasTop && lineY <= canvasBottom) {
-                Rectangle scissorArea = new Rectangle(lineX, canvasTop, lineWidth, canvasBounds.height);
-                enableScissor(scissorArea);
-                drawRect(lineX, lineY - 1, lineWidth, 2, 0xFFFF6600); // Orange line
-                drawText("Target", lineX + 4, lineY - getTextHeight() - 2);
-                disableScissor();
-            }
-        }
+        // Overlays are now rendered via CandlestickChart.Overlay callbacks
     }
 }
