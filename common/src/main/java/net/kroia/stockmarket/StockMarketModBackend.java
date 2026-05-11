@@ -21,6 +21,7 @@ import net.kroia.stockmarket.minecraft.entity.StockMarketEntities;
 import net.kroia.stockmarket.event.EventRegistration;
 import net.kroia.stockmarket.minecraft.item.StockMarketCreativeModeTab;
 import net.kroia.stockmarket.minecraft.item.StockMarketItems;
+import net.kroia.stockmarket.stockmarket.market.preset.MarketPresetManager;
 import net.kroia.stockmarket.pluginsystem.Plugins;
 import net.kroia.stockmarket.pluginsystem.pluginmanager.ClientPluginManager;
 import net.kroia.stockmarket.pluginsystem.pluginmanager.PluginManager;
@@ -70,6 +71,8 @@ public class StockMarketModBackend implements StockMarketAPI {
 
         public MarketPriceManager MARKET_PRICE_HISTORY_MANAGER;
         public OrderRecordManager ORDER_RECORD_MANAGER;
+
+        public MarketPresetManager PRESET_MANAGER;
 
         public StockMarketNetworking NETWORKING;
         public StockMarketLogger LOGGER;
@@ -186,6 +189,9 @@ public class StockMarketModBackend implements StockMarketAPI {
         SERVER_INSTANCES.NETWORKING = COMMON_INSTANCES.NETWORKING;
         SERVER_INSTANCES.SERVER_SETTINGS = new StockMarketModSettings();
         SERVER_INSTANCES.SERVER_SETTINGS.setLogger(SERVER_INSTANCES.LOGGER::error, SERVER_INSTANCES.LOGGER::error, SERVER_INSTANCES.LOGGER::debug);
+
+        SERVER_INSTANCES.PRESET_MANAGER = new MarketPresetManager();
+        SERVER_INSTANCES.PRESET_MANAGER.loadOrGenerate();
 
         MarketManager.setBackend(SERVER_INSTANCES);
         PluginManager.setBackend(SERVER_INSTANCES);

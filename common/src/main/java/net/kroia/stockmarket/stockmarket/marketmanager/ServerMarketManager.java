@@ -8,6 +8,7 @@ import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import net.kroia.stockmarket.stockmarket.market.ServerMarket;
+import net.kroia.stockmarket.stockmarket.market.preset.MarketPreset;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import org.jetbrains.annotations.NotNull;
@@ -101,7 +102,11 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
         ServerMarket m = markets.get(marketID);
         if (m == null)
         {
-            m = new ServerMarket(marketID);
+            MarketPreset preset = BACKEND_INSTANCES.PRESET_MANAGER != null
+                    ? BACKEND_INSTANCES.PRESET_MANAGER.getPreset(marketID) : null;
+            long defaultPrice = (preset != null) ? (long) preset.defaultPrice() : 1000;
+            float abundance = (preset != null) ? preset.naturalAbundance() : 10f;
+            m = new ServerMarket(marketID, null, defaultPrice, abundance);
             markets.put(marketID, m);
         }
         return m;

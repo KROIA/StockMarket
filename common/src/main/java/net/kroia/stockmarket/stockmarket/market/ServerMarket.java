@@ -60,9 +60,9 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     private final PriorityQueue<InterMarketOrder> interMarket_MarketBuyOrders_inputBuffer = new PriorityQueue<>((o1, o2) -> Long.compare(o2.getTime(), o1.getTime()));
 
 
-    public ServerMarket(ItemID itemID, @Nullable Function<Double, Float> volumeProvider, long defaultPrice)
+    public ServerMarket(ItemID itemID, @Nullable Function<Double, Float> volumeProvider, long defaultPrice, float naturalAbundance)
     {
-        this.settings = new MarketSettings(true, defaultPrice);
+        this.settings = new MarketSettings(true, defaultPrice, naturalAbundance);
         this.defaultVolumeProviderFunction =  volumeProvider;
         this.itemID = itemID;
         this.orderbook = new Orderbook(itemID,
@@ -90,7 +90,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
 
     public ServerMarket(ItemID itemID)
     {
-        this(itemID, null, 1000);
+        this(itemID, null, 1000, 10f);
     }
 
     @Override
