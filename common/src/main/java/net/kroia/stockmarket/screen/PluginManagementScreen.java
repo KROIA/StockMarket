@@ -12,6 +12,7 @@ import net.kroia.stockmarket.pluginsystem.plugin.core.PluginSyncData;
 import net.kroia.stockmarket.pluginsystem.registry.PluginRegistry;
 import net.kroia.stockmarket.pluginsystem.registry.PluginRegistryObject;
 import net.kroia.stockmarket.pluginsystem.screen.PluginGuiElement;
+import net.kroia.stockmarket.screen.uiElements.MarketItemButton;
 import net.kroia.stockmarket.screen.widgets.CandlestickChart;
 import net.kroia.stockmarket.screen.widgets.OrderbookVolumeHistogram;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
@@ -174,6 +175,7 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             entryWidgets.add(entry);
             listView.addChild(entry);
         }
+        updateMarketButtonSelection();
     }
 
     /**
@@ -233,6 +235,7 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             }
             selectedChartMarket = null;
             candlestickChart.setMarket(null);
+            updateMarketButtonSelection();
             return;
         }
 
@@ -247,6 +250,15 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             market.subscribeToMarketPriceUpdate();
             candlestickChart.setMarket(market);
             currentChartMarket = market;
+        }
+        updateMarketButtonSelection();
+    }
+
+    private void updateMarketButtonSelection() {
+        for (PluginEntryWidget entry : entryWidgets) {
+            for (MarketItemButton btn : entry.marketItemViews) {
+                btn.setSelected(selectedChartMarket != null && selectedChartMarket.equals(btn.getMarketID()));
+            }
         }
     }
 
@@ -360,7 +372,8 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
                 ItemStack stack = marketID.getStack();
                 if (stack != null) {
                     ItemID currentMarketID = marketID;
-                    MarketItemButton itemBtn = new MarketItemButton(stack, marketID, parentScreen,
+                    MarketItemButton itemBtn = new MarketItemButton(stack, marketID,
+                            id -> parentScreen.selectMarketForChart(id),
                             () -> onUnsubscribeClicked(currentMarketID));
                     itemBtn.setSize(16, 16);
                     marketItemViews.add(itemBtn);
@@ -611,83 +624,4 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         }
     }
 
-    /**
-     * Clickable market item icon that highlights when its market is selected for chart display.
-     * Extends ItemView with selection overlay and click handling.
-     * All instances share the same parentScreen.selectedChartMarket field for synchronized highlighting.
-     */
-    private static class MarketItemButton extends ItemView {
-        private final ItemID marketID;
-        private final PluginManagementScreen parentScreen;
-        private final Runnable onUnsubscribe;
-
-        public MarketItemButton(ItemStack stack, ItemID marketID, PluginManagementScreen parentScreen, Runnable onUnsubscribe) {
-            super(stack);
-            this.marketID = marketID;
-            this.parentScreen = parentScreen;
-            this.onUnsubscribe = onUnsubscribe;
-        }
-
-        public ItemID getMarketID() {
-            return marketID;
-        }
-
-        @Override
-        public void renderBackground() {
-            super.renderBackground();
-            if (parentScreen.selectedChartMarket != null && parentScreen.selectedChartMarket.equals(marketID)) {
-                drawRect(0, 0, getWidth(), getHeight(), 0x6000FF00);
-            }
-            if (isMouseOver()) {
-                drawRect(0, 0, getWidth(), getHeight(), 0x80FFFFFF);
-            }
-        }
-
-        @Override
-        protected void render() {
-            super.render();
-            int w = getWidth();
-            int h = getHeight();
-            int closeW = w / 2;
-            int closeH = h / 2;
-            int closeX = w - closeW;
-
-            boolean hoverClose = isMouseOver()
-                    && getMouseX() >= closeX && getMouseX() < w
-                    && getMouseY() >= 0 && getMouseY() < closeH;
-
-            // Push Z above the item icon (Minecraft renders items at ~150 Z)
-            var graphics = getGraphics();
-            graphics.pushPose();
-            graphics.translate(0, 0, 200);
-
-            int bgColor = hoverClose ? 0xC0FF0000 : 0x80000000;
-            drawRect(closeX, 0, closeW, closeH, bgColor);
-
-            int pad = 2;
-            int lineColor = hoverClose ? 0xFFFFFFFF : 0xFFFF4444;
-            drawLine(closeX + pad, pad, closeX + closeW - pad, closeH - pad, 1.0f, lineColor);
-            drawLine(closeX + closeW - pad, pad, closeX + pad, closeH - pad, 1.0f, lineColor);
-
-            graphics.popPose();
-        }
-
-        @Override
-        protected boolean mouseClickedOverElement(int button) {
-            if (button == 0) {
-                int closeW = getWidth() / 2;
-                int closeH = getHeight() / 2;
-                int closeX = getWidth() - closeW;
-
-                if (getMouseX() >= closeX && getMouseX() < getWidth()
-                        && getMouseY() >= 0 && getMouseY() < closeH) {
-                    onUnsubscribe.run();
-                    return true;
-                }
-                parentScreen.selectMarketForChart(marketID);
-                return true;
-            }
-            return false;
-        }
-    }
 }

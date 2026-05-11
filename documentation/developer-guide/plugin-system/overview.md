@@ -71,6 +71,8 @@ The sequence each tick:
 | Define type-safe custom settings | `ServerPlugin.customSettingsCodec()`, `provideCustomSettings()`, `applyCustomSettings()` |
 | Persist state across server restarts | `ServerPlugin.save(CompoundTag)`, `load(CompoundTag)` |
 | Custom inline or full-screen GUI | `PluginGuiElement` subclass, registered via `PluginRegistryObject.setGuiElementFactory()` |
+| Draw overlays on candlestick chart | Override `PluginGuiElement.setCandlestickChart()`, register `CandlestickChart.Overlay` |
+| Draw overlays on orderbook histogram | Override `PluginGuiElement.setOrderbookVolumeHistogram()`, register `OrderbookVolumeHistogram.Overlay` |
 
 Both `ServerPlugin` and `PluginGuiElement` are generic classes parameterized by `<TSettings, TRuntimeData>`. Custom settings and runtime data are defined as inner record types with `StreamCodec<ByteBuf, T>` fields. The framework handles all byte-level encoding/decoding internally -- plugin developers work exclusively with typed Java objects.
 

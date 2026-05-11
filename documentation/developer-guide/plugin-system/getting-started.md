@@ -336,6 +336,62 @@ public class MyGuiElement extends PluginGuiElement<MyPlugin.Settings, MyPlugin.S
 
 Call `startDataStream()` when the GUI element needs live data (typically in `onPluginSyncDataReceived`). Call `stopDataStream()` when the element is no longer visible.
 
+## Step 7: Add Chart Overlays (Optional)
+
+Plugins can draw custom visualizations on the shared candlestick chart and orderbook volume histogram in the Plugin Management Screen. Override the hook methods on your `PluginGuiElement` to register overlay callbacks.
+
+**Candlestick chart overlay:**
+
+```java
+@Override
+public void setCandlestickChart(@Nullable CandlestickChart chart) {
+    // Remove from previous chart
+    if (this.chart != null && this.overlay != null) {
+        this.chart.removeOverlay(this.overlay);
+    }
+    this.chart = chart;
+    if (chart != null) {
+        if (this.overlay == null) this.overlay = this::renderChartOverlay;
+        chart.addOverlay(this.overlay);
+    }
+}
+
+private void renderChartOverlay(CandlestickChart chart) {
+    ClientMarket market = chart.getMarket();
+    if (market == null) return;
+
+    Rectangle bounds = chart.getCanvasBounds();
+    // Use chart.toCanvasSpaceY(price) for Y coordinates
+    // Use chart.drawRect(), chart.drawLine(), chart.drawText() for drawing
+}
+```
+
+**Orderbook histogram overlay:**
+
+```java
+@Override
+public void setOrderbookVolumeHistogram(@Nullable OrderbookVolumeHistogram histogram) {
+    if (this.histogram != null && this.histogramOverlay != null) {
+        this.histogram.removeOverlay(this.histogramOverlay);
+    }
+    this.histogram = histogram;
+    if (histogram != null) {
+        if (this.histogramOverlay == null) this.histogramOverlay = this::renderHistogramOverlay;
+        histogram.addOverlay(this.histogramOverlay);
+    }
+}
+
+private void renderHistogramOverlay(OrderbookVolumeHistogram histogram) {
+    // Use histogram.toCanvasSpaceX(volume) and histogram.toCanvasSpaceY(price)
+    // Use histogram.getMaxAbsVolume() for normalization
+    // Use histogram.drawRect(), histogram.drawLine() for drawing
+}
+```
+
+The framework calls these hooks automatically when the Plugin Management Screen creates plugin entries. When entries are rebuilt (e.g., after unsubscribing a market), the framework calls with `null` first to clean up, then with the new reference.
+
+For plugins with dedicated screens (`needsCustomScreen() = true`), you can also register overlays on your own chart widgets in the constructor. Both approaches work simultaneously — the overlay method receives the chart as a parameter and adapts to whichever chart is calling it.
+
 ## Next Steps
 
 - [API Reference](api-reference.md) -- complete method signatures for all plugin API classes
