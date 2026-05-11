@@ -543,7 +543,7 @@ public class AsyncMarket implements IAsyncMarket{
     @Override
     public CompletableFuture<MarketPriceStruct> getCurrentMarketPriceStructAsync() {
         if(!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(new MarketPriceStruct(itemID.getShort(), 0,0,0,0));
+            return CompletableFuture.completedFuture(new MarketPriceStruct(itemID.getShort(), 0,0,0,0, 0f));
         CompletableFuture<MarketPriceStruct> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetCurrentMarketPriceStruct, itemID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
@@ -554,7 +554,7 @@ public class AsyncMarket implements IAsyncMarket{
     @Override
     public CompletableFuture<MarketPriceStruct> getCurrentMarketPriceStructAndResetAsync() {
         if(!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(new MarketPriceStruct(itemID.getShort(), 0,0,0,0));
+            return CompletableFuture.completedFuture(new MarketPriceStruct(itemID.getShort(), 0,0,0,0, 0f));
         CompletableFuture<MarketPriceStruct> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.GetCurrentMarketPriceStructAndReset, itemID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);

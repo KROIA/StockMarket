@@ -49,6 +49,8 @@ public class CandlestickChart extends StockMarketGuiElement {
     int candleWidth = 12;
     private final Rectangle canvasRect = new Rectangle(1, 1, 0, 0);
     private final Rectangle canvasScissorRect = new Rectangle(1, 1, 0, 0);
+    private final Rectangle volumeRect = new Rectangle(1, 1, 0, 0);
+    private final Rectangle volumeScissorRect = new Rectangle(1, 1, 0, 0);
     private double zoomLevel = 200;
     private final RectangleF chartviewRect = new RectangleF(200, 0, 200, 500);
     private final Point lastDragMousePos = new Point();
@@ -183,7 +185,10 @@ public class CandlestickChart extends StockMarketGuiElement {
         renderChartVerticalBackground();
 
         renderCandles();
-        drawFrame(canvasRect, ColorUtilities.setAlpha(colorZeroLine, 1.0f), 1);
+        renderVolumeBars();
+        int frameColor = ColorUtilities.setAlpha(colorZeroLine, 1.0f);
+        drawFrame(canvasRect, frameColor, 1);
+        drawFrame(volumeRect, frameColor, 1);
 
         // Render plugin overlays on top of chart
         enableScissor(canvasScissorRect);
@@ -240,6 +245,48 @@ public class CandlestickChart extends StockMarketGuiElement {
         }
     }
 
+    private void renderVolumeBars() {
+        if (data == null || data.getCandles().isEmpty())
+            return;
+        List<PriceHistoryData.Candle> candles = data.getCandles();
+        int candleCount = candles.size();
+
+        float maxVolume = 0;
+        for (int i = firstVisibleCandleIndex; i <= lastVisibleCandleIndex; i++) {
+            if (i >= 0 && i < candleCount)
+                maxVolume = Math.max(maxVolume, candles.get(i).tradedVolume);
+        }
+        if (maxVolume <= 0)
+            return;
+
+        int volumeBase = volumeRect.y + volumeRect.height;
+        float norm = (float) volumeRect.height / maxVolume;
+
+        enableScissor(volumeScissorRect);
+
+        // Same pattern as renderCandles: track lastXPos to eliminate gaps between bars
+        double closePrice = data.getCurrentMarketRealPrice();
+        int lastXPos = toCanvasSpaceX(0) - candleWidth * 2;
+        for (int i = candleCount - 1; i >= 0; i--) {
+            int xPos = toCanvasSpaceX(candleCount - i - 1) - candleWidth;
+            int barWidth = Math.abs(xPos - lastXPos);
+            lastXPos = xPos;
+
+            if (xPos < 0 || (xPos + barWidth - 1) > (volumeRect.x + volumeRect.width))
+                continue;
+
+            PriceHistoryData.Candle candle = candles.get(i);
+            int barHeight = (int) (candle.tradedVolume * norm);
+            if (barHeight < 1 && candle.tradedVolume > 0) barHeight = 1;
+
+            boolean bullish = closePrice >= data.toRealPrice(candle.open);
+            drawRect(xPos, volumeBase - barHeight, barWidth, barHeight, bullish ? colorGreen : colorRed);
+            closePrice = data.toRealPrice(candle.open);
+        }
+
+        disableScissor();
+    }
+
     private void renderChartHorizontalBackground() {
         int targetLineCount = 8;
 
@@ -268,12 +315,26 @@ public class CandlestickChart extends StockMarketGuiElement {
         }
         scissorResume();
         maxPriceLabelTextWidth += 10;
-        canvasRect.width = Math.max(2, ((getWidth() - maxPriceLabelTextWidth) / 2) * 2);
-        canvasRect.height = Math.max(1, (getHeight() - maxTimeDateLabelWidth));
-        canvasScissorRect.width = canvasRect.width - 1;
+        int totalWidth = Math.max(2, ((getWidth() - maxPriceLabelTextWidth) / 2) * 2);
+        int totalHeight = Math.max(1, (getHeight() - maxTimeDateLabelWidth));
+        int volumeHeight = totalHeight / 5;
+        int candleHeight = totalHeight - volumeHeight;
+
+        canvasRect.width = totalWidth;
+        canvasRect.height = candleHeight;
         canvasScissorRect.x = canvasRect.x + 1;
         canvasScissorRect.y = canvasRect.y + 1;
+        canvasScissorRect.width = canvasRect.width - 1;
         canvasScissorRect.height = canvasRect.height - 1;
+
+        volumeRect.x = canvasRect.x;
+        volumeRect.y = canvasRect.y + candleHeight;
+        volumeRect.width = totalWidth;
+        volumeRect.height = volumeHeight;
+        volumeScissorRect.x = volumeRect.x + 1;
+        volumeScissorRect.y = volumeRect.y + 1;
+        volumeScissorRect.width = volumeRect.width - 1;
+        volumeScissorRect.height = volumeRect.height - 1;
         for (double price = firstLine; price <= topPrice; price += niceStep) {
             renderHorizontalValueLine(price);
         }
@@ -302,7 +363,7 @@ public class CandlestickChart extends StockMarketGuiElement {
 
         Date lastTime = new Date(0);
         maxTimeDateLabelWidth = 0;
-        int canvasY = canvasRect.y + canvasRect.height;
+        int canvasY = volumeRect.y + volumeRect.height;
         int i = firstVisibleCandleIndex;
 
         for (; i <= lastVisibleCandleIndex; i += offset) {

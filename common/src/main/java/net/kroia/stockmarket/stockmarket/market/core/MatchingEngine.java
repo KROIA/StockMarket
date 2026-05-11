@@ -51,6 +51,7 @@ public class MatchingEngine
 
     private final Orderbook.LongPair pair_cache =  new Orderbook.LongPair();
     private long currentMarketPrice;
+    private float tradedVolumeSinceLastReset = 0;
 
 
     public MatchingEngine(ItemID itemID, Orderbook orderbook,
@@ -86,9 +87,13 @@ public class MatchingEngine
 
 
 
+    // Total matched trade volume accumulated during the last update() call (real-scaled)
+    public float getLastTradedVolume() { return tradedVolumeSinceLastReset; }
+
     public void update(long currentMarketPrice)
     {
         this.currentMarketPrice = currentMarketPrice;
+        tradedVolumeSinceLastReset = 0;
 
         if(!buyLimitOrders_inputBuffer.isEmpty())
         {
@@ -282,6 +287,7 @@ public class MatchingEngine
                 itemDelta   -= fillPotential;
                 moneyDelta  += cost;
                 currentMarketPrice  = buyOrder.getStartPrice();
+                tradedVolumeSinceLastReset += Math.abs(fillPotential);
 
                 if (buyOrder.isFilled()) {
                     buyOrdersToRemove.add(buyOrder);
@@ -306,6 +312,7 @@ public class MatchingEngine
                 itemDelta   -= fillPotential;
                 moneyDelta  += cost;
                 currentMarketPrice  = buyOrder.getStartPrice();
+                tradedVolumeSinceLastReset += Math.abs(fillPotential);
                 if (buyOrder.isFilled()) {
                     buyOrdersToRemove.add(buyOrder);
                     orderConsumed(buyOrder);
@@ -469,6 +476,7 @@ public class MatchingEngine
                 moneyDelta     += cost;
                 availableFunds += cost;
                 currentMarketPrice  = sellOrder.getStartPrice();
+                tradedVolumeSinceLastReset += Math.abs(fillPotential);
 
                 if (sellOrder.isFilled()) {
                     sellOrdersToRemove.add(sellOrder);
@@ -509,6 +517,7 @@ public class MatchingEngine
                 moneyDelta     += cost;
                 availableFunds += cost;
                 currentMarketPrice  = sellOrder.getStartPrice();
+                tradedVolumeSinceLastReset += Math.abs(fillPotential);
 
                 if (sellOrder.isFilled()) {
                     sellOrdersToRemove.add(sellOrder);
@@ -585,6 +594,7 @@ public class MatchingEngine
                 itemDelta  += filled;
                 moneyDelta -= virtualCost;
                 orderVolume -= filled;
+                tradedVolumeSinceLastReset += Math.abs(filled);
                 if(filled != 0)
                 {
                     currentMarketPrice = nextExecutedPrice;
@@ -656,6 +666,7 @@ public class MatchingEngine
                 moneyDelta     -= cost;
                 availableFunds -= cost;
                 orderVolume    -= filled;
+                tradedVolumeSinceLastReset += Math.abs(filled);
                 if(filled != 0)
                 {
                     currentMarketPrice = nextExecutedPrice;

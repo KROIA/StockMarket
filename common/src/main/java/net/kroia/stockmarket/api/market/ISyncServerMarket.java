@@ -43,6 +43,8 @@ public interface ISyncServerMarket {
 
     Orderbook getOrderbook();
 
+    // Returns the accumulated traded volume for the current candle period (real-scaled)
+    float getCurrentCandleTradedVolume();
 
     void update();
 }

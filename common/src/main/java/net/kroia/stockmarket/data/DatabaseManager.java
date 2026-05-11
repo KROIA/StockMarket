@@ -39,11 +39,23 @@ public class DatabaseManager {
         try {
             executeSqlFile("/sql/MarketPrice.sql");
             executeSqlFile("/sql/OrderHistory.sql");
+            migrateSchema();
             return true;
         }
         catch(SQLException | IOException e){
             StockMarketMod.LOGGER.error("Failed to create database table {}", e.getMessage());
             return false;
+        }
+    }
+
+    // Adds columns introduced after the initial schema. Silently ignores if they already exist.
+    private void migrateSchema() {
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute("ALTER TABLE MarketPrice ADD COLUMN traded_volume REAL NOT NULL DEFAULT 0");
+            connection.commit();
+        } catch (SQLException ignored) {
+            // Column already exists — expected for new databases
+            try { connection.rollback(); } catch (SQLException e) { /* ignore */ }
         }
     }
 

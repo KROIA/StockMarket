@@ -23,6 +23,7 @@ public class PriceHistoryData
                 ByteBufCodecs.VAR_LONG, p -> p.open,
                 ByteBufCodecs.VAR_LONG, p -> p.high,
                 ByteBufCodecs.VAR_LONG, p -> p.low,
+                ByteBufCodecs.FLOAT, p -> p.tradedVolume,
                 Candle::new
         );
 
@@ -30,20 +31,24 @@ public class PriceHistoryData
         public final long open;
         public long high;
         public long low;
+        // Real-scaled total traded volume for this candle period
+        public float tradedVolume;
 
         public Candle(long open, long high, long low)
         {
-            this.openTimestamp = System.currentTimeMillis();
-            this.open = open;
-            this.high = high;
-            this.low = low;
+            this(System.currentTimeMillis(), open, high, low, 0f);
         }
         public Candle(long openTimestamp, long open, long high, long low)
+        {
+            this(openTimestamp, open, high, low, 0f);
+        }
+        public Candle(long openTimestamp, long open, long high, long low, float tradedVolume)
         {
             this.openTimestamp = openTimestamp;
             this.open = open;
             this.high = high;
             this.low = low;
+            this.tradedVolume = tradedVolume;
         }
         public Candle(MarketPriceStruct  sqlData)
         {
@@ -51,12 +56,14 @@ public class PriceHistoryData
             open = sqlData.open();
             high = sqlData.high();
             low = sqlData.low();
+            tradedVolume = sqlData.tradedVolume();
         }
         public static Candle merge(List<Candle> candles, long timestamp, int begin, int count)
         {
             long open = 0;
             long high = -Long.MAX_VALUE;
             long low  = Long.MAX_VALUE;
+            float totalVolume = 0;
             if(candles.size() > begin)
             {
                 Candle candle = candles.get(begin);
@@ -68,8 +75,9 @@ public class PriceHistoryData
                 Candle candle = candles.get(i);
                 high = Math.max(high, candle.high);
                 low = Math.min(low, candle.low);
+                totalVolume += candle.tradedVolume;
             }
-            return new Candle(timestamp, open, high, low);
+            return new Candle(timestamp, open, high, low, totalVolume);
         }
 
         @Override
@@ -236,6 +244,10 @@ public class PriceHistoryData
 
     public void setCurrentMarketPrice(long currentMarketPrice)
     {
+        setCurrentMarketPrice(currentMarketPrice, 0);
+    }
+    public void setCurrentMarketPrice(long currentMarketPrice, float tradedVolume)
+    {
         this.currentMarketPrice = currentMarketPrice;
         if(!candles.isEmpty())
         {
@@ -243,6 +255,7 @@ public class PriceHistoryData
             Candle  candle = candles.getLast();
             candle.high = Math.max(this.currentMarketPrice, candle.high);
             candle.low = Math.min(this.currentMarketPrice, candle.low);
+            candle.tradedVolume += tradedVolume;
         }
     }
     public void startNewCandle(long currentServerTime)

@@ -100,7 +100,7 @@ public class MarketPriceManagerTestSuite extends TestSuite {
 
             // Save a record and verify it can be queried back
             MarketPriceStruct testRecord = new MarketPriceStruct(
-                    (short) 1, 100L, 90L, 110L, System.currentTimeMillis());
+                    (short) 1, 100L, 90L, 110L, System.currentTimeMillis(), 0f);
 
             CompletableFuture<Void> saveFuture = manager.save(testRecord);
             saveFuture.get(5, TimeUnit.SECONDS);
@@ -202,7 +202,7 @@ public class MarketPriceManagerTestSuite extends TestSuite {
             // Insert a few records first
             for (int i = 0; i < 5; i++) {
                 MarketPriceStruct record = new MarketPriceStruct(
-                        (short) 2, 100L + i, 90L, 110L, System.currentTimeMillis() + i);
+                        (short) 2, 100L + i, 90L, 110L, System.currentTimeMillis() + i, 0f);
                 manager.save(record).get(5, TimeUnit.SECONDS);
             }
 
