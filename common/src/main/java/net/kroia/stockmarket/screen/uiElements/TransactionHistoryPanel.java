@@ -23,6 +23,7 @@ import java.util.List;
 public class TransactionHistoryPanel extends StockMarketGuiElement {
 
     private static final int MAX_RESULTS = 100;
+    private static final long AUTO_REFRESH_INTERVAL_MS = 3000;
     private static final DateTimeFormatter TIME_FORMATTER =
             DateTimeFormatter.ofPattern("MM-dd HH:mm").withZone(ZoneId.systemDefault());
 
@@ -31,6 +32,9 @@ public class TransactionHistoryPanel extends StockMarketGuiElement {
     // Dirty-flag for deferred rebuild
     private boolean needsRebuild = false;
     private List<OrderRecordStruct> pendingRecords = new ArrayList<>();
+    private long lastRefreshMs = 0;
+    @org.jetbrains.annotations.Nullable
+    private ItemID currentMarketID;
 
     public TransactionHistoryPanel() {
         super();
@@ -52,6 +56,7 @@ public class TransactionHistoryPanel extends StockMarketGuiElement {
      */
     public void refresh(ItemID marketID) {
         if (marketID == null) return;
+        this.currentMarketID = marketID;
         BACKEND_INSTANCES.NETWORKING.TRANSACTION_HISTORY_REQUEST.sendRequestToServer(
                 new TransactionHistoryRequest.InputData(marketID, MAX_RESULTS)
         ).thenAccept(response -> updateRecords(response.records()));
@@ -72,6 +77,11 @@ public class TransactionHistoryPanel extends StockMarketGuiElement {
         if (needsRebuild) {
             needsRebuild = false;
             rebuildRecordList(pendingRecords);
+        }
+        long now = System.currentTimeMillis();
+        if (now - lastRefreshMs > AUTO_REFRESH_INTERVAL_MS && currentMarketID != null) {
+            lastRefreshMs = now;
+            refresh(currentMarketID);
         }
     }
 
