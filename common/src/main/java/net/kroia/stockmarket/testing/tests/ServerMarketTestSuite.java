@@ -63,6 +63,11 @@ public class ServerMarketTestSuite extends TestSuite {
 
         // Candle Tracking
         addTest("getCurrentMarketPriceStructAndReset_resets", this::test_getCurrentMarketPriceStructAndReset_resets);
+
+        // Cancel Order
+        addTest("cancelOrder_existing_limit", this::test_cancelOrder_existingLimit);
+        addTest("cancelOrder_nonexistent", this::test_cancelOrder_nonexistent);
+        addTest("cancelOrder_wrong_executor", this::test_cancelOrder_wrongExecutor);
     }
 
     @Override
@@ -416,6 +421,104 @@ public class ServerMarketTestSuite extends TestSuite {
                     serverMarket.getCurrentMarketPrice(), newCandle.open());
             if (!r.passed()) return r;
             return pass("getCurrentMarketPriceStructAndReset resets candle to current price");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    // ── Cancel Order ────────────────────────────────────────────────────────
+
+    /**
+     * Places a limit buy order directly in the orderbook, then cancels it via cancelOrder().
+     * Verifies that cancelOrder returns true and the order is removed from the limit orders list.
+     */
+    private TestResult test_cancelOrder_existingLimit() {
+        try {
+            resetMarket(100, true);
+
+            UUID executorUUID = UUID.randomUUID();
+            Order order = new Order(itemID, Order.Type.LIMIT, 5, 90, 0, executorUUID, bankAccountNr);
+
+            // Place order directly in orderbook so it appears in getLimitOrders()
+            serverMarket.getOrderbook().putOrder(order);
+
+            // Verify order is present in limit orders
+            TestResult r = assertTrue("Limit orders should contain the placed order",
+                    serverMarket.getLimitOrders().size() >= 1);
+            if (!r.passed()) return r;
+
+            // Cancel the order using all identifying fields
+            boolean cancelled = serverMarket.cancelOrder(
+                    executorUUID, order.getTime(), Order.Type.LIMIT,
+                    order.getStartPrice(), order.getTargetVolume());
+
+            r = assertTrue("cancelOrder should return true for existing order", cancelled);
+            if (!r.passed()) return r;
+
+            // Verify order is removed
+            for (Order remaining : serverMarket.getLimitOrders()) {
+                if (remaining == order) {
+                    return fail("Order should have been removed from limit orders list");
+                }
+            }
+            return pass("cancelOrder successfully removes an existing limit order");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Calls cancelOrder with a random UUID and arbitrary values on an empty orderbook.
+     * Verifies that cancelOrder returns false when no matching order exists.
+     */
+    private TestResult test_cancelOrder_nonexistent() {
+        try {
+            resetMarket(100, true);
+
+            // Attempt to cancel a non-existent order
+            boolean cancelled = serverMarket.cancelOrder(
+                    UUID.randomUUID(), System.currentTimeMillis(),
+                    Order.Type.LIMIT, 100, 5);
+
+            TestResult r = assertFalse("cancelOrder should return false for non-existent order", cancelled);
+            if (!r.passed()) return r;
+            return pass("cancelOrder returns false when no matching order exists");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Places a limit order with UUID-A, then tries to cancel with UUID-B.
+     * Verifies cancelOrder returns false and the original order remains in the orderbook.
+     */
+    private TestResult test_cancelOrder_wrongExecutor() {
+        try {
+            resetMarket(100, true);
+
+            UUID ownerUUID = UUID.randomUUID();
+            UUID wrongUUID = UUID.randomUUID();
+            Order order = new Order(itemID, Order.Type.LIMIT, 5, 90, 0, ownerUUID, bankAccountNr);
+
+            // Place order directly in orderbook
+            serverMarket.getOrderbook().putOrder(order);
+
+            int sizeBefore = serverMarket.getLimitOrders().size();
+
+            // Try to cancel with a different executor UUID
+            boolean cancelled = serverMarket.cancelOrder(
+                    wrongUUID, order.getTime(), Order.Type.LIMIT,
+                    order.getStartPrice(), order.getTargetVolume());
+
+            TestResult r = assertFalse("cancelOrder should return false for wrong executor", cancelled);
+            if (!r.passed()) return r;
+
+            // Verify order is still in the orderbook
+            int sizeAfter = serverMarket.getLimitOrders().size();
+            r = assertEquals("Limit orders size should be unchanged", sizeBefore, sizeAfter);
+            if (!r.passed()) return r;
+
+            return pass("cancelOrder with wrong executor UUID does not remove the order");
         } catch (Exception e) {
             return fail("Exception: " + e.getMessage());
         }

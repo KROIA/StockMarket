@@ -20,8 +20,8 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
 
     private final DatabaseManager databaseManager;
 
-    public static final String INSERT = "INSERT INTO OrderHistory (itemid, marketid, userid_one, userid_two, type, amount, price, time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-    public static final String SELECT = "SELECT itemid, marketid, userid_one, userid_two, type, amount, price, time FROM OrderHistory";
+    public static final String INSERT = "INSERT INTO OrderHistory (itemid, accountid, userid_one, userid_two, type, amount, price, time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+    public static final String SELECT = "SELECT itemid, accountid, userid_one, userid_two, type, amount, price, time FROM OrderHistory";
     public static final String DELETE = "DELETE FROM OrderHistory";
     public static final String COUNT  = "SELECT COUNT(*) FROM OrderHistory";
 
