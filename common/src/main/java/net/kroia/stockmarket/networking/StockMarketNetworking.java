@@ -50,6 +50,7 @@ public class StockMarketNetworking extends NetworkPacketManager {
     public final CancelOrderRequest CANCEL_ORDER_REQUEST = (CancelOrderRequest) AsynchronousRequestResponseSystem.register(new CancelOrderRequest());
     public final OrderHistoryRequest ORDER_HISTORY_REQUEST = (OrderHistoryRequest) AsynchronousRequestResponseSystem.register(new OrderHistoryRequest());
     public final TransactionHistoryRequest TRANSACTION_HISTORY_REQUEST = (TransactionHistoryRequest) AsynchronousRequestResponseSystem.register(new TransactionHistoryRequest());
+    public final PresetUpdateRequest PRESET_UPDATE_REQUEST = (PresetUpdateRequest) AsynchronousRequestResponseSystem.register(new PresetUpdateRequest());
 
     //public final MarketSettingsGetRequest MARKET_SETTINGS_GET_REQUEST = (MarketSettingsGetRequest) AsynchronousRequestResponseSystem.register(new MarketSettingsGetRequest());
 

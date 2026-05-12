@@ -213,5 +213,12 @@
   "gui.stockmarket.create_market_tab.price": "Price",
   "gui.stockmarket.create_market_tab.abundance": "Abundance",
   "gui.stockmarket.create_market_tab.already_exists": "Market already exists",
-  "gui.stockmarket.create_market_tab.clear_selection": "Clear Selection"
+  "gui.stockmarket.create_market_tab.clear_selection": "Clear Selection",
+
+  "gui.stockmarket.preset_editor_tab.search": "Search",
+  "gui.stockmarket.preset_editor_tab.save": "Save Changes",
+  "gui.stockmarket.preset_editor_tab.price": "Price",
+  "gui.stockmarket.preset_editor_tab.abundance": "Abundance",
+  "gui.stockmarket.preset_editor_tab.saved_ok": "Presets saved successfully",
+  "gui.stockmarket.preset_editor_tab.save_failed": "Failed to save presets"
 }
