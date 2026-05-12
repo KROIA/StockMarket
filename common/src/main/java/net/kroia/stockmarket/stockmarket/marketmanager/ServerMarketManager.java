@@ -171,7 +171,8 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
         }
         if(!user.getName().equals(playerName))
         {
-            user = new User(playerUUID, playerName);
+            // Use createWithChangedName to preserve admin status and preferences
+            user = User.createWithChangedName(user, playerName);
             userMap.put(playerUUID, user);
         }
     }
@@ -231,6 +232,35 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
         if (user == null)
             return CompletableFuture.completedFuture(false);
         return CompletableFuture.completedFuture(user.isStockMarketAdmin());
+    }
+
+
+
+    @Override
+    public @NotNull PlayerPreferences getPlayerPreferences(UUID playerUUID) {
+        User user = userMap.get(playerUUID);
+        if (user == null)
+            return new PlayerPreferences();
+        return user.getPreferences();
+    }
+
+    @Override
+    public CompletableFuture<PlayerPreferences> getPlayerPreferencesAsync(UUID playerUUID) {
+        return CompletableFuture.completedFuture(getPlayerPreferences(playerUUID));
+    }
+
+    @Override
+    public boolean updatePlayerPreferences(UUID playerUUID, PlayerPreferences preferences) {
+        User user = userMap.get(playerUUID);
+        if (user == null)
+            return false;
+        user.setPreferences(preferences);
+        return true;
+    }
+
+    @Override
+    public CompletableFuture<Boolean> updatePlayerPreferencesAsync(UUID playerUUID, PlayerPreferences preferences) {
+        return CompletableFuture.completedFuture(updatePlayerPreferences(playerUUID, preferences));
     }
 
 

@@ -73,6 +73,8 @@ public class AsyncMarketManager implements IAsyncMarketManager {
         OnPlayerJoin,
         SetStockmarketAdminMode,
         IsStockmarketAdmin,
+        GetPlayerPreferences,
+        UpdatePlayerPreferences,
     }
 
 
@@ -97,6 +99,8 @@ public class AsyncMarketManager implements IAsyncMarketManager {
         put(FunctionType.OnPlayerJoin,                              codecPacket(ParamGroup_UUID_String.STREAM_CODEC, null));
         put(FunctionType.SetStockmarketAdminMode,                   codecPacket(ParamGroup_UUID_Bool.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
         put(FunctionType.IsStockmarketAdmin,                        codecPacket(UUIDUtil.STREAM_CODEC.cast(), ByteBufCodecs.BOOL.cast()));
+        put(FunctionType.GetPlayerPreferences,                      codecPacket(UUIDUtil.STREAM_CODEC.cast(), PlayerPreferences.STREAM_CODEC));
+        put(FunctionType.UpdatePlayerPreferences,                   codecPacket(ParamGroup_UUID_Preferences.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
 
     }};
     /**
@@ -211,6 +215,11 @@ public class AsyncMarketManager implements IAsyncMarketManager {
                     yield OutputData.of(input.function);
                 }
                 case FunctionType.IsStockmarketAdmin ->        OutputData.of(input.function, manager.isStockmarketAdmin(input.decodeParams()));
+                case FunctionType.GetPlayerPreferences ->     OutputData.of(input.function, manager.getPlayerPreferences(input.decodeParams()));
+                case FunctionType.UpdatePlayerPreferences -> {
+                    ParamGroup_UUID_Preferences data = (ParamGroup_UUID_Preferences)input.decodeParams();
+                    yield OutputData.of(input.function, manager.updatePlayerPreferences(data.uuid, data.preferences));
+                }
             });
         }
         @Override
@@ -222,7 +231,9 @@ public class AsyncMarketManager implements IAsyncMarketManager {
                      FunctionType.MarketExists,
                      FunctionType.CreateMarket,
                      FunctionType.DeleteMarket,
-                     FunctionType.GetMarket-> true;
+                     FunctionType.GetMarket,
+                     FunctionType.GetPlayerPreferences,
+                     FunctionType.UpdatePlayerPreferences -> true;
 
                 default -> false;
             };
@@ -309,6 +320,14 @@ public class AsyncMarketManager implements IAsyncMarketManager {
                 UUIDUtil.STREAM_CODEC, p -> p.uuid,
                 ByteBufCodecs.BOOL, p -> p.bool,
                 ParamGroup_UUID_Bool::new
+        );
+    }
+    private record ParamGroup_UUID_Preferences(UUID uuid, PlayerPreferences preferences)
+    {
+        public static final StreamCodec<RegistryFriendlyByteBuf, ParamGroup_UUID_Preferences> STREAM_CODEC = StreamCodec.composite(
+                UUIDUtil.STREAM_CODEC, p -> p.uuid,
+                PlayerPreferences.STREAM_CODEC, p -> p.preferences,
+                ParamGroup_UUID_Preferences::new
         );
     }
 
@@ -427,6 +446,28 @@ public class AsyncMarketManager implements IAsyncMarketManager {
             return;
         InputData inputData = InputData.of(FunctionType.OnPlayerJoin, new ParamGroup_UUID_String(playerUUID, playerName));
         sendRequest(inputData);
+    }
+
+    @Override
+    public CompletableFuture<PlayerPreferences> getPlayerPreferencesAsync(UUID playerUUID) {
+        if(!MultiServerUtils.canInteractWithStockMarket())
+            return CompletableFuture.completedFuture(new PlayerPreferences());
+        CompletableFuture<PlayerPreferences> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.GetPlayerPreferences, playerUUID);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
+    }
+
+    @Override
+    public CompletableFuture<Boolean> updatePlayerPreferencesAsync(UUID playerUUID, PlayerPreferences preferences) {
+        if(!MultiServerUtils.canInteractWithStockMarket())
+            return CompletableFuture.completedFuture(false);
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.UpdatePlayerPreferences, new ParamGroup_UUID_Preferences(playerUUID, preferences));
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
     }
 
 

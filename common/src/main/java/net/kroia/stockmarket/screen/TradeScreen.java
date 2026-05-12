@@ -3,13 +3,13 @@ package net.kroia.stockmarket.screen;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ClientPlayerUtilities;
 import net.kroia.modutilities.gui.Gui;
-import net.kroia.modutilities.gui.elements.Frame;
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.screen.uiElements.FavoritesBar;
 import net.kroia.stockmarket.screen.uiElements.trading_panel.TradingPanel;
 import net.kroia.stockmarket.screen.widgets.OrderbookVolumeHistogram;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.screen.widgets.CandlestickChart;
-import net.kroia.stockmarket.stockmarket.market.core.Orderbook;
+import net.kroia.stockmarket.stockmarket.marketmanager.PlayerPreferences;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.kroia.stockmarket.util.StockMarketGuiScreen;
 import net.minecraft.client.Minecraft;
@@ -28,10 +28,9 @@ public class TradeScreen extends StockMarketGuiScreen {
 
 
 
-    private final CandlestickChart  candlestickChart;
-    private final OrderbookVolumeHistogram  orderbookVolumeHistogram;
-    private final Frame placeholder1;
-    private final Frame placeholder2;
+    private final FavoritesBar favoritesBar;
+    private final CandlestickChart candlestickChart;
+    private final OrderbookVolumeHistogram orderbookVolumeHistogram;
     private final TradingPanel tradingPanel;
     private @Nullable ItemID currentMarketID = null;
     private int selectedBankAccountNr = -1;
@@ -40,35 +39,43 @@ public class TradeScreen extends StockMarketGuiScreen {
     {
         super(Texts.TITLE);
 
+        favoritesBar = new FavoritesBar(this::switchMarket);
         candlestickChart = new CandlestickChart();
         candlestickChart.setMarket(null);
         orderbookVolumeHistogram = new OrderbookVolumeHistogram(candlestickChart);
+        tradingPanel = new TradingPanel(this::onBuyMarket, this::onSellMarket, this::onBuyLimit, this::onSellLimit);
 
-        tradingPanel = new TradingPanel(this::onBuyMarket, this::onSellMarket, this::onBuyLimit,  this::onSellLimit);
-
-        placeholder1 = new Frame();
-        placeholder2 = new Frame();
-
+        addElement(favoritesBar);
         addElement(candlestickChart);
         addElement(orderbookVolumeHistogram);
-        addElement(placeholder1);
-        addElement(placeholder2);
         addElement(tradingPanel);
 
+        // Determine initial market from preferences, fall back to first available
         List<ItemID> markets = getAvailableMarkets();
-        if(markets.isEmpty())
-        {
-            info("No markets available");
-            return;
+        PlayerPreferences prefs = StockMarketGuiElement.getPlayerPreferences();
+
+        ItemID initialMarket = prefs.getLastMarketID();
+        if (initialMarket == null || !markets.contains(initialMarket)) {
+            initialMarket = markets.isEmpty() ? null : markets.getFirst();
         }
-        currentMarketID =  markets.getFirst();
-        ClientMarket market = getMarket(currentMarketID);
-        if(market != null) {
-            market.subscribeToMarketPriceUpdate();
-            candlestickChart.setMarket(market);
-            tradingPanel.setItemName(ClientPlayerUtilities.getItemDisplayText(currentMarketID.getStack()));
-            tradingPanel.setLimitPrice(market.getCurrentMarketRealPrice());
+
+        if (initialMarket != null) {
+            currentMarketID = initialMarket;
+            ClientMarket market = getMarket(currentMarketID);
+            if (market != null) {
+                market.subscribeToMarketPriceUpdate();
+                candlestickChart.setMarket(market);
+                tradingPanel.setItemName(ClientPlayerUtilities.getItemDisplayText(currentMarketID.getStack()));
+                tradingPanel.setLimitPrice(market.getCurrentMarketRealPrice());
+            }
+            // Update last market in preferences
+            prefs.setLastMarketID(currentMarketID);
+            StockMarketGuiElement.updatePlayerPreferences(prefs);
         }
+
+        // Build favorites bar with all markets and current selection
+        favoritesBar.rebuild(markets, prefs.getFavoriteMarketIDs(), currentMarketID);
+
         getMarketManager().getTradingCurrencyIDAsync().thenAccept(currencyID -> {
             if(currentMarketID == null)
                 tradingPanel.setCurrencyName("?");
@@ -89,6 +96,38 @@ public class TradeScreen extends StockMarketGuiScreen {
         TradeScreen screen = new TradeScreen();
         Minecraft.getInstance().setScreen(screen);
     }
+
+    /**
+     * Switches the displayed market: unsubscribes old, subscribes new, updates all widgets.
+     */
+    private void switchMarket(ItemID newMarketID) {
+        // Unsubscribe from old market
+        if (currentMarketID != null) {
+            ClientMarket oldMarket = getMarket(currentMarketID);
+            if (oldMarket != null) {
+                oldMarket.unsubscribeFromMarketPriceUpdate();
+            }
+        }
+
+        currentMarketID = newMarketID;
+        ClientMarket market = getMarket(newMarketID);
+        if (market != null) {
+            market.subscribeToMarketPriceUpdate();
+            candlestickChart.setMarket(market);
+            tradingPanel.setItemName(ClientPlayerUtilities.getItemDisplayText(newMarketID.getStack()));
+            tradingPanel.setLimitPrice(market.getCurrentMarketRealPrice());
+        }
+
+        // Update preferences
+        PlayerPreferences prefs = StockMarketGuiElement.getPlayerPreferences();
+        prefs.setLastMarketID(newMarketID);
+        StockMarketGuiElement.updatePlayerPreferences(prefs);
+
+        // Deferred rebuild — switchMarket is called from click handlers while the
+        // GUI framework is still iterating the children list.
+        favoritesBar.scheduleRebuild(getAvailableMarkets(), prefs.getFavoriteMarketIDs(), currentMarketID);
+    }
+
     @Override
     public void onClose()
     {
@@ -110,16 +149,21 @@ public class TradeScreen extends StockMarketGuiScreen {
     @Override
     protected void updateLayout(Gui gui) {
         int padding = StockMarketGuiElement.padding;
-        int spacing =  StockMarketGuiElement.spacing;
-        int width = getWidth() - padding*2;
-        int height = getHeight() - padding*2;
+        int spacing = StockMarketGuiElement.spacing;
+        int width = getWidth() - padding * 2;
+        int height = getHeight() - padding * 2;
 
-        int orderbookVolumeWidth = width/10;
-        candlestickChart.setBounds(padding, padding, (width*3)/4 - orderbookVolumeWidth, (height*2)/3);
+        int orderbookVolumeWidth = width / 10;
+
+        // Top-left: candlestick chart
+        candlestickChart.setBounds(padding, padding, (width * 3) / 4 - orderbookVolumeWidth, (height * 2) / 3);
+        // Right of chart: orderbook volume histogram
         orderbookVolumeHistogram.setBounds(candlestickChart.getRight(), candlestickChart.getTop(), orderbookVolumeWidth, candlestickChart.getHeight());
-        placeholder1.setBounds(orderbookVolumeHistogram.getRight()+spacing, padding, width - (orderbookVolumeHistogram.getRight()), (height-spacing)/2);
-        tradingPanel.setBounds(orderbookVolumeHistogram.getRight()+spacing, placeholder1.getBottom()+spacing, placeholder1.getWidth(), height - (placeholder1.getBottom()));
-        placeholder2.setBounds(padding, candlestickChart.getBottom()+spacing, tradingPanel.getLeft()-spacing-padding, height- (candlestickChart.getBottom()));
+        // Top-right: favorites bar / market navigation
+        favoritesBar.setBounds(orderbookVolumeHistogram.getRight() + spacing, padding, width - (orderbookVolumeHistogram.getRight() - padding + spacing), (height - spacing) / 2);
+        // Bottom-right: trading panel
+        tradingPanel.setBounds(orderbookVolumeHistogram.getRight() + spacing, favoritesBar.getBottom() + spacing, favoritesBar.getWidth(), height - (favoritesBar.getBottom() - padding + spacing));
+        // Bottom-left area (below chart+OB) is reserved for Phase 3 — no element placed here
     }
 
     private @Nullable ClientMarket getValidMarketForOrder()

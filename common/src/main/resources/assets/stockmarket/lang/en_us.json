@@ -4,6 +4,8 @@
   "item.stockmarket.trading_software": "Trading Software",
   "gui.stockmarket.stock_market_block_screen": "Stock Market Block",
   "gui.stockmarket.trade_screen.your_balance": "Your Balance",
+  "gui.stockmarket.trade_screen.title": "Trade",
+  "gui.stockmarket.trade_screen.select_market": "Select Market",
   "gui.stockmarket.trade_screen.change_item": "Change Item",
   "gui.stockmarket.trade_screen.amount": "Amount",
   "gui.stockmarket.trade_screen.market_order": "Market Order",

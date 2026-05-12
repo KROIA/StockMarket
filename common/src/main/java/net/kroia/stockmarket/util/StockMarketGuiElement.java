@@ -9,8 +9,10 @@ import net.kroia.stockmarket.api.marketmanager.IClientMarketManager;
 import net.kroia.stockmarket.api.pluginmanager.IClientPluginManager;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.stockmarket.market.preset.MarketPresetManager;
+import net.kroia.stockmarket.stockmarket.marketmanager.PlayerPreferences;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -23,6 +25,9 @@ public abstract class StockMarketGuiElement extends GuiElement {
     }
 
     protected static @Nullable ClientMarket selectedMarket;
+
+    /** Client-side cache of the player's trading preferences, fetched from server on join. */
+    protected static @Nullable PlayerPreferences playerPreferences;
 
     public final static float hoverToolTipFontSize = 0.8f;
     public final static int padding = 4;
@@ -87,6 +92,34 @@ public abstract class StockMarketGuiElement extends GuiElement {
     public static @Nullable ClientMarket getSelectedMarket()
     {
         return selectedMarket;
+    }
+
+    /**
+     * Fetches player preferences from the server. Call on player join.
+     */
+    public static void fetchPlayerPreferences() {
+        BACKEND_INSTANCES.NETWORKING.PLAYER_PREFERENCES_GET_REQUEST.sendRequestToServer((byte) 0)
+            .thenAccept(prefs -> {
+                playerPreferences = prefs;
+            });
+    }
+
+    /**
+     * Returns cached player preferences, or empty if not yet fetched.
+     */
+    public static @NotNull PlayerPreferences getPlayerPreferences() {
+        if (playerPreferences == null)
+            return new PlayerPreferences();
+        return playerPreferences;
+    }
+
+    /**
+     * Updates player preferences locally and syncs to server.
+     * @param prefs the updated preferences to save
+     */
+    public static void updatePlayerPreferences(PlayerPreferences prefs) {
+        playerPreferences = prefs;
+        BACKEND_INSTANCES.NETWORKING.PLAYER_PREFERENCES_UPDATE_REQUEST.sendRequestToServer(prefs);
     }
 
     protected void info(String msg)
