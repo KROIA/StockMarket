@@ -120,7 +120,12 @@ public class TradeScreen extends StockMarketGuiScreen {
         activeOrdersStreamID = StreamSystem.startServerToClientStream(
                 BACKEND_INSTANCES.NETWORKING.ACTIVE_ORDERS_STREAM,
                 (byte) 0,
-                data -> pendingOrdersPanel.updateOrders(data.orders),
+                data -> {
+                    pendingOrdersPanel.updateOrders(data.orders);
+                    orderHistoryPanel.refresh();
+                    if (currentMarketID != null)
+                        transactionHistoryPanel.refresh(currentMarketID);
+                },
                 () -> {
                     activeOrdersStreamID = null;
                 }
