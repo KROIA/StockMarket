@@ -4,6 +4,8 @@
   "item.stockmarket.trading_software": "Trading Software",
   "gui.stockmarket.stock_market_block_screen": "Stock Market Block",
   "gui.stockmarket.trade_screen.your_balance": "Your Balance",
+  "gui.stockmarket.trade_screen.title": "Trade",
+  "gui.stockmarket.trade_screen.select_market": "Select Market",
   "gui.stockmarket.trade_screen.change_item": "Change Item",
   "gui.stockmarket.trade_screen.amount": "Amount",
   "gui.stockmarket.trade_screen.market_order": "Market Order",
@@ -202,6 +204,9 @@
 
   "gui.stockmarket.plugin_management_screen.auto_subscribe": "Auto-subscribe",
   "gui.stockmarket.plugin_management_screen.subscription_order": "Order",
+  "gui.stockmarket.plugin_management_screen.add_plugin": "Add Plugin",
+  "gui.stockmarket.plugin_management_screen.add_plugin_title": "Add Plugin",
+  "gui.stockmarket.plugin_management_screen.delete_plugin": "x",
 
   "gui.stockmarket.create_market_tab.title": "Create Markets",
   "gui.stockmarket.create_market_tab.create_all": "Create Selected",
@@ -211,5 +216,12 @@
   "gui.stockmarket.create_market_tab.price": "Price",
   "gui.stockmarket.create_market_tab.abundance": "Abundance",
   "gui.stockmarket.create_market_tab.already_exists": "Market already exists",
-  "gui.stockmarket.create_market_tab.clear_selection": "Clear Selection"
+  "gui.stockmarket.create_market_tab.clear_selection": "Clear Selection",
+
+  "gui.stockmarket.preset_editor_tab.search": "Search",
+  "gui.stockmarket.preset_editor_tab.save": "Save Changes",
+  "gui.stockmarket.preset_editor_tab.price": "Price",
+  "gui.stockmarket.preset_editor_tab.abundance": "Abundance",
+  "gui.stockmarket.preset_editor_tab.saved_ok": "Presets saved successfully",
+  "gui.stockmarket.preset_editor_tab.save_failed": "Failed to save presets"
 }

@@ -3,7 +3,9 @@
   "item.stockmarket.stock_market_block": "Stock Market Block",
   "item.stockmarket.trading_software": "Handels Software",
   "gui.stockmarket.stock_market_block_screen": "Stock Market Block",
+  "gui.stockmarket.trade_screen.title": "Handeln",
   "gui.stockmarket.trade_screen.your_balance": "Dein Guthaben",
+  "gui.stockmarket.trade_screen.select_market": "Markt auswählen",
   "gui.stockmarket.trade_screen.change_item": "Item ändern",
   "gui.stockmarket.trade_screen.amount": "Mänge",
   "gui.stockmarket.trade_screen.market_order": "Market Order",
@@ -168,7 +170,11 @@
   "gui.stockmarket.volatility_plugin.apply": "Anwenden",
   "gui.stockmarket.volume_distribution.volume_scale": "Volumenskalierung",
   "gui.stockmarket.volume_distribution.speed": "Geschwindigkeit",
-  "gui.stockmarket.volume_distribution.apply": "Anwenden"
-
-
+  "gui.stockmarket.volume_distribution.apply": "Anwenden",
+  "gui.stockmarket.preset_editor_tab.search": "Suche",
+  "gui.stockmarket.preset_editor_tab.save": "Änderungen speichern",
+  "gui.stockmarket.preset_editor_tab.price": "Preis",
+  "gui.stockmarket.preset_editor_tab.abundance": "Häufigkeit",
+  "gui.stockmarket.preset_editor_tab.saved_ok": "Voreinstellungen erfolgreich gespeichert",
+  "gui.stockmarket.preset_editor_tab.save_failed": "Speichern der Voreinstellungen fehlgeschlagen"
 }

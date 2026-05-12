@@ -24,6 +24,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -40,10 +41,14 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         public static final Component OPEN_PLUGIN_SCREEN = Component.translatable(PREFIX + "open_plugin_screen");
         public static final Component AUTO_SUBSCRIBE = Component.translatable(PREFIX + "auto_subscribe");
         public static final Component SUBSCRIPTION_ORDER = Component.translatable(PREFIX + "subscription_order");
+        public static final Component ADD_PLUGIN = Component.translatable(PREFIX + "add_plugin");
+        public static final Component ADD_PLUGIN_TITLE = Component.translatable(PREFIX + "add_plugin_title");
+        public static final Component DELETE_PLUGIN = Component.translatable(PREFIX + "delete_plugin");
     }
 
     private final StockMarketGuiScreen parent;
     private final Label titleLabel;
+    private final Button addPluginButton;
     final CandlestickChart candlestickChart;
     final OrderbookVolumeHistogram orderbookVolumeHistogram;
     private @Nullable ItemID selectedChartMarket = null;
@@ -64,6 +69,8 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         titleLabel = new Label(Texts.TITLE.getString());
         titleLabel.setAlignment(Label.Alignment.CENTER);
 
+        addPluginButton = new Button(Texts.ADD_PLUGIN.getString(), this::onAddPluginClicked);
+
         candlestickChart = new CandlestickChart();
         orderbookVolumeHistogram = new OrderbookVolumeHistogram(candlestickChart);
 
@@ -74,6 +81,7 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         listView.setLayout(layout);
 
         addElement(titleLabel);
+        addElement(addPluginButton);
         addElement(candlestickChart);
         addElement(orderbookVolumeHistogram);
         addElement(listView);
@@ -102,7 +110,10 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         int height = getHeight() - 2 * padding;
         int eh = StockMarketGuiElement.defaultElementHeight;
 
-        titleLabel.setBounds(padding, padding, width, eh);
+        // Title label takes most of the width, add plugin button on the right
+        int addBtnWidth = 80;
+        titleLabel.setBounds(padding, padding, width - addBtnWidth - spacing, eh);
+        addPluginButton.setBounds(titleLabel.getRight() + spacing, padding, addBtnWidth, eh);
 
         int contentTop = titleLabel.getBottom() + spacing;
         int contentHeight = height - (titleLabel.getBottom() + spacing) + padding;
@@ -186,6 +197,14 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         updateMarketButtonSelection();
     }
 
+    /**
+     * Called when the "Add Plugin" button is clicked.
+     * Opens a popup showing all registered plugin types for selection.
+     */
+    private void onAddPluginClicked() {
+        setScreen(new PluginCreatePopup(this));
+    }
+
     private void updateMarketButtonSelection() {
         for (PluginEntryWidget entry : entryWidgets) {
             for (MarketItemButton btn : entry.marketItemViews) {
@@ -209,6 +228,7 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         private final List<MarketItemButton> marketItemViews = new ArrayList<>();
         private final Button subscribeButton;
         private final CheckBox enabledCheckBox;
+        private final Button deleteButton;
         private final Button moveUpButton;
         private final Button moveDownButton;
         private final CheckBox autoSubscribeCheckBox;
@@ -261,6 +281,9 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             enabledCheckBox.setChecked(data.isEnabled());
             enabledCheckBox.setOnStateChanged(this::onEnabledChanged);
 
+            // Delete button
+            deleteButton = new Button(Texts.DELETE_PLUGIN.getString(), this::onDeleteClicked);
+
             // Move up/down buttons
             moveUpButton = new Button("▲", this::onMoveUp);
             moveDownButton = new Button("▼", this::onMoveDown);
@@ -286,6 +309,7 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             }
             this.addChild(subscribeButton);
             this.addChild(enabledCheckBox);
+            this.addChild(deleteButton);
             this.addChild(moveUpButton);
             this.addChild(moveDownButton);
             this.addChild(autoSubscribeCheckBox);
@@ -339,11 +363,12 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             int btnWidth = 20;
             int checkBoxWidth = 100;
 
-            // Row 1: nameLabel (left), enabledCheckBox (right of name), moveUp and moveDown (far right)
-            int nameLabelWidth = width - checkBoxWidth - 2 * btnWidth - 3 * spacing;
+            // Row 1: nameLabel (left), enabledCheckBox, deleteButton, moveUp and moveDown (far right)
+            int nameLabelWidth = width - checkBoxWidth - 3 * btnWidth - 4 * spacing;
             nameLabel.setBounds(padding, padding, nameLabelWidth, defaultElementHeight);
             enabledCheckBox.setBounds(nameLabel.getRight() + spacing, padding, checkBoxWidth, defaultElementHeight);
-            moveUpButton.setBounds(enabledCheckBox.getRight() + spacing, padding, btnWidth, defaultElementHeight);
+            deleteButton.setBounds(enabledCheckBox.getRight() + spacing, padding, btnWidth, defaultElementHeight);
+            moveUpButton.setBounds(deleteButton.getRight() + spacing, padding, btnWidth, defaultElementHeight);
             moveDownButton.setBounds(moveUpButton.getRight() + spacing, padding, btnWidth, defaultElementHeight);
 
             // Row 2: description label (full width)
@@ -457,6 +482,18 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         }
 
         /**
+         * Called when the delete button is clicked.
+         * Sends a delete request to remove this plugin instance from the server.
+         */
+        private void onDeleteClicked() {
+            getPluginManager().requestDeletePlugin(pluginData.getInstanceID()).thenAccept(success -> {
+                if (success) {
+                    parentScreen.refreshPluginList();
+                }
+            });
+        }
+
+        /**
          * Called when the subscribe "+" button is clicked.
          * Opens a MarketSubscribeScreen popup showing available markets not yet subscribed.
          */
@@ -551,6 +588,76 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
 
             titleLabel.setBounds(p, p, w, eh);
             itemSelectionView.setBounds(p, titleLabel.getBottom() + s, w, getHeight() - titleLabel.getBottom() - s - p);
+        }
+
+        @Override
+        public void onClose() {
+            super.onClose();
+        }
+    }
+
+    /**
+     * Popup screen for selecting a plugin type to create a new instance of.
+     * Shows a VerticalListView with one button per registered plugin type.
+     */
+    private static class PluginCreatePopup extends StockMarketGuiScreen {
+        private final PluginManagementScreen parentScreen;
+        private final Label titleLabel;
+        private final ListView pluginTypeListView;
+
+        PluginCreatePopup(PluginManagementScreen parentScreen) {
+            super(Texts.ADD_PLUGIN_TITLE, parentScreen);
+            this.parentScreen = parentScreen;
+
+            titleLabel = new Label(Texts.ADD_PLUGIN_TITLE.getString());
+            titleLabel.setAlignment(Label.Alignment.CENTER);
+
+            pluginTypeListView = new VerticalListView();
+            LayoutVertical layout = new LayoutVertical();
+            layout.stretchX = true;
+            layout.stretchY = false;
+            pluginTypeListView.setLayout(layout);
+
+            // Add a button for each registered plugin type
+            Map<String, PluginRegistryObject> registryObjects = PluginRegistry.getRegistryObjects();
+            for (Map.Entry<String, PluginRegistryObject> entry : registryObjects.entrySet()) {
+                PluginRegistryObject regObj = entry.getValue();
+                String typeID = regObj.getPluginTypeID();
+                String displayName = regObj.getPluginName();
+
+                Button typeButton = new Button(displayName, () -> onPluginTypeSelected(typeID));
+                typeButton.setHeight(StockMarketGuiElement.defaultElementHeight);
+                pluginTypeListView.addChild(typeButton);
+            }
+
+            addElement(titleLabel);
+            addElement(pluginTypeListView);
+        }
+
+        /**
+         * Called when a plugin type button is clicked.
+         * Sends a create request to the server and returns to the parent screen.
+         */
+        private void onPluginTypeSelected(String pluginTypeID) {
+            getPluginManager().requestCreatePlugin(pluginTypeID).thenAccept(success -> {
+                if (success) {
+                    parentScreen.refreshPluginList();
+                }
+                net.minecraft.client.Minecraft.getInstance().execute(() -> {
+                    setScreen(parentScreen);
+                });
+            });
+        }
+
+        @Override
+        protected void updateLayout(Gui gui) {
+            int p = StockMarketGuiElement.padding;
+            int s = StockMarketGuiElement.spacing;
+            int w = getWidth() - 2 * p;
+            int eh = StockMarketGuiElement.defaultElementHeight;
+
+            titleLabel.setBounds(p, p, w, eh);
+            pluginTypeListView.setBounds(p, titleLabel.getBottom() + s, w, getHeight() - titleLabel.getBottom() - s - p);
         }
 
         @Override

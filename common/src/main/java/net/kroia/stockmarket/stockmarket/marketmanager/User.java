@@ -21,30 +21,40 @@ public class User implements ServerSaveable {
             UUIDUtil.STREAM_CODEC, p -> p.userUUID,
             ByteBufCodecs.STRING_UTF8, p -> p.userName,
             ByteBufCodecs.BOOL, p -> p.isStockMarketAdmin,
+            PlayerPreferences.STREAM_CODEC, p -> p.preferences,
             User::new
     );
 
     private UUID userUUID;
     private String userName;
     private boolean isStockMarketAdmin = false;
+    private PlayerPreferences preferences = new PlayerPreferences();
 
     private User()
     {
 
     }
-    private User(UUID userUUID, String userName, boolean isStockMarketAdmin)
+    private User(UUID userUUID, String userName, boolean isStockMarketAdmin, PlayerPreferences preferences)
     {
         this.userUUID = userUUID;
         this.userName = userName;
         this.isStockMarketAdmin = isStockMarketAdmin;
+        this.preferences = preferences;
+    }
+    private User(UUID userUUID, String userName, boolean isStockMarketAdmin)
+    {
+        this(userUUID, userName, isStockMarketAdmin, new PlayerPreferences());
     }
     public User(UUID userUUID, String userName) {
         this.userUUID = userUUID;
         this.userName = userName;
     }
+    /**
+     * Creates a copy of the user with a changed name, preserving UUID, admin status, and preferences.
+     */
     public static User createWithChangedName(User oldUser, String newName)
     {
-        return new User(oldUser.userUUID, newName, oldUser.isStockMarketAdmin);
+        return new User(oldUser.userUUID, newName, oldUser.isStockMarketAdmin, oldUser.preferences);
     }
     public static @Nullable User createFromTag(CompoundTag tag)
     {
@@ -68,12 +78,23 @@ public class User implements ServerSaveable {
     public void setStockMarketAdmin(boolean isBankModAdmin) {
         this.isStockMarketAdmin = isBankModAdmin;
     }
+    public PlayerPreferences getPreferences() {
+        return preferences;
+    }
+    public void setPreferences(PlayerPreferences preferences) {
+        this.preferences = preferences;
+    }
 
     @Override
     public boolean save(CompoundTag tag) {
         tag.putUUID("userUUID", userUUID);
         tag.putString("userName", userName);
         tag.putBoolean("isStockMarketAdmin", isStockMarketAdmin);
+
+        // Save player preferences as a sub-tag
+        CompoundTag prefsTag = new CompoundTag();
+        preferences.save(prefsTag);
+        tag.put("preferences", prefsTag);
         return true;
     }
 
@@ -89,6 +110,15 @@ public class User implements ServerSaveable {
             this.isStockMarketAdmin = tag.getBoolean("isStockMarketAdmin");
         else
             this.isStockMarketAdmin = false;
+
+        // Load player preferences (backward compatible — defaults to empty if not present)
+        if (tag.contains("preferences")) {
+            CompoundTag prefsTag = tag.getCompound("preferences");
+            preferences = new PlayerPreferences();
+            preferences.load(prefsTag);
+        } else {
+            preferences = new PlayerPreferences();
+        }
         return true;
     }
 

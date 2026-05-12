@@ -2,15 +2,10 @@ package net.kroia.stockmarket.minecraft.compat;
 
 import mezz.jei.api.IModPlugin;
 import mezz.jei.api.JeiPlugin;
-import mezz.jei.api.gui.handlers.IGuiContainerHandler;
 import mezz.jei.api.registration.IGuiHandlerRegistration;
 import mezz.jei.api.runtime.IJeiRuntime;
 import net.kroia.banksystem.BankSystemMod;
-import net.kroia.banksystem.screen.custom.BankTerminalScreen;
-import net.minecraft.client.renderer.Rect2i;
 import net.minecraft.resources.ResourceLocation;
-
-import java.util.List;
 
 @JeiPlugin
 public class StockMarketJeiPlugin implements IModPlugin {
@@ -32,14 +27,10 @@ public class StockMarketJeiPlugin implements IModPlugin {
 
     @Override
     public void registerGuiHandlers(IGuiHandlerRegistration registration) {
-        // Register exclusion areas for your custom screen
-        registration.addGuiContainerHandler(BankTerminalScreen.class, new IGuiContainerHandler<BankTerminalScreen>() {
-            @Override
-            public List<Rect2i> getGuiExtraAreas(BankTerminalScreen screen) {
-                // Define the area that JEI should exclude
-                return List.of(new Rect2i(0, 0, screen.width, screen.height));
-            }
-        });
+        // TODO: BankTerminalScreen no longer extends AbstractContainerScreen, so addGuiContainerHandler
+        //  cannot be used. JEI's addGuiScreenHandler uses IScreenHandler (for GUI properties), not
+        //  exclusion areas. Re-enable once BankSystem provides a compatible screen type or use
+        //  addGlobalGuiHandler if screen-agnostic exclusion is acceptable.
     }
 
     @Override

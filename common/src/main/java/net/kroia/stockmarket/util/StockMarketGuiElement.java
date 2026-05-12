@@ -9,20 +9,43 @@ import net.kroia.stockmarket.api.marketmanager.IClientMarketManager;
 import net.kroia.stockmarket.api.pluginmanager.IClientPluginManager;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.stockmarket.market.preset.MarketPresetManager;
+import net.kroia.stockmarket.stockmarket.marketmanager.PlayerPreferences;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.UUID;
 
 public abstract class StockMarketGuiElement extends GuiElement {
+
+    /**
+     * Draws an X mark (two crossing diagonal lines) at the given position.
+     * Used by MarketItemButton close button and order marker cancel button.
+     *
+     * @param target    the GuiElement to draw on
+     * @param x         left edge of the X area
+     * @param y         top edge of the X area
+     * @param width     width of the X area
+     * @param height    height of the X area
+     * @param padding   inset from edges
+     * @param thickness line thickness
+     * @param color     line color (ARGB)
+     */
+    public static void drawXMark(GuiElement target, int x, int y, int width, int height, int padding, float thickness, int color) {
+        target.drawLine(x + padding, y + padding, x + width - padding, y + height - padding, thickness, color);
+        target.drawLine(x + width - padding, y + padding, x + padding, y + height - padding, thickness, color);
+    }
     protected static StockMarketModBackend.ClientInstances BACKEND_INSTANCES;
     public static void setBackend(StockMarketModBackend.ClientInstances backend) {
         BACKEND_INSTANCES = backend;
     }
 
     protected static @Nullable ClientMarket selectedMarket;
+
+    /** Client-side cache of the player's trading preferences, fetched from server on join. */
+    protected static @Nullable PlayerPreferences playerPreferences;
 
     public final static float hoverToolTipFontSize = 0.8f;
     public final static int padding = 4;
@@ -87,6 +110,34 @@ public abstract class StockMarketGuiElement extends GuiElement {
     public static @Nullable ClientMarket getSelectedMarket()
     {
         return selectedMarket;
+    }
+
+    /**
+     * Fetches player preferences from the server. Call on player join.
+     */
+    public static void fetchPlayerPreferences() {
+        BACKEND_INSTANCES.NETWORKING.PLAYER_PREFERENCES_GET_REQUEST.sendRequestToServer((byte) 0)
+            .thenAccept(prefs -> {
+                playerPreferences = prefs;
+            });
+    }
+
+    /**
+     * Returns cached player preferences, or empty if not yet fetched.
+     */
+    public static @NotNull PlayerPreferences getPlayerPreferences() {
+        if (playerPreferences == null)
+            return new PlayerPreferences();
+        return playerPreferences;
+    }
+
+    /**
+     * Updates player preferences locally and syncs to server.
+     * @param prefs the updated preferences to save
+     */
+    public static void updatePlayerPreferences(PlayerPreferences prefs) {
+        playerPreferences = prefs;
+        BACKEND_INSTANCES.NETWORKING.PLAYER_PREFERENCES_UPDATE_REQUEST.sendRequestToServer(prefs);
     }
 
     protected void info(String msg)

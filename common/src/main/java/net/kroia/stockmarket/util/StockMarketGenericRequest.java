@@ -6,13 +6,19 @@ import net.kroia.banksystem.api.bankmanager.IBankManager;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.banking.bankmanager.BankManager;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.networking.client_server.arrs.GenericRequest;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
 import net.kroia.stockmarket.api.pluginmanager.IServerPluginManager;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import org.jetbrains.annotations.Nullable;
 
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
@@ -77,6 +83,50 @@ public abstract class StockMarketGenericRequest<IN, OUT> extends GenericRequest<
         return BankManager.convertToRealAmountStatic(realValue, getItemFractionScaleFactor());
     }
 
+
+    /**
+     * Resolves a player's display name from their UUID.
+     * Returns the UUID string as fallback if the player is not online.
+     *
+     * @param playerUUID the UUID to resolve
+     * @return the player's name, or the UUID string if not found
+     */
+    protected String getPlayerName(@Nullable UUID playerUUID) {
+        if (playerUUID == null) return "Unknown";
+        MinecraftServer server = UtilitiesPlatform.getServer();
+        if (server == null) return playerUUID.toString();
+        ServerPlayer player = server.getPlayerList().getPlayer(playerUUID);
+        if (player == null) return playerUUID.toString();
+        return player.getName().getString();
+    }
+
+    /**
+     * Broadcasts a gold-colored system message to all online players with op level 2,
+     * except the player who triggered the action. Used to notify other admins when
+     * plugin settings are changed.
+     *
+     * @param excludePlayer UUID of the player to exclude from the broadcast (the one who made the change), or null to send to all admins
+     * @param message       the message text (will be prefixed with [StockMarket] and colored gold)
+     */
+    protected void broadcastToAdmins(@Nullable UUID excludePlayer, String message) {
+        MinecraftServer server = UtilitiesPlatform.getServer();
+        if (server == null) return;
+
+        Component chatMessage = Component.literal("[StockMarket] " + message)
+                .withStyle(ChatFormatting.GOLD);
+
+        List<ServerPlayer> players = server.getPlayerList().getPlayers();
+        for (ServerPlayer player : players) {
+            // Skip the player who made the change
+            if (excludePlayer != null && player.getUUID().equals(excludePlayer)) {
+                continue;
+            }
+            // Only send to players with op level 2 (stockmarket admin permission)
+            if (player.hasPermissions(2)) {
+                player.sendSystemMessage(chatMessage);
+            }
+        }
+    }
 
     protected abstract OUT getDefaultResponse();
 

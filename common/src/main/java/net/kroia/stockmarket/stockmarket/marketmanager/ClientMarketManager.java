@@ -7,6 +7,7 @@ import net.kroia.stockmarket.api.marketmanager.IAsyncMarketManager;
 import net.kroia.stockmarket.api.marketmanager.IClientMarketManager;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.networking.request.ActiveOrdersRequest;
+import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.minecraft.client.player.LocalPlayer;
 import org.jetbrains.annotations.Nullable;
 
@@ -54,6 +55,9 @@ public class ClientMarketManager implements IClientMarketManager
             ClientMarket.PriceHistoryContainer.ServerRelativeTimer.timeOffsetMS = currentServerTime - currentTime;
             requestMarkets();
         });
+
+        // Fetch player preferences (favorites, last market) from server
+        StockMarketGuiElement.fetchPlayerPreferences();
     }
 
     @Override

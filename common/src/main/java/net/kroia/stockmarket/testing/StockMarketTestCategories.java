@@ -41,6 +41,9 @@ public class StockMarketTestCategories {
     public static final TestCategory USER = new TestCategory(
             "sm_user", "User class tests", BOTH, false);
 
+    public static final TestCategory PLAYER_PREFERENCES = new TestCategory(
+            "sm_player_preferences", "PlayerPreferences tests", BOTH, false);
+
     public static final TestCategory MARKET_SETTINGS = new TestCategory(
             "sm_market_settings", "MarketSettings tests", BOTH, false);
 

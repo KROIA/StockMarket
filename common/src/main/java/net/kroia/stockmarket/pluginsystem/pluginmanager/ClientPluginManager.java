@@ -84,6 +84,16 @@ public class ClientPluginManager implements IClientPluginManager {
     }
 
     @Override
+    public CompletableFuture<Boolean> requestCreatePlugin(String pluginTypeID) {
+        return AsynchronousRequestResponseSystem.sendRequestToServer(BACKEND_INSTANCES.NETWORKING.PLUGIN_CREATE_REQUEST, pluginTypeID);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> requestDeletePlugin(UUID instanceID) {
+        return AsynchronousRequestResponseSystem.sendRequestToServer(BACKEND_INSTANCES.NETWORKING.PLUGIN_DELETE_REQUEST, instanceID);
+    }
+
+    @Override
     public CompletableFuture<List<PluginSyncData>> requestReorderPlugin(UUID instanceID, int direction) {
         PluginReorderRequest.InputData input = new PluginReorderRequest.InputData(instanceID, direction);
         CompletableFuture<List<PluginSyncData>> future = new CompletableFuture<>();

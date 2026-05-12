@@ -91,6 +91,12 @@ public class PluginSubscriptionRequest extends StockMarketGenericRequest<PluginS
             }
         }
 
+        // Notify other admins about the subscription change
+        String action = input.subscribe() ? "subscribed" : "unsubscribed";
+        broadcastToAdmins(playerSender,
+                getPlayerName(playerSender) + " " + action + " '" + plugin.getName() + "' "
+                        + (input.subscribe() ? "to" : "from") + " " + input.marketID());
+
         return CompletableFuture.completedFuture(new OutputData(true, PluginSyncData.fromServerPlugin(plugin)));
     }
 

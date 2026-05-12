@@ -12,6 +12,7 @@ repositories {
     }
     flatDir {
         dir "../../../MC_ModUtilities/mc_${minecraft_version}_MC_ModUtilities/neoforge/build/libs"
+        dir "../../../BankSystem/mc_${minecraft_version}_BankSystem/neoforge/build/libs"
     }
 
 
@@ -60,6 +61,8 @@ dependencies {
 
     modImplementation("net.kroia:modutilities-neoforge:$rootProject.modutilities_version")
     include("net.kroia:modutilities-neoforge:$rootProject.modutilities_version")
+
+    modImplementation("net.kroia:banksystem-neoforge:$rootProject.banksystem_version")
 
 
 

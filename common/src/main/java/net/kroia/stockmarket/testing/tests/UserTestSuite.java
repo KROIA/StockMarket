@@ -2,9 +2,11 @@ package net.kroia.stockmarket.testing.tests;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.stockmarket.stockmarket.marketmanager.PlayerPreferences;
 import net.kroia.stockmarket.stockmarket.marketmanager.User;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.minecraft.nbt.CompoundTag;
@@ -28,6 +30,8 @@ public class UserTestSuite extends TestSuite {
         addTest("create_from_tag_invalid", this::test_createFromTag_invalidTag);
         addTest("create_with_changed_name", this::test_createWithChangedName);
         addTest("to_json_round_trip", this::test_toJson_roundTrip);
+        addTest("save_load_preserves_preferences", this::test_save_load_preservesPreferences);
+        addTest("create_with_changed_name_preserves_preferences", this::test_createWithChangedName_preservesPreferences);
     }
 
     /**
@@ -177,5 +181,53 @@ public class UserTestSuite extends TestSuite {
         r = assertTrue("Admin should be true in JSON", obj.get("isStockMarketAdmin").getAsBoolean());
         if (!r.passed()) return r;
         return pass("toJson produces expected JSON structure");
+    }
+
+    /**
+     * User save/load preserves preferences (empty default state).
+     */
+    private TestResult test_save_load_preservesPreferences() {
+        UUID uuid = UUID.randomUUID();
+        User original = new User(uuid, "TestPlayer");
+
+        CompoundTag tag = new CompoundTag();
+        original.save(tag);
+
+        User loaded = User.createFromTag(tag);
+        TestResult r = assertNotNull("loaded user should not be null", loaded);
+        if (!r.passed()) return r;
+        r = assertNotNull("preferences should not be null", loaded.getPreferences());
+        if (!r.passed()) return r;
+        r = assertNull("default lastMarketID should be null", loaded.getPreferences().getLastMarketID());
+        if (!r.passed()) return r;
+        r = assertTrue("default favorites should be empty", loaded.getPreferences().getFavoriteMarketIDs().isEmpty());
+        if (!r.passed()) return r;
+        return pass("User save/load preserves preferences (empty default)");
+    }
+
+    /**
+     * createWithChangedName preserves the original user's preferences object.
+     */
+    private TestResult test_createWithChangedName_preservesPreferences() {
+        UUID uuid = UUID.randomUUID();
+        User original = new User(uuid, "OriginalName");
+        original.setStockMarketAdmin(true);
+
+        // Modify the original's preferences
+        ItemID testItem = new ItemID((short) 42);
+        original.getPreferences().setLastMarketID(testItem);
+        original.getPreferences().addFavorite(testItem);
+
+        User changed = User.createWithChangedName(original, "NewName");
+        TestResult r = assertNotNull("changed user preferences should not be null", changed.getPreferences());
+        if (!r.passed()) return r;
+        r = assertNotNull("lastMarketID should be preserved", changed.getPreferences().getLastMarketID());
+        if (!r.passed()) return r;
+        r = assertEquals("lastMarketID should match original",
+                testItem.getShort(), changed.getPreferences().getLastMarketID().getShort());
+        if (!r.passed()) return r;
+        r = assertFalse("favorites should not be empty", changed.getPreferences().getFavoriteMarketIDs().isEmpty());
+        if (!r.passed()) return r;
+        return pass("createWithChangedName preserves preferences");
     }
 }

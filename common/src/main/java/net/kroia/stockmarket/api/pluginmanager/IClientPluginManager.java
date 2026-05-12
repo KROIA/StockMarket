@@ -40,4 +40,10 @@ public interface IClientPluginManager {
 
     /** Sends a subscription change request for a plugin instance to the server. */
     CompletableFuture<PluginSubscriptionRequest.OutputData> requestUpdateSubscription(UUID instanceID, ItemID marketID, boolean subscribe);
+
+    /** Sends a request to create a new plugin instance of the given type on the server. */
+    CompletableFuture<Boolean> requestCreatePlugin(String pluginTypeID);
+
+    /** Sends a request to delete a plugin instance on the server. */
+    CompletableFuture<Boolean> requestDeletePlugin(UUID instanceID);
 }

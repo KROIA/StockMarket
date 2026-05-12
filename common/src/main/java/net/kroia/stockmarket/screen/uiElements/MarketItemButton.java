@@ -2,6 +2,7 @@ package net.kroia.stockmarket.screen.uiElements;
 
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.elements.ItemView;
+import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.function.Consumer;
@@ -85,8 +86,7 @@ public class MarketItemButton extends ItemView {
 
         int pad = 2;
         int lineColor = hoverClose ? 0xFFFFFFFF : 0xFFFF4444;
-        drawLine(closeX + pad, pad, closeX + closeW - pad, closeH - pad, 1.0f, lineColor);
-        drawLine(closeX + closeW - pad, pad, closeX + pad, closeH - pad, 1.0f, lineColor);
+        StockMarketGuiElement.drawXMark(this, closeX, 0, closeW, closeH, pad, 1.0f, lineColor);
 
         graphics.popPose();
     }

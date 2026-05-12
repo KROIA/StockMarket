@@ -17,12 +17,16 @@ public class TradingPanel extends TabElement {
         private static final Component LIMIT_ORDER_TAB_TITLE = Component.translatable(PREFIX +"limit_order_tab_title");
     }
 
-
-
+    // Tab index constants
+    private static final int MARKET_ORDER_TAB = 0;
+    private static final int LIMIT_ORDER_TAB = 1;
 
     //private final TabElement tabElement;
     private final MarketOrderPanel marketOrderPanel;
     private final LimitOrderPanel limitOrderPanel;
+
+    // Track the previously selected tab to detect tab switches
+    private int lastSelectedTab = -1;
 
 
     public TradingPanel(Consumer<Double> onBuyMarket, Consumer<Double> onSellMarket,
@@ -46,6 +50,22 @@ public class TradingPanel extends TabElement {
     public void setCurrencyName(String currencyName)
     {
         limitOrderPanel.setCurrencyName(currencyName);
+        marketOrderPanel.setCurrencyName(currencyName);
+    }
+    public void setCurrentMarketPrice(double price)
+    {
+        limitOrderPanel.setCurrentMarketPrice(price);
+        marketOrderPanel.setCurrentMarketPrice(price);
+    }
+    public void setMoneyBalance(double balance)
+    {
+        limitOrderPanel.setMoneyBalance(balance);
+        marketOrderPanel.setMoneyBalance(balance);
+    }
+    public void setItemBalance(double balance)
+    {
+        limitOrderPanel.setItemBalance(balance);
+        marketOrderPanel.setItemBalance(balance);
     }
     public void setLimitQuantity(double quantity)
     {
@@ -72,18 +92,17 @@ public class TradingPanel extends TabElement {
         return limitOrderPanel.getPrice();
     }
 
-/*
     @Override
     protected void render() {
-
+        super.render();
+        // Detect tab switch: when the limit order tab becomes active, populate the price
+        // with the current market price
+        int currentTab = getSelectedTab();
+        if(currentTab != lastSelectedTab) {
+            lastSelectedTab = currentTab;
+            if(currentTab == LIMIT_ORDER_TAB) {
+                limitOrderPanel.setPrice(limitOrderPanel.getCurrentMarketPrice());
+            }
+        }
     }
-
-    @Override
-    protected void layoutChanged() {
-        int padding = StockMarketGuiElement.padding;
-        int spacing =  StockMarketGuiElement.spacing;
-        int width = getWidth() - padding*2;
-        int height = getHeight() - padding*2;
-        tabElement.setBounds(padding, padding, width, height);
-    }*/
 }

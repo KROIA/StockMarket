@@ -37,6 +37,7 @@ public class MarketPresetTestSuite extends TestSuite {
         addTest("json_round_trip", this::test_jsonRoundTrip);
         addTest("json_round_trip_preserves_values", this::test_jsonRoundTripPreservesValues);
         addTest("category_names_unique", this::test_categoryNamesUnique);
+        addTest("preset_replacement_in_category", this::test_presetReplacementInCategory);
     }
 
     private TestResult test_presetRecordFields() {
@@ -181,5 +182,34 @@ public class MarketPresetTestSuite extends TestSuite {
             }
         }
         return pass("All default category names are unique");
+    }
+
+    /**
+     * Verifies that the list returned by MarketPresetCategory.getPresets() is mutable,
+     * allowing in-place replacement of presets (used by PresetUpdateRequest).
+     */
+    private TestResult test_presetReplacementInCategory() {
+        List<MarketPresetCategory> categories = DefaultPresets.generate();
+        MarketPresetCategory cat = categories.get(0);
+        List<MarketPreset> presets = cat.getPresets();
+
+        TestResult r = assertFalse("Category should have presets", presets.isEmpty());
+        if (!r.passed()) return r;
+
+        MarketPreset original = presets.get(0);
+        float newPrice = original.defaultPrice() + 100f;
+        MarketPreset replacement = new MarketPreset(original.itemId(), newPrice, original.naturalAbundance());
+        presets.set(0, replacement);
+
+        // Read back through the category to confirm mutation is visible
+        MarketPreset updated = cat.getPresets().get(0);
+        r = assertEquals("Price should be updated", newPrice, updated.defaultPrice());
+        if (!r.passed()) return r;
+        r = assertEquals("ItemId should be unchanged", original.itemId(), updated.itemId());
+        if (!r.passed()) return r;
+        r = assertEquals("NaturalAbundance should be unchanged",
+                original.naturalAbundance(), updated.naturalAbundance());
+        if (!r.passed()) return r;
+        return pass("Preset replacement in category works via list.set()");
     }
 }

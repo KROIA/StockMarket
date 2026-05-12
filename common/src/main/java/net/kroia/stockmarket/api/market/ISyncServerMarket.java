@@ -8,6 +8,7 @@ import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 
 import java.util.List;
+import java.util.UUID;
 import java.util.function.Function;
 
 public interface ISyncServerMarket {
@@ -31,6 +32,20 @@ public interface ISyncServerMarket {
 
     boolean putOrder(Order order);
     boolean putOrder(InterMarketOrder order);
+
+    /**
+     * Cancels a pending order identified by its executor, timestamp, type, start price, and target volume.
+     * Removes the order from the orderbook and triggers cancellation cleanup (e.g. unlocking reserved funds/items).
+     *
+     * @param executor     the UUID of the player who placed the order
+     * @param time         the timestamp when the order was placed
+     * @param type         the order type (LIMIT, MARKET, etc.)
+     * @param startPrice   the price at which the order was placed
+     * @param targetVolume the target volume of the order
+     * @return true if a matching order was found and cancelled, false otherwise
+     */
+    boolean cancelOrder(UUID executor, long time, Order.Type type, long startPrice, long targetVolume);
+
     List<Order> getLimitOrders();
     boolean isMarketOpen();
     boolean setMarketOpen(boolean marketOpen);

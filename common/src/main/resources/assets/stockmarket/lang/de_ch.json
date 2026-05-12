@@ -3,7 +3,9 @@
   "item.stockmarket.stock_market_block": "Stock Market Block",
   "item.stockmarket.trading_software": "Handels Programm",
   "gui.stockmarket.stock_market_block_screen": "Stock Market Block",
+  "gui.stockmarket.trade_screen.title": "Handle",
   "gui.stockmarket.trade_screen.your_balance": "Dis Guethabe",
+  "gui.stockmarket.trade_screen.select_market": "Markt uswähle",
   "gui.stockmarket.trade_screen.change_item": "Item ändere",
   "gui.stockmarket.trade_screen.amount": "Mängi",
   "gui.stockmarket.trade_screen.market_order": "Market Order",
@@ -167,6 +169,11 @@
   "gui.stockmarket.volatility_plugin.apply": "Awände",
   "gui.stockmarket.volume_distribution.volume_scale": "Volume-Skalierig",
   "gui.stockmarket.volume_distribution.speed": "Gschwindikeit",
-  "gui.stockmarket.volume_distribution.apply": "Awände"
-
+  "gui.stockmarket.volume_distribution.apply": "Awände",
+  "gui.stockmarket.preset_editor_tab.search": "Suechi",
+  "gui.stockmarket.preset_editor_tab.save": "Änderige speichere",
+  "gui.stockmarket.preset_editor_tab.price": "Priis",
+  "gui.stockmarket.preset_editor_tab.abundance": "Hüfigkeit",
+  "gui.stockmarket.preset_editor_tab.saved_ok": "Voriistellige erfolgriich gspeicheret",
+  "gui.stockmarket.preset_editor_tab.save_failed": "Speichere vo de Voriistellige fählgschlage"
 }

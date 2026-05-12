@@ -4,6 +4,7 @@ import net.kroia.modutilities.ColorUtilities;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.TextBox;
+import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.screen.UI_Colors;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
@@ -25,6 +26,7 @@ public class LimitOrderPanel extends StockMarketGuiElement
     private final Label quantityLabel;
     private final Label itemNameLabel;
 
+    private final Button marketPriceButton;
     private final TextBox priceTextBox;
     private final Label priceLabel;
     private final Label currencyLabel;
@@ -38,6 +40,8 @@ public class LimitOrderPanel extends StockMarketGuiElement
     private final Button remove64Button;
     private final Button remove128Button;
 
+    private final Label estimatedCostLabel;
+
     //private final HorizontalSlider quantitySlider;
 
     private final Button buyButton;
@@ -47,6 +51,10 @@ public class LimitOrderPanel extends StockMarketGuiElement
     // private IAsyncBank moneyBank;
     private double quantity = 0;
     private double price = 0;
+    private double currentMarketPrice = 0;
+    private double moneyBalance = 0;
+    private double itemBalance = 0;
+    private String currencyName = "";
 
     public LimitOrderPanel(BiConsumer<Double, Double> onBuy, BiConsumer<Double, Double> onSell)
     {
@@ -69,6 +77,8 @@ public class LimitOrderPanel extends StockMarketGuiElement
             double newQuantity = quantityTextBox.getDouble();
             quantity = Math.max(0, newQuantity);
             updateButtons();
+            updateEstimatedCost();
+            updateValidation();
         });
 
         quantityLabel =  new Label(Texts.QUANTITY.getString());
@@ -85,6 +95,8 @@ public class LimitOrderPanel extends StockMarketGuiElement
         priceTextBox.setOnTextChanged((text)->{
             double newPrice = priceTextBox.getDouble();
             price = Math.max(0, newPrice);
+            updateEstimatedCost();
+            updateValidation();
         });
         priceLabel = new  Label(Texts.PRICE.getString());
         priceLabel.setTextFontScale(0.8f);
@@ -92,6 +104,13 @@ public class LimitOrderPanel extends StockMarketGuiElement
         currencyLabel = new Label();
         currencyLabel.setTextFontScale(0.8f);
         currencyLabel.setAlignment(Alignment.RIGHT);
+
+        // "Market" button sets the price to the current market price
+        marketPriceButton = new Button("Market", () -> {
+            setPrice(currentMarketPrice);
+            updateEstimatedCost();
+            updateValidation();
+        });
 
         add10Button = new Button("+10", () -> addQuantity(10.0));
         add32Button = new Button("+32", () -> addQuantity(32.0));
@@ -126,6 +145,11 @@ public class LimitOrderPanel extends StockMarketGuiElement
         //quantitySlider = new HorizontalSlider();
         //quantitySlider.setSliderValue(0);
 
+        // Estimated cost label displayed between quantity buttons and buy/sell buttons
+        estimatedCostLabel = new Label("");
+        estimatedCostLabel.setTextFontScale(0.8f);
+        estimatedCostLabel.setAlignment(Alignment.CENTER);
+
         buyButton = new Button(Texts.BUY.getString(), () -> onBuy.accept(quantity, price));
         buyButton.setBackgroundColor(darkerBuyColor1);
         buyButton.setHoverColor(darkerBuyColor2);
@@ -142,6 +166,7 @@ public class LimitOrderPanel extends StockMarketGuiElement
         addChild(quantityLabel);
         addChild(itemNameLabel);
 
+        addChild(marketPriceButton);
         addChild(priceTextBox);
         addChild(priceLabel);
         addChild(currencyLabel);
@@ -155,11 +180,14 @@ public class LimitOrderPanel extends StockMarketGuiElement
         addChild(remove64Button);
         addChild(remove128Button);
         //addChild(quantitySlider);
+        addChild(estimatedCostLabel);
         addChild(buyButton);
         addChild(sellButton);
 
         quantityTextBox.setText(String.valueOf(quantity));
         updateButtons();
+        updateEstimatedCost();
+        updateValidation();
     }
     public void setItemName(String itemName)
     {
@@ -167,7 +195,27 @@ public class LimitOrderPanel extends StockMarketGuiElement
     }
     public void setCurrencyName(String currencyName)
     {
+        this.currencyName = currencyName;
         currencyLabel.setText(currencyName);
+        updateEstimatedCost();
+    }
+    public void setCurrentMarketPrice(double price)
+    {
+        this.currentMarketPrice = price;
+        updateEstimatedCost();
+        updateValidation();
+    }
+    public void setMoneyBalance(double balance)
+    {
+        this.moneyBalance = balance;
+        updateEstimatedCost();
+        updateValidation();
+    }
+    public void setItemBalance(double balance)
+    {
+        this.itemBalance = balance;
+        updateEstimatedCost();
+        updateValidation();
     }
     public void setQuantity(double quantity)
     {
@@ -190,6 +238,10 @@ public class LimitOrderPanel extends StockMarketGuiElement
     {
         return price;
     }
+    public double getCurrentMarketPrice()
+    {
+        return currentMarketPrice;
+    }
 
 
     @Override
@@ -206,7 +258,11 @@ public class LimitOrderPanel extends StockMarketGuiElement
 
         priceLabel.setBounds(padding, padding, width/2, StockMarketGuiElement.defaultElementHeight/2);
         currencyLabel.setBounds(priceLabel.getRight(), priceLabel.getTop(), width/2, priceLabel.getHeight());
-        priceTextBox.setBounds(padding, priceLabel.getBottom(), width, StockMarketGuiElement.defaultElementHeight);
+
+        // "Market" button to the left of the price TextBox
+        int marketBtnWidth = 45;
+        marketPriceButton.setBounds(padding, priceLabel.getBottom(), marketBtnWidth, StockMarketGuiElement.defaultElementHeight);
+        priceTextBox.setBounds(marketPriceButton.getRight()+spacing, priceLabel.getBottom(), width - marketBtnWidth - spacing, StockMarketGuiElement.defaultElementHeight);
 
         quantityLabel.setBounds(padding, priceTextBox.getBottom()+spacing*2, width/2, StockMarketGuiElement.defaultElementHeight/2);
         itemNameLabel.setBounds(quantityLabel.getRight(), quantityLabel.getTop(), width/2, quantityLabel.getHeight());
@@ -223,6 +279,9 @@ public class LimitOrderPanel extends StockMarketGuiElement
         remove64Button.setBounds(remove32Button.getRight()+spacing, remove32Button.getTop(), buttonWidth, remove32Button.getHeight());
         remove128Button.setBounds(remove64Button.getRight()+spacing, remove64Button.getTop(), buttonWidth, remove64Button.getHeight());
 
+        // Estimated cost label between remove buttons and buy/sell buttons
+        estimatedCostLabel.setBounds(padding, remove10Button.getBottom()+spacing, width, StockMarketGuiElement.defaultElementHeight/2);
+
         buyButton.setBounds(padding, height-(StockMarketGuiElement.defaultElementHeight-padding), (width-spacing)/2, StockMarketGuiElement.defaultElementHeight);
         sellButton.setBounds(buyButton.getRight()+spacing, buyButton.getTop(), buyButton.getWidth(), buyButton.getHeight());
 
@@ -235,6 +294,8 @@ public class LimitOrderPanel extends StockMarketGuiElement
             quantity = 0;
         quantityTextBox.setText(String.valueOf(quantity));
         updateButtons();
+        updateEstimatedCost();
+        updateValidation();
     }
     private void updateButtons()
     {
@@ -242,5 +303,35 @@ public class LimitOrderPanel extends StockMarketGuiElement
         remove32Button.setEnabled(quantity >= 32);
         remove64Button.setEnabled(quantity >= 64);
         remove128Button.setEnabled(quantity >= 128);
+    }
+
+    /**
+     * Updates the estimated cost label based on current quantity and price.
+     * Colors the text red if the player cannot afford the trade.
+     */
+    private void updateEstimatedCost()
+    {
+        double cost = quantity * price;
+        String costText = String.format("Est: %.2f %s", cost, currencyName);
+        estimatedCostLabel.setText(costText);
+
+        // Color red only when the displayed money cost exceeds the player's balance
+        // (sell-side validation is handled separately by updateValidation disabling the sell button)
+        boolean buyInsufficient = cost > moneyBalance && moneyBalance > 0;
+        if(buyInsufficient && quantity > 0 && price > 0)
+            estimatedCostLabel.setTextColor(UI_Colors.sellColorRed);
+        else
+            estimatedCostLabel.setTextColor(GuiElement.DEFAULT_TEXT_COLOR);
+    }
+
+    /**
+     * Enables or disables the buy/sell buttons based on balance validation.
+     */
+    private void updateValidation()
+    {
+        double cost = quantity * price;
+        boolean validInput = quantity > 0 && price > 0;
+        buyButton.setEnabled(validInput && cost <= moneyBalance);
+        sellButton.setEnabled(validInput && quantity <= itemBalance);
     }
 }

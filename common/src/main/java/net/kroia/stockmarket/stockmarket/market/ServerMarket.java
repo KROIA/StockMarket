@@ -1,11 +1,16 @@
 package net.kroia.stockmarket.stockmarket.market;
 
+import net.kroia.banksystem.BankSystemModSettings;
+import net.kroia.banksystem.api.bank.BankStatus;
+import net.kroia.banksystem.api.bank.IServerBank;
+import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.persistence.ServerSaveable;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
+import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
 import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.market.core.MatchingEngine;
@@ -17,6 +22,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.PriorityQueue;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 
@@ -269,6 +275,26 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     }
 
 
+    @Override
+    public boolean cancelOrder(UUID executor, long time, Order.Type type, long startPrice, long targetVolume) {
+        // Search limit orders in the orderbook for an order matching all five criteria
+        List<Order> orders = getLimitOrders();
+        for (Order order : orders) {
+            if (order.getExecutorPlayerUUID() != null
+                    && order.getExecutorPlayerUUID().equals(executor)
+                    && order.getTime() == time
+                    && order.getType() == type
+                    && order.getStartPrice() == startPrice
+                    && order.getTargetVolume() == targetVolume) {
+                orderbook.removeOrder(order);
+                unlockRemainingFunds(order);
+                onOrderCanceled(order);
+                return true;
+            }
+        }
+        return false;
+    }
+
     public PriorityQueue<Order> getIncomingBuyMarketOrders()
     {
         return buyMarketOrders_inputBuffer;
@@ -467,12 +493,12 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
 
     }
     /**
-     * Gets called when the provided order has been consumed
-     * @param order
+     * Gets called when the provided order has been consumed (fully filled)
+     * @param order the consumed order
      */
     private void onOrderConsumed(Order order)
     {
-
+        saveOrderRecord(order);
     }
 
     /**
@@ -482,18 +508,84 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
      */
     private void onOrderCanceled(InterMarketOrder order)
     {
-
+        // InterMarketOrders are bot-to-bot and don't need history tracking
     }
     /**
      * Gets called when the provided order has been canceled
      * It may be partially filled
-     * @param order
+     * @param order the canceled order
      */
     private void onOrderCanceled(Order order)
     {
-
+        saveOrderRecord(order);
     }
 
+    /**
+     * Saves a completed or canceled player order to the OrderHistory SQL table.
+     * Bot orders (no player executor) are skipped.
+     * @param order the order to save as a historical record
+     */
+    private void saveOrderRecord(Order order)
+    {
+        if (order.isBotOrder()) return; // skip bot orders (no player executor)
+        if (order.getFilledVolume() == 0) return; // skip orders with no fills (e.g. cancelled before any execution)
+        if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.ORDER_RECORD_MANAGER == null) return;
+
+        OrderRecordStruct record = order.getHistoricalRecord();
+        BACKEND_INSTANCES.ORDER_RECORD_MANAGER.save(record);
+    }
+
+
+    /**
+     * Unlocks the bank funds reserved for the unfilled portion of a cancelled order.
+     * Buy orders locked money (remainingVolume * startPrice) in the money bank.
+     * Sell orders locked items (abs(remainingVolume)) in the item bank.
+     * If the bank account or bank is unavailable (e.g. player left), logs a warning and skips.
+     */
+    private void unlockRemainingFunds(Order order) {
+        if (order.isBotOrder()) return; // bot orders have no bank reservations
+        if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.BANK_SYSTEM_API == null) return;
+
+        long remainingVolume = order.getRemainingVolume();
+        if (remainingVolume == 0) return; // fully filled, nothing to unlock
+
+        IServerBankAccount bankAccount = BACKEND_INSTANCES.BANK_SYSTEM_API
+                .getServerBankManager().getSync().getBankAccount(order.getBankAccountNr());
+        if (bankAccount == null) {
+            warn("Cannot unlock funds for cancelled order: bank account " + order.getBankAccountNr() + " not found");
+            return;
+        }
+
+        if (order.isBuyOrder()) {
+            // Buy order: unlock reserved money = remainingVolume * startPrice
+            ItemID moneyID = BACKEND_INSTANCES.MARKET_MANAGER.getSync().getTradingCurrencyID();
+            IServerBank moneyBank = bankAccount.getBank(moneyID);
+            if (moneyBank == null) {
+                warn("Cannot unlock money for cancelled buy order: money bank not found for account " + order.getBankAccountNr());
+                return;
+            }
+            // toUnlock = rawVolume * rawPrice / scaleFactor
+            long toUnlock = Math.round((double)remainingVolume * order.getStartPrice() / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
+            BankStatus status = moneyBank.unlockAmount(toUnlock);
+            if (status != BankStatus.SUCCESS) {
+                warn("Failed to unlock " + toUnlock + " money for cancelled buy order on account "
+                        + order.getBankAccountNr() + ": " + status);
+            }
+        } else {
+            // Sell order: unlock reserved items = abs(remainingVolume)
+            IServerBank itemBank = bankAccount.getBank(itemID);
+            if (itemBank == null) {
+                warn("Cannot unlock items for cancelled sell order: item bank not found for account " + order.getBankAccountNr());
+                return;
+            }
+            long toUnlock = -remainingVolume; // remainingVolume is negative for sell orders
+            BankStatus status = itemBank.unlockAmount(toUnlock);
+            if (status != BankStatus.SUCCESS) {
+                warn("Failed to unlock " + toUnlock + " items for cancelled sell order on account "
+                        + order.getBankAccountNr() + ": " + status);
+            }
+        }
+    }
 
     private void onPriceChanged(long newPrice)
     {

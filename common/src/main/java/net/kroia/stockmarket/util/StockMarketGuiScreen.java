@@ -2,7 +2,7 @@ package net.kroia.stockmarket.util;
 
 import net.kroia.banksystem.api.bankmanager.IClientBankManager;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.gui.GuiScreen;
+import net.kroia.modutilities.gui.client.GuiScreen;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.marketmanager.IClientMarketManager;
 import net.kroia.stockmarket.api.pluginmanager.IClientPluginManager;

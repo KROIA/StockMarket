@@ -1,0 +1,317 @@
+package net.kroia.stockmarket.screen.uiElements;
+
+import net.kroia.banksystem.banking.clientdata.BankAccountData;
+import net.kroia.banksystem.banking.clientdata.BankData;
+import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.gui.elements.Frame;
+import net.kroia.modutilities.gui.elements.ItemView;
+import net.kroia.modutilities.gui.elements.Label;
+import net.kroia.modutilities.gui.elements.VerticalListView;
+import net.kroia.modutilities.gui.layout.LayoutGrid;
+import net.kroia.stockmarket.util.StockMarketGuiElement;
+import net.minecraft.client.Minecraft;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.UUID;
+import java.util.function.Consumer;
+
+/**
+ * Scrollable grid panel displaying ALL available markets.
+ * <p>
+ * Each market is shown as a {@link MarketFavoriteButton} with a star overlay
+ * to toggle favorite status. Favorites are pinned to the top of the grid in
+ * their stable add-order from player preferences; non-favorites follow sorted
+ * alphabetically by display name.
+ * <p>
+ * An {@link ItemView} at the top shows the currently selected market icon.
+ */
+public class FavoritesBar extends StockMarketGuiElement {
+
+    private final Consumer<ItemID> onMarketSelected;
+
+    private final ItemView selectedMarketView;
+    private final VerticalListView marketGrid;
+    private final LayoutGrid gridLayout;
+
+    // Bank balance display section
+    private final Frame balanceFrame;
+    private final Label balanceTitleLabel;
+    private final ItemView currencyIcon;
+    private final Label currencyBalanceLabel;
+    private final ItemView marketItemIcon;
+    private final Label marketItemBalanceLabel;
+    @Nullable
+    private ItemID tradingCurrencyID;
+
+    // Timer for periodic balance refresh
+    private long lastBalanceRefreshMs = 0;
+    private static final long BALANCE_REFRESH_INTERVAL_MS = 2000;
+
+    /** The market currently displayed in the trade screen. */
+    @Nullable
+    private ItemID currentMarketID;
+
+    // Dirty-flag for deferred rebuild (avoids ConcurrentModificationException
+    // when rebuild is triggered from inside a click handler while the GUI
+    // framework is still iterating the children list).
+    private boolean needsRebuild = false;
+    private List<ItemID> pendingAllMarkets;
+    private List<ItemID> pendingFavoriteIDs;
+    @Nullable
+    private ItemID pendingSelectedID;
+
+    /**
+     * @param onMarketSelected callback fired when a market button is clicked
+     */
+    public FavoritesBar(Consumer<ItemID> onMarketSelected) {
+        super();
+        this.onMarketSelected = onMarketSelected;
+        setEnableBackground(true);
+
+        // Icon showing the currently selected market item
+        selectedMarketView = new ItemView();
+        selectedMarketView.setEnabled(false);
+        addChild(selectedMarketView);
+
+        // Scrollable grid for all market buttons
+        marketGrid = new VerticalListView();
+        gridLayout = new LayoutGrid(0, 0, false, false, 0, 1, Alignment.TOP);
+        marketGrid.setLayout(gridLayout);
+        addChild(marketGrid);
+
+        // Bank balance frame below the grid
+        balanceFrame = new Frame();
+        balanceFrame.setEnableBackground(true);
+        addChild(balanceFrame);
+
+        balanceTitleLabel = new Label("Bank Balance");
+        balanceTitleLabel.setAlignment(Label.Alignment.CENTER);
+        balanceTitleLabel.setTextFontScale(0.7f);
+        balanceFrame.addChild(balanceTitleLabel);
+
+        currencyIcon = new ItemView();
+        currencyIcon.setEnabled(false);
+        balanceFrame.addChild(currencyIcon);
+        currencyBalanceLabel = new Label("--");
+        currencyBalanceLabel.setTextFontScale(0.7f);
+        balanceFrame.addChild(currencyBalanceLabel);
+
+        marketItemIcon = new ItemView();
+        marketItemIcon.setEnabled(false);
+        balanceFrame.addChild(marketItemIcon);
+        marketItemBalanceLabel = new Label("--");
+        marketItemBalanceLabel.setTextFontScale(0.7f);
+        balanceFrame.addChild(marketItemBalanceLabel);
+    }
+
+    /**
+     * Clears and rebuilds the grid from the given market lists.
+     * Call this when markets change or when the selected market switches.
+     *
+     * @param allMarkets       all available market IDs
+     * @param favoriteIDs      ordered list of favorite market IDs (in the order they were added)
+     * @param selectedMarketID the currently active market, or null if none
+     */
+    public void rebuild(List<ItemID> allMarkets, List<ItemID> favoriteIDs,
+                        @Nullable ItemID selectedMarketID) {
+        this.currentMarketID = selectedMarketID;
+        marketGrid.removeChilds();
+
+        // Update selected market icon
+        if (selectedMarketID != null) {
+            selectedMarketView.setItemStack(selectedMarketID.getStack());
+            selectedMarketView.setEnabled(true);
+            // Update market item balance icon
+            marketItemIcon.setItemStack(selectedMarketID.getStack());
+            marketItemIcon.setEnabled(true);
+        } else {
+            selectedMarketView.setEnabled(false);
+            marketItemIcon.setEnabled(false);
+        }
+
+        // Build sorted list: favorites first (stable order), then non-favorites alphabetically
+        List<ItemID> sorted = new ArrayList<>();
+        for (ItemID fav : favoriteIDs) {
+            if (allMarkets.contains(fav)) {
+                sorted.add(fav);
+            }
+        }
+        List<ItemID> nonFavorites = new ArrayList<>();
+        for (ItemID market : allMarkets) {
+            if (!favoriteIDs.contains(market)) {
+                nonFavorites.add(market);
+            }
+        }
+        nonFavorites.sort(Comparator.comparing(id -> id.getStack().getHoverName().getString()));
+        sorted.addAll(nonFavorites);
+
+        // Create buttons
+        for (ItemID marketID : sorted) {
+            boolean isFav = favoriteIDs.contains(marketID);
+            boolean isSel = marketID.equals(selectedMarketID);
+            MarketFavoriteButton btn = new MarketFavoriteButton(
+                    marketID.getStack(),
+                    marketID,
+                    id -> onMarketSelected.accept(id),
+                    () -> onFavoriteToggled(marketID)
+            );
+            btn.setFavorite(isFav);
+            btn.setSelected(isSel);
+            marketGrid.addChild(btn);
+        }
+
+        // Fetch updated bank balances
+        refreshBalances();
+
+        // Trigger layout recalculation
+        layoutChanged();
+    }
+
+    /**
+     * Schedules a rebuild for the next render frame.
+     * Use this instead of rebuild() when called from inside a click handler.
+     */
+    public void scheduleRebuild(List<ItemID> allMarkets, List<ItemID> favoriteIDs,
+                                @Nullable ItemID selectedMarketID) {
+        needsRebuild = true;
+        pendingAllMarkets = allMarkets;
+        pendingFavoriteIDs = favoriteIDs;
+        pendingSelectedID = selectedMarketID;
+    }
+
+    /**
+     * Called when the star on a market button is toggled.
+     * Adds or removes the market from favorites and triggers a rebuild.
+     */
+    private void onFavoriteToggled(ItemID marketID) {
+        var prefs = getPlayerPreferences();
+        if (prefs.isFavorite(marketID)) {
+            prefs.removeFavorite(marketID);
+        } else {
+            prefs.addFavorite(marketID);
+        }
+        updatePlayerPreferences(prefs);
+        scheduleRebuild(getAvailableMarkets(), prefs.getFavoriteMarketIDs(), currentMarketID);
+    }
+
+    /**
+     * Fetches current bank balances for the trading currency and the selected market item.
+     * Called after market switch and periodically from render().
+     */
+    public void refreshBalances() {
+        if (currentMarketID == null) return;
+        UUID playerUUID = Minecraft.getInstance().player != null
+                ? Minecraft.getInstance().player.getUUID() : null;
+        if (playerUUID == null) return;
+
+        // Fetch currency ID if not yet known
+        if (tradingCurrencyID == null) {
+            getMarketManager().getTradingCurrencyIDAsync().thenAccept(currencyID -> {
+                tradingCurrencyID = currencyID;
+                if (currencyID != null) {
+                    currencyIcon.setItemStack(currencyID.getStack());
+                    currencyIcon.setEnabled(true);
+                }
+                fetchBalances(playerUUID);
+            });
+        } else {
+            fetchBalances(playerUUID);
+        }
+    }
+
+    /**
+     * Fetches bank account data and updates the currency and market item balance labels.
+     */
+    private void fetchBalances(UUID playerUUID) {
+        getBankManager().getPersonalBankAccountDataAsync(playerUUID).thenAccept(bankAccountData -> {
+            if (bankAccountData == null) return;
+
+            // Currency balance
+            if (tradingCurrencyID != null) {
+                BankData currencyBalance = bankAccountData.bankData.get(tradingCurrencyID);
+                currencyBalanceLabel.setText(currencyBalance != null ? currencyBalance.getFormattedBalance() : "0");
+            }
+
+            // Market item balance
+            if (currentMarketID != null) {
+                BankData itemBalance = bankAccountData.bankData.get(currentMarketID);
+                marketItemBalanceLabel.setText(itemBalance != null ? itemBalance.getFormattedBalance() : "0");
+            }
+        });
+    }
+
+    @Override
+    protected void render() {
+        if (needsRebuild) {
+            needsRebuild = false;
+            rebuild(pendingAllMarkets, pendingFavoriteIDs, pendingSelectedID);
+        }
+
+        // Periodic balance refresh
+        long now = System.currentTimeMillis();
+        if (now - lastBalanceRefreshMs > BALANCE_REFRESH_INTERVAL_MS) {
+            lastBalanceRefreshMs = now;
+            refreshBalances();
+        }
+    }
+
+    /**
+     * Layout:
+     * [Selected Market Icon 24x24]
+     * [--- Market Grid (scrollable, fills remaining) ---]
+     * [--- Bank Balance Frame ---]
+     * | "Bank Balance" title                        |
+     * | [CurrencyIcon] balance | [ItemIcon] balance |
+     */
+    @Override
+    protected void layoutChanged() {
+        int p = 2;
+        int s = 2;
+        int selectedIconSize = 24;
+        int balanceIconSize = 16;
+        int titleHeight = 12;
+        int balanceRowHeight = 18;
+        int balanceFrameHeight = titleHeight + s + balanceRowHeight + p * 2;
+
+        int y = p;
+        int w = getWidth();
+
+        // Selected market icon at top-left
+        if (selectedMarketView.isEnabled()) {
+            selectedMarketView.setBounds(p, y, selectedIconSize, selectedIconSize);
+            y = selectedMarketView.getBottom() + s;
+        }
+
+        // Market grid fills the space between the icon and the balance frame
+        int gridWidth = w - 2 * p;
+        int gridHeight = getHeight() - y - s - balanceFrameHeight - p;
+        marketGrid.setBounds(p, y, gridWidth, Math.max(0, gridHeight));
+
+        // Update grid columns
+        int containerWidth = marketGrid.getContainerWidth();
+        if (containerWidth > 0) {
+            gridLayout.columns = Math.max(1, containerWidth / ItemView.DEFAULT_WIDTH);
+        }
+
+        // Bank Balance frame at the bottom
+        int frameY = marketGrid.getBottom() + s;
+        balanceFrame.setBounds(p, frameY, w - 2 * p, balanceFrameHeight);
+
+        // Layout inside the balance frame
+        int fw = balanceFrame.getWidth();
+        int halfW = fw / 2;
+        balanceTitleLabel.setBounds(0, p, fw, titleHeight);
+
+        int balanceY = titleHeight + s + p;
+        // Left half: currency
+        currencyIcon.setBounds(p, balanceY, balanceIconSize, balanceIconSize);
+        currencyBalanceLabel.setBounds(p + balanceIconSize + s, balanceY, halfW - balanceIconSize - s - p * 2, balanceRowHeight);
+
+        // Right half: market item
+        marketItemIcon.setBounds(halfW + p, balanceY, balanceIconSize, balanceIconSize);
+        marketItemBalanceLabel.setBounds(halfW + p + balanceIconSize + s, balanceY, halfW - balanceIconSize - s - p * 2, balanceRowHeight);
+    }
+}

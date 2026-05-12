@@ -72,6 +72,7 @@ public class ManagementScreen extends StockMarketGuiScreen {
     // Tab names
     private static final String TAB_OVERVIEW = "Overview";
     private static final String TAB_CREATE_MARKETS = "Create Markets";
+    private static final String TAB_PRESETS = "Presets";
 
     // ---- Inner widget classes (used inside OverviewTab) ----
 
@@ -328,6 +329,7 @@ public class ManagementScreen extends StockMarketGuiScreen {
     private final TabElement tabElement;
     private final OverviewTab overviewTab;
     private final CreateMarketTab createMarketTab;
+    private final PresetEditorTab presetEditorTab;
 
     public ManagementScreen() {
         super(Texts.TITLE);
@@ -342,6 +344,10 @@ public class ManagementScreen extends StockMarketGuiScreen {
         createMarketTab = new CreateMarketTab();
         createMarketTab.setOnMarketsChanged(overviewTab::refreshMarketList);
         tabElement.addTab(TAB_CREATE_MARKETS, createMarketTab);
+
+        // Presets tab -- edit preset prices and abundance values
+        presetEditorTab = new PresetEditorTab();
+        tabElement.addTab(TAB_PRESETS, presetEditorTab);
 
         addElement(tabElement);
     }
