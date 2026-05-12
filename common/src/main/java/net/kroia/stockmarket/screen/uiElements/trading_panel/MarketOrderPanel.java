@@ -254,10 +254,10 @@ class MarketOrderPanel extends StockMarketGuiElement
         String costText = String.format("Est: %.2f %s", cost, currencyName);
         estimatedCostLabel.setText(costText);
 
-        // Color red if buy cost exceeds money balance or sell quantity exceeds item balance
+        // Color red only when the displayed money cost exceeds the player's balance
+        // (sell-side validation is handled separately by updateValidation disabling the sell button)
         boolean buyInsufficient = cost > moneyBalance && moneyBalance > 0;
-        boolean sellInsufficient = quantity > itemBalance && itemBalance > 0;
-        if((buyInsufficient || sellInsufficient) && quantity > 0 && currentMarketPrice > 0)
+        if(buyInsufficient && quantity > 0 && currentMarketPrice > 0)
             estimatedCostLabel.setTextColor(UI_Colors.sellColorRed);
         else
             estimatedCostLabel.setTextColor(GuiElement.DEFAULT_TEXT_COLOR);
