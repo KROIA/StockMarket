@@ -92,14 +92,8 @@ public class OrderRecordManagerTestSuite extends TestSuite {
             if (manager == null)
                 return fail("ORDER_RECORD_MANAGER is null");
 
-            // Note: The INSERT/SELECT constants in OrderRecordManager reference column "marketid"
-            // but the OrderHistory table DDL defines the column as "accountid". This column name
-            // mismatch causes SQL errors for all save/query operations.
-            // This test verifies the WHERE clause AND/WHERE chaining logic is correct by using
+            // Verify the WHERE clause AND/WHERE chaining logic is correct by using
             // getHistory with filters constructed using the correct column names (accountid, itemid).
-            // The query method in OrderRecordManager builds filter clauses with correct column names
-            // ("accountid", "itemid", "time", "userid_one"/"userid_two"), but the base SELECT
-            // statement references the wrong column "marketid", so the query will fail.
 
             UUID testUUID = UUID.randomUUID();
             long now = System.currentTimeMillis();
@@ -116,7 +110,7 @@ public class OrderRecordManagerTestSuite extends TestSuite {
             r = assertEquals("Market filter clause", "itemid = ?", marketFilter.getClause("itemid"));
             if (!r.passed()) return r;
 
-            return pass("Filter clause construction is correct; base SELECT has known 'marketid' column mismatch (should be 'accountid')");
+            return pass("Filter clause construction is correct; column names match DDL");
         } catch (Exception e) {
             return fail("Exception: " + e.getMessage());
         }
@@ -127,20 +121,18 @@ public class OrderRecordManagerTestSuite extends TestSuite {
             if (manager == null)
                 return fail("ORDER_RECORD_MANAGER is null");
 
-            // With no filters, the query uses the base SELECT statement which references
-            // "marketid" — a column that doesn't exist in the table (should be "accountid").
             // Verify the base SELECT string references expected columns.
             String selectStmt = OrderRecordManager.SELECT;
             TestResult r = assertTrue("SELECT should reference itemid",
                     selectStmt.contains("itemid"));
             if (!r.passed()) return r;
 
-            // Document the known column name mismatch
-            r = assertTrue("SELECT references 'marketid' instead of 'accountid' (known mismatch with DDL)",
-                    selectStmt.contains("marketid"));
+            // Verify the SELECT references 'accountid' (column name matches DDL)
+            r = assertTrue("SELECT should reference 'accountid'",
+                    selectStmt.contains("accountid"));
             if (!r.passed()) return r;
 
-            return pass("No-filter query construction verified; base SELECT has known 'marketid' column mismatch");
+            return pass("No-filter query construction verified; SELECT column names match DDL");
         } catch (Exception e) {
             return fail("Exception: " + e.getMessage());
         }
@@ -178,7 +170,6 @@ public class OrderRecordManagerTestSuite extends TestSuite {
 
             // Verify the UUID two-column storage approach is correct by testing the
             // decomposition and reconstruction logic, as well as the filter clause format.
-            // Note: Actual DB round-trip is blocked by the known 'marketid' column mismatch.
 
             UUID originalUUID = UUID.randomUUID();
             long msb = originalUUID.getMostSignificantBits();

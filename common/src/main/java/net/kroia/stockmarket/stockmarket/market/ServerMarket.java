@@ -6,6 +6,7 @@ import net.kroia.modutilities.persistence.ServerSaveable;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
+import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
 import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.market.core.MatchingEngine;
@@ -487,12 +488,12 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
 
     }
     /**
-     * Gets called when the provided order has been consumed
-     * @param order
+     * Gets called when the provided order has been consumed (fully filled)
+     * @param order the consumed order
      */
     private void onOrderConsumed(Order order)
     {
-
+        saveOrderRecord(order);
     }
 
     /**
@@ -502,16 +503,30 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
      */
     private void onOrderCanceled(InterMarketOrder order)
     {
-
+        // InterMarketOrders are bot-to-bot and don't need history tracking
     }
     /**
      * Gets called when the provided order has been canceled
      * It may be partially filled
-     * @param order
+     * @param order the canceled order
      */
     private void onOrderCanceled(Order order)
     {
+        saveOrderRecord(order);
+    }
 
+    /**
+     * Saves a completed or canceled player order to the OrderHistory SQL table.
+     * Bot orders (no player executor) are skipped.
+     * @param order the order to save as a historical record
+     */
+    private void saveOrderRecord(Order order)
+    {
+        if (order.isBotOrder()) return; // skip bot orders (no player executor)
+        if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.ORDER_RECORD_MANAGER == null) return;
+
+        OrderRecordStruct record = order.getHistoricalRecord();
+        BACKEND_INSTANCES.ORDER_RECORD_MANAGER.save(record);
     }
 
 
