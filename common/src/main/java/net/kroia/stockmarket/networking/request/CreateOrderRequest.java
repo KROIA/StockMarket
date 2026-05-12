@@ -193,13 +193,9 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
             switch(input.type)
             {
                 case Order.Type.LIMIT:
-                    try {
-                        toLockAmount = Math.multiplyExact(toRawAmount(input.volume), toRawAmount(input.price));
-                    } catch (ArithmeticException e) {
-                        response.status = Status.INVALID_VOLUME;
-                        future.complete(response);
-                        return future;
-                    }
+                    // Correct cost: real volume * real price * scaleFactor = raw cost
+                    // Use ceil to ensure lock amount always covers the full order cost
+                    toLockAmount = (long)Math.ceil(input.volume * input.price * getItemFractionScaleFactor());
                     if(moneyBank.getBalance() < toLockAmount) {
                         response.status = Status.NOT_ENOUGH_MONEY;
                         future.complete(response);
@@ -207,13 +203,9 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
                     }
                     break;
                 case Order.Type.MARKET:
-                    try {
-                        toLockAmount = Math.multiplyExact(toRawAmount(input.volume), currentMarketPrice);
-                    } catch (ArithmeticException e) {
-                        response.status = Status.INVALID_VOLUME;
-                        future.complete(response);
-                        return future;
-                    }
+                    // Correct cost: rawVolume * rawPrice / scaleFactor = raw cost
+                    // Use ceil to ensure lock amount always covers the full order cost
+                    toLockAmount = (long)Math.ceil((double)toRawAmount(input.volume) * currentMarketPrice / getItemFractionScaleFactor());
                     if(moneyBank.getBalance() < toLockAmount) {
                         response.status = Status.NOT_ENOUGH_MONEY;
                         future.complete(response);

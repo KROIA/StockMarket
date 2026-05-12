@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.stockmarket.market.core;
 
 
+import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.bank.IServerBank;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.util.ItemID;
@@ -261,8 +262,9 @@ public class MatchingEngine
                 }
 
                 // Cap fill to what the buyer can actually afford
+                // maxAffordable = buyerFunds * SF / price (since cost = vol * price / SF)
                 long buyerFunds = other.moneyBank.getTotalBalance();
-                long maxAffordable = buyerFunds / buyOrder.getStartPrice();
+                long maxAffordable = buyerFunds * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR / buyOrder.getStartPrice();
                 if (maxAffordable < fillPotential)
                 {
                     fillPotential = maxAffordable;    // partial – buyer is broke
@@ -270,15 +272,8 @@ public class MatchingEngine
                     orderCanceled(buyOrder);          // cancel remainder of buy order
                 }
 
-                long cost;
-                try {
-                    cost = Math.multiplyExact(fillPotential, buyOrder.getStartPrice());
-                } catch (ArithmeticException e) {
-                    warn("Overflow in sell-vs-player-buy cost calculation — canceling buy order " + buyOrder.hashCode());
-                    buyOrdersToRemove.add(buyOrder);
-                    orderCanceled(buyOrder);
-                    continue;
-                }
+                // cost = rawVolume * rawPrice / scaleFactor (both inputs are raw-scaled)
+                long cost = Math.round((double)fillPotential * buyOrder.getStartPrice() / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
                 buyOrder.edit(fillPotential, -cost);
                 order.edit(-fillPotential, cost);
                 other.itemBank.deposit(fillPotential);
@@ -297,15 +292,8 @@ public class MatchingEngine
             else
             {
                 // Bot / virtual limit order — no counterparty account needed
-                long cost;
-                try {
-                    cost = Math.multiplyExact(fillPotential, buyOrder.getStartPrice());
-                } catch (ArithmeticException e) {
-                    warn("Overflow in sell-vs-bot-buy cost calculation — canceling buy order " + buyOrder.hashCode());
-                    buyOrdersToRemove.add(buyOrder);
-                    orderCanceled(buyOrder);
-                    continue;
-                }
+                // cost = rawVolume * rawPrice / scaleFactor
+                long cost = Math.round((double)fillPotential * buyOrder.getStartPrice() / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
                 buyOrder.edit(fillPotential, -cost);
                 order.edit(-fillPotential, cost);
                 orderVolume += fillPotential;
@@ -367,7 +355,8 @@ public class MatchingEngine
             // at cheaper ask prices. Any overshoot is harmless — the loop stops when
             // orderVolume reaches 0.
             availableFunds = moneyBank.getTotalBalance();
-            long maxAffordable = (currentMarketPrice > 0) ? availableFunds / currentMarketPrice : orderVolume;
+            // maxAffordable = funds * SF / price (since cost = vol * price / SF)
+            long maxAffordable = (currentMarketPrice > 0) ? availableFunds * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR / currentMarketPrice : orderVolume;
             if (maxAffordable < orderVolume)
                 orderVolume = maxAffordable;                      // still positive
         }
@@ -433,40 +422,20 @@ public class MatchingEngine
                 }
 
                 // Cap fill to what the buyer can still afford
-                long costFull;
-                try {
-                    costFull = Math.multiplyExact(fillPotential, sellOrder.getStartPrice());
-                } catch (ArithmeticException e) {
-                    warn("Overflow in buy-vs-player-sell costFull calculation — canceling sell order " + sellOrder.hashCode());
-                    sellOrdersToRemove.add(sellOrder);
-                    orderCanceled(sellOrder);
-                    continue;
-                }
+                // costFull = rawVolume * rawPrice / scaleFactor (fillPotential is negative for sells)
+                long costFull = Math.round((double)fillPotential * sellOrder.getStartPrice() / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
                 if (availableFunds < -costFull)
                 {
-                    fillPotential  = -availableFunds / sellOrder.getStartPrice();
-                    try {
-                        costFull = Math.multiplyExact(fillPotential, sellOrder.getStartPrice());
-                    } catch (ArithmeticException e) {
-                        warn("Overflow in buy-vs-player-sell recalculated costFull — canceling order " + order.hashCode());
-                        orderCanceled(order);
-                        break;
-                    }
+                    // fillPotential = -funds * SF / price (negative volume for sells)
+                    fillPotential  = -availableFunds * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR / sellOrder.getStartPrice();
                     // Buyer exhausted — order will finish after this fill
                 }
 
                 if (fillPotential >= 0)
                     break;  // buyer is completely broke, stop
 
-                long cost;
-                try {
-                    cost = Math.multiplyExact(fillPotential, sellOrder.getStartPrice());
-                } catch (ArithmeticException e) {
-                    warn("Overflow in buy-vs-player-sell cost calculation — canceling sell order " + sellOrder.hashCode());
-                    sellOrdersToRemove.add(sellOrder);
-                    orderCanceled(sellOrder);
-                    continue;
-                }
+                // cost = rawVolume * rawPrice / scaleFactor
+                long cost = Math.round((double)fillPotential * sellOrder.getStartPrice() / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
                 sellOrder.edit(fillPotential, -cost);
                 order.edit(-fillPotential, cost);
                 other.itemBank.withdrawLockedPrefered(-fillPotential);
@@ -487,29 +456,15 @@ public class MatchingEngine
             {
                 // Bot / virtual limit order — no counterparty account needed
                 // Still cap to buyer's remaining funds
-                long costFull;
-                try {
-                    costFull = Math.multiplyExact(fillPotential, sellOrder.getStartPrice());
-                } catch (ArithmeticException e) {
-                    warn("Overflow in buy-vs-bot-sell costFull calculation — canceling sell order " + sellOrder.hashCode());
-                    sellOrdersToRemove.add(sellOrder);
-                    orderCanceled(sellOrder);
-                    continue;
-                }
+                // costFull = rawVolume * rawPrice / scaleFactor (fillPotential is negative for sells)
+                long costFull = Math.round((double)fillPotential * sellOrder.getStartPrice() / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
                 if (availableFunds < -costFull)
-                    fillPotential = -availableFunds / sellOrder.getStartPrice();
+                    fillPotential = -availableFunds * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR / sellOrder.getStartPrice();
 
                 if (fillPotential >= 0) break;
 
-                long cost;
-                try {
-                    cost = Math.multiplyExact(fillPotential, sellOrder.getStartPrice());
-                } catch (ArithmeticException e) {
-                    warn("Overflow in buy-vs-bot-sell cost calculation — canceling sell order " + sellOrder.hashCode());
-                    sellOrdersToRemove.add(sellOrder);
-                    orderCanceled(sellOrder);
-                    continue;
-                }
+                // cost = rawVolume * rawPrice / scaleFactor
+                long cost = Math.round((double)fillPotential * sellOrder.getStartPrice() / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
                 sellOrder.edit(fillPotential, -cost);
                 order.edit(-fillPotential, cost);
                 orderVolume    += fillPotential;
@@ -584,13 +539,8 @@ public class MatchingEngine
             if (virtualVol > 0)
             {
                 long filled = orderbook.fillVirtual(nextExecutedPrice, orderVolume);
-                long virtualCost;
-                try {
-                    virtualCost = Math.multiplyExact(nextExecutedPrice, filled);
-                } catch (ArithmeticException e) {
-                    warn("Overflow in drainVirtualSell cost calculation at price " + nextExecutedPrice);
-                    break;
-                }
+                // virtualCost = rawPrice * rawVolume / scaleFactor
+                long virtualCost = Math.round((double)nextExecutedPrice * filled / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
                 itemDelta  += filled;
                 moneyDelta -= virtualCost;
                 orderVolume -= filled;
@@ -646,8 +596,9 @@ public class MatchingEngine
             if (virtualVol < 0)
             {
                 // Also cap to what the buyer can afford at this price level
+                // maxByFunds = funds * SF / price (since cost = vol * price / SF)
                 long maxByFunds = (nextExecutedPrice > 0)
-                        ? availableFunds / nextExecutedPrice
+                        ? availableFunds * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR / nextExecutedPrice
                         : orderVolume;
                 long wantToFill = Math.min(orderVolume, maxByFunds);
 
@@ -655,13 +606,8 @@ public class MatchingEngine
                     break;   // buyer is broke
 
                 long filled = orderbook.fillVirtual(nextExecutedPrice, wantToFill);
-                long cost;
-                try {
-                    cost = Math.multiplyExact(nextExecutedPrice, filled);
-                } catch (ArithmeticException e) {
-                    warn("Overflow in drainVirtualBuy cost calculation at price " + nextExecutedPrice);
-                    break;
-                }
+                // cost = rawPrice * rawVolume / scaleFactor
+                long cost = Math.round((double)nextExecutedPrice * filled / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
                 itemDelta      += filled;
                 moneyDelta     -= cost;
                 availableFunds -= cost;

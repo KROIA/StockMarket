@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.stockmarket.market;
 
+import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.bank.BankStatus;
 import net.kroia.banksystem.api.bank.IServerBank;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
@@ -563,7 +564,8 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
                 warn("Cannot unlock money for cancelled buy order: money bank not found for account " + order.getBankAccountNr());
                 return;
             }
-            long toUnlock = remainingVolume * order.getStartPrice();
+            // toUnlock = rawVolume * rawPrice / scaleFactor
+            long toUnlock = Math.round((double)remainingVolume * order.getStartPrice() / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
             BankStatus status = moneyBank.unlockAmount(toUnlock);
             if (status != BankStatus.SUCCESS) {
                 warn("Failed to unlock " + toUnlock + " money for cancelled buy order on account "
