@@ -98,6 +98,7 @@ public class TradeScreen extends StockMarketGuiScreen {
         favoritesBar.rebuild(markets, prefs.getFavoriteMarketIDs(), currentMarketID);
 
         // Load initial history data
+        orderHistoryPanel.setCurrentMarketID(currentMarketID);
         orderHistoryPanel.refresh();
         if (currentMarketID != null) {
             transactionHistoryPanel.refresh(currentMarketID);
@@ -160,7 +161,8 @@ public class TradeScreen extends StockMarketGuiScreen {
             tradingPanel.setLimitPrice(market.getCurrentMarketRealPrice());
         }
 
-        // Refresh transaction history for the new market
+        // Update history panels for the new market
+        orderHistoryPanel.setCurrentMarketID(newMarketID);
         transactionHistoryPanel.refresh(newMarketID);
 
         // Update preferences

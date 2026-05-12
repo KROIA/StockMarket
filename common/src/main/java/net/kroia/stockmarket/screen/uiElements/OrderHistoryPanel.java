@@ -30,11 +30,16 @@ public class OrderHistoryPanel extends StockMarketGuiElement {
             DateTimeFormatter.ofPattern("MM-dd HH:mm").withZone(ZoneId.systemDefault());
 
     private final VerticalListView recordListView;
+    private final Button clearButton;
 
     // Dirty-flag for deferred rebuild
     private boolean needsRebuild = false;
     private List<OrderRecordStruct> pendingRecords = new ArrayList<>();
     private long lastRefreshMs = 0;
+    @org.jetbrains.annotations.Nullable
+    private ItemID currentMarketID;
+    // Client-side "clear" — hides records older than this timestamp without deleting from SQL
+    private long clearedBeforeMs = 0;
 
     public OrderHistoryPanel() {
         super();
@@ -46,6 +51,11 @@ public class OrderHistoryPanel extends StockMarketGuiElement {
         layout.stretchY = false;
         recordListView.setLayout(layout);
         addChild(recordListView);
+
+        clearButton = new Button("Clear", this::onClearHistory);
+        clearButton.setBackgroundColor(0xFFe8711c);
+        clearButton.setHoverColor(0xFFe04c12);
+        addChild(clearButton);
     }
 
     /**
@@ -83,17 +93,41 @@ public class OrderHistoryPanel extends StockMarketGuiElement {
 
     @Override
     protected void layoutChanged() {
-        recordListView.setBounds(0, 0, getWidth(), getHeight());
+        int btnHeight = 18;
+        int spacing = 2;
+        clearButton.setBounds(getWidth() - 50 - spacing, spacing, 50, btnHeight);
+        recordListView.setBounds(0, btnHeight + spacing * 2, getWidth(), getHeight() - btnHeight - spacing * 2);
     }
 
     /**
-     * Clears and rebuilds the record list view. Records are already sorted by time descending
-     * from the server response.
+     * Sets the current market for filtering the clear operation.
+     */
+    public void setCurrentMarketID(@org.jetbrains.annotations.Nullable ItemID marketID) {
+        this.currentMarketID = marketID;
+    }
+
+    /**
+     * Hides all currently displayed records by setting a "cleared before" timestamp.
+     * Does NOT delete from SQL — the global "Market Trades" tab is unaffected.
+     */
+    private void onClearHistory() {
+        clearedBeforeMs = System.currentTimeMillis();
+        updateRecords(new ArrayList<>());
+    }
+
+    /**
+     * Clears and rebuilds the record list view, applying market and clear-timestamp filters.
      */
     private void rebuildRecordList(List<OrderRecordStruct> records) {
         recordListView.removeChilds();
 
         for (OrderRecordStruct record : records) {
+            // Filter by current market
+            if (currentMarketID != null && record.itemID() != currentMarketID.getShort())
+                continue;
+            // Filter out records hidden by the clear button
+            if (clearedBeforeMs > 0 && record.time() <= clearedBeforeMs)
+                continue;
             HistoryEntryWidget entry = new HistoryEntryWidget(record);
             recordListView.addChild(entry);
         }
