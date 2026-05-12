@@ -19,6 +19,24 @@ import java.util.List;
 import java.util.UUID;
 
 public abstract class StockMarketGuiElement extends GuiElement {
+
+    /**
+     * Draws an X mark (two crossing diagonal lines) at the given position.
+     * Used by MarketItemButton close button and order marker cancel button.
+     *
+     * @param target    the GuiElement to draw on
+     * @param x         left edge of the X area
+     * @param y         top edge of the X area
+     * @param width     width of the X area
+     * @param height    height of the X area
+     * @param padding   inset from edges
+     * @param thickness line thickness
+     * @param color     line color (ARGB)
+     */
+    public static void drawXMark(GuiElement target, int x, int y, int width, int height, int padding, float thickness, int color) {
+        target.drawLine(x + padding, y + padding, x + width - padding, y + height - padding, thickness, color);
+        target.drawLine(x + width - padding, y + padding, x + padding, y + height - padding, thickness, color);
+    }
     protected static StockMarketModBackend.ClientInstances BACKEND_INSTANCES;
     public static void setBackend(StockMarketModBackend.ClientInstances backend) {
         BACKEND_INSTANCES = backend;

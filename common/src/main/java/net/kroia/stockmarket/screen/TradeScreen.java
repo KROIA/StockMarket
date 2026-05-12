@@ -12,8 +12,12 @@ import net.kroia.stockmarket.screen.uiElements.PendingOrdersPanel;
 import net.kroia.stockmarket.screen.uiElements.TransactionHistoryPanel;
 import net.kroia.stockmarket.screen.uiElements.trading_panel.TradingPanel;
 import net.kroia.stockmarket.screen.widgets.OrderbookVolumeHistogram;
+import net.kroia.stockmarket.screen.widgets.OrderMarkerOverlay;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.screen.widgets.CandlestickChart;
+import net.kroia.stockmarket.networking.request.CancelOrderRequest;
+import net.kroia.stockmarket.stockmarket.market.core.order.Order;
+import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
 import net.kroia.stockmarket.stockmarket.marketmanager.PlayerPreferences;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.kroia.stockmarket.util.StockMarketGuiScreen;
@@ -36,6 +40,7 @@ public class TradeScreen extends StockMarketGuiScreen {
 
     private final FavoritesBar favoritesBar;
     private final CandlestickChart candlestickChart;
+    private final OrderMarkerOverlay orderMarkerOverlay;
     private final OrderbookVolumeHistogram orderbookVolumeHistogram;
     private final TradingPanel tradingPanel;
     private final TabElement ordersTabElement;
@@ -53,11 +58,19 @@ public class TradeScreen extends StockMarketGuiScreen {
         favoritesBar = new FavoritesBar(this::switchMarket);
         candlestickChart = new CandlestickChart();
         candlestickChart.setMarket(null);
+
+        // Order marker overlay for draggable limit order lines on the chart
+        orderMarkerOverlay = new OrderMarkerOverlay();
+        candlestickChart.addOverlay(orderMarkerOverlay);
+        orderMarkerOverlay.setOnCancelOrder(this::onCancelOrderFromChart);
+        orderMarkerOverlay.setOnMoveOrder(this::onMoveOrderFromChart);
+
         orderbookVolumeHistogram = new OrderbookVolumeHistogram(candlestickChart);
         tradingPanel = new TradingPanel(this::onBuyMarket, this::onSellMarket, this::onBuyLimit, this::onSellLimit);
 
         // Orders tab element with pending orders, order history, and market trades
         pendingOrdersPanel = new PendingOrdersPanel();
+        pendingOrdersPanel.setOnMarketSwitch(this::switchMarket);
         orderHistoryPanel = new OrderHistoryPanel();
         transactionHistoryPanel = new TransactionHistoryPanel();
         ordersTabElement = new TabElement();
@@ -86,6 +99,7 @@ public class TradeScreen extends StockMarketGuiScreen {
             if (market != null) {
                 market.subscribeToMarketPriceUpdate();
                 candlestickChart.setMarket(market);
+                orderMarkerOverlay.setCurrentMarket(currentMarketID);
                 tradingPanel.setItemName(ClientPlayerUtilities.getItemDisplayText(currentMarketID.getStack()));
                 tradingPanel.setLimitPrice(market.getCurrentMarketRealPrice());
             }
@@ -123,6 +137,7 @@ public class TradeScreen extends StockMarketGuiScreen {
                 (byte) 0,
                 data -> {
                     pendingOrdersPanel.updateOrders(data.orders);
+                    orderMarkerOverlay.updateOrders(data.orders);
                     orderHistoryPanel.refresh();
                     if (currentMarketID != null)
                         transactionHistoryPanel.refresh(currentMarketID);
@@ -157,6 +172,7 @@ public class TradeScreen extends StockMarketGuiScreen {
         if (market != null) {
             market.subscribeToMarketPriceUpdate();
             candlestickChart.setMarket(market);
+            orderMarkerOverlay.setCurrentMarket(newMarketID);
             tradingPanel.setItemName(ClientPlayerUtilities.getItemDisplayText(newMarketID.getStack()));
             tradingPanel.setLimitPrice(market.getCurrentMarketRealPrice());
         }
@@ -273,6 +289,50 @@ public class TradeScreen extends StockMarketGuiScreen {
         market.createLimitOrder(selectedBankAccountNr, -quantity, price).thenAccept(result->{
             info("Order creation response: "+result.status);
         });
+    }
+
+    /**
+     * Cancels an order directly from the chart overlay cancel button.
+     */
+    private void onCancelOrderFromChart(Order order) {
+        CancelOrderRequest.InputData input = new CancelOrderRequest.InputData(
+                order.getItemID(),
+                order.getTime(),
+                order.getType().ordinal(),
+                order.getStartPrice(),
+                order.getTargetVolume()
+        );
+        BACKEND_INSTANCES.NETWORKING.CANCEL_ORDER_REQUEST.sendRequestToServer(input);
+    }
+
+    /**
+     * Moves an order by cancelling the old one and creating a new limit order
+     * at the new price with the remaining volume.
+     */
+    private void onMoveOrderFromChart(Order order, double newPrice) {
+        CancelOrderRequest.InputData cancelInput = new CancelOrderRequest.InputData(
+                order.getItemID(),
+                order.getTime(),
+                order.getType().ordinal(),
+                order.getStartPrice(),
+                order.getTargetVolume()
+        );
+        BACKEND_INSTANCES.NETWORKING.CANCEL_ORDER_REQUEST.sendRequestToServer(cancelInput)
+                .thenAccept(success -> {
+                    if (success) {
+                        // Re-create the order at the new price with remaining volume
+                        double remainingVolume = MarketManager.convertToRealAmountStatic(order.getRemainingVolume());
+                        ClientMarket market = getMarket(order.getItemID());
+                        if (market != null && selectedBankAccountNr != -1) {
+                            market.createLimitOrder(selectedBankAccountNr, remainingVolume, newPrice)
+                                    .thenAccept(result -> {
+                                        info("Move order response: " + result.status);
+                                    });
+                        }
+                    } else {
+                        warn("Failed to cancel order for move operation");
+                    }
+                });
     }
 
 }

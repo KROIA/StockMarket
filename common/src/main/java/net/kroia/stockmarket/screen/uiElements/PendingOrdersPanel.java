@@ -1,15 +1,18 @@
 package net.kroia.stockmarket.screen.uiElements;
 
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.elements.*;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.kroia.stockmarket.networking.request.CancelOrderRequest;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * Scrollable panel displaying the player's active (pending) orders with cancel buttons.
@@ -25,6 +28,9 @@ public class PendingOrdersPanel extends StockMarketGuiElement {
     // Dirty-flag for deferred rebuild
     private boolean needsRebuild = false;
     private List<Order> pendingOrders = new ArrayList<>();
+
+    /** Called when the user clicks an item icon to switch to that market. */
+    private @Nullable Consumer<ItemID> onMarketSwitch;
 
     public PendingOrdersPanel() {
         super();
@@ -47,6 +53,16 @@ public class PendingOrdersPanel extends StockMarketGuiElement {
     public void updateOrders(List<Order> orders) {
         needsRebuild = true;
         pendingOrders = orders != null ? new ArrayList<>(orders) : new ArrayList<>();
+    }
+
+    /**
+     * Sets a callback that fires when the user clicks an item icon in a pending order row.
+     * Allows switching the active market from the pending orders panel.
+     *
+     * @param callback receives the ItemID of the clicked order's market, or null to disable
+     */
+    public void setOnMarketSwitch(@Nullable Consumer<ItemID> callback) {
+        this.onMarketSwitch = callback;
     }
 
     @Override
@@ -103,6 +119,9 @@ public class PendingOrdersPanel extends StockMarketGuiElement {
     /**
      * Displays a single pending order as a compact row:
      * {@code [ItemIcon 16x16] [BUY/SELL] [filled/total] [@ price] [Cancel btn]}
+     * <p>
+     * The item icon is clickable — clicking it fires the market switch callback
+     * to navigate to that order's market. A hover overlay indicates clickability.
      */
     private class OrderEntryWidget extends StockMarketGuiElement {
 
@@ -111,9 +130,15 @@ public class PendingOrdersPanel extends StockMarketGuiElement {
         private final Label amountLabel;
         private final Label priceLabel;
         private final Button cancelButton;
+        private final Order order;
+
+        // Layout constants for icon hit-testing
+        private static final int ICON_SIZE = 16;
+        private static final int ICON_MARGIN = 2;
 
         OrderEntryWidget(Order order) {
             super();
+            this.order = order;
             setEnableBackground(true);
 
             // Item icon from the order's ItemID
@@ -153,20 +178,45 @@ public class PendingOrdersPanel extends StockMarketGuiElement {
 
         @Override
         protected void render() {
-            // No dynamic rendering needed
+            // Draw hover overlay on the item icon when the mouse is over it
+            if (isMouseOver() && isInIconArea(getMouseX(), getMouseY())) {
+                int iconX = ICON_MARGIN;
+                int iconY = (getHeight() - ICON_SIZE) / 2;
+                drawRect(iconX, iconY, ICON_SIZE, ICON_SIZE, 0x60FFFFFF);
+            }
+        }
+
+        @Override
+        protected boolean mouseClickedOverElement(int button) {
+            if (button == 0 && isInIconArea(getMouseX(), getMouseY())) {
+                if (onMarketSwitch != null) {
+                    onMarketSwitch.accept(order.getItemID());
+                }
+                return true;
+            }
+            return false;
+        }
+
+        /**
+         * Checks if the given local coordinates fall within the item icon area.
+         */
+        private boolean isInIconArea(int mouseX, int mouseY) {
+            int iconX = ICON_MARGIN;
+            int iconY = (getHeight() - ICON_SIZE) / 2;
+            return mouseX >= iconX && mouseX < iconX + ICON_SIZE
+                    && mouseY >= iconY && mouseY < iconY + ICON_SIZE;
         }
 
         @Override
         protected void layoutChanged() {
             int w = getWidth();
             int h = getHeight();
-            int iconSize = 16;
             int btnSize = 16;
             int s = 2;
             int x = s;
 
-            itemIcon.setBounds(x, (h - iconSize) / 2, iconSize, iconSize);
-            x += iconSize + s;
+            itemIcon.setBounds(x, (h - ICON_SIZE) / 2, ICON_SIZE, ICON_SIZE);
+            x += ICON_SIZE + s;
             typeLabel.setBounds(x, 0, 30, h);
             x += 30 + s;
             amountLabel.setBounds(x, 0, 60, h);

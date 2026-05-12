@@ -9,7 +9,7 @@ import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.util.PriceHistoryData;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import org.jetbrains.annotations.Nullable;
-import org.lwjgl.glfw.GLFW;
+import net.kroia.modutilities.gui.InputConstants;
 
 import java.awt.*;
 import java.text.SimpleDateFormat;
@@ -31,11 +31,22 @@ public class CandlestickChart extends StockMarketGuiElement {
     public static final SimpleDateFormat yearFormat  = new SimpleDateFormat("yyyy", Locale.getDefault());
     public static final SimpleDateFormat timeFormat  = new SimpleDateFormat("HH:mm", Locale.getDefault());
 
-    // ── Overlay interface ──
+    // ── Overlay interfaces ──
 
     @FunctionalInterface
     public interface Overlay {
         void render(CandlestickChart chart);
+    }
+
+    /**
+     * Extended overlay that can intercept mouse events on the chart canvas.
+     * If any interactive overlay consumes an event, the chart's own input handling
+     * (panning / dragging) is skipped for that event.
+     */
+    public interface InteractiveOverlay extends Overlay {
+        boolean mouseClicked(CandlestickChart chart, int mouseX, int mouseY, int button);
+        boolean mouseDragged(CandlestickChart chart, int mouseX, int mouseY, int button, double deltaX, double deltaY);
+        boolean mouseReleased(CandlestickChart chart, int mouseX, int mouseY, int button);
     }
 
     // ── Fields ──
@@ -77,6 +88,8 @@ public class CandlestickChart extends StockMarketGuiElement {
             Button button = new Button(timeStr, () -> {
                 selectCandleTimeDeltaByIndex(finalI);
             });
+            candleTimeSelectButtons.add(button);
+            addChild(button);
 
             button.setTextFontScale(buttonFontSizeScale);
             int textWidth = getTextWidth(timeStr);
@@ -87,8 +100,7 @@ public class CandlestickChart extends StockMarketGuiElement {
             button.setPressedColor(ColorUtilities.setAlpha(button.getPressedColor(), 1.0f));
             button.setHoverColor(ColorUtilities.setAlpha(button.getHoverColor(), 1.0f));
 
-            candleTimeSelectButtons.add(button);
-            addChild(button);
+
         }
 
         selectCandleTimeDeltaByIndex(currentCandleTimeIdx);
@@ -475,7 +487,7 @@ public class CandlestickChart extends StockMarketGuiElement {
         boolean consumed = false;
 
         // Horizontal zoom (disabled when holding Ctrl for vertical-only zoom)
-        if (!isKeyPressed(GLFW.GLFW_KEY_LEFT_CONTROL)) {
+        if (!isKeyPressed(InputConstants.KEY_LEFT_CONTROL)) {
             double minScrollValue = Math.min(canvasRect.width / 3.f, data.getCandles().size());
             zoomLevel = Math.max(Math.min(zoomLevel * zoomFactor, minScrollValue), 5.0f);
 
@@ -501,7 +513,7 @@ public class CandlestickChart extends StockMarketGuiElement {
         }
 
         // Vertical zoom (disabled when holding Shift for horizontal-only zoom)
-        if (!isKeyPressed(GLFW.GLFW_KEY_LEFT_SHIFT)) {
+        if (!isKeyPressed(InputConstants.KEY_LEFT_SHIFT)) {
             double newHeight = chartviewRect.height * zoomFactor;
             if (newHeight < Long.MAX_VALUE && newHeight > 0.1) {
                 chartviewRect.height = newHeight;
@@ -520,29 +532,60 @@ public class CandlestickChart extends StockMarketGuiElement {
 
     @Override
     protected boolean mouseClickedOverElement(int button) {
-        lastDragMousePos.x = getMouseX();
-        lastDragMousePos.y = getMouseY();
+        // Forward to interactive overlays first — if consumed, skip chart panning
+        int mx = getMouseX();
+        int my = getMouseY();
+        for (Overlay overlay : overlays) {
+            if (overlay instanceof InteractiveOverlay interactive) {
+                if (interactive.mouseClicked(this, mx, my, button)) {
+                    return true;
+                }
+            }
+        }
+
+        lastDragMousePos.x = mx;
+        lastDragMousePos.y = my;
         dragging = true;
         return true;
     }
 
     @Override
     protected void mouseReleased(int button) {
+        // Forward to interactive overlays first
+        int mx = getMouseX();
+        int my = getMouseY();
+        for (Overlay overlay : overlays) {
+            if (overlay instanceof InteractiveOverlay interactive) {
+                if (interactive.mouseReleased(this, mx, my, button)) {
+                    return;
+                }
+            }
+        }
+
         dragging = false;
     }
 
     @Override
     protected boolean mouseDragged(int button, double deltaX, double deltaY) {
+        // Forward to interactive overlays first — if consumed, skip chart panning
+        int mx = getMouseX();
+        int my = getMouseY();
+        for (Overlay overlay : overlays) {
+            if (overlay instanceof InteractiveOverlay interactive) {
+                if (interactive.mouseDragged(this, mx, my, button, deltaX, deltaY)) {
+                    return true;
+                }
+            }
+        }
+
         if (!dragging || data == null)
             return false;
-        int mouseX = getMouseX();
-        int mouseY = getMouseY();
 
-        if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT && (mouseX != lastDragMousePos.x || mouseY != lastDragMousePos.y)) {
-            int dx = lastDragMousePos.x - mouseX;
-            int dy = lastDragMousePos.y - mouseY;
-            lastDragMousePos.x = mouseX;
-            lastDragMousePos.y = mouseY;
+        if (button == InputConstants.MOUSE_BUTTON_LEFT && (mx != lastDragMousePos.x || my != lastDragMousePos.y)) {
+            int dx = lastDragMousePos.x - mx;
+            int dy = lastDragMousePos.y - my;
+            lastDragMousePos.x = mx;
+            lastDragMousePos.y = my;
 
             // Convert pixel delta to world space delta
             double worldDeltaX = dx * chartviewRect.width / canvasRect.width;
@@ -562,8 +605,8 @@ public class CandlestickChart extends StockMarketGuiElement {
 
     @Override
     protected boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        boolean ctrlKeyDown = isKeyPressed(GLFW.GLFW_KEY_LEFT_CONTROL);
-        if (keyCode == GLFW.GLFW_KEY_SPACE && !ctrlKeyDown) {
+        boolean ctrlKeyDown = isKeyPressed(InputConstants.KEY_LEFT_CONTROL);
+        if (keyCode == 32 && !ctrlKeyDown) {
             if (data != null) {
                 // Recenter view based on the horizontal time
                 double maxPrice = data.toRealPrice(data.getMaxPrice(firstVisibleCandleIndex, lastVisibleCandleIndex));
@@ -574,7 +617,7 @@ public class CandlestickChart extends StockMarketGuiElement {
                 chartviewRect.height = (maxPrice + priceDifference * 0.1) - chartviewRect.y;
                 return true;
             }
-        } else if (keyCode == GLFW.GLFW_KEY_SPACE) {
+        } else if (keyCode == 32) {
             if (data != null) {
                 autoCenterView();
                 return true;
@@ -655,15 +698,13 @@ public class CandlestickChart extends StockMarketGuiElement {
     @Override
     public int getTextWidth(String text) {
         String[] el = text.split("\n");
-        int longestIndex = 0;
-        int longestWidth = 0;
-        for (int i = 0; i < el.length; i++) {
-            if (el[i].length() > longestWidth) {
-                longestWidth = el[i].length();
-                longestIndex = i;
-            }
+        int maxWidth = 0;
+        for (String line : el) {
+            int w = super.getTextWidth(line);
+            if (w > maxWidth)
+                maxWidth = w;
         }
-        return (int) ((float) getFont().width(el[longestIndex]) * getTextFontScale());
+        return maxWidth;
     }
 
     private String[] timestampToTimeDate(Date currentTime, Date lastTime) {

@@ -1,5 +1,8 @@
 package net.kroia.stockmarket.stockmarket.market;
 
+import net.kroia.banksystem.api.bank.BankStatus;
+import net.kroia.banksystem.api.bank.IServerBank;
+import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.persistence.ServerSaveable;
@@ -283,6 +286,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
                     && order.getStartPrice() == startPrice
                     && order.getTargetVolume() == targetVolume) {
                 orderbook.removeOrder(order);
+                unlockRemainingFunds(order);
                 onOrderCanceled(order);
                 return true;
             }
@@ -523,12 +527,63 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     private void saveOrderRecord(Order order)
     {
         if (order.isBotOrder()) return; // skip bot orders (no player executor)
+        if (order.getFilledVolume() == 0) return; // skip orders with no fills (e.g. cancelled before any execution)
         if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.ORDER_RECORD_MANAGER == null) return;
 
         OrderRecordStruct record = order.getHistoricalRecord();
         BACKEND_INSTANCES.ORDER_RECORD_MANAGER.save(record);
     }
 
+
+    /**
+     * Unlocks the bank funds reserved for the unfilled portion of a cancelled order.
+     * Buy orders locked money (remainingVolume * startPrice) in the money bank.
+     * Sell orders locked items (abs(remainingVolume)) in the item bank.
+     * If the bank account or bank is unavailable (e.g. player left), logs a warning and skips.
+     */
+    private void unlockRemainingFunds(Order order) {
+        if (order.isBotOrder()) return; // bot orders have no bank reservations
+        if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.BANK_SYSTEM_API == null) return;
+
+        long remainingVolume = order.getRemainingVolume();
+        if (remainingVolume == 0) return; // fully filled, nothing to unlock
+
+        IServerBankAccount bankAccount = BACKEND_INSTANCES.BANK_SYSTEM_API
+                .getServerBankManager().getSync().getBankAccount(order.getBankAccountNr());
+        if (bankAccount == null) {
+            warn("Cannot unlock funds for cancelled order: bank account " + order.getBankAccountNr() + " not found");
+            return;
+        }
+
+        if (order.isBuyOrder()) {
+            // Buy order: unlock reserved money = remainingVolume * startPrice
+            ItemID moneyID = BACKEND_INSTANCES.MARKET_MANAGER.getSync().getTradingCurrencyID();
+            IServerBank moneyBank = bankAccount.getBank(moneyID);
+            if (moneyBank == null) {
+                warn("Cannot unlock money for cancelled buy order: money bank not found for account " + order.getBankAccountNr());
+                return;
+            }
+            long toUnlock = remainingVolume * order.getStartPrice();
+            BankStatus status = moneyBank.unlockAmount(toUnlock);
+            if (status != BankStatus.SUCCESS) {
+                warn("Failed to unlock " + toUnlock + " money for cancelled buy order on account "
+                        + order.getBankAccountNr() + ": " + status);
+            }
+        } else {
+            // Sell order: unlock reserved items = abs(remainingVolume)
+            IServerBank itemBank = bankAccount.getBank(itemID);
+            if (itemBank == null) {
+                warn("Cannot unlock items for cancelled sell order: item bank not found for account " + order.getBankAccountNr());
+                return;
+            }
+            long toUnlock = -remainingVolume; // remainingVolume is negative for sell orders
+            BankStatus status = itemBank.unlockAmount(toUnlock);
+            if (status != BankStatus.SUCCESS) {
+                warn("Failed to unlock " + toUnlock + " items for cancelled sell order on account "
+                        + order.getBankAccountNr() + ": " + status);
+            }
+        }
+    }
 
     private void onPriceChanged(long newPrice)
     {
