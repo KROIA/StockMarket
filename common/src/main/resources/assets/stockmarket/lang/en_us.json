@@ -204,6 +204,9 @@
 
   "gui.stockmarket.plugin_management_screen.auto_subscribe": "Auto-subscribe",
   "gui.stockmarket.plugin_management_screen.subscription_order": "Order",
+  "gui.stockmarket.plugin_management_screen.add_plugin": "Add Plugin",
+  "gui.stockmarket.plugin_management_screen.add_plugin_title": "Add Plugin",
+  "gui.stockmarket.plugin_management_screen.delete_plugin": "x",
 
   "gui.stockmarket.create_market_tab.title": "Create Markets",
   "gui.stockmarket.create_market_tab.create_all": "Create Selected",

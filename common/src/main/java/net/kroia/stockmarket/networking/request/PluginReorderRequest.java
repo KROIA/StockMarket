@@ -67,6 +67,10 @@ public class PluginReorderRequest extends StockMarketGenericRequest<PluginReorde
 
         pluginManager.reorderPlugin(input.instanceID(), input.direction());
 
+        // Notify other admins about the reorder
+        broadcastToAdmins(playerSender,
+                getPlayerName(playerSender) + " reordered plugins");
+
         return CompletableFuture.completedFuture(buildCurrentPluginList(pluginManager));
     }
 

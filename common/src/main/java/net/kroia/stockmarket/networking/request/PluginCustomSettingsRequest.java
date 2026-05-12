@@ -75,6 +75,13 @@ public class PluginCustomSettingsRequest extends StockMarketGenericRequest<Plugi
 
         boolean applied = plugin.decodeAndApplyCustomSettings(input.payload());
         byte[] confirmed = applied ? plugin.encodeCustomSettings() : null;
+
+        // Notify other admins about the custom settings change
+        if (applied) {
+            broadcastToAdmins(playerSender,
+                    getPlayerName(playerSender) + " updated custom settings for plugin '" + plugin.getName() + "'");
+        }
+
         return CompletableFuture.completedFuture(new OutputData(applied, confirmed));
     }
 

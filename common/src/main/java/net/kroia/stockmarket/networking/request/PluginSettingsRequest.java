@@ -91,6 +91,10 @@ public class PluginSettingsRequest extends StockMarketGenericRequest<PluginSetti
         plugin.setAutoSubscribeNewMarkets(updated.getAutoSubscribeNewMarkets());
         plugin.setSubscriptionOrder(updated.getSubscriptionOrder());
 
+        // Notify other admins about the settings change
+        broadcastToAdmins(playerSender,
+                getPlayerName(playerSender) + " updated settings for plugin '" + plugin.getName() + "'");
+
         return CompletableFuture.completedFuture(new OutputData(true, plugin.getGenericPluginData()));
     }
 
