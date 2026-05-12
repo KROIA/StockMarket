@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.PriorityQueue;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 
@@ -268,6 +269,25 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         return CompletableFuture.completedFuture(putOrder(order));
     }
 
+
+    @Override
+    public boolean cancelOrder(UUID executor, long time, Order.Type type, long startPrice, long targetVolume) {
+        // Search limit orders in the orderbook for an order matching all five criteria
+        List<Order> orders = getLimitOrders();
+        for (Order order : orders) {
+            if (order.getExecutorPlayerUUID() != null
+                    && order.getExecutorPlayerUUID().equals(executor)
+                    && order.getTime() == time
+                    && order.getType() == type
+                    && order.getStartPrice() == startPrice
+                    && order.getTargetVolume() == targetVolume) {
+                orderbook.removeOrder(order);
+                onOrderCanceled(order);
+                return true;
+            }
+        }
+        return false;
+    }
 
     public PriorityQueue<Order> getIncomingBuyMarketOrders()
     {

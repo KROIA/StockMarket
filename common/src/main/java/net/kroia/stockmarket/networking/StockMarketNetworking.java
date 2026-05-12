@@ -8,6 +8,7 @@ import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.networking.packet.OpenUIPacket;
 import net.kroia.stockmarket.networking.packet.PlayerJoinSyncPacket;
 import net.kroia.stockmarket.networking.request.*;
+import net.kroia.stockmarket.networking.stream.ActiveOrdersStream;
 import net.kroia.stockmarket.networking.stream.MarketPriceStream;
 import net.kroia.stockmarket.networking.stream.PluginRuntimeDataStream;
 import net.kroia.stockmarket.stockmarket.market.AsyncMarket;
@@ -31,6 +32,7 @@ public class StockMarketNetworking extends NetworkPacketManager {
 
     public final MarketPriceStream MARKET_PRICE_STREAM = (MarketPriceStream) StreamSystem.register(new MarketPriceStream());
     public final PluginRuntimeDataStream PLUGIN_RUNTIME_DATA_STREAM = (PluginRuntimeDataStream) StreamSystem.register(new PluginRuntimeDataStream());
+    public final ActiveOrdersStream ACTIVE_ORDERS_STREAM = (ActiveOrdersStream) StreamSystem.register(new ActiveOrdersStream());
 
     public final MarketPriceHistoryRequest MARKET_PRICE_HISTORY_REQUEST = (MarketPriceHistoryRequest) AsynchronousRequestResponseSystem.register(new MarketPriceHistoryRequest());
     public final MarketsRequest MARKETS_REQUEST = (MarketsRequest) AsynchronousRequestResponseSystem.register(new MarketsRequest());
@@ -45,6 +47,7 @@ public class StockMarketNetworking extends NetworkPacketManager {
     public final PluginSubscriptionRequest PLUGIN_SUBSCRIPTION_REQUEST = (PluginSubscriptionRequest) AsynchronousRequestResponseSystem.register(new PluginSubscriptionRequest());
     public final PlayerPreferencesGetRequest PLAYER_PREFERENCES_GET_REQUEST = (PlayerPreferencesGetRequest) AsynchronousRequestResponseSystem.register(new PlayerPreferencesGetRequest());
     public final PlayerPreferencesUpdateRequest PLAYER_PREFERENCES_UPDATE_REQUEST = (PlayerPreferencesUpdateRequest) AsynchronousRequestResponseSystem.register(new PlayerPreferencesUpdateRequest());
+    public final CancelOrderRequest CANCEL_ORDER_REQUEST = (CancelOrderRequest) AsynchronousRequestResponseSystem.register(new CancelOrderRequest());
 
     //public final MarketSettingsGetRequest MARKET_SETTINGS_GET_REQUEST = (MarketSettingsGetRequest) AsynchronousRequestResponseSystem.register(new MarketSettingsGetRequest());
 

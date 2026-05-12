@@ -3,8 +3,11 @@ package net.kroia.stockmarket.screen;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ClientPlayerUtilities;
 import net.kroia.modutilities.gui.Gui;
+import net.kroia.modutilities.gui.elements.TabElement;
+import net.kroia.modutilities.networking.client_server.streaming.StreamSystem;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.screen.uiElements.FavoritesBar;
+import net.kroia.stockmarket.screen.uiElements.PendingOrdersPanel;
 import net.kroia.stockmarket.screen.uiElements.trading_panel.TradingPanel;
 import net.kroia.stockmarket.screen.widgets.OrderbookVolumeHistogram;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
@@ -17,6 +20,7 @@ import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.UUID;
 
 
 public class TradeScreen extends StockMarketGuiScreen {
@@ -32,6 +36,9 @@ public class TradeScreen extends StockMarketGuiScreen {
     private final CandlestickChart candlestickChart;
     private final OrderbookVolumeHistogram orderbookVolumeHistogram;
     private final TradingPanel tradingPanel;
+    private final TabElement ordersTabElement;
+    private final PendingOrdersPanel pendingOrdersPanel;
+    private @Nullable UUID activeOrdersStreamID = null;
     private @Nullable ItemID currentMarketID = null;
     private int selectedBankAccountNr = -1;
 
@@ -45,10 +52,16 @@ public class TradeScreen extends StockMarketGuiScreen {
         orderbookVolumeHistogram = new OrderbookVolumeHistogram(candlestickChart);
         tradingPanel = new TradingPanel(this::onBuyMarket, this::onSellMarket, this::onBuyLimit, this::onSellLimit);
 
+        // Pending orders panel in a tab element (Phase 4 will add History tab)
+        pendingOrdersPanel = new PendingOrdersPanel();
+        ordersTabElement = new TabElement();
+        ordersTabElement.addTab("Pending Orders", pendingOrdersPanel);
+
         addElement(favoritesBar);
         addElement(candlestickChart);
         addElement(orderbookVolumeHistogram);
         addElement(tradingPanel);
+        addElement(ordersTabElement);
 
         // Determine initial market from preferences, fall back to first available
         List<ItemID> markets = getAvailableMarkets();
@@ -88,6 +101,16 @@ public class TradeScreen extends StockMarketGuiScreen {
                 selectedBankAccountNr = bankAccountData.accountNumber;
             }
         });
+
+        // Subscribe to active orders stream for real-time updates of pending orders
+        activeOrdersStreamID = StreamSystem.startServerToClientStream(
+                BACKEND_INSTANCES.NETWORKING.ACTIVE_ORDERS_STREAM,
+                (byte) 0,
+                data -> pendingOrdersPanel.updateOrders(data.orders),
+                () -> {
+                    activeOrdersStreamID = null;
+                }
+        );
     }
 
 
@@ -131,6 +154,12 @@ public class TradeScreen extends StockMarketGuiScreen {
     @Override
     public void onClose()
     {
+        // Unsubscribe from active orders stream
+        if (activeOrdersStreamID != null) {
+            StreamSystem.stopStream(activeOrdersStreamID);
+            activeOrdersStreamID = null;
+        }
+
         if(currentMarketID != null)
         {
             ClientMarket market = getMarket(currentMarketID);
@@ -163,7 +192,10 @@ public class TradeScreen extends StockMarketGuiScreen {
         favoritesBar.setBounds(orderbookVolumeHistogram.getRight() + spacing, padding, width - (orderbookVolumeHistogram.getRight() - padding + spacing), (height - spacing) / 2);
         // Bottom-right: trading panel
         tradingPanel.setBounds(orderbookVolumeHistogram.getRight() + spacing, favoritesBar.getBottom() + spacing, favoritesBar.getWidth(), height - (favoritesBar.getBottom() - padding + spacing));
-        // Bottom-left area (below chart+OB) is reserved for Phase 3 — no element placed here
+        // Bottom-left: pending orders tab element (below chart + OB volume)
+        ordersTabElement.setBounds(padding, candlestickChart.getBottom() + spacing,
+                tradingPanel.getLeft() - spacing - padding,
+                height - (candlestickChart.getBottom() - padding + spacing));
     }
 
     private @Nullable ClientMarket getValidMarketForOrder()
