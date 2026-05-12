@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.screen;
 
+import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ClientPlayerUtilities;
 import net.kroia.modutilities.gui.Gui;
@@ -50,6 +51,15 @@ public class TradeScreen extends StockMarketGuiScreen {
     private @Nullable UUID activeOrdersStreamID = null;
     private @Nullable ItemID currentMarketID = null;
     private int selectedBankAccountNr = -1;
+
+    // Trading currency ID cached for balance lookups
+    private @Nullable ItemID tradingCurrencyID = null;
+
+    // Timer for periodic balance and price refresh
+    private long lastBalanceRefreshMs = 0;
+    private static final long BALANCE_REFRESH_INTERVAL_MS = 2000;
+    private long lastPriceRefreshMs = 0;
+    private static final long PRICE_REFRESH_INTERVAL_MS = 500;
 
     public TradeScreen()
     {
@@ -119,11 +129,20 @@ public class TradeScreen extends StockMarketGuiScreen {
         }
 
         getMarketManager().getTradingCurrencyIDAsync().thenAccept(currencyID -> {
+            tradingCurrencyID = currencyID;
             if(currentMarketID == null)
                 tradingPanel.setCurrencyName("?");
             else
                 tradingPanel.setCurrencyName(ClientPlayerUtilities.getItemDisplayText(currencyID.getStack()));
         });
+
+        // Set initial market price on the trading panel
+        if (currentMarketID != null) {
+            ClientMarket initMarket = getMarket(currentMarketID);
+            if (initMarket != null) {
+                tradingPanel.setCurrentMarketPrice(initMarket.getCurrentMarketRealPrice());
+            }
+        }
 
         getBankManager().getPersonalBankAccountDataAsync(getThisPlayerUUID()).thenAccept(bankAccountData -> {
             if(bankAccountData != null) {
@@ -155,6 +174,56 @@ public class TradeScreen extends StockMarketGuiScreen {
         Minecraft.getInstance().setScreen(screen);
     }
 
+    @Override
+    public void tick() {
+        super.tick();
+        long now = System.currentTimeMillis();
+
+        // Periodically update the market price on the trading panel (~500ms)
+        if (now - lastPriceRefreshMs > PRICE_REFRESH_INTERVAL_MS) {
+            lastPriceRefreshMs = now;
+            if (currentMarketID != null) {
+                ClientMarket market = getMarket(currentMarketID);
+                if (market != null) {
+                    tradingPanel.setCurrentMarketPrice(market.getCurrentMarketRealPrice());
+                }
+            }
+        }
+
+        // Periodically refresh balances for the trading panel (~2s)
+        if (now - lastBalanceRefreshMs > BALANCE_REFRESH_INTERVAL_MS) {
+            lastBalanceRefreshMs = now;
+            refreshTradingPanelBalances();
+        }
+    }
+
+    /**
+     * Fetches current bank balances and updates the trading panel with money and item balances.
+     */
+    private void refreshTradingPanelBalances() {
+        if (currentMarketID == null) return;
+        UUID playerUUID = getThisPlayerUUID();
+        if (playerUUID == null) return;
+
+        getBankManager().getPersonalBankAccountDataAsync(playerUUID).thenAccept(bankAccountData -> {
+            if (bankAccountData == null) return;
+
+            // Money balance (trading currency)
+            if (tradingCurrencyID != null) {
+                BankData currencyBalance = bankAccountData.bankData.get(tradingCurrencyID);
+                double moneyBal = currencyBalance != null ? currencyBalance.getRealBalance() : 0.0;
+                tradingPanel.setMoneyBalance(moneyBal);
+            }
+
+            // Item balance (current market item)
+            if (currentMarketID != null) {
+                BankData itemBalance = bankAccountData.bankData.get(currentMarketID);
+                double itemBal = itemBalance != null ? itemBalance.getRealBalance() : 0.0;
+                tradingPanel.setItemBalance(itemBal);
+            }
+        });
+    }
+
     /**
      * Switches the displayed market: unsubscribes old, subscribes new, updates all widgets.
      */
@@ -175,7 +244,11 @@ public class TradeScreen extends StockMarketGuiScreen {
             orderMarkerOverlay.setCurrentMarket(newMarketID);
             tradingPanel.setItemName(ClientPlayerUtilities.getItemDisplayText(newMarketID.getStack()));
             tradingPanel.setLimitPrice(market.getCurrentMarketRealPrice());
+            tradingPanel.setCurrentMarketPrice(market.getCurrentMarketRealPrice());
         }
+
+        // Refresh balances for the new market
+        refreshTradingPanelBalances();
 
         // Update history panels for the new market
         orderHistoryPanel.setCurrentMarketID(newMarketID);
