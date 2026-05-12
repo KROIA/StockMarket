@@ -7,6 +7,7 @@ import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
 import net.kroia.stockmarket.networking.request.OrderHistoryRequest;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
+import net.kroia.stockmarket.stockmarket.marketmanager.PlayerPreferences;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 
 import java.time.Instant;
@@ -56,6 +57,10 @@ public class OrderHistoryPanel extends StockMarketGuiElement {
         clearButton.setBackgroundColor(0xFFe8711c);
         clearButton.setHoverColor(0xFFe04c12);
         addChild(clearButton);
+
+        // Restore persisted clear timestamp so previously cleared records stay hidden across sessions
+        PlayerPreferences prefs = StockMarketGuiElement.getPlayerPreferences();
+        clearedBeforeMs = prefs.getOrderHistoryClearedBeforeMs();
     }
 
     /**
@@ -109,9 +114,16 @@ public class OrderHistoryPanel extends StockMarketGuiElement {
     /**
      * Hides all currently displayed records by setting a "cleared before" timestamp.
      * Does NOT delete from SQL — the global "Market Trades" tab is unaffected.
+     * The timestamp is persisted via PlayerPreferences so it survives screen/session restarts.
      */
     private void onClearHistory() {
         clearedBeforeMs = System.currentTimeMillis();
+
+        // Persist the clear timestamp to the server via PlayerPreferences
+        PlayerPreferences prefs = StockMarketGuiElement.getPlayerPreferences();
+        prefs.setOrderHistoryClearedBeforeMs(clearedBeforeMs);
+        StockMarketGuiElement.updatePlayerPreferences(prefs);
+
         updateRecords(new ArrayList<>());
     }
 
@@ -204,10 +216,12 @@ public class OrderHistoryPanel extends StockMarketGuiElement {
             x += iconSize + s;
             typeLabel.setBounds(x, 0, 30, h);
             x += 30 + s;
-            amountLabel.setBounds(x, 0, 50, h);
-            x += 50 + s;
-            priceLabel.setBounds(x, 0, 60, h);
-            x += 60 + s;
+            int remaining = w - x - s;
+            int colWidth = remaining / 3;
+            amountLabel.setBounds(x, 0, colWidth, h);
+            x += colWidth + s;
+            priceLabel.setBounds(x, 0, colWidth, h);
+            x += colWidth + s;
             timeLabel.setBounds(x, 0, w - x - s, h);
         }
     }

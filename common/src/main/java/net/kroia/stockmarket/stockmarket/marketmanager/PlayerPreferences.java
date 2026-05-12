@@ -27,6 +27,7 @@ public class PlayerPreferences implements ServerSaveable {
         public void encode(RegistryFriendlyByteBuf buf, PlayerPreferences prefs) {
             ExtraCodecUtils.nullable(ItemID.STREAM_CODEC).encode(buf, prefs.lastMarketID);
             ExtraCodecUtils.listStreamCodec(ItemID.STREAM_CODEC).encode(buf, prefs.favoriteMarketIDs);
+            buf.writeLong(prefs.orderHistoryClearedBeforeMs);
         }
 
         @Override
@@ -34,6 +35,7 @@ public class PlayerPreferences implements ServerSaveable {
             PlayerPreferences prefs = new PlayerPreferences();
             prefs.lastMarketID = ExtraCodecUtils.nullable(ItemID.STREAM_CODEC).decode(buf);
             prefs.favoriteMarketIDs = new ArrayList<>(ExtraCodecUtils.listStreamCodec(ItemID.STREAM_CODEC).decode(buf));
+            prefs.orderHistoryClearedBeforeMs = buf.readLong();
             return prefs;
         }
     };
@@ -45,12 +47,16 @@ public class PlayerPreferences implements ServerSaveable {
     /** Ordered list of favorite market IDs, in the order they were added. */
     private List<ItemID> favoriteMarketIDs;
 
+    /** Epoch-millis timestamp; order history records older than this are hidden from the player's personal view. */
+    private long orderHistoryClearedBeforeMs = 0;
+
     /**
-     * Creates empty default preferences (no last market, no favorites).
+     * Creates empty default preferences (no last market, no favorites, no clear timestamp).
      */
     public PlayerPreferences() {
         this.lastMarketID = null;
         this.favoriteMarketIDs = new ArrayList<>();
+        this.orderHistoryClearedBeforeMs = 0;
     }
 
     // --- Getters / Setters ---
@@ -83,6 +89,21 @@ public class PlayerPreferences implements ServerSaveable {
      */
     public void setFavoriteMarketIDs(List<ItemID> favoriteMarketIDs) {
         this.favoriteMarketIDs = new ArrayList<>(favoriteMarketIDs);
+    }
+
+    /**
+     * @return epoch-millis timestamp before which order history records are hidden, or 0 if never cleared
+     */
+    public long getOrderHistoryClearedBeforeMs() {
+        return orderHistoryClearedBeforeMs;
+    }
+
+    /**
+     * Sets the epoch-millis timestamp before which order history records should be hidden.
+     * @param timestamp epoch millis, or 0 to show all records
+     */
+    public void setOrderHistoryClearedBeforeMs(long timestamp) {
+        this.orderHistoryClearedBeforeMs = timestamp;
     }
 
     // --- Favorite management ---
@@ -135,6 +156,9 @@ public class PlayerPreferences implements ServerSaveable {
             favTag.add(t);
         }
         tag.put("favorites", favTag);
+
+        // Save order history clear timestamp
+        tag.putLong("orderHistoryClearedBeforeMs", orderHistoryClearedBeforeMs);
         return true;
     }
 
@@ -163,6 +187,9 @@ public class PlayerPreferences implements ServerSaveable {
                 }
             }
         }
+
+        // Load order history clear timestamp (getLong returns 0 if key missing — backward compatible)
+        orderHistoryClearedBeforeMs = tag.getLong("orderHistoryClearedBeforeMs");
         return true;
     }
 }
