@@ -219,9 +219,12 @@ public class PendingOrdersPanel extends StockMarketGuiElement {
             x += ICON_SIZE + s;
             typeLabel.setBounds(x, 0, 30, h);
             x += 30 + s;
-            amountLabel.setBounds(x, 0, 60, h);
-            x += 60 + s;
-            priceLabel.setBounds(x, 0, 50, h);
+            int remaining = w - x - btnSize - s * 2;
+            int amountWidth = remaining / 2;
+            int priceWidth = remaining - amountWidth;
+            amountLabel.setBounds(x, 0, amountWidth, h);
+            x += amountWidth + s;
+            priceLabel.setBounds(x, 0, priceWidth, h);
             cancelButton.setBounds(w - btnSize - s, (h - btnSize) / 2, btnSize, btnSize);
         }
     }
