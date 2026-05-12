@@ -7,7 +7,9 @@ import net.kroia.modutilities.gui.elements.TabElement;
 import net.kroia.modutilities.networking.client_server.streaming.StreamSystem;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.screen.uiElements.FavoritesBar;
+import net.kroia.stockmarket.screen.uiElements.OrderHistoryPanel;
 import net.kroia.stockmarket.screen.uiElements.PendingOrdersPanel;
+import net.kroia.stockmarket.screen.uiElements.TransactionHistoryPanel;
 import net.kroia.stockmarket.screen.uiElements.trading_panel.TradingPanel;
 import net.kroia.stockmarket.screen.widgets.OrderbookVolumeHistogram;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
@@ -38,6 +40,8 @@ public class TradeScreen extends StockMarketGuiScreen {
     private final TradingPanel tradingPanel;
     private final TabElement ordersTabElement;
     private final PendingOrdersPanel pendingOrdersPanel;
+    private final OrderHistoryPanel orderHistoryPanel;
+    private final TransactionHistoryPanel transactionHistoryPanel;
     private @Nullable UUID activeOrdersStreamID = null;
     private @Nullable ItemID currentMarketID = null;
     private int selectedBankAccountNr = -1;
@@ -52,10 +56,14 @@ public class TradeScreen extends StockMarketGuiScreen {
         orderbookVolumeHistogram = new OrderbookVolumeHistogram(candlestickChart);
         tradingPanel = new TradingPanel(this::onBuyMarket, this::onSellMarket, this::onBuyLimit, this::onSellLimit);
 
-        // Pending orders panel in a tab element (Phase 4 will add History tab)
+        // Orders tab element with pending orders, order history, and market trades
         pendingOrdersPanel = new PendingOrdersPanel();
+        orderHistoryPanel = new OrderHistoryPanel();
+        transactionHistoryPanel = new TransactionHistoryPanel();
         ordersTabElement = new TabElement();
         ordersTabElement.addTab("Pending Orders", pendingOrdersPanel);
+        ordersTabElement.addTab("My History", orderHistoryPanel);
+        ordersTabElement.addTab("Market Trades", transactionHistoryPanel);
 
         addElement(favoritesBar);
         addElement(candlestickChart);
@@ -88,6 +96,12 @@ public class TradeScreen extends StockMarketGuiScreen {
 
         // Build favorites bar with all markets and current selection
         favoritesBar.rebuild(markets, prefs.getFavoriteMarketIDs(), currentMarketID);
+
+        // Load initial history data
+        orderHistoryPanel.refresh();
+        if (currentMarketID != null) {
+            transactionHistoryPanel.refresh(currentMarketID);
+        }
 
         getMarketManager().getTradingCurrencyIDAsync().thenAccept(currencyID -> {
             if(currentMarketID == null)
@@ -140,6 +154,9 @@ public class TradeScreen extends StockMarketGuiScreen {
             tradingPanel.setItemName(ClientPlayerUtilities.getItemDisplayText(newMarketID.getStack()));
             tradingPanel.setLimitPrice(market.getCurrentMarketRealPrice());
         }
+
+        // Refresh transaction history for the new market
+        transactionHistoryPanel.refresh(newMarketID);
 
         // Update preferences
         PlayerPreferences prefs = StockMarketGuiElement.getPlayerPreferences();
