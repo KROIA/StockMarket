@@ -39,6 +39,7 @@ public class DatabaseManager {
         try {
             executeSqlFile("/sql/MarketPrice.sql");
             executeSqlFile("/sql/OrderHistory.sql");
+            connection.commit();
             migrateSchema();
             return true;
         }

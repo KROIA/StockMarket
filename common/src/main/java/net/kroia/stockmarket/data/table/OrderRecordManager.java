@@ -117,7 +117,7 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
                     databaseManager.commitTransaction();
                 }
             } catch (SQLException e) {
-                throw new RuntimeException(e);
+                StockMarketMod.LOGGER.warn("Failed to remove OrderHistory: {}", e.getMessage());
             }
         }, databaseManager.getDatabaseThread());
     }
@@ -169,7 +169,8 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
                 return result;
 
             } catch (SQLException e) {
-                throw new RuntimeException(e);
+                StockMarketMod.LOGGER.warn("Failed to query OrderHistory: {}", e.getMessage());
+                return List.of();
             }
 
         }, databaseManager.getDatabaseThread());
@@ -205,7 +206,8 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
                 }
                 return 0;
             } catch (SQLException e) {
-                throw new RuntimeException(e);
+                StockMarketMod.LOGGER.warn("Failed to count OrderHistory records: {}", e.getMessage());
+                return 0;
             }
         }, databaseManager.getDatabaseThread());
     }

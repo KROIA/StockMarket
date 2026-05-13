@@ -618,8 +618,8 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         success &= orderbook.save(orderbookTag);
         tag.put("orderbook", orderbookTag);
         tag.putLong("currentMarketPrice", currentMarketPrice);
-
-
+        tag.putLong("defaultPrice", settings.defaultPrice);
+        tag.putFloat("naturalAbundance", settings.naturalAbundance);
 
         return success;
     }
@@ -642,6 +642,14 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         if(tag.contains("currentMarketPrice"))
         {
             currentMarketPrice =  tag.getLong("currentMarketPrice");
+        }
+        if(tag.contains("defaultPrice"))
+        {
+            settings.defaultPrice = tag.getLong("defaultPrice");
+        }
+        if(tag.contains("naturalAbundance"))
+        {
+            settings.naturalAbundance = tag.getFloat("naturalAbundance");
         }
 
         // Initialize candle state from loaded price to prevent false spike on first candle

@@ -74,9 +74,10 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
                 data.priceGenerator.getNextValue();
             }
 
+            // Scale random walk proportionally to default price for equal percentage volatility
             double defaultPrice = market.market.getDefaultRealPrice();
-            float randomWalkValue = (float)(data.priceGenerator.getCurrentValue() * volatilityScale * defaultPrice);
-            market.market.setTargetPrice(Math.max(0, randomWalkValue + defaultPrice));
+            double deviation = data.priceGenerator.getCurrentValue() * volatilityScale;
+            market.market.setTargetPrice(Math.max(0, defaultPrice * (1.0 + deviation)));
         }
     }
 
