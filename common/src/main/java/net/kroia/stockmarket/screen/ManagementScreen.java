@@ -192,32 +192,28 @@ public class ManagementScreen extends StockMarketGuiScreen {
             if (loadingCheckBox) return;
             ClientMarket currentMarket = getSelectedMarket();
             if (currentMarket == null) return;
-            currentMarket.getSettings().thenAccept(settings -> {
-                settings.marketOpen = isOpen;
-                currentMarket.setSettings(settings).thenAccept(success -> {
-                    if (success) overviewTab.refreshMarketStates();
-                });
+            currentMarket.setMarketOpenAsync(isOpen).thenAccept(success -> {
+                if (success) {
+                    Minecraft.getInstance().execute(() -> overviewTab.refreshMarketStates());
+                }
             });
         }
         private void setAllMarketsOpen(boolean open) {
             List<ItemID> markets = getAvailableMarkets();
-            final int[] remaining = {markets.size()};
+            int total = markets.size();
+            final int[] completed = {0};
             for (ItemID marketID : markets) {
                 ClientMarket market = getMarket(marketID);
-                if (market == null) { remaining[0]--; continue; }
-                market.getSettings().thenAccept(settings -> {
-                    settings.marketOpen = open;
-                    market.setSettings(settings).thenAccept(success -> {
-                        remaining[0]--;
-                        if (remaining[0] <= 0) {
+                if (market == null) { completed[0]++; continue; }
+                market.setMarketOpenAsync(open).thenAccept(success -> {
+                    completed[0]++;
+                    if (completed[0] >= total) {
+                        Minecraft.getInstance().execute(() -> {
+                            setMarketOpenCheckBoxChecked(open);
                             overviewTab.refreshMarketStates();
-                        }
-                    });
+                        });
+                    }
                 });
-            }
-            ClientMarket current = getSelectedMarket();
-            if (current != null) {
-                setMarketOpenCheckBoxChecked(open);
             }
         }
         private void onOpenAllMarkets() {
@@ -297,9 +293,11 @@ public class ManagementScreen extends StockMarketGuiScreen {
      */
     public final class OverviewTab extends StockMarketGuiElement {
         private final CandlestickChart candlestickChart;
+        private final Label searchLabel;
+        private final TextBox searchField;
         private final ListView marketGridView;
         private final LayoutGrid marketGridLayout;
-        private final List<MarketItemView> marketItemViews = new ArrayList<>();
+        private final List<MarketItemView> allMarketItems = new ArrayList<>();
         private final ListView listView;
         private final CurrentMarketManagerWidget currentMarketManagerWidget;
         private final PluginOverviewWidget pluginOverviewWidget;
@@ -309,6 +307,12 @@ public class ManagementScreen extends StockMarketGuiScreen {
             setEnableBackground(false);
 
             candlestickChart = new CandlestickChart();
+
+            searchLabel = new Label(Component.translatable("gui.stockmarket.create_market_tab.search").getString());
+            searchLabel.setAlignment(Label.Alignment.RIGHT);
+
+            searchField = new TextBox();
+            searchField.setOnTextChanged(text -> applySearchFilter());
 
             marketGridView = new VerticalListView();
             marketGridLayout = new LayoutGrid(0, 0, false, false, 0, 1, Alignment.TOP);
@@ -327,6 +331,8 @@ public class ManagementScreen extends StockMarketGuiScreen {
             listView.addChild(pluginOverviewWidget);
 
             addChild(candlestickChart);
+            addChild(searchLabel);
+            addChild(searchField);
             addChild(marketGridView);
             addChild(listView);
 
@@ -335,19 +341,30 @@ public class ManagementScreen extends StockMarketGuiScreen {
         }
 
         private void loadMarketGrid() {
-            marketItemViews.clear();
+            allMarketItems.clear();
             marketGridView.removeChilds();
             getMarketManager().requestMarkets().thenAccept(markets -> {
-                for (ItemID id : markets) {
-                    ItemStack stack = id.getStack();
-                    if (stack == null) continue;
-                    MarketItemView view = new MarketItemView(stack, id);
-                    marketItemViews.add(view);
+                Minecraft.getInstance().execute(() -> {
+                    for (ItemID id : markets) {
+                        ItemStack stack = id.getStack();
+                        if (stack == null) continue;
+                        MarketItemView view = new MarketItemView(stack, id);
+                        allMarketItems.add(view);
+                        marketGridView.addChild(view);
+                    }
+                    refreshMarketStates();
+                });
+            });
+        }
+
+        private void applySearchFilter() {
+            String filter = searchField.getText().toLowerCase();
+            marketGridView.removeChilds();
+            for (MarketItemView view : allMarketItems) {
+                if (filter.isEmpty() || view.itemName.toLowerCase().contains(filter)) {
                     marketGridView.addChild(view);
                 }
-                // Query open/closed state for all markets
-                refreshMarketStates();
-            });
+            }
         }
 
         public void refreshMarketList() {
@@ -355,11 +372,11 @@ public class ManagementScreen extends StockMarketGuiScreen {
         }
 
         public void refreshMarketStates() {
-            for (MarketItemView view : marketItemViews) {
+            for (MarketItemView view : allMarketItems) {
                 ClientMarket market = getMarket(view.marketID);
                 if (market != null) {
-                    market.getSettings().thenAccept(settings ->
-                        view.setMarketOpen(settings.marketOpen)
+                    market.isMarketOpenAsync().thenAccept(isOpen ->
+                        Minecraft.getInstance().execute(() -> view.setMarketOpen(isOpen))
                     );
                 }
             }
@@ -374,8 +391,14 @@ public class ManagementScreen extends StockMarketGuiScreen {
             int h = getHeight() - 2 * padding;
 
             candlestickChart.setBounds(padding, padding, w / 2, h / 2);
-            marketGridView.setBounds(padding, candlestickChart.getBottom() + spacing,
-                    w / 2, h - (candlestickChart.getBottom() + spacing) + padding);
+
+            int searchY = candlestickChart.getBottom() + spacing;
+            int searchLabelW = w / 8;
+            searchLabel.setBounds(padding, searchY, searchLabelW, elementHeight);
+            searchField.setBounds(searchLabel.getRight() + spacing, searchY, w / 2 - searchLabelW - spacing, elementHeight);
+
+            int gridY = searchField.getBottom() + spacing;
+            marketGridView.setBounds(padding, gridY, w / 2, h - (gridY - padding));
 
             int containerWidth = marketGridView.getContainerWidth();
             marketGridLayout.columns = Math.max(1, containerWidth / ItemView.DEFAULT_WIDTH);
@@ -397,11 +420,13 @@ public class ManagementScreen extends StockMarketGuiScreen {
          */
         private class MarketItemView extends ItemView {
             private final ItemID marketID;
+            private final String itemName;
             private boolean marketOpen = true;
 
             MarketItemView(ItemStack stack, ItemID marketID) {
                 super(stack);
                 this.marketID = marketID;
+                this.itemName = stack.getHoverName().getString();
             }
 
             void setMarketOpen(boolean open) {
@@ -411,7 +436,6 @@ public class ManagementScreen extends StockMarketGuiScreen {
             @Override
             public void renderBackground() {
                 super.renderBackground();
-                // Green overlay for open, red for closed
                 int overlayColor = marketOpen ? 0x3000FF00 : 0x40FF0000;
                 drawRect(0, 0, getWidth(), getHeight(), overlayColor);
                 if (isMouseOver()) {
@@ -506,8 +530,10 @@ public class ManagementScreen extends StockMarketGuiScreen {
                 StockMarketGuiElement.selectMarket(itemID);
                 overviewTab.getCandlestickChart().setMarket(market);
                 overviewTab.getCurrentMarketManagerWidget().setCurrentMarket(itemID);
-                market.getSettings().thenAccept(settings ->
-                    overviewTab.getCurrentMarketManagerWidget().setMarketOpenCheckBoxChecked(settings.marketOpen)
+                market.isMarketOpenAsync().thenAccept(isOpen ->
+                    Minecraft.getInstance().execute(() ->
+                        overviewTab.getCurrentMarketManagerWidget().setMarketOpenCheckBoxChecked(isOpen)
+                    )
                 );
             }
         });

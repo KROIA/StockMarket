@@ -276,7 +276,7 @@ public class AsyncMarket implements IAsyncMarket{
                      //FunctionType.PutOrder_2,
                      //FunctionType.GetLimitOrders,
                      FunctionType.IsMarketOpen,
-                     //FunctionType.SetMarketOpen,
+                     FunctionType.SetMarketOpen,
                      FunctionType.GetCurrentMarketPriceStruct,
                      //FunctionType.GetCurrentMarketPriceStructAndReset,
                      FunctionType.GetSettings,

@@ -256,10 +256,10 @@ public class TradeScreen extends StockMarketGuiScreen {
             tradingPanel.setLimitPrice(market.getCurrentMarketRealPrice());
             tradingPanel.setCurrentMarketPrice(market.getCurrentMarketRealPrice());
 
-            market.getSettings().thenAccept(settings -> {
+            market.isMarketOpenAsync().thenAccept(isOpen -> {
                 Minecraft.getInstance().execute(() -> {
-                    tradingPanel.setMarketOpen(settings.marketOpen);
-                    marketClosedLabel.setEnabled(!settings.marketOpen);
+                    tradingPanel.setMarketOpen(isOpen);
+                    marketClosedLabel.setEnabled(!isOpen);
                 });
             });
         }
