@@ -71,6 +71,10 @@ public class CandlestickChart extends StockMarketGuiElement {
     // Cross-rate mode: when both are non-null, derive synthetic candles from two markets
     private @Nullable ClientMarket crossRateHaveMarket;
     private @Nullable ClientMarket crossRateWantMarket;
+    // Running high/low tracker for the current cross-rate candle period
+    private long crossRateCurrentCandleTimestamp = 0;
+    private long crossRateCurrentHigh = Long.MIN_VALUE;
+    private long crossRateCurrentLow = Long.MAX_VALUE;
 
     int candleWidth = 12;
     private final Rectangle canvasRect = new Rectangle(1, 1, 0, 0);
@@ -167,6 +171,9 @@ public class CandlestickChart extends StockMarketGuiElement {
         if (haveMarket != null && wantMarket != null) {
             // Clear single-market reference so the chart uses cross-rate data
             this.market = null;
+            crossRateCurrentCandleTimestamp = 0;
+            crossRateCurrentHigh = Long.MIN_VALUE;
+            crossRateCurrentLow = Long.MAX_VALUE;
             recomputeCrossRateData();
             firstDraw = true;
         } else {
@@ -797,12 +804,18 @@ public class CandlestickChart extends StockMarketGuiElement {
                 double wantLow   = wantData.toRealPrice(wc.low);
 
                 if (haveOpen > 0 && haveLow > 0 && haveHigh > 0) {
+                    // Compute rate at multiple OHLC sample points for better high/low estimates
                     double rateOpen = wantOpen / haveOpen;
-                    // High/low set to open for now; adjusted in a post-pass below
-                    // to include the close (next candle's open) since Candle has no close field
+                    double rateHH = wantHigh / haveHigh;
+                    double rateLL = wantLow / haveLow;
+                    double rateHigh = Math.max(Math.max(rateOpen, rateHH), rateLL);
+                    double rateLow = Math.min(Math.min(rateOpen, rateHH), rateLL);
+
                     long rawOpen = (long)(rateOpen * syntheticScaleFactor);
+                    long rawHigh = (long)(rateHigh * syntheticScaleFactor);
+                    long rawLow = (long)(rateLow * syntheticScaleFactor);
                     syntheticCandles.add(new PriceHistoryData.Candle(
-                            hc.openTimestamp, rawOpen, rawOpen, rawOpen, 0f));
+                            hc.openTimestamp, rawOpen, rawHigh, rawLow, 0f));
                 }
                 hi++;
                 wi++;
@@ -826,14 +839,32 @@ public class CandlestickChart extends StockMarketGuiElement {
             currentRateRaw = (long)((wantPrice / havePrice) * syntheticScaleFactor);
         }
 
-        // Post-pass: set high/low to include the close price (next candle's open).
+        // Post-pass: extend high/low to include the close price (next candle's open).
         // Candles are stored newest-first. For candle i, close = candle[i-1].open
         // (or currentRateRaw for the newest candle).
         for (int i = 0; i < syntheticCandles.size(); i++) {
             PriceHistoryData.Candle c = syntheticCandles.get(i);
             long close = (i > 0) ? syntheticCandles.get(i - 1).open : currentRateRaw;
-            c.high = Math.max(c.open, close);
-            c.low  = Math.min(c.open, close);
+            c.high = Math.max(c.high, Math.max(c.open, close));
+            c.low  = Math.min(c.low, Math.min(c.open, close));
+        }
+
+        // Track running high/low for the current (newest) candle using the live cross-rate.
+        // This captures intra-period extremes that the OHLC sample points might miss.
+        if (!syntheticCandles.isEmpty()) {
+            PriceHistoryData.Candle newest = syntheticCandles.getFirst();
+            if (newest.openTimestamp != crossRateCurrentCandleTimestamp) {
+                // New candle period started — reset tracker
+                crossRateCurrentCandleTimestamp = newest.openTimestamp;
+                crossRateCurrentHigh = currentRateRaw;
+                crossRateCurrentLow = currentRateRaw;
+            }
+            // Update running high/low with current live rate
+            if (currentRateRaw > crossRateCurrentHigh) crossRateCurrentHigh = currentRateRaw;
+            if (currentRateRaw < crossRateCurrentLow) crossRateCurrentLow = currentRateRaw;
+            // Apply tracked extremes to the newest candle
+            newest.high = Math.max(newest.high, crossRateCurrentHigh);
+            newest.low = Math.min(newest.low, crossRateCurrentLow);
         }
 
         // Build the synthetic PriceHistoryData.
