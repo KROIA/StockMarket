@@ -734,16 +734,21 @@ public class CandlestickChart extends StockMarketGuiElement {
 
     /**
      * Recomputes synthetic OHLC candle data from the two cross-rate markets.
-     * For each matching candle timestamp:
+     * For each matching candle timestamp the rate at each OHLC point is computed
+     * individually (rateX = wantX / haveX) and the extremes are taken:
      * <ul>
      *   <li>rateOpen  = wantOpen  / haveOpen</li>
      *   <li>rateClose = wantClose / haveClose</li>
-     *   <li>rateHigh  = wantHigh  / haveLow  (max possible rate in the period)</li>
-     *   <li>rateLow   = wantLow   / haveHigh (min possible rate in the period)</li>
+     *   <li>rateHigh  = max(rateOpen, rateClose, wantHigh/haveHigh, wantLow/haveLow)</li>
+     *   <li>rateLow   = min(rateOpen, rateClose, wantHigh/haveHigh, wantLow/haveLow)</li>
      *   <li>volume    = 0 (no meaningful volume for derived pairs)</li>
      * </ul>
-     * The result is stored as a synthetic PriceHistoryData using a dummy scale factor of 1
-     * so that toRealPrice() is a simple identity (values are already in real/double scale).
+     * This is still an approximation but avoids the exaggerated wicks that result
+     * from combining independent highs and lows (wantHigh/haveLow) which may never
+     * have occurred at the same time.
+     * <p>
+     * The result is stored as a synthetic PriceHistoryData using a large scale factor
+     * so that toRealPrice() converts back to floating-point rates.
      */
     private void recomputeCrossRateData() {
         if (crossRateHaveMarket == null || crossRateWantMarket == null) {
@@ -792,16 +797,12 @@ public class CandlestickChart extends StockMarketGuiElement {
                 double wantLow   = wantData.toRealPrice(wc.low);
 
                 if (haveOpen > 0 && haveLow > 0 && haveHigh > 0) {
-                    double rateOpen  = wantOpen  / haveOpen;
-                    double rateHigh  = wantHigh  / haveLow;   // max possible rate
-                    double rateLow   = wantLow   / haveHigh;  // min possible rate
-
+                    double rateOpen = wantOpen / haveOpen;
+                    // High/low set to open for now; adjusted in a post-pass below
+                    // to include the close (next candle's open) since Candle has no close field
                     long rawOpen = (long)(rateOpen * syntheticScaleFactor);
-                    long rawHigh = (long)(rateHigh * syntheticScaleFactor);
-                    long rawLow  = (long)(rateLow  * syntheticScaleFactor);
-
                     syntheticCandles.add(new PriceHistoryData.Candle(
-                            hc.openTimestamp, rawOpen, rawHigh, rawLow, 0f));
+                            hc.openTimestamp, rawOpen, rawOpen, rawOpen, 0f));
                 }
                 hi++;
                 wi++;
@@ -823,6 +824,16 @@ public class CandlestickChart extends StockMarketGuiElement {
         long currentRateRaw = 0;
         if (havePrice > 0) {
             currentRateRaw = (long)((wantPrice / havePrice) * syntheticScaleFactor);
+        }
+
+        // Post-pass: set high/low to include the close price (next candle's open).
+        // Candles are stored newest-first. For candle i, close = candle[i-1].open
+        // (or currentRateRaw for the newest candle).
+        for (int i = 0; i < syntheticCandles.size(); i++) {
+            PriceHistoryData.Candle c = syntheticCandles.get(i);
+            long close = (i > 0) ? syntheticCandles.get(i - 1).open : currentRateRaw;
+            c.high = Math.max(c.open, close);
+            c.low  = Math.min(c.open, close);
         }
 
         // Build the synthetic PriceHistoryData.

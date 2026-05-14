@@ -409,12 +409,10 @@ public class TradeScreen extends StockMarketGuiScreen {
 
         int selectorTop = padding + modeButtonHeight + spacing;
 
-        // Top-left: candlestick chart (expands into orderbook area when in pair mode)
-        int chartWidth = isPairMode
-                ? (width * 3) / 4  // full width when orderbook is hidden
-                : (width * 3) / 4 - orderbookVolumeWidth;
+        // Top-left: candlestick chart (orderbook histogram always visible next to it)
+        int chartWidth = (width * 3) / 4 - orderbookVolumeWidth;
         candlestickChart.setBounds(padding, padding, chartWidth, (height * 2) / 3);
-        // Right of chart: orderbook volume histogram (hidden in pair mode)
+        // Right of chart: orderbook volume histogram (shows have-market depth in pair mode)
         orderbookVolumeHistogram.setBounds(candlestickChart.getRight(), candlestickChart.getTop(), orderbookVolumeWidth, candlestickChart.getHeight());
 
         // Market selector area height (favorites bar or pair selector)
@@ -452,8 +450,7 @@ public class TradeScreen extends StockMarketGuiScreen {
         moneyModeButton.setBackgroundColor(pairMode ? MODE_BUTTON_DEFAULT_COLOR : MODE_BUTTON_SELECTED_COLOR);
         pairModeButton.setBackgroundColor(pairMode ? MODE_BUTTON_SELECTED_COLOR : MODE_BUTTON_DEFAULT_COLOR);
 
-        // CandlestickChart stays visible in both modes; orderbook hidden in pair mode
-        orderbookVolumeHistogram.setEnabled(!pairMode);
+        // CandlestickChart and orderbook histogram stay visible in both modes
         tradingPanel.setEnabled(!pairMode);
         interMarketTradingPanel.setEnabled(pairMode);
 
