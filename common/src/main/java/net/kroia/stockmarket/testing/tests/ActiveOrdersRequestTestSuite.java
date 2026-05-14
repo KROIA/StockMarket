@@ -30,6 +30,8 @@ public class ActiveOrdersRequestTestSuite extends TestSuite {
     private ItemID itemID;
     private ItemID moneyID;
     private IServerMarket serverMarket;
+    private IServerBankAccount bankAccount;
+    private int bankAccountNr;
 
     @Override
     public TestCategory getCategory() {
@@ -56,6 +58,10 @@ public class ActiveOrdersRequestTestSuite extends TestSuite {
         moneyID = ItemID.getOrRegisterFromItemStackServerSide_direct(BankSystemItems.MONEY.get().getDefaultInstance());
         itemID = ItemID.getOrRegisterFromItemStackServerSide_direct(Items.GOLD_INGOT.getDefaultInstance());
         serverMarket = backend.MARKET_MANAGER.getSync().createMarket(itemID);
+        bankAccount = backend.BANK_SYSTEM_API.getServerBankManager().getSync().createBankAccount("ActiveOrdersRequestTest");
+        if (bankAccount == null)
+            throw new RuntimeException("Can't create ActiveOrdersRequestTest bank account");
+        bankAccountNr = bankAccount.getAccountNumber();
     }
 
     @Override
@@ -100,11 +106,9 @@ public class ActiveOrdersRequestTestSuite extends TestSuite {
             UUID executor = UUID.randomUUID();
             backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(executor, "PermTestUser");
 
-            IServerBankAccount account = backend.BANK_SYSTEM_API.getServerBankManager().getSync().getBankAccount(2);
-            if (account == null) return fail("Bank account 2 not found");
-            account.addUser(new User(executor, "TestUser", false), BankPermission.getAllPermissions());
+            bankAccount.addUser(new User(executor, "TestUser", false), BankPermission.getAllPermissions());
 
-            placeTestOrders(executor, executor, account.getAccountNumber(), account.getAccountNumber());
+            placeTestOrders(executor, executor, bankAccountNr, bankAccountNr);
 
             // Any player (admin) can see orders
             backend.MARKET_MANAGER.getSync().setStockmarketAdminMode(executor, true);
@@ -133,12 +137,10 @@ public class ActiveOrdersRequestTestSuite extends TestSuite {
             backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(executor1, "ExecFilter1");
             backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(executor2, "ExecFilter2");
 
-            IServerBankAccount account = backend.BANK_SYSTEM_API.getServerBankManager().getSync().getBankAccount(2);
-            if (account == null) return fail("Bank account 2 not found");
-            account.addUser(new User(executor1, "TestUser1", false), BankPermission.getAllPermissions());
-            account.addUser(new User(executor2, "TestUser2", false), BankPermission.getAllPermissions());
+            bankAccount.addUser(new User(executor1, "TestUser1", false), BankPermission.getAllPermissions());
+            bankAccount.addUser(new User(executor2, "TestUser2", false), BankPermission.getAllPermissions());
 
-            placeTestOrders(executor1, executor2, account.getAccountNumber(), account.getAccountNumber());
+            placeTestOrders(executor1, executor2, bankAccountNr, bankAccountNr);
 
             backend.MARKET_MANAGER.getSync().setStockmarketAdminMode(executor1, true);
 
@@ -177,12 +179,10 @@ public class ActiveOrdersRequestTestSuite extends TestSuite {
             backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(executor, "MatchExecUser");
             backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(otherPlayer, "OtherExecUser");
 
-            IServerBankAccount account = backend.BANK_SYSTEM_API.getServerBankManager().getSync().getBankAccount(2);
-            if (account == null) return fail("Bank account 2 not found");
-            account.addUser(new User(executor, "TestUser", false), BankPermission.getAllPermissions());
-            account.addUser(new User(otherPlayer, "OtherUser", false), BankPermission.getAllPermissions());
+            bankAccount.addUser(new User(executor, "TestUser", false), BankPermission.getAllPermissions());
+            bankAccount.addUser(new User(otherPlayer, "OtherUser", false), BankPermission.getAllPermissions());
 
-            Order o1 = new Order(itemID, Order.Type.LIMIT, 5, 90, 1000, executor, account.getAccountNumber());
+            Order o1 = new Order(itemID, Order.Type.LIMIT, 5, 90, 1000, executor, bankAccountNr);
             serverMarket.getOrderbook().putOrder(o1);
 
             backend.MARKET_MANAGER.getSync().setStockmarketAdminMode(otherPlayer, true);
@@ -210,11 +210,9 @@ public class ActiveOrdersRequestTestSuite extends TestSuite {
             UUID player = UUID.randomUUID();
             backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(player, "BankAcctFilterUser");
 
-            IServerBankAccount account = backend.BANK_SYSTEM_API.getServerBankManager().getSync().getBankAccount(2);
-            if (account == null) return fail("Bank account 2 not found");
-            account.addUser(new User(player, "TestPlayer", false), BankPermission.getAllPermissions());
+            bankAccount.addUser(new User(player, "TestPlayer", false), BankPermission.getAllPermissions());
 
-            Order o1 = new Order(itemID, Order.Type.LIMIT, 5, 90, 1000, player, account.getAccountNumber());
+            Order o1 = new Order(itemID, Order.Type.LIMIT, 5, 90, 1000, player, bankAccountNr);
             Order o2 = new Order(itemID, Order.Type.LIMIT, 3, 85, 2000, player, 9999);
             serverMarket.getOrderbook().putOrder(o1);
             serverMarket.getOrderbook().putOrder(o2);
@@ -223,13 +221,13 @@ public class ActiveOrdersRequestTestSuite extends TestSuite {
 
             // Filter by specific bank account number
             ActiveOrdersRequest.InputData input = new ActiveOrdersRequest.InputData(
-                    itemID, account.getAccountNumber(), null, 0, Long.MAX_VALUE);
+                    itemID, bankAccountNr, null, 0, Long.MAX_VALUE);
 
             ActiveOrdersRequest.OutputData result = executeRequest(input, player);
 
             // Only o1 should pass the bank account filter
             for (Order o : result.orders()) {
-                if (o.getBankAccountNr() != account.getAccountNumber()) {
+                if (o.getBankAccountNr() != bankAccountNr) {
                     return fail("Returned order has wrong bank account: " + o.getBankAccountNr());
                 }
             }
@@ -247,11 +245,9 @@ public class ActiveOrdersRequestTestSuite extends TestSuite {
             UUID player = UUID.randomUUID();
             backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(player, "NegBankFilterUser");
 
-            IServerBankAccount account = backend.BANK_SYSTEM_API.getServerBankManager().getSync().getBankAccount(2);
-            if (account == null) return fail("Bank account 2 not found");
-            account.addUser(new User(player, "TestPlayer", false), BankPermission.getAllPermissions());
+            bankAccount.addUser(new User(player, "TestPlayer", false), BankPermission.getAllPermissions());
 
-            Order o1 = new Order(itemID, Order.Type.LIMIT, 5, 90, 1000, player, account.getAccountNumber());
+            Order o1 = new Order(itemID, Order.Type.LIMIT, 5, 90, 1000, player, bankAccountNr);
             Order o2 = new Order(itemID, Order.Type.LIMIT, 3, 85, 2000, player, 9999);
             serverMarket.getOrderbook().putOrder(o1);
             serverMarket.getOrderbook().putOrder(o2);
@@ -285,12 +281,10 @@ public class ActiveOrdersRequestTestSuite extends TestSuite {
             UUID player = UUID.randomUUID();
             backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(player, "TimeRangeUser");
 
-            IServerBankAccount account = backend.BANK_SYSTEM_API.getServerBankManager().getSync().getBankAccount(2);
-            if (account == null) return fail("Bank account 2 not found");
-            account.addUser(new User(player, "TestPlayer", false), BankPermission.getAllPermissions());
+            bankAccount.addUser(new User(player, "TestPlayer", false), BankPermission.getAllPermissions());
 
-            Order o1 = new Order(itemID, Order.Type.LIMIT, 5, 90, 1000, player, account.getAccountNumber());
-            Order o2 = new Order(itemID, Order.Type.LIMIT, -5, 110, 5000, player, account.getAccountNumber());
+            Order o1 = new Order(itemID, Order.Type.LIMIT, 5, 90, 1000, player, bankAccountNr);
+            Order o2 = new Order(itemID, Order.Type.LIMIT, -5, 110, 5000, player, bankAccountNr);
             serverMarket.getOrderbook().putOrder(o1);
             serverMarket.getOrderbook().putOrder(o2);
 
@@ -321,11 +315,9 @@ public class ActiveOrdersRequestTestSuite extends TestSuite {
             UUID player = UUID.randomUUID();
             backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(player, "NullExecUser");
 
-            IServerBankAccount account = backend.BANK_SYSTEM_API.getServerBankManager().getSync().getBankAccount(2);
-            if (account == null) return fail("Bank account 2 not found");
-            account.addUser(new User(player, "TestPlayer", false), BankPermission.getAllPermissions());
+            bankAccount.addUser(new User(player, "TestPlayer", false), BankPermission.getAllPermissions());
 
-            placeTestOrders(player, player, account.getAccountNumber(), account.getAccountNumber());
+            placeTestOrders(player, player, bankAccountNr, bankAccountNr);
 
             backend.MARKET_MANAGER.getSync().setStockmarketAdminMode(player, true);
 
@@ -352,11 +344,9 @@ public class ActiveOrdersRequestTestSuite extends TestSuite {
             UUID player = UUID.randomUUID();
             backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(player, "NullItemUser");
 
-            IServerBankAccount account = backend.BANK_SYSTEM_API.getServerBankManager().getSync().getBankAccount(2);
-            if (account == null) return fail("Bank account 2 not found");
-            account.addUser(new User(player, "TestPlayer", false), BankPermission.getAllPermissions());
+            bankAccount.addUser(new User(player, "TestPlayer", false), BankPermission.getAllPermissions());
 
-            placeTestOrders(player, player, account.getAccountNumber(), account.getAccountNumber());
+            placeTestOrders(player, player, bankAccountNr, bankAccountNr);
 
             backend.MARKET_MANAGER.getSync().setStockmarketAdminMode(player, true);
 

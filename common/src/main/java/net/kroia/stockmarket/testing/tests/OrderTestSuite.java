@@ -57,7 +57,7 @@ public class OrderTestSuite extends TestSuite {
 
     private TestResult test_getAverageExecutionPrice_normalBuy() {
         Order order = new Order(DUMMY_ITEM_ID, Order.Type.MARKET, 10, 100, 0, UUID.randomUUID(), 1);
-        order.edit(5, -500);
+        order.edit(5, -5);
         long avgPrice = order.getAverageExecutionPrice();
         return assertEquals("Average execution price should be 100", 100L, avgPrice);
     }
@@ -169,7 +169,7 @@ public class OrderTestSuite extends TestSuite {
     private TestResult test_getAverageExecutionPrice_normalSell() {
         // Sell order: targetVolume=-10, filledVolume negative, transferredMoney positive
         Order order = new Order(DUMMY_ITEM_ID, Order.Type.MARKET, -10, 100, 0, UUID.randomUUID(), 1);
-        order.edit(-5, 500); // sold 5 items, received 500 money
+        order.edit(-5, 5); // sold 5 items, received 5 money
         long avgPrice = order.getAverageExecutionPrice();
         // getAverageExecutionPrice = -transferredMoney / filledVolume = -500 / -5 = 100
         return assertEquals("Average execution price for sell should be 100", 100L, avgPrice);
@@ -266,7 +266,7 @@ public class OrderTestSuite extends TestSuite {
     private TestResult test_getHistoricalRecord_normalOrder() {
         UUID executor = UUID.randomUUID();
         Order order = new Order(DUMMY_ITEM_ID, Order.Type.MARKET, 10, 100, 5000L, executor, 3);
-        order.edit(10, -1000); // fully filled, avg price = 100
+        order.edit(10, -10); // fully filled, avg price = 100
 
         OrderRecordStruct record = order.getHistoricalRecord();
         TestResult r = assertNotNull("Historical record should not be null", record);

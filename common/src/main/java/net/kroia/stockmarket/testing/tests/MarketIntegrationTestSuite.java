@@ -29,6 +29,7 @@ public class MarketIntegrationTestSuite extends TestSuite {
     private int bankAccountNr2;
     private IServerBankAccount bankAccount2;
     private long uniformVolumeDistributionScale = 5;
+    private int scaleFactor;
 
     @Override
     public TestCategory getCategory() {
@@ -72,9 +73,10 @@ public class MarketIntegrationTestSuite extends TestSuite {
 
         ItemID id = ItemID.getOrRegisterFromItemStackServerSide_direct(Items.GOLD_INGOT.getDefaultInstance());
         serverMarket = BACKEND_INSTANCES.MARKET_MANAGER.getSync().createMarket(id);
+        scaleFactor = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync().getItemFractionScaleFactor();
 
-        bankAccount1.createBank(id, 100);
-        bankAccount2.createBank(id, 100);
+        bankAccount1.createBank(id, 100 * scaleFactor);
+        bankAccount2.createBank(id, 100 * scaleFactor);
         bankAccount1.createBank(moneyID, 1000);
         bankAccount2.createBank(moneyID, 1000);
     }
@@ -98,8 +100,8 @@ public class MarketIntegrationTestSuite extends TestSuite {
         serverMarket.test_clearOrderbook();
         ItemID item = serverMarket.getItemID();
 
-        bankAccount1.getBank(item).setBalance(100);
-        bankAccount2.getBank(item).setBalance(100);
+        bankAccount1.getBank(item).setBalance(100 * scaleFactor);
+        bankAccount2.getBank(item).setBalance(100 * scaleFactor);
         bankAccount1.getBank(moneyID).setBalance(1000);
         bankAccount2.getBank(moneyID).setBalance(1000);
     }
@@ -107,7 +109,7 @@ public class MarketIntegrationTestSuite extends TestSuite {
     private TestResult marketOrderTest_1() {
         resetMarketState(true, 10);
 
-        Order o1 = new Order(serverMarket.getItemID(), Order.Type.MARKET, -10, serverMarket.getCurrentMarketPrice(), 0, UUID.randomUUID(), bankAccountNr1);
+        Order o1 = new Order(serverMarket.getItemID(), Order.Type.MARKET, -10 * scaleFactor, serverMarket.getCurrentMarketPrice(), 0, UUID.randomUUID(), bankAccountNr1);
         serverMarket.putOrder(o1);
         serverMarket.update();
 
@@ -121,7 +123,7 @@ public class MarketIntegrationTestSuite extends TestSuite {
 
         if (newMoneyBalance - o1.getTransferredMoney() != 1000)
             return fail("Wrong money amount transferred: " + newMoneyBalance);
-        if (newItemBalance != 90)
+        if (newItemBalance != 90 * scaleFactor)
             return fail("Wrong end balance of items: " + newItemBalance);
         if (serverMarket.getCurrentMarketPrice() != 9)
             return fail("Wrong market end price: " + serverMarket.getCurrentMarketPrice());
@@ -142,7 +144,7 @@ public class MarketIntegrationTestSuite extends TestSuite {
     private TestResult marketOrderTest_2() {
         resetMarketState(true, 10);
 
-        Order o1 = new Order(serverMarket.getItemID(), Order.Type.MARKET, 10, serverMarket.getCurrentMarketPrice(), 0, UUID.randomUUID(), bankAccountNr1);
+        Order o1 = new Order(serverMarket.getItemID(), Order.Type.MARKET, 10 * scaleFactor, serverMarket.getCurrentMarketPrice(), 0, UUID.randomUUID(), bankAccountNr1);
         serverMarket.putOrder(o1);
         serverMarket.update();
 
@@ -156,7 +158,7 @@ public class MarketIntegrationTestSuite extends TestSuite {
 
         if (newMoneyBalance - o1.getTransferredMoney() != 1000)
             return fail("Wrong money amount transferred: " + newMoneyBalance);
-        if (newItemBalance != 110)
+        if (newItemBalance != 110 * scaleFactor)
             return fail("Wrong end balance of items: " + newItemBalance);
         if (serverMarket.getCurrentMarketPrice() != 12)
             return fail("Wrong market end price: " + serverMarket.getCurrentMarketPrice());
@@ -177,17 +179,17 @@ public class MarketIntegrationTestSuite extends TestSuite {
     private TestResult marketOrderTest_3() {
         resetMarketState(false, 10);
 
-        Order limitOrder = new Order(serverMarket.getItemID(), Order.Type.LIMIT, -10, 12, 0, UUID.randomUUID(), bankAccountNr1);
+        Order limitOrder = new Order(serverMarket.getItemID(), Order.Type.LIMIT, -10 * scaleFactor, 12, 0, UUID.randomUUID(), bankAccountNr1);
         serverMarket.putOrder(limitOrder);
         serverMarket.update();
 
-        Order o1 = new Order(serverMarket.getItemID(), Order.Type.MARKET, 5, serverMarket.getCurrentMarketPrice(), 0, UUID.randomUUID(), bankAccountNr2);
+        Order o1 = new Order(serverMarket.getItemID(), Order.Type.MARKET, 5 * scaleFactor, serverMarket.getCurrentMarketPrice(), 0, UUID.randomUUID(), bankAccountNr2);
         serverMarket.putOrder(o1);
         serverMarket.update();
 
         if (!o1.isFilled())
             return fail("Market order should be filled. Order: " + o1);
-        if (o1.getTransferredMoney() != -limitOrder.getStartPrice() * o1.getFilledVolume())
+        if (o1.getTransferredMoney() != -Math.round((double)limitOrder.getStartPrice() * o1.getFilledVolume() / scaleFactor))
             return fail("Transferred money mismatch: " + o1.getTransferredMoney());
 
         long newItemBalance = bankAccount2.getBank(serverMarket.getItemID()).getTotalBalance();
@@ -195,7 +197,7 @@ public class MarketIntegrationTestSuite extends TestSuite {
 
         if (newMoneyBalance - o1.getTransferredMoney() != 1000)
             return fail("Wrong money amount transferred: " + newMoneyBalance);
-        if (newItemBalance != 105)
+        if (newItemBalance != 105 * scaleFactor)
             return fail("Wrong end balance of items: " + newItemBalance);
         if (serverMarket.getCurrentMarketPrice() != 12)
             return fail("Wrong market end price: " + serverMarket.getCurrentMarketPrice());
@@ -218,17 +220,17 @@ public class MarketIntegrationTestSuite extends TestSuite {
     private TestResult marketOrderTest_4() {
         resetMarketState(false, 10);
 
-        Order limitOrder = new Order(serverMarket.getItemID(), Order.Type.LIMIT, -10, 12, 0, UUID.randomUUID(), bankAccountNr1);
+        Order limitOrder = new Order(serverMarket.getItemID(), Order.Type.LIMIT, -10 * scaleFactor, 12, 0, UUID.randomUUID(), bankAccountNr1);
         serverMarket.putOrder(limitOrder);
         serverMarket.update();
 
-        Order o1 = new Order(serverMarket.getItemID(), Order.Type.MARKET, 10, serverMarket.getCurrentMarketPrice(), 0, UUID.randomUUID(), bankAccountNr2);
+        Order o1 = new Order(serverMarket.getItemID(), Order.Type.MARKET, 10 * scaleFactor, serverMarket.getCurrentMarketPrice(), 0, UUID.randomUUID(), bankAccountNr2);
         serverMarket.putOrder(o1);
         serverMarket.update();
 
         if (!o1.isFilled())
             return fail("Market order should be filled. Order: " + o1);
-        if (o1.getTransferredMoney() != -limitOrder.getStartPrice() * o1.getFilledVolume())
+        if (o1.getTransferredMoney() != -Math.round((double)limitOrder.getStartPrice() * o1.getFilledVolume() / scaleFactor))
             return fail("Transferred money mismatch: " + o1.getTransferredMoney());
 
         long newItemBalance = bankAccount2.getBank(serverMarket.getItemID()).getTotalBalance();
@@ -236,7 +238,7 @@ public class MarketIntegrationTestSuite extends TestSuite {
 
         if (newMoneyBalance - o1.getTransferredMoney() != 1000)
             return fail("Wrong money amount transferred: " + newMoneyBalance);
-        if (newItemBalance != 110)
+        if (newItemBalance != 110 * scaleFactor)
             return fail("Wrong end balance of items: " + newItemBalance);
         if (serverMarket.getCurrentMarketPrice() != 12)
             return fail("Wrong market end price: " + serverMarket.getCurrentMarketPrice());
@@ -261,17 +263,17 @@ public class MarketIntegrationTestSuite extends TestSuite {
     private TestResult marketOrderTest_5() {
         resetMarketState(false, 10);
 
-        Order limitOrder = new Order(serverMarket.getItemID(), Order.Type.LIMIT, -10, 12, 0, UUID.randomUUID(), bankAccountNr1);
+        Order limitOrder = new Order(serverMarket.getItemID(), Order.Type.LIMIT, -10 * scaleFactor, 12, 0, UUID.randomUUID(), bankAccountNr1);
         serverMarket.putOrder(limitOrder);
         serverMarket.update();
 
-        Order o1 = new Order(serverMarket.getItemID(), Order.Type.MARKET, 15, serverMarket.getCurrentMarketPrice(), 0, UUID.randomUUID(), bankAccountNr2);
+        Order o1 = new Order(serverMarket.getItemID(), Order.Type.MARKET, 15 * scaleFactor, serverMarket.getCurrentMarketPrice(), 0, UUID.randomUUID(), bankAccountNr2);
         serverMarket.putOrder(o1);
         serverMarket.update();
 
         if (o1.isFilled())
             return fail("Market order should NOT be filled (not enough supply). Order: " + o1);
-        if (o1.getTransferredMoney() != -limitOrder.getStartPrice() * o1.getFilledVolume())
+        if (o1.getTransferredMoney() != -Math.round((double)limitOrder.getStartPrice() * o1.getFilledVolume() / scaleFactor))
             return fail("Transferred money mismatch: " + o1.getTransferredMoney());
 
         long newItemBalance = bankAccount2.getBank(serverMarket.getItemID()).getTotalBalance();
@@ -279,7 +281,7 @@ public class MarketIntegrationTestSuite extends TestSuite {
 
         if (newMoneyBalance - o1.getTransferredMoney() != 1000)
             return fail("Wrong money amount transferred: " + newMoneyBalance);
-        if (newItemBalance != 110)
+        if (newItemBalance != 110 * scaleFactor)
             return fail("Wrong end balance of items: " + newItemBalance);
         if (serverMarket.getCurrentMarketPrice() != 12)
             return fail("Wrong market end price: " + serverMarket.getCurrentMarketPrice());
@@ -302,7 +304,7 @@ public class MarketIntegrationTestSuite extends TestSuite {
     private TestResult limitOrderTest_1() {
         resetMarketState(true, 10);
 
-        Order limitOrder = new Order(serverMarket.getItemID(), Order.Type.LIMIT, 10, 13, 0, UUID.randomUUID(), bankAccountNr1);
+        Order limitOrder = new Order(serverMarket.getItemID(), Order.Type.LIMIT, 10 * scaleFactor, 13, 0, UUID.randomUUID(), bankAccountNr1);
         serverMarket.putOrder(limitOrder);
         serverMarket.update();
 
@@ -316,7 +318,7 @@ public class MarketIntegrationTestSuite extends TestSuite {
 
         if (newMoneyBalance - limitOrder.getTransferredMoney() != 1000)
             return fail("Wrong money amount transferred: " + newMoneyBalance);
-        if (newItemBalance != 110)
+        if (newItemBalance != 110 * scaleFactor)
             return fail("Wrong end balance of items: " + newItemBalance);
         if (serverMarket.getCurrentMarketPrice() != 12)
             return fail("Wrong market end price: " + serverMarket.getCurrentMarketPrice());
@@ -334,7 +336,7 @@ public class MarketIntegrationTestSuite extends TestSuite {
     private TestResult limitOrderTest_2() {
         resetMarketState(true, 10);
 
-        Order limitOrder = new Order(serverMarket.getItemID(), Order.Type.LIMIT, 30, 13, 0, UUID.randomUUID(), bankAccountNr1);
+        Order limitOrder = new Order(serverMarket.getItemID(), Order.Type.LIMIT, 30 * scaleFactor, 13, 0, UUID.randomUUID(), bankAccountNr1);
         serverMarket.putOrder(limitOrder);
         serverMarket.update();
 
@@ -348,7 +350,7 @@ public class MarketIntegrationTestSuite extends TestSuite {
 
         if (newMoneyBalance - limitOrder.getTransferredMoney() != 1000)
             return fail("Wrong money amount transferred: " + newMoneyBalance);
-        if (newItemBalance != 115)
+        if (newItemBalance != 115 * scaleFactor)
             return fail("Wrong end balance of items: " + newItemBalance);
         if (serverMarket.getCurrentMarketPrice() != 13)
             return fail("Wrong market end price: " + serverMarket.getCurrentMarketPrice());
@@ -366,7 +368,7 @@ public class MarketIntegrationTestSuite extends TestSuite {
     private TestResult limitOrderTest_3() {
         resetMarketState(true, 10);
 
-        Order limitOrder = new Order(serverMarket.getItemID(), Order.Type.LIMIT, -10, 7, 0, UUID.randomUUID(), bankAccountNr1);
+        Order limitOrder = new Order(serverMarket.getItemID(), Order.Type.LIMIT, -10 * scaleFactor, 7, 0, UUID.randomUUID(), bankAccountNr1);
         serverMarket.putOrder(limitOrder);
         serverMarket.update();
 
@@ -380,7 +382,7 @@ public class MarketIntegrationTestSuite extends TestSuite {
 
         if (newMoneyBalance - limitOrder.getTransferredMoney() != 1000)
             return fail("Wrong money amount transferred: " + newMoneyBalance);
-        if (newItemBalance != 90)
+        if (newItemBalance != 90 * scaleFactor)
             return fail("Wrong end balance of items: " + newItemBalance);
         if (serverMarket.getCurrentMarketPrice() != 9)
             return fail("Wrong market end price: " + serverMarket.getCurrentMarketPrice());
@@ -398,7 +400,7 @@ public class MarketIntegrationTestSuite extends TestSuite {
     private TestResult limitOrderTest_4() {
         resetMarketState(true, 10);
 
-        Order limitOrder = new Order(serverMarket.getItemID(), Order.Type.LIMIT, -30, 7, 0, UUID.randomUUID(), bankAccountNr1);
+        Order limitOrder = new Order(serverMarket.getItemID(), Order.Type.LIMIT, -30 * scaleFactor, 7, 0, UUID.randomUUID(), bankAccountNr1);
         serverMarket.putOrder(limitOrder);
         serverMarket.update();
 
@@ -412,7 +414,7 @@ public class MarketIntegrationTestSuite extends TestSuite {
 
         if (newMoneyBalance - limitOrder.getTransferredMoney() != 1000)
             return fail("Wrong money amount transferred: " + newMoneyBalance);
-        if (newItemBalance != 80)
+        if (newItemBalance != 80 * scaleFactor)
             return fail("Wrong end balance of items: " + newItemBalance);
         if (serverMarket.getCurrentMarketPrice() != 7)
             return fail("Wrong market end price: " + serverMarket.getCurrentMarketPrice());
@@ -431,10 +433,10 @@ public class MarketIntegrationTestSuite extends TestSuite {
         resetMarketState(false, 10);
 
         ItemID item = serverMarket.getItemID();
-        Order limitOrder = new Order(item, Order.Type.LIMIT, -10, 13, 0, UUID.randomUUID(), bankAccountNr1);
+        Order limitOrder = new Order(item, Order.Type.LIMIT, -10 * scaleFactor, 13, 0, UUID.randomUUID(), bankAccountNr1);
         serverMarket.putOrder(limitOrder);
 
-        Order marketOrder = new Order(item, Order.Type.MARKET, 10, 10, 0, UUID.randomUUID(), bankAccountNr2);
+        Order marketOrder = new Order(item, Order.Type.MARKET, 10 * scaleFactor, 10, 0, UUID.randomUUID(), bankAccountNr2);
         serverMarket.putOrder(marketOrder);
         serverMarket.update();
 
@@ -454,11 +456,11 @@ public class MarketIntegrationTestSuite extends TestSuite {
 
         if (newMoneyBalance1 - limitOrder.getTransferredMoney() != 1000)
             return fail("Wrong money transferred for limit order: " + newMoneyBalance1);
-        if (newItemBalance1 != 90)
+        if (newItemBalance1 != 90 * scaleFactor)
             return fail("Wrong item balance for limit order account: " + newItemBalance1);
         if (newMoneyBalance2 - marketOrder.getTransferredMoney() != 1000)
             return fail("Wrong money transferred for market order: " + newMoneyBalance2);
-        if (newItemBalance2 != 110)
+        if (newItemBalance2 != 110 * scaleFactor)
             return fail("Wrong item balance for market order account: " + newItemBalance2);
         if (serverMarket.getCurrentMarketPrice() != 13)
             return fail("Wrong market end price: " + serverMarket.getCurrentMarketPrice());
@@ -480,6 +482,6 @@ public class MarketIntegrationTestSuite extends TestSuite {
     }
 
     private float uniformVolumeDistribution(double price) {
-        return (float) uniformVolumeDistributionScale / BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync().getItemFractionScaleFactor();
+        return (float) uniformVolumeDistributionScale;
     }
 }
