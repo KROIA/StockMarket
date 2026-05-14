@@ -92,4 +92,7 @@ public class StockMarketTestCategories {
 
     public static final TestCategory DEPTH_SIMULATION = new TestCategory(
             "sm_depth_simulation", "DepthSimulation read-only walk tests", MASTER_ONLY, true);
+
+    public static final TestCategory INTER_MARKET_EXECUTOR = new TestCategory(
+            "sm_inter_market_executor", "InterMarketExecutor two-leg execution tests", MASTER_ONLY, true);
 }

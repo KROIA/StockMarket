@@ -7,6 +7,7 @@ import net.kroia.stockmarket.testing.tests.CreateOrderRequestTestSuite;
 import net.kroia.stockmarket.testing.tests.DataFilterTestSuite;
 import net.kroia.stockmarket.testing.tests.DatabaseTestSuite;
 import net.kroia.stockmarket.testing.tests.DynamicIndexedArrayTestSuite;
+import net.kroia.stockmarket.testing.tests.InterMarketExecutorTestSuite;
 import net.kroia.stockmarket.testing.tests.InterMarketOrderTestSuite;
 import net.kroia.stockmarket.testing.tests.TradingPairTestSuite;
 import net.kroia.stockmarket.testing.tests.MarketIntegrationTestSuite;
@@ -65,5 +66,6 @@ public class StockMarketTestRegistration {
         TestRegistry.register(new OrderRecordManagerTestSuite());
         TestRegistry.register(new ServerMarketTestSuite());
         TestRegistry.register(new PluginTestSuite());
+        TestRegistry.register(new InterMarketExecutorTestSuite());
     }
 }
