@@ -143,6 +143,10 @@
   "gui.stockmarket.management_screen.general.delete_all_markets_popup_ask": "Delete all Markets",
   "gui.stockmarket.management_screen.general.delete_all_markets_popup_msg": "Do you really want to delete all markets?\nThis will remove all markets and all bots.\nAll open orders will be closed and the market data will be lost.\nThis can not be undone!",
 
+  "gui.stockmarket.market_management_screen.title": "Market Settings",
+  "gui.stockmarket.market_settings_widget.market_open": "Market Open",
+  "gui.stockmarket.market_settings_widget.default_price": "Default Price",
+  "gui.stockmarket.market_settings_widget.abundance": "Abundance",
 
   "gui.stockmarket.bot_settings_setup_screen.cancel": "Cancel",
   "gui.stockmarket.bot_settings_setup_screen.back": "Back",
@@ -200,13 +204,17 @@
   "gui.stockmarket.volatility_plugin.apply": "Apply",
   "gui.stockmarket.volume_distribution.volume_scale": "Volume Scale",
   "gui.stockmarket.volume_distribution.speed": "Speed",
+  "gui.stockmarket.volume_distribution.accumulation_rate": "Accumulation Rate",
+  "gui.stockmarket.volume_distribution.decumulation_rate": "Decumulation Rate",
   "gui.stockmarket.volume_distribution.apply": "Apply",
+  "gui.stockmarket.volume_distribution.reset_volume": "Reset Volume",
 
   "gui.stockmarket.plugin_management_screen.auto_subscribe": "Auto-subscribe",
   "gui.stockmarket.plugin_management_screen.subscription_order": "Order",
   "gui.stockmarket.plugin_management_screen.add_plugin": "Add Plugin",
   "gui.stockmarket.plugin_management_screen.add_plugin_title": "Add Plugin",
   "gui.stockmarket.plugin_management_screen.delete_plugin": "x",
+  "gui.stockmarket.plugin_management_screen.subscribe_close": "Close",
 
   "gui.stockmarket.create_market_tab.title": "Create Markets",
   "gui.stockmarket.create_market_tab.create_all": "Create Selected",
@@ -222,6 +230,7 @@
   "gui.stockmarket.preset_editor_tab.save": "Save Changes",
   "gui.stockmarket.preset_editor_tab.price": "Price",
   "gui.stockmarket.preset_editor_tab.abundance": "Abundance",
+  "gui.stockmarket.preset_editor_tab.abundance_tooltip": "How common the item is in nature.\nHigher values = more common (e.g. dirt: 200)\nLower values = more rare (e.g. diamond: 5)\nAffects trading volume and liquidity.\nMust be greater than 0. Typical range: 0.5 - 200",
   "gui.stockmarket.preset_editor_tab.saved_ok": "Presets saved successfully",
   "gui.stockmarket.preset_editor_tab.save_failed": "Failed to save presets"
 }

@@ -5,6 +5,7 @@ import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.elements.*;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.gui.elements.base.ListView;
+import net.kroia.modutilities.gui.layout.LayoutGrid;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.pluginsystem.plugin.core.GenericPluginData;
@@ -44,6 +45,7 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         public static final Component ADD_PLUGIN = Component.translatable(PREFIX + "add_plugin");
         public static final Component ADD_PLUGIN_TITLE = Component.translatable(PREFIX + "add_plugin_title");
         public static final Component DELETE_PLUGIN = Component.translatable(PREFIX + "delete_plugin");
+        public static final Component CLOSE = Component.translatable(PREFIX + "subscribe_close");
     }
 
     private final StockMarketGuiScreen parent;
@@ -119,7 +121,7 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         int contentHeight = height - (titleLabel.getBottom() + spacing) + padding;
         int histogramWidth = width / 20;
         int chartWidth = width / 2 - histogramWidth;
-        int listWidth = width - chartWidth - histogramWidth - 2 * spacing;
+        int listWidth = width - chartWidth - histogramWidth - spacing;
 
         candlestickChart.setBounds(padding, contentTop, chartWidth, contentHeight);
         orderbookVolumeHistogram.setBounds(candlestickChart.getRight(), contentTop, histogramWidth, contentHeight);
@@ -224,7 +226,8 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         private final PluginManagementScreen parentScreen;
 
         private final Label nameLabel;
-        private final Label descriptionLabel;
+        private final List<Label> descriptionLabels = new ArrayList<>();
+        private static final float descriptionFontScale = 0.8f;
         private final List<MarketItemButton> marketItemViews = new ArrayList<>();
         private final Button subscribeButton;
         private final CheckBox enabledCheckBox;
@@ -257,8 +260,13 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
                 nameLabel.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
             }
 
-            // Description label
-            descriptionLabel = new Label(data.getDescription() != null ? data.getDescription() : "");
+            // Description labels (split on newlines for multiline support)
+            String desc = data.getDescription() != null ? data.getDescription() : "";
+            for (String line : desc.split("\n")) {
+                Label lineLabel = new Label(line);
+                lineLabel.setTextFontScale(descriptionFontScale);
+                descriptionLabels.add(lineLabel);
+            }
 
             // Item icons for subscribed markets (each button has a built-in close area in the top-right corner)
             for (ItemID marketID : data.getSubscribedMarkets()) {
@@ -303,7 +311,7 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
 
             // Add children
             this.addChild(nameLabel);
-            this.addChild(descriptionLabel);
+            for (Label dl : descriptionLabels) this.addChild(dl);
             for (MarketItemButton iv : marketItemViews) {
                 this.addChild(iv);
             }
@@ -338,15 +346,20 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
                 openPluginScreenButton = null;
             }
 
-            // Set entry height: base 5 rows (name, description, markets, auto-subscribe)
-            // + optional extra row for button or inline GUI element
-            int baseHeight = 5 * (defaultElementHeight + spacing) + padding;
+            int descLineH = (int)(defaultElementHeight * descriptionFontScale);
+            int descTotalH = descLineH * Math.max(1, descriptionLabels.size());
+            int row5Y = padding                              // top padding
+                    + (defaultElementHeight + spacing)       // row 1: name
+                    + (descTotalH + spacing)                 // row 2: description line(s)
+                    + (18 + spacing)                         // row 3: market icons (16px + 2px)
+                    + (defaultElementHeight + spacing);      // row 4: auto-subscribe
+            int totalHeight = row5Y;
             if (openPluginScreenButton != null) {
-                baseHeight += defaultElementHeight + spacing;
+                totalHeight += defaultElementHeight + padding;
             } else if (pluginGuiElement != null) {
-                baseHeight += 80 + spacing;
+                totalHeight += pluginGuiElement.getHeight() + padding;
             }
-            this.setHeight(baseHeight);
+            this.setHeight(totalHeight);
 
             // Enable background for visual separation
             this.setEnableBackground(true);
@@ -371,12 +384,17 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             moveUpButton.setBounds(deleteButton.getRight() + spacing, padding, btnWidth, defaultElementHeight);
             moveDownButton.setBounds(moveUpButton.getRight() + spacing, padding, btnWidth, defaultElementHeight);
 
-            // Row 2: description label (full width)
-            descriptionLabel.setBounds(padding, nameLabel.getBottom() + spacing, width, defaultElementHeight);
+            // Row 2: description labels (full width, smaller font)
+            int descLineH = (int)(defaultElementHeight * descriptionFontScale);
+            int descY = nameLabel.getBottom() + spacing;
+            for (Label dl : descriptionLabels) {
+                dl.setBounds(padding, descY, width, descLineH);
+                descY = dl.getBottom();
+            }
 
             // Row 3: market item icons, plus subscribe button
             int iconX = padding;
-            int iconY = descriptionLabel.getBottom() + spacing;
+            int iconY = descY + spacing;
             for (int idx = 0; idx < marketItemViews.size(); idx++) {
                 MarketItemButton iv = marketItemViews.get(idx);
                 iv.setBounds(iconX, iconY, 16, 16);
@@ -398,7 +416,7 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             if (openPluginScreenButton != null) {
                 openPluginScreenButton.setBounds(padding, row5Y, width, defaultElementHeight);
             } else if (pluginGuiElement != null) {
-                pluginGuiElement.setBounds(padding, row5Y, width, 80);
+                pluginGuiElement.setBounds(padding, row5Y, width, pluginGuiElement.getHeight());
             }
         }
 
@@ -495,20 +513,12 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
 
         /**
          * Called when the subscribe "+" button is clicked.
-         * Opens a MarketSubscribeScreen popup showing available markets not yet subscribed.
+         * Opens a MarketSubscribeScreen popup showing all markets with toggle subscription.
          */
         private void onSubscribeClicked() {
-            List<ItemStack> marketStacks = new ArrayList<>();
-            for (ItemID marketID : getAvailableMarkets()) {
-                // Skip markets already subscribed
-                if (!pluginData.getSubscribedMarkets().contains(marketID)) {
-                    ItemStack stack = marketID.getStack();
-                    if (stack != null) {
-                        marketStacks.add(stack);
-                    }
-                }
-            }
-            setScreen(new MarketSubscribeScreen(parentScreen, pluginData.getInstanceID(), marketStacks));
+            List<ItemID> allMarkets = getAvailableMarkets();
+            List<ItemID> subscribedMarkets = pluginData.getSubscribedMarkets();
+            setScreen(new MarketSubscribeScreen(parentScreen, pluginData.getInstanceID(), allMarkets, subscribedMarkets));
         }
 
         /**
@@ -533,48 +543,70 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
     }
 
     /**
-     * Popup screen for selecting a market to subscribe a plugin to.
-     * Shows an ItemSelectionView with available markets that the plugin is not yet subscribed to.
+     * Popup screen for toggling market subscriptions on a plugin.
+     * Shows all available markets in a scrollable list — subscribed markets are
+     * highlighted green. Clicking a market toggles its subscription state.
      */
     private static class MarketSubscribeScreen extends StockMarketGuiScreen {
         private static final String PREFIX = "gui." + StockMarketMod.MOD_ID + ".plugin_management_screen.";
         private static final Component SUBSCRIBE_TITLE = Component.translatable(PREFIX + "subscribe_market_title");
+        private static final Component CLOSE_TEXT = Texts.CLOSE;
+
+        private static final int COLOR_SUBSCRIBED = 0xFF2d8a4e;
+        private static final int COLOR_UNSUBSCRIBED = Button.DEFAULT_BACKGROUND_COLOR;
 
         private final PluginManagementScreen parentScreen;
         private final UUID pluginInstanceID;
         private final Label titleLabel;
-        private final ItemSelectionView itemSelectionView;
+        private final ListView marketListView;
+        private final Button closeButton;
+        private final List<ItemID> subscribedMarkets;
+        private final List<MarketToggleEntry> toggleEntries = new ArrayList<>();
 
-        MarketSubscribeScreen(PluginManagementScreen parentScreen, UUID pluginInstanceID, List<ItemStack> marketStacks) {
+        MarketSubscribeScreen(PluginManagementScreen parentScreen, UUID pluginInstanceID,
+                              List<ItemID> allMarkets, List<ItemID> subscribedMarkets) {
             super(SUBSCRIBE_TITLE, parentScreen);
             this.parentScreen = parentScreen;
             this.pluginInstanceID = pluginInstanceID;
+            this.subscribedMarkets = new ArrayList<>(subscribedMarkets);
 
             titleLabel = new Label(SUBSCRIBE_TITLE.getString());
             titleLabel.setAlignment(Label.Alignment.CENTER);
 
-            itemSelectionView = new ItemSelectionView(this::onMarketSelected);
-            itemSelectionView.setItems(marketStacks);
+            marketListView = new VerticalListView();
+            LayoutGrid gridLayout = new LayoutGrid(1, 1, true, false, 0, 4, GuiElement.Alignment.TOP);
+            marketListView.setLayout(gridLayout);
+
+            for (ItemID marketID : allMarkets) {
+                ItemStack stack = marketID.getStack();
+                if (stack == null) continue;
+                boolean subscribed = this.subscribedMarkets.contains(marketID);
+                MarketToggleEntry entry = new MarketToggleEntry(stack, marketID, subscribed);
+                toggleEntries.add(entry);
+                marketListView.addChild(entry);
+            }
+
+            closeButton = new Button(CLOSE_TEXT.getString(), this::onClose);
 
             addElement(titleLabel);
-            addElement(itemSelectionView);
+            addElement(marketListView);
+            addElement(closeButton);
         }
 
-        /**
-         * Called when a market item is selected from the ItemSelectionView.
-         * Sends a subscribe request to the server and returns to the parent screen.
-         */
-        private void onMarketSelected(ItemStack item) {
-            ItemID.getOrRegisterFromItemStackClientSide(item).thenAccept(itemID -> {
+        private void toggleSubscription(MarketToggleEntry entry) {
+            boolean newState = !entry.subscribed;
+            getPluginManager().requestUpdateSubscription(pluginInstanceID, entry.marketID, newState).thenAccept(result -> {
                 net.minecraft.client.Minecraft.getInstance().execute(() -> {
-                    getPluginManager().requestUpdateSubscription(pluginInstanceID, itemID, true).thenAccept(result -> {
-                        if (result.success()) {
-                            parentScreen.refreshPluginList();
+                    if (result.success()) {
+                        entry.subscribed = newState;
+                        entry.updateColor();
+                        if (newState) {
+                            subscribedMarkets.add(entry.marketID);
+                        } else {
+                            subscribedMarkets.remove(entry.marketID);
                         }
-                        net.minecraft.client.Minecraft.getInstance().execute(() -> {
-                            setScreen(parentScreen);
-                        });
-                    });
+                        parentScreen.refreshPluginList();
+                    }
                 });
             });
         }
@@ -583,27 +615,83 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         protected void updateLayout(Gui gui) {
             int p = StockMarketGuiElement.padding;
             int s = StockMarketGuiElement.spacing;
-            int w = getWidth() - 2 * p;
             int eh = StockMarketGuiElement.defaultElementHeight;
 
-            titleLabel.setBounds(p, p, w, eh);
-            itemSelectionView.setBounds(p, titleLabel.getBottom() + s, w, getHeight() - titleLabel.getBottom() - s - p);
+            // Center a smaller panel (60% width, 70% height)
+            int panelW = (int)(getWidth() * 0.6);
+            int panelH = (int)(getHeight() * 0.7);
+            int panelX = (getWidth() - panelW) / 2;
+            int panelY = (getHeight() - panelH) / 2;
+
+            titleLabel.setBounds(panelX, panelY, panelW, eh);
+            int listH = panelH - eh - eh - 3 * s;
+            marketListView.setBounds(panelX, titleLabel.getBottom() + s, panelW, listH);
+            closeButton.setBounds(panelX, marketListView.getBottom() + s, panelW, eh);
         }
 
         @Override
         public void onClose() {
             super.onClose();
         }
+
+        // Entry widget for a single market in the toggle list
+        private class MarketToggleEntry extends StockMarketGuiElement {
+            private final ItemView itemView;
+            private final Label nameLabel;
+            private final ItemID marketID;
+            boolean subscribed;
+
+            MarketToggleEntry(ItemStack stack, ItemID marketID, boolean subscribed) {
+                super();
+                this.marketID = marketID;
+                this.subscribed = subscribed;
+                setEnableBackground(true);
+
+                itemView = new ItemView(stack);
+                itemView.setShowTooltip(true);
+                nameLabel = new Label(stack.getHoverName().getString());
+
+                addChild(itemView);
+                addChild(nameLabel);
+                setHeight(20);
+                updateColor();
+            }
+
+            void updateColor() {
+                setBackgroundColor(subscribed ? COLOR_SUBSCRIBED : COLOR_UNSUBSCRIBED);
+            }
+
+            @Override
+            protected void render() {}
+
+            @Override
+            protected void layoutChanged() {
+                int iconSize = 16;
+                int h = getHeight();
+                itemView.setBounds(padding, (h - iconSize) / 2, iconSize, iconSize);
+                nameLabel.setBounds(itemView.getRight() + spacing, 0, getWidth() - iconSize - padding - spacing, h);
+            }
+
+            @Override
+            protected boolean mouseClickedOverElement(int button) {
+                if (button == 0) {
+                    toggleSubscription(this);
+                    return true;
+                }
+                return false;
+            }
+        }
     }
 
     /**
      * Popup screen for selecting a plugin type to create a new instance of.
-     * Shows a VerticalListView with one button per registered plugin type.
+     * Uses the same centered panel layout as MarketSubscribeScreen.
      */
     private static class PluginCreatePopup extends StockMarketGuiScreen {
         private final PluginManagementScreen parentScreen;
         private final Label titleLabel;
         private final ListView pluginTypeListView;
+        private final Button closeButton;
 
         PluginCreatePopup(PluginManagementScreen parentScreen) {
             super(Texts.ADD_PLUGIN_TITLE, parentScreen);
@@ -618,26 +706,30 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             layout.stretchY = false;
             pluginTypeListView.setLayout(layout);
 
-            // Add a button for each registered plugin type
             Map<String, PluginRegistryObject> registryObjects = PluginRegistry.getRegistryObjects();
             for (Map.Entry<String, PluginRegistryObject> entry : registryObjects.entrySet()) {
                 PluginRegistryObject regObj = entry.getValue();
                 String typeID = regObj.getPluginTypeID();
                 String displayName = regObj.getPluginName();
+                String description = regObj.getPluginDescription();
 
                 Button typeButton = new Button(displayName, () -> onPluginTypeSelected(typeID));
                 typeButton.setHeight(StockMarketGuiElement.defaultElementHeight);
+                if (description != null && !description.isEmpty()) {
+                    typeButton.setHoverTooltipSupplier(() -> description);
+                    typeButton.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.TOP_RIGHT);
+                    typeButton.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
+                }
                 pluginTypeListView.addChild(typeButton);
             }
 
+            closeButton = new Button(Texts.CLOSE.getString(), this::onClose);
+
             addElement(titleLabel);
             addElement(pluginTypeListView);
+            addElement(closeButton);
         }
 
-        /**
-         * Called when a plugin type button is clicked.
-         * Sends a create request to the server and returns to the parent screen.
-         */
         private void onPluginTypeSelected(String pluginTypeID) {
             getPluginManager().requestCreatePlugin(pluginTypeID).thenAccept(success -> {
                 if (success) {
@@ -653,11 +745,17 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         protected void updateLayout(Gui gui) {
             int p = StockMarketGuiElement.padding;
             int s = StockMarketGuiElement.spacing;
-            int w = getWidth() - 2 * p;
             int eh = StockMarketGuiElement.defaultElementHeight;
 
-            titleLabel.setBounds(p, p, w, eh);
-            pluginTypeListView.setBounds(p, titleLabel.getBottom() + s, w, getHeight() - titleLabel.getBottom() - s - p);
+            int panelW = (int)(getWidth() * 0.6);
+            int panelH = (int)(getHeight() * 0.7);
+            int panelX = (getWidth() - panelW) / 2;
+            int panelY = (getHeight() - panelH) / 2;
+
+            titleLabel.setBounds(panelX, panelY, panelW, eh);
+            int listH = panelH - eh - eh - 3 * s;
+            pluginTypeListView.setBounds(panelX, titleLabel.getBottom() + s, panelW, listH);
+            closeButton.setBounds(panelX, pluginTypeListView.getBottom() + s, panelW, eh);
         }
 
         @Override

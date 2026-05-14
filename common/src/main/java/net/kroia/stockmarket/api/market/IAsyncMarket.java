@@ -32,5 +32,6 @@ public interface IAsyncMarket {
     CompletableFuture<MarketSettings> getSettingsAsync();
     CompletableFuture<Boolean> setSettingsAsync(MarketSettings settings);
 
+    CompletableFuture<Boolean> resetNetPlayerItemFlowAsync();
 
 }

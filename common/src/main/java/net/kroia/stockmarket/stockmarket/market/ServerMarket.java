@@ -39,6 +39,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     private final Orderbook orderbook;
     private final MatchingEngine matchingEngine;
     private long currentMarketPrice;
+    private long netPlayerItemFlow = 0;
 
     private MarketSettings settings;
 
@@ -378,7 +379,25 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     public boolean setMarketOpen(boolean marketOpen)
     {
         this.settings.marketOpen = marketOpen;
+        if (!marketOpen) {
+            cancelAllPlayerOrders();
+        }
         return true;
+    }
+
+    private void cancelAllPlayerOrders() {
+        List<Order> limitOrders = new ArrayList<>(getLimitOrders());
+        int cancelledCount = 0;
+        for (Order order : limitOrders) {
+            if (order.isBotOrder()) continue;
+            orderbook.removeOrder(order);
+            unlockRemainingFunds(order);
+            onOrderCanceled(order);
+            cancelledCount++;
+        }
+        if (cancelledCount > 0) {
+            info("Market closed: cancelled " + cancelledCount + " player order(s)");
+        }
     }
     @Override
     public CompletableFuture<Boolean> setMarketOpenAsync(boolean marketOpen) {
@@ -424,12 +443,24 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     @Override
     public MarketSettings getSettings()
     {
+        settings.netPlayerItemFlow = netPlayerItemFlow;
         return settings;
+    }
+
+    @Override
+    public long getNetPlayerItemFlow() { return netPlayerItemFlow; }
+    @Override
+    public void resetNetPlayerItemFlow() { netPlayerItemFlow = 0; }
+    @Override
+    public CompletableFuture<Boolean> resetNetPlayerItemFlowAsync()
+    {
+        resetNetPlayerItemFlow();
+        return CompletableFuture.completedFuture(true);
     }
     @Override
     public CompletableFuture<MarketSettings> getSettingsAsync()
     {
-        return CompletableFuture.completedFuture(settings);
+        return CompletableFuture.completedFuture(getSettings());
     }
 
 
@@ -439,7 +470,10 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     @Override
     public void setSettings(MarketSettings settings)
     {
-        this.settings = settings;
+        this.settings.marketOpen = settings.marketOpen;
+        this.settings.defaultPrice = settings.defaultPrice;
+        this.settings.naturalAbundance = settings.naturalAbundance;
+        // netPlayerItemFlow is intentionally not copied from client settings
     }
     @Override
     public CompletableFuture<Boolean> setSettingsAsync(MarketSettings settings)
@@ -472,12 +506,13 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     @Override
     public void update()
     {
-        if(!settings.marketOpen)
-            return;
-
         orderbook.setCurrentMarketPrice(currentMarketPrice);
-        matchingEngine.update(currentMarketPrice);
-        candleTradedVolume += matchingEngine.getLastTradedVolume();
+
+        if(settings.marketOpen)
+        {
+            matchingEngine.update(currentMarketPrice);
+            candleTradedVolume += matchingEngine.getLastTradedVolume();
+        }
 
         // Update the current candle
         candleLowPrice = Math.min(candleLowPrice, currentMarketPrice);
@@ -498,6 +533,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
      */
     private void onOrderConsumed(Order order)
     {
+        trackPlayerNetFlow(order);
         saveOrderRecord(order);
     }
 
@@ -517,6 +553,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
      */
     private void onOrderCanceled(Order order)
     {
+        trackPlayerNetFlow(order);
         saveOrderRecord(order);
     }
 
@@ -535,6 +572,19 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         BACKEND_INSTANCES.ORDER_RECORD_MANAGER.save(record);
     }
 
+
+    /**
+     * Tracks the net player item flow for completed/cancelled orders.
+     * filledVolume is negative for sell orders, so subtracting it adds to the counter.
+     * Bot orders are excluded.
+     */
+    private void trackPlayerNetFlow(Order order) {
+        if (order.isBotOrder()) return;
+        long filledVolume = order.getFilledVolume();
+        if (filledVolume == 0) return;
+        // filledVolume is negative for sell orders, so subtracting it adds to the counter
+        netPlayerItemFlow -= filledVolume;
+    }
 
     /**
      * Unlocks the bank funds reserved for the unfilled portion of a cancelled order.
@@ -620,6 +670,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         tag.putLong("currentMarketPrice", currentMarketPrice);
         tag.putLong("defaultPrice", settings.defaultPrice);
         tag.putFloat("naturalAbundance", settings.naturalAbundance);
+        tag.putLong("netPlayerItemFlow", netPlayerItemFlow);
 
         return success;
     }
@@ -650,6 +701,10 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         if(tag.contains("naturalAbundance"))
         {
             settings.naturalAbundance = tag.getFloat("naturalAbundance");
+        }
+        if(tag.contains("netPlayerItemFlow"))
+        {
+            netPlayerItemFlow = tag.getLong("netPlayerItemFlow");
         }
 
         // Initialize candle state from loaded price to prevent false spike on first candle

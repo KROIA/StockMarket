@@ -109,6 +109,15 @@ public interface IPluginMarket {
 
 
     /**
+     * Gets the net player item flow for this market.
+     * Positive means players have net-sold items into the market.
+     * Negative means players have net-bought items from the market.
+     * Only player orders contribute; bot orders are excluded.
+     * @return the net player item flow as a real (scaled) value
+     */
+    double getNetPlayerItemFlow();
+
+    /**
      * Checks if a market plugin with the given registration object exists for this market.
      * @param registrationObject The registration object of the plugin to check.
      * @return True if the plugin exists, false otherwise.

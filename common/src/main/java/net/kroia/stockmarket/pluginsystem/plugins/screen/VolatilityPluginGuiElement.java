@@ -28,6 +28,7 @@ public class VolatilityPluginGuiElement extends PluginGuiElement<VolatilityPlugi
 
     public VolatilityPluginGuiElement() {
         scaleLabel = new Label(Texts.SCALE_LABEL.getString());
+        scaleLabel.setAlignment(Alignment.RIGHT);
         scaleTextBox = new TextBox();
         scaleTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 10, 6));
         applyButton = new Button(Texts.APPLY.getString(), this::onApply);
@@ -35,6 +36,9 @@ public class VolatilityPluginGuiElement extends PluginGuiElement<VolatilityPlugi
         addChild(scaleLabel);
         addChild(scaleTextBox);
         addChild(applyButton);
+
+        // 2 rows of controls
+        setHeight(2 * (defaultElementHeight + spacing) + padding);
     }
 
     @Override
@@ -56,16 +60,16 @@ public class VolatilityPluginGuiElement extends PluginGuiElement<VolatilityPlugi
     @Override
     protected void layoutChanged() {
         int w = getWidth();
-        int h = getHeight();
-        int eh = Math.min(defaultElementHeight, h / 3);
+        int eh = defaultElementHeight;
         int labelW = w / 3;
+        int padding = PluginGuiElement.padding;
 
         // Row 1: label + textbox side by side
-        scaleLabel.setBounds(0, 0, labelW, eh);
-        scaleTextBox.setBounds(labelW + spacing, 0, w - labelW - spacing, eh);
+        scaleLabel.setBounds(padding, padding, labelW, eh);
+        scaleTextBox.setBounds(labelW + spacing, scaleLabel.getTop(), w - labelW - spacing, eh);
 
         // Row 2: apply button
-        applyButton.setBounds(0, eh + spacing, w, eh);
+        applyButton.setBounds(padding, scaleTextBox.getBottom() + spacing, w-2*padding, eh);
     }
 
     @Override

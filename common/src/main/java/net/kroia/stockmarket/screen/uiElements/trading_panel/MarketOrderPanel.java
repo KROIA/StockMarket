@@ -51,6 +51,7 @@ class MarketOrderPanel extends StockMarketGuiElement
     private double moneyBalance = 0;
     private double itemBalance = 0;
     private String currencyName = "";
+    private boolean marketOpen = true;
 
     public MarketOrderPanel(Consumer<Double> onBuy, Consumer<Double> onSell)
     {
@@ -196,6 +197,10 @@ class MarketOrderPanel extends StockMarketGuiElement
         updateEstimatedCost();
         updateValidation();
     }
+    public void setMarketOpen(boolean open) {
+        this.marketOpen = open;
+        updateValidation();
+    }
     public void setCurrencyName(String name)
     {
         this.currencyName = name;
@@ -294,7 +299,7 @@ class MarketOrderPanel extends StockMarketGuiElement
     private void updateValidation()
     {
         double cost = quantity * currentMarketPrice;
-        buyButton.setEnabled(quantity > 0 && cost <= moneyBalance);
-        sellButton.setEnabled(quantity > 0 && quantity <= itemBalance);
+        buyButton.setEnabled(marketOpen && quantity > 0 && cost <= moneyBalance);
+        sellButton.setEnabled(marketOpen && quantity > 0 && quantity <= itemBalance);
     }
 }

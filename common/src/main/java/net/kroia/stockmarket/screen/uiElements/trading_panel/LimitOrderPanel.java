@@ -58,6 +58,7 @@ public class LimitOrderPanel extends StockMarketGuiElement
     private double moneyBalance = 0;
     private double itemBalance = 0;
     private String currencyName = "";
+    private boolean marketOpen = true;
 
     public LimitOrderPanel(BiConsumer<Double, Double> onBuy, BiConsumer<Double, Double> onSell)
     {
@@ -230,6 +231,10 @@ public class LimitOrderPanel extends StockMarketGuiElement
         updateEstimatedCost();
         updateValidation();
     }
+    public void setMarketOpen(boolean open) {
+        this.marketOpen = open;
+        updateValidation();
+    }
     public void setQuantity(double quantity)
     {
         quantityTextBox.setText(String.valueOf(quantity));
@@ -356,7 +361,7 @@ public class LimitOrderPanel extends StockMarketGuiElement
     {
         double cost = quantity * price;
         boolean validInput = quantity > 0 && price > 0;
-        buyButton.setEnabled(validInput && cost <= moneyBalance);
-        sellButton.setEnabled(validInput && quantity <= itemBalance);
+        buyButton.setEnabled(marketOpen && validInput && cost <= moneyBalance);
+        sellButton.setEnabled(marketOpen && validInput && quantity <= itemBalance);
     }
 }

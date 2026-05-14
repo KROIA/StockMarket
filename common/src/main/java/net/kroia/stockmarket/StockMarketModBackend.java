@@ -15,6 +15,7 @@ import net.kroia.stockmarket.api.StockMarketAPI;
 import net.kroia.stockmarket.api.marketmanager.IClientMarketManager;
 import net.kroia.stockmarket.api.pluginmanager.IClientPluginManager;
 import net.kroia.stockmarket.minecraft.block.StockMarketBlocks;
+import net.kroia.stockmarket.minecraft.command.StockMarketCommandHandler;
 import net.kroia.stockmarket.minecraft.command.StockMarketCommands;
 import net.kroia.stockmarket.minecraft.compat.NEZNAMY_TAB_Placeholders;
 import net.kroia.stockmarket.data.DataManager;
@@ -72,6 +73,7 @@ public class StockMarketModBackend implements StockMarketAPI {
         public DatabaseManager DATABASE_MANAGER;
         public MarketManager MARKET_MANAGER;
         public PluginManager PLUGIN_MANAGER;
+        public StockMarketCommandHandler COMMAND_HANDLER;
 
         public MarketPriceManager MARKET_PRICE_HISTORY_MANAGER;
         public OrderRecordManager ORDER_RECORD_MANAGER;
@@ -203,6 +205,7 @@ public class StockMarketModBackend implements StockMarketAPI {
         StockMarketNetworking.setBackend(SERVER_INSTANCES);
         NEZNAMY_TAB_Placeholders.setBackend(SERVER_INSTANCES);
         StockMarketCommands.setBackend(SERVER_INSTANCES);
+        StockMarketCommandHandler.setBackend(SERVER_INSTANCES);
         DataManager.setBackend(SERVER_INSTANCES);
 
         if (TestRegistry.ENABLE_TESTS) {
@@ -218,6 +221,7 @@ public class StockMarketModBackend implements StockMarketAPI {
             SERVER_INSTANCES.ORDER_RECORD_MANAGER = new OrderRecordManager(SERVER_INSTANCES.DATABASE_MANAGER);
             SERVER_INSTANCES.MARKET_MANAGER = MarketManager.createMaster();
             SERVER_INSTANCES.PLUGIN_MANAGER = PluginManager.createMaster();
+            SERVER_INSTANCES.COMMAND_HANDLER = StockMarketCommandHandler.createMaster();
             SERVER_INSTANCES.DATA_MANAGER = new DataManager();
 
             loadDataFromFiles(UtilitiesPlatform.getServer());
@@ -240,6 +244,7 @@ public class StockMarketModBackend implements StockMarketAPI {
         {
             SERVER_INSTANCES.MARKET_MANAGER = MarketManager.createSlave();
             SERVER_INSTANCES.PLUGIN_MANAGER = PluginManager.createSlave();
+            SERVER_INSTANCES.COMMAND_HANDLER = StockMarketCommandHandler.createSlave();
         }
     }
 

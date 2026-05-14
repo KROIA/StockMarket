@@ -2,7 +2,6 @@ package net.kroia.stockmarket.pluginsystem.plugins.screen;
 
 import io.netty.buffer.ByteBuf;
 import net.kroia.modutilities.gui.elements.*;
-import net.kroia.modutilities.gui.geometry.Rectangle;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.pluginsystem.plugin.core.PluginSyncData;
 import net.kroia.stockmarket.pluginsystem.plugins.DefaultOrderbookVolumeDistributionPlugin;
@@ -26,14 +25,22 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
         private static final String PREFIX = "gui." + StockMarketMod.MOD_ID + ".volume_distribution.";
         public static final Component VOLUME_SCALE = Component.translatable(PREFIX + "volume_scale");
         public static final Component SPEED = Component.translatable(PREFIX + "speed");
+        public static final Component ACCUMULATION_RATE = Component.translatable(PREFIX + "accumulation_rate");
+        public static final Component DECUMULATION_RATE = Component.translatable(PREFIX + "decumulation_rate");
         public static final Component APPLY = Component.translatable(PREFIX + "apply");
+        public static final Component RESET_VOLUME = Component.translatable(PREFIX + "reset_volume");
     }
 
     private final Label volumeScaleLabel;
     private final TextBox volumeScaleTextBox;
     private final Label speedLabel;
     private final TextBox speedTextBox;
+    private final Label accumulationRateLabel;
+    private final TextBox accumulationRateTextBox;
+    private final Label decumulationRateLabel;
+    private final TextBox decumulationRateTextBox;
     private final Button applyButton;
+    private final Button resetVolumeButton;
     private @Nullable OrderbookVolumeHistogram histogram;
     private @Nullable OrderbookVolumeHistogram.Overlay volumeOverlay;
     private float currentVolumeScale = 1.0f;
@@ -41,20 +48,41 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
 
     public VolumeDistributionGuiElement() {
         volumeScaleLabel = new Label(Texts.VOLUME_SCALE.getString());
+        volumeScaleLabel.setAlignment(Alignment.RIGHT);
         volumeScaleTextBox = new TextBox();
         volumeScaleTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 10, 6));
 
         speedLabel = new Label(Texts.SPEED.getString());
+        speedLabel.setAlignment(Alignment.RIGHT);
         speedTextBox = new TextBox();
         speedTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 10, 6));
 
+        accumulationRateLabel = new Label(Texts.ACCUMULATION_RATE.getString());
+        accumulationRateLabel.setAlignment(Alignment.RIGHT);
+        accumulationRateTextBox = new TextBox();
+        accumulationRateTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 10, 6));
+
+        decumulationRateLabel = new Label(Texts.DECUMULATION_RATE.getString());
+        decumulationRateLabel.setAlignment(Alignment.RIGHT);
+        decumulationRateTextBox = new TextBox();
+        decumulationRateTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 10, 6));
+
         applyButton = new Button(Texts.APPLY.getString(), this::onApply);
+        resetVolumeButton = new Button(Texts.RESET_VOLUME.getString(), this::onResetVolume);
 
         addChild(volumeScaleLabel);
         addChild(volumeScaleTextBox);
         addChild(speedLabel);
         addChild(speedTextBox);
+        addChild(accumulationRateLabel);
+        addChild(accumulationRateTextBox);
+        addChild(decumulationRateLabel);
+        addChild(decumulationRateTextBox);
         addChild(applyButton);
+        addChild(resetVolumeButton);
+
+        // 5 rows (4 label+field rows, 1 button row with Apply + Reset side by side)
+        setHeight(5 * (defaultElementHeight + spacing) + padding);
     }
 
     @Override
@@ -94,6 +122,8 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
         if (customSettings != null) {
             volumeScaleTextBox.setText(customSettings.volumeScale());
             speedTextBox.setText(customSettings.speed());
+            accumulationRateTextBox.setText(customSettings.accumulationRate());
+            decumulationRateTextBox.setText(customSettings.decumulationRate());
             currentVolumeScale = customSettings.volumeScale();
         }
         startDataStream();
@@ -102,7 +132,21 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
     private void onApply() {
         sendCustomSettings(new DefaultOrderbookVolumeDistributionPlugin.Settings(
                 (float) volumeScaleTextBox.getDouble(),
-                (float) speedTextBox.getDouble()
+                (float) speedTextBox.getDouble(),
+                (float) accumulationRateTextBox.getDouble(),
+                (float) decumulationRateTextBox.getDouble(),
+                false
+        ));
+        currentVolumeScale = (float) volumeScaleTextBox.getDouble();
+    }
+
+    private void onResetVolume() {
+        sendCustomSettings(new DefaultOrderbookVolumeDistributionPlugin.Settings(
+                (float) volumeScaleTextBox.getDouble(),
+                (float) speedTextBox.getDouble(),
+                (float) accumulationRateTextBox.getDouble(),
+                (float) decumulationRateTextBox.getDouble(),
+                true
         ));
         currentVolumeScale = (float) volumeScaleTextBox.getDouble();
     }
@@ -110,21 +154,31 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
     @Override
     protected void layoutChanged() {
         int w = getWidth();
-        int h = getHeight();
-        int eh = Math.min(defaultElementHeight, h / 4);
+        int eh = defaultElementHeight;
         int labelW = w / 3;
+        int fieldW = w - labelW - spacing - padding * 2;
+        int padding = PluginGuiElement.padding;
 
-        // Row 1: volume scale label + textbox
-        volumeScaleLabel.setBounds(0, 0, labelW, eh);
-        volumeScaleTextBox.setBounds(labelW + spacing, 0, w - labelW - spacing, eh);
+        int y = padding;
+        volumeScaleLabel.setBounds(padding, y, labelW, eh);
+        volumeScaleTextBox.setBounds(volumeScaleLabel.getRight() + spacing, y, fieldW, eh);
 
-        // Row 2: speed label + textbox
-        int row2Y = eh + spacing;
-        speedLabel.setBounds(0, row2Y, labelW, eh);
-        speedTextBox.setBounds(labelW + spacing, row2Y, w - labelW - spacing, eh);
+        y = volumeScaleTextBox.getBottom() + spacing;
+        speedLabel.setBounds(padding, y, labelW, eh);
+        speedTextBox.setBounds(speedLabel.getRight() + spacing, y, fieldW, eh);
 
-        // Row 3: apply button
-        applyButton.setBounds(0, row2Y + eh + spacing, w, eh);
+        y = speedTextBox.getBottom() + spacing;
+        accumulationRateLabel.setBounds(padding, y, labelW, eh);
+        accumulationRateTextBox.setBounds(accumulationRateLabel.getRight() + spacing, y, fieldW, eh);
+
+        y = accumulationRateTextBox.getBottom() + spacing;
+        decumulationRateLabel.setBounds(padding, y, labelW, eh);
+        decumulationRateTextBox.setBounds(decumulationRateLabel.getRight() + spacing, y, fieldW, eh);
+
+        y = decumulationRateTextBox.getBottom() + spacing;
+        int buttonW = (w - 2 * padding - spacing) / 2;
+        applyButton.setBounds(padding, y, buttonW, eh);
+        resetVolumeButton.setBounds(applyButton.getRight() + spacing, y, buttonW, eh);
     }
 
     @Override
@@ -144,31 +198,25 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
         float maxAbsVolume = histogram.getMaxAbsVolume();
         if (maxAbsVolume <= 0) return;
 
-        Rectangle bounds = histogram.getCanvasBounds();
-        if (bounds.width <= 0) return;
+        // Streamed data is in raw per-backend-price-point units (same as orderbook).
+        // Histogram shows summed raw volume per chunk. Multiply by backend prices per chunk.
+        float scaleFactor = market.getItemFractionScaleFactor();
+        int histogramChunks = histogram.getChunkCount();
+        if (histogramChunks <= 0) histogramChunks = 50;
+        float backendPricesPerChunk = (float)((endPrice - startPrice) * scaleFactor / histogramChunks);
 
         int chunkCount = 50;
         double chunkPriceDelta = (endPrice - startPrice) / chunkCount;
 
-        // First pass: interpolate from streamed data and find max for self-normalization
-        float[] targets = new float[chunkCount + 1];
-        float maxTarget = 0;
-        for (int i = 0; i <= chunkCount; i++) {
-            double price = startPrice + chunkPriceDelta * i;
-            targets[i] = Math.abs(interpolateVolume(distribution, price));
-            maxTarget = Math.max(maxTarget, targets[i]);
-        }
-        if (maxTarget <= 0) return;
-
-        // Second pass: draw the curve, scaled so peak target fills the histogram width
         int lastX = -1;
         int lastY = -1;
         int lineColor = 0xFFFFAA00;
 
         for (int i = 0; i <= chunkCount; i++) {
-            float normalized = targets[i] / maxTarget * maxAbsVolume;
-            int x = histogram.toCanvasSpaceX(normalized);
-            int y = histogram.toCanvasSpaceY(startPrice + chunkPriceDelta * i);
+            double price = startPrice + chunkPriceDelta * i;
+            float targetVolume = Math.abs(interpolateVolume(distribution, price)) * backendPricesPerChunk;
+            int x = histogram.toCanvasSpaceX(targetVolume);
+            int y = histogram.toCanvasSpaceY(price);
 
             if (lastX >= 0) {
                 histogram.drawLine(lastX, lastY, x, y, 1.5f, lineColor);

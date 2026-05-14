@@ -92,6 +92,11 @@ public class TradingPanel extends TabElement {
         return limitOrderPanel.getPrice();
     }
 
+    public void setMarketOpen(boolean open) {
+        marketOrderPanel.setMarketOpen(open);
+        limitOrderPanel.setMarketOpen(open);
+    }
+
     @Override
     protected void render() {
         super.render();

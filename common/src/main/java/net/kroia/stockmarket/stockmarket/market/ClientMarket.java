@@ -289,6 +289,18 @@ public class ClientMarket implements IClientMarket
     {
         return asyncMarket.setSettingsAsync(settings);
     }
+    public CompletableFuture<Boolean> isMarketOpenAsync()
+    {
+        return asyncMarket.isMarketOpenAsync();
+    }
+    public CompletableFuture<Boolean> setMarketOpenAsync(boolean marketOpen)
+    {
+        return asyncMarket.setMarketOpenAsync(marketOpen);
+    }
+    public CompletableFuture<Boolean> resetNetPlayerItemFlow()
+    {
+        return asyncMarket.resetNetPlayerItemFlowAsync();
+    }
 
 
     @Override

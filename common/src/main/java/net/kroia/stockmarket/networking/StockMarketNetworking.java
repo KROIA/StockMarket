@@ -11,6 +11,7 @@ import net.kroia.stockmarket.networking.request.*;
 import net.kroia.stockmarket.networking.stream.ActiveOrdersStream;
 import net.kroia.stockmarket.networking.stream.MarketPriceStream;
 import net.kroia.stockmarket.networking.stream.PluginRuntimeDataStream;
+import net.kroia.stockmarket.minecraft.command.AsyncStockMarketCommandHandler;
 import net.kroia.stockmarket.stockmarket.market.AsyncMarket;
 import net.kroia.stockmarket.stockmarket.marketmanager.AsyncMarketManager;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
@@ -66,6 +67,7 @@ public class StockMarketNetworking extends NetworkPacketManager {
 
         AsyncMarket.setupNetworkPacket();
         AsyncMarketManager.setupNetworkPacket();
+        AsyncStockMarketCommandHandler.setupNetworkPacket();
 
         this.setupARRS(); // Setup the Asynchronous Request Response System (ARRS)
         this.setupStreamSystem();
