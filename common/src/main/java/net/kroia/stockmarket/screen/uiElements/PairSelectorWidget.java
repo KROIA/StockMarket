@@ -13,6 +13,7 @@ import net.kroia.modutilities.gui.layout.LayoutGrid;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -113,7 +114,7 @@ public class PairSelectorWidget extends StockMarketGuiElement {
         setEnableBackground(true);
 
         // "I HAVE" side
-        haveLabel = new Label("I HAVE:");
+        haveLabel = new Label(Component.translatable("gui.stockmarket.pair_selector.i_have").getString());
         haveLabel.setTextFontScale(0.7f);
         haveLabel.setAlignment(Label.Alignment.CENTER);
         addChild(haveLabel);
@@ -122,13 +123,13 @@ public class PairSelectorWidget extends StockMarketGuiElement {
         haveItemView.setEnabled(false);
         addChild(haveItemView);
 
-        haveNameLabel = new Label("Select...");
+        haveNameLabel = new Label(Component.translatable("gui.stockmarket.pair_selector.select").getString());
         haveNameLabel.setTextFontScale(0.6f);
         haveNameLabel.setAlignment(Label.Alignment.CENTER);
         addChild(haveNameLabel);
 
         // "I WANT" side
-        wantLabel = new Label("I WANT:");
+        wantLabel = new Label(Component.translatable("gui.stockmarket.pair_selector.i_want").getString());
         wantLabel.setTextFontScale(0.7f);
         wantLabel.setAlignment(Label.Alignment.CENTER);
         addChild(wantLabel);
@@ -137,29 +138,29 @@ public class PairSelectorWidget extends StockMarketGuiElement {
         wantItemView.setEnabled(false);
         addChild(wantItemView);
 
-        wantNameLabel = new Label("Select...");
+        wantNameLabel = new Label(Component.translatable("gui.stockmarket.pair_selector.select").getString());
         wantNameLabel.setTextFontScale(0.6f);
         wantNameLabel.setAlignment(Label.Alignment.CENTER);
         addChild(wantNameLabel);
 
         // Rate label
-        rateLabel = new Label("Rate: --");
+        rateLabel = new Label(Component.translatable("gui.stockmarket.pair_selector.rate_unknown").getString());
         rateLabel.setTextFontScale(0.7f);
         rateLabel.setAlignment(Label.Alignment.CENTER);
         addChild(rateLabel);
 
         // Swap button
-        swapButton = new Button("Swap", this::onSwap);
+        swapButton = new Button(Component.translatable("gui.stockmarket.pair_selector.swap").getString(), this::onSwap);
         swapButton.setTextFontScale(0.8f);
         addChild(swapButton);
 
         // Balance labels
-        haveBalanceLabel = new Label("Bal: --");
+        haveBalanceLabel = new Label(Component.translatable("gui.stockmarket.pair_selector.balance_unknown").getString());
         haveBalanceLabel.setTextFontScale(0.6f);
         haveBalanceLabel.setAlignment(Label.Alignment.CENTER);
         addChild(haveBalanceLabel);
 
-        wantBalanceLabel = new Label("Bal: --");
+        wantBalanceLabel = new Label(Component.translatable("gui.stockmarket.pair_selector.balance_unknown").getString());
         wantBalanceLabel.setTextFontScale(0.6f);
         wantBalanceLabel.setAlignment(Label.Alignment.CENTER);
         addChild(wantBalanceLabel);
@@ -231,39 +232,24 @@ public class PairSelectorWidget extends StockMarketGuiElement {
         int mx = getMouseX();
         int my = getMouseY();
 
-        // Check if click is in the dropdown area (if open)
+        // When dropdown is open, only allow clicks inside the dropdown or close it
         if (dropdownTarget != null && dropdownFrame.isEnabled()) {
-            // Let the dropdown children handle the click
-            return false;
-        }
-
-        // Check if click is in the "have" item area
-        if (isInBounds(mx, my, haveItemView)) {
-            openDropdown(Side.HAVE);
-            return true;
-        }
-
-        // Check if click is in the "want" item area
-        if (isInBounds(mx, my, wantItemView)) {
-            openDropdown(Side.WANT);
-            return true;
-        }
-
-        // Check if click is on the "have" name label (also opens dropdown)
-        if (isInBounds(mx, my, haveNameLabel)) {
-            openDropdown(Side.HAVE);
-            return true;
-        }
-
-        // Check if click is on the "want" name label (also opens dropdown)
-        if (isInBounds(mx, my, wantNameLabel)) {
-            openDropdown(Side.WANT);
-            return true;
-        }
-
-        // Close dropdown if clicking elsewhere
-        if (dropdownTarget != null) {
+            if (isInBounds(mx, my, dropdownFrame)) {
+                return false; // Let dropdown children handle the click
+            }
             closeDropdown();
+            return true; // Consume the click (don't let it reach swap button etc.)
+        }
+
+        // Check if click is in the "have" area (icon or name label)
+        if (isInBounds(mx, my, haveItemView) || isInBounds(mx, my, haveNameLabel) || isInBounds(mx, my, haveLabel)) {
+            openDropdown(Side.HAVE);
+            return true;
+        }
+
+        // Check if click is in the "want" area (icon or name label)
+        if (isInBounds(mx, my, wantItemView) || isInBounds(mx, my, wantNameLabel) || isInBounds(mx, my, wantLabel)) {
+            openDropdown(Side.WANT);
             return true;
         }
 
@@ -309,8 +295,23 @@ public class PairSelectorWidget extends StockMarketGuiElement {
             dropdownList.addChild(btn);
         }
 
+        // Hide elements that the dropdown covers
+        haveItemView.setEnabled(false);
+        wantItemView.setEnabled(false);
+        haveNameLabel.setEnabled(false);
+        wantNameLabel.setEnabled(false);
+        haveBalanceLabel.setEnabled(false);
+        wantBalanceLabel.setEnabled(false);
+        rateLabel.setEnabled(false);
+        swapButton.setEnabled(false);
+
         dropdownFrame.setEnabled(true);
         layoutChanged();
+
+        // Pre-compute grid columns from known dropdown width (don't wait for container layout)
+        int dropdownWidth = getWidth() - 2 * 2; // p = 2 on each side
+        int cols = Math.max(1, dropdownWidth / ItemView.DEFAULT_WIDTH);
+        dropdownGridLayout.columns = cols;
     }
 
     /**
@@ -319,6 +320,16 @@ public class PairSelectorWidget extends StockMarketGuiElement {
     private void closeDropdown() {
         dropdownTarget = null;
         dropdownFrame.setEnabled(false);
+
+        // Restore hidden elements
+        if (haveMarketID != null) haveItemView.setEnabled(true);
+        if (wantMarketID != null) wantItemView.setEnabled(true);
+        haveNameLabel.setEnabled(true);
+        wantNameLabel.setEnabled(true);
+        haveBalanceLabel.setEnabled(true);
+        wantBalanceLabel.setEnabled(true);
+        rateLabel.setEnabled(true);
+        swapButton.setEnabled(true);
     }
 
     /**
@@ -366,7 +377,7 @@ public class PairSelectorWidget extends StockMarketGuiElement {
             haveNameLabel.setText(ClientPlayerUtilities.getItemDisplayText(haveMarketID.getStack()));
         } else {
             haveItemView.setEnabled(false);
-            haveNameLabel.setText("Select...");
+            haveNameLabel.setText(Component.translatable("gui.stockmarket.pair_selector.select").getString());
         }
     }
 
@@ -380,7 +391,7 @@ public class PairSelectorWidget extends StockMarketGuiElement {
             wantNameLabel.setText(ClientPlayerUtilities.getItemDisplayText(wantMarketID.getStack()));
         } else {
             wantItemView.setEnabled(false);
-            wantNameLabel.setText("Select...");
+            wantNameLabel.setText(Component.translatable("gui.stockmarket.pair_selector.select").getString());
         }
     }
 
@@ -390,14 +401,14 @@ public class PairSelectorWidget extends StockMarketGuiElement {
      */
     private void updateRate() {
         if (haveMarketID == null || wantMarketID == null) {
-            rateLabel.setText("Rate: --");
+            rateLabel.setText(Component.translatable("gui.stockmarket.pair_selector.rate_unknown").getString());
             return;
         }
 
         ClientMarket haveMarket = getMarket(haveMarketID);
         ClientMarket wantMarket = getMarket(wantMarketID);
         if (haveMarket == null || wantMarket == null) {
-            rateLabel.setText("Rate: --");
+            rateLabel.setText(Component.translatable("gui.stockmarket.pair_selector.rate_unknown").getString());
             return;
         }
 
@@ -405,7 +416,7 @@ public class PairSelectorWidget extends StockMarketGuiElement {
         double wantPrice = wantMarket.getCurrentMarketRealPrice();
 
         if (havePrice <= 0) {
-            rateLabel.setText("Rate: --");
+            rateLabel.setText(Component.translatable("gui.stockmarket.pair_selector.rate_unknown").getString());
             return;
         }
 
@@ -431,7 +442,7 @@ public class PairSelectorWidget extends StockMarketGuiElement {
                 BankData haveBalance = bankAccountData.bankData.get(haveMarketID);
                 haveBalanceLabel.setText("Bal: " + (haveBalance != null ? haveBalance.getFormattedBalance() : "0"));
             } else {
-                haveBalanceLabel.setText("Bal: --");
+                haveBalanceLabel.setText(Component.translatable("gui.stockmarket.pair_selector.balance_unknown").getString());
             }
 
             // "Want" item balance
@@ -439,7 +450,7 @@ public class PairSelectorWidget extends StockMarketGuiElement {
                 BankData wantBalance = bankAccountData.bankData.get(wantMarketID);
                 wantBalanceLabel.setText("Bal: " + (wantBalance != null ? wantBalance.getFormattedBalance() : "0"));
             } else {
-                wantBalanceLabel.setText("Bal: --");
+                wantBalanceLabel.setText(Component.translatable("gui.stockmarket.pair_selector.balance_unknown").getString());
             }
         });
     }
@@ -525,21 +536,12 @@ public class PairSelectorWidget extends StockMarketGuiElement {
         rateLabel.setBounds(leftX, y, rateWidth, buttonHeight);
         swapButton.setBounds(leftX + rateWidth + s, y, swapButtonWidth, buttonHeight);
 
-        // Dropdown frame occupies the half being selected, below the header labels
+        // Dropdown frame spans full width, below the header labels
         if (dropdownTarget != null && dropdownFrame.isEnabled()) {
             int dropdownY = haveLabel.getBottom() + s;
             int dropdownH = h - dropdownY - p;
 
-            // Position dropdown over only the half that is being selected
-            int dropdownX, dropdownW;
-            if (dropdownTarget == Side.HAVE) {
-                dropdownX = leftX;
-                dropdownW = halfW;
-            } else {
-                dropdownX = rightX;
-                dropdownW = halfW;
-            }
-            dropdownFrame.setBounds(dropdownX, dropdownY, dropdownW, Math.max(0, dropdownH));
+            dropdownFrame.setBounds(leftX, dropdownY, w - 2 * p, Math.max(0, dropdownH));
 
             // Update grid columns based on container width
             int containerWidth = dropdownList.getContainerWidth();

@@ -41,8 +41,8 @@ public class TradeScreen extends StockMarketGuiScreen {
         private static final String PREFIX = "gui."+ StockMarketMod.MOD_ID + ".trade_screen.";
         private static final Component TITLE = Component.translatable(PREFIX +"title");
         private static final Component MARKET_CLOSED = Component.translatable(PREFIX +"market_closed");
-        private static final String MONEY_MODE = "Item / Money";
-        private static final String PAIR_MODE = "Item / Item";
+        private static final String MONEY_MODE = Component.translatable(PREFIX + "mode_money").getString();
+        private static final String PAIR_MODE = Component.translatable(PREFIX + "mode_pair").getString();
     }
 
     // Color for the active mode toggle button
