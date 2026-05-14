@@ -160,8 +160,8 @@ public class InterMarketExecutor
     {
         long SF = BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
 
-        // The sell volume from the InterMarketOrder (positive: max items the player wants to sell)
-        long maxSellVolume = order.getTargetSellVolume();
+        // The remaining sell volume (positive: items still to sell, accounts for partial fills)
+        long maxSellVolume = Math.abs(order.getSellOrder().getRemainingVolume());
         if (maxSellVolume <= 0)
         {
             logWarn("Inter-market order has zero or negative sell volume, canceling");
@@ -252,7 +252,7 @@ public class InterMarketExecutor
         long SF = BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
         long crossRateLimit = order.getCrossRateLimit();
 
-        long maxSellVolume = order.getTargetSellVolume();
+        long maxSellVolume = Math.abs(order.getSellOrder().getRemainingVolume());
         if (maxSellVolume <= 0)
         {
             logWarn("Limit inter-market order has zero or negative sell volume, canceling");

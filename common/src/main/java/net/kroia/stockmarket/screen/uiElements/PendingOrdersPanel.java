@@ -310,18 +310,17 @@ public class PendingOrdersPanel extends StockMarketGuiElement {
             typeLabel.setTextFontScale(0.8f);
             addChild(typeLabel);
 
-            // Amount: filled/total of the sell (have) side
-            // The sell order has negative volume; use absolute values for display
-            Order sellOrder = order.getSellOrder();
-            double filled = Math.abs(MarketManager.convertToRealAmountStatic(sellOrder.getFilledVolume()));
-            double total = Math.abs(MarketManager.convertToRealAmountStatic(sellOrder.getTargetVolume()));
+            // Amount: filled/total of the buy (want) side — what the player receives
+            Order buyOrder = order.getBuyOrder();
+            double filled = Math.abs(MarketManager.convertToRealAmountStatic(buyOrder.getFilledVolume()));
+            double total = Math.abs(MarketManager.convertToRealAmountStatic(buyOrder.getTargetVolume()));
             amountLabel = new Label(String.format("%.2f/%.2f", filled, total));
             amountLabel.setTextFontScale(0.8f);
             addChild(amountLabel);
 
-            // Rate: cross-rate limit price from the buy order, or "MKT" for market orders
+            // Rate: cross-rate limit (sellItems/buyItem), or "MKT" for market orders
             if (isLimit) {
-                double realRate = MarketManager.convertToRealAmountStatic(order.getBuyOrder().getStartPrice());
+                double realRate = (double) order.getCrossRateLimit() / net.kroia.banksystem.BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
                 rateLabel = new Label(String.format("≤ %.2f", realRate));
             } else {
                 rateLabel = new Label("MKT");
