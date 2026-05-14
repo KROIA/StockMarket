@@ -16,7 +16,6 @@ import net.kroia.stockmarket.screen.uiElements.PendingOrdersPanel;
 import net.kroia.stockmarket.screen.uiElements.TransactionHistoryPanel;
 import net.kroia.stockmarket.screen.uiElements.trading_panel.InterMarketTradingPanel;
 import net.kroia.stockmarket.screen.uiElements.trading_panel.TradingPanel;
-import net.kroia.stockmarket.screen.widgets.CrossRateChart;
 import net.kroia.stockmarket.screen.widgets.OrderbookVolumeHistogram;
 import net.kroia.stockmarket.screen.widgets.OrderMarkerOverlay;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
@@ -58,7 +57,6 @@ public class TradeScreen extends StockMarketGuiScreen {
     private final OrderMarkerOverlay orderMarkerOverlay;
     private final OrderbookVolumeHistogram orderbookVolumeHistogram;
     private final TradingPanel tradingPanel;
-    private final CrossRateChart crossRateChart;
     private final InterMarketTradingPanel interMarketTradingPanel;
     private final TabElement ordersTabElement;
     private final PendingOrdersPanel pendingOrdersPanel;
@@ -118,10 +116,6 @@ public class TradeScreen extends StockMarketGuiScreen {
         orderbookVolumeHistogram = new OrderbookVolumeHistogram(candlestickChart);
         tradingPanel = new TradingPanel(this::onBuyMarket, this::onSellMarket, this::onBuyLimit, this::onSellLimit);
 
-        // Cross-rate chart for pair mode (replaces candlestick chart)
-        crossRateChart = new CrossRateChart();
-        crossRateChart.setEnabled(false);
-
         // Inter-market trading panel for pair mode (replaces regular trading panel)
         interMarketTradingPanel = new InterMarketTradingPanel(this::onMarketExchange, this::onLimitExchange);
         interMarketTradingPanel.setEnabled(false);
@@ -148,7 +142,6 @@ public class TradeScreen extends StockMarketGuiScreen {
         addElement(pairSelectorWidget);
         addElement(candlestickChart);
         addElement(orderbookVolumeHistogram);
-        addElement(crossRateChart);
         addElement(tradingPanel);
         addElement(interMarketTradingPanel);
         addElement(marketClosedLabel);
@@ -384,7 +377,7 @@ public class TradeScreen extends StockMarketGuiScreen {
         pairHaveMarketID = null;
 
         // Clear cross-rate chart references
-        crossRateChart.setMarkets(null, null);
+        candlestickChart.setCrossRateMarkets(null, null);
 
         super.onClose();
     }
@@ -411,9 +404,12 @@ public class TradeScreen extends StockMarketGuiScreen {
 
         int selectorTop = padding + modeButtonHeight + spacing;
 
-        // Top-left: candlestick chart
-        candlestickChart.setBounds(padding, padding, (width * 3) / 4 - orderbookVolumeWidth, (height * 2) / 3);
-        // Right of chart: orderbook volume histogram
+        // Top-left: candlestick chart (expands into orderbook area when in pair mode)
+        int chartWidth = isPairMode
+                ? (width * 3) / 4  // full width when orderbook is hidden
+                : (width * 3) / 4 - orderbookVolumeWidth;
+        candlestickChart.setBounds(padding, padding, chartWidth, (height * 2) / 3);
+        // Right of chart: orderbook volume histogram (hidden in pair mode)
         orderbookVolumeHistogram.setBounds(candlestickChart.getRight(), candlestickChart.getTop(), orderbookVolumeWidth, candlestickChart.getHeight());
 
         // Market selector area height (favorites bar or pair selector)
@@ -426,9 +422,6 @@ public class TradeScreen extends StockMarketGuiScreen {
         // Bottom-right: trading panel (below the selector area)
         int tradingPanelTop = selectorTop + selectorHeight + spacing;
         tradingPanel.setBounds(rightPanelX, tradingPanelTop, rightPanelWidth, height - (tradingPanelTop - padding));
-        // Cross-rate chart gets combined bounds of candlestick + orderbook volume area
-        crossRateChart.setBounds(candlestickChart.getLeft(), candlestickChart.getTop(),
-                candlestickChart.getWidth() + orderbookVolumeHistogram.getWidth(), candlestickChart.getHeight());
         // Inter-market trading panel same bounds as regular trading panel
         interMarketTradingPanel.setBounds(tradingPanel.getLeft(), tradingPanel.getTop(),
                 tradingPanel.getWidth(), tradingPanel.getHeight());
@@ -443,6 +436,8 @@ public class TradeScreen extends StockMarketGuiScreen {
     /**
      * Toggles between Item/Money mode and Item/Item (pair) mode.
      * Shows/hides the FavoritesBar and PairSelectorWidget accordingly.
+     * In pair mode the CandlestickChart switches to cross-rate mode (synthetic OHLC candles),
+     * and the orderbook histogram is hidden (no meaningful depth for synthetic pairs).
      */
     private void setMode(boolean pairMode) {
         isPairMode = pairMode;
@@ -451,10 +446,8 @@ public class TradeScreen extends StockMarketGuiScreen {
         moneyModeButton.setBackgroundColor(pairMode ? MODE_BUTTON_DEFAULT_COLOR : MODE_BUTTON_SELECTED_COLOR);
         pairModeButton.setBackgroundColor(pairMode ? MODE_BUTTON_SELECTED_COLOR : MODE_BUTTON_DEFAULT_COLOR);
 
-        // Toggle chart and trading panel between money mode and pair mode
-        candlestickChart.setEnabled(!pairMode);
+        // CandlestickChart stays visible in both modes; orderbook hidden in pair mode
         orderbookVolumeHistogram.setEnabled(!pairMode);
-        crossRateChart.setEnabled(pairMode);
         tradingPanel.setEnabled(!pairMode);
         interMarketTradingPanel.setEnabled(pairMode);
 
@@ -464,10 +457,27 @@ public class TradeScreen extends StockMarketGuiScreen {
                 pairHaveMarketID = currentMarketID;
                 pairSelectorWidget.setHaveMarketID(pairHaveMarketID);
             }
+
+            // If both pair sides are already selected, configure cross-rate mode on the chart
+            if (pairHaveMarketID != null && pairWantMarketID != null) {
+                ClientMarket haveMarket = getMarket(pairHaveMarketID);
+                ClientMarket wantMarket = getMarket(pairWantMarketID);
+                if (haveMarket != null && wantMarket != null) {
+                    candlestickChart.setCrossRateMarkets(haveMarket, wantMarket);
+                }
+            }
         } else {
+            // Revert the chart to normal single-market mode
+            candlestickChart.setCrossRateMarkets(null, null);
             // When returning to money mode, switch back to the "have" market if set
             if (pairHaveMarketID != null && !pairHaveMarketID.equals(currentMarketID)) {
                 switchMarket(pairHaveMarketID);
+            } else if (currentMarketID != null) {
+                // Restore the current market on the chart
+                ClientMarket market = getMarket(currentMarketID);
+                if (market != null) {
+                    candlestickChart.setMarket(market);
+                }
             }
         }
     }
@@ -494,11 +504,11 @@ public class TradeScreen extends StockMarketGuiScreen {
             }
         }
 
-        // Update cross-rate chart with both markets
+        // Configure candlestick chart for cross-rate mode with both markets
         ClientMarket haveMarket = pairHaveMarketID != null ? getMarket(pairHaveMarketID) : null;
         ClientMarket wantMarket2 = pairWantMarketID != null ? getMarket(pairWantMarketID) : null;
         if (haveMarket != null && wantMarket2 != null) {
-            crossRateChart.setMarkets(haveMarket, wantMarket2);
+            candlestickChart.setCrossRateMarkets(haveMarket, wantMarket2);
         }
 
         // Update inter-market trading panel item names

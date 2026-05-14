@@ -167,6 +167,7 @@ public class PairSelectorWidget extends StockMarketGuiElement {
         // Dropdown overlay (hidden by default)
         dropdownFrame = new Frame();
         dropdownFrame.setEnableBackground(true);
+        dropdownFrame.setBackgroundColor(0xFF2a2a2a);  // dark opaque background for clear overlay
         dropdownFrame.setEnabled(false);
 
         dropdownList = new VerticalListView();
@@ -524,11 +525,21 @@ public class PairSelectorWidget extends StockMarketGuiElement {
         rateLabel.setBounds(leftX, y, rateWidth, buttonHeight);
         swapButton.setBounds(leftX + rateWidth + s, y, swapButtonWidth, buttonHeight);
 
-        // Dropdown frame occupies the remaining space below row 1 when open
+        // Dropdown frame occupies the half being selected, below the header labels
         if (dropdownTarget != null && dropdownFrame.isEnabled()) {
             int dropdownY = haveLabel.getBottom() + s;
             int dropdownH = h - dropdownY - p;
-            dropdownFrame.setBounds(p, dropdownY, w - 2 * p, Math.max(0, dropdownH));
+
+            // Position dropdown over only the half that is being selected
+            int dropdownX, dropdownW;
+            if (dropdownTarget == Side.HAVE) {
+                dropdownX = leftX;
+                dropdownW = halfW;
+            } else {
+                dropdownX = rightX;
+                dropdownW = halfW;
+            }
+            dropdownFrame.setBounds(dropdownX, dropdownY, dropdownW, Math.max(0, dropdownH));
 
             // Update grid columns based on container width
             int containerWidth = dropdownList.getContainerWidth();
