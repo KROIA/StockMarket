@@ -113,6 +113,7 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
         rateTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, true, 10, 6));
 
         applyButton = new Button(Texts.APPLY_BUTTON.getString(), this::onApplySettings);
+        applyButton.setHeight(20);
 
         settingsListView.addChild(pGainLabel);
         settingsListView.addChild(pGainTextBox);

@@ -539,7 +539,6 @@ public class MatchingEngine
             if (virtualVol > 0)
             {
                 long filled = orderbook.fillVirtual(nextExecutedPrice, orderVolume);
-                // virtualCost = rawPrice * rawVolume / scaleFactor
                 long virtualCost = Math.round((double)nextExecutedPrice * filled / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
                 itemDelta  += filled;
                 moneyDelta -= virtualCost;
@@ -597,9 +596,13 @@ public class MatchingEngine
             {
                 // Also cap to what the buyer can afford at this price level
                 // maxByFunds = funds * SF / price (since cost = vol * price / SF)
-                long maxByFunds = (nextExecutedPrice > 0)
-                        ? availableFunds * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR / nextExecutedPrice
-                        : orderVolume;
+                // Guard against overflow for bot orders where availableFunds can be Long.MAX_VALUE
+                long maxByFunds;
+                if (nextExecutedPrice <= 0 || availableFunds >= Long.MAX_VALUE / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR) {
+                    maxByFunds = orderVolume;
+                } else {
+                    maxByFunds = availableFunds * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR / nextExecutedPrice;
+                }
                 long wantToFill = Math.min(orderVolume, maxByFunds);
 
                 if (wantToFill <= 0)

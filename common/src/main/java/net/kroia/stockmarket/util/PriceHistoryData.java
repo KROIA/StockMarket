@@ -255,7 +255,7 @@ public class PriceHistoryData
             Candle  candle = candles.getLast();
             candle.high = Math.max(this.currentMarketPrice, candle.high);
             candle.low = Math.min(this.currentMarketPrice, candle.low);
-            candle.tradedVolume += tradedVolume;
+            candle.tradedVolume = tradedVolume;
         }
     }
     public void startNewCandle(long currentServerTime)
