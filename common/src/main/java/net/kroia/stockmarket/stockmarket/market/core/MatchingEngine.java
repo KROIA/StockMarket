@@ -277,7 +277,7 @@ public class MatchingEngine
                 buyOrder.edit(fillPotential, -cost);
                 order.edit(-fillPotential, cost);
                 other.itemBank.deposit(fillPotential);
-                other.moneyBank.withdrawLockedPrefered(-cost);
+                other.moneyBank.withdrawLockedPrefered(cost);
                 orderVolume += fillPotential;
                 itemDelta   -= fillPotential;
                 moneyDelta  += cost;

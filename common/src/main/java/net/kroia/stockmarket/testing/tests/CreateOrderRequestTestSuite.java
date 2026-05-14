@@ -29,6 +29,8 @@ public class CreateOrderRequestTestSuite extends TestSuite {
     private ItemID itemID;
     private ItemID moneyID;
     private IServerMarket serverMarket;
+    private IServerBankAccount bankAccount;
+    private int bankAccountNr;
 
     @Override
     public TestCategory getCategory() {
@@ -73,6 +75,12 @@ public class CreateOrderRequestTestSuite extends TestSuite {
         itemID = ItemID.getOrRegisterFromItemStackServerSide_direct(Items.GOLD_INGOT.getDefaultInstance());
         serverMarket = backend.MARKET_MANAGER.getSync().createMarket(itemID);
         serverMarket.test_setCurrentMarketPrice(100);
+        bankAccount = backend.BANK_SYSTEM_API.getServerBankManager().getSync().createBankAccount("CreateOrderRequestTest");
+        if (bankAccount == null)
+            throw new RuntimeException("Can't create CreateOrderRequestTest bank account");
+        bankAccountNr = bankAccount.getAccountNumber();
+        bankAccount.createBank(itemID, 0);
+        bankAccount.createBank(moneyID, 10000000);
     }
 
     @Override
@@ -144,19 +152,16 @@ public class CreateOrderRequestTestSuite extends TestSuite {
             // Create a known bank account with sufficient funds.
             // Lock amount = toRawAmount(volume) * toRawAmount(price), which for scaleFactor=100
             // is (5*100) * (10*100) = 500 * 1000 = 500,000. Use a large balance to be safe.
-            IServerBankAccount account = backend.BANK_SYSTEM_API.getServerBankManager().getSync().getBankAccount(2);
-            if (account == null) return fail("Bank account 2 not found");
-
             UUID player = UUID.randomUUID();
             backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(player, "NormalLockTestUser");
-            account.addUser(new User(player, "TestPlayer", false), BankPermission.getAllPermissions());
+            bankAccount.addUser(new User(player, "TestPlayer", false), BankPermission.getAllPermissions());
 
-            account.createBank(itemID, 0);
-            account.createBank(moneyID, 0);
-            account.getBank(moneyID).setBalance(10000000);
+            bankAccount.createBank(itemID, 0);
+            bankAccount.createBank(moneyID, 0);
+            bankAccount.getBank(moneyID).setBalance(10000000);
 
             CreateOrderRequest.InputData input = new CreateOrderRequest.InputData(
-                    itemID, account.getAccountNumber(), Order.Type.LIMIT, 5.0, 10.0);
+                    itemID, bankAccount.getAccountNumber(), Order.Type.LIMIT, 5.0, 10.0);
 
             CreateOrderRequest.OutputData result = executeRequest(input, player);
 
@@ -245,21 +250,17 @@ public class CreateOrderRequestTestSuite extends TestSuite {
 
     private TestResult test_interMarketType_rejected() {
         try {
-            IServerBankAccount account = backend.BANK_SYSTEM_API.getServerBankManager().getSync().getBankAccount(2);
-            if (account == null) return fail("Bank account 2 not found");
-
             UUID player = UUID.randomUUID();
             backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(player, "InterMarketUser");
-            account.addUser(new User(player, "TestPlayer", false), BankPermission.getAllPermissions());
-            account.createBank(itemID, 100);
-            account.createBank(moneyID, 10000);
+            bankAccount.addUser(new User(player, "TestPlayer", false), BankPermission.getAllPermissions());
+            bankAccount.createBank(itemID, 100);
+            bankAccount.createBank(moneyID, 10000);
 
             CreateOrderRequest.InputData input = new CreateOrderRequest.InputData(
-                    itemID, account.getAccountNumber(), Order.Type.INTER_MARKET, 5.0, 10.0);
+                    itemID, bankAccount.getAccountNumber(), Order.Type.INTER_MARKET, 5.0, 10.0);
 
             CreateOrderRequest.OutputData result = executeRequest(input, player);
 
-            // INTER_MARKET type should be rejected (returns NO_SUCH_MARKET as per code)
             TestResult r = assertEquals("INTER_MARKET should return NO_SUCH_MARKET",
                     CreateOrderRequest.Status.NO_SUCH_MARKET, result.status);
             if (!r.passed()) return r;
@@ -274,22 +275,19 @@ public class CreateOrderRequestTestSuite extends TestSuite {
             // This documents the issue: funds might be locked before the INTER_MARKET check
             // The code checks INTER_MARKET type after validation but before fund locking,
             // so this should be safe
-            IServerBankAccount account = backend.BANK_SYSTEM_API.getServerBankManager().getSync().getBankAccount(2);
-            if (account == null) return fail("Bank account 2 not found");
-
             UUID player = UUID.randomUUID();
             backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(player, "InterMarketFundsUser");
-            account.addUser(new User(player, "TestPlayer", false), BankPermission.getAllPermissions());
-            account.createBank(moneyID, 10000);
-            account.getBank(moneyID).setBalance(10000);
-            long balanceBefore = account.getBank(moneyID).getTotalBalance();
+            bankAccount.addUser(new User(player, "TestPlayer", false), BankPermission.getAllPermissions());
+            bankAccount.createBank(moneyID, 10000);
+            bankAccount.getBank(moneyID).setBalance(10000);
+            long balanceBefore = bankAccount.getBank(moneyID).getTotalBalance();
 
             CreateOrderRequest.InputData input = new CreateOrderRequest.InputData(
-                    itemID, account.getAccountNumber(), Order.Type.INTER_MARKET, 5.0, 10.0);
+                    itemID, bankAccount.getAccountNumber(), Order.Type.INTER_MARKET, 5.0, 10.0);
 
             CreateOrderRequest.OutputData result = executeRequest(input, player);
 
-            long balanceAfter = account.getBank(moneyID).getTotalBalance();
+            long balanceAfter = bankAccount.getBank(moneyID).getTotalBalance();
 
             TestResult r = assertEquals("Balance should not change after INTER_MARKET rejection",
                     balanceBefore, balanceAfter);
@@ -324,15 +322,11 @@ public class CreateOrderRequestTestSuite extends TestSuite {
 
     private TestResult test_nonMember_rejected() {
         try {
-            IServerBankAccount account = backend.BANK_SYSTEM_API.getServerBankManager().getSync().getBankAccount(2);
-            if (account == null) return fail("Bank account 2 not found");
-
             UUID nonMember = UUID.randomUUID();
             backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(nonMember, "NonMemberUser");
-            // Do NOT add nonMember to the account
 
             CreateOrderRequest.InputData input = new CreateOrderRequest.InputData(
-                    itemID, account.getAccountNumber(), Order.Type.LIMIT, 5.0, 10.0);
+                    itemID, bankAccount.getAccountNumber(), Order.Type.LIMIT, 5.0, 10.0);
 
             CreateOrderRequest.OutputData result = executeRequest(input, nonMember);
 
@@ -351,20 +345,17 @@ public class CreateOrderRequestTestSuite extends TestSuite {
 
     private TestResult test_buyLimit_locksCorrectAmount() {
         try {
-            IServerBankAccount account = backend.BANK_SYSTEM_API.getServerBankManager().getSync().getBankAccount(2);
-            if (account == null) return fail("Bank account 2 not found");
-
             UUID player = UUID.randomUUID();
             backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(player, "BuyLimitLockUser");
-            account.addUser(new User(player, "TestPlayer", false), BankPermission.getAllPermissions());
-            account.createBank(moneyID, 0);
-            account.getBank(moneyID).setBalance(10000000);
-            account.createBank(itemID, 0);
+            bankAccount.addUser(new User(player, "TestPlayer", false), BankPermission.getAllPermissions());
+            bankAccount.createBank(moneyID, 0);
+            bankAccount.getBank(moneyID).setBalance(10000000);
+            bankAccount.createBank(itemID, 0);
 
-            long balanceBefore = account.getBank(moneyID).getBalance();
+            long balanceBefore = bankAccount.getBank(moneyID).getBalance();
 
             CreateOrderRequest.InputData input = new CreateOrderRequest.InputData(
-                    itemID, account.getAccountNumber(), Order.Type.LIMIT, 5.0, 10.0);
+                    itemID, bankAccount.getAccountNumber(), Order.Type.LIMIT, 5.0, 10.0);
 
             CreateOrderRequest.OutputData result = executeRequest(input, player);
 
@@ -372,7 +363,7 @@ public class CreateOrderRequestTestSuite extends TestSuite {
                 return fail("Expected CREATED, got: " + result.status);
             }
 
-            long balanceAfter = account.getBank(moneyID).getBalance();
+            long balanceAfter = bankAccount.getBank(moneyID).getBalance();
             TestResult r = assertTrue("Balance should decrease after locking for buy limit",
                     balanceAfter < balanceBefore);
             if (!r.passed()) return r;
@@ -384,20 +375,17 @@ public class CreateOrderRequestTestSuite extends TestSuite {
 
     private TestResult test_buyMarket_locksAtMarketPrice() {
         try {
-            IServerBankAccount account = backend.BANK_SYSTEM_API.getServerBankManager().getSync().getBankAccount(2);
-            if (account == null) return fail("Bank account 2 not found");
-
             UUID player = UUID.randomUUID();
             backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(player, "BuyMarketLockUser");
-            account.addUser(new User(player, "TestPlayer", false), BankPermission.getAllPermissions());
-            account.createBank(moneyID, 0);
-            account.getBank(moneyID).setBalance(10000000);
-            account.createBank(itemID, 0);
+            bankAccount.addUser(new User(player, "TestPlayer", false), BankPermission.getAllPermissions());
+            bankAccount.createBank(moneyID, 0);
+            bankAccount.getBank(moneyID).setBalance(10000000);
+            bankAccount.createBank(itemID, 0);
 
-            long balanceBefore = account.getBank(moneyID).getBalance();
+            long balanceBefore = bankAccount.getBank(moneyID).getBalance();
 
             CreateOrderRequest.InputData input = new CreateOrderRequest.InputData(
-                    itemID, account.getAccountNumber(), Order.Type.MARKET, 5.0, 0.0);
+                    itemID, bankAccount.getAccountNumber(), Order.Type.MARKET, 5.0, 0.0);
 
             CreateOrderRequest.OutputData result = executeRequest(input, player);
 
@@ -405,7 +393,7 @@ public class CreateOrderRequestTestSuite extends TestSuite {
                 return fail("Expected CREATED, got: " + result.status);
             }
 
-            long balanceAfter = account.getBank(moneyID).getBalance();
+            long balanceAfter = bankAccount.getBank(moneyID).getBalance();
             TestResult r = assertTrue("Balance should decrease for market buy lock",
                     balanceAfter < balanceBefore);
             if (!r.passed()) return r;
@@ -417,21 +405,18 @@ public class CreateOrderRequestTestSuite extends TestSuite {
 
     private TestResult test_sell_locksItemVolume() {
         try {
-            IServerBankAccount account = backend.BANK_SYSTEM_API.getServerBankManager().getSync().getBankAccount(2);
-            if (account == null) return fail("Bank account 2 not found");
-
             UUID player = UUID.randomUUID();
             backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(player, "SellLockUser");
-            account.addUser(new User(player, "TestPlayer", false), BankPermission.getAllPermissions());
-            account.createBank(itemID, 0);
-            account.getBank(itemID).setBalance(1000);
-            account.createBank(moneyID, 0);
-            account.getBank(moneyID).setBalance(100000);
+            bankAccount.addUser(new User(player, "TestPlayer", false), BankPermission.getAllPermissions());
+            bankAccount.createBank(itemID, 0);
+            bankAccount.getBank(itemID).setBalance(1000);
+            bankAccount.createBank(moneyID, 0);
+            bankAccount.getBank(moneyID).setBalance(100000);
 
-            long itemBalanceBefore = account.getBank(itemID).getBalance();
+            long itemBalanceBefore = bankAccount.getBank(itemID).getBalance();
 
             CreateOrderRequest.InputData input = new CreateOrderRequest.InputData(
-                    itemID, account.getAccountNumber(), Order.Type.LIMIT, -5.0, 10.0);
+                    itemID, bankAccount.getAccountNumber(), Order.Type.LIMIT, -5.0, 10.0);
 
             CreateOrderRequest.OutputData result = executeRequest(input, player);
 
@@ -439,7 +424,7 @@ public class CreateOrderRequestTestSuite extends TestSuite {
                 return fail("Expected CREATED, got: " + result.status);
             }
 
-            long itemBalanceAfter = account.getBank(itemID).getBalance();
+            long itemBalanceAfter = bankAccount.getBank(itemID).getBalance();
             TestResult r = assertTrue("Item balance should decrease after locking for sell",
                     itemBalanceAfter < itemBalanceBefore);
             if (!r.passed()) return r;
@@ -455,27 +440,21 @@ public class CreateOrderRequestTestSuite extends TestSuite {
             boolean wasOpen = serverMarket.isMarketOpen();
             serverMarket.setMarketOpen(false);
 
-            IServerBankAccount account = backend.BANK_SYSTEM_API.getServerBankManager().getSync().getBankAccount(2);
-            if (account == null) {
-                serverMarket.setMarketOpen(wasOpen);
-                return fail("Bank account 2 not found");
-            }
-
             UUID player = UUID.randomUUID();
             backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(player, "PutOrderFailUser");
-            account.addUser(new User(player, "TestPlayer", false), BankPermission.getAllPermissions());
-            account.createBank(moneyID, 0);
-            account.getBank(moneyID).setBalance(100000);
-            account.createBank(itemID, 0);
+            bankAccount.addUser(new User(player, "TestPlayer", false), BankPermission.getAllPermissions());
+            bankAccount.createBank(moneyID, 0);
+            bankAccount.getBank(moneyID).setBalance(100000);
+            bankAccount.createBank(itemID, 0);
 
-            long balanceBefore = account.getBank(moneyID).getTotalBalance();
+            long balanceBefore = bankAccount.getBank(moneyID).getTotalBalance();
 
             CreateOrderRequest.InputData input = new CreateOrderRequest.InputData(
-                    itemID, account.getAccountNumber(), Order.Type.LIMIT, 5.0, 10.0);
+                    itemID, bankAccount.getAccountNumber(), Order.Type.LIMIT, 5.0, 10.0);
 
             CreateOrderRequest.OutputData result = executeRequest(input, player);
 
-            long balanceAfter = account.getBank(moneyID).getTotalBalance();
+            long balanceAfter = bankAccount.getBank(moneyID).getTotalBalance();
 
             serverMarket.setMarketOpen(wasOpen);
 

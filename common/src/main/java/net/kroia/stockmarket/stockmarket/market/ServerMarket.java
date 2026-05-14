@@ -533,6 +533,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
      */
     private void onOrderConsumed(Order order)
     {
+        unlockRemainingFunds(order);
         trackPlayerNetFlow(order);
         saveOrderRecord(order);
     }
@@ -596,9 +597,6 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         if (order.isBotOrder()) return; // bot orders have no bank reservations
         if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.BANK_SYSTEM_API == null) return;
 
-        long remainingVolume = order.getRemainingVolume();
-        if (remainingVolume == 0) return; // fully filled, nothing to unlock
-
         IServerBankAccount bankAccount = BACKEND_INSTANCES.BANK_SYSTEM_API
                 .getServerBankManager().getSync().getBankAccount(order.getBankAccountNr());
         if (bankAccount == null) {
@@ -607,15 +605,18 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         }
 
         if (order.isBuyOrder()) {
-            // Buy order: unlock reserved money = remainingVolume * startPrice
             ItemID moneyID = BACKEND_INSTANCES.MARKET_MANAGER.getSync().getTradingCurrencyID();
             IServerBank moneyBank = bankAccount.getBank(moneyID);
             if (moneyBank == null) {
                 warn("Cannot unlock money for cancelled buy order: money bank not found for account " + order.getBankAccountNr());
                 return;
             }
-            // toUnlock = rawVolume * rawPrice / scaleFactor
-            long toUnlock = Math.round((double)remainingVolume * order.getStartPrice() / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
+            // Total originally locked = ceil(targetVolume * startPrice / SF), matching CreateOrderRequest lock formula
+            long totalLocked = (long)Math.ceil((double)order.getTargetVolume() * order.getStartPrice() / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
+            // transferredMoney is negative for buy orders (money spent); absolute value = already withdrawn from locked
+            long alreadySpent = -order.getTransferredMoney();
+            long toUnlock = totalLocked - alreadySpent;
+            if (toUnlock <= 0) return;
             BankStatus status = moneyBank.unlockAmount(toUnlock);
             if (status != BankStatus.SUCCESS) {
                 warn("Failed to unlock " + toUnlock + " money for cancelled buy order on account "
@@ -628,7 +629,8 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
                 warn("Cannot unlock items for cancelled sell order: item bank not found for account " + order.getBankAccountNr());
                 return;
             }
-            long toUnlock = -remainingVolume; // remainingVolume is negative for sell orders
+            long toUnlock = -order.getRemainingVolume();
+            if (toUnlock <= 0) return;
             BankStatus status = itemBank.unlockAmount(toUnlock);
             if (status != BankStatus.SUCCESS) {
                 warn("Failed to unlock " + toUnlock + " items for cancelled sell order on account "

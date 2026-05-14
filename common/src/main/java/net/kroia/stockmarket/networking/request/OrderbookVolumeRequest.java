@@ -104,7 +104,7 @@ public class OrderbookVolumeRequest extends StockMarketGenericRequest<OrderbookV
         {
 
             long p2 = p1 + chunkSize-1;
-            array[i] = market.getRawVolume(p1, p2);
+            array[i] = (float) backendToRealValue(market.getRawVolume(p1, p2));
             p1 = p2+1;
         }
         endPrice = startPrice + chunkSize * chunkCount;
