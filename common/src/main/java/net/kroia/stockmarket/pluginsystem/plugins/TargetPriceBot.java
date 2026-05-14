@@ -105,26 +105,37 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
     private void updateForMarket(MarketInterface market, RuntimeData data)
     {
         data.tickCounter++;
-        if(data.tickCounter < 5) //update once per second
+        if(data.tickCounter < 5)
             return;
         data.tickCounter = 0;
         data.targetPrice = market.market.getPreviousTargetPrice();
         double currentPrice = market.market.getPrice();
 
         double output = data.pid.update(data.targetPrice - currentPrice);
-        double normalized = (Math.min(Math.max(-10, output*5),10));
+        // Clamp PID output to [-1, 1] as a fraction of how aggressively to push
+        double pidFraction = Math.min(Math.max(-1, output), 1);
+
         float volumeToTarget = market.oderBook.getRealVolume(currentPrice, data.targetPrice);
-        if(normalized < 0 && volumeToTarget > 0)
-            normalized = Math.max(-volumeToTarget, normalized);
-        else if(normalized > 0 && volumeToTarget < 0)
-            normalized = Math.min(-volumeToTarget, normalized);
-        else if(normalized != 0)
-            normalized = 0; //we are at target price
-        double marketOrderAmount = ((double) Math.round(normalized * 100)) /100;
+        double absVolumeToTarget = Math.abs(volumeToTarget);
+
+        double normalized;
+        if (absVolumeToTarget < 0.01) {
+            normalized = 0;
+        } else {
+            // Scale order size proportional to orderbook depth and PID urgency
+            normalized = pidFraction * absVolumeToTarget;
+            // Constrain: don't overshoot by consuming more than the volume to target
+            if (normalized < 0 && volumeToTarget > 0)
+                normalized = Math.max(-volumeToTarget, normalized);
+            else if (normalized > 0 && volumeToTarget < 0)
+                normalized = Math.min(-volumeToTarget, normalized);
+        }
+
+        double marketOrderAmount = ((double) Math.round(normalized * 100)) / 100;
         if(marketOrderAmount != 0)
         {
             market.market.placeOrder(marketOrderAmount);
-            info("Placing order: " + marketOrderAmount + " (PID-OUT: " + output + ", normalized-order-size: " + normalized +" , volumeToTarget: " + volumeToTarget + ")");
+            info("Placing order: " + marketOrderAmount + " (PID-OUT: " + output + ", fraction: " + pidFraction + ", volumeToTarget: " + volumeToTarget + ")");
         }
     }
 
