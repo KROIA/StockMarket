@@ -90,4 +90,9 @@ public class PluginMarket implements IPluginMarket
     public void placeOrder(double amount) {
         cache.addMarketOrder(amount);
     }
+
+    @Override
+    public double getNetPlayerItemFlow() {
+        return MarketManager.convertToRealAmountStatic(serverMarket.getNetPlayerItemFlow());
+    }
 }

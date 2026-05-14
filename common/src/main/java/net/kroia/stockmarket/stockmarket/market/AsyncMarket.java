@@ -83,6 +83,7 @@ public class AsyncMarket implements IAsyncMarket{
         GetCurrentMarketPriceStructAndReset,
         GetSettings,
         SetSettings,
+        ResetNetPlayerItemFlow,
     }
 
 
@@ -114,6 +115,7 @@ public class AsyncMarket implements IAsyncMarket{
         put(FunctionType.GetCurrentMarketPriceStructAndReset,   codecPacket(null, MarketPriceStruct.STREAM_CODEC));
         put(FunctionType.GetSettings,                           codecPacket(null, MarketSettings.STREAM_CODEC));
         put(FunctionType.SetSettings,                           codecPacket(MarketSettings.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
+        put(FunctionType.ResetNetPlayerItemFlow,               codecPacket(null, ByteBufCodecs.BOOL.cast()));
 
     }};
     /**
@@ -259,6 +261,15 @@ public class AsyncMarket implements IAsyncMarket{
                     market.setSettings((MarketSettings)inputData.extra);
                     yield OutputData.of(input.function, true);
                 }
+                case FunctionType.ResetNetPlayerItemFlow -> {
+                    if(playerSender != null)
+                    {
+                        if(!isPlayerAdmin(playerSender))
+                            yield OutputData.of(input.function, false);
+                    }
+                    market.resetNetPlayerItemFlow();
+                    yield OutputData.of(input.function, true);
+                }
             });
         }
         @Override
@@ -276,11 +287,12 @@ public class AsyncMarket implements IAsyncMarket{
                      //FunctionType.PutOrder_2,
                      //FunctionType.GetLimitOrders,
                      FunctionType.IsMarketOpen,
-                     FunctionType.SetMarketOpen,
+                     //FunctionType.SetMarketOpen,
                      FunctionType.GetCurrentMarketPriceStruct,
                      //FunctionType.GetCurrentMarketPriceStructAndReset,
                      FunctionType.GetSettings,
-                     FunctionType.SetSettings
+                     FunctionType.SetSettings,
+                     FunctionType.ResetNetPlayerItemFlow
                      -> true;
 
                 default -> false;
@@ -589,7 +601,17 @@ public class AsyncMarket implements IAsyncMarket{
         return future;
     }
 
-
+    @Override
+    public CompletableFuture<Boolean> resetNetPlayerItemFlowAsync()
+    {
+        if(!MultiServerUtils.canInteractWithStockMarket())
+            return CompletableFuture.completedFuture(false);
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.ResetNetPlayerItemFlow, itemID);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
+    }
 
 
 

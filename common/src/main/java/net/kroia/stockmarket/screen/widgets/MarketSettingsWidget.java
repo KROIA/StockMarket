@@ -28,6 +28,9 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
     private final TextBox defaultPriceTextBox;
     private final Label abundanceLabel;
     private final TextBox abundanceTextBox;
+    private final Label netFlowLabel;
+    private final Label netFlowValueLabel;
+    private final Button resetNetFlowButton;
     private final Button applyButton;
 
     public MarketSettingsWidget(ClientMarket market)
@@ -52,6 +55,18 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
         abundanceTextBox = new TextBox();
         abundanceTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 10, 6));
 
+        netFlowLabel = new Label("Net Flow:");
+        netFlowLabel.setAlignment(Label.Alignment.RIGHT);
+
+        netFlowValueLabel = new Label("0");
+        netFlowValueLabel.setAlignment(Label.Alignment.LEFT);
+
+        resetNetFlowButton = new Button("Reset", () -> {
+            market.resetNetPlayerItemFlow().thenAccept(success -> {
+                if (success) loadSettings();
+            });
+        });
+
         applyButton = new Button("Apply", this::saveSettings);
 
         addChild(marketOpenCheckBox);
@@ -59,9 +74,12 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
         addChild(defaultPriceTextBox);
         addChild(abundanceLabel);
         addChild(abundanceTextBox);
+        addChild(netFlowLabel);
+        addChild(netFlowValueLabel);
+        addChild(resetNetFlowButton);
         addChild(applyButton);
 
-        setHeight(4 * elementHeight + 5 * padding);
+        setHeight(5 * elementHeight + 6 * padding);
         loadSettings();
     }
 
@@ -82,7 +100,14 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
         abundanceLabel.setBounds(padding, defaultPriceLabel.getBottom() + padding, labelWidth, elementHeight);
         abundanceTextBox.setBounds(abundanceLabel.getRight() + spacing, abundanceLabel.getTop(), fieldWidth, elementHeight);
 
-        applyButton.setBounds(padding, abundanceLabel.getBottom() + padding, width, elementHeight);
+        // Net flow row: label | value label | reset button
+        int resetButtonWidth = 40;
+        int valueWidth = fieldWidth - resetButtonWidth - spacing;
+        netFlowLabel.setBounds(padding, abundanceLabel.getBottom() + padding, labelWidth, elementHeight);
+        netFlowValueLabel.setBounds(netFlowLabel.getRight() + spacing, netFlowLabel.getTop(), valueWidth, elementHeight);
+        resetNetFlowButton.setBounds(netFlowValueLabel.getRight() + spacing, netFlowLabel.getTop(), resetButtonWidth, elementHeight);
+
+        applyButton.setBounds(padding, netFlowLabel.getBottom() + padding, width, elementHeight);
     }
 
     public void loadSettings()
@@ -106,9 +131,11 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
         settings.marketOpen = marketSettings.marketOpen;
         settings.defaultPrice = marketSettings.defaultPrice;
         settings.naturalAbundance = marketSettings.naturalAbundance;
+        settings.netPlayerItemFlow = marketSettings.netPlayerItemFlow;
         marketOpenCheckBox.setChecked(settings.marketOpen);
         defaultPriceTextBox.setText(getBankManager().convertToRealAmount(settings.defaultPrice));
         abundanceTextBox.setText(formatAbundance(settings.naturalAbundance));
+        netFlowValueLabel.setText(String.valueOf(getBankManager().convertToRealAmount(settings.netPlayerItemFlow)));
         loading = false;
     }
 

@@ -56,6 +56,9 @@ public interface ISyncServerMarket {
     MarketSettings getSettings();
     void setSettings(MarketSettings settings);
 
+    long getNetPlayerItemFlow();
+    void resetNetPlayerItemFlow();
+
     Orderbook getOrderbook();
 
     // Returns the accumulated traded volume for the current candle period (real-scaled)

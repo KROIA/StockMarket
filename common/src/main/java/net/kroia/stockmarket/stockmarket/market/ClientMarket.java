@@ -297,6 +297,10 @@ public class ClientMarket implements IClientMarket
     {
         return asyncMarket.setMarketOpenAsync(marketOpen);
     }
+    public CompletableFuture<Boolean> resetNetPlayerItemFlow()
+    {
+        return asyncMarket.resetNetPlayerItemFlowAsync();
+    }
 
 
     @Override
