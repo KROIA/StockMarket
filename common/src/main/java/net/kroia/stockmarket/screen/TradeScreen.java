@@ -454,10 +454,11 @@ public class TradeScreen extends StockMarketGuiScreen {
         interMarketTradingPanel.setEnabled(pairMode);
 
         if (pairMode) {
-            // When entering pair mode, initialize the "have" side from the current market
-            if (currentMarketID != null && pairHaveMarketID == null) {
-                pairHaveMarketID = currentMarketID;
-                pairSelectorWidget.setHaveMarketID(pairHaveMarketID);
+            // When entering pair mode, initialize the "want" side from the current market
+            // (the market the player was looking at is likely the item they want to trade)
+            if (currentMarketID != null && pairWantMarketID == null) {
+                pairWantMarketID = currentMarketID;
+                pairSelectorWidget.setWantMarketID(pairWantMarketID);
             }
 
             // If both pair sides are already selected, configure cross-rate mode on the chart
@@ -471,9 +472,9 @@ public class TradeScreen extends StockMarketGuiScreen {
         } else {
             // Revert the chart to normal single-market mode
             candlestickChart.setCrossRateMarkets(null, null);
-            // When returning to money mode, switch back to the "have" market if set
-            if (pairHaveMarketID != null && !pairHaveMarketID.equals(currentMarketID)) {
-                switchMarket(pairHaveMarketID);
+            // When returning to money mode, switch back to the "want" market (primary slot)
+            if (pairWantMarketID != null && !pairWantMarketID.equals(currentMarketID)) {
+                switchMarket(pairWantMarketID);
             } else if (currentMarketID != null) {
                 // Restore the current market on the chart
                 ClientMarket market = getMarket(currentMarketID);
