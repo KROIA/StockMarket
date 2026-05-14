@@ -14,4 +14,5 @@ public class UI_Colors {
 
     public static final int candlestickChart_horizontalLine = ColorUtilities.getRGB(32,32,32,32);
     public static final int candlestickChart_zeroLine = ColorUtilities.getRGB(32,32,32,64);
+    public static final int candlestickChart_currentPriceLine = ColorUtilities.getRGB(200,200,200,180);
 }

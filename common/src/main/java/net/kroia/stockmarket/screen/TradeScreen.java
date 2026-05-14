@@ -4,6 +4,7 @@ import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ClientPlayerUtilities;
 import net.kroia.modutilities.gui.Gui;
+import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.TabElement;
 import net.kroia.modutilities.networking.client_server.streaming.StreamSystem;
 import net.kroia.stockmarket.StockMarketMod;
@@ -35,6 +36,7 @@ public class TradeScreen extends StockMarketGuiScreen {
     private static class Texts{
         private static final String PREFIX = "gui."+ StockMarketMod.MOD_ID + ".trade_screen.";
         private static final Component TITLE = Component.translatable(PREFIX +"title");
+        private static final Component MARKET_CLOSED = Component.translatable(PREFIX +"market_closed");
     }
 
 
@@ -48,6 +50,7 @@ public class TradeScreen extends StockMarketGuiScreen {
     private final PendingOrdersPanel pendingOrdersPanel;
     private final OrderHistoryPanel orderHistoryPanel;
     private final TransactionHistoryPanel transactionHistoryPanel;
+    private final Label marketClosedLabel;
     private @Nullable UUID activeOrdersStreamID = null;
     private @Nullable ItemID currentMarketID = null;
     private int selectedBankAccountNr = -1;
@@ -78,6 +81,12 @@ public class TradeScreen extends StockMarketGuiScreen {
         orderbookVolumeHistogram = new OrderbookVolumeHistogram(candlestickChart);
         tradingPanel = new TradingPanel(this::onBuyMarket, this::onSellMarket, this::onBuyLimit, this::onSellLimit);
 
+        marketClosedLabel = new Label(Texts.MARKET_CLOSED.getString());
+        marketClosedLabel.setAlignment(Label.Alignment.CENTER);
+        marketClosedLabel.setTextColor(UI_Colors.sellColorRed);
+        marketClosedLabel.setTextFontScale(1.5f);
+        marketClosedLabel.setEnabled(false);
+
         // Orders tab element with pending orders, order history, and market trades
         pendingOrdersPanel = new PendingOrdersPanel();
         pendingOrdersPanel.setOnMarketSwitch(this::switchMarket);
@@ -92,6 +101,7 @@ public class TradeScreen extends StockMarketGuiScreen {
         addElement(candlestickChart);
         addElement(orderbookVolumeHistogram);
         addElement(tradingPanel);
+        addElement(marketClosedLabel);
         addElement(ordersTabElement);
 
         // Determine initial market from preferences, fall back to first available
@@ -245,6 +255,13 @@ public class TradeScreen extends StockMarketGuiScreen {
             tradingPanel.setItemName(ClientPlayerUtilities.getItemDisplayText(newMarketID.getStack()));
             tradingPanel.setLimitPrice(market.getCurrentMarketRealPrice());
             tradingPanel.setCurrentMarketPrice(market.getCurrentMarketRealPrice());
+
+            market.getSettings().thenAccept(settings -> {
+                Minecraft.getInstance().execute(() -> {
+                    tradingPanel.setMarketOpen(settings.marketOpen);
+                    marketClosedLabel.setEnabled(!settings.marketOpen);
+                });
+            });
         }
 
         // Refresh balances for the new market
@@ -305,6 +322,8 @@ public class TradeScreen extends StockMarketGuiScreen {
         favoritesBar.setBounds(orderbookVolumeHistogram.getRight() + spacing, padding, width - (orderbookVolumeHistogram.getRight() - padding + spacing), (height - spacing) / 2);
         // Bottom-right: trading panel
         tradingPanel.setBounds(orderbookVolumeHistogram.getRight() + spacing, favoritesBar.getBottom() + spacing, favoritesBar.getWidth(), height - (favoritesBar.getBottom() - padding + spacing));
+        // Market closed label overlays the trading panel area
+        marketClosedLabel.setBounds(tradingPanel.getLeft(), tradingPanel.getTop(), tradingPanel.getWidth(), 20);
         // Bottom-left: pending orders tab element (below chart + OB volume)
         ordersTabElement.setBounds(padding, candlestickChart.getBottom() + spacing,
                 tradingPanel.getLeft() - spacing - padding,

@@ -8,6 +8,7 @@ import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.screen.widgets.CandlestickChart;
 import net.kroia.stockmarket.screen.widgets.MarketSettingsWidget;
+import net.kroia.stockmarket.screen.widgets.OrderbookVolumeHistogram;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.kroia.stockmarket.util.StockMarketGuiScreen;
@@ -15,14 +16,9 @@ import net.minecraft.network.chat.Component;
 
 public class MarketManagementScreen extends StockMarketGuiScreen {
 
-
-
     private static class Texts {
         private static final String PREFIX = "gui." + StockMarketMod.MOD_ID + ".market_management_screen.";
         private static final Component TITLE = Component.translatable(PREFIX + "title");
-
-
-        //public static final Component NEW_MARKET_TITLE = Component.translatable(PREFIX + "new_market_title");
     }
 
     private final StockMarketGuiScreen parent;
@@ -30,6 +26,7 @@ public class MarketManagementScreen extends StockMarketGuiScreen {
     private final ClientMarket market;
 
     private final CandlestickChart candlestickChart;
+    private final OrderbookVolumeHistogram orderbookVolumeHistogram;
 
     private final ListView listView;
     private final MarketSettingsWidget marketSettingsWidget;
@@ -40,9 +37,10 @@ public class MarketManagementScreen extends StockMarketGuiScreen {
         this.marketID = marketID;
         market = getMarket(marketID);
 
-
         candlestickChart = new CandlestickChart();
         candlestickChart.setMarket(market);
+
+        orderbookVolumeHistogram = new OrderbookVolumeHistogram(candlestickChart);
 
         listView = new VerticalListView();
         LayoutVertical layout = new LayoutVertical();
@@ -54,6 +52,7 @@ public class MarketManagementScreen extends StockMarketGuiScreen {
         listView.addChild(marketSettingsWidget);
 
         addElement(candlestickChart);
+        addElement(orderbookVolumeHistogram);
         addElement(listView);
     }
 
@@ -68,10 +67,14 @@ public class MarketManagementScreen extends StockMarketGuiScreen {
     protected void updateLayout(Gui gui) {
         int padding = StockMarketGuiElement.padding;
         int spacing = StockMarketGuiElement.spacing;
-        int width = getWidth()- 2 * padding;
-        int height = getHeight()- 2 * padding;
+        int width = getWidth() - 2 * padding;
+        int height = getHeight() - 2 * padding;
 
-        candlestickChart.setBounds(padding,padding,width/2,height/2);
-        listView.setBounds(candlestickChart.getRight()+spacing, padding, width-(candlestickChart.getRight()+spacing)+padding, height);
+        int orderbookVolumeWidth = width / 10;
+        int chartWidth = width / 2 - orderbookVolumeWidth;
+
+        candlestickChart.setBounds(padding, padding, chartWidth, height / 2);
+        orderbookVolumeHistogram.setBounds(candlestickChart.getRight(), candlestickChart.getTop(), orderbookVolumeWidth, candlestickChart.getHeight());
+        listView.setBounds(orderbookVolumeHistogram.getRight() + spacing, padding, width - (orderbookVolumeHistogram.getRight() - padding + spacing), height);
     }
 }

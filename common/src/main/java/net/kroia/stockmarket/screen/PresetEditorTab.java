@@ -43,6 +43,7 @@ public class PresetEditorTab extends StockMarketGuiElement {
         public static final Component SAVE = Component.translatable(PREFIX + "save");
         public static final Component PRICE = Component.translatable(PREFIX + "price");
         public static final Component ABUNDANCE = Component.translatable(PREFIX + "abundance");
+        public static final Component ABUNDANCE_TOOLTIP = Component.translatable(PREFIX + "abundance_tooltip");
         public static final Component SAVED_OK = Component.translatable(PREFIX + "saved_ok");
         public static final Component SAVE_FAILED = Component.translatable(PREFIX + "save_failed");
     }
@@ -311,6 +312,9 @@ public class PresetEditorTab extends StockMarketGuiElement {
 
             abundanceLabel = new Label(Texts.ABUNDANCE.getString());
             abundanceLabel.setAlignment(Label.Alignment.RIGHT);
+            abundanceLabel.setHoverTooltipSupplier(Texts.ABUNDANCE_TOOLTIP::getString);
+            abundanceLabel.setHoverTooltipMousePositionAlignment(Alignment.BOTTOM);
+            abundanceLabel.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
 
             abundanceTextBox = new TextBox();
             abundanceTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 10, 6));
@@ -367,18 +371,19 @@ public class PresetEditorTab extends StockMarketGuiElement {
             int iconSize = 16;
             int fieldHeight = h - 2;
 
-            // Layout: [icon 16px] [name ~30%] [priceLabel] [priceField] [abundLabel] [abundField]
+            // Layout: [icon 16px] [name ~25%] [priceLabel] [priceField] [abundLabel] [abundField]
             int nameLabelWidth = w / 4;
-            int labelWidth = 50;
-            int fieldWidth = (w - iconSize - nameLabelWidth - 2 * labelWidth - 5 * spacing) / 2;
+            int priceLabelWidth = 50;
+            int abundanceLabelWidth = 65;
+            int fieldWidth = (w - iconSize - nameLabelWidth - priceLabelWidth - abundanceLabelWidth - 5 * spacing) / 2;
 
             itemView.setBounds(padding, (h - iconSize) / 2, iconSize, iconSize);
             nameLabel.setBounds(itemView.getRight() + spacing, 1, nameLabelWidth, fieldHeight);
 
-            priceLabel.setBounds(nameLabel.getRight() + spacing, 1, labelWidth, fieldHeight);
+            priceLabel.setBounds(nameLabel.getRight() + spacing, 1, priceLabelWidth, fieldHeight);
             priceTextBox.setBounds(priceLabel.getRight() + spacing, 1, fieldWidth, fieldHeight);
 
-            abundanceLabel.setBounds(priceTextBox.getRight() + spacing, 1, labelWidth, fieldHeight);
+            abundanceLabel.setBounds(priceTextBox.getRight() + spacing, 1, abundanceLabelWidth, fieldHeight);
             abundanceTextBox.setBounds(abundanceLabel.getRight() + spacing, 1, fieldWidth, fieldHeight);
         }
     }

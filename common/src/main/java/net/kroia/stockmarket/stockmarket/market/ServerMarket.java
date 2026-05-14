@@ -472,12 +472,13 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     @Override
     public void update()
     {
-        if(!settings.marketOpen)
-            return;
-
         orderbook.setCurrentMarketPrice(currentMarketPrice);
-        matchingEngine.update(currentMarketPrice);
-        candleTradedVolume += matchingEngine.getLastTradedVolume();
+
+        if(settings.marketOpen)
+        {
+            matchingEngine.update(currentMarketPrice);
+            candleTradedVolume += matchingEngine.getLastTradedVolume();
+        }
 
         // Update the current candle
         candleLowPrice = Math.min(candleLowPrice, currentMarketPrice);

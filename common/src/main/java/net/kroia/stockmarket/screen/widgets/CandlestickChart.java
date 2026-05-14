@@ -11,12 +11,16 @@ import net.kroia.stockmarket.util.StockMarketGuiElement;
 import org.jetbrains.annotations.Nullable;
 import net.kroia.modutilities.gui.InputConstants;
 
+import net.kroia.banksystem.util.ItemID;
+
 import java.awt.*;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 public class CandlestickChart extends StockMarketGuiElement {
 
@@ -26,6 +30,7 @@ public class CandlestickChart extends StockMarketGuiElement {
     public static final int colorRed            = UI_Colors.sellColorRed;
     public static final int colorHorizontalLine = UI_Colors.candlestickChart_horizontalLine;
     public static final int colorZeroLine       = UI_Colors.candlestickChart_zeroLine;
+    public static final int colorCurrentPrice   = UI_Colors.candlestickChart_currentPriceLine;
     public static final SimpleDateFormat dayFormat   = new SimpleDateFormat("dd.", Locale.getDefault());
     public static final SimpleDateFormat monthFormat = new SimpleDateFormat(" MMMM ", Locale.getDefault());
     public static final SimpleDateFormat yearFormat  = new SimpleDateFormat("yyyy", Locale.getDefault());
@@ -51,6 +56,12 @@ public class CandlestickChart extends StockMarketGuiElement {
 
     // ── Fields ──
 
+    // Saved viewport state per market item, so switching between markets preserves the user's view
+    private record ViewportState(double viewX, double viewY, double viewWidth, double viewHeight,
+                                 double zoomLevel, int candleTimeIdx) {}
+
+    private static final Map<ItemID, ViewportState> savedViewports = new HashMap<>();
+
     private final List<Overlay> overlays = new ArrayList<>();
 
     private @Nullable ClientMarket market;
@@ -71,6 +82,7 @@ public class CandlestickChart extends StockMarketGuiElement {
     private int maxTimeDateLabelWidth = 0;
     private boolean firstDraw = false;
     private boolean dragging = false;
+    private boolean skipAutoCenterOnce = false;
 
     private final List<Button> candleTimeSelectButtons = new ArrayList<>();
     private final int defaultButtonBackgroundColor = ColorUtilities.setAlpha(DEFAULT_BACKGROUND_COLOR, 1.0f);
@@ -113,11 +125,18 @@ public class CandlestickChart extends StockMarketGuiElement {
     public void removeOverlay(Overlay overlay) { overlays.remove(overlay); }
 
     public void setMarket(@Nullable ClientMarket market) {
+        // Save viewport state for the old market before switching
+        saveViewportState();
+
         this.market = market;
         this.data = null;
         if (market != null) {
-            selectCandleTimeDeltaByIndex(currentCandleTimeIdx);
-            firstDraw = true;
+            // Try to restore a previously saved viewport for this market
+            if (!restoreViewportState(market.getItemID())) {
+                // No saved state — use default behavior
+                selectCandleTimeDeltaByIndex(currentCandleTimeIdx);
+                firstDraw = true;
+            }
         }
     }
 
@@ -155,7 +174,11 @@ public class CandlestickChart extends StockMarketGuiElement {
         if (market != null) {
             long deltaTime = ClientMarket.getAvailableCandleTimeDeltas()[index];
             this.data = market.getPriceHistoryData(deltaTime);
-            autoCenterView();
+            if (skipAutoCenterOnce) {
+                skipAutoCenterOnce = false;
+            } else {
+                autoCenterView();
+            }
         }
         for (int i = 0; i < candleTimeSelectButtons.size(); i++) {
             Button button = candleTimeSelectButtons.get(i);
@@ -198,6 +221,7 @@ public class CandlestickChart extends StockMarketGuiElement {
 
         renderCandles();
         renderVolumeBars();
+        renderCurrentPriceMarker();
         int frameColor = ColorUtilities.setAlpha(colorZeroLine, 1.0f);
         drawFrame(canvasRect, frameColor, 1);
         drawFrame(volumeRect, frameColor, 1);
@@ -299,6 +323,34 @@ public class CandlestickChart extends StockMarketGuiElement {
         disableScissor();
     }
 
+    private void renderCurrentPriceMarker() {
+        if (data == null)
+            return;
+        double currentPrice = data.getCurrentMarketRealPrice();
+        int yPos = toCanvasSpaceY(currentPrice);
+        if (yPos < canvasRect.y || yPos > canvasRect.y + canvasRect.height)
+            return;
+
+        // Dashed horizontal line across the chart canvas
+        enableScissor(canvasScissorRect);
+        int dashWidth = 4;
+        int gapWidth = 4;
+        for (int x = canvasRect.x; x < canvasRect.x + canvasRect.width; x += dashWidth + gapWidth) {
+            int w = Math.min(dashWidth, canvasRect.x + canvasRect.width - x);
+            drawRect(x, yPos, w, 1, colorCurrentPrice);
+        }
+        disableScissor();
+
+        // Price label to the right of the chart (same position as grid labels)
+        String priceLabel = formatPrice(currentPrice);
+        int textWidth = getTextWidth(priceLabel);
+        int textHeight = getTextHeight();
+        int labelX = canvasRect.x + canvasRect.width + 2;
+        int labelY = yPos - textHeight / 2;
+        drawRect(labelX, labelY, textWidth + 6, textHeight, colorCurrentPrice);
+        drawText(priceLabel, labelX + 3, labelY, 0xFFFFFFFF, getTextFontScale());
+    }
+
     private void renderChartHorizontalBackground() {
         int targetLineCount = 8;
 
@@ -329,7 +381,7 @@ public class CandlestickChart extends StockMarketGuiElement {
         maxPriceLabelTextWidth += 10;
         int totalWidth = Math.max(2, ((getWidth() - maxPriceLabelTextWidth) / 2) * 2);
         int totalHeight = Math.max(1, (getHeight() - maxTimeDateLabelWidth));
-        int volumeHeight = totalHeight / 5;
+        int volumeHeight = totalHeight / 8;
         int candleHeight = totalHeight - volumeHeight;
 
         canvasRect.width = totalWidth;
@@ -624,6 +676,44 @@ public class CandlestickChart extends StockMarketGuiElement {
             }
         }
         return false;
+    }
+
+    // ── Viewport persistence ──
+
+    /**
+     * Saves the current viewport state (position, zoom, candle time index)
+     * into the static map, keyed by the current market's ItemID.
+     */
+    private void saveViewportState() {
+        if (this.market != null) {
+            savedViewports.put(this.market.getItemID(), new ViewportState(
+                    chartviewRect.x, chartviewRect.y,
+                    chartviewRect.width, chartviewRect.height,
+                    zoomLevel, currentCandleTimeIdx));
+        }
+    }
+
+    /**
+     * Restores a previously saved viewport state for the given item.
+     * @return true if a saved state existed and was restored
+     */
+    private boolean restoreViewportState(ItemID itemID) {
+        ViewportState state = savedViewports.get(itemID);
+        if (state == null)
+            return false;
+
+        chartviewRect.x = state.viewX;
+        chartviewRect.y = state.viewY;
+        chartviewRect.width = state.viewWidth;
+        chartviewRect.height = state.viewHeight;
+        zoomLevel = state.zoomLevel;
+        currentCandleTimeIdx = state.candleTimeIdx;
+
+        // Load the correct candle data and update button colors without auto-centering
+        skipAutoCenterOnce = true;
+        selectCandleTimeDeltaByIndex(currentCandleTimeIdx);
+        firstDraw = false;
+        return true;
     }
 
     // ── View management ──
