@@ -175,6 +175,16 @@ public class TradeScreen extends StockMarketGuiScreen {
             StockMarketGuiElement.updatePlayerPreferences(prefs);
         }
 
+        // Restore pair selections from preferences
+        if (prefs.getLastPairHaveMarketID() != null) {
+            pairHaveMarketID = prefs.getLastPairHaveMarketID();
+            pairSelectorWidget.setHaveMarketID(pairHaveMarketID);
+        }
+        if (prefs.getLastPairWantMarketID() != null) {
+            pairWantMarketID = prefs.getLastPairWantMarketID();
+            pairSelectorWidget.setWantMarketID(pairWantMarketID);
+        }
+
         // Build favorites bar with all markets and current selection
         favoritesBar.rebuild(markets, prefs.getFavoriteMarketIDs(), currentMarketID);
 
@@ -455,8 +465,16 @@ public class TradeScreen extends StockMarketGuiScreen {
         interMarketTradingPanel.setEnabled(pairMode);
 
         if (pairMode) {
-            // When entering pair mode, initialize the "want" side from the current market
-            // (the market the player was looking at is likely the item they want to trade)
+            // Restore pair selections from preferences, or initialize from current market
+            PlayerPreferences prefs = StockMarketGuiElement.getPlayerPreferences();
+            if (pairWantMarketID == null && prefs.getLastPairWantMarketID() != null) {
+                pairWantMarketID = prefs.getLastPairWantMarketID();
+                pairSelectorWidget.setWantMarketID(pairWantMarketID);
+            }
+            if (pairHaveMarketID == null && prefs.getLastPairHaveMarketID() != null) {
+                pairHaveMarketID = prefs.getLastPairHaveMarketID();
+                pairSelectorWidget.setHaveMarketID(pairHaveMarketID);
+            }
             if (currentMarketID != null && pairWantMarketID == null) {
                 pairWantMarketID = currentMarketID;
                 pairSelectorWidget.setWantMarketID(pairWantMarketID);
@@ -497,6 +515,12 @@ public class TradeScreen extends StockMarketGuiScreen {
     private void onPairSelected(PairSelectorWidget.PairSelection selection) {
         pairHaveMarketID = selection.haveMarketID;
         pairWantMarketID = selection.wantMarketID;
+
+        // Persist pair selections to player preferences
+        PlayerPreferences prefs = StockMarketGuiElement.getPlayerPreferences();
+        prefs.setLastPairHaveMarketID(pairHaveMarketID);
+        prefs.setLastPairWantMarketID(pairWantMarketID);
+        StockMarketGuiElement.updatePlayerPreferences(prefs);
 
         // Update the overlay's pair direction so limit order markers display at the correct rate
         orderMarkerOverlay.setPairDirection(pairHaveMarketID, pairWantMarketID);
