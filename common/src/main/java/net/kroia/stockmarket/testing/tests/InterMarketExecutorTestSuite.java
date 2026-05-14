@@ -100,6 +100,10 @@ public class InterMarketExecutorTestSuite extends TestSuite {
     // ═══════════════════════════════════════════════════════════════════════════
 
     private void resetState(long priceA, long priceB) {
+        // Cancel any leftover inter-market orders from previous tests
+        marketManager.cancelInterMarketOrdersForMarket(itemA_ID);
+        marketManager.cancelInterMarketOrdersForMarket(itemB_ID);
+
         marketA.test_setCurrentMarketPrice(priceA);
         marketA.test_clearOrderbook();
         marketA.test_setDefaultVolumeProviderFunction(p -> 5f);
