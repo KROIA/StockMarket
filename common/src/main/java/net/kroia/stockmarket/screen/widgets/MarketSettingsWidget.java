@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.screen.widgets;
 
+import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.CheckBox;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.TextBox;
@@ -27,6 +28,7 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
     private final TextBox defaultPriceTextBox;
     private final Label abundanceLabel;
     private final TextBox abundanceTextBox;
+    private final Button applyButton;
 
     public MarketSettingsWidget(ClientMarket market)
     {
@@ -35,7 +37,6 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
 
         marketOpenCheckBox = new CheckBox(MARKET_OPEN_TEXT.getString());
         marketOpenCheckBox.setChecked(settings.marketOpen);
-        marketOpenCheckBox.setOnStateChanged(this::onSettingChanged);
 
         defaultPriceLabel = new Label(DEFAULT_PRICE_TEXT.getString());
         defaultPriceLabel.setAlignment(Label.Alignment.RIGHT);
@@ -44,22 +45,23 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
         defaultPriceTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false,
                 (int)Math.log10((double)(Long.MAX_VALUE/getBankManager().getItemFractionScaleFactor())),
                 (int)Math.log10(getBankManager().getItemFractionScaleFactor())));
-        defaultPriceTextBox.setOnTextChanged(text -> onSettingChanged(false));
 
         abundanceLabel = new Label(ABUNDANCE_TEXT.getString());
         abundanceLabel.setAlignment(Label.Alignment.RIGHT);
 
         abundanceTextBox = new TextBox();
         abundanceTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 10, 6));
-        abundanceTextBox.setOnTextChanged(text -> onSettingChanged(false));
+
+        applyButton = new Button("Apply", this::saveSettings);
 
         addChild(marketOpenCheckBox);
         addChild(defaultPriceLabel);
         addChild(defaultPriceTextBox);
         addChild(abundanceLabel);
         addChild(abundanceTextBox);
+        addChild(applyButton);
 
-        setHeight(3 * elementHeight + 4 * padding);
+        setHeight(4 * elementHeight + 5 * padding);
         loadSettings();
     }
 
@@ -79,6 +81,8 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
 
         abundanceLabel.setBounds(padding, defaultPriceLabel.getBottom() + padding, labelWidth, elementHeight);
         abundanceTextBox.setBounds(abundanceLabel.getRight() + spacing, abundanceLabel.getTop(), fieldWidth, elementHeight);
+
+        applyButton.setBounds(padding, abundanceLabel.getBottom() + padding, width, elementHeight);
     }
 
     public void loadSettings()
@@ -115,11 +119,6 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
         if (abundance > 0)
             settings.naturalAbundance = abundance;
         return settings;
-    }
-
-    private void onSettingChanged(Boolean ignored) {
-        if (!loading)
-            saveSettings();
     }
 
     private static String formatAbundance(float value) {

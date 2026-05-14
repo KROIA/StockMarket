@@ -378,8 +378,27 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     public boolean setMarketOpen(boolean marketOpen)
     {
         this.settings.marketOpen = marketOpen;
+        if (!marketOpen) {
+            cancelAllPlayerOrders();
+        }
         return true;
     }
+
+    private void cancelAllPlayerOrders() {
+        List<Order> limitOrders = new ArrayList<>(getLimitOrders());
+        int cancelledCount = 0;
+        for (Order order : limitOrders) {
+            if (order.isBotOrder()) continue;
+            orderbook.removeOrder(order);
+            unlockRemainingFunds(order);
+            onOrderCanceled(order);
+            cancelledCount++;
+        }
+        if (cancelledCount > 0) {
+            info("Market closed: cancelled " + cancelledCount + " player order(s)");
+        }
+    }
+
     @Override
     public CompletableFuture<Boolean> setMarketOpenAsync(boolean marketOpen) {
         return CompletableFuture.completedFuture(setMarketOpen(marketOpen));
@@ -472,13 +491,12 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     @Override
     public void update()
     {
-        orderbook.setCurrentMarketPrice(currentMarketPrice);
+        if(!settings.marketOpen)
+            return;
 
-        if(settings.marketOpen)
-        {
-            matchingEngine.update(currentMarketPrice);
-            candleTradedVolume += matchingEngine.getLastTradedVolume();
-        }
+        orderbook.setCurrentMarketPrice(currentMarketPrice);
+        matchingEngine.update(currentMarketPrice);
+        candleTradedVolume += matchingEngine.getLastTradedVolume();
 
         // Update the current candle
         candleLowPrice = Math.min(candleLowPrice, currentMarketPrice);
