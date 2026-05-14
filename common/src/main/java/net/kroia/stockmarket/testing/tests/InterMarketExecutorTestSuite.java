@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.testing.tests;
 
+import net.kroia.banksystem.api.bank.IServerBank;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.banksystem.util.ItemID;
@@ -111,9 +112,18 @@ public class InterMarketExecutorTestSuite extends TestSuite {
         marketB.test_resetVirtualOrderBookVolume();
         marketB.setMarketOpen(true);
 
+        // Unlock any locked funds from previous tests before resetting balance
+        unlockAll(bankAccount.getBank(itemA_ID));
+        unlockAll(bankAccount.getBank(itemB_ID));
+        unlockAll(bankAccount.getBank(moneyID));
         bankAccount.getBank(itemA_ID).setBalance(100 * scaleFactor);
         bankAccount.getBank(itemB_ID).setBalance(100 * scaleFactor);
         bankAccount.getBank(moneyID).setBalance(100000);
+    }
+
+    private void unlockAll(IServerBank bank) {
+        long locked = bank.getLockedBalance();
+        if (locked > 0) bank.unlockAmount(locked);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
