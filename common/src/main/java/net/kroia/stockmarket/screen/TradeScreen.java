@@ -22,6 +22,7 @@ import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.screen.widgets.CandlestickChart;
 import net.kroia.stockmarket.networking.request.CancelOrderRequest;
 import net.kroia.stockmarket.networking.request.PlaceInterMarketOrderRequest;
+import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
 import net.kroia.stockmarket.stockmarket.marketmanager.PlayerPreferences;
@@ -112,6 +113,7 @@ public class TradeScreen extends StockMarketGuiScreen {
         candlestickChart.addOverlay(orderMarkerOverlay);
         orderMarkerOverlay.setOnCancelOrder(this::onCancelOrderFromChart);
         orderMarkerOverlay.setOnMoveOrder(this::onMoveOrderFromChart);
+        orderMarkerOverlay.setOnCancelInterMarketOrder(this::onCancelInterMarketOrderFromChart);
 
         orderbookVolumeHistogram = new OrderbookVolumeHistogram(candlestickChart);
         tradingPanel = new TradingPanel(this::onBuyMarket, this::onSellMarket, this::onBuyLimit, this::onSellLimit);
@@ -213,6 +215,7 @@ public class TradeScreen extends StockMarketGuiScreen {
                     pendingOrdersPanel.updateOrders(data.orders);
                     pendingOrdersPanel.updateInterMarketOrders(data.interMarketOrders);
                     orderMarkerOverlay.updateOrders(data.orders);
+                    orderMarkerOverlay.updateInterMarketOrders(data.interMarketOrders);
                     orderHistoryPanel.refresh();
                     if (currentMarketID != null)
                         transactionHistoryPanel.refresh(currentMarketID);
@@ -445,6 +448,7 @@ public class TradeScreen extends StockMarketGuiScreen {
         isPairMode = pairMode;
         favoritesBar.setEnabled(!pairMode);
         pairSelectorWidget.setEnabled(pairMode);
+        orderMarkerOverlay.setPairMode(pairMode);
         moneyModeButton.setBackgroundColor(pairMode ? MODE_BUTTON_DEFAULT_COLOR : MODE_BUTTON_SELECTED_COLOR);
         pairModeButton.setBackgroundColor(pairMode ? MODE_BUTTON_SELECTED_COLOR : MODE_BUTTON_DEFAULT_COLOR);
 
@@ -698,6 +702,13 @@ public class TradeScreen extends StockMarketGuiScreen {
                 order.getTargetVolume()
         );
         BACKEND_INSTANCES.NETWORKING.CANCEL_ORDER_REQUEST.sendRequestToServer(input);
+    }
+
+    /**
+     * Cancels an inter-market order directly from the chart overlay cancel button.
+     */
+    private void onCancelInterMarketOrderFromChart(InterMarketOrder order) {
+        BACKEND_INSTANCES.NETWORKING.CANCEL_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(order.getInterMarketGroupID());
     }
 
     /**
