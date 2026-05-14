@@ -9,12 +9,13 @@ import java.util.function.Consumer;
 
 /**
  * Trading panel for inter-market (pair) mode. Provides two tabs:
- * - Market Exchange: sell "have" items at market rate to receive "want" items
- * - Limit Exchange: place a limit order with a max exchange rate
+ * - Market Exchange: buy/sell "want" items at market rate
+ * - Limit Exchange: place a limit buy/sell order with a rate limit
  *
- * The panel displays estimated yield based on the current cross-rate between
- * the two paired markets, and validates quantity against the player's "have"
- * item balance before enabling the exchange button.
+ * Quantity is in "want" items (the traded item). The "have" item acts as the
+ * currency. Estimated cost is displayed based on the current cross-rate.
+ * The panel validates quantity against the player's "have" item balance
+ * before enabling the buy button.
  */
 public class InterMarketTradingPanel extends TabElement {
     private static class Texts {
@@ -34,26 +35,29 @@ public class InterMarketTradingPanel extends TabElement {
     private int lastSelectedTab = -1;
 
     /**
-     * @param onMarketExchange called with quantity of "have" items to exchange at market rate
-     * @param onLimitExchange  called with (quantity of "have" items, rate limit in have-per-want)
+     * @param onBuy       called with quantity of "want" items to buy at market rate
+     * @param onSell      called with quantity of "want" items to sell at market rate
+     * @param onBuyLimit  called with (quantity of "want" items, rate limit) for limit buy
+     * @param onSellLimit called with (quantity of "want" items, rate limit) for limit sell
      */
-    public InterMarketTradingPanel(Consumer<Double> onMarketExchange, BiConsumer<Double, Double> onLimitExchange) {
-        marketExchangePanel = new InterMarketMarketExchangePanel(onMarketExchange);
+    public InterMarketTradingPanel(Consumer<Double> onBuy, Consumer<Double> onSell,
+                                   BiConsumer<Double, Double> onBuyLimit, BiConsumer<Double, Double> onSellLimit) {
+        marketExchangePanel = new InterMarketMarketExchangePanel(onBuy, onSell);
         addTab(Texts.MARKET_EXCHANGE_TAB_TITLE.getString(), marketExchangePanel);
 
-        limitExchangePanel = new InterMarketLimitExchangePanel(onLimitExchange);
+        limitExchangePanel = new InterMarketLimitExchangePanel(onBuyLimit, onSellLimit);
         addTab(Texts.LIMIT_EXCHANGE_TAB_TITLE.getString(), limitExchangePanel);
     }
 
     // --- State setters called from TradeScreen ---
 
-    /** Sets the display name of the "have" item (item being sold). */
+    /** Sets the display name of the "have" item (currency side). */
     public void setHaveItemName(String name) {
         marketExchangePanel.setHaveItemName(name);
         limitExchangePanel.setHaveItemName(name);
     }
 
-    /** Sets the display name of the "want" item (item being acquired). */
+    /** Sets the display name of the "want" item (traded item, shown next to quantity). */
     public void setWantItemName(String name) {
         marketExchangePanel.setWantItemName(name);
         limitExchangePanel.setWantItemName(name);

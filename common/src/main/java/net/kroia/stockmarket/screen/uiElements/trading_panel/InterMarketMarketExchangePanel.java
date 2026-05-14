@@ -14,27 +14,30 @@ import java.util.function.Consumer;
 
 /**
  * Market Exchange sub-panel for inter-market trading.
- * Allows the player to sell a quantity of "have" items at the current market
- * cross-rate and receive "want" items in return. The estimated yield is
- * displayed based on the live rate.
+ * Quantity is in "want" items (the traded item). The "have" item acts as
+ * the currency.
+ * - BUY: buy want-items by spending have-items
+ * - SELL: sell want-items to receive have-items
+ * Estimated cost shows: quantity * currentRate (in have-items).
  *
  * Layout:
  * - Quantity input with quick-add/subtract buttons
- * - Estimated yield label (quantity / currentRate)
+ * - Estimated cost label (quantity * currentRate)
  * - Current rate display
- * - Single "EXCHANGE" button
+ * - BUY and SELL buttons side by side
  */
 class InterMarketMarketExchangePanel extends StockMarketGuiElement {
     private static class Texts {
         private static final String PREFIX = "gui." + StockMarketMod.MOD_ID + ".inter_market_market_exchange.";
         private static final Component QUANTITY = Component.translatable(PREFIX + "quantity");
-        private static final Component EXCHANGE = Component.translatable(PREFIX + "exchange");
-        private static final Component ESTIMATED_YIELD_UNKNOWN = Component.translatable(PREFIX + "estimated_yield_unknown");
+        private static final Component BUY = Component.translatable(PREFIX + "buy");
+        private static final Component SELL = Component.translatable(PREFIX + "sell");
+        private static final Component ESTIMATED_COST_UNKNOWN = Component.translatable(PREFIX + "estimated_cost_unknown");
         private static final Component RATE_UNKNOWN = Component.translatable(PREFIX + "rate_unknown");
 
-        /** Returns "Est. yield: ~{value} {itemName}" using the translation pattern. */
-        static String estimatedYield(String formattedValue, String itemName) {
-            return Component.translatable(PREFIX + "estimated_yield", formattedValue, itemName).getString();
+        /** Returns "Est. cost: ~{value} {itemName}" using the translation pattern. */
+        static String estimatedCost(String formattedValue, String itemName) {
+            return Component.translatable(PREFIX + "estimated_cost", formattedValue, itemName).getString();
         }
 
         /** Returns "Rate: {value} {haveItem}/{wantItem}" using the translation pattern. */
@@ -45,7 +48,8 @@ class InterMarketMarketExchangePanel extends StockMarketGuiElement {
 
     private final TextBox quantityTextBox;
     private final Label quantityLabel;
-    private final Label haveItemNameLabel;
+    // Shows the WANT item name (since quantity is in want-items)
+    private final Label wantItemNameLabel;
 
     // Quick-add/subtract buttons (same pattern as MarketOrderPanel)
     private final Button zeroButton;
@@ -60,10 +64,11 @@ class InterMarketMarketExchangePanel extends StockMarketGuiElement {
     private final Button remove64Button;
     private final Button remove128Button;
 
-    private final Label estimatedYieldLabel;
+    private final Label estimatedCostLabel;
     private final Label currentRateLabel;
 
-    private final Button exchangeButton;
+    private final Button buyButton;
+    private final Button sellButton;
 
     private double quantity = 0;
     private double currentRate = 0; // "have" items per 1 "want" item
@@ -72,11 +77,16 @@ class InterMarketMarketExchangePanel extends StockMarketGuiElement {
     private String wantItemName = "";
     private boolean marketOpen = true;
 
-    public InterMarketMarketExchangePanel(Consumer<Double> onExchange) {
-        int exchangeColor1 = ColorUtilities.setBrightness(UI_Colors.buyColorGreen_dark, 0.8f);
-        int exchangeColor2 = ColorUtilities.setBrightness(UI_Colors.buyColorGreen_dark, 0.7f);
-        int exchangeColor3 = ColorUtilities.setBrightness(UI_Colors.buyColorGreen_dark, 0.6f);
-        int exchangeColor4 = ColorUtilities.setBrightness(UI_Colors.buyColorGreen_dark, 0.5f);
+    public InterMarketMarketExchangePanel(Consumer<Double> onBuy, Consumer<Double> onSell) {
+        int darkerBuyColor1 = ColorUtilities.setBrightness(UI_Colors.buyColorGreen_dark, 0.8f);
+        int darkerBuyColor2 = ColorUtilities.setBrightness(UI_Colors.buyColorGreen_dark, 0.7f);
+        int darkerBuyColor3 = ColorUtilities.setBrightness(UI_Colors.buyColorGreen_dark, 0.6f);
+        int darkerBuyColor4 = ColorUtilities.setBrightness(UI_Colors.buyColorGreen_dark, 0.5f);
+
+        int darkerSellColor1 = ColorUtilities.setBrightness(UI_Colors.sellColorRed_dark, 0.8f);
+        int darkerSellColor2 = ColorUtilities.setBrightness(UI_Colors.sellColorRed_dark, 0.7f);
+        int darkerSellColor3 = ColorUtilities.setBrightness(UI_Colors.sellColorRed_dark, 0.6f);
+        int darkerSellColor4 = ColorUtilities.setBrightness(UI_Colors.sellColorRed_dark, 0.5f);
 
         int addColor = ColorUtilities.setBrightness(UI_Colors.buyColorGreen_dark, 0.8f);
         int removeColor = ColorUtilities.setBrightness(UI_Colors.sellColorRed_dark, 0.8f);
@@ -89,19 +99,20 @@ class InterMarketMarketExchangePanel extends StockMarketGuiElement {
             double newQuantity = quantityTextBox.getDouble();
             quantity = Math.max(0, newQuantity);
             updateButtons();
-            updateEstimatedYield();
+            updateEstimatedCost();
             updateValidation();
         });
 
         quantityLabel = new Label(Texts.QUANTITY.getString());
         quantityLabel.setTextFontScale(0.8f);
 
-        haveItemNameLabel = new Label();
-        haveItemNameLabel.setTextFontScale(0.8f);
-        haveItemNameLabel.setAlignment(Alignment.RIGHT);
+        // Shows the WANT item name next to the quantity label
+        wantItemNameLabel = new Label();
+        wantItemNameLabel.setTextFontScale(0.8f);
+        wantItemNameLabel.setAlignment(Alignment.RIGHT);
 
         // Quick-add/subtract buttons
-        zeroButton = new Button("0", () -> { quantity = 0; quantityTextBox.setText("0.0"); updateButtons(); updateEstimatedYield(); updateValidation(); });
+        zeroButton = new Button("0", () -> { quantity = 0; quantityTextBox.setText("0.0"); updateButtons(); updateEstimatedCost(); updateValidation(); });
         zeroButton.setTextFontScale(1.3f);
 
         add1Button = new Button("+1", () -> addQuantity(1.0));
@@ -138,26 +149,33 @@ class InterMarketMarketExchangePanel extends StockMarketGuiElement {
         remove64Button.setTextFontScale(1.3f);
         remove128Button.setTextFontScale(1.3f);
 
-        // Estimated yield and rate info
-        estimatedYieldLabel = new Label("");
-        estimatedYieldLabel.setTextFontScale(0.8f);
-        estimatedYieldLabel.setAlignment(Alignment.CENTER);
+        // Estimated cost and rate info
+        estimatedCostLabel = new Label("");
+        estimatedCostLabel.setTextFontScale(0.8f);
+        estimatedCostLabel.setAlignment(Alignment.CENTER);
 
         currentRateLabel = new Label("");
         currentRateLabel.setTextFontScale(0.8f);
         currentRateLabel.setAlignment(Alignment.CENTER);
 
-        // Exchange button (green, single action)
-        exchangeButton = new Button(Texts.EXCHANGE.getString(), () -> onExchange.accept(quantity));
-        exchangeButton.setBackgroundColor(exchangeColor1);
-        exchangeButton.setHoverColor(exchangeColor2);
-        exchangeButton.setPressedColor(exchangeColor3);
-        exchangeButton.setOutlineColor(exchangeColor4);
+        // Buy button (green)
+        buyButton = new Button(Texts.BUY.getString(), () -> onBuy.accept(quantity));
+        buyButton.setBackgroundColor(darkerBuyColor1);
+        buyButton.setHoverColor(darkerBuyColor2);
+        buyButton.setPressedColor(darkerBuyColor3);
+        buyButton.setOutlineColor(darkerBuyColor4);
+
+        // Sell button (red)
+        sellButton = new Button(Texts.SELL.getString(), () -> onSell.accept(quantity));
+        sellButton.setBackgroundColor(darkerSellColor1);
+        sellButton.setHoverColor(darkerSellColor2);
+        sellButton.setPressedColor(darkerSellColor3);
+        sellButton.setOutlineColor(darkerSellColor4);
 
         // Add all children
         addChild(quantityTextBox);
         addChild(quantityLabel);
-        addChild(haveItemNameLabel);
+        addChild(wantItemNameLabel);
         addChild(zeroButton);
         addChild(add1Button);
         addChild(remove1Button);
@@ -169,30 +187,33 @@ class InterMarketMarketExchangePanel extends StockMarketGuiElement {
         addChild(remove32Button);
         addChild(remove64Button);
         addChild(remove128Button);
-        addChild(estimatedYieldLabel);
+        addChild(estimatedCostLabel);
         addChild(currentRateLabel);
-        addChild(exchangeButton);
+        addChild(buyButton);
+        addChild(sellButton);
 
         quantityTextBox.setText(String.valueOf(quantity));
         updateButtons();
-        updateEstimatedYield();
+        updateEstimatedCost();
         updateValidation();
     }
 
+    /** Sets the display name of the "have" item (currency side). */
     public void setHaveItemName(String name) {
         this.haveItemName = name;
-        haveItemNameLabel.setText(name);
-        updateEstimatedYield();
+        updateEstimatedCost();
     }
 
+    /** Sets the display name of the "want" item (traded item, shown next to quantity). */
     public void setWantItemName(String name) {
         this.wantItemName = name;
-        updateEstimatedYield();
+        wantItemNameLabel.setText(name);
+        updateEstimatedCost();
     }
 
     public void setCurrentRate(double rate) {
         this.currentRate = rate;
-        updateEstimatedYield();
+        updateEstimatedCost();
         updateValidation();
     }
 
@@ -210,7 +231,7 @@ class InterMarketMarketExchangePanel extends StockMarketGuiElement {
         this.quantity = quantity;
         quantityTextBox.setText(String.valueOf(quantity));
         updateButtons();
-        updateEstimatedYield();
+        updateEstimatedCost();
         updateValidation();
     }
 
@@ -232,7 +253,7 @@ class InterMarketMarketExchangePanel extends StockMarketGuiElement {
 
         // Quantity label row
         quantityLabel.setBounds(padding, padding, width / 2, StockMarketGuiElement.defaultElementHeight / 2);
-        haveItemNameLabel.setBounds(quantityLabel.getRight(), quantityLabel.getTop(), width / 2, quantityLabel.getHeight());
+        wantItemNameLabel.setBounds(quantityLabel.getRight(), quantityLabel.getTop(), width / 2, quantityLabel.getHeight());
 
         // Quantity text box
         quantityTextBox.setBounds(padding, quantityLabel.getBottom(), width, StockMarketGuiElement.defaultElementHeight);
@@ -260,12 +281,14 @@ class InterMarketMarketExchangePanel extends StockMarketGuiElement {
         remove64Button.setBounds(remove32Button.getRight() + spacing, remove32Button.getTop(), buttonWidth, rowHeight);
         remove128Button.setBounds(remove64Button.getRight() + spacing, remove64Button.getTop(), buttonWidth, rowHeight);
 
-        // Estimated yield and rate labels
-        estimatedYieldLabel.setBounds(padding, remove10Button.getBottom() + spacing, width, StockMarketGuiElement.defaultElementHeight / 2);
-        currentRateLabel.setBounds(padding, estimatedYieldLabel.getBottom() + spacing, width, StockMarketGuiElement.defaultElementHeight / 2);
+        // Estimated cost and rate labels
+        estimatedCostLabel.setBounds(padding, remove10Button.getBottom() + spacing, width, StockMarketGuiElement.defaultElementHeight / 2);
+        currentRateLabel.setBounds(padding, estimatedCostLabel.getBottom() + spacing, width, StockMarketGuiElement.defaultElementHeight / 2);
 
-        // Exchange button at the bottom
-        exchangeButton.setBounds(padding, height - (StockMarketGuiElement.defaultElementHeight - padding), width, StockMarketGuiElement.defaultElementHeight);
+        // Buy and sell buttons side by side at the bottom
+        int halfWidth = (width - spacing) / 2;
+        buyButton.setBounds(padding, height - (StockMarketGuiElement.defaultElementHeight - padding), halfWidth, StockMarketGuiElement.defaultElementHeight);
+        sellButton.setBounds(buyButton.getRight() + spacing, buyButton.getTop(), halfWidth, StockMarketGuiElement.defaultElementHeight);
     }
 
     private void addQuantity(double amount) {
@@ -274,7 +297,7 @@ class InterMarketMarketExchangePanel extends StockMarketGuiElement {
             quantity = 0;
         quantityTextBox.setText(String.valueOf(quantity));
         updateButtons();
-        updateEstimatedYield();
+        updateEstimatedCost();
         updateValidation();
     }
 
@@ -287,16 +310,16 @@ class InterMarketMarketExchangePanel extends StockMarketGuiElement {
     }
 
     /**
-     * Updates the estimated yield and current rate labels.
-     * Yield = quantity / currentRate (how many "want" items the player receives).
-     * Colors the yield red if the player doesn't have enough "have" items.
+     * Updates the estimated cost and current rate labels.
+     * Cost = quantity * currentRate (how many "have" items it costs to buy/sell quantity "want" items).
+     * Colors the cost red if the player doesn't have enough "have" items for a buy.
      */
-    private void updateEstimatedYield() {
+    private void updateEstimatedCost() {
         if (currentRate > 0 && quantity > 0) {
-            double yield = quantity / currentRate;
-            estimatedYieldLabel.setText(Texts.estimatedYield(String.format("%.2f", yield), wantItemName));
+            double cost = quantity * currentRate;
+            estimatedCostLabel.setText(Texts.estimatedCost(String.format("%.2f", cost), haveItemName));
         } else {
-            estimatedYieldLabel.setText(Texts.ESTIMATED_YIELD_UNKNOWN.getString());
+            estimatedCostLabel.setText(Texts.ESTIMATED_COST_UNKNOWN.getString());
         }
 
         if (currentRate > 0) {
@@ -305,18 +328,24 @@ class InterMarketMarketExchangePanel extends StockMarketGuiElement {
             currentRateLabel.setText(Texts.RATE_UNKNOWN.getString());
         }
 
-        // Color red if player cannot afford
-        boolean insufficient = quantity > haveBalance && haveBalance > 0;
-        if (insufficient && quantity > 0)
-            estimatedYieldLabel.setTextColor(UI_Colors.sellColorRed);
+        // Color red if player cannot afford a buy at the current rate
+        double cost = quantity * currentRate;
+        boolean insufficient = cost > haveBalance && haveBalance > 0;
+        if (insufficient && quantity > 0 && currentRate > 0)
+            estimatedCostLabel.setTextColor(UI_Colors.sellColorRed);
         else
-            estimatedYieldLabel.setTextColor(GuiElement.DEFAULT_TEXT_COLOR);
+            estimatedCostLabel.setTextColor(GuiElement.DEFAULT_TEXT_COLOR);
     }
 
     /**
-     * Enables or disables the exchange button based on balance and market state.
+     * Enables or disables the buy/sell buttons based on balance and market state.
+     * Buy requires enough have-items to cover the cost (quantity * rate).
+     * Sell requires the quantity to be valid and the market to be open.
      */
     private void updateValidation() {
-        exchangeButton.setEnabled(marketOpen && quantity > 0 && currentRate > 0 && quantity <= haveBalance);
+        double cost = quantity * currentRate;
+        buyButton.setEnabled(marketOpen && quantity > 0 && currentRate > 0 && cost <= haveBalance);
+        // Sell does not require have-balance (the player sells want-items, not have-items)
+        sellButton.setEnabled(marketOpen && quantity > 0 && currentRate > 0);
     }
 }

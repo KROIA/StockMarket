@@ -117,7 +117,9 @@ public class TradeScreen extends StockMarketGuiScreen {
         tradingPanel = new TradingPanel(this::onBuyMarket, this::onSellMarket, this::onBuyLimit, this::onSellLimit);
 
         // Inter-market trading panel for pair mode (replaces regular trading panel)
-        interMarketTradingPanel = new InterMarketTradingPanel(this::onMarketExchange, this::onLimitExchange);
+        interMarketTradingPanel = new InterMarketTradingPanel(
+                this::onInterMarketBuy, this::onInterMarketSell,
+                this::onInterMarketBuyLimit, this::onInterMarketSellLimit);
         interMarketTradingPanel.setEnabled(false);
 
         marketClosedLabel = new Label(Texts.MARKET_CLOSED.getString());
@@ -610,28 +612,70 @@ public class TradeScreen extends StockMarketGuiScreen {
     }
 
     /**
-     * Handles a market exchange from the inter-market trading panel.
-     * Places an inter-market order at market rate (crossRateLimit = 0).
+     * BUY want-items at market rate: spend have-items to acquire want-items.
+     * Converts want-quantity to have-volume using current market prices, since
+     * PlaceInterMarketOrderRequest takes the have-item volume.
      */
-    private void onMarketExchange(double quantity) {
+    private void onInterMarketBuy(double wantQuantity) {
         if (pairHaveMarketID == null || pairWantMarketID == null || selectedBankAccountNr == -1) return;
+        ClientMarket haveM = getMarket(pairHaveMarketID);
+        ClientMarket wantM = getMarket(pairWantMarketID);
+        if (haveM == null || wantM == null) return;
+        double havePrice = haveM.getCurrentMarketRealPrice();
+        double wantPrice = wantM.getCurrentMarketRealPrice();
+        double haveVolume = (havePrice > 0) ? wantQuantity * wantPrice / havePrice : 0;
+        if (haveVolume <= 0) return;
         PlaceInterMarketOrderRequest.InputData input = new PlaceInterMarketOrderRequest.InputData(
-                pairHaveMarketID, pairWantMarketID, selectedBankAccountNr, quantity, 0L);
+                pairHaveMarketID, pairWantMarketID, selectedBankAccountNr, haveVolume, 0L);
         BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(input)
-                .thenAccept(result -> info("Inter-market order: " + (result.success ? "OK" : result.errorMessage)));
+                .thenAccept(result -> info("Inter-market buy: " + (result.success ? "OK" : result.errorMessage)));
     }
 
     /**
-     * Handles a limit exchange from the inter-market trading panel.
-     * Places an inter-market order with a cross-rate limit.
+     * SELL want-items at market rate: sell want-items to receive have-items.
+     * Reverses the direction so haveItemID=WANT (selling want-items) and
+     * wantItemID=HAVE (receiving have-items).
      */
-    private void onLimitExchange(double quantity, double rateLimit) {
+    private void onInterMarketSell(double wantQuantity) {
         if (pairHaveMarketID == null || pairWantMarketID == null || selectedBankAccountNr == -1) return;
+        // Reverse direction: selling want-items to receive have-items
+        PlaceInterMarketOrderRequest.InputData input = new PlaceInterMarketOrderRequest.InputData(
+                pairWantMarketID, pairHaveMarketID, selectedBankAccountNr, wantQuantity, 0L);
+        BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(input)
+                .thenAccept(result -> info("Inter-market sell: " + (result.success ? "OK" : result.errorMessage)));
+    }
+
+    /**
+     * BUY LIMIT want-items: buy want-items with a rate limit.
+     * Converts want-quantity to have-volume using the rate limit, since
+     * PlaceInterMarketOrderRequest takes the have-item volume.
+     */
+    private void onInterMarketBuyLimit(double wantQuantity, double rateLimit) {
+        if (pairHaveMarketID == null || pairWantMarketID == null || selectedBankAccountNr == -1) return;
+        // haveVolume = wantQuantity * rateLimit (rate is have-per-want)
+        double haveVolume = wantQuantity * rateLimit;
+        if (haveVolume <= 0) return;
         long rawRateLimit = (long)(rateLimit * getItemFractionScaleFactor());
         PlaceInterMarketOrderRequest.InputData input = new PlaceInterMarketOrderRequest.InputData(
-                pairHaveMarketID, pairWantMarketID, selectedBankAccountNr, quantity, rawRateLimit);
+                pairHaveMarketID, pairWantMarketID, selectedBankAccountNr, haveVolume, rawRateLimit);
         BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(input)
-                .thenAccept(result -> info("Inter-market limit order: " + (result.success ? "OK" : result.errorMessage)));
+                .thenAccept(result -> info("Inter-market buy limit: " + (result.success ? "OK" : result.errorMessage)));
+    }
+
+    /**
+     * SELL LIMIT want-items: sell want-items with a rate limit.
+     * Reverses the direction so haveItemID=WANT and wantItemID=HAVE.
+     * The rate limit is inverted (1/rateLimit) since the direction is reversed.
+     */
+    private void onInterMarketSellLimit(double wantQuantity, double rateLimit) {
+        if (pairHaveMarketID == null || pairWantMarketID == null || selectedBankAccountNr == -1) return;
+        // Reverse direction: selling want-items to receive have-items
+        // Invert rate: original rateLimit is have-per-want, reversed is want-per-have = 1/rateLimit
+        long rawRateLimit = (rateLimit > 0) ? (long)((1.0 / rateLimit) * getItemFractionScaleFactor()) : 0L;
+        PlaceInterMarketOrderRequest.InputData input = new PlaceInterMarketOrderRequest.InputData(
+                pairWantMarketID, pairHaveMarketID, selectedBankAccountNr, wantQuantity, rawRateLimit);
+        BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(input)
+                .thenAccept(result -> info("Inter-market sell limit: " + (result.success ? "OK" : result.errorMessage)));
     }
 
     private long getItemFractionScaleFactor() {
