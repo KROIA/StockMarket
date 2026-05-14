@@ -241,7 +241,15 @@ public class AsyncMarket implements IAsyncMarket{
                 case FunctionType.PutOrder_2 ->                           OutputData.of(input.function, market.putOrder((InterMarketOrder)inputData.extra));
                 case FunctionType.GetLimitOrders ->                       OutputData.of(input.function, market.getLimitOrders());
                 case FunctionType.IsMarketOpen ->                         OutputData.of(input.function, market.isMarketOpen());
-                case FunctionType.SetMarketOpen ->                        OutputData.of(input.function, market.setMarketOpen((Boolean)inputData.extra));
+                case FunctionType.SetMarketOpen ->
+                {
+                    if(playerSender != null)
+                    {
+                        if(!isPlayerAdmin(playerSender))
+                            yield OutputData.of(input.function, false);
+                    }
+                    yield OutputData.of(input.function, market.setMarketOpen((Boolean)inputData.extra));
+                }
                 case FunctionType.GetCurrentMarketPriceStruct ->          OutputData.of(input.function, market.getCurrentMarketPriceStruct());
                 case FunctionType.GetCurrentMarketPriceStructAndReset ->  OutputData.of(input.function, market.getCurrentMarketPriceStructAndReset());
                 case FunctionType.GetSettings ->  {
@@ -287,7 +295,7 @@ public class AsyncMarket implements IAsyncMarket{
                      //FunctionType.PutOrder_2,
                      //FunctionType.GetLimitOrders,
                      FunctionType.IsMarketOpen,
-                     //FunctionType.SetMarketOpen,
+                     FunctionType.SetMarketOpen,
                      FunctionType.GetCurrentMarketPriceStruct,
                      //FunctionType.GetCurrentMarketPriceStructAndReset,
                      FunctionType.GetSettings,
