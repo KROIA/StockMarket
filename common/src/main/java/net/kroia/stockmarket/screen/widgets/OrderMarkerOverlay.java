@@ -39,6 +39,9 @@ public class OrderMarkerOverlay implements CandlestickChart.InteractiveOverlay {
     private List<InterMarketOrder> interMarketOrders = new ArrayList<>();
     private @Nullable ItemID currentMarketItemID;
     private boolean pairMode = false;
+    // Current pair direction — needed to invert rates for orders in the opposite direction
+    private @Nullable ItemID pairHaveItemID = null;
+    private @Nullable ItemID pairWantItemID = null;
 
     // ── Drag state ──
 
@@ -133,6 +136,16 @@ public class OrderMarkerOverlay implements CandlestickChart.InteractiveOverlay {
      */
     public void setPairMode(boolean pairMode) {
         this.pairMode = pairMode;
+    }
+
+    /**
+     * Sets the current pair direction so inter-market orders can be displayed at the
+     * correct rate. Orders whose sell-item matches pairHaveItemID display their rate as-is.
+     * Orders in the opposite direction have their rate inverted (1/rate).
+     */
+    public void setPairDirection(@Nullable ItemID haveItemID, @Nullable ItemID wantItemID) {
+        this.pairHaveItemID = haveItemID;
+        this.pairWantItemID = wantItemID;
     }
 
     public void setOnCancelInterMarketOrder(@Nullable Consumer<InterMarketOrder> callback) {
@@ -260,8 +273,12 @@ public class OrderMarkerOverlay implements CandlestickChart.InteractiveOverlay {
         for (InterMarketOrder order : interMarketOrders) {
             if (!order.isLimitOrder()) continue;
 
-            // Convert raw cross-rate limit to real rate
-            double ratePrice = (double) order.getCrossRateLimit() / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+            // Convert raw cross-rate limit to real rate, inverting if the order direction
+            // is opposite to the current pair view direction
+            double rawRate = (double) order.getCrossRateLimit() / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+            boolean orderMatchesPairDirection = pairHaveItemID != null
+                    && order.getSellItemID().equals(pairHaveItemID);
+            double ratePrice = orderMatchesPairDirection ? rawRate : (rawRate > 0 ? 1.0 / rawRate : 0);
             int lineY = chart.toCanvasSpaceY(ratePrice);
 
             // Skip if outside canvas bounds (with margin for the buttons)

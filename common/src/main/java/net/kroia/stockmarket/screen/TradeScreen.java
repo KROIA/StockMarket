@@ -501,6 +501,9 @@ public class TradeScreen extends StockMarketGuiScreen {
         pairHaveMarketID = selection.haveMarketID;
         pairWantMarketID = selection.wantMarketID;
 
+        // Update the overlay's pair direction so limit order markers display at the correct rate
+        orderMarkerOverlay.setPairDirection(pairHaveMarketID, pairWantMarketID);
+
         // In pair mode, switch the chart/trading panel to show the "have" market as fallback
         if (pairHaveMarketID != null && !pairHaveMarketID.equals(currentMarketID)) {
             switchMarketInternal(pairHaveMarketID);
