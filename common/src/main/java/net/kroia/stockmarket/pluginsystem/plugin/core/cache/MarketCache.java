@@ -7,6 +7,7 @@ import net.kroia.stockmarket.pluginsystem.interaction.PluginMarket;
 import net.kroia.stockmarket.pluginsystem.interaction.PluginOrderBook;
 import net.kroia.stockmarket.stockmarket.market.ServerMarket;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
+import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
 import org.jetbrains.annotations.NotNull;
 
 public class MarketCache {
@@ -27,6 +28,9 @@ public class MarketCache {
         this.serverMarket = serverMarket;
         pluginMarket = new PluginMarket(serverMarket, this);
         pluginOrderBook = new PluginOrderBook(serverMarket, this);
+        double currentPrice = MarketManager.convertToRealAmountStatic(serverMarket.getCurrentMarketPrice());
+        lastTargetPrice = currentPrice;
+        nextTargetPrice = currentPrice;
     }
 
     public IPluginMarket getPluginMarket()
