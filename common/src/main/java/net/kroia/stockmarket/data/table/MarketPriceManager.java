@@ -97,7 +97,7 @@ public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
                     databaseManager.commitTransaction();
                 }
             } catch (SQLException e) {
-                throw new RuntimeException(e);
+                StockMarketMod.LOGGER.warn("Failed to remove MarketPrice history: {}", e.getMessage());
             }
         }, databaseManager.getDatabaseThread());
     }
@@ -141,7 +141,8 @@ public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
                 return result;
 
             } catch (SQLException e) {
-                throw new RuntimeException(e);
+                StockMarketMod.LOGGER.warn("Failed to query MarketPrice: {}", e.getMessage());
+                return List.of();
             }
 
         }, databaseManager.getDatabaseThread());
@@ -194,7 +195,8 @@ public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
                 return 0;
 
             } catch (SQLException e) {
-                throw new RuntimeException(e);
+                StockMarketMod.LOGGER.warn("Failed to count MarketPrice records: {}", e.getMessage());
+                return 0;
             }
 
         }, databaseManager.getDatabaseThread());

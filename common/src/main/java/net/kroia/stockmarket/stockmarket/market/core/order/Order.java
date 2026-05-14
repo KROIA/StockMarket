@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.stockmarket.market.core.order;
 
+import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.modutilities.persistence.ServerSaveable;
@@ -216,7 +217,7 @@ public class Order implements ServerSaveable
     public long getAverageExecutionPrice()
     {
         if (filledVolume == 0) return 0;
-        return -transferredMoney / filledVolume;
+        return -transferredMoney * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR / filledVolume;
     }
 
     public boolean isBuyOrder()

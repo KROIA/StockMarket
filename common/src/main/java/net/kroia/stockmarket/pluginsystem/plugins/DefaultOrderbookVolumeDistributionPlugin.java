@@ -13,11 +13,12 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.util.Tuple;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<DefaultOrderbookVolumeDistributionPlugin.Settings, Void> {
+public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<DefaultOrderbookVolumeDistributionPlugin.Settings, DefaultOrderbookVolumeDistributionPlugin.RuntimeStreamData> {
 
     /**
      * Custom settings record for volume scale and convergence speed parameters.
@@ -30,9 +31,52 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
         );
     }
 
+    /**
+     * Runtime data containing sampled volume distribution points per market,
+     * computed on the server using the actual DistributionCalculator formula.
+     */
+    public record RuntimeStreamData(List<MarketDistribution> entries) {
+        public record MarketDistribution(short itemId, double startPrice, double priceStep, float[] volumes) {}
+
+        public static final StreamCodec<ByteBuf, RuntimeStreamData> CODEC = new StreamCodec<>() {
+            @Override
+            public RuntimeStreamData decode(ByteBuf buf) {
+                int count = buf.readInt();
+                List<MarketDistribution> entries = new ArrayList<>();
+                for (int i = 0; i < count; i++) {
+                    short itemId = buf.readShort();
+                    double startPrice = buf.readDouble();
+                    double priceStep = buf.readDouble();
+                    int volCount = buf.readInt();
+                    float[] volumes = new float[volCount];
+                    for (int j = 0; j < volCount; j++) {
+                        volumes[j] = buf.readFloat();
+                    }
+                    entries.add(new MarketDistribution(itemId, startPrice, priceStep, volumes));
+                }
+                return new RuntimeStreamData(entries);
+            }
+            @Override
+            public void encode(ByteBuf buf, RuntimeStreamData data) {
+                buf.writeInt(data.entries().size());
+                for (MarketDistribution e : data.entries()) {
+                    buf.writeShort(e.itemId());
+                    buf.writeDouble(e.startPrice());
+                    buf.writeDouble(e.priceStep());
+                    buf.writeInt(e.volumes().length);
+                    for (float v : e.volumes()) {
+                        buf.writeFloat(v);
+                    }
+                }
+            }
+        };
+    }
+
     static class DistributionCalculator implements IVolumeDistributionCalculator
     {
-        private float volumeScale = 1;
+        private float volumeScale = 1000;
+        private double defaultPrice = 0;
+
         public DistributionCalculator()
         {
 
@@ -40,29 +84,37 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
 
         @Override
         public float getVolume(double marketPrice, double volumePickPrice) {
-            float delta = (float)Math.abs(volumePickPrice - marketPrice);
-            float absDelta =  Math.abs(delta);
-            float sign = Math.signum(delta);
-            float volume = 0;
+            if (marketPrice <= 0) return 0;
 
-            if(absDelta < 20)
-            {
-                volume += (float) (2/Math.exp(1) * Math.sqrt(absDelta) * sign*Math.exp(-Math.abs(delta*delta/marketPrice+0.5)));
+            double absDistance = Math.abs((volumePickPrice - marketPrice) / marketPrice);
+
+            // Spread gap width: at least one tick (0.01) relative to market price
+            double spreadWidth = Math.max(0.005, 0.01 / marketPrice);
+            double spreadNorm = absDistance / spreadWidth;
+
+            // Bouchaud-style shape: delta^(1-mu) rise near spread, exponential decay further out.
+            // mu ~ 0.6 (empirical power-law exponent), so volume grows as delta^0.4 near the spread.
+            double coreShape = Math.pow(spreadNorm + 0.001, 0.4) * Math.exp(-absDistance / 0.15);
+
+            // Value-seeking cluster: Gaussian bump near the default/fair price
+            double valueCluster = 0;
+            if (defaultPrice > 0) {
+                double fairRelDistance = (volumePickPrice - defaultPrice) / defaultPrice;
+                double sigma = 0.15;
+                valueCluster = 0.4 * Math.exp(-fairRelDistance * fairRelDistance / (2 * sigma * sigma));
             }
 
-            volume += 1 * sign;
+            // Background liquidity: thin but persistent orders at all price levels
+            double background = 0.08 * Math.exp(-absDistance / 0.6);
 
-            if(delta > 0)
-            {
-                volume += (float) (5.0/(1.0+volumePickPrice));
+            // Buy-side demand boost: increasing buying interest at lower prices
+            double demandBoost = 0;
+            if (volumePickPrice < marketPrice) {
+                double dropFraction = (marketPrice - volumePickPrice) / marketPrice;
+                demandBoost = 0.5 * Math.sqrt(dropFraction);
             }
 
-            return volume * volumeScale;
-
-            // Dummy implementation
-            /*if(delta > 1)
-                delta = 1;
-            return delta*100;*/
+            return (float) ((coreShape + valueCluster + background + demandBoost) * volumeScale);
         }
     }
 
@@ -104,6 +156,7 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
         for(MarketInterface market : markets)
         {
             RuntimeData data = marketData.get(market.market.getMarketID());
+            data.currentMarketPrice = (float) market.market.getPrice();
             updateForMarket(market, data);
         }
     }
@@ -164,6 +217,7 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
         MarketInterface interf = getMarketInterface(marketID);
         if(interf == null)
             return;
+        data.calculator.defaultPrice = interf.market.getDefaultRealPrice();
         interf.oderBook.registerDefaultVolumeDistributionCalculator(data.calculator);
         interf.oderBook.resetVirtualVolume();
     }
@@ -224,5 +278,39 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
             data.speed = speed;
         }
         return true;
+    }
+
+    private static final int SAMPLE_COUNT = 64;
+
+    @Override
+    protected StreamCodec<ByteBuf, RuntimeStreamData> runtimeDataCodec() {
+        return RuntimeStreamData.CODEC;
+    }
+
+    @Override
+    protected RuntimeStreamData provideRuntimeData() {
+        if (marketData.isEmpty()) return null;
+        List<RuntimeStreamData.MarketDistribution> entries = new ArrayList<>();
+        for (Map.Entry<ItemID, RuntimeData> entry : marketData.entrySet()) {
+            RuntimeData data = entry.getValue();
+            double marketPrice = data.currentMarketPrice;
+            double maxPrice = Math.max(marketPrice * 2.5, data.calculator.defaultPrice * 2.5);
+            if (maxPrice <= 0.01) maxPrice = 10;
+            double startPrice = 0.01;
+            double priceStep = (maxPrice - startPrice) / (SAMPLE_COUNT - 1);
+            float[] volumes = new float[SAMPLE_COUNT];
+            for (int i = 0; i < SAMPLE_COUNT; i++) {
+                double price = startPrice + priceStep * i;
+                volumes[i] = data.calculator.getVolume(marketPrice, price);
+            }
+            entries.add(new RuntimeStreamData.MarketDistribution(
+                    entry.getKey().getShort(), startPrice, priceStep, volumes));
+        }
+        return new RuntimeStreamData(entries);
+    }
+
+    @Override
+    public long getRuntimeDataStreamInterval() {
+        return 500;
     }
 }

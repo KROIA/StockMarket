@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.stockmarket.marketmanager;
 
+import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.persistence.ServerSaveableChunked;
 import net.kroia.stockmarket.StockMarketModBackend;
@@ -102,12 +103,24 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
         ServerMarket m = markets.get(marketID);
         if (m == null)
         {
+            // Reject blacklisted items
+            IServerBankManager bankManager = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync();
+            if (bankManager != null && bankManager.isItemIDBlacklisted(marketID)) {
+                warn("Cannot create market for blacklisted item: " + marketID);
+                return null;
+            }
+
             MarketPreset preset = BACKEND_INSTANCES.PRESET_MANAGER != null
                     ? BACKEND_INSTANCES.PRESET_MANAGER.getPreset(marketID) : null;
-            long defaultPrice = (preset != null) ? (long) preset.defaultPrice() : 1000;
+            long defaultPrice = (preset != null) ? MarketManager.convertToRawAmountStatic(preset.defaultPrice()) : 1000;
             float abundance = (preset != null) ? preset.naturalAbundance() : 10f;
             m = new ServerMarket(marketID, null, defaultPrice, abundance);
             markets.put(marketID, m);
+
+            // Allow the item in the banking system so it can be traded
+            if (bankManager != null) {
+                bankManager.allowItemID(marketID);
+            }
 
             // Auto-subscribe new market to plugins that opt in
             if (BACKEND_INSTANCES.PLUGIN_MANAGER != null) {

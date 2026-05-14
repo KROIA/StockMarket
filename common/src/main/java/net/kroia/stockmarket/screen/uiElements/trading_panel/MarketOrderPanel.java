@@ -25,6 +25,9 @@ class MarketOrderPanel extends StockMarketGuiElement
     private final Label quantityLabel;
     private final Label itemNameLabel;
 
+    private final Button zeroButton;
+    private final Button add1Button;
+    private final Button remove1Button;
     private final Button add10Button;
     private final Button add32Button;
     private final Button add64Button;
@@ -81,6 +84,17 @@ class MarketOrderPanel extends StockMarketGuiElement
         itemNameLabel.setTextFontScale(0.8f);
         itemNameLabel.setAlignment(Alignment.RIGHT);
 
+        zeroButton = new Button("0", () -> { quantity = 0; quantityTextBox.setText("0.0"); updateButtons(); updateEstimatedCost(); updateValidation(); });
+        zeroButton.setTextFontScale(1.3f);
+
+        add1Button = new Button("+1", () -> addQuantity(1.0));
+        add1Button.setOutlineColor(darkerBuyColor1);
+        add1Button.setTextFontScale(1.3f);
+
+        remove1Button = new Button("-1", () -> addQuantity(-1.0));
+        remove1Button.setOutlineColor(darkerSellColor1);
+        remove1Button.setTextFontScale(1.3f);
+
         add10Button = new Button("+10", () -> addQuantity(10.0));
         add32Button = new Button("+32", () -> addQuantity(32.0));
         add64Button = new Button("+64", () -> addQuantity(64.0));
@@ -93,10 +107,6 @@ class MarketOrderPanel extends StockMarketGuiElement
         add32Button.setTextFontScale(1.3f);
         add64Button.setTextFontScale(1.3f);
         add128Button.setTextFontScale(1.3f);
-        //add10Button.setIdleColor(ColorUtilities.setBrightness(DEFAULT_BACKGROUND_COLOR, 0.7f));
-        //add32Button.setIdleColor(ColorUtilities.setBrightness(DEFAULT_BACKGROUND_COLOR, 0.7f));
-        // add64Button.setIdleColor(ColorUtilities.setBrightness(DEFAULT_BACKGROUND_COLOR, 0.7f));
-        // add128Button.setIdleColor(ColorUtilities.setBrightness(DEFAULT_BACKGROUND_COLOR, 0.7f));
 
         remove10Button = new Button("-10", () -> addQuantity(-10.0));
         remove32Button = new Button("-32", () -> addQuantity(-32.0));
@@ -133,6 +143,9 @@ class MarketOrderPanel extends StockMarketGuiElement
         addChild(quantityTextBox);
         addChild(quantityLabel);
         addChild(itemNameLabel);
+        addChild(zeroButton);
+        addChild(add1Button);
+        addChild(remove1Button);
         addChild(add10Button);
         addChild(add32Button);
         addChild(add64Button);
@@ -206,16 +219,27 @@ class MarketOrderPanel extends StockMarketGuiElement
         itemNameLabel.setBounds(quantityLabel.getRight(), quantityLabel.getTop(), width/2, quantityLabel.getHeight());
         quantityTextBox.setBounds(padding, quantityLabel.getBottom(), width, StockMarketGuiElement.defaultElementHeight);
 
-        int buttonWidth = (width-3*spacing)/4;
-        add10Button.setBounds(padding, quantityTextBox.getBottom()+spacing, buttonWidth, defaultElementHeight);
-        add32Button.setBounds(add10Button.getRight()+spacing, add10Button.getTop(), buttonWidth, add10Button.getHeight());
-        add64Button.setBounds(add32Button.getRight()+spacing, add32Button.getTop(), buttonWidth, add32Button.getHeight());
-        add128Button.setBounds(add64Button.getRight()+spacing, add64Button.getTop(), buttonWidth, add64Button.getHeight());
+        int rowHeight = defaultElementHeight;
+        int twoRowHeight = rowHeight * 2 + spacing;
+        int zeroWidth = (width - 5 * spacing) / 6;
+        int smallBtnWidth = zeroWidth;
+        int buttonWidth = (width - zeroWidth - smallBtnWidth - 5 * spacing) / 4;
+        int rightStart = padding + zeroWidth + spacing + smallBtnWidth + spacing;
+        int topY = quantityTextBox.getBottom() + spacing;
 
-        remove10Button.setBounds(add10Button.getLeft(), add10Button.getBottom()+spacing, buttonWidth, defaultElementHeight);
-        remove32Button.setBounds(remove10Button.getRight()+spacing, remove10Button.getTop(), buttonWidth, remove10Button.getHeight());
-        remove64Button.setBounds(remove32Button.getRight()+spacing, remove32Button.getTop(), buttonWidth, remove32Button.getHeight());
-        remove128Button.setBounds(remove64Button.getRight()+spacing, remove64Button.getTop(), buttonWidth, remove64Button.getHeight());
+        zeroButton.setBounds(padding, topY, zeroWidth, twoRowHeight);
+        add1Button.setBounds(zeroButton.getRight() + spacing, topY, smallBtnWidth, rowHeight);
+        remove1Button.setBounds(zeroButton.getRight() + spacing, add1Button.getBottom() + spacing, smallBtnWidth, rowHeight);
+
+        add10Button.setBounds(rightStart, topY, buttonWidth, rowHeight);
+        add32Button.setBounds(add10Button.getRight() + spacing, topY, buttonWidth, rowHeight);
+        add64Button.setBounds(add32Button.getRight() + spacing, topY, buttonWidth, rowHeight);
+        add128Button.setBounds(add64Button.getRight() + spacing, topY, buttonWidth, rowHeight);
+
+        remove10Button.setBounds(rightStart, add10Button.getBottom() + spacing, buttonWidth, rowHeight);
+        remove32Button.setBounds(remove10Button.getRight() + spacing, remove10Button.getTop(), buttonWidth, rowHeight);
+        remove64Button.setBounds(remove32Button.getRight() + spacing, remove32Button.getTop(), buttonWidth, rowHeight);
+        remove128Button.setBounds(remove64Button.getRight() + spacing, remove64Button.getTop(), buttonWidth, rowHeight);
 
         // Estimated cost label between remove buttons and buy/sell buttons
         estimatedCostLabel.setBounds(padding, remove10Button.getBottom()+spacing, width, StockMarketGuiElement.defaultElementHeight/2);
@@ -237,6 +261,7 @@ class MarketOrderPanel extends StockMarketGuiElement
     }
     private void updateButtons()
     {
+        remove1Button.setEnabled(quantity >= 1);
         remove10Button.setEnabled(quantity >= 10);
         remove32Button.setEnabled(quantity >= 32);
         remove64Button.setEnabled(quantity >= 64);

@@ -3,6 +3,7 @@ package net.kroia.stockmarket.pluginsystem.screen;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import net.kroia.modutilities.networking.client_server.streaming.StreamSystem;
+import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.networking.stream.PluginRuntimeDataStream;
 import net.kroia.stockmarket.pluginsystem.plugin.core.PluginSyncData;
 import net.kroia.stockmarket.screen.widgets.CandlestickChart;
@@ -168,7 +169,11 @@ public class PluginGuiElement<TSettings, TRuntimeData> extends StockMarketGuiEle
     protected final void sendCustomSettings(TSettings settings) {
         StreamCodec<ByteBuf, TSettings> codec = customSettingsCodec();
         UUID id = getPluginInstanceID();
-        if (codec == null || id == null || settings == null) return;
+        if (codec == null || id == null || settings == null) {
+            StockMarketMod.LOGGER.warn("[PluginGuiElement] sendCustomSettings aborted: codec={}, id={}, settings={}",
+                    codec != null ? "ok" : "null", id != null ? id : "null", settings != null ? "ok" : "null");
+            return;
+        }
         ByteBuf buf = Unpooled.buffer();
         try {
             codec.encode(buf, settings);
@@ -179,6 +184,7 @@ public class PluginGuiElement<TSettings, TRuntimeData> extends StockMarketGuiEle
                     TSettings confirmed = decodeSettings(response.confirmedPayload());
                     onCustomSettingsResponse(true, confirmed);
                 } else {
+                    StockMarketMod.LOGGER.warn("[PluginGuiElement] Custom settings update failed for plugin {}", id);
                     onCustomSettingsResponse(false, null);
                 }
             });

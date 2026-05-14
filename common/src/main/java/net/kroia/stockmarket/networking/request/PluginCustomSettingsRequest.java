@@ -2,6 +2,7 @@ package net.kroia.stockmarket.networking.request;
 
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
+import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.pluginsystem.plugin.ServerPlugin;
 import net.kroia.stockmarket.pluginsystem.pluginmanager.ServerPluginManager;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
@@ -75,6 +76,11 @@ public class PluginCustomSettingsRequest extends StockMarketGenericRequest<Plugi
 
         boolean applied = plugin.decodeAndApplyCustomSettings(input.payload());
         byte[] confirmed = applied ? plugin.encodeCustomSettings() : null;
+
+        if (!applied) {
+            StockMarketMod.LOGGER.warn("[PluginCustomSettingsRequest] Failed to apply custom settings for plugin '{}' (instance {})",
+                    plugin.getName(), input.instanceID());
+        }
 
         // Notify other admins about the custom settings change
         if (applied) {
