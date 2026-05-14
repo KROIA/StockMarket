@@ -200,6 +200,23 @@
   "gui.stockmarket.inter_market_panel.estimated_yield": "Est. yield: ~%s",
   "gui.stockmarket.inter_market_panel.current_rate": "Rate: %s",
 
+  "gui.stockmarket.inter_market_trading_panel.market_exchange_tab_title": "Exchange",
+  "gui.stockmarket.inter_market_trading_panel.limit_exchange_tab_title": "Limit",
+
+  "gui.stockmarket.inter_market_market_exchange.quantity": "Quantity",
+  "gui.stockmarket.inter_market_market_exchange.exchange": "EXCHANGE",
+  "gui.stockmarket.inter_market_market_exchange.estimated_yield": "Est. yield: ~%s %s",
+  "gui.stockmarket.inter_market_market_exchange.estimated_yield_unknown": "Est. yield: --",
+  "gui.stockmarket.inter_market_market_exchange.rate": "Rate: %s %s/%s",
+  "gui.stockmarket.inter_market_market_exchange.rate_unknown": "Rate: --",
+
+  "gui.stockmarket.inter_market_limit_exchange.rate_limit": "Rate Limit",
+  "gui.stockmarket.inter_market_limit_exchange.quantity": "Quantity",
+  "gui.stockmarket.inter_market_limit_exchange.place_limit_order": "PLACE LIMIT ORDER",
+  "gui.stockmarket.inter_market_limit_exchange.market_button": "Market",
+  "gui.stockmarket.inter_market_limit_exchange.estimated_yield": "Est. yield: ~%s %s",
+  "gui.stockmarket.inter_market_limit_exchange.estimated_yield_unknown": "Est. yield: --",
+
   "gui.stockmarket.management_screen.plugins.title": "Plugins",
   "gui.stockmarket.management_screen.plugins.enabled": "enabled",
   "gui.stockmarket.management_screen.plugins.manage": "Manage Plugins",

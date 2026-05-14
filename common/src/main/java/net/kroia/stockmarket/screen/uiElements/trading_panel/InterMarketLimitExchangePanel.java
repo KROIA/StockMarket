@@ -30,6 +30,13 @@ class InterMarketLimitExchangePanel extends StockMarketGuiElement {
         private static final Component RATE_LIMIT = Component.translatable(PREFIX + "rate_limit");
         private static final Component QUANTITY = Component.translatable(PREFIX + "quantity");
         private static final Component PLACE_LIMIT_ORDER = Component.translatable(PREFIX + "place_limit_order");
+        private static final Component MARKET_BUTTON = Component.translatable(PREFIX + "market_button");
+        private static final Component ESTIMATED_YIELD_UNKNOWN = Component.translatable(PREFIX + "estimated_yield_unknown");
+
+        /** Returns "Est. yield: ~{value} {itemName}" using the translation pattern. */
+        static String estimatedYield(String formattedValue, String itemName) {
+            return Component.translatable(PREFIX + "estimated_yield", formattedValue, itemName).getString();
+        }
     }
 
     // Rate limit input
@@ -96,7 +103,7 @@ class InterMarketLimitExchangePanel extends StockMarketGuiElement {
         });
 
         // "Market" button auto-fills the current cross-rate
-        marketRateButton = new Button("Market", () -> {
+        marketRateButton = new Button(Texts.MARKET_BUTTON.getString(), () -> {
             setRateLimit(currentRate);
             updateEstimatedYield();
             updateValidation();
@@ -342,9 +349,9 @@ class InterMarketLimitExchangePanel extends StockMarketGuiElement {
     private void updateEstimatedYield() {
         if (rateLimit > 0 && quantity > 0) {
             double yield = quantity / rateLimit;
-            estimatedYieldLabel.setText(String.format("Est. yield: ~%.2f %s", yield, wantItemName));
+            estimatedYieldLabel.setText(Texts.estimatedYield(String.format("%.2f", yield), wantItemName));
         } else {
-            estimatedYieldLabel.setText("Est. yield: --");
+            estimatedYieldLabel.setText(Texts.ESTIMATED_YIELD_UNKNOWN.getString());
         }
 
         // Color red if player cannot afford

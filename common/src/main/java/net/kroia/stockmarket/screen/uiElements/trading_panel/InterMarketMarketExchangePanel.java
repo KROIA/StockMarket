@@ -29,6 +29,18 @@ class InterMarketMarketExchangePanel extends StockMarketGuiElement {
         private static final String PREFIX = "gui." + StockMarketMod.MOD_ID + ".inter_market_market_exchange.";
         private static final Component QUANTITY = Component.translatable(PREFIX + "quantity");
         private static final Component EXCHANGE = Component.translatable(PREFIX + "exchange");
+        private static final Component ESTIMATED_YIELD_UNKNOWN = Component.translatable(PREFIX + "estimated_yield_unknown");
+        private static final Component RATE_UNKNOWN = Component.translatable(PREFIX + "rate_unknown");
+
+        /** Returns "Est. yield: ~{value} {itemName}" using the translation pattern. */
+        static String estimatedYield(String formattedValue, String itemName) {
+            return Component.translatable(PREFIX + "estimated_yield", formattedValue, itemName).getString();
+        }
+
+        /** Returns "Rate: {value} {haveItem}/{wantItem}" using the translation pattern. */
+        static String rate(String formattedValue, String haveItem, String wantItem) {
+            return Component.translatable(PREFIX + "rate", formattedValue, haveItem, wantItem).getString();
+        }
     }
 
     private final TextBox quantityTextBox;
@@ -282,15 +294,15 @@ class InterMarketMarketExchangePanel extends StockMarketGuiElement {
     private void updateEstimatedYield() {
         if (currentRate > 0 && quantity > 0) {
             double yield = quantity / currentRate;
-            estimatedYieldLabel.setText(String.format("Est. yield: ~%.2f %s", yield, wantItemName));
+            estimatedYieldLabel.setText(Texts.estimatedYield(String.format("%.2f", yield), wantItemName));
         } else {
-            estimatedYieldLabel.setText("Est. yield: --");
+            estimatedYieldLabel.setText(Texts.ESTIMATED_YIELD_UNKNOWN.getString());
         }
 
         if (currentRate > 0) {
-            currentRateLabel.setText(String.format("Rate: %.2f %s/%s", currentRate, haveItemName, wantItemName));
+            currentRateLabel.setText(Texts.rate(String.format("%.2f", currentRate), haveItemName, wantItemName));
         } else {
-            currentRateLabel.setText("Rate: --");
+            currentRateLabel.setText(Texts.RATE_UNKNOWN.getString());
         }
 
         // Color red if player cannot afford
