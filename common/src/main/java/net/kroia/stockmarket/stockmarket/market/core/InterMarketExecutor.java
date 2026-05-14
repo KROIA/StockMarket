@@ -489,19 +489,19 @@ public class InterMarketExecutor
             long SF)
     {
         // ── Create the sell Order ─────────────────────────────────────────────
-        // Sell order: negative volume, MARKET type, in the haveMarket.
-        // We use MARKET type (not INTER_MARKET) so that ServerMarket.putOrder() routes
-        // the order to the market-order input buffer, and the MatchingEngine processes
-        // it immediately via processMarketOrder (full depth walk from current price).
-        // Using INTER_MARKET type would route to the limit-order buffer, which only
-        // executes at the startPrice — too restrictive for depth-walking.
+        // Sell order: negative volume, INTER_MARKET type, in the haveMarket.
+        // We use INTER_MARKET type so that ServerMarket skips saving duplicate history
+        // records and skips net-flow tracking for these temporary orders — the
+        // InterMarketExecutor saves the authoritative records with interMarketGroupID.
+        // ServerMarket.putOrder() routes INTER_MARKET orders to the market-order buffer
+        // (same as MARKET) so the MatchingEngine processes them immediately.
         long havePrice = haveMarket.getCurrentMarketPrice();
         Order sellOrder;
         if (order.isBotOrder())
         {
             sellOrder = new Order(
                     order.getSellItemID(),
-                    Order.Type.MARKET,
+                    Order.Type.INTER_MARKET,
                     -sellVolume,               // negative = sell
                     havePrice,                 // startPrice
                     order.getTime());          // bot order (no player UUID)
@@ -510,7 +510,7 @@ public class InterMarketExecutor
         {
             sellOrder = new Order(
                     order.getSellItemID(),
-                    Order.Type.MARKET,
+                    Order.Type.INTER_MARKET,
                     -sellVolume,               // negative = sell
                     havePrice,                 // startPrice
                     order.getTime(),
@@ -519,8 +519,8 @@ public class InterMarketExecutor
         }
 
         // ── Create the buy Order ──────────────────────────────────────────────
-        // Buy order: positive volume, MARKET type, in the wantMarket.
-        // Same reasoning as sell: MARKET type for immediate depth-walking execution.
+        // Buy order: positive volume, INTER_MARKET type, in the wantMarket.
+        // Same reasoning as sell: INTER_MARKET type for immediate depth-walking execution.
         long buyVolume = estimatedBuyVolume;
         if (buyVolume <= 0 && wantPrice > 0)
         {
@@ -537,7 +537,7 @@ public class InterMarketExecutor
         {
             buyOrder = new Order(
                     order.getBuyItemID(),
-                    Order.Type.MARKET,
+                    Order.Type.INTER_MARKET,
                     buyVolume,                 // positive = buy
                     wantPrice,                 // startPrice
                     order.getTime());          // bot order (no player UUID)
@@ -546,7 +546,7 @@ public class InterMarketExecutor
         {
             buyOrder = new Order(
                     order.getBuyItemID(),
-                    Order.Type.MARKET,
+                    Order.Type.INTER_MARKET,
                     buyVolume,                 // positive = buy
                     wantPrice,                 // startPrice
                     order.getTime(),

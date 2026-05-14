@@ -26,8 +26,8 @@ import java.util.function.Consumer;
  * Layout:
  * <pre>
  * ┌─────────────────────────────────┐
- * │  I HAVE:         I WANT:        │
- * │  [Iron Ingot]    [Gold Ingot]   │
+ * │  I WANT:         I HAVE:        │
+ * │  [Gold Ingot]    [Iron Ingot]   │
  * │  Rate: 10.0 iron/gold     [Swap]│
  * │  Balance: 128 iron | 3 gold     │
  * └─────────────────────────────────┘
@@ -486,7 +486,7 @@ public class PairSelectorWidget extends StockMarketGuiElement {
     /**
      * Layout:
      * <pre>
-     * Row 0: [I HAVE:    ] [I WANT:    ]
+     * Row 0: [I WANT:    ] [I HAVE:    ]
      * Row 1: [  ItemIcon  ] [  ItemIcon  ]
      * Row 2: [  ItemName  ] [  ItemName  ]
      * Row 3: [  Bal: xxx  ] [  Bal: xxx  ]
@@ -510,25 +510,25 @@ public class PairSelectorWidget extends StockMarketGuiElement {
         int leftX = p;
         int rightX = p + halfW + s;
 
-        // Row 0: labels
-        haveLabel.setBounds(leftX, y, halfW, labelHeight);
-        wantLabel.setBounds(rightX, y, halfW, labelHeight);
+        // Row 0: labels — WANT (traded item) on the left, HAVE on the right
+        wantLabel.setBounds(leftX, y, halfW, labelHeight);
+        haveLabel.setBounds(rightX, y, halfW, labelHeight);
         y += labelHeight + s;
 
         // Row 1: item icons (centered in each half)
         int iconLeftOffset = (halfW - iconSize) / 2;
-        haveItemView.setBounds(leftX + iconLeftOffset, y, iconSize, iconSize);
-        wantItemView.setBounds(rightX + iconLeftOffset, y, iconSize, iconSize);
+        wantItemView.setBounds(leftX + iconLeftOffset, y, iconSize, iconSize);
+        haveItemView.setBounds(rightX + iconLeftOffset, y, iconSize, iconSize);
         y += iconSize + s;
 
         // Row 2: item names
-        haveNameLabel.setBounds(leftX, y, halfW, labelHeight);
-        wantNameLabel.setBounds(rightX, y, halfW, labelHeight);
+        wantNameLabel.setBounds(leftX, y, halfW, labelHeight);
+        haveNameLabel.setBounds(rightX, y, halfW, labelHeight);
         y += labelHeight + s;
 
         // Row 3: balances
-        haveBalanceLabel.setBounds(leftX, y, halfW, labelHeight);
-        wantBalanceLabel.setBounds(rightX, y, halfW, labelHeight);
+        wantBalanceLabel.setBounds(leftX, y, halfW, labelHeight);
+        haveBalanceLabel.setBounds(rightX, y, halfW, labelHeight);
         y += labelHeight + s;
 
         // Row 4: rate label and swap button

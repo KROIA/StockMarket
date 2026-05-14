@@ -122,8 +122,24 @@ public class InterMarketOrder implements ServerSaveable
 
     public Pair<OrderRecordStruct, OrderRecordStruct> getHistoricalRecord()
     {
-        OrderRecordStruct buyRecord = buyOrder.getHistoricalRecord();
-        OrderRecordStruct sellRecord = sellOrder.getHistoricalRecord();
+        OrderRecordStruct buyRecord = new OrderRecordStruct(
+                buyOrder.getItemID().getShort(),
+                buyOrder.getBankAccountNr(),
+                buyOrder.getExecutorPlayerUUID(),
+                buyOrder.getType().ordinal(),
+                buyOrder.getFilledVolume(),
+                buyOrder.getAverageExecutionPrice(),
+                buyOrder.getTime(),
+                interMarketGroupID);
+        OrderRecordStruct sellRecord = new OrderRecordStruct(
+                sellOrder.getItemID().getShort(),
+                sellOrder.getBankAccountNr(),
+                sellOrder.getExecutorPlayerUUID(),
+                sellOrder.getType().ordinal(),
+                sellOrder.getFilledVolume(),
+                sellOrder.getAverageExecutionPrice(),
+                sellOrder.getTime(),
+                interMarketGroupID);
         return Pair.of(buyRecord, sellRecord);
     }
 

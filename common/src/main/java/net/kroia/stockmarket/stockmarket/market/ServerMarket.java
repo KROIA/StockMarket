@@ -261,14 +261,14 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
             return false; // Wrong stockmarket for this order
         if(order.isBuyOrder())
         {
-            if(order.isMarketOrder())
+            if(order.isMarketOrder() || order.getType() == Order.Type.INTER_MARKET)
                 buyMarketOrders_inputBuffer.add(order);
             else
                 buyLimitOrders_inputBuffer.add(order);
         }
         else
         {
-            if(order.isMarketOrder())
+            if(order.isMarketOrder() || order.getType() == Order.Type.INTER_MARKET)
                 sellMarketOrders_inputBuffer.add(order);
             else
                 sellLimitOrders_inputBuffer.add(order);
@@ -535,6 +535,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     {
         if (order.isBotOrder()) return; // skip bot orders (no player executor)
         if (order.getFilledVolume() == 0) return; // skip orders with no fills (e.g. cancelled before any execution)
+        if (order.getType() == Order.Type.INTER_MARKET) return; // saved by InterMarketExecutor with groupID
         if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.ORDER_RECORD_MANAGER == null) return;
 
         OrderRecordStruct record = order.getHistoricalRecord();
@@ -549,6 +550,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
      */
     private void trackPlayerNetFlow(Order order) {
         if (order.isBotOrder()) return;
+        if (order.getType() == Order.Type.INTER_MARKET) return; // tracked at inter-market level
         long filledVolume = order.getFilledVolume();
         if (filledVolume == 0) return;
         // filledVolume is negative for sell orders, so subtracting it adds to the counter
