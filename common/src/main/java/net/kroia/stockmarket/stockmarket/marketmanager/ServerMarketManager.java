@@ -1,5 +1,9 @@
 package net.kroia.stockmarket.stockmarket.marketmanager;
 
+import com.ibm.icu.impl.Pair;
+import net.kroia.banksystem.api.bank.BankStatus;
+import net.kroia.banksystem.api.bank.IServerBank;
+import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.persistence.ServerSaveableChunked;
@@ -8,7 +12,11 @@ import net.kroia.stockmarket.api.market.IAsyncMarket;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
+import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
 import net.kroia.stockmarket.stockmarket.market.ServerMarket;
+import net.kroia.stockmarket.stockmarket.market.core.InterMarketExecutor;
+import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
+import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.market.preset.MarketPreset;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -17,6 +25,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.IntFunction;
 
 public class ServerMarketManager implements ServerSaveableChunked, IServerMarketManager
 {
@@ -33,6 +42,10 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
     private final Map<UUID, User> userMap = new HashMap<>();
 
     private final Map<ItemID, ServerMarket> markets = new HashMap<>();
+
+    // Central queue for pending inter-market orders, sorted by time (FIFO)
+    private final PriorityQueue<InterMarketOrder> pendingInterMarketOrders =
+            new PriorityQueue<>(Comparator.comparingLong(InterMarketOrder::getTime));
 
     private long candleSaveTimer_lastMs = (System.currentTimeMillis()/60000)*60000;
     private final Random random = new Random();
@@ -115,6 +128,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
             long defaultPrice = (preset != null) ? MarketManager.convertToRawAmountStatic(preset.defaultPrice()) : 1000;
             float abundance = (preset != null) ? preset.naturalAbundance() : 10f;
             m = new ServerMarket(marketID, null, defaultPrice, abundance);
+            m.setMarketClosedCallback(this::cancelInterMarketOrdersForMarket);
             markets.put(marketID, m);
 
             // Allow the item in the banking system so it can be traded
@@ -285,6 +299,48 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
     }
 
 
+    /**
+     * Validates and enqueues an inter-market order for processing in the next update tick.
+     * Both the buy-leg and sell-leg markets must exist and be open.
+     *
+     * @param order the inter-market order to enqueue
+     * @return true if the order was successfully enqueued, false if validation failed
+     */
+    public boolean putInterMarketOrder(InterMarketOrder order)
+    {
+        if (order == null)
+        {
+            warn("putInterMarketOrder: order is null");
+            return false;
+        }
+
+        ServerMarket buyMarket = markets.get(order.getBuyItemID());
+        ServerMarket sellMarket = markets.get(order.getSellItemID());
+
+        if (buyMarket == null)
+        {
+            warn("putInterMarketOrder: buy market not found for " + order.getBuyItemID());
+            return false;
+        }
+        if (sellMarket == null)
+        {
+            warn("putInterMarketOrder: sell market not found for " + order.getSellItemID());
+            return false;
+        }
+        if (!buyMarket.isMarketOpen())
+        {
+            warn("putInterMarketOrder: buy market is closed for " + order.getBuyItemID());
+            return false;
+        }
+        if (!sellMarket.isMarketOpen())
+        {
+            warn("putInterMarketOrder: sell market is closed for " + order.getSellItemID());
+            return false;
+        }
+
+        pendingInterMarketOrders.add(order);
+        return true;
+    }
 
 
 
@@ -310,24 +366,12 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
     @Override
     public void update()
     {
+        // Process inter-market orders FIRST, before individual market updates.
+        // This ensures they see a clean orderbook state not modified by same-tick regular orders.
+        processInterMarketOrders();
+
         for(ServerMarket m : markets.values())
         {
-            // Create random movement for testing
-            /*tmpValue += Math.sin((double)System.currentTimeMillis()/10000.0);
-            long rand = (random.nextLong()%10);
-            if(tmpValue > 1) {
-                rand += 1;
-                tmpValue -= 1;
-            }
-            else if(tmpValue < 0) {
-                rand -= 1;
-                tmpValue += 1;
-            }
-            long currentPrice = m.getCurrentMarketPrice();
-
-            currentPrice = Math.max(0, currentPrice + rand);
-            m.test_setCurrentMarketPrice(currentPrice);
-            m.test_resetVirtualOrderBookVolume();*/
             m.update();
         }
 
@@ -344,6 +388,219 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
 
 
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  Inter-market order processing
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Processes all pending inter-market orders through the InterMarketExecutor.
+     * Removes FILLED/CANCELED/ERROR orders (with appropriate callbacks), keeps
+     * PARTIAL_FILL and SKIPPED orders in the queue for retry next tick.
+     */
+    private void processInterMarketOrders()
+    {
+        if (pendingInterMarketOrders.isEmpty())
+            return;
+
+        // Bank account lookup: resolves account number to IServerBankAccount
+        IntFunction<IServerBankAccount> bankLookup = (accountNr) ->
+                BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync().getBankAccount(accountNr);
+
+        Map<InterMarketOrder, InterMarketExecutor.ExecutionResult> results =
+                InterMarketExecutor.processOrders(pendingInterMarketOrders, markets, bankLookup, getTradingCurrencyID());
+
+        // Iterate results: remove terminal orders, keep retryable ones
+        for (Map.Entry<InterMarketOrder, InterMarketExecutor.ExecutionResult> entry : results.entrySet())
+        {
+            InterMarketOrder order = entry.getKey();
+            InterMarketExecutor.ExecutionResult result = entry.getValue();
+
+            switch (result)
+            {
+                case FILLED:
+                    pendingInterMarketOrders.remove(order);
+                    onInterMarketOrderConsumed(order);
+                    break;
+
+                case CANCELED:
+                case ERROR:
+                    pendingInterMarketOrders.remove(order);
+                    onInterMarketOrderCanceled(order);
+                    break;
+
+                case PARTIAL_FILL:
+                    // Keep in queue for retry; save partial record
+                    onInterMarketOrderPartialFill(order);
+                    break;
+
+                case SKIPPED:
+                    // Keep in queue unchanged — retry next tick
+                    break;
+            }
+        }
+    }
+
+    /**
+     * Called when an inter-market order is fully filled.
+     * Saves the historical record for both legs and unlocks any remaining sell-side funds.
+     */
+    private void onInterMarketOrderConsumed(InterMarketOrder order)
+    {
+        saveInterMarketOrderRecord(order);
+        unlockInterMarketRemainingFunds(order);
+    }
+
+    /**
+     * Called when an inter-market order is canceled or encounters an error.
+     * Saves the historical record for both legs (if any fills occurred) and unlocks remaining sell-side funds.
+     */
+    private void onInterMarketOrderCanceled(InterMarketOrder order)
+    {
+        saveInterMarketOrderRecord(order);
+        unlockInterMarketRemainingFunds(order);
+    }
+
+    /**
+     * Called when a limit inter-market order is partially filled.
+     * Saves the partial historical record for both legs.
+     * The order remains in the queue for further processing.
+     */
+    private void onInterMarketOrderPartialFill(InterMarketOrder order)
+    {
+        saveInterMarketOrderRecord(order);
+    }
+
+    /**
+     * Saves historical records for both legs of an inter-market order.
+     * Bot orders and zero-amount records are skipped.
+     */
+    private void saveInterMarketOrderRecord(InterMarketOrder order)
+    {
+        if (order.isBotOrder()) return;
+        if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.ORDER_RECORD_MANAGER == null) return;
+
+        Pair<OrderRecordStruct, OrderRecordStruct> records = order.getHistoricalRecord();
+
+        // Save buy-leg record if it has fills
+        OrderRecordStruct buyRecord = records.first;
+        if (buyRecord != null && buyRecord.amount() != 0)
+        {
+            BACKEND_INSTANCES.ORDER_RECORD_MANAGER.save(buyRecord);
+        }
+
+        // Save sell-leg record if it has fills
+        OrderRecordStruct sellRecord = records.second;
+        if (sellRecord != null && sellRecord.amount() != 0)
+        {
+            BACKEND_INSTANCES.ORDER_RECORD_MANAGER.save(sellRecord);
+        }
+    }
+
+    /**
+     * Unlocks the sell-leg's remaining unfilled volume from the player's item bank.
+     * For inter-market orders, the sell leg locks items at order creation time.
+     * When the order completes (filled or canceled), any unfilled portion must be unlocked.
+     */
+    private void unlockInterMarketRemainingFunds(InterMarketOrder order)
+    {
+        if (order.isBotOrder()) return;
+        if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.BANK_SYSTEM_API == null) return;
+
+        // Get the sell order's remaining volume (negative for sells), negate to get positive unlock amount
+        long toUnlock = -order.getSellOrder().getRemainingVolume();
+        if (toUnlock <= 0) return;
+
+        IServerBankAccount bankAccount = BACKEND_INSTANCES.BANK_SYSTEM_API
+                .getServerBankManager().getSync().getBankAccount(order.getBankAccountNr());
+        if (bankAccount == null)
+        {
+            warn("Cannot unlock items for inter-market order: bank account " + order.getBankAccountNr() + " not found");
+            return;
+        }
+
+        IServerBank itemBank = bankAccount.getBank(order.getSellItemID());
+        if (itemBank == null)
+        {
+            warn("Cannot unlock items for inter-market order: item bank not found for " + order.getSellItemID()
+                    + " on account " + order.getBankAccountNr());
+            return;
+        }
+
+        BankStatus status = itemBank.unlockAmount(toUnlock);
+        if (status != BankStatus.SUCCESS)
+        {
+            warn("Failed to unlock " + toUnlock + " items for inter-market order on account "
+                    + order.getBankAccountNr() + ": " + status);
+        }
+    }
+
+    /**
+     * Cancels all pending inter-market orders that touch a given market (buy or sell leg).
+     * Used when a market is closed to clean up any pending inter-market orders involving that market.
+     *
+     * @param marketID the market ItemID being closed
+     * @return the number of orders that were canceled
+     */
+    public int cancelInterMarketOrdersForMarket(ItemID marketID)
+    {
+        int canceledCount = 0;
+        Iterator<InterMarketOrder> it = pendingInterMarketOrders.iterator();
+        while (it.hasNext())
+        {
+            InterMarketOrder order = it.next();
+            if (order.getBuyItemID().equals(marketID) || order.getSellItemID().equals(marketID))
+            {
+                it.remove();
+                onInterMarketOrderCanceled(order);
+                canceledCount++;
+            }
+        }
+        if (canceledCount > 0)
+        {
+            info("Canceled " + canceledCount + " inter-market orders touching market " + marketID);
+        }
+        return canceledCount;
+    }
+
+    /**
+     * Cancels a specific pending inter-market order identified by its group ID.
+     * Only cancels if the order belongs to the specified player.
+     * @param groupID the interMarketGroupID of the order
+     * @param playerUUID the player requesting the cancellation
+     * @return true if found and canceled
+     */
+    public boolean cancelInterMarketOrder(UUID groupID, UUID playerUUID) {
+        Iterator<InterMarketOrder> it = pendingInterMarketOrders.iterator();
+        while (it.hasNext()) {
+            InterMarketOrder order = it.next();
+            if (order.getInterMarketGroupID().equals(groupID)
+                    && !order.isBotOrder()
+                    && playerUUID.equals(order.getOwnerUUID())) {
+                it.remove();
+                onInterMarketOrderCanceled(order);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Returns all pending inter-market orders belonging to a specific player.
+     * Used by ActiveOrdersStream to include inter-market orders in the stream.
+     * @param playerUUID the player's UUID
+     * @return list of matching orders (may be empty, never null)
+     */
+    public List<InterMarketOrder> getPendingInterMarketOrdersForPlayer(UUID playerUUID) {
+        List<InterMarketOrder> result = new ArrayList<>();
+        for (InterMarketOrder order : pendingInterMarketOrders) {
+            if (!order.isBotOrder() && playerUUID.equals(order.getOwnerUUID())) {
+                result.add(order);
+            }
+        }
+        return result;
+    }
+
+
     @Override
     public boolean save(Map<String, ListTag> listTags) {
         boolean success = true;
@@ -356,6 +613,23 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
             marketListTag.add(marketTag);
         }
         listTags.put("markets", marketListTag);
+
+        // Save pending inter-market orders
+        ListTag interMarketOrdersTag = new ListTag();
+        for (InterMarketOrder imo : pendingInterMarketOrders)
+        {
+            CompoundTag orderTag = new CompoundTag();
+            if (imo.save(orderTag))
+            {
+                interMarketOrdersTag.add(orderTag);
+            }
+            else
+            {
+                error("save(): Failed to save inter-market order");
+                success = false;
+            }
+        }
+        listTags.put("interMarketOrders", interMarketOrdersTag);
 
         ListTag userListTag = new ListTag();
         for(User user : userMap.values())
@@ -391,6 +665,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
                 ServerMarket market = new ServerMarket(id);
                 if(market.load(marketTag))
                 {
+                    market.setMarketClosedCallback(this::cancelInterMarketOrdersForMarket);
                     newMarkets.put(id, market);
                 }
                 else {
@@ -405,6 +680,27 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
         }
         markets.clear();
         markets.putAll(newMarkets);
+
+        // Load pending inter-market orders
+        pendingInterMarketOrders.clear();
+        ListTag interMarketOrdersTag = listTags.get("interMarketOrders");
+        if (interMarketOrdersTag != null)
+        {
+            for (int i = 0; i < interMarketOrdersTag.size(); i++)
+            {
+                CompoundTag orderTag = interMarketOrdersTag.getCompound(i);
+                InterMarketOrder imo = InterMarketOrder.createFromNBT(orderTag);
+                if (imo != null)
+                {
+                    pendingInterMarketOrders.add(imo);
+                }
+                else
+                {
+                    error("load(): Failed to load inter-market order at index " + i);
+                    success = false;
+                }
+            }
+        }
 
         ListTag userListTag = listTags.get("users");
         if(userListTag != null)

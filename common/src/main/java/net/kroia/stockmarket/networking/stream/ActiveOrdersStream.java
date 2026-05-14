@@ -5,7 +5,9 @@ import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.modutilities.networking.client_server.streaming.GenericStream;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
+import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
+import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.kroia.stockmarket.util.StockMarketGenericStream;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -26,17 +28,20 @@ import java.util.UUID;
 public class ActiveOrdersStream extends StockMarketGenericStream<Byte, ActiveOrdersStream.ResponseData> {
 
     /**
-     * Payload containing the list of active orders for the subscribing player.
+     * Payload containing the list of active orders and inter-market orders for the subscribing player.
      */
     public static class ResponseData {
         public List<Order> orders;
+        public List<InterMarketOrder> interMarketOrders;
 
         public ResponseData() {
             this.orders = new ArrayList<>();
+            this.interMarketOrders = new ArrayList<>();
         }
 
-        public ResponseData(List<Order> orders) {
+        public ResponseData(List<Order> orders, List<InterMarketOrder> interMarketOrders) {
             this.orders = orders;
+            this.interMarketOrders = interMarketOrders;
         }
     }
 
@@ -105,12 +110,21 @@ public class ActiveOrdersStream extends StockMarketGenericStream<Byte, ActiveOrd
             }
         }
 
+        // Collect pending inter-market orders for this player
+        List<InterMarketOrder> currentInterMarketOrders = new ArrayList<>();
+        if (mgr instanceof ServerMarketManager serverMgr) {
+            currentInterMarketOrders = serverMgr.getPendingInterMarketOrdersForPlayer(playerUUID);
+        }
+
         // Change detection: compare count and content hash to avoid redundant packets
         int orderHash = computeOrderHash(currentOrders);
-        if (currentOrders.size() != lastSentOrderCount || orderHash != lastSentOrderHash) {
-            lastSentOrderCount = currentOrders.size();
-            lastSentOrderHash = orderHash;
-            currentResponse = new ResponseData(currentOrders);
+        int interMarketHash = computeInterMarketOrderHash(currentInterMarketOrders);
+        int combinedHash = 31 * orderHash + interMarketHash;
+        int combinedCount = currentOrders.size() + currentInterMarketOrders.size();
+        if (combinedCount != lastSentOrderCount || combinedHash != lastSentOrderHash) {
+            lastSentOrderCount = combinedCount;
+            lastSentOrderHash = combinedHash;
+            currentResponse = new ResponseData(currentOrders, currentInterMarketOrders);
             sendPacket();
         }
     }
@@ -137,12 +151,14 @@ public class ActiveOrdersStream extends StockMarketGenericStream<Byte, ActiveOrd
     @Override
     public void encodeData(RegistryFriendlyByteBuf buffer, ResponseData data) {
         ExtraCodecUtils.listStreamCodec(Order.STREAM_CODEC).encode(buffer, data.orders);
+        ExtraCodecUtils.listStreamCodec(InterMarketOrder.STREAM_CODEC).encode(buffer, data.interMarketOrders);
     }
 
     @Override
     public ResponseData decodeData(RegistryFriendlyByteBuf buffer) {
         ResponseData data = new ResponseData();
         data.orders = new ArrayList<>(ExtraCodecUtils.listStreamCodec(Order.STREAM_CODEC).decode(buffer));
+        data.interMarketOrders = new ArrayList<>(ExtraCodecUtils.listStreamCodec(InterMarketOrder.STREAM_CODEC).decode(buffer));
         return data;
     }
 
@@ -159,6 +175,20 @@ public class ActiveOrdersStream extends StockMarketGenericStream<Byte, ActiveOrd
             hash = 31 * hash + Long.hashCode(order.getTargetVolume());
             hash = 31 * hash + Long.hashCode(order.getFilledVolume());
             hash = 31 * hash + Long.hashCode(order.getTransferredMoney());
+        }
+        return hash;
+    }
+
+    /**
+     * Computes a simple hash over the inter-market order list to detect content changes.
+     * Uses key fields from both the buy and sell sub-orders.
+     */
+    private static int computeInterMarketOrderHash(List<InterMarketOrder> orders) {
+        int hash = 1;
+        for (InterMarketOrder order : orders) {
+            hash = 31 * hash + Long.hashCode(order.getTime());
+            hash = 31 * hash + Long.hashCode(order.getTargetBuyVolume());
+            hash = 31 * hash + (order.isFilled() ? 1 : 0);
         }
         return hash;
     }

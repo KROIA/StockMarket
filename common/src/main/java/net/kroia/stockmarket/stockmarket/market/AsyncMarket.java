@@ -12,7 +12,6 @@ import net.kroia.stockmarket.api.market.IAsyncMarket;
 import net.kroia.stockmarket.api.market.ISyncServerMarket;
 import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
-import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.util.MultiServerUtils;
 import net.kroia.stockmarket.util.StockMarketLogger;
@@ -75,7 +74,6 @@ public class AsyncMarket implements IAsyncMarket{
         GetRealVolume_1,
         GetRealVolume_2,
         PutOrder_1,
-        PutOrder_2,
         GetLimitOrders,
         IsMarketOpen,
         SetMarketOpen,
@@ -107,7 +105,6 @@ public class AsyncMarket implements IAsyncMarket{
         put(FunctionType.GetRealVolume_1,                       codecPacket(ByteBufCodecs.DOUBLE.cast(), ByteBufCodecs.FLOAT.cast()));
         put(FunctionType.GetRealVolume_2,                       codecPacket(ParamGroup_double_double.STREAM_CODEC.cast(), ByteBufCodecs.FLOAT.cast()));
         put(FunctionType.PutOrder_1,                            codecPacket(Order.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
-        put(FunctionType.PutOrder_2,                            codecPacket(InterMarketOrder.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
         put(FunctionType.GetLimitOrders,                        codecPacket(null, ExtraCodecUtils.listStreamCodec(Order.STREAM_CODEC)));
         put(FunctionType.IsMarketOpen,                          codecPacket(null, ByteBufCodecs.BOOL.cast()));
         put(FunctionType.SetMarketOpen,                         codecPacket(ByteBufCodecs.BOOL.cast(), ByteBufCodecs.BOOL.cast()));
@@ -238,7 +235,6 @@ public class AsyncMarket implements IAsyncMarket{
                     yield OutputData.of(input.function, market.getRealVolume(params.value1, params.value2));
                 }
                 case FunctionType.PutOrder_1 ->                           OutputData.of(input.function, market.putOrder((Order)inputData.extra));
-                case FunctionType.PutOrder_2 ->                           OutputData.of(input.function, market.putOrder((InterMarketOrder)inputData.extra));
                 case FunctionType.GetLimitOrders ->                       OutputData.of(input.function, market.getLimitOrders());
                 case FunctionType.IsMarketOpen ->                         OutputData.of(input.function, market.isMarketOpen());
                 case FunctionType.SetMarketOpen ->
@@ -292,7 +288,6 @@ public class AsyncMarket implements IAsyncMarket{
                      FunctionType.GetRealVolume_1,
                      FunctionType.GetRealVolume_2,
                      //FunctionType.PutOrder_1,
-                     //FunctionType.PutOrder_2,
                      //FunctionType.GetLimitOrders,
                      FunctionType.IsMarketOpen,
                      FunctionType.SetMarketOpen,
@@ -511,17 +506,6 @@ public class AsyncMarket implements IAsyncMarket{
             return CompletableFuture.completedFuture(false);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.PutOrder_1, itemID, order);
-        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
-        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
-        return future;
-    }
-
-    @Override
-    public CompletableFuture<Boolean> putOrderAsync(InterMarketOrder order) {
-        if(!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(false);
-        CompletableFuture<Boolean> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.PutOrder_2, itemID, order);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;

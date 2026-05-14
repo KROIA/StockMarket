@@ -1,0 +1,234 @@
+package net.kroia.stockmarket.networking.request;
+
+import net.kroia.banksystem.api.bank.BankStatus;
+import net.kroia.banksystem.api.bank.IServerBank;
+import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
+import net.kroia.banksystem.api.bankmanager.IBankManager;
+import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.networking.ExtraCodecUtils;
+import net.kroia.stockmarket.api.market.IServerMarket;
+import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
+import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
+import net.kroia.stockmarket.stockmarket.market.core.order.Order;
+import net.kroia.stockmarket.util.MultiServerUtils;
+import net.kroia.stockmarket.util.StockMarketGenericRequest;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+
+/**
+ * Request to place an inter-market order.
+ * An inter-market order sells items from one market and uses the proceeds to buy items on another market.
+ * The player specifies which item they have (sell) and which item they want (buy),
+ * along with the volume of "have" items to sell and an optional cross-rate limit.
+ */
+public class PlaceInterMarketOrderRequest extends StockMarketGenericRequest<PlaceInterMarketOrderRequest.InputData, PlaceInterMarketOrderRequest.OutputData> {
+
+    /**
+     * Input data for placing an inter-market order.
+     *
+     * @param haveItemID    the item the player is selling
+     * @param wantItemID    the item the player is buying
+     * @param bankAccountNr the player's bank account number
+     * @param volume        amount of "have" items to sell (positive, real format)
+     * @param crossRateLimit rate limit in raw format (0 = market order)
+     */
+    public record InputData(ItemID haveItemID, ItemID wantItemID, int bankAccountNr, double volume, long crossRateLimit) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, InputData> STREAM_CODEC = StreamCodec.composite(
+                ItemID.STREAM_CODEC, p -> p.haveItemID,
+                ItemID.STREAM_CODEC, p -> p.wantItemID,
+                ByteBufCodecs.INT, p -> p.bankAccountNr,
+                ByteBufCodecs.DOUBLE, p -> p.volume,
+                ByteBufCodecs.VAR_LONG, p -> p.crossRateLimit,
+                InputData::new
+        );
+    }
+
+    /**
+     * Output data indicating success or failure of placing the inter-market order.
+     */
+    public static class OutputData {
+        public boolean success;
+        public @Nullable String errorMessage;
+
+        public static final StreamCodec<RegistryFriendlyByteBuf, OutputData> STREAM_CODEC = new StreamCodec<>() {
+            @Override
+            public void encode(RegistryFriendlyByteBuf buf, OutputData data) {
+                ByteBufCodecs.BOOL.encode(buf, data.success);
+                ExtraCodecUtils.nullable(ByteBufCodecs.STRING_UTF8).encode(buf, data.errorMessage);
+            }
+
+            @Override
+            public OutputData decode(RegistryFriendlyByteBuf buf) {
+                boolean success = ByteBufCodecs.BOOL.decode(buf);
+                String errorMessage = ExtraCodecUtils.nullable(ByteBufCodecs.STRING_UTF8).decode(buf);
+                return new OutputData(success, errorMessage);
+            }
+        };
+
+        public OutputData(boolean success, @Nullable String errorMessage) {
+            this.success = success;
+            this.errorMessage = errorMessage;
+        }
+    }
+
+    @Override
+    public String getRequestTypeID() {
+        return PlaceInterMarketOrderRequest.class.getName();
+    }
+
+    @Override
+    protected OutputData getDefaultResponse() {
+        return new OutputData(false, "NO_SERVER");
+    }
+
+    @Override
+    public CompletableFuture<OutputData> handleOnMasterServer(InputData input, String slaveID, @Nullable UUID playerSender) {
+        // 1. Check playerSender not null
+        if (playerSender == null || (needsRoutingToMaster() && !MultiServerUtils.canInteractWithStockMarket(playerSender)))
+            return CompletableFuture.completedFuture(new OutputData(false, "NO_PLAYER_SENDER"));
+
+        CompletableFuture<OutputData> future = new CompletableFuture<>();
+
+        // 2. Validate volume is positive
+        if (input.volume <= 0) {
+            future.complete(new OutputData(false, "INVALID_VOLUME"));
+            return future;
+        }
+
+        // 3. Validate both markets exist and are open
+        IServerMarket haveMarket = getServerMarketManager().getMarket(input.haveItemID);
+        if (haveMarket == null) {
+            future.complete(new OutputData(false, "NO_SUCH_MARKET_HAVE"));
+            return future;
+        }
+        if (!haveMarket.isMarketOpen()) {
+            future.complete(new OutputData(false, "MARKET_CLOSED_HAVE"));
+            return future;
+        }
+
+        IServerMarket wantMarket = getServerMarketManager().getMarket(input.wantItemID);
+        if (wantMarket == null) {
+            future.complete(new OutputData(false, "NO_SUCH_MARKET_WANT"));
+            return future;
+        }
+        if (!wantMarket.isMarketOpen()) {
+            future.complete(new OutputData(false, "MARKET_CLOSED_WANT"));
+            return future;
+        }
+
+        // 4. Get bank manager and bank account
+        IBankManager serverBankManager = getServerBankManager();
+        if (serverBankManager == null) {
+            error("No IServerBankManager found");
+            future.complete(new OutputData(false, "NO_SERVER_BANK_MANAGER"));
+            return future;
+        }
+
+        ISyncServerBankAccount bankAccount = serverBankManager.getSync().getBankAccount(input.bankAccountNr);
+        if (bankAccount == null) {
+            warn("No BankAccount found with BankAccountNr " + input.bankAccountNr);
+            future.complete(new OutputData(false, "NO_BANK_ACCOUNT"));
+            return future;
+        }
+
+        // 5. Validate player has the "have" items in their item bank
+        IServerBank itemBank = bankAccount.getBank(input.haveItemID);
+        if (itemBank == null) {
+            future.complete(new OutputData(false, "NO_ITEM_BANK"));
+            return future;
+        }
+
+        long rawVolume = toRawAmount(input.volume);
+        if (rawVolume <= 0) {
+            future.complete(new OutputData(false, "INVALID_VOLUME"));
+            return future;
+        }
+
+        if (itemBank.getBalance() < rawVolume) {
+            future.complete(new OutputData(false, "NOT_ENOUGH_ITEMS"));
+            return future;
+        }
+
+        // 6. Lock player's "have" items in the item bank
+        BankStatus lockStatus = itemBank.lockAmount(rawVolume);
+        if (lockStatus != BankStatus.SUCCESS) {
+            warn("Trying to lock " + rawVolume + " of " + input.haveItemID + " for bank: " + itemBank +
+                    " of BankAccount: " + bankAccount.getAccountNumber() + "[" + bankAccount.getAccountName() + "]. Got status: " + lockStatus);
+            future.complete(new OutputData(false, "UNABLE_TO_LOCK_ITEMS"));
+            return future;
+        }
+
+        // 7. Build the InterMarketOrder
+        long time = System.currentTimeMillis();
+        long SF = getItemFractionScaleFactor();
+        long havePrice = haveMarket.getCurrentMarketPrice();
+        long wantPrice = wantMarket.getCurrentMarketPrice();
+
+        // Estimate buy volume from the dollar yield of selling "have" items
+        long dollarEstimate = rawVolume * havePrice / SF;
+        long estimatedBuyVolume = dollarEstimate * SF / wantPrice;
+        if (estimatedBuyVolume <= 0) estimatedBuyVolume = 1;
+
+        // crossRateLimit == 0 means market order, otherwise limit order
+        Order.Type orderType = (input.crossRateLimit == 0) ? Order.Type.MARKET : Order.Type.LIMIT;
+
+        InterMarketOrder imo = new InterMarketOrder(
+                input.wantItemID, input.haveItemID,  // buyItemID = want, sellItemID = have
+                orderType,
+                estimatedBuyVolume, wantPrice,       // buy leg estimates
+                rawVolume, havePrice,                 // sell leg
+                time, playerSender, input.bankAccountNr,
+                input.crossRateLimit
+        );
+
+        // 8. Enqueue the inter-market order on the "want" (buy) market
+        ServerMarketManager smm = (ServerMarketManager) getServerMarketManager();
+        if (!smm.putInterMarketOrder(imo)) {
+            // Enqueue failed — unlock the items
+            BankStatus unlockStatus = itemBank.unlockAmount(rawVolume);
+            if (unlockStatus != BankStatus.SUCCESS) {
+                warn("Trying to unlock " + rawVolume + " of " + input.haveItemID + " for bank: " + itemBank +
+                        " of BankAccount: " + bankAccount.getAccountNumber() + "[" + bankAccount.getAccountName() + "] " +
+                        "after failed to enqueue inter-market order. Got status: " + unlockStatus);
+            }
+            future.complete(new OutputData(false, "ENQUEUE_FAILED"));
+            return future;
+        }
+
+        // 9. Success
+        future.complete(new OutputData(true, null));
+        return future;
+    }
+
+    /**
+     * Converts a real (human-readable) amount to the raw backend value.
+     */
+    private long toRawAmount(double realAmount) {
+        return getServerBankManager().getSync().convertToRawAmount(realAmount);
+    }
+
+    @Override
+    public void encodeInput(RegistryFriendlyByteBuf buf, InputData input) {
+        InputData.STREAM_CODEC.encode(buf, input);
+    }
+
+    @Override
+    public void encodeOutput(RegistryFriendlyByteBuf buf, OutputData output) {
+        OutputData.STREAM_CODEC.encode(buf, output);
+    }
+
+    @Override
+    public InputData decodeInput(RegistryFriendlyByteBuf buf) {
+        return InputData.STREAM_CODEC.decode(buf);
+    }
+
+    @Override
+    public OutputData decodeOutput(RegistryFriendlyByteBuf buf) {
+        return OutputData.STREAM_CODEC.decode(buf);
+    }
+}

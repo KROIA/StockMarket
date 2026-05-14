@@ -1,16 +1,31 @@
 package net.kroia.stockmarket.data.table.record;
 
+import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.UUID;
 
-public record OrderRecordStruct(/*long orderID, */short itemID, int bankaccountID, UUID user, int type, long amount, long price, long time) {
+/**
+ * @param interMarketGroupID Nullable UUID that links trade records belonging to the same inter-market transaction.
+ *                           All order records created by a single cross-market trade share the same group ID,
+ *                           allowing them to be correlated after the fact. Null for regular (non-inter-market) trades.
+ */
+public record OrderRecordStruct(/*long orderID, */short itemID, int bankaccountID, UUID user, int type, long amount, long price, long time, @Nullable UUID interMarketGroupID) {
+
+    /**
+     * Backward-compatible constructor for regular (non-inter-market) trades.
+     * Sets interMarketGroupID to null.
+     */
+    public OrderRecordStruct(short itemID, int bankaccountID, UUID user, int type, long amount, long price, long time) {
+        this(itemID, bankaccountID, user, type, amount, price, time, null);
+    }
 
     /**
      * StreamCodec for network transport of OrderRecordStruct.
@@ -26,6 +41,7 @@ public record OrderRecordStruct(/*long orderID, */short itemID, int bankaccountI
             ByteBufCodecs.VAR_LONG.encode(buf, val.amount());
             ByteBufCodecs.VAR_LONG.encode(buf, val.price());
             ByteBufCodecs.VAR_LONG.encode(buf, val.time());
+            ExtraCodecUtils.nullable(UUIDUtil.STREAM_CODEC).encode(buf, val.interMarketGroupID());
         }
 
         @Override
@@ -37,7 +53,8 @@ public record OrderRecordStruct(/*long orderID, */short itemID, int bankaccountI
                     ByteBufCodecs.VAR_INT.decode(buf),
                     ByteBufCodecs.VAR_LONG.decode(buf),
                     ByteBufCodecs.VAR_LONG.decode(buf),
-                    ByteBufCodecs.VAR_LONG.decode(buf)
+                    ByteBufCodecs.VAR_LONG.decode(buf),
+                    ExtraCodecUtils.nullable(UUIDUtil.STREAM_CODEC).decode(buf)
             );
         }
     };

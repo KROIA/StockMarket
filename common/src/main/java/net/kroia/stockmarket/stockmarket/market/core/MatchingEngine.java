@@ -6,7 +6,6 @@ import net.kroia.banksystem.api.bank.IServerBank;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.StockMarketModBackend;
-import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -39,13 +38,9 @@ public class MatchingEngine
     private final PriorityQueue<Order> sellMarketOrders_inputBuffer;
     private final PriorityQueue<Order> buyLimitOrders_inputBuffer;
     private final PriorityQueue<Order> sellLimitOrders_inputBuffer;
-    private final PriorityQueue<InterMarketOrder> interMarket_LimitBuyOrders_inputBuffer;
-    private final PriorityQueue<InterMarketOrder> interMarket_MarketBuyOrders_inputBuffer;
 
     private final @NotNull Consumer<Order> consumedOrderCallback;
-    private final @NotNull Consumer<InterMarketOrder> consumedInterMarketOrderCallback;
     private final @NotNull Consumer<Order> cancelOrderCallback;
-    private final @NotNull Consumer<InterMarketOrder> cancelInterMarketOrderCallback;
 
     private final @NotNull Consumer<Long> priceChanged;
 
@@ -60,12 +55,8 @@ public class MatchingEngine
                           PriorityQueue<Order> sellMarketOrders_inputBuffer,
                           PriorityQueue<Order> buyLimitOrders_inputBuffer,
                           PriorityQueue<Order> sellLimitOrders_inputBuffer,
-                          PriorityQueue<InterMarketOrder> interMarket_LimitBuyOrders_inputBuffer,
-                          PriorityQueue<InterMarketOrder> interMarket_MarketBuyOrders_inputBuffer,
                           @NotNull Consumer<Order> consumedOrderCallback,
-                          @NotNull Consumer<InterMarketOrder> consumedInterMarketOrderCallback,
                           @NotNull Consumer<Order> cancelOrderCallback,
-                          @NotNull Consumer<InterMarketOrder> cancelInterMarketOrderCallback,
                           @NotNull Consumer<Long> priceChanged)
     {
         this.itemID = itemID;
@@ -75,13 +66,9 @@ public class MatchingEngine
         this.sellMarketOrders_inputBuffer = sellMarketOrders_inputBuffer;
         this.buyLimitOrders_inputBuffer = buyLimitOrders_inputBuffer;
         this.sellLimitOrders_inputBuffer = sellLimitOrders_inputBuffer;
-        this.interMarket_LimitBuyOrders_inputBuffer = interMarket_LimitBuyOrders_inputBuffer;
-        this.interMarket_MarketBuyOrders_inputBuffer = interMarket_MarketBuyOrders_inputBuffer;
 
         this.consumedOrderCallback = consumedOrderCallback;
-        this.consumedInterMarketOrderCallback = consumedInterMarketOrderCallback;
         this.cancelOrderCallback = cancelOrderCallback;
-        this.cancelInterMarketOrderCallback = cancelInterMarketOrderCallback;
 
         this.priceChanged = priceChanged;
     }
@@ -157,12 +144,6 @@ public class MatchingEngine
             orderbook.putOrder(order);
         }
     }
-
-    //private void processInterMarketLimitOrder(InterMarketOrder order)
-    //{
-    //
-    //}
-
 
     /**
      * Executes a stockmarket order against the order book.
@@ -750,17 +731,9 @@ public class MatchingEngine
     {
         consumedOrderCallback.accept(order);
     }
-    private void orderConsumed(InterMarketOrder order)
-    {
-        consumedInterMarketOrderCallback.accept(order);
-    }
     private void orderCanceled(Order order)
     {
         cancelOrderCallback.accept(order);
-    }
-    private void orderCanceled(InterMarketOrder order)
-    {
-        cancelInterMarketOrderCallback.accept(order);
     }
 
 

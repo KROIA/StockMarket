@@ -54,6 +54,9 @@ public class StockMarketNetworking extends NetworkPacketManager {
     public final PresetUpdateRequest PRESET_UPDATE_REQUEST = (PresetUpdateRequest) AsynchronousRequestResponseSystem.register(new PresetUpdateRequest());
     public final PluginCreateRequest PLUGIN_CREATE_REQUEST = (PluginCreateRequest) AsynchronousRequestResponseSystem.register(new PluginCreateRequest());
     public final PluginDeleteRequest PLUGIN_DELETE_REQUEST = (PluginDeleteRequest) AsynchronousRequestResponseSystem.register(new PluginDeleteRequest());
+    public final PlaceInterMarketOrderRequest PLACE_INTER_MARKET_ORDER_REQUEST = (PlaceInterMarketOrderRequest) AsynchronousRequestResponseSystem.register(new PlaceInterMarketOrderRequest());
+    public final CancelInterMarketOrderRequest CANCEL_INTER_MARKET_ORDER_REQUEST = (CancelInterMarketOrderRequest) AsynchronousRequestResponseSystem.register(new CancelInterMarketOrderRequest());
+    public final GetAvailablePairsRequest GET_AVAILABLE_PAIRS_REQUEST = (GetAvailablePairsRequest) AsynchronousRequestResponseSystem.register(new GetAvailablePairsRequest());
 
     //public final MarketSettingsGetRequest MARKET_SETTINGS_GET_REQUEST = (MarketSettingsGetRequest) AsynchronousRequestResponseSystem.register(new MarketSettingsGetRequest());
 
