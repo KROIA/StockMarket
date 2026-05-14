@@ -4,20 +4,25 @@ import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ClientPlayerUtilities;
 import net.kroia.modutilities.gui.Gui;
+import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.TabElement;
 import net.kroia.modutilities.networking.client_server.streaming.StreamSystem;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.screen.uiElements.FavoritesBar;
 import net.kroia.stockmarket.screen.uiElements.OrderHistoryPanel;
+import net.kroia.stockmarket.screen.uiElements.PairSelectorWidget;
 import net.kroia.stockmarket.screen.uiElements.PendingOrdersPanel;
 import net.kroia.stockmarket.screen.uiElements.TransactionHistoryPanel;
+import net.kroia.stockmarket.screen.uiElements.trading_panel.InterMarketTradingPanel;
 import net.kroia.stockmarket.screen.uiElements.trading_panel.TradingPanel;
+import net.kroia.stockmarket.screen.widgets.CrossRateChart;
 import net.kroia.stockmarket.screen.widgets.OrderbookVolumeHistogram;
 import net.kroia.stockmarket.screen.widgets.OrderMarkerOverlay;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.screen.widgets.CandlestickChart;
 import net.kroia.stockmarket.networking.request.CancelOrderRequest;
+import net.kroia.stockmarket.networking.request.PlaceInterMarketOrderRequest;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
 import net.kroia.stockmarket.stockmarket.marketmanager.PlayerPreferences;
@@ -37,7 +42,14 @@ public class TradeScreen extends StockMarketGuiScreen {
         private static final String PREFIX = "gui."+ StockMarketMod.MOD_ID + ".trade_screen.";
         private static final Component TITLE = Component.translatable(PREFIX +"title");
         private static final Component MARKET_CLOSED = Component.translatable(PREFIX +"market_closed");
+        private static final String MONEY_MODE = "Item / Money";
+        private static final String PAIR_MODE = "Item / Item";
     }
+
+    // Color for the active mode toggle button
+    private static final int MODE_BUTTON_SELECTED_COLOR = 0xFF4a6fa5;
+    // Color for the inactive mode toggle button (default button color)
+    private static final int MODE_BUTTON_DEFAULT_COLOR = Button.DEFAULT_BACKGROUND_COLOR;
 
 
 
@@ -46,6 +58,8 @@ public class TradeScreen extends StockMarketGuiScreen {
     private final OrderMarkerOverlay orderMarkerOverlay;
     private final OrderbookVolumeHistogram orderbookVolumeHistogram;
     private final TradingPanel tradingPanel;
+    private final CrossRateChart crossRateChart;
+    private final InterMarketTradingPanel interMarketTradingPanel;
     private final TabElement ordersTabElement;
     private final PendingOrdersPanel pendingOrdersPanel;
     private final OrderHistoryPanel orderHistoryPanel;
@@ -54,6 +68,16 @@ public class TradeScreen extends StockMarketGuiScreen {
     private @Nullable UUID activeOrdersStreamID = null;
     private @Nullable ItemID currentMarketID = null;
     private int selectedBankAccountNr = -1;
+
+    // Mode toggle: Item/Money vs Item/Item
+    private final Button moneyModeButton;
+    private final Button pairModeButton;
+    private final PairSelectorWidget pairSelectorWidget;
+    private boolean isPairMode = false;
+
+    // Pair mode state: tracks the "have" and "want" markets for cross-rate calculation
+    private @Nullable ItemID pairHaveMarketID = null;
+    private @Nullable ItemID pairWantMarketID = null;
 
     // Trading currency ID cached for balance lookups
     private @Nullable ItemID tradingCurrencyID = null;
@@ -68,6 +92,19 @@ public class TradeScreen extends StockMarketGuiScreen {
     {
         super(Texts.TITLE);
 
+        // Mode toggle buttons
+        moneyModeButton = new Button(Texts.MONEY_MODE, () -> setMode(false));
+        moneyModeButton.setTextFontScale(0.8f);
+        moneyModeButton.setBackgroundColor(MODE_BUTTON_SELECTED_COLOR);
+
+        pairModeButton = new Button(Texts.PAIR_MODE, () -> setMode(true));
+        pairModeButton.setTextFontScale(0.8f);
+        pairModeButton.setBackgroundColor(MODE_BUTTON_DEFAULT_COLOR);
+
+        // Pair selector widget (hidden by default in money mode)
+        pairSelectorWidget = new PairSelectorWidget(this::onPairSelected);
+        pairSelectorWidget.setEnabled(false);
+
         favoritesBar = new FavoritesBar(this::switchMarket);
         candlestickChart = new CandlestickChart();
         candlestickChart.setMarket(null);
@@ -80,6 +117,14 @@ public class TradeScreen extends StockMarketGuiScreen {
 
         orderbookVolumeHistogram = new OrderbookVolumeHistogram(candlestickChart);
         tradingPanel = new TradingPanel(this::onBuyMarket, this::onSellMarket, this::onBuyLimit, this::onSellLimit);
+
+        // Cross-rate chart for pair mode (replaces candlestick chart)
+        crossRateChart = new CrossRateChart();
+        crossRateChart.setEnabled(false);
+
+        // Inter-market trading panel for pair mode (replaces regular trading panel)
+        interMarketTradingPanel = new InterMarketTradingPanel(this::onMarketExchange, this::onLimitExchange);
+        interMarketTradingPanel.setEnabled(false);
 
         marketClosedLabel = new Label(Texts.MARKET_CLOSED.getString());
         marketClosedLabel.setAlignment(Label.Alignment.CENTER);
@@ -97,10 +142,15 @@ public class TradeScreen extends StockMarketGuiScreen {
         ordersTabElement.addTab("My History", orderHistoryPanel);
         ordersTabElement.addTab("Market Trades", transactionHistoryPanel);
 
+        addElement(moneyModeButton);
+        addElement(pairModeButton);
         addElement(favoritesBar);
+        addElement(pairSelectorWidget);
         addElement(candlestickChart);
         addElement(orderbookVolumeHistogram);
+        addElement(crossRateChart);
         addElement(tradingPanel);
+        addElement(interMarketTradingPanel);
         addElement(marketClosedLabel);
         addElement(ordersTabElement);
 
@@ -166,6 +216,7 @@ public class TradeScreen extends StockMarketGuiScreen {
                 (byte) 0,
                 data -> {
                     pendingOrdersPanel.updateOrders(data.orders);
+                    pendingOrdersPanel.updateInterMarketOrders(data.interMarketOrders);
                     orderMarkerOverlay.updateOrders(data.orders);
                     orderHistoryPanel.refresh();
                     if (currentMarketID != null)
@@ -205,6 +256,19 @@ public class TradeScreen extends StockMarketGuiScreen {
             lastBalanceRefreshMs = now;
             refreshTradingPanelBalances();
         }
+
+        // Update cross-rate and inter-market trading panel when in pair mode
+        if (isPairMode && pairHaveMarketID != null && pairWantMarketID != null) {
+            ClientMarket haveM = getMarket(pairHaveMarketID);
+            ClientMarket wantM = getMarket(pairWantMarketID);
+            if (haveM != null && wantM != null) {
+                double havePrice = haveM.getCurrentMarketRealPrice();
+                double wantPrice = wantM.getCurrentMarketRealPrice();
+                if (havePrice > 0) {
+                    interMarketTradingPanel.setCurrentRate(wantPrice / havePrice);
+                }
+            }
+        }
     }
 
     /**
@@ -230,6 +294,13 @@ public class TradeScreen extends StockMarketGuiScreen {
                 BankData itemBalance = bankAccountData.bankData.get(currentMarketID);
                 double itemBal = itemBalance != null ? itemBalance.getRealBalance() : 0.0;
                 tradingPanel.setItemBalance(itemBal);
+            }
+
+            // "Have" item balance for inter-market trading panel
+            if (isPairMode && pairHaveMarketID != null) {
+                BankData haveBalance = bankAccountData.bankData.get(pairHaveMarketID);
+                double haveBal = haveBalance != null ? haveBalance.getRealBalance() : 0.0;
+                interMarketTradingPanel.setHaveBalance(haveBal);
             }
         });
     }
@@ -301,6 +372,20 @@ public class TradeScreen extends StockMarketGuiScreen {
             candlestickChart.setMarket(null);
             currentMarketID = null;
         }
+
+        // Unsubscribe from the "want" market price stream if in pair mode
+        if (pairWantMarketID != null) {
+            ClientMarket wantMarket = getMarket(pairWantMarketID);
+            if (wantMarket != null) {
+                wantMarket.unsubscribeFromMarketPriceUpdate();
+            }
+            pairWantMarketID = null;
+        }
+        pairHaveMarketID = null;
+
+        // Clear cross-rate chart references
+        crossRateChart.setMarkets(null, null);
+
         super.onClose();
     }
 
@@ -313,21 +398,152 @@ public class TradeScreen extends StockMarketGuiScreen {
         int height = getHeight() - padding * 2;
 
         int orderbookVolumeWidth = width / 10;
+        int modeButtonHeight = 14;
+        int modeButtonWidth = 60;
+
+        // Right panel area (where favorites bar / pair selector / trading panel live)
+        int rightPanelX = padding + (width * 3) / 4 + spacing;
+        int rightPanelWidth = width - ((width * 3) / 4 + spacing);
+
+        // Mode toggle buttons at the top of the right panel
+        moneyModeButton.setBounds(rightPanelX, padding, modeButtonWidth, modeButtonHeight);
+        pairModeButton.setBounds(rightPanelX + modeButtonWidth + spacing, padding, modeButtonWidth, modeButtonHeight);
+
+        int selectorTop = padding + modeButtonHeight + spacing;
 
         // Top-left: candlestick chart
         candlestickChart.setBounds(padding, padding, (width * 3) / 4 - orderbookVolumeWidth, (height * 2) / 3);
         // Right of chart: orderbook volume histogram
         orderbookVolumeHistogram.setBounds(candlestickChart.getRight(), candlestickChart.getTop(), orderbookVolumeWidth, candlestickChart.getHeight());
-        // Top-right: favorites bar / market navigation
-        favoritesBar.setBounds(orderbookVolumeHistogram.getRight() + spacing, padding, width - (orderbookVolumeHistogram.getRight() - padding + spacing), (height - spacing) / 2);
-        // Bottom-right: trading panel
-        tradingPanel.setBounds(orderbookVolumeHistogram.getRight() + spacing, favoritesBar.getBottom() + spacing, favoritesBar.getWidth(), height - (favoritesBar.getBottom() - padding + spacing));
+
+        // Market selector area height (favorites bar or pair selector)
+        int selectorHeight = (height - spacing) / 2 - (modeButtonHeight + spacing);
+
+        // Top-right: favorites bar or pair selector (below mode buttons)
+        favoritesBar.setBounds(rightPanelX, selectorTop, rightPanelWidth, selectorHeight);
+        pairSelectorWidget.setBounds(rightPanelX, selectorTop, rightPanelWidth, selectorHeight);
+
+        // Bottom-right: trading panel (below the selector area)
+        int tradingPanelTop = selectorTop + selectorHeight + spacing;
+        tradingPanel.setBounds(rightPanelX, tradingPanelTop, rightPanelWidth, height - (tradingPanelTop - padding));
+        // Cross-rate chart gets combined bounds of candlestick + orderbook volume area
+        crossRateChart.setBounds(candlestickChart.getLeft(), candlestickChart.getTop(),
+                candlestickChart.getWidth() + orderbookVolumeHistogram.getWidth(), candlestickChart.getHeight());
+        // Inter-market trading panel same bounds as regular trading panel
+        interMarketTradingPanel.setBounds(tradingPanel.getLeft(), tradingPanel.getTop(),
+                tradingPanel.getWidth(), tradingPanel.getHeight());
         // Market closed label overlays the trading panel area
         marketClosedLabel.setBounds(tradingPanel.getLeft(), tradingPanel.getTop(), tradingPanel.getWidth(), 20);
         // Bottom-left: pending orders tab element (below chart + OB volume)
         ordersTabElement.setBounds(padding, candlestickChart.getBottom() + spacing,
                 tradingPanel.getLeft() - spacing - padding,
                 height - (candlestickChart.getBottom() - padding + spacing));
+    }
+
+    /**
+     * Toggles between Item/Money mode and Item/Item (pair) mode.
+     * Shows/hides the FavoritesBar and PairSelectorWidget accordingly.
+     */
+    private void setMode(boolean pairMode) {
+        isPairMode = pairMode;
+        favoritesBar.setEnabled(!pairMode);
+        pairSelectorWidget.setEnabled(pairMode);
+        moneyModeButton.setBackgroundColor(pairMode ? MODE_BUTTON_DEFAULT_COLOR : MODE_BUTTON_SELECTED_COLOR);
+        pairModeButton.setBackgroundColor(pairMode ? MODE_BUTTON_SELECTED_COLOR : MODE_BUTTON_DEFAULT_COLOR);
+
+        // Toggle chart and trading panel between money mode and pair mode
+        candlestickChart.setEnabled(!pairMode);
+        orderbookVolumeHistogram.setEnabled(!pairMode);
+        crossRateChart.setEnabled(pairMode);
+        tradingPanel.setEnabled(!pairMode);
+        interMarketTradingPanel.setEnabled(pairMode);
+
+        if (pairMode) {
+            // When entering pair mode, initialize the "have" side from the current market
+            if (currentMarketID != null && pairHaveMarketID == null) {
+                pairHaveMarketID = currentMarketID;
+                pairSelectorWidget.setHaveMarketID(pairHaveMarketID);
+            }
+        } else {
+            // When returning to money mode, switch back to the "have" market if set
+            if (pairHaveMarketID != null && !pairHaveMarketID.equals(currentMarketID)) {
+                switchMarket(pairHaveMarketID);
+            }
+        }
+    }
+
+    /**
+     * Called when the pair selector widget fires a pair change event.
+     * Subscribes to both market price streams and updates the chart to show
+     * the "have" market as a fallback (pair-specific chart is IMT-15).
+     */
+    private void onPairSelected(PairSelectorWidget.PairSelection selection) {
+        pairHaveMarketID = selection.haveMarketID;
+        pairWantMarketID = selection.wantMarketID;
+
+        // In pair mode, switch the chart/trading panel to show the "have" market as fallback
+        if (pairHaveMarketID != null && !pairHaveMarketID.equals(currentMarketID)) {
+            switchMarketInternal(pairHaveMarketID);
+        }
+
+        // Subscribe to the "want" market price updates as well
+        if (pairWantMarketID != null) {
+            ClientMarket wantMarket = getMarket(pairWantMarketID);
+            if (wantMarket != null) {
+                wantMarket.subscribeToMarketPriceUpdate();
+            }
+        }
+
+        // Update cross-rate chart with both markets
+        ClientMarket haveMarket = pairHaveMarketID != null ? getMarket(pairHaveMarketID) : null;
+        ClientMarket wantMarket2 = pairWantMarketID != null ? getMarket(pairWantMarketID) : null;
+        if (haveMarket != null && wantMarket2 != null) {
+            crossRateChart.setMarkets(haveMarket, wantMarket2);
+        }
+
+        // Update inter-market trading panel item names
+        if (pairHaveMarketID != null) {
+            interMarketTradingPanel.setHaveItemName(ClientPlayerUtilities.getItemDisplayText(pairHaveMarketID.getStack()));
+        }
+        if (pairWantMarketID != null) {
+            interMarketTradingPanel.setWantItemName(ClientPlayerUtilities.getItemDisplayText(pairWantMarketID.getStack()));
+        }
+    }
+
+    /**
+     * Internal market switch that updates chart and trading panel without triggering
+     * a FavoritesBar rebuild. Used by pair mode to switch the fallback display market.
+     */
+    private void switchMarketInternal(ItemID newMarketID) {
+        // Unsubscribe from old market
+        if (currentMarketID != null) {
+            ClientMarket oldMarket = getMarket(currentMarketID);
+            if (oldMarket != null) {
+                oldMarket.unsubscribeFromMarketPriceUpdate();
+            }
+        }
+
+        currentMarketID = newMarketID;
+        ClientMarket market = getMarket(newMarketID);
+        if (market != null) {
+            market.subscribeToMarketPriceUpdate();
+            candlestickChart.setMarket(market);
+            orderMarkerOverlay.setCurrentMarket(newMarketID);
+            tradingPanel.setItemName(ClientPlayerUtilities.getItemDisplayText(newMarketID.getStack()));
+            tradingPanel.setLimitPrice(market.getCurrentMarketRealPrice());
+            tradingPanel.setCurrentMarketPrice(market.getCurrentMarketRealPrice());
+
+            market.isMarketOpenAsync().thenAccept(isOpen -> {
+                Minecraft.getInstance().execute(() -> {
+                    tradingPanel.setMarketOpen(isOpen);
+                    marketClosedLabel.setEnabled(!isOpen);
+                });
+            });
+        }
+
+        refreshTradingPanelBalances();
+        orderHistoryPanel.setCurrentMarketID(newMarketID);
+        transactionHistoryPanel.refresh(newMarketID);
     }
 
     private @Nullable ClientMarket getValidMarketForOrder()
@@ -381,6 +597,35 @@ public class TradeScreen extends StockMarketGuiScreen {
         market.createLimitOrder(selectedBankAccountNr, -quantity, price).thenAccept(result->{
             info("Order creation response: "+result.status);
         });
+    }
+
+    /**
+     * Handles a market exchange from the inter-market trading panel.
+     * Places an inter-market order at market rate (crossRateLimit = 0).
+     */
+    private void onMarketExchange(double quantity) {
+        if (pairHaveMarketID == null || pairWantMarketID == null || selectedBankAccountNr == -1) return;
+        PlaceInterMarketOrderRequest.InputData input = new PlaceInterMarketOrderRequest.InputData(
+                pairHaveMarketID, pairWantMarketID, selectedBankAccountNr, quantity, 0L);
+        BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(input)
+                .thenAccept(result -> info("Inter-market order: " + (result.success ? "OK" : result.errorMessage)));
+    }
+
+    /**
+     * Handles a limit exchange from the inter-market trading panel.
+     * Places an inter-market order with a cross-rate limit.
+     */
+    private void onLimitExchange(double quantity, double rateLimit) {
+        if (pairHaveMarketID == null || pairWantMarketID == null || selectedBankAccountNr == -1) return;
+        long rawRateLimit = (long)(rateLimit * getItemFractionScaleFactor());
+        PlaceInterMarketOrderRequest.InputData input = new PlaceInterMarketOrderRequest.InputData(
+                pairHaveMarketID, pairWantMarketID, selectedBankAccountNr, quantity, rawRateLimit);
+        BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(input)
+                .thenAccept(result -> info("Inter-market limit order: " + (result.success ? "OK" : result.errorMessage)));
+    }
+
+    private long getItemFractionScaleFactor() {
+        return net.kroia.banksystem.BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
     }
 
     /**

@@ -13,8 +13,7 @@ import net.kroia.stockmarket.util.StockMarketGuiElement;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 /**
  * Scrollable panel displaying the player's completed/cancelled order records.
@@ -22,6 +21,9 @@ import java.util.List;
  * Data is loaded on-demand via {@link OrderHistoryRequest}.
  * Uses a dirty-flag pattern to defer the UI rebuild to the next render frame,
  * avoiding ConcurrentModificationException when updates arrive during iteration.
+ * <p>
+ * Records that share the same non-null {@code interMarketGroupID} are grouped
+ * and displayed as a single "Traded X sellItem -> Y buyItem" entry.
  */
 public class OrderHistoryPanel extends StockMarketGuiElement {
 
@@ -129,23 +131,99 @@ public class OrderHistoryPanel extends StockMarketGuiElement {
 
     /**
      * Clears and rebuilds the record list view, applying market and clear-timestamp filters.
+     * <p>
+     * Records with a non-null {@code interMarketGroupID} are grouped into pairs and displayed
+     * as combined inter-market trade entries. Standalone records (null groupID) are displayed
+     * individually as before. All entries are sorted chronologically (most recent first).
      */
     private void rebuildRecordList(List<OrderRecordStruct> records) {
         recordListView.removeChilds();
 
+        // Separate records into grouped inter-market trades and standalone records
+        Map<UUID, List<OrderRecordStruct>> groupedByIMGroupID = new LinkedHashMap<>();
+        List<OrderRecordStruct> standaloneRecords = new ArrayList<>();
+
         for (OrderRecordStruct record : records) {
-            // Filter by current market
-            if (currentMarketID != null && record.itemID() != currentMarketID.getShort())
+            // Apply market filter: skip records that don't belong to the current market view.
+            // For inter-market trades, we allow records from ANY market since the grouped entry
+            // shows both legs (which belong to different markets).
+            if (currentMarketID != null && record.interMarketGroupID() == null
+                    && record.itemID() != currentMarketID.getShort())
                 continue;
             // Filter out records hidden by the clear button
             if (clearedBeforeMs > 0 && record.time() <= clearedBeforeMs)
                 continue;
+
+            if (record.interMarketGroupID() != null) {
+                groupedByIMGroupID.computeIfAbsent(record.interMarketGroupID(), k -> new ArrayList<>()).add(record);
+            } else {
+                standaloneRecords.add(record);
+            }
+        }
+
+        // Build a combined list of displayable entries with timestamps for sorting.
+        // Each entry is a widget paired with its effective timestamp.
+        List<TimestampedEntry> allEntries = new ArrayList<>();
+
+        // Add standalone records as HistoryEntryWidgets
+        for (OrderRecordStruct record : standaloneRecords) {
             HistoryEntryWidget entry = new HistoryEntryWidget(record);
-            recordListView.addChild(entry);
+            allEntries.add(new TimestampedEntry(record.time(), entry));
+        }
+
+        // Add grouped inter-market trade entries
+        for (Map.Entry<UUID, List<OrderRecordStruct>> group : groupedByIMGroupID.entrySet()) {
+            List<OrderRecordStruct> legs = group.getValue();
+            if (legs.size() == 2) {
+                // Normal case: exactly 2 legs forming a complete inter-market trade.
+                // Apply market filter for grouped entries: if a market filter is set,
+                // at least one leg must involve that market.
+                if (currentMarketID != null) {
+                    boolean matchesMarket = false;
+                    for (OrderRecordStruct leg : legs) {
+                        if (leg.itemID() == currentMarketID.getShort()) {
+                            matchesMarket = true;
+                            break;
+                        }
+                    }
+                    if (!matchesMarket) continue;
+                }
+
+                // Identify sell leg (negative amount) and buy leg (positive amount)
+                OrderRecordStruct sellLeg = legs.get(0).amount() < 0 ? legs.get(0) : legs.get(1);
+                OrderRecordStruct buyLeg = legs.get(0).amount() > 0 ? legs.get(0) : legs.get(1);
+
+                // Use the earlier timestamp of the two legs for chronological sorting
+                long effectiveTime = Math.min(sellLeg.time(), buyLeg.time());
+
+                InterMarketHistoryEntryWidget entry = new InterMarketHistoryEntryWidget(sellLeg, buyLeg);
+                allEntries.add(new TimestampedEntry(effectiveTime, entry));
+            } else {
+                // Unexpected group size (not exactly 2 legs) — display each record individually
+                for (OrderRecordStruct record : legs) {
+                    if (currentMarketID != null && record.itemID() != currentMarketID.getShort())
+                        continue;
+                    HistoryEntryWidget entry = new HistoryEntryWidget(record);
+                    allEntries.add(new TimestampedEntry(record.time(), entry));
+                }
+            }
+        }
+
+        // Sort all entries by timestamp descending (most recent first)
+        allEntries.sort(Comparator.comparingLong(TimestampedEntry::timestamp).reversed());
+
+        // Add sorted entries to the list view
+        for (TimestampedEntry entry : allEntries) {
+            recordListView.addChild(entry.widget());
         }
 
         layoutChanged();
     }
+
+    /**
+     * Helper record pairing a display widget with its effective timestamp for chronological sorting.
+     */
+    private record TimestampedEntry(long timestamp, StockMarketGuiElement widget) {}
 
     // -------------------------------------------------------------------------
     //  HistoryEntryWidget — single row representing one completed order record
@@ -223,6 +301,95 @@ public class OrderHistoryPanel extends StockMarketGuiElement {
             priceLabel.setBounds(x, 0, colWidth, h);
             x += colWidth + s;
             timeLabel.setBounds(x, 0, w - x - s, h);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    //  InterMarketHistoryEntryWidget — combined row for an inter-market trade
+    // -------------------------------------------------------------------------
+
+    /**
+     * Displays a grouped inter-market trade as a compact row showing both legs:
+     * {@code [sellIcon 16x16] -> [buyIcon 16x16]  Traded X.XX -> Y.YY  [timestamp]}
+     * <p>
+     * The sell leg (negative amount) represents what was given, and the buy leg
+     * (positive amount) represents what was received.
+     */
+    private class InterMarketHistoryEntryWidget extends StockMarketGuiElement {
+
+        private final ItemView sellIcon;
+        private final Label arrowLabel;
+        private final ItemView buyIcon;
+        private final Label tradeLabel;
+        private final Label timeLabel;
+
+        InterMarketHistoryEntryWidget(OrderRecordStruct sellLeg, OrderRecordStruct buyLeg) {
+            super();
+            setEnableBackground(true);
+
+            // Sell leg icon (what was given)
+            ItemID sellItemID = new ItemID(sellLeg.itemID());
+            sellIcon = new ItemView(sellItemID.getStack());
+            addChild(sellIcon);
+
+            // Arrow between icons
+            arrowLabel = new Label("->");
+            arrowLabel.setTextFontScale(0.8f);
+            addChild(arrowLabel);
+
+            // Buy leg icon (what was received)
+            ItemID buyItemID = new ItemID(buyLeg.itemID());
+            buyIcon = new ItemView(buyItemID.getStack());
+            addChild(buyIcon);
+
+            // "Traded X.XX -> Y.YY" text
+            double sellAmount = Math.abs(MarketManager.convertToRealAmountStatic(sellLeg.amount()));
+            double buyAmount = Math.abs(MarketManager.convertToRealAmountStatic(buyLeg.amount()));
+            tradeLabel = new Label(String.format("Traded %.2f -> %.2f", sellAmount, buyAmount));
+            tradeLabel.setTextFontScale(0.8f);
+            addChild(tradeLabel);
+
+            // Timestamp (use the earlier of the two legs)
+            long effectiveTime = Math.min(sellLeg.time(), buyLeg.time());
+            String timeStr = TIME_FORMATTER.format(Instant.ofEpochMilli(effectiveTime));
+            timeLabel = new Label(timeStr);
+            timeLabel.setTextFontScale(0.8f);
+            addChild(timeLabel);
+
+            setHeight(24);
+        }
+
+        @Override
+        protected void render() {
+            // No dynamic rendering needed
+        }
+
+        @Override
+        protected void layoutChanged() {
+            int w = getWidth();
+            int h = getHeight();
+            int iconSize = 16;
+            int s = 2;
+            int x = s;
+
+            // [sellIcon] -> [buyIcon]  Traded X.XX -> Y.YY  [timestamp]
+            sellIcon.setBounds(x, (h - iconSize) / 2, iconSize, iconSize);
+            x += iconSize + s;
+
+            arrowLabel.setBounds(x, 0, 14, h);
+            x += 14 + s;
+
+            buyIcon.setBounds(x, (h - iconSize) / 2, iconSize, iconSize);
+            x += iconSize + s;
+
+            // Split the remaining space between trade label and timestamp
+            int remaining = w - x - s;
+            int timeLabelWidth = 70; // enough for "MM-dd HH:mm"
+            int tradeLabelWidth = remaining - timeLabelWidth - s;
+
+            tradeLabel.setBounds(x, 0, tradeLabelWidth, h);
+            x += tradeLabelWidth + s;
+            timeLabel.setBounds(x, 0, timeLabelWidth, h);
         }
     }
 }
