@@ -483,6 +483,9 @@ public class TradeScreen extends StockMarketGuiScreen {
                 }
             }
         }
+
+        // Trigger re-layout so chart/histogram bounds update for the new mode
+        updateLayout(null);
     }
 
     /**
