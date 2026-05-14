@@ -850,21 +850,23 @@ public class CandlestickChart extends StockMarketGuiElement {
         }
 
         // Track running high/low for the current (newest) candle using the live cross-rate.
-        // This captures intra-period extremes that the OHLC sample points might miss.
+        // The OHLC sample points are unreliable for the live candle because individual markets'
+        // candle highs/lows shift each frame. The running tracker is the only source of truth.
         if (!syntheticCandles.isEmpty()) {
             PriceHistoryData.Candle newest = syntheticCandles.getFirst();
             if (newest.openTimestamp != crossRateCurrentCandleTimestamp) {
-                // New candle period started — reset tracker
+                // New candle period started — initialize tracker from open and current rate
                 crossRateCurrentCandleTimestamp = newest.openTimestamp;
-                crossRateCurrentHigh = currentRateRaw;
-                crossRateCurrentLow = currentRateRaw;
+                crossRateCurrentHigh = Math.max(newest.open, currentRateRaw);
+                crossRateCurrentLow = Math.min(newest.open, currentRateRaw);
             }
             // Update running high/low with current live rate
             if (currentRateRaw > crossRateCurrentHigh) crossRateCurrentHigh = currentRateRaw;
             if (currentRateRaw < crossRateCurrentLow) crossRateCurrentLow = currentRateRaw;
-            // Apply tracked extremes to the newest candle
-            newest.high = Math.max(newest.high, crossRateCurrentHigh);
-            newest.low = Math.min(newest.low, crossRateCurrentLow);
+            // Override newest candle high/low entirely from the tracker —
+            // the OHLC sample points are inconsistent for the live candle
+            newest.high = crossRateCurrentHigh;
+            newest.low = crossRateCurrentLow;
         }
 
         // Build the synthetic PriceHistoryData.
