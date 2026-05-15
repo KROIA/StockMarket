@@ -565,10 +565,13 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
      */
     private void depositTransactionMoneyBalance(InterMarketOrder order)
     {
-        if (order.isBotOrder()) return;
+        if (order.isBotOrder())
+            return;
         long balance = order.getTransactionMoneyBalance();
-        if (balance <= 0) return;
-        if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.BANK_SYSTEM_API == null) return;
+        if (balance <= 0)
+            return;
+        if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.BANK_SYSTEM_API == null)
+            return;
 
         IServerBankAccount bankAccount = BACKEND_INSTANCES.BANK_SYSTEM_API
                 .getServerBankManager().getSync().getBankAccount(order.getBankAccountNr());

@@ -110,6 +110,17 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         this.currentMarketPrice = currentMarketPrice;
         this.orderbook.setCurrentMarketPrice(currentMarketPrice);
     }
+
+    /**
+     * Updates only the reported market price without redistributing virtual orderbook depth.
+     * Used by the cross-market bilateral walk which already consumed depth via fillVirtual —
+     * calling orderbook.setCurrentMarketPrice would shift the DynamicIndexedArray window
+     * and regenerate default volumes, draining depth that wasn't actually traded.
+     */
+    public void setCurrentMarketPriceNoRedistribute(long newPrice)
+    {
+        this.currentMarketPrice = newPrice;
+    }
     @Override
     public void test_clearOrderbook()
     {

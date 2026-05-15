@@ -383,92 +383,113 @@ public class MatchingEngine
         final long SF = BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
 
         // Sample starting prices: sell into buy-side (price walks DOWN), buy from sell-side (price walks UP)
-        long glassSamplePrice = haveMarket.getCurrentMarketPrice();
-        long sandSamplePrice  = wantMarket.getCurrentMarketPrice();
+        long haveSamplePrice = haveMarket.getCurrentMarketPrice();
+        long wantSamplePrice  = wantMarket.getCurrentMarketPrice();
 
         // Read order state (persisted across ticks for partial fills)
-        long sandTargetVolume      = order.getBuyOrder().getRemainingVolume();            // positive, items still to buy
-        long glassLockedVolume     = Math.abs(order.getSellOrder().getRemainingVolume()); // positive, items still available to sell
+        long wantTargetVolume      = order.getBuyOrder().getRemainingVolume();            // positive, items still to buy
+        long haveLockedVolume     = Math.abs(order.getSellOrder().getRemainingVolume()); // positive, items still available to sell
         long crossMarketLimitPrice = order.getCrossRateLimit();
         long transactionMoneyBalance = order.getTransactionMoneyBalance();
 
         // Track whether any progress was made this tick
         boolean madeProgress = false;
+        long lastHaveFillPrice = haveSamplePrice;
+        long lastWantFillPrice = wantSamplePrice;
 
         // Main loop with timeout protection
         int timeout = 10000;
         while (timeout-- > 0)
         {
             // 1. Rate check
-            if (glassSamplePrice <= 0) break;
-            long crossMarketPrice = sandSamplePrice * SF / glassSamplePrice;
-            if (crossMarketPrice > crossMarketLimitPrice) break;
+            if (haveSamplePrice <= 0)
+                break;
+            long crossMarketPrice = wantSamplePrice * SF / haveSamplePrice;
+            if (crossMarketPrice > crossMarketLimitPrice)
+                break;
 
             // 2. Stop conditions
-            if (sandTargetVolume <= 0 || glassLockedVolume <= 0) break;
+            if (wantTargetVolume <= 0)
+                break;
+            //if (haveLockedVolume <= 0 && transactionMoneyBalance <= 0)
+            //    break;
 
             // 3. Read depth at current prices
-            long glassVolume = getMatchableVolume(haveMarket.getOrderbook(), glassSamplePrice, true);
-            long sandVolume  = getMatchableVolume(wantMarket.getOrderbook(), sandSamplePrice, false);
+            long haveVolume = getMatchableVolume(haveMarket.getOrderbook(), haveSamplePrice, true);
+            long wantVolume  = getMatchableVolume(wantMarket.getOrderbook(), wantSamplePrice, false);
 
-            if (glassVolume <= 0 && sandVolume <= 0) break;
-
-            // 4. Sell glass (have-item) if needed to fund sand (want-item) purchase
-            long canAffordSand = (sandSamplePrice > 0) ? transactionMoneyBalance * SF / sandSamplePrice : 0;
-
-            if (canAffordSand < sandVolume && canAffordSand < sandTargetVolume)
+            if (wantVolume <= 0)
             {
-                long sandWeWant = Math.min(sandVolume, sandTargetVolume);
-                long dollarsNeeded = sandWeWant * sandSamplePrice / SF - transactionMoneyBalance;
+                // No depth at current prices — advance and retry
+                wantSamplePrice += 1;
+                continue;
+            }
+            if(haveVolume <= 0)
+            {
+                // No depth at current prices — advance and retry
+                haveSamplePrice -= 1;
+                if (haveSamplePrice <= 0)
+                    break;
+                continue;
+            }
+
+            // 4. Sell have-items if needed to fund want-item purchase
+            long canAffordWant = (wantSamplePrice > 0) ? transactionMoneyBalance * SF / wantSamplePrice : 0;
+
+            if (canAffordWant < wantVolume && canAffordWant < wantTargetVolume)
+            {
+                long wantWeNeed = Math.min(wantVolume, wantTargetVolume);
+                long dollarsNeeded = wantWeNeed * wantSamplePrice - transactionMoneyBalance;
                 if (dollarsNeeded < 0) dollarsNeeded = 0;
 
-                long glassToSell = (glassSamplePrice > 0) ? dollarsNeeded * SF / glassSamplePrice : 0;
-                if (glassSamplePrice > 0 && glassToSell * glassSamplePrice / SF < dollarsNeeded)
-                    glassToSell += 1;  // round up
+                long haveToSell = (haveSamplePrice > 0) ? dollarsNeeded / haveSamplePrice : 0;
+                if (haveSamplePrice > 0 && haveToSell * haveSamplePrice / SF < dollarsNeeded)
+                    haveToSell += 1;  // round up
 
-                glassToSell = Math.min(glassToSell, Math.min(glassLockedVolume, glassVolume));
+                haveToSell = Math.min(haveToSell, haveVolume);
 
-                if (glassToSell > 0)
+                if (haveToSell > 0)
                 {
                     // Withdraw from player's locked item balance
                     if (!order.isBotOrder() && playerBankAccount != null)
                     {
                         IServerBank haveItemBank = playerBankAccount.getBank(order.getSellItemID());
-                        if (haveItemBank == null || haveItemBank.withdrawLockedPrefered(glassToSell) != BankStatus.SUCCESS)
+                        if (haveItemBank == null || haveItemBank.withdrawLockedPrefered(haveToSell) != BankStatus.SUCCESS)
                             break;
                     }
 
                     DepthConsumeResult consumed = consumeBuySideDepthAtPrice(
-                            haveMarket.getOrderbook(), haveMarket.getItemID(), glassSamplePrice, glassToSell);
+                            haveMarket.getOrderbook(), haveMarket.getItemID(), haveSamplePrice, haveToSell);
 
-                    glassLockedVolume -= consumed.volumeConsumed();
+                    haveLockedVolume -= consumed.volumeConsumed();
                     transactionMoneyBalance += consumed.dollarAmount();
-                    glassVolume -= consumed.volumeConsumed();
+                    haveVolume -= consumed.volumeConsumed();
 
                     if (consumed.volumeConsumed() > 0)
                     {
                         order.getSellOrder().edit(-consumed.volumeConsumed(), consumed.dollarAmount());
                         madeProgress = true;
+                        lastHaveFillPrice = haveSamplePrice;
                     }
                 }
             }
 
-            // 5. Buy sand (want-item) with available balance
-            long sandToBuy = Math.min(sandVolume, sandTargetVolume);
-            if (sandSamplePrice > 0)
+            // 5. Buy want-items with available balance
+            long wantToBuy = Math.min(wantVolume, wantTargetVolume);
+            if (wantSamplePrice > 0)
             {
-                long canBuy = transactionMoneyBalance * SF / sandSamplePrice;
-                sandToBuy = Math.min(sandToBuy, canBuy);
+                long canBuy = transactionMoneyBalance * SF / wantSamplePrice;
+                wantToBuy = Math.min(wantToBuy, canBuy);
             }
 
-            if (sandToBuy > 0)
+            if (wantToBuy > 0)
             {
                 DepthConsumeResult consumed = consumeSellSideDepthAtPrice(
-                        wantMarket.getOrderbook(), wantMarket.getItemID(), sandSamplePrice, sandToBuy, transactionMoneyBalance);
+                        wantMarket.getOrderbook(), wantMarket.getItemID(), wantSamplePrice, wantToBuy, transactionMoneyBalance);
 
                 transactionMoneyBalance -= consumed.dollarAmount();
-                sandTargetVolume -= consumed.volumeConsumed();
-                sandVolume -= consumed.volumeConsumed();
+                wantTargetVolume -= consumed.volumeConsumed();
+                wantVolume -= consumed.volumeConsumed();
 
                 if (!order.isBotOrder() && playerBankAccount != null && consumed.volumeConsumed() > 0)
                 {
@@ -481,24 +502,33 @@ public class MatchingEngine
                 {
                     order.getBuyOrder().edit(consumed.volumeConsumed(), -consumed.dollarAmount());
                     madeProgress = true;
+                    lastWantFillPrice = wantSamplePrice;
                 }
             }
 
             // 6. Advance prices when depth exhausted
-            if (glassVolume <= 0) glassSamplePrice -= 1;
-            if (sandVolume <= 0) sandSamplePrice += 1;
-            if (glassSamplePrice <= 0) break;
+            if (haveVolume <= 0) haveSamplePrice -= 1;
+            if (wantVolume <= 0) wantSamplePrice += 1;
+            if (haveSamplePrice <= 0)
+                break;
         }
 
-        // 7. Update market prices atomically at end of walk
-        haveMarket.getOrderbook().setCurrentMarketPrice(glassSamplePrice);
-        wantMarket.getOrderbook().setCurrentMarketPrice(sandSamplePrice);
+        // 7. Update reported market prices only if fills occurred, using the last actual fill prices.
+        //    Uses setCurrentMarketPriceNoRedistribute to avoid shifting the VirtualOrderbook's
+        //    DynamicIndexedArray window — the bilateral walk already consumed depth directly
+        //    via fillVirtual, and redistributing would regenerate default volumes at new price
+        //    levels, draining depth that wasn't actually traded.
+        if (madeProgress)
+        {
+            haveMarket.setCurrentMarketPriceNoRedistribute(lastHaveFillPrice);
+            wantMarket.setCurrentMarketPriceNoRedistribute(lastWantFillPrice);
+        }
 
         // 8. Persist state on order
         order.setTransactionMoneyBalance(transactionMoneyBalance);
 
         // 9. Determine result
-        if (sandTargetVolume <= 0 || order.isFilled())
+        if (wantTargetVolume <= 0 || order.isFilled())
             return InterMarketExecutor.ExecutionResult.FILLED;
         else if (madeProgress)
             return InterMarketExecutor.ExecutionResult.PARTIAL_FILL;
