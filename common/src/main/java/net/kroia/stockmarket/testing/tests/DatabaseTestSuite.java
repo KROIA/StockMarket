@@ -46,9 +46,21 @@ public class DatabaseTestSuite extends TestSuite {
             if (dbManager == null)
                 return fail("DATABASE_MANAGER is null");
 
+            // SQLite requires an active transaction before commit — a no-op commit
+            // throws "cannot commit - no transaction is active". Execute a write
+            // statement to start a transaction.
+            Connection conn = dbManager.getConnection();
+            conn.createStatement().execute("CREATE TABLE IF NOT EXISTS _test_commit (id INTEGER)");
+            conn.createStatement().execute("INSERT INTO _test_commit VALUES (1)");
+
             boolean result = dbManager.commitTransaction();
             TestResult r = assertTrue("commitTransaction should succeed on valid connection", result);
             if (!r.passed()) return r;
+
+            // Clean up the temp table
+            conn.createStatement().execute("DROP TABLE IF EXISTS _test_commit");
+            dbManager.commitTransaction();
+
             return pass("commitTransaction succeeds normally");
         } catch (Exception e) {
             return fail("Exception during commit: " + e.getMessage());
