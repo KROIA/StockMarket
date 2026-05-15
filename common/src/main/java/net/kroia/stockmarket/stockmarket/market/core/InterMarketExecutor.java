@@ -98,7 +98,7 @@ public class InterMarketExecutor
         try
         {
             // ── Pre-flight checks ─────────────────────────────────────────────
-            if (!haveMarket.isMarketOpen() || !wantMarket.isMarketOpen())
+            if ((!haveMarket.isMarketOpen() || !wantMarket.isMarketOpen()) && !order.isBotOrder())
             {
                 logWarn("One or both markets are closed, canceling order");
                 return ExecutionResult.CANCELED;
@@ -242,6 +242,19 @@ public class InterMarketExecutor
      *   <li>Partial fill: update the order's fill state, keep remainder pending</li>
      * </ol>
      */
+    /**
+     * Executes a limit-type inter-market order.
+     *
+     * <p>The cross-rate limit defines the maximum acceptable rate of sell-items
+     * per buy-item. When the current market rate is favorable (≤ limit), the
+     * order executes directly through the matching engine.</p>
+     *
+     * <p>To enforce the rate limit even with slippage, the sell volume is capped
+     * to only what's needed to buy the target amount of want-items at current
+     * prices. This keeps the effective rate close to the current rate (which
+     * already passed the check). The order fills partially each tick until the
+     * full target is met.</p>
+     */
     private static ExecutionResult executeLimitOrder(
             InterMarketOrder order,
             ServerMarket haveMarket,
@@ -255,7 +268,6 @@ public class InterMarketExecutor
         long maxSellVolume = Math.abs(order.getSellOrder().getRemainingVolume());
         if (maxSellVolume <= 0)
         {
-            logWarn("Limit inter-market order has zero or negative sell volume, canceling");
             return ExecutionResult.CANCELED;
         }
 
@@ -267,36 +279,34 @@ public class InterMarketExecutor
             return ExecutionResult.SKIPPED;
         }
 
-        // Rate check: currentRate = wantPrice * SF / havePrice (how many have-items
-        // per want-item at current prices). If this exceeds the limit, skip.
+        // Rate check: currentRate = wantPrice * SF / havePrice.
+        // If this exceeds the limit, the rate is unfavorable — skip.
         long currentRate = wantPrice * SF / havePrice;
         if (currentRate > crossRateLimit)
         {
             return ExecutionResult.SKIPPED;
         }
 
-        // Rate is favorable — execute directly through the matching engine.
-        // The read-only DepthSimulation can miss depth that the matching engine
-        // can access (e.g., virtual depth regenerated after regular order fills).
-        // By executing directly, we let the matching engine walk all available
-        // depth and fill as much as possible.
-        //
-        // The sell volume is the remaining amount on the sell leg. The buy volume
-        // is estimated from the sell volume and current prices. executeBothLegs
-        // adjusts the buy volume based on actual dollar yield from the sell leg.
-        long estimatedBuyVolume = maxSellVolume * havePrice / wantPrice;
+        // Compute a conservative sell volume: only sell enough glass to buy the
+        // remaining target sand at current prices. This prevents overshoot —
+        // selling all glass at unfavorable depth prices would give too few sand.
+        long buyRemaining = Math.abs(order.getBuyOrder().getRemainingVolume());
+        // Glass needed = sand * (sandPrice / glassPrice) in raw integer math
+        long sellNeeded = buyRemaining * wantPrice / havePrice;
+        // Add 1 to avoid rounding down to 0 for small volumes
+        if (sellNeeded <= 0) sellNeeded = 1;
+        long sellVolume = Math.min(maxSellVolume, sellNeeded);
+
+        long estimatedBuyVolume = sellVolume * havePrice / wantPrice;
         if (estimatedBuyVolume <= 0) estimatedBuyVolume = 1;
 
-        long estimatedDollarBudget = maxSellVolume * havePrice / SF;
+        long estimatedDollarBudget = sellVolume * havePrice / SF;
         if (estimatedDollarBudget <= 0) estimatedDollarBudget = 1;
 
         ExecutionResult result = executeBothLegs(
                 order, haveMarket, wantMarket, playerBankAccount, tradingCurrencyID,
-                maxSellVolume, estimatedDollarBudget, estimatedBuyVolume, wantPrice, SF);
+                sellVolume, estimatedDollarBudget, estimatedBuyVolume, wantPrice, SF);
 
-        // After execution, verify the effective cross-rate of what actually filled.
-        // If the rate exceeded the limit, the market moved unfavorably during
-        // execution — this is rare since prices settled before we run.
         if (result == ExecutionResult.FILLED || result == ExecutionResult.PARTIAL_FILL)
         {
             if (order.isFilled())

@@ -385,7 +385,8 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
             for (ItemID id : affected)
             {
                 ServerMarket m = markets.get(id);
-                if (m != null) m.update();
+                if (m != null)
+                    m.update();
             }
         }
 
@@ -483,12 +484,11 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
 
     /**
      * Called when a limit inter-market order is partially filled.
-     * Saves the partial historical record for both legs.
      * The order remains in the queue for further processing.
+     * History records are saved only on completion or cancellation to avoid duplicates.
      */
     private void onInterMarketOrderPartialFill(InterMarketOrder order)
     {
-        saveInterMarketOrderRecord(order);
     }
 
     /**
