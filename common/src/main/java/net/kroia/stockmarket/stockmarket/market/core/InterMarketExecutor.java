@@ -298,12 +298,27 @@ public class InterMarketExecutor
             return ExecutionResult.SKIPPED;
         }
 
-        // Sell only enough glass to buy the remaining target sand at current prices.
-        // This prevents over-selling when the buy target is partially filled.
+        // Cap the sell volume to enforce the rate limit across all ticks.
+        // Total glass sold must never exceed buyTarget * crossRateLimit / SF.
+        // The locked margin (10% extra) is a buffer, not an allowance to overspend.
+        long buyTarget = Math.abs(order.getBuyOrder().getTargetVolume());
+        long maxTotalSell = buyTarget * crossRateLimit / SF;
+        long alreadySold = Math.abs(order.getSellOrder().getFilledVolume());
+        long sellBudget = maxTotalSell - alreadySold;
+        if (sellBudget <= 0)
+        {
+            // Sell budget exhausted — can't sell more without exceeding the rate limit
+            if (Math.abs(order.getBuyOrder().getFilledVolume()) > 0)
+                return ExecutionResult.FILLED;
+            else
+                return ExecutionResult.CANCELED;
+        }
+
+        // Also cap to what's needed for the remaining buy target at current prices
         long buyRemaining = Math.abs(order.getBuyOrder().getRemainingVolume());
         long sellNeeded = buyRemaining * wantPrice / havePrice;
         if (sellNeeded <= 0) sellNeeded = 1;
-        long sellVolume = Math.min(maxSellVolume, sellNeeded);
+        long sellVolume = Math.min(maxSellVolume, Math.min(sellNeeded, sellBudget));
 
         long estimatedBuyVolume = sellVolume * havePrice / wantPrice;
         if (estimatedBuyVolume <= 0) estimatedBuyVolume = 1;
