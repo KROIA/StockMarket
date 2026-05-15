@@ -259,189 +259,46 @@ public class InterMarketExecutor
             return ExecutionResult.CANCELED;
         }
 
-        Orderbook haveOrderbook = haveMarket.getOrderbook();
-        Orderbook wantOrderbook = wantMarket.getOrderbook();
         long havePrice = haveMarket.getCurrentMarketPrice();
         long wantPrice = wantMarket.getCurrentMarketPrice();
 
-        // ── Step 1: Quick rate check ──────────────────────────────────────────
-        // crossRateLimit represents the maximum acceptable sell-to-buy ratio in raw format.
-        // currentRate = havePrice * SF / wantPrice (how many sell-items per buy-item at current prices).
-        // All arithmetic is in longs to avoid floating-point imprecision.
-        // If wantPrice is 0, skip to avoid division by zero.
-        if (wantPrice <= 0)
+        if (wantPrice <= 0 || havePrice <= 0)
         {
             return ExecutionResult.SKIPPED;
         }
 
-        // Quick check: currentRate = wantPrice / havePrice in terms of the cross rate
-        // The cross-rate limit is defined as: sellVolume / buyVolume (scaled by SF)
-        // At current market prices, 1 buy-item costs wantPrice dollars, and
-        // selling 1 have-item yields havePrice dollars. So to buy 1 want-item,
-        // we need (wantPrice / havePrice) have-items. In scaled form:
-        // currentRate = wantPrice * SF / havePrice
-        if (havePrice <= 0)
-        {
-            return ExecutionResult.SKIPPED;
-        }
+        // Rate check: currentRate = wantPrice * SF / havePrice (how many have-items
+        // per want-item at current prices). If this exceeds the limit, skip.
         long currentRate = wantPrice * SF / havePrice;
         if (currentRate > crossRateLimit)
         {
-            // Current market conditions are unfavorable — skip, retry next tick
             return ExecutionResult.SKIPPED;
         }
 
-        // ── Step 2: Full simulation (same as market order Phase 1) ────────────
-        DepthSimulation.SimResult simSell = DepthSimulation.simulateSell(
-                haveOrderbook, maxSellVolume, havePrice);
-
-        if (simSell.volumeFilled() <= 0 || simSell.dollarAmount() <= 0)
-        {
-            return ExecutionResult.SKIPPED;  // No depth, keep pending
-        }
-
-        DepthSimulation.SimResult simBuy = DepthSimulation.simulateBuy(
-                wantOrderbook, simSell.dollarAmount(), wantPrice);
-
-        if (simBuy.volumeFilled() <= 0 || simBuy.dollarAmount() <= 0)
-        {
-            return ExecutionResult.SKIPPED;  // No depth, keep pending
-        }
-
-        // Back-calculate exact sell volume
-        DepthSimulation.SimResult simSellExact = DepthSimulation.simulateSellForDollars(
-                haveOrderbook, simBuy.dollarAmount(), havePrice);
-
-        if (simSellExact.volumeFilled() <= 0)
-        {
-            return ExecutionResult.SKIPPED;
-        }
-
-        long exactSellVolume = simSellExact.volumeFilled();
-        long itemsReceived = simBuy.volumeFilled();
-        long dollarsSpent = simBuy.dollarAmount();
-
-        // ── Step 3: Check effective rate ──────────────────────────────────────
-        // effectiveRate = exactSellVolume * SF / itemsReceived
-        // This represents how many sell-items per buy-item the trade actually costs.
-        // Must not exceed crossRateLimit.
-        long effectiveRate = exactSellVolume * SF / itemsReceived;
-
-        if (effectiveRate <= crossRateLimit)
-        {
-            // Full fill is within the rate limit — execute at full volume
-            ExecutionResult result = executeBothLegs(
-                    order, haveMarket, wantMarket, playerBankAccount, tradingCurrencyID,
-                    exactSellVolume, dollarsSpent, itemsReceived, wantPrice, SF);
-
-            // For limit orders, a full execution still counts as FILLED
-            return result;
-        }
-
-        // ── Step 4: Binary search for max fillable volume ─────────────────────
-        // The effective rate at full volume exceeds the limit. Find the maximum
-        // buy-volume (lo) where the rate stays within crossRateLimit.
+        // Rate is favorable — execute directly through the matching engine.
+        // The read-only DepthSimulation can miss depth that the matching engine
+        // can access (e.g., virtual depth regenerated after regular order fills).
+        // By executing directly, we let the matching engine walk all available
+        // depth and fill as much as possible.
         //
-        // For each candidate buy-volume 'mid':
-        //   1. Simulate buying 'mid' items from wantMarket → get dollar cost
-        //   2. Simulate selling enough items from haveMarket to cover that cost
-        //   3. Compute rate = sellVolume * SF / mid
-        //   4. If rate <= crossRateLimit: lo = mid (feasible), else: hi = mid (infeasible)
-        long lo = 0;
-        long hi = itemsReceived;
+        // The sell volume is the remaining amount on the sell leg. The buy volume
+        // is estimated from the sell volume and current prices. executeBothLegs
+        // adjusts the buy volume based on actual dollar yield from the sell leg.
+        long estimatedBuyVolume = maxSellVolume * havePrice / wantPrice;
+        if (estimatedBuyVolume <= 0) estimatedBuyVolume = 1;
 
-        while (hi - lo > 1)
-        {
-            long mid = lo + (hi - lo) / 2;
+        long estimatedDollarBudget = maxSellVolume * havePrice / SF;
+        if (estimatedDollarBudget <= 0) estimatedDollarBudget = 1;
 
-            // Simulate buying 'mid' items: we need to figure out what it costs.
-            // We use simulateSellForDollars in reverse: simulate buying mid items
-            // by estimating the dollar cost, then check how many sell-items that requires.
-            //
-            // Estimate dollar cost for buying mid items: use the ratio from full simulation
-            // dollarCostEstimate = dollarsSpent * mid / itemsReceived
-            // But this is imprecise for non-linear depth. Instead, do a fresh buy simulation
-            // with a budget that would buy approximately mid items, then use simulateSellForDollars.
-            //
-            // Actually, the cleanest approach: simulate buying mid items by using a large budget
-            // and then capping. But simulateBuy takes a dollarBudget, not a volume target.
-            // We estimate: budgetForMid = mid * wantPrice / SF (cost at current price, lower bound)
-            // Then increase iteratively. For simplicity, we use a proportional estimate:
-            long budgetForMid = dollarsSpent * mid / itemsReceived;
-            if (budgetForMid <= 0) budgetForMid = 1;
-
-            DepthSimulation.SimResult simBuyMid = DepthSimulation.simulateBuy(
-                    wantOrderbook, budgetForMid, wantPrice);
-
-            // The actual items received may differ from mid due to depth shape.
-            // Use what was actually spent for the sell-side back-calculation.
-            long actualBuyCost = simBuyMid.dollarAmount();
-            if (actualBuyCost <= 0)
-            {
-                hi = mid;
-                continue;
-            }
-
-            DepthSimulation.SimResult simSellMid = DepthSimulation.simulateSellForDollars(
-                    haveOrderbook, actualBuyCost, havePrice);
-
-            long sellVol = simSellMid.volumeFilled();
-            long buyVol = simBuyMid.volumeFilled();
-
-            if (buyVol <= 0)
-            {
-                hi = mid;
-                continue;
-            }
-
-            long rate = sellVol * SF / buyVol;
-            if (rate <= crossRateLimit)
-            {
-                lo = mid;
-            }
-            else
-            {
-                hi = mid;
-            }
-        }
-
-        // lo is the max feasible buy-volume
-        if (lo <= 0)
-        {
-            // Cannot fill any volume within the rate limit
-            return ExecutionResult.SKIPPED;
-        }
-
-        // Re-simulate at the chosen volume to get exact numbers for execution
-        long budgetForLo = dollarsSpent * lo / itemsReceived;
-        if (budgetForLo <= 0) budgetForLo = 1;
-
-        DepthSimulation.SimResult finalBuySim = DepthSimulation.simulateBuy(
-                wantOrderbook, budgetForLo, wantPrice);
-
-        if (finalBuySim.volumeFilled() <= 0 || finalBuySim.dollarAmount() <= 0)
-        {
-            return ExecutionResult.SKIPPED;
-        }
-
-        DepthSimulation.SimResult finalSellSim = DepthSimulation.simulateSellForDollars(
-                haveOrderbook, finalBuySim.dollarAmount(), havePrice);
-
-        if (finalSellSim.volumeFilled() <= 0)
-        {
-            return ExecutionResult.SKIPPED;
-        }
-
-        // Execute the partial fill
         ExecutionResult result = executeBothLegs(
                 order, haveMarket, wantMarket, playerBankAccount, tradingCurrencyID,
-                finalSellSim.volumeFilled(), finalBuySim.dollarAmount(),
-                finalBuySim.volumeFilled(), wantPrice, SF);
+                maxSellVolume, estimatedDollarBudget, estimatedBuyVolume, wantPrice, SF);
 
-        // A successful partial execution of a limit order returns PARTIAL_FILL
-        if (result == ExecutionResult.FILLED)
+        // After execution, verify the effective cross-rate of what actually filled.
+        // If the rate exceeded the limit, the market moved unfavorably during
+        // execution — this is rare since prices settled before we run.
+        if (result == ExecutionResult.FILLED || result == ExecutionResult.PARTIAL_FILL)
         {
-            // Check if the original order is fully filled
             if (order.isFilled())
                 return ExecutionResult.FILLED;
             else
