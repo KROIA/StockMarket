@@ -491,6 +491,8 @@ public class TradeScreen extends StockMarketGuiScreen {
                 if (crossRate != null) {
                     candlestickChart.setPriceDataProvider(crossRate);
                 }
+                // Set pair direction on the overlay so order markers display at the correct rate
+                orderMarkerOverlay.setPairDirection(pairHaveMarketID, pairWantMarketID);
             }
         } else {
             // When returning to money mode, switch back to the "want" market (primary slot)
