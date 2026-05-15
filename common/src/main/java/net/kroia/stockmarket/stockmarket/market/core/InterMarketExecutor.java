@@ -305,16 +305,19 @@ public class InterMarketExecutor
         long estimatedDollarBudget = sellVolume * havePrice / SF;
         if (estimatedDollarBudget <= 0) estimatedDollarBudget = 1;
 
-        // Sell price floor: prevent selling glass below the price that would break
-        // the cross-rate limit. No buy-side cap — the sell floor + sell volume cap
-        // are sufficient to constrain the rate, and a buy cap at the exact market
-        // price leaves zero room for depth walking.
+        // Price constraints to enforce the cross-rate limit from both sides:
+        // - Sell floor: don't sell glass below the price that would break the rate
+        // - Buy cap: don't buy sand above the price that would break the rate
+        // Both are needed: the floor prevents sell-side slippage, the cap prevents
+        // buy-side slippage. The cap has natural headroom above wantPrice when the
+        // rate is favorable (headroom = maxBuyPrice - wantPrice > 0).
         long minSellPrice = wantPrice * SF / crossRateLimit;
+        long maxBuyPrice = havePrice * crossRateLimit / SF;
 
         ExecutionResult result = executeBothLegs(
                 order, haveMarket, wantMarket, playerBankAccount, tradingCurrencyID,
                 sellVolume, estimatedDollarBudget, estimatedBuyVolume, wantPrice, SF,
-                minSellPrice, 0);
+                minSellPrice, maxBuyPrice);
 
         if (result == ExecutionResult.FILLED || result == ExecutionResult.PARTIAL_FILL)
         {
