@@ -459,10 +459,10 @@ public class InterMarketExecutor
      * Creates and executes both the sell-leg and buy-leg Order objects through
      * the respective ServerMarkets' matching engines.
      *
-     * <p>The approach relies on the fact that the InterMarketExecutor runs BEFORE
-     * ServerMarketManager.update() calls the individual market updates, so the
-     * input buffers should be empty. Each putOrder + update pair executes just
-     * that single order against the current orderbook state.</p>
+     * <p>The InterMarketExecutor runs AFTER ServerMarketManager.update() has
+     * processed all regular market orders, so the input buffers are empty.
+     * Each putOrder + update pair executes just that single order against the
+     * current orderbook state with settled prices.</p>
      *
      * @param order              the parent inter-market order
      * @param haveMarket         sell-leg market

@@ -363,16 +363,30 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
 
 
     private static double tmpValue = 100;
+    private static final int MAX_CROSS_MARKET_ITERATIONS = 10;
+
     @Override
     public void update()
     {
-        // Process inter-market orders FIRST, before individual market updates.
-        // This ensures they see a clean orderbook state not modified by same-tick regular orders.
-        processInterMarketOrders();
-
+        // Update individual markets first so regular orders execute and prices settle.
         for(ServerMarket m : markets.values())
         {
             m.update();
+        }
+
+        // Process inter-market orders iteratively: when a cross-market fill modifies
+        // orderbook depth/prices, re-run market updates and re-evaluate remaining
+        // inter-market orders. This lets cross-market limit orders react to every
+        // price change within a single tick, rather than waiting until the next tick.
+        for (int i = 0; i < MAX_CROSS_MARKET_ITERATIONS; i++)
+        {
+            if (!processInterMarketOrders())
+                break;
+            // A fill occurred — re-settle markets and check again
+            for (ServerMarket m : markets.values())
+            {
+                m.update();
+            }
         }
 
         long time = System.currentTimeMillis();
@@ -395,12 +409,14 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
     /**
      * Processes all pending inter-market orders through the InterMarketExecutor.
      * Removes FILLED/CANCELED/ERROR orders (with appropriate callbacks), keeps
-     * PARTIAL_FILL and SKIPPED orders in the queue for retry next tick.
+     * PARTIAL_FILL and SKIPPED orders in the queue for retry.
+     *
+     * @return true if any orders were filled or partially filled (prices may have changed)
      */
-    private void processInterMarketOrders()
+    private boolean processInterMarketOrders()
     {
         if (pendingInterMarketOrders.isEmpty())
-            return;
+            return false;
 
         // Bank account lookup: resolves account number to IServerBankAccount
         IntFunction<IServerBankAccount> bankLookup = (accountNr) ->
@@ -408,6 +424,8 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
 
         Map<InterMarketOrder, InterMarketExecutor.ExecutionResult> results =
                 InterMarketExecutor.processOrders(pendingInterMarketOrders, markets, bankLookup, getTradingCurrencyID());
+
+        boolean anyFilled = false;
 
         // Iterate results: remove terminal orders, keep retryable ones
         for (Map.Entry<InterMarketOrder, InterMarketExecutor.ExecutionResult> entry : results.entrySet())
@@ -420,6 +438,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
                 case FILLED:
                     pendingInterMarketOrders.remove(order);
                     onInterMarketOrderConsumed(order);
+                    anyFilled = true;
                     break;
 
                 case CANCELED:
@@ -431,13 +450,15 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
                 case PARTIAL_FILL:
                     // Keep in queue for retry; save partial record
                     onInterMarketOrderPartialFill(order);
+                    anyFilled = true;
                     break;
 
                 case SKIPPED:
-                    // Keep in queue unchanged — retry next tick
+                    // Keep in queue unchanged — retry next iteration
                     break;
             }
         }
+        return anyFilled;
     }
 
     /**

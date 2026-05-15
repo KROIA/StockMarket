@@ -188,7 +188,11 @@ public class ActiveOrdersStream extends StockMarketGenericStream<Byte, ActiveOrd
         for (InterMarketOrder order : orders) {
             hash = 31 * hash + Long.hashCode(order.getTime());
             hash = 31 * hash + Long.hashCode(order.getTargetBuyVolume());
-            hash = 31 * hash + (order.isFilled() ? 1 : 0);
+            // Include fill state from both legs so partial fills trigger a client update
+            hash = 31 * hash + Long.hashCode(order.getBuyOrder().getFilledVolume());
+            hash = 31 * hash + Long.hashCode(order.getBuyOrder().getTransferredMoney());
+            hash = 31 * hash + Long.hashCode(order.getSellOrder().getFilledVolume());
+            hash = 31 * hash + Long.hashCode(order.getSellOrder().getTransferredMoney());
         }
         return hash;
     }

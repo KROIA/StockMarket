@@ -230,7 +230,8 @@ public class Order implements ServerSaveable
     }
     public boolean isFilled()
     {
-        return filledVolume == targetVolume;
+        // Use >= instead of == to handle rounding overfill from inter-market execution
+        return Math.abs(filledVolume) >= Math.abs(targetVolume);
     }
     public boolean isMarketOrder()
     {
