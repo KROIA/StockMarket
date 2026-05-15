@@ -269,6 +269,11 @@ public class CrossRateMarket implements IPriceDataProvider {
         if (havePrice > 0) {
             currentRateRaw = (long)((wantPrice / havePrice) * CROSS_RATE_SCALE);
         }
+        // If live prices aren't available yet (async load), fall back to the
+        // newest synthetic candle's open so the chart doesn't show a crash to 0
+        if (currentRateRaw <= 0 && !syntheticCandles.isEmpty()) {
+            currentRateRaw = syntheticCandles.getLast().open;
+        }
 
         // Post-pass: extend historical candle high/low to include the close price.
         // Candles are chronological (oldest first at index 0, newest last).

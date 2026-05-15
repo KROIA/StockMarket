@@ -480,6 +480,13 @@ public class TradeScreen extends StockMarketGuiScreen {
 
             // If both pair sides are already selected, configure cross-rate mode on the chart
             if (pairHaveMarketID != null && pairWantMarketID != null) {
+                // Ensure both markets are subscribed to price updates — restored
+                // selections from preferences skip onPairSelected() which normally does this
+                ClientMarket haveMarket = getMarket(pairHaveMarketID);
+                ClientMarket wantMarket = getMarket(pairWantMarketID);
+                if (haveMarket != null) haveMarket.subscribeToMarketPriceUpdate();
+                if (wantMarket != null) wantMarket.subscribeToMarketPriceUpdate();
+
                 IPriceDataProvider crossRate = getMarketManager().getCrossRateMarket(pairHaveMarketID, pairWantMarketID);
                 if (crossRate != null) {
                     candlestickChart.setPriceDataProvider(crossRate);
