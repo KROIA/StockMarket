@@ -18,6 +18,7 @@ import net.kroia.stockmarket.screen.uiElements.trading_panel.InterMarketTradingP
 import net.kroia.stockmarket.screen.uiElements.trading_panel.TradingPanel;
 import net.kroia.stockmarket.screen.widgets.OrderbookVolumeHistogram;
 import net.kroia.stockmarket.screen.widgets.OrderMarkerOverlay;
+import net.kroia.stockmarket.api.market.IPriceDataProvider;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.screen.widgets.CandlestickChart;
 import net.kroia.stockmarket.networking.request.CancelOrderRequest;
@@ -391,9 +392,6 @@ public class TradeScreen extends StockMarketGuiScreen {
         }
         pairHaveMarketID = null;
 
-        // Clear cross-rate chart references
-        candlestickChart.setCrossRateMarkets(null, null);
-
         super.onClose();
     }
 
@@ -482,15 +480,12 @@ public class TradeScreen extends StockMarketGuiScreen {
 
             // If both pair sides are already selected, configure cross-rate mode on the chart
             if (pairHaveMarketID != null && pairWantMarketID != null) {
-                ClientMarket haveMarket = getMarket(pairHaveMarketID);
-                ClientMarket wantMarket = getMarket(pairWantMarketID);
-                if (haveMarket != null && wantMarket != null) {
-                    candlestickChart.setCrossRateMarkets(haveMarket, wantMarket);
+                IPriceDataProvider crossRate = getMarketManager().getCrossRateMarket(pairHaveMarketID, pairWantMarketID);
+                if (crossRate != null) {
+                    candlestickChart.setPriceDataProvider(crossRate);
                 }
             }
         } else {
-            // Revert the chart to normal single-market mode
-            candlestickChart.setCrossRateMarkets(null, null);
             // When returning to money mode, switch back to the "want" market (primary slot)
             if (pairWantMarketID != null && !pairWantMarketID.equals(currentMarketID)) {
                 switchMarket(pairWantMarketID);
@@ -538,11 +533,12 @@ public class TradeScreen extends StockMarketGuiScreen {
             }
         }
 
-        // Configure candlestick chart for cross-rate mode with both markets
-        ClientMarket haveMarket = pairHaveMarketID != null ? getMarket(pairHaveMarketID) : null;
-        ClientMarket wantMarket2 = pairWantMarketID != null ? getMarket(pairWantMarketID) : null;
-        if (haveMarket != null && wantMarket2 != null) {
-            candlestickChart.setCrossRateMarkets(haveMarket, wantMarket2);
+        // Configure candlestick chart for cross-rate mode via the market manager
+        if (pairHaveMarketID != null && pairWantMarketID != null) {
+            IPriceDataProvider crossRate = getMarketManager().getCrossRateMarket(pairHaveMarketID, pairWantMarketID);
+            if (crossRate != null) {
+                candlestickChart.setPriceDataProvider(crossRate);
+            }
         }
 
         // Update inter-market trading panel item names

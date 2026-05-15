@@ -4,6 +4,7 @@ import net.kroia.modutilities.ColorUtilities;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.geometry.Rectangle;
 import net.kroia.modutilities.gui.geometry.RectangleF;
+import net.kroia.stockmarket.api.market.IPriceDataProvider;
 import net.kroia.stockmarket.screen.UI_Colors;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.util.PriceHistoryData;
@@ -64,17 +65,13 @@ public class CandlestickChart extends StockMarketGuiElement {
 
     private final List<Overlay> overlays = new ArrayList<>();
 
-    private @Nullable ClientMarket market;
+    // The data source for candle/price information (ClientMarket, CrossRateMarket, etc.)
+    private @Nullable IPriceDataProvider priceDataProvider;
+    // Cached downcast for backward compat with OrderbookVolumeHistogram and other code
+    // that still needs a ClientMarket reference; null when the provider is not a ClientMarket.
+    private @Nullable ClientMarket clientMarket;
     private @Nullable PriceHistoryData data;
     private int currentCandleTimeIdx = 0;
-
-    // Cross-rate mode: when both are non-null, derive synthetic candles from two markets
-    private @Nullable ClientMarket crossRateHaveMarket;
-    private @Nullable ClientMarket crossRateWantMarket;
-    // Running high/low tracker for the current (newest) cross-rate candle only
-    private long crossRateCurrentCandleTs = 0;
-    private long crossRateCurrentHigh = Long.MIN_VALUE;
-    private long crossRateCurrentLow = Long.MAX_VALUE;
 
     int candleWidth = 12;
     private final Rectangle canvasRect = new Rectangle(1, 1, 0, 0);
@@ -132,60 +129,52 @@ public class CandlestickChart extends StockMarketGuiElement {
 
     public void removeOverlay(Overlay overlay) { overlays.remove(overlay); }
 
-    public void setMarket(@Nullable ClientMarket market) {
-        // Save viewport state for the old market before switching
+    /**
+     * Sets the price data provider for the chart.
+     * Works with any IPriceDataProvider implementation — both single-market (ClientMarket)
+     * and cross-rate (CrossRateMarket). The chart is a pure display widget that delegates
+     * all price/candle data retrieval to the provider.
+     *
+     * @param provider the data source, or null to clear the chart
+     */
+    public void setPriceDataProvider(@Nullable IPriceDataProvider provider) {
         saveViewportState();
-
-        this.market = market;
+        this.priceDataProvider = provider;
+        this.clientMarket = (provider instanceof ClientMarket cm) ? cm : null;
         this.data = null;
-        // Clear cross-rate state when switching to single-market mode
-        this.crossRateHaveMarket = null;
-        this.crossRateWantMarket = null;
 
-        if (market != null) {
-            // Try to restore a previously saved viewport for this market
-            if (!restoreViewportState(market.getItemID())) {
-                // No saved state — use default behavior
+        if (provider != null) {
+            if (!restoreViewportState(provider.getItemID())) {
                 selectCandleTimeDeltaByIndex(currentCandleTimeIdx);
                 firstDraw = true;
             }
         }
     }
 
-    public @Nullable ClientMarket getMarket() {
-        return market;
-    }
-
     /**
-     * Enables cross-rate mode: the chart derives synthetic OHLC candles from two
-     * markets instead of displaying a single market's price history.
-     * <p>
-     * Pass (null, null) to revert to normal single-market mode.
+     * Convenience method for single-market mode. Delegates to {@link #setPriceDataProvider}.
      *
-     * @param haveMarket the "have" side market (denominator in rate = want/have)
-     * @param wantMarket the "want" side market (numerator in rate = want/have)
+     * @param market the ClientMarket to display, or null to clear the chart
      */
-    public void setCrossRateMarkets(@Nullable ClientMarket haveMarket, @Nullable ClientMarket wantMarket) {
-        this.crossRateHaveMarket = haveMarket;
-        this.crossRateWantMarket = wantMarket;
-        if (haveMarket != null && wantMarket != null) {
-            // Clear single-market reference so the chart uses cross-rate data
-            this.market = null;
-            crossRateCurrentCandleTs = 0;
-            crossRateCurrentHigh = Long.MIN_VALUE;
-            crossRateCurrentLow = Long.MAX_VALUE;
-            recomputeCrossRateData();
-            firstDraw = true;
-        } else {
-            this.data = null;
-        }
+    public void setMarket(@Nullable ClientMarket market) {
+        setPriceDataProvider(market);
     }
 
     /**
-     * @return true if currently in cross-rate mode (two markets set)
+     * Returns the underlying ClientMarket if the current provider is a ClientMarket, or null otherwise.
+     * Used by OrderbookVolumeHistogram for orderbook depth requests.
      */
-    public boolean isCrossRateMode() {
-        return crossRateHaveMarket != null && crossRateWantMarket != null;
+    public @Nullable ClientMarket getMarket() {
+        return clientMarket;
+    }
+
+    /**
+     * Returns the current price data provider (ClientMarket, CrossRateMarket, etc.).
+     *
+     * @return the active provider, or null if no provider is set
+     */
+    public @Nullable IPriceDataProvider getPriceDataProvider() {
+        return priceDataProvider;
     }
 
     public double getMinVisiblePrice() {
@@ -205,27 +194,31 @@ public class CandlestickChart extends StockMarketGuiElement {
         return new Rectangle(canvasRect.x, canvasRect.y, canvasRect.width, canvasRect.height);
     }
 
+    /**
+     * Selects the candle time resolution by exact delta value (in milliseconds).
+     * Fetches new candle data from the current provider if available.
+     *
+     * @param timeDeltaMs the candle period in milliseconds
+     */
     public void selectCandleTimeDelta(int timeDeltaMs) {
-        if (market != null) {
-            PriceHistoryData newData = market.getPriceHistoryData(timeDeltaMs);
+        if (priceDataProvider != null) {
+            PriceHistoryData newData = priceDataProvider.getPriceHistoryData(timeDeltaMs);
             if (newData != null)
                 this.data = newData;
         }
     }
 
+    /**
+     * Selects the candle time resolution by index into the available time deltas array.
+     * Fetches new data from the provider and updates the toolbar button highlighting.
+     *
+     * @param index the index into {@link ClientMarket#getAvailableCandleTimeDeltas()}
+     */
     public void selectCandleTimeDeltaByIndex(int index) {
         currentCandleTimeIdx = index;
-        if (isCrossRateMode()) {
-            // Cross-rate mode: derive synthetic candles from both markets
-            recomputeCrossRateData();
-            if (skipAutoCenterOnce) {
-                skipAutoCenterOnce = false;
-            } else {
-                autoCenterView();
-            }
-        } else if (market != null) {
+        if (priceDataProvider != null) {
             long deltaTime = ClientMarket.getAvailableCandleTimeDeltas()[index];
-            this.data = market.getPriceHistoryData(deltaTime);
+            this.data = priceDataProvider.getPriceHistoryData(deltaTime);
             if (skipAutoCenterOnce) {
                 skipAutoCenterOnce = false;
             } else {
@@ -260,10 +253,13 @@ public class CandlestickChart extends StockMarketGuiElement {
     protected void renderBackground() {
         super.renderBackground();
 
-        // In cross-rate mode, recompute synthetic candles each frame
-        // so live price updates are reflected immediately
-        if (isCrossRateMode()) {
-            recomputeCrossRateData();
+        // Refresh data from provider each frame to pick up live price updates
+        // and new candles (CrossRateMarket rebuilds PriceHistoryData on recompute)
+        if (priceDataProvider != null) {
+            long deltaTime = ClientMarket.getAvailableCandleTimeDeltas()[currentCandleTimeIdx];
+            PriceHistoryData freshData = priceDataProvider.getPriceHistoryData(deltaTime);
+            if (freshData != null)
+                this.data = freshData;
         }
 
         if (data == null || data.getCandles().isEmpty())
@@ -737,143 +733,6 @@ public class CandlestickChart extends StockMarketGuiElement {
         return false;
     }
 
-    // ── Cross-rate data derivation ──
-
-    /**
-     * Recomputes synthetic OHLC candle data from the two cross-rate markets.
-     * For each matching candle timestamp the rate at each OHLC point is computed
-     * individually (rateX = wantX / haveX) and the extremes are taken:
-     * <ul>
-     *   <li>rateOpen  = wantOpen  / haveOpen</li>
-     *   <li>rateClose = wantClose / haveClose</li>
-     *   <li>rateHigh  = max(rateOpen, rateClose, wantHigh/haveHigh, wantLow/haveLow)</li>
-     *   <li>rateLow   = min(rateOpen, rateClose, wantHigh/haveHigh, wantLow/haveLow)</li>
-     *   <li>volume    = 0 (no meaningful volume for derived pairs)</li>
-     * </ul>
-     * This is still an approximation but avoids the exaggerated wicks that result
-     * from combining independent highs and lows (wantHigh/haveLow) which may never
-     * have occurred at the same time.
-     * <p>
-     * The result is stored as a synthetic PriceHistoryData using a large scale factor
-     * so that toRealPrice() converts back to floating-point rates.
-     */
-    private void recomputeCrossRateData() {
-        if (crossRateHaveMarket == null || crossRateWantMarket == null) {
-            this.data = null;
-            return;
-        }
-
-        long deltaTime = ClientMarket.getAvailableCandleTimeDeltas()[currentCandleTimeIdx];
-        PriceHistoryData haveData = crossRateHaveMarket.getPriceHistoryData(deltaTime);
-        PriceHistoryData wantData = crossRateWantMarket.getPriceHistoryData(deltaTime);
-        if (haveData == null || wantData == null) {
-            this.data = null;
-            return;
-        }
-
-        List<PriceHistoryData.Candle> haveCandles = haveData.getCandles();
-        List<PriceHistoryData.Candle> wantCandles = wantData.getCandles();
-        if (haveCandles.isEmpty() || wantCandles.isEmpty()) {
-            this.data = null;
-            return;
-        }
-
-        // Scale factor used to convert floating-point rates into the integer candle format.
-        // PriceHistoryData stores raw long values and divides by scaleFactor in toRealPrice().
-        // We pick a large factor for good precision.
-        int syntheticScaleFactor = 1_000_000;
-
-        List<PriceHistoryData.Candle> syntheticCandles = new ArrayList<>();
-
-        // Two-pointer merge on candle timestamps
-        long tolerance = deltaTime / 2;
-        int hi = 0;
-        int wi = 0;
-        while (hi < haveCandles.size() && wi < wantCandles.size()) {
-            PriceHistoryData.Candle hc = haveCandles.get(hi);
-            PriceHistoryData.Candle wc = wantCandles.get(wi);
-            long timeDiff = hc.openTimestamp - wc.openTimestamp;
-
-            if (Math.abs(timeDiff) <= tolerance) {
-                // Matching candles -- derive cross-rate OHLC
-                double haveOpen  = haveData.toRealPrice(hc.open);
-                double haveHigh  = haveData.toRealPrice(hc.high);
-                double haveLow   = haveData.toRealPrice(hc.low);
-                double wantOpen  = wantData.toRealPrice(wc.open);
-                double wantHigh  = wantData.toRealPrice(wc.high);
-                double wantLow   = wantData.toRealPrice(wc.low);
-
-                if (haveOpen > 0 && haveHigh > 0 && haveLow > 0) {
-                    double rateOpen = wantOpen / haveOpen;
-                    // Derive high/low from OHLC sample points (stable for historical candles)
-                    double rateHH = wantHigh / haveHigh;
-                    double rateLL = wantLow / haveLow;
-                    double rateHigh = Math.max(Math.max(rateOpen, rateHH), rateLL);
-                    double rateLow = Math.min(Math.min(rateOpen, rateHH), rateLL);
-
-                    long rawOpen = (long)(rateOpen * syntheticScaleFactor);
-                    long rawHigh = (long)(rateHigh * syntheticScaleFactor);
-                    long rawLow = (long)(rateLow * syntheticScaleFactor);
-                    syntheticCandles.add(new PriceHistoryData.Candle(
-                            hc.openTimestamp, rawOpen, rawHigh, rawLow, 0f));
-                }
-                hi++;
-                wi++;
-            } else if (timeDiff > 0) {
-                wi++;
-            } else {
-                hi++;
-            }
-        }
-
-        if (syntheticCandles.isEmpty()) {
-            this.data = null;
-            return;
-        }
-
-        // Compute the current cross-rate as the "market price"
-        double havePrice = crossRateHaveMarket.getCurrentMarketRealPrice();
-        double wantPrice = crossRateWantMarket.getCurrentMarketRealPrice();
-        long currentRateRaw = 0;
-        if (havePrice > 0) {
-            currentRateRaw = (long)((wantPrice / havePrice) * syntheticScaleFactor);
-        }
-
-        // Post-pass: extend historical candle high/low to include the close price.
-        // Candles are newest-first. Close = next candle's open (or currentRateRaw for newest).
-        for (int i = 1; i < syntheticCandles.size(); i++) {
-            PriceHistoryData.Candle c = syntheticCandles.get(i);
-            long close = syntheticCandles.get(i - 1).open;
-            c.high = Math.max(c.high, Math.max(c.open, close));
-            c.low  = Math.min(c.low, Math.min(c.open, close));
-        }
-
-        // Current (newest) candle: track high/low using the live cross-rate only.
-        // High only increases, low only decreases — guaranteed monotonic.
-        if (!syntheticCandles.isEmpty() && currentRateRaw > 0) {
-            PriceHistoryData.Candle newest = syntheticCandles.getFirst();
-            if (newest.openTimestamp != crossRateCurrentCandleTs) {
-                // New candle period — reset tracker from open price
-                crossRateCurrentCandleTs = newest.openTimestamp;
-                crossRateCurrentHigh = newest.open;
-                crossRateCurrentLow = newest.open;
-            }
-            crossRateCurrentHigh = Math.max(crossRateCurrentHigh, currentRateRaw);
-            crossRateCurrentLow = Math.min(crossRateCurrentLow, currentRateRaw);
-            newest.high = crossRateCurrentHigh;
-            newest.low = crossRateCurrentLow;
-        }
-
-        // Build the synthetic PriceHistoryData.
-        // Use a dummy ItemID from the have market; it's not displayed.
-        this.data = new PriceHistoryData(
-                crossRateHaveMarket.getItemID(),
-                syntheticScaleFactor,
-                syntheticCandles,
-                currentRateRaw
-        );
-    }
-
     // ── Viewport persistence ──
 
     /**
@@ -881,8 +740,8 @@ public class CandlestickChart extends StockMarketGuiElement {
      * into the static map, keyed by the current market's ItemID.
      */
     private void saveViewportState() {
-        if (this.market != null) {
-            savedViewports.put(this.market.getItemID(), new ViewportState(
+        if (this.priceDataProvider != null) {
+            savedViewports.put(this.priceDataProvider.getItemID(), new ViewportState(
                     chartviewRect.x, chartviewRect.y,
                     chartviewRect.width, chartviewRect.height,
                     zoomLevel, currentCandleTimeIdx));

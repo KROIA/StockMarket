@@ -3,12 +3,15 @@ package net.kroia.stockmarket.stockmarket.marketmanager;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.client_server.arrs.AsynchronousRequestResponseSystem;
 import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.api.market.IPriceDataProvider;
 import net.kroia.stockmarket.api.marketmanager.IAsyncMarketManager;
 import net.kroia.stockmarket.api.marketmanager.IClientMarketManager;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
+import net.kroia.stockmarket.stockmarket.market.CrossRateMarket;
 import net.kroia.stockmarket.networking.request.ActiveOrdersRequest;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.minecraft.client.player.LocalPlayer;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
@@ -23,8 +26,13 @@ public class ClientMarketManager implements IClientMarketManager
     }
     private final IAsyncMarketManager asyncMarketManager;
 
-
     private final Map<ItemID, ClientMarket> clientMarkets = new HashMap<>();
+
+    /** Composite key for caching cross-rate market instances. */
+    private record CrossRateKey(ItemID haveItemID, ItemID wantItemID) {}
+
+    /** Lazily-populated cache of cross-rate markets keyed by their item pair. */
+    private final Map<CrossRateKey, CrossRateMarket> crossRateMarkets = new HashMap<>();
 
     public ClientMarketManager()
     {
@@ -39,6 +47,11 @@ public class ClientMarketManager implements IClientMarketManager
         for(ClientMarket clientMarket : clientMarkets.values())
         {
             clientMarket.update(serverTime);
+        }
+        // Tick all active cross-rate markets so their live candles stay current
+        for(CrossRateMarket crossRateMarket : crossRateMarkets.values())
+        {
+            crossRateMarket.update(serverTime);
         }
     }
 
@@ -138,6 +151,26 @@ public class ClientMarketManager implements IClientMarketManager
 
 
 
+
+    /**
+     * {@inheritDoc}
+     * Lazily creates and caches the CrossRateMarket on first request.
+     * Returns null if either underlying ClientMarket has not been created yet.
+     */
+    @Override
+    public @Nullable IPriceDataProvider getCrossRateMarket(@NotNull ItemID haveItemID, @NotNull ItemID wantItemID) {
+        CrossRateKey key = new CrossRateKey(haveItemID, wantItemID);
+        CrossRateMarket existing = crossRateMarkets.get(key);
+        if (existing != null) return existing;
+
+        ClientMarket have = clientMarkets.get(haveItemID);
+        ClientMarket want = clientMarkets.get(wantItemID);
+        if (have == null || want == null) return null;
+
+        CrossRateMarket crossRate = new CrossRateMarket(have, want);
+        crossRateMarkets.put(key, crossRate);
+        return crossRate;
+    }
 
     private void createClientMarket(ItemID itemID, int itemFractionScaleFactor)
     {
