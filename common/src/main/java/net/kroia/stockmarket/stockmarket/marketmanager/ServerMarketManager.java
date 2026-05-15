@@ -363,7 +363,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
 
 
     private static double tmpValue = 100;
-    private static final int MAX_CROSS_MARKET_ITERATIONS = 10;
+    private static final int MAX_CROSS_MARKET_ITERATIONS = 2;
 
     @Override
     public void update()
@@ -374,18 +374,18 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
             m.update();
         }
 
-        // Process inter-market orders iteratively: when a cross-market fill modifies
-        // orderbook depth/prices, re-run market updates and re-evaluate remaining
-        // inter-market orders. This lets cross-market limit orders react to every
-        // price change within a single tick, rather than waiting until the next tick.
+        // Process cross-market orders against settled prices. When a fill occurs,
+        // only re-update the two affected markets (not all), then retry once more.
         for (int i = 0; i < MAX_CROSS_MARKET_ITERATIONS; i++)
         {
-            if (!processInterMarketOrders())
+            Set<ItemID> affected = processInterMarketOrders();
+            if (affected.isEmpty())
                 break;
-            // A fill occurred — re-settle markets and check again
-            for (ServerMarket m : markets.values())
+            // Only re-settle markets that were involved in cross-market fills
+            for (ItemID id : affected)
             {
-                m.update();
+                ServerMarket m = markets.get(id);
+                if (m != null) m.update();
             }
         }
 
@@ -411,12 +411,13 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
      * Removes FILLED/CANCELED/ERROR orders (with appropriate callbacks), keeps
      * PARTIAL_FILL and SKIPPED orders in the queue for retry.
      *
-     * @return true if any orders were filled or partially filled (prices may have changed)
+     * @return set of market ItemIDs that were affected by fills (empty if nothing filled)
      */
-    private boolean processInterMarketOrders()
+    private Set<ItemID> processInterMarketOrders()
     {
+        Set<ItemID> affectedMarkets = new HashSet<>();
         if (pendingInterMarketOrders.isEmpty())
-            return false;
+            return affectedMarkets;
 
         // Bank account lookup: resolves account number to IServerBankAccount
         IntFunction<IServerBankAccount> bankLookup = (accountNr) ->
@@ -424,8 +425,6 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
 
         Map<InterMarketOrder, InterMarketExecutor.ExecutionResult> results =
                 InterMarketExecutor.processOrders(pendingInterMarketOrders, markets, bankLookup, getTradingCurrencyID());
-
-        boolean anyFilled = false;
 
         // Iterate results: remove terminal orders, keep retryable ones
         for (Map.Entry<InterMarketOrder, InterMarketExecutor.ExecutionResult> entry : results.entrySet())
@@ -438,7 +437,8 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
                 case FILLED:
                     pendingInterMarketOrders.remove(order);
                     onInterMarketOrderConsumed(order);
-                    anyFilled = true;
+                    affectedMarkets.add(order.getBuyItemID());
+                    affectedMarkets.add(order.getSellItemID());
                     break;
 
                 case CANCELED:
@@ -448,9 +448,9 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
                     break;
 
                 case PARTIAL_FILL:
-                    // Keep in queue for retry; save partial record
                     onInterMarketOrderPartialFill(order);
-                    anyFilled = true;
+                    affectedMarkets.add(order.getBuyItemID());
+                    affectedMarkets.add(order.getSellItemID());
                     break;
 
                 case SKIPPED:
@@ -458,7 +458,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
                     break;
             }
         }
-        return anyFilled;
+        return affectedMarkets;
     }
 
     /**
