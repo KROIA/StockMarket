@@ -4,6 +4,7 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.elements.*;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.kroia.stockmarket.networking.request.CancelOrderRequest;
+import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
@@ -28,6 +29,7 @@ public class PendingOrdersPanel extends StockMarketGuiElement {
     // Dirty-flag for deferred rebuild
     private boolean needsRebuild = false;
     private List<Order> pendingOrders = new ArrayList<>();
+    private List<InterMarketOrder> pendingInterMarketOrders = new ArrayList<>();
 
     /** Called when the user clicks an item icon to switch to that market. */
     private @Nullable Consumer<ItemID> onMarketSwitch;
@@ -45,7 +47,7 @@ public class PendingOrdersPanel extends StockMarketGuiElement {
     }
 
     /**
-     * Updates the displayed orders. Called when the ActiveOrdersStream pushes new data.
+     * Updates the displayed regular orders. Called when the ActiveOrdersStream pushes new data.
      * Uses a dirty flag to defer the rebuild to the next render frame.
      *
      * @param orders the current list of active orders for this player
@@ -53,6 +55,17 @@ public class PendingOrdersPanel extends StockMarketGuiElement {
     public void updateOrders(List<Order> orders) {
         needsRebuild = true;
         pendingOrders = orders != null ? new ArrayList<>(orders) : new ArrayList<>();
+    }
+
+    /**
+     * Updates the displayed inter-market orders. Called when the ActiveOrdersStream pushes new data.
+     * Uses a dirty flag to defer the rebuild to the next render frame.
+     *
+     * @param orders the current list of pending inter-market orders for this player
+     */
+    public void updateInterMarketOrders(List<InterMarketOrder> orders) {
+        needsRebuild = true;
+        pendingInterMarketOrders = orders != null ? new ArrayList<>(orders) : new ArrayList<>();
     }
 
     /**
@@ -69,7 +82,7 @@ public class PendingOrdersPanel extends StockMarketGuiElement {
     protected void render() {
         if (needsRebuild) {
             needsRebuild = false;
-            rebuildOrderList(pendingOrders);
+            rebuildOrderList(pendingOrders, pendingInterMarketOrders);
         }
     }
 
@@ -80,17 +93,27 @@ public class PendingOrdersPanel extends StockMarketGuiElement {
 
     /**
      * Clears and rebuilds the order list view from the given orders.
-     * Orders are sorted most recent first (by timestamp descending).
+     * Regular orders are sorted most recent first (by timestamp descending),
+     * followed by inter-market orders also sorted most recent first.
      */
-    private void rebuildOrderList(List<Order> orders) {
+    private void rebuildOrderList(List<Order> orders, List<InterMarketOrder> interMarketOrders) {
         orderListView.removeChilds();
 
-        // Sort by time descending (most recent first)
+        // Sort regular orders by time descending (most recent first)
         List<Order> sorted = new ArrayList<>(orders);
         sorted.sort(Comparator.comparingLong(Order::getTime).reversed());
 
         for (Order order : sorted) {
             OrderEntryWidget entry = new OrderEntryWidget(order);
+            orderListView.addChild(entry);
+        }
+
+        // Sort inter-market orders by time descending (most recent first)
+        List<InterMarketOrder> sortedInterMarket = new ArrayList<>(interMarketOrders);
+        sortedInterMarket.sort(Comparator.comparingLong(InterMarketOrder::getTime).reversed());
+
+        for (InterMarketOrder imo : sortedInterMarket) {
+            InterMarketOrderEntryWidget entry = new InterMarketOrderEntryWidget(imo);
             orderListView.addChild(entry);
         }
 
@@ -110,6 +133,14 @@ public class PendingOrdersPanel extends StockMarketGuiElement {
                 order.getTargetVolume()
         );
         BACKEND_INSTANCES.NETWORKING.CANCEL_ORDER_REQUEST.sendRequestToServer(input);
+    }
+
+    /**
+     * Sends a cancel request to the server for the given inter-market order.
+     * Identifies the order by its unique group ID.
+     */
+    private void onCancelInterMarketOrder(InterMarketOrder order) {
+        BACKEND_INSTANCES.NETWORKING.CANCEL_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(order.getInterMarketGroupID());
     }
 
     // -------------------------------------------------------------------------
@@ -225,6 +256,168 @@ public class PendingOrdersPanel extends StockMarketGuiElement {
             amountLabel.setBounds(x, 0, amountWidth, h);
             x += amountWidth + s;
             priceLabel.setBounds(x, 0, priceWidth, h);
+            cancelButton.setBounds(w - btnSize - s, (h - btnSize) / 2, btnSize, btnSize);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    //  InterMarketOrderEntryWidget — single row representing one pending inter-market order
+    // -------------------------------------------------------------------------
+
+    /**
+     * Displays a single pending inter-market order as a compact row:
+     * {@code [haveIcon → wantIcon] [LIMIT/MKT] [filled/total] [@ rate] [Cancel btn]}
+     * <p>
+     * The have icon (sell item) and want icon (buy item) are displayed with an arrow between them.
+     * Clicking either icon fires the market switch callback to navigate to that item's market.
+     */
+    private class InterMarketOrderEntryWidget extends StockMarketGuiElement {
+
+        private final ItemView haveIcon;
+        private final Label arrowLabel;
+        private final ItemView wantIcon;
+        private final Label typeLabel;
+        private final Label amountLabel;
+        private final Label rateLabel;
+        private final Button cancelButton;
+        private final InterMarketOrder order;
+
+        // Layout constants
+        private static final int ICON_SIZE = 16;
+        private static final int ICON_MARGIN = 2;
+
+        InterMarketOrderEntryWidget(InterMarketOrder order) {
+            super();
+            this.order = order;
+            setEnableBackground(true);
+
+            // Have icon: the item being sold (sell side)
+            haveIcon = new ItemView(order.getSellItemID().getStack());
+            addChild(haveIcon);
+
+            // Arrow label between icons
+            arrowLabel = new Label("→"); // Unicode right arrow
+            arrowLabel.setTextFontScale(0.7f);
+            addChild(arrowLabel);
+
+            // Want icon: the item being bought (buy side)
+            wantIcon = new ItemView(order.getBuyItemID().getStack());
+            addChild(wantIcon);
+
+            // Type label: LIMIT or MKT
+            boolean isLimit = !order.isMarketOrder();
+            typeLabel = new Label(isLimit ? "LIMIT" : "MKT");
+            typeLabel.setTextFontScale(0.8f);
+            addChild(typeLabel);
+
+            // Amount: filled/total of the buy (want) side — what the player receives
+            Order buyOrder = order.getBuyOrder();
+            double filled = Math.abs(MarketManager.convertToRealAmountStatic(buyOrder.getFilledVolume()));
+            double total = Math.abs(MarketManager.convertToRealAmountStatic(buyOrder.getTargetVolume()));
+            amountLabel = new Label(String.format("%.2f/%.2f", filled, total));
+            amountLabel.setTextFontScale(0.8f);
+            addChild(amountLabel);
+
+            // Rate: cross-rate limit (sellItems/buyItem), or "MKT" for market orders
+            if (isLimit) {
+                double realRate = (double) order.getCrossRateLimit() / net.kroia.banksystem.BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+                rateLabel = new Label(String.format("≤ %.2f", realRate));
+            } else {
+                rateLabel = new Label("MKT");
+            }
+            rateLabel.setTextFontScale(0.8f);
+            addChild(rateLabel);
+
+            // Cancel button
+            cancelButton = new Button("x", () -> onCancelInterMarketOrder(order));
+            cancelButton.setBackgroundColor(0xFFe8711c);
+            cancelButton.setHoverColor(0xFFe04c12);
+            addChild(cancelButton);
+
+            setHeight(24);
+        }
+
+        @Override
+        protected void render() {
+            // Draw hover overlay on the have icon when the mouse is over it
+            if (isMouseOver()) {
+                int mouseX = getMouseX();
+                int mouseY = getMouseY();
+                if (isInHaveIconArea(mouseX, mouseY)) {
+                    int iconX = ICON_MARGIN;
+                    int iconY = (getHeight() - ICON_SIZE) / 2;
+                    drawRect(iconX, iconY, ICON_SIZE, ICON_SIZE, 0x60FFFFFF);
+                } else if (isInWantIconArea(mouseX, mouseY)) {
+                    // wantIcon position: after haveIcon + arrow
+                    int iconY = (getHeight() - ICON_SIZE) / 2;
+                    drawRect(wantIcon.getLeft(), iconY, ICON_SIZE, ICON_SIZE, 0x60FFFFFF);
+                }
+            }
+        }
+
+        @Override
+        protected boolean mouseClickedOverElement(int button) {
+            if (button == 0 && onMarketSwitch != null) {
+                int mouseX = getMouseX();
+                int mouseY = getMouseY();
+                if (isInHaveIconArea(mouseX, mouseY)) {
+                    onMarketSwitch.accept(order.getSellItemID());
+                    return true;
+                } else if (isInWantIconArea(mouseX, mouseY)) {
+                    onMarketSwitch.accept(order.getBuyItemID());
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /** Checks if the given local coordinates fall within the have (sell) item icon area. */
+        private boolean isInHaveIconArea(int mouseX, int mouseY) {
+            int iconX = ICON_MARGIN;
+            int iconY = (getHeight() - ICON_SIZE) / 2;
+            return mouseX >= iconX && mouseX < iconX + ICON_SIZE
+                    && mouseY >= iconY && mouseY < iconY + ICON_SIZE;
+        }
+
+        /** Checks if the given local coordinates fall within the want (buy) item icon area. */
+        private boolean isInWantIconArea(int mouseX, int mouseY) {
+            int iconX = wantIcon.getLeft();
+            int iconY = (getHeight() - ICON_SIZE) / 2;
+            return mouseX >= iconX && mouseX < iconX + ICON_SIZE
+                    && mouseY >= iconY && mouseY < iconY + ICON_SIZE;
+        }
+
+        @Override
+        protected void layoutChanged() {
+            int w = getWidth();
+            int h = getHeight();
+            int btnSize = 16;
+            int s = 2;
+            int arrowWidth = 10;
+            int typeLabelWidth = 35;
+            int x = s;
+
+            // [haveIcon] [→] [wantIcon]
+            haveIcon.setBounds(x, (h - ICON_SIZE) / 2, ICON_SIZE, ICON_SIZE);
+            x += ICON_SIZE;
+            arrowLabel.setBounds(x, 0, arrowWidth, h);
+            x += arrowWidth;
+            wantIcon.setBounds(x, (h - ICON_SIZE) / 2, ICON_SIZE, ICON_SIZE);
+            x += ICON_SIZE + s;
+
+            // [LIMIT/MKT]
+            typeLabel.setBounds(x, 0, typeLabelWidth, h);
+            x += typeLabelWidth + s;
+
+            // Divide remaining space between amount and rate
+            int remaining = w - x - btnSize - s * 2;
+            int amountWidth = remaining / 2;
+            int rateWidth = remaining - amountWidth;
+            amountLabel.setBounds(x, 0, amountWidth, h);
+            x += amountWidth + s;
+            rateLabel.setBounds(x, 0, rateWidth, h);
+
+            // Cancel button at the right edge
             cancelButton.setBounds(w - btnSize - s, (h - btnSize) / 2, btnSize, btnSize);
         }
     }

@@ -11,7 +11,6 @@ import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
-import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.market.core.MatchingEngine;
 import net.kroia.stockmarket.stockmarket.market.core.Orderbook;
@@ -24,6 +23,7 @@ import java.util.List;
 import java.util.PriorityQueue;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 public class ServerMarket implements ServerSaveable, IServerMarket {
@@ -42,6 +42,9 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     private long netPlayerItemFlow = 0;
 
     private MarketSettings settings;
+
+    // Callback fired when this market closes, used by ServerMarketManager to cancel inter-market orders
+    private @Nullable Consumer<ItemID> marketClosedCallback;
 
     /**
      * Input: Real price
@@ -63,8 +66,6 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     private final PriorityQueue<Order> sellMarketOrders_inputBuffer = new PriorityQueue<>(Comparator.comparingLong(Order::getStartPrice));
     private final PriorityQueue<Order> buyLimitOrders_inputBuffer = new PriorityQueue<>((o1, o2) -> Long.compare(o2.getStartPrice(), o1.getStartPrice()));
     private final PriorityQueue<Order> sellLimitOrders_inputBuffer = new PriorityQueue<>(Comparator.comparingLong(Order::getStartPrice));
-    private final PriorityQueue<InterMarketOrder> interMarket_LimitBuyOrders_inputBuffer = new PriorityQueue<>((o1, o2) -> Long.compare(o2.getTime(), o1.getTime()));
-    private final PriorityQueue<InterMarketOrder> interMarket_MarketBuyOrders_inputBuffer = new PriorityQueue<>((o1, o2) -> Long.compare(o2.getTime(), o1.getTime()));
 
 
     public ServerMarket(ItemID itemID, @Nullable Function<Double, Float> volumeProvider, long defaultPrice, float naturalAbundance)
@@ -73,18 +74,16 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         this.defaultVolumeProviderFunction =  volumeProvider;
         this.itemID = itemID;
         this.orderbook = new Orderbook(itemID,
-                                        this::onOrderConsumed, this::onOrderConsumed,
-                                        this::onOrderCanceled, this::onOrderCanceled,
+                                        this::onOrderConsumed,
+                                        this::onOrderCanceled,
                                         this::defaultVolumeProvider);
         this.matchingEngine = new MatchingEngine(this.itemID, this.orderbook,
                 buyMarketOrders_inputBuffer,
                 sellMarketOrders_inputBuffer,
                 buyLimitOrders_inputBuffer,
                 sellLimitOrders_inputBuffer,
-                interMarket_LimitBuyOrders_inputBuffer,
-                interMarket_MarketBuyOrders_inputBuffer,
-                this::onOrderConsumed, this::onOrderConsumed,
-                this::onOrderCanceled, this::onOrderCanceled,
+                this::onOrderConsumed,
+                this::onOrderCanceled,
                 this::onPriceChanged);
 
         this.currentMarketPrice = defaultPrice;
@@ -111,6 +110,17 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         this.currentMarketPrice = currentMarketPrice;
         this.orderbook.setCurrentMarketPrice(currentMarketPrice);
     }
+
+    /**
+     * Updates only the reported market price without redistributing virtual orderbook depth.
+     * Used by the cross-market bilateral walk which already consumed depth via fillVirtual —
+     * calling orderbook.setCurrentMarketPrice would shift the DynamicIndexedArray window
+     * and regenerate default volumes, draining depth that wasn't actually traded.
+     */
+    public void setCurrentMarketPriceNoRedistribute(long newPrice)
+    {
+        this.currentMarketPrice = newPrice;
+    }
     @Override
     public void test_clearOrderbook()
     {
@@ -128,7 +138,13 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         orderbook.resetVirtualVolumeDistribution();
     }
 
-
+    /**
+     * Sets a callback that fires when this market closes (setMarketOpen(false)).
+     * Used by ServerMarketManager to cancel inter-market orders referencing this market.
+     */
+    public void setMarketClosedCallback(@Nullable Consumer<ItemID> callback) {
+        this.marketClosedCallback = callback;
+    }
 
 
 
@@ -256,14 +272,14 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
             return false; // Wrong stockmarket for this order
         if(order.isBuyOrder())
         {
-            if(order.isMarketOrder())
+            if(order.isMarketOrder() || order.getType() == Order.Type.INTER_MARKET)
                 buyMarketOrders_inputBuffer.add(order);
             else
                 buyLimitOrders_inputBuffer.add(order);
         }
         else
         {
-            if(order.isMarketOrder())
+            if(order.isMarketOrder() || order.getType() == Order.Type.INTER_MARKET)
                 sellMarketOrders_inputBuffer.add(order);
             else
                 sellLimitOrders_inputBuffer.add(order);
@@ -324,29 +340,6 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
 
 
 
-    // Buffers the incoming order, execution will take place in the update()
-    @Override
-    public boolean putOrder(InterMarketOrder order)
-    {
-        if(order.isFilled() || !settings.marketOpen)
-            return false;
-        if(!order.getBuyItemID().equals(itemID))
-            return false; // Wrong stockmarket for this order
-
-        if(order.isMarketOrder())
-            interMarket_MarketBuyOrders_inputBuffer.add(order);
-        else
-            interMarket_LimitBuyOrders_inputBuffer.add(order);
-        return true;
-    }
-    @Override
-    public CompletableFuture<Boolean> putOrderAsync(InterMarketOrder order) {
-        return CompletableFuture.completedFuture(putOrder(order));
-    }
-
-
-
-
     @Override
     public List<Order> getLimitOrders()
     {
@@ -381,6 +374,9 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         this.settings.marketOpen = marketOpen;
         if (!marketOpen) {
             cancelAllPlayerOrders();
+            if (marketClosedCallback != null) {
+                marketClosedCallback.accept(itemID);
+            }
         }
         return true;
     }
@@ -520,14 +516,6 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     }
 
     /**
-     * Gets called when the provided order has been consumed
-     * @param order
-     */
-    private void onOrderConsumed(InterMarketOrder order)
-    {
-
-    }
-    /**
      * Gets called when the provided order has been consumed (fully filled)
      * @param order the consumed order
      */
@@ -538,15 +526,6 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         saveOrderRecord(order);
     }
 
-    /**
-     * Gets called when the provided order has been canceled
-     * It may be partially filled
-     * @param order
-     */
-    private void onOrderCanceled(InterMarketOrder order)
-    {
-        // InterMarketOrders are bot-to-bot and don't need history tracking
-    }
     /**
      * Gets called when the provided order has been canceled
      * It may be partially filled
@@ -567,6 +546,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     {
         if (order.isBotOrder()) return; // skip bot orders (no player executor)
         if (order.getFilledVolume() == 0) return; // skip orders with no fills (e.g. cancelled before any execution)
+        if (order.getType() == Order.Type.INTER_MARKET) return; // saved by InterMarketExecutor with groupID
         if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.ORDER_RECORD_MANAGER == null) return;
 
         OrderRecordStruct record = order.getHistoricalRecord();
@@ -581,6 +561,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
      */
     private void trackPlayerNetFlow(Order order) {
         if (order.isBotOrder()) return;
+        if (order.getType() == Order.Type.INTER_MARKET) return; // tracked at inter-market level
         long filledVolume = order.getFilledVolume();
         if (filledVolume == 0) return;
         // filledVolume is negative for sell orders, so subtracting it adds to the counter

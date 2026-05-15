@@ -8,7 +8,6 @@ import net.kroia.modutilities.testing.TestSuite;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.stockmarket.market.core.Orderbook;
-import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.minecraft.nbt.CompoundTag;
@@ -46,7 +45,6 @@ public class OrderbookTestSuite extends TestSuite {
         // Core Operations
         addTest("putOrder_buyGoesToBuyQueue", this::test_putOrder_buyGoesToBuyQueue);
         addTest("putOrder_sellGoesToSellQueue", this::test_putOrder_sellGoesToSellQueue);
-        addTest("putOrder_interMarket", this::test_putOrder_interMarket);
         addTest("removeOrder_buy", this::test_removeOrder_buy);
         addTest("removeOrder_sell", this::test_removeOrder_sell);
         addTest("removeOrder_nonexistent", this::test_removeOrder_nonexistent);
@@ -213,24 +211,6 @@ public class OrderbookTestSuite extends TestSuite {
                     orderbook.getSellLimitOrders().contains(sell));
             if (!r.passed()) return r;
             return pass("Sell order added to sellLimitOrders queue");
-        } catch (Exception e) {
-            return fail("Exception: " + e.getMessage());
-        }
-    }
-
-    private TestResult test_putOrder_interMarket() {
-        try {
-            resetOrderbook(10);
-
-            ItemID sellItemID = new ItemID((short) 99);
-            InterMarketOrder imo = new InterMarketOrder(itemID, sellItemID, Order.Type.LIMIT,
-                    5, 10, 5, 10, 0, UUID.randomUUID(), 1);
-            orderbook.putOrder(imo);
-
-            boolean removed = orderbook.removeOrder(imo);
-            TestResult r = assertTrue("InterMarket order should be removable after adding", removed);
-            if (!r.passed()) return r;
-            return pass("InterMarketOrder correctly stored and removable");
         } catch (Exception e) {
             return fail("Exception: " + e.getMessage());
         }

@@ -230,7 +230,8 @@ public class Order implements ServerSaveable
     }
     public boolean isFilled()
     {
-        return filledVolume == targetVolume;
+        // Use >= instead of == to handle rounding overfill from inter-market execution
+        return Math.abs(filledVolume) >= Math.abs(targetVolume);
     }
     public boolean isMarketOrder()
     {
@@ -272,6 +273,7 @@ public class Order implements ServerSaveable
         tag.putShort("ItemID", itemID.getShort());
         if(orderExecutor != null)
             tag.putUUID("orderExecutor", orderExecutor);
+        tag.putInt("bankAccountNr", bankAccountNr);
         tag.putInt("Type", type.ordinal());
         tag.putLong("TargetVolume", targetVolume);
         tag.putLong("FilledVolume", filledVolume);
@@ -304,6 +306,7 @@ public class Order implements ServerSaveable
             orderExecutor = tag.getUUID("orderExecutor");
         else
             orderExecutor = null;
+        bankAccountNr = tag.contains("bankAccountNr") ? tag.getInt("bankAccountNr") : 0;
         int typeOrdinal = tag.getInt("Type");
         if (typeOrdinal < 0 || typeOrdinal >= Type.values().length)
             return false;

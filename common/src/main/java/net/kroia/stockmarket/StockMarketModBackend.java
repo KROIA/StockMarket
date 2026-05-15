@@ -37,6 +37,7 @@ import net.kroia.stockmarket.testing.StockMarketTestRegistration;
 import net.kroia.stockmarket.testing.tests.ActiveOrdersRequestTestSuite;
 import net.kroia.stockmarket.testing.tests.CreateOrderRequestTestSuite;
 import net.kroia.stockmarket.testing.tests.DatabaseTestSuite;
+import net.kroia.stockmarket.testing.tests.InterMarketExecutorTestSuite;
 import net.kroia.stockmarket.testing.tests.MarketIntegrationTestSuite;
 import net.kroia.stockmarket.testing.tests.MarketPriceManagerTestSuite;
 import net.kroia.stockmarket.testing.tests.MatchingEngineTestSuite;
@@ -210,6 +211,7 @@ public class StockMarketModBackend implements StockMarketAPI {
 
         if (TestRegistry.ENABLE_TESTS) {
             MarketIntegrationTestSuite.setBackend(SERVER_INSTANCES);
+            InterMarketExecutorTestSuite.setBackend(SERVER_INSTANCES);
             StockMarketTestRegistration.register();
         }
 

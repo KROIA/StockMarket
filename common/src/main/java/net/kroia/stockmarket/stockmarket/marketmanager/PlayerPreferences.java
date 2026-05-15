@@ -26,6 +26,8 @@ public class PlayerPreferences implements ServerSaveable {
         @Override
         public void encode(RegistryFriendlyByteBuf buf, PlayerPreferences prefs) {
             ExtraCodecUtils.nullable(ItemID.STREAM_CODEC).encode(buf, prefs.lastMarketID);
+            ExtraCodecUtils.nullable(ItemID.STREAM_CODEC).encode(buf, prefs.lastPairHaveMarketID);
+            ExtraCodecUtils.nullable(ItemID.STREAM_CODEC).encode(buf, prefs.lastPairWantMarketID);
             ExtraCodecUtils.listStreamCodec(ItemID.STREAM_CODEC).encode(buf, prefs.favoriteMarketIDs);
             buf.writeLong(prefs.orderHistoryClearedBeforeMs);
         }
@@ -34,6 +36,8 @@ public class PlayerPreferences implements ServerSaveable {
         public PlayerPreferences decode(RegistryFriendlyByteBuf buf) {
             PlayerPreferences prefs = new PlayerPreferences();
             prefs.lastMarketID = ExtraCodecUtils.nullable(ItemID.STREAM_CODEC).decode(buf);
+            prefs.lastPairHaveMarketID = ExtraCodecUtils.nullable(ItemID.STREAM_CODEC).decode(buf);
+            prefs.lastPairWantMarketID = ExtraCodecUtils.nullable(ItemID.STREAM_CODEC).decode(buf);
             prefs.favoriteMarketIDs = new ArrayList<>(ExtraCodecUtils.listStreamCodec(ItemID.STREAM_CODEC).decode(buf));
             prefs.orderHistoryClearedBeforeMs = buf.readLong();
             return prefs;
@@ -43,6 +47,14 @@ public class PlayerPreferences implements ServerSaveable {
     /** The last market the player had selected in the trade screen (null if never opened). */
     @Nullable
     private ItemID lastMarketID;
+
+    /** The last "I HAVE" pair selection in the trade screen (null if never selected). */
+    @Nullable
+    private ItemID lastPairHaveMarketID;
+
+    /** The last "I WANT" pair selection in the trade screen (null if never selected). */
+    @Nullable
+    private ItemID lastPairWantMarketID;
 
     /** Ordered list of favorite market IDs, in the order they were added. */
     private List<ItemID> favoriteMarketIDs;
@@ -55,6 +67,8 @@ public class PlayerPreferences implements ServerSaveable {
      */
     public PlayerPreferences() {
         this.lastMarketID = null;
+        this.lastPairHaveMarketID = null;
+        this.lastPairWantMarketID = null;
         this.favoriteMarketIDs = new ArrayList<>();
         this.orderHistoryClearedBeforeMs = 0;
     }
@@ -74,6 +88,36 @@ public class PlayerPreferences implements ServerSaveable {
      */
     public void setLastMarketID(@Nullable ItemID lastMarketID) {
         this.lastMarketID = lastMarketID;
+    }
+
+    /**
+     * @return the last selected "I HAVE" pair market ID, or null if never selected
+     */
+    public @Nullable ItemID getLastPairHaveMarketID() {
+        return lastPairHaveMarketID;
+    }
+
+    /**
+     * Sets the last selected "I HAVE" pair market ID.
+     * @param id the market ID, or null to clear
+     */
+    public void setLastPairHaveMarketID(@Nullable ItemID id) {
+        this.lastPairHaveMarketID = id;
+    }
+
+    /**
+     * @return the last selected "I WANT" pair market ID, or null if never selected
+     */
+    public @Nullable ItemID getLastPairWantMarketID() {
+        return lastPairWantMarketID;
+    }
+
+    /**
+     * Sets the last selected "I WANT" pair market ID.
+     * @param id the market ID, or null to clear
+     */
+    public void setLastPairWantMarketID(@Nullable ItemID id) {
+        this.lastPairWantMarketID = id;
     }
 
     /**
@@ -148,6 +192,22 @@ public class PlayerPreferences implements ServerSaveable {
             tag.put("lastMarket", lastMarketTag);
         }
 
+        // Save last pair "I HAVE" selection
+        tag.putBoolean("hasLastPairHave", lastPairHaveMarketID != null);
+        if (lastPairHaveMarketID != null) {
+            CompoundTag t = new CompoundTag();
+            lastPairHaveMarketID.save(t);
+            tag.put("lastPairHave", t);
+        }
+
+        // Save last pair "I WANT" selection
+        tag.putBoolean("hasLastPairWant", lastPairWantMarketID != null);
+        if (lastPairWantMarketID != null) {
+            CompoundTag t = new CompoundTag();
+            lastPairWantMarketID.save(t);
+            tag.put("lastPairWant", t);
+        }
+
         // Save favorites as a ListTag of CompoundTags
         ListTag favTag = new ListTag();
         for (ItemID id : favoriteMarketIDs) {
@@ -173,6 +233,22 @@ public class PlayerPreferences implements ServerSaveable {
             }
         } else {
             lastMarketID = null;
+        }
+
+        // Load last pair "I HAVE" selection
+        if (tag.getBoolean("hasLastPairHave") && tag.contains("lastPairHave")) {
+            lastPairHaveMarketID = ItemID.createFromTag(tag.getCompound("lastPairHave"));
+            if (lastPairHaveMarketID != null && !lastPairHaveMarketID.isValid()) lastPairHaveMarketID = null;
+        } else {
+            lastPairHaveMarketID = null;
+        }
+
+        // Load last pair "I WANT" selection
+        if (tag.getBoolean("hasLastPairWant") && tag.contains("lastPairWant")) {
+            lastPairWantMarketID = ItemID.createFromTag(tag.getCompound("lastPairWant"));
+            if (lastPairWantMarketID != null && !lastPairWantMarketID.isValid()) lastPairWantMarketID = null;
+        } else {
+            lastPairWantMarketID = null;
         }
 
         // Load favorites

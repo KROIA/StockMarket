@@ -32,6 +32,9 @@ public class StockMarketTestCategories {
     public static final TestCategory INTER_MARKET_ORDER = new TestCategory(
             "sm_inter_market_order", "InterMarketOrder tests", BOTH, false);
 
+    public static final TestCategory TRADING_PAIR = new TestCategory(
+            "sm_trading_pair", "TradingPair record tests", BOTH, false);
+
     public static final TestCategory VIRTUAL_ORDERBOOK = new TestCategory(
             "sm_virtual_orderbook", "VirtualOrderbook tests", BOTH, false);
 
@@ -86,4 +89,10 @@ public class StockMarketTestCategories {
 
     public static final TestCategory INTEGRATION = new TestCategory(
             "sm_integration", "Integration tests", MASTER_ONLY, true);
+
+    public static final TestCategory DEPTH_SIMULATION = new TestCategory(
+            "sm_depth_simulation", "DepthSimulation read-only walk tests", MASTER_ONLY, true);
+
+    public static final TestCategory INTER_MARKET_EXECUTOR = new TestCategory(
+            "sm_inter_market_executor", "InterMarketExecutor two-leg execution tests", MASTER_ONLY, true);
 }

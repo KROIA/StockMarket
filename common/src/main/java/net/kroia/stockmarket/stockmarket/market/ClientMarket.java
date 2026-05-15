@@ -6,6 +6,7 @@ import net.kroia.modutilities.TimerMillis;
 import net.kroia.modutilities.networking.client_server.streaming.StreamSystem;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IClientMarket;
+import net.kroia.stockmarket.api.market.IPriceDataProvider;
 import net.kroia.stockmarket.networking.request.OrderbookVolumeRequest;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.networking.request.ActiveOrdersRequest;
@@ -19,7 +20,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
-public class ClientMarket implements IClientMarket
+public class ClientMarket implements IClientMarket, IPriceDataProvider
 {
     protected static StockMarketModBackend.ClientInstances BACKEND_INSTANCES;
     public static void setBackend(StockMarketModBackend.ClientInstances backend) {
@@ -120,6 +121,8 @@ public class ClientMarket implements IClientMarket
     {
         return itemScaleFactor;
     }
+    /** {@inheritDoc} */
+    @Override
     public @NotNull ItemID getItemID()
     {
         return itemID;
@@ -129,6 +132,8 @@ public class ClientMarket implements IClientMarket
     {
         return AVAILABLE_CANDLE_TIME_DELTAS;
     }
+    /** {@inheritDoc} */
+    @Override
     public @Nullable PriceHistoryData getPriceHistoryData(long candleTimeDelta)
     {
         PriceHistoryContainer historyContainer = priceHistoryDataMap.get(candleTimeDelta);
@@ -140,6 +145,8 @@ public class ClientMarket implements IClientMarket
     {
         return currentMarketPrice;
     }
+    /** {@inheritDoc} */
+    @Override
     public double getCurrentMarketRealPrice()
     {
         return BankManager.convertToRealAmountStatic(currentMarketPrice, itemScaleFactor);

@@ -4,6 +4,7 @@ import net.kroia.modutilities.ColorUtilities;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.geometry.Rectangle;
 import net.kroia.modutilities.gui.geometry.RectangleF;
+import net.kroia.stockmarket.api.market.IPriceDataProvider;
 import net.kroia.stockmarket.screen.UI_Colors;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.util.PriceHistoryData;
@@ -64,7 +65,11 @@ public class CandlestickChart extends StockMarketGuiElement {
 
     private final List<Overlay> overlays = new ArrayList<>();
 
-    private @Nullable ClientMarket market;
+    // The data source for candle/price information (ClientMarket, CrossRateMarket, etc.)
+    private @Nullable IPriceDataProvider priceDataProvider;
+    // Cached downcast for backward compat with OrderbookVolumeHistogram and other code
+    // that still needs a ClientMarket reference; null when the provider is not a ClientMarket.
+    private @Nullable ClientMarket clientMarket;
     private @Nullable PriceHistoryData data;
     private int currentCandleTimeIdx = 0;
 
@@ -124,24 +129,52 @@ public class CandlestickChart extends StockMarketGuiElement {
 
     public void removeOverlay(Overlay overlay) { overlays.remove(overlay); }
 
-    public void setMarket(@Nullable ClientMarket market) {
-        // Save viewport state for the old market before switching
+    /**
+     * Sets the price data provider for the chart.
+     * Works with any IPriceDataProvider implementation — both single-market (ClientMarket)
+     * and cross-rate (CrossRateMarket). The chart is a pure display widget that delegates
+     * all price/candle data retrieval to the provider.
+     *
+     * @param provider the data source, or null to clear the chart
+     */
+    public void setPriceDataProvider(@Nullable IPriceDataProvider provider) {
         saveViewportState();
-
-        this.market = market;
+        this.priceDataProvider = provider;
+        this.clientMarket = (provider instanceof ClientMarket cm) ? cm : null;
         this.data = null;
-        if (market != null) {
-            // Try to restore a previously saved viewport for this market
-            if (!restoreViewportState(market.getItemID())) {
-                // No saved state — use default behavior
+
+        if (provider != null) {
+            if (!restoreViewportState(provider.getItemID())) {
                 selectCandleTimeDeltaByIndex(currentCandleTimeIdx);
                 firstDraw = true;
             }
         }
     }
 
+    /**
+     * Convenience method for single-market mode. Delegates to {@link #setPriceDataProvider}.
+     *
+     * @param market the ClientMarket to display, or null to clear the chart
+     */
+    public void setMarket(@Nullable ClientMarket market) {
+        setPriceDataProvider(market);
+    }
+
+    /**
+     * Returns the underlying ClientMarket if the current provider is a ClientMarket, or null otherwise.
+     * Used by OrderbookVolumeHistogram for orderbook depth requests.
+     */
     public @Nullable ClientMarket getMarket() {
-        return market;
+        return clientMarket;
+    }
+
+    /**
+     * Returns the current price data provider (ClientMarket, CrossRateMarket, etc.).
+     *
+     * @return the active provider, or null if no provider is set
+     */
+    public @Nullable IPriceDataProvider getPriceDataProvider() {
+        return priceDataProvider;
     }
 
     public double getMinVisiblePrice() {
@@ -161,19 +194,31 @@ public class CandlestickChart extends StockMarketGuiElement {
         return new Rectangle(canvasRect.x, canvasRect.y, canvasRect.width, canvasRect.height);
     }
 
+    /**
+     * Selects the candle time resolution by exact delta value (in milliseconds).
+     * Fetches new candle data from the current provider if available.
+     *
+     * @param timeDeltaMs the candle period in milliseconds
+     */
     public void selectCandleTimeDelta(int timeDeltaMs) {
-        if (market != null) {
-            PriceHistoryData newData = market.getPriceHistoryData(timeDeltaMs);
+        if (priceDataProvider != null) {
+            PriceHistoryData newData = priceDataProvider.getPriceHistoryData(timeDeltaMs);
             if (newData != null)
                 this.data = newData;
         }
     }
 
+    /**
+     * Selects the candle time resolution by index into the available time deltas array.
+     * Fetches new data from the provider and updates the toolbar button highlighting.
+     *
+     * @param index the index into {@link ClientMarket#getAvailableCandleTimeDeltas()}
+     */
     public void selectCandleTimeDeltaByIndex(int index) {
         currentCandleTimeIdx = index;
-        if (market != null) {
+        if (priceDataProvider != null) {
             long deltaTime = ClientMarket.getAvailableCandleTimeDeltas()[index];
-            this.data = market.getPriceHistoryData(deltaTime);
+            this.data = priceDataProvider.getPriceHistoryData(deltaTime);
             if (skipAutoCenterOnce) {
                 skipAutoCenterOnce = false;
             } else {
@@ -207,6 +252,16 @@ public class CandlestickChart extends StockMarketGuiElement {
     @Override
     protected void renderBackground() {
         super.renderBackground();
+
+        // Refresh data from provider each frame to pick up live price updates
+        // and new candles (CrossRateMarket rebuilds PriceHistoryData on recompute)
+        if (priceDataProvider != null) {
+            long deltaTime = ClientMarket.getAvailableCandleTimeDeltas()[currentCandleTimeIdx];
+            PriceHistoryData freshData = priceDataProvider.getPriceHistoryData(deltaTime);
+            if (freshData != null)
+                this.data = freshData;
+        }
+
         if (data == null || data.getCandles().isEmpty())
             return;
         lastVisibleCandleIndex = Math.min(data.getCandles().size() - 1, lastVisibleCandleIndex);
@@ -685,8 +740,8 @@ public class CandlestickChart extends StockMarketGuiElement {
      * into the static map, keyed by the current market's ItemID.
      */
     private void saveViewportState() {
-        if (this.market != null) {
-            savedViewports.put(this.market.getItemID(), new ViewportState(
+        if (this.priceDataProvider != null) {
+            savedViewports.put(this.priceDataProvider.getItemID(), new ViewportState(
                     chartviewRect.x, chartviewRect.y,
                     chartviewRect.width, chartviewRect.height,
                     zoomLevel, currentCandleTimeIdx));

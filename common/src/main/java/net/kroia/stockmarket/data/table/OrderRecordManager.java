@@ -20,8 +20,8 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
 
     private final DatabaseManager databaseManager;
 
-    public static final String INSERT = "INSERT INTO OrderHistory (itemid, accountid, userid_one, userid_two, type, amount, price, time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-    public static final String SELECT = "SELECT itemid, accountid, userid_one, userid_two, type, amount, price, time FROM OrderHistory";
+    public static final String INSERT = "INSERT INTO OrderHistory (itemid, accountid, userid_one, userid_two, type, amount, price, time, intermarket_group_one, intermarket_group_two) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    public static final String SELECT = "SELECT itemid, accountid, userid_one, userid_two, type, amount, price, time, intermarket_group_one, intermarket_group_two FROM OrderHistory";
     public static final String DELETE = "DELETE FROM OrderHistory";
     public static final String COUNT  = "SELECT COUNT(*) FROM OrderHistory";
 
@@ -65,6 +65,14 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
             stmt.setLong(6, data.amount());
             stmt.setLong(7, data.price());
             stmt.setLong(8, data.time());
+            // Inter-market group ID stored as two longs (MSB/LSB); null is encoded as (0, 0)
+            if (data.interMarketGroupID() != null) {
+                stmt.setLong(9, data.interMarketGroupID().getMostSignificantBits());
+                stmt.setLong(10, data.interMarketGroupID().getLeastSignificantBits());
+            } else {
+                stmt.setLong(9, 0);
+                stmt.setLong(10, 0);
+            }
             stmt.addBatch();
         }
         catch(SQLException e){
@@ -214,7 +222,11 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
 
     public OrderRecordStruct mapRow(ResultSet rs){
         try {
-            return new OrderRecordStruct(rs.getShort(1), rs.getInt(2), new UUID(rs.getLong(3), rs.getLong(4)), rs.getInt(5), rs.getLong(6), rs.getLong(7), rs.getLong(8));
+            // Reconstruct inter-market group UUID from two longs; (0, 0) means null (no inter-market link)
+            long groupMsb = rs.getLong(9);
+            long groupLsb = rs.getLong(10);
+            UUID groupID = (groupMsb == 0 && groupLsb == 0) ? null : new UUID(groupMsb, groupLsb);
+            return new OrderRecordStruct(rs.getShort(1), rs.getInt(2), new UUID(rs.getLong(3), rs.getLong(4)), rs.getInt(5), rs.getLong(6), rs.getLong(7), rs.getLong(8), groupID);
         }
         catch(SQLException e){
             StockMarketMod.LOGGER.warn("Failed to read MarketPrice record, is the data corrupt?");

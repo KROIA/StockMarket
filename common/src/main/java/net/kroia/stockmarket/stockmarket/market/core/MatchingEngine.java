@@ -2,10 +2,12 @@ package net.kroia.stockmarket.stockmarket.market.core;
 
 
 import net.kroia.banksystem.BankSystemModSettings;
+import net.kroia.banksystem.api.bank.BankStatus;
 import net.kroia.banksystem.api.bank.IServerBank;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.stockmarket.market.ServerMarket;
 import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import org.jetbrains.annotations.NotNull;
@@ -21,6 +23,517 @@ public class MatchingEngine
     private static StockMarketModBackend.ServerInstances BACKEND_INSTANCES;
     public static void setBackend(StockMarketModBackend.ServerInstances backend) {
         BACKEND_INSTANCES = backend;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  Shared types and static depth-consumption methods
+    //  Used by both the regular MatchingEngine loop and CrossMarketMatchingEngine.
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Result of consuming depth at a single price level (virtual + real orders).
+     * @param volumeConsumed total volume consumed (positive)
+     * @param dollarAmount   total dollars exchanged (positive)
+     */
+    public record DepthConsumeResult(long volumeConsumed, long dollarAmount) {}
+
+    /**
+     * Consumes buy-side depth at a specific price level.
+     * Fills virtual depth first, then real buy limit orders (FIFO).
+     * Handles counterparty bank operations for real orders.
+     *
+     * @param orderbook  the orderbook to consume from
+     * @param itemID     the item being traded (for counterparty bank resolution)
+     * @param price      the price level to consume at
+     * @param maxVolume  maximum volume to consume (positive)
+     * @return consumed volume and dollar amount received from selling into buy-side
+     */
+    public static DepthConsumeResult consumeBuySideDepthAtPrice(
+            Orderbook orderbook, ItemID itemID, long price, long maxVolume)
+    {
+        long remaining = maxVolume;   // positive, counts down as we sell into buy-side
+        long totalConsumed = 0;       // total volume consumed (positive)
+        long totalDollars  = 0;       // total dollars received (positive)
+        final long SF = BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+
+        // ── 1. Consume virtual buy-side depth at this price ─────────────────
+        long virtualVol = orderbook.getRawVirtualVolumeRounded(price);
+        if (virtualVol > 0)
+        {
+            long toFill = Math.min(remaining, virtualVol);
+            // fillVirtual expects negative volume to consume buy-side depth
+            long filled = orderbook.fillVirtual(price, -toFill);
+            // filled is negative (consumed from buy-side); take absolute value
+            long absFilled = Math.abs(filled);
+            long cost = Math.round((double) price * absFilled / SF);
+            totalConsumed += absFilled;
+            totalDollars  += cost;
+            remaining     -= absFilled;
+        }
+
+        if (remaining <= 0)
+            return new DepthConsumeResult(totalConsumed, totalDollars);
+
+        // ── 2. Consume real buy limit orders at this price ──────────────────
+        // Snapshot to avoid ConcurrentModificationException
+        List<Order> buyOrderSnapshot = new ArrayList<>(orderbook.getBuyLimitOrders());
+        List<Order> toRemove = new ArrayList<>();
+
+        for (Order buyOrder : buyOrderSnapshot)
+        {
+            if (remaining <= 0) break;
+            if (buyOrder.getStartPrice() != price) continue;
+
+            long fillPotential = Math.min(buyOrder.getRemainingVolume(), remaining);
+            if (fillPotential <= 0) continue;
+
+            if (buyOrder.isPlayerOrder())
+            {
+                // Resolve counterparty bank accounts
+                BankPair other = resolveCounterpartyBanksStatic(buyOrder, itemID);
+                if (other == null)
+                {
+                    toRemove.add(buyOrder);
+                    continue;
+                }
+
+                // Cap fill to what the buyer can actually afford
+                // maxAffordable = buyerFunds * SF / price
+                long buyerFunds = other.moneyBank.getTotalBalance();
+                long maxAffordable = buyerFunds * SF / price;
+                if (maxAffordable < fillPotential)
+                {
+                    fillPotential = maxAffordable;
+                    toRemove.add(buyOrder);  // buyer is broke, cancel remainder
+                }
+
+                if (fillPotential <= 0) continue;
+
+                // cost = rawVolume * rawPrice / scaleFactor
+                long cost = Math.round((double) fillPotential * price / SF);
+                // Update counterparty order: receives items (+fillPotential), pays money (-cost)
+                buyOrder.edit(fillPotential, -cost);
+                other.itemBank.deposit(fillPotential);
+                other.moneyBank.withdrawLockedPrefered(cost);
+
+                totalConsumed += fillPotential;
+                totalDollars  += cost;
+                remaining     -= fillPotential;
+
+                if (buyOrder.isFilled())
+                    toRemove.add(buyOrder);
+            }
+            else
+            {
+                // Bot order — no bank operations needed
+                long cost = Math.round((double) fillPotential * price / SF);
+                buyOrder.edit(fillPotential, -cost);
+
+                totalConsumed += fillPotential;
+                totalDollars  += cost;
+                remaining     -= fillPotential;
+
+                if (buyOrder.isFilled())
+                    toRemove.add(buyOrder);
+            }
+        }
+
+        // Deferred removal of consumed/canceled orders
+        for (Order o : toRemove)
+            orderbook.removeOrder(o);
+
+        return new DepthConsumeResult(totalConsumed, totalDollars);
+    }
+
+    /**
+     * Consumes sell-side depth at a specific price level.
+     * Fills virtual depth first, then real sell limit orders (FIFO).
+     * Handles counterparty bank operations for real orders.
+     *
+     * @param orderbook      the orderbook to consume from
+     * @param itemID         the item being traded (for counterparty bank resolution)
+     * @param price          the price level to consume at
+     * @param maxVolume      maximum volume to consume (positive)
+     * @param availableFunds maximum dollars available to spend (Long.MAX_VALUE for bots)
+     * @return consumed volume and dollar amount spent buying from sell-side
+     */
+    public static DepthConsumeResult consumeSellSideDepthAtPrice(
+            Orderbook orderbook, ItemID itemID, long price, long maxVolume, long availableFunds)
+    {
+        long remaining = maxVolume;   // positive, counts down as we buy from sell-side
+        long totalConsumed = 0;       // total volume bought (positive)
+        long totalDollars  = 0;       // total dollars spent (positive)
+        final long SF = BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+
+        // ── 1. Consume virtual sell-side depth at this price ────────────────
+        long virtualVol = orderbook.getRawVirtualVolumeRounded(price);
+        if (virtualVol < 0)
+        {
+            // Cap by available funds: maxByFunds = availableFunds * SF / price
+            // Guard against overflow for bot orders where availableFunds can be Long.MAX_VALUE
+            long maxByFunds;
+            if (price <= 0 || availableFunds >= Long.MAX_VALUE / SF)
+                maxByFunds = remaining;
+            else
+                maxByFunds = availableFunds * SF / price;
+
+            long toFill = Math.min(remaining, Math.min(Math.abs(virtualVol), maxByFunds));
+            if (toFill > 0)
+            {
+                // fillVirtual expects positive volume to consume sell-side depth
+                long filled = orderbook.fillVirtual(price, toFill);
+                // filled is positive (bought from sell-side)
+                long absFilled = Math.abs(filled);
+                long cost = Math.round((double) price * absFilled / SF);
+                totalConsumed  += absFilled;
+                totalDollars   += cost;
+                remaining      -= absFilled;
+                availableFunds -= cost;
+            }
+        }
+
+        if (remaining <= 0)
+            return new DepthConsumeResult(totalConsumed, totalDollars);
+
+        // ── 2. Consume real sell limit orders at this price ─────────────────
+        // Snapshot to avoid ConcurrentModificationException
+        List<Order> sellOrderSnapshot = new ArrayList<>(orderbook.getSellLimitOrders());
+        List<Order> toRemove = new ArrayList<>();
+
+        for (Order sellOrder : sellOrderSnapshot)
+        {
+            if (remaining <= 0 || availableFunds <= 0) break;
+            if (sellOrder.getStartPrice() != price) continue;
+
+            // sellOrder.getRemainingVolume() is negative for sells
+            // fillPotential is negative (sell-side convention)
+            long fillPotential = -Math.min(-sellOrder.getRemainingVolume(), remaining);
+            if (fillPotential >= 0) continue;
+
+            if (sellOrder.isPlayerOrder())
+            {
+                // Resolve counterparty (seller) bank accounts
+                BankPair other = resolveCounterpartyBanksStatic(sellOrder, itemID);
+                if (other == null)
+                {
+                    toRemove.add(sellOrder);
+                    continue;
+                }
+
+                // Cap fill to what the seller actually has in stock
+                long sellerStock = other.itemBank.getTotalBalance();
+                if (sellerStock < -fillPotential)
+                {
+                    fillPotential = -sellerStock;  // partial — seller is out of stock
+                    toRemove.add(sellOrder);        // cancel remainder of sell order
+                }
+
+                // Cap fill to what the buyer can still afford
+                long costFull = Math.round((double) fillPotential * price / SF);
+                // costFull is negative (fillPotential is negative)
+                if (availableFunds < -costFull)
+                {
+                    // fillPotential = -funds * SF / price (negative volume for sells)
+                    fillPotential = -availableFunds * SF / price;
+                }
+
+                if (fillPotential >= 0) continue;
+
+                // cost = rawVolume * rawPrice / scaleFactor (negative because fillPotential < 0)
+                long cost = Math.round((double) fillPotential * price / SF);
+                // Update counterparty order: loses items (fillPotential, negative), receives money (-cost, positive)
+                sellOrder.edit(fillPotential, -cost);
+                other.itemBank.withdrawLockedPrefered(-fillPotential);
+                other.moneyBank.deposit(-cost);
+
+                // Track consumed volume (positive) and dollars spent (positive)
+                long absConsumed = -fillPotential;
+                long absCost     = -cost;
+                totalConsumed  += absConsumed;
+                totalDollars   += absCost;
+                remaining      -= absConsumed;
+                availableFunds -= absCost;
+
+                if (sellOrder.isFilled())
+                    toRemove.add(sellOrder);
+            }
+            else
+            {
+                // Bot order — no bank operations needed
+                // Still cap to buyer's remaining funds
+                long costFull = Math.round((double) fillPotential * price / SF);
+                if (availableFunds < -costFull)
+                    fillPotential = -availableFunds * SF / price;
+
+                if (fillPotential >= 0) continue;
+
+                long cost = Math.round((double) fillPotential * price / SF);
+                sellOrder.edit(fillPotential, -cost);
+
+                long absConsumed = -fillPotential;
+                long absCost     = -cost;
+                totalConsumed  += absConsumed;
+                totalDollars   += absCost;
+                remaining      -= absConsumed;
+                availableFunds -= absCost;
+
+                if (sellOrder.isFilled())
+                    toRemove.add(sellOrder);
+            }
+        }
+
+        // Deferred removal of consumed/canceled orders
+        for (Order o : toRemove)
+            orderbook.removeOrder(o);
+
+        return new DepthConsumeResult(totalConsumed, totalDollars);
+    }
+
+    /**
+     * Returns the total matchable volume at a price level (virtual + real limit orders).
+     *
+     * @param orderbook the orderbook to query
+     * @param price     the price level
+     * @param isBuySide true for buy-side depth (positive), false for sell-side (positive result either way)
+     * @return total matchable volume at this price (always positive or zero)
+     */
+    public static long getMatchableVolume(Orderbook orderbook, long price, boolean isBuySide)
+    {
+        long total = 0;
+        long virtualVol = orderbook.getRawVirtualVolumeRounded(price);
+
+        if (isBuySide)
+        {
+            // Buy-side virtual depth is positive
+            if (virtualVol > 0)
+                total += virtualVol;
+
+            // Count real buy limit orders at this price
+            for (Order order : orderbook.getBuyLimitOrders())
+            {
+                if (order.getStartPrice() == price)
+                    total += order.getRemainingVolume();  // positive for buy orders
+            }
+        }
+        else
+        {
+            // Sell-side virtual depth is negative; return absolute value
+            if (virtualVol < 0)
+                total += Math.abs(virtualVol);
+
+            // Count real sell limit orders at this price
+            for (Order order : orderbook.getSellLimitOrders())
+            {
+                if (order.getStartPrice() == price)
+                    total += Math.abs(order.getRemainingVolume());  // negative for sell orders, take abs
+            }
+        }
+
+        return total;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  Cross-market bilateral matching (static entry point)
+    //  Walks both orderbooks simultaneously — have-market buy-side DOWN,
+    //  want-market sell-side UP. Uses the shared depth-consumption methods above.
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Executes a limit inter-market order using bilateral depth walking.
+     *
+     * <p>Algorithm overview:</p>
+     * <ol>
+     *   <li>Start at current market prices for both markets</li>
+     *   <li>Check cross rate: if wantPrice * SF / havePrice &gt; limit, stop</li>
+     *   <li>Sell have-items into buy-side depth (if money buffer needs funding)</li>
+     *   <li>Buy want-items from sell-side depth (using money buffer)</li>
+     *   <li>Advance prices when depth exhausted at current level</li>
+     *   <li>Update both market prices atomically at end</li>
+     *   <li>Persist state on order (transactionMoneyBalance, remaining volumes)</li>
+     * </ol>
+     *
+     * <p>Money flows through {@link InterMarketOrder#getTransactionMoneyBalance()} as a
+     * dollar buffer — sells deposit here, buys withdraw. No temporary Order objects are
+     * created. On completion/cancellation, the remaining buffer is deposited to the
+     * player's money bank by ServerMarketManager.</p>
+     *
+     * <h2>Stop Conditions</h2>
+     * <ol>
+     *   <li>Cross rate at current price pair exceeds crossMarketLimitPrice</li>
+     *   <li>Want-item target volume reached (order filled)</li>
+     *   <li>Have-item locked volume exhausted (sell budget spent)</li>
+     *   <li>No depth on either side</li>
+     * </ol>
+     *
+     * @param order             the inter-market limit order to execute
+     * @param haveMarket        market for the "sell" item (sell into buy-side depth, price walks DOWN)
+     * @param wantMarket        market for the "buy" item (buy from sell-side depth, price walks UP)
+     * @param playerBankAccount player's bank account (null for bot orders)
+     * @param tradingCurrencyID the money item ID used as intermediary
+     * @return FILLED if target volume reached, PARTIAL_FILL if some progress made,
+     *         SKIPPED if cross rate is unfavorable at current prices
+     */
+    public static InterMarketExecutor.ExecutionResult executeCrossMarketLimitOrder(
+            InterMarketOrder order,
+            ServerMarket haveMarket,
+            ServerMarket wantMarket,
+            @Nullable IServerBankAccount playerBankAccount,
+            ItemID tradingCurrencyID)
+    {
+        final long SF = BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+
+        // Sample starting prices: sell into buy-side (price walks DOWN), buy from sell-side (price walks UP)
+        long haveSamplePrice = haveMarket.getCurrentMarketPrice();
+        long wantSamplePrice  = wantMarket.getCurrentMarketPrice();
+
+        // Read order state (persisted across ticks for partial fills)
+        long wantTargetVolume      = order.getBuyOrder().getRemainingVolume();            // positive, items still to buy
+        long haveLockedVolume     = Math.abs(order.getSellOrder().getRemainingVolume()); // positive, items still available to sell
+        long crossMarketLimitPrice = order.getCrossRateLimit();
+        long transactionMoneyBalance = order.getTransactionMoneyBalance();
+
+        // Track whether any progress was made this tick
+        boolean madeProgress = false;
+        long lastHaveFillPrice = haveSamplePrice;
+        long lastWantFillPrice = wantSamplePrice;
+
+        // Main loop with timeout protection
+        int timeout = 10000;
+        while (timeout-- > 0)
+        {
+            // 1. Rate check
+            if (haveSamplePrice <= 0)
+                break;
+            long crossMarketPrice = wantSamplePrice * SF / haveSamplePrice;
+            if (crossMarketPrice > crossMarketLimitPrice)
+                break;
+
+            // 2. Stop conditions
+            if (wantTargetVolume <= 0)
+                break;
+            //if (haveLockedVolume <= 0 && transactionMoneyBalance <= 0)
+            //    break;
+
+            // 3. Read depth at current prices
+            long haveVolume = getMatchableVolume(haveMarket.getOrderbook(), haveSamplePrice, true);
+            long wantVolume  = getMatchableVolume(wantMarket.getOrderbook(), wantSamplePrice, false);
+
+            if (wantVolume <= 0)
+            {
+                // No depth at current prices — advance and retry
+                wantSamplePrice += 1;
+                continue;
+            }
+            if(haveVolume <= 0)
+            {
+                // No depth at current prices — advance and retry
+                haveSamplePrice -= 1;
+                if (haveSamplePrice <= 0)
+                    break;
+                continue;
+            }
+
+            // 4. Sell have-items if needed to fund want-item purchase
+            long canAffordWant = (wantSamplePrice > 0) ? transactionMoneyBalance * SF / wantSamplePrice : 0;
+
+            if (canAffordWant < wantVolume && canAffordWant < wantTargetVolume)
+            {
+                long wantWeNeed = Math.min(wantVolume, wantTargetVolume);
+                long dollarsNeeded = wantWeNeed * wantSamplePrice - transactionMoneyBalance;
+                if (dollarsNeeded < 0) dollarsNeeded = 0;
+
+                long haveToSell = (haveSamplePrice > 0) ? dollarsNeeded / haveSamplePrice : 0;
+                if (haveSamplePrice > 0 && haveToSell * haveSamplePrice / SF < dollarsNeeded)
+                    haveToSell += 1;  // round up
+
+                haveToSell = Math.min(haveToSell, haveVolume);
+
+                if (haveToSell > 0)
+                {
+                    // Withdraw from player's locked item balance
+                    if (!order.isBotOrder() && playerBankAccount != null)
+                    {
+                        IServerBank haveItemBank = playerBankAccount.getBank(order.getSellItemID());
+                        if (haveItemBank == null || haveItemBank.withdrawLockedPrefered(haveToSell) != BankStatus.SUCCESS)
+                            break;
+                    }
+
+                    DepthConsumeResult consumed = consumeBuySideDepthAtPrice(
+                            haveMarket.getOrderbook(), haveMarket.getItemID(), haveSamplePrice, haveToSell);
+
+                    haveLockedVolume -= consumed.volumeConsumed();
+                    transactionMoneyBalance += consumed.dollarAmount();
+                    haveVolume -= consumed.volumeConsumed();
+
+                    if (consumed.volumeConsumed() > 0)
+                    {
+                        order.getSellOrder().edit(-consumed.volumeConsumed(), consumed.dollarAmount());
+                        madeProgress = true;
+                        lastHaveFillPrice = haveSamplePrice;
+                    }
+                }
+            }
+
+            // 5. Buy want-items with available balance
+            long wantToBuy = Math.min(wantVolume, wantTargetVolume);
+            if (wantSamplePrice > 0)
+            {
+                long canBuy = transactionMoneyBalance * SF / wantSamplePrice;
+                wantToBuy = Math.min(wantToBuy, canBuy);
+            }
+
+            if (wantToBuy > 0)
+            {
+                DepthConsumeResult consumed = consumeSellSideDepthAtPrice(
+                        wantMarket.getOrderbook(), wantMarket.getItemID(), wantSamplePrice, wantToBuy, transactionMoneyBalance);
+
+                transactionMoneyBalance -= consumed.dollarAmount();
+                wantTargetVolume -= consumed.volumeConsumed();
+                wantVolume -= consumed.volumeConsumed();
+
+                if (!order.isBotOrder() && playerBankAccount != null && consumed.volumeConsumed() > 0)
+                {
+                    IServerBank wantItemBank = playerBankAccount.getBank(order.getBuyItemID());
+                    if (wantItemBank != null)
+                        wantItemBank.deposit(consumed.volumeConsumed());
+                }
+
+                if (consumed.volumeConsumed() > 0)
+                {
+                    order.getBuyOrder().edit(consumed.volumeConsumed(), -consumed.dollarAmount());
+                    madeProgress = true;
+                    lastWantFillPrice = wantSamplePrice;
+                }
+            }
+
+            // 6. Advance prices when depth exhausted
+            if (haveVolume <= 0) haveSamplePrice -= 1;
+            if (wantVolume <= 0) wantSamplePrice += 1;
+            if (haveSamplePrice <= 0)
+                break;
+        }
+
+        // 7. Update reported market prices only if fills occurred, using the last actual fill prices.
+        //    Uses setCurrentMarketPriceNoRedistribute to avoid shifting the VirtualOrderbook's
+        //    DynamicIndexedArray window — the bilateral walk already consumed depth directly
+        //    via fillVirtual, and redistributing would regenerate default volumes at new price
+        //    levels, draining depth that wasn't actually traded.
+        if (madeProgress)
+        {
+            haveMarket.setCurrentMarketPriceNoRedistribute(lastHaveFillPrice);
+            wantMarket.setCurrentMarketPriceNoRedistribute(lastWantFillPrice);
+        }
+
+        // 8. Persist state on order
+        order.setTransactionMoneyBalance(transactionMoneyBalance);
+
+        // 9. Determine result
+        if (wantTargetVolume <= 0 || order.isFilled())
+            return InterMarketExecutor.ExecutionResult.FILLED;
+        else if (madeProgress)
+            return InterMarketExecutor.ExecutionResult.PARTIAL_FILL;
+        else
+            return InterMarketExecutor.ExecutionResult.SKIPPED;
     }
 
     /** Tiny value-holder to return two banks together. */
@@ -39,13 +552,9 @@ public class MatchingEngine
     private final PriorityQueue<Order> sellMarketOrders_inputBuffer;
     private final PriorityQueue<Order> buyLimitOrders_inputBuffer;
     private final PriorityQueue<Order> sellLimitOrders_inputBuffer;
-    private final PriorityQueue<InterMarketOrder> interMarket_LimitBuyOrders_inputBuffer;
-    private final PriorityQueue<InterMarketOrder> interMarket_MarketBuyOrders_inputBuffer;
 
     private final @NotNull Consumer<Order> consumedOrderCallback;
-    private final @NotNull Consumer<InterMarketOrder> consumedInterMarketOrderCallback;
     private final @NotNull Consumer<Order> cancelOrderCallback;
-    private final @NotNull Consumer<InterMarketOrder> cancelInterMarketOrderCallback;
 
     private final @NotNull Consumer<Long> priceChanged;
 
@@ -60,12 +569,8 @@ public class MatchingEngine
                           PriorityQueue<Order> sellMarketOrders_inputBuffer,
                           PriorityQueue<Order> buyLimitOrders_inputBuffer,
                           PriorityQueue<Order> sellLimitOrders_inputBuffer,
-                          PriorityQueue<InterMarketOrder> interMarket_LimitBuyOrders_inputBuffer,
-                          PriorityQueue<InterMarketOrder> interMarket_MarketBuyOrders_inputBuffer,
                           @NotNull Consumer<Order> consumedOrderCallback,
-                          @NotNull Consumer<InterMarketOrder> consumedInterMarketOrderCallback,
                           @NotNull Consumer<Order> cancelOrderCallback,
-                          @NotNull Consumer<InterMarketOrder> cancelInterMarketOrderCallback,
                           @NotNull Consumer<Long> priceChanged)
     {
         this.itemID = itemID;
@@ -75,13 +580,9 @@ public class MatchingEngine
         this.sellMarketOrders_inputBuffer = sellMarketOrders_inputBuffer;
         this.buyLimitOrders_inputBuffer = buyLimitOrders_inputBuffer;
         this.sellLimitOrders_inputBuffer = sellLimitOrders_inputBuffer;
-        this.interMarket_LimitBuyOrders_inputBuffer = interMarket_LimitBuyOrders_inputBuffer;
-        this.interMarket_MarketBuyOrders_inputBuffer = interMarket_MarketBuyOrders_inputBuffer;
 
         this.consumedOrderCallback = consumedOrderCallback;
-        this.consumedInterMarketOrderCallback = consumedInterMarketOrderCallback;
         this.cancelOrderCallback = cancelOrderCallback;
-        this.cancelInterMarketOrderCallback = cancelInterMarketOrderCallback;
 
         this.priceChanged = priceChanged;
     }
@@ -116,7 +617,11 @@ public class MatchingEngine
         {
             for(Order order : sellMarketOrders_inputBuffer)
             {
-                processMarketOrder(order, 0, Long.MAX_VALUE);
+                // INTER_MARKET orders with startPrice > 0 use it as a price floor
+                // (set by InterMarketExecutor to enforce cross-rate limits). startPrice = 0 means no floor.
+                long minPrice = (order.getType() == Order.Type.INTER_MARKET && order.getStartPrice() > 0)
+                        ? order.getStartPrice() : 0;
+                processMarketOrder(order, minPrice, Long.MAX_VALUE);
             }
             sellMarketOrders_inputBuffer.clear();
         }
@@ -124,7 +629,11 @@ public class MatchingEngine
         {
             for(Order order : buyMarketOrders_inputBuffer)
             {
-                processMarketOrder(order, 0, Long.MAX_VALUE);
+                // INTER_MARKET orders with startPrice > 0 use it as a price cap
+                // (set by InterMarketExecutor to enforce cross-rate limits). startPrice = 0 means no cap.
+                long maxPrice = (order.getType() == Order.Type.INTER_MARKET && order.getStartPrice() > 0)
+                        ? order.getStartPrice() : Long.MAX_VALUE;
+                processMarketOrder(order, 0, maxPrice);
             }
             buyMarketOrders_inputBuffer.clear();
         }
@@ -157,12 +666,6 @@ public class MatchingEngine
             orderbook.putOrder(order);
         }
     }
-
-    //private void processInterMarketLimitOrder(InterMarketOrder order)
-    //{
-    //
-    //}
-
 
     /**
      * Executes a stockmarket order against the order book.
@@ -686,6 +1189,18 @@ public class MatchingEngine
         return (ib == null || mb == null) ? null : new BankPair(ib, mb);
     }
 
+    /** Static overload for use by the shared depth-consumption methods. Takes itemID as a parameter. */
+    private static BankPair resolveCounterpartyBanksStatic(Order counterOrder, ItemID itemID)
+    {
+        if (BACKEND_INSTANCES == null) return null;
+        IServerBankAccount acct = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync()
+                .getBankAccount(counterOrder.getBankAccountNr());
+        if (acct == null) return null;
+        IServerBank ib = acct.getBank(itemID);
+        IServerBank mb = acct.getBank(BACKEND_INSTANCES.MARKET_MANAGER.getSync().getTradingCurrencyID());
+        return (ib == null || mb == null) ? null : new BankPair(ib, mb);
+    }
+
 
 
 
@@ -750,17 +1265,9 @@ public class MatchingEngine
     {
         consumedOrderCallback.accept(order);
     }
-    private void orderConsumed(InterMarketOrder order)
-    {
-        consumedInterMarketOrderCallback.accept(order);
-    }
     private void orderCanceled(Order order)
     {
         cancelOrderCallback.accept(order);
-    }
-    private void orderCanceled(InterMarketOrder order)
-    {
-        cancelInterMarketOrderCallback.accept(order);
     }
 
 

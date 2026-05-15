@@ -3,7 +3,6 @@ package net.kroia.stockmarket.stockmarket.market.core;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.persistence.ServerSaveable;
 import net.kroia.stockmarket.StockMarketModBackend;
-import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
 import net.minecraft.nbt.CompoundTag;
@@ -42,26 +41,19 @@ public class Orderbook implements ServerSaveable
     private final VirtualOrderbook virtualOrderbook;
     private final PriorityQueue<Order>  buyLimitOrders = new PriorityQueue<>((o1, o2) -> Long.compare(o2.getStartPrice(), o1.getStartPrice()));
     private final PriorityQueue<Order> sellLimitOrders = new PriorityQueue<>(Comparator.comparingLong(Order::getStartPrice));
-    private final PriorityQueue<InterMarketOrder> interMarketBuyOrders = new PriorityQueue<>((o1, o2) -> Long.compare(o2.getTime(), o1.getTime()));
 
 
     private final @NotNull Consumer<Order> consumedOrderCallback;
-    private final @NotNull Consumer<InterMarketOrder> consumedInterMarketOrderCallback;
     private final @NotNull Consumer<Order> cancelOrderCallback;
-    private final @NotNull Consumer<InterMarketOrder> cancelInterMarketOrderCallback;
 
     public Orderbook(@NotNull ItemID id,
                      @NotNull Consumer<Order> consumedOrderCallback,
-                     @NotNull Consumer<InterMarketOrder> consumedInterMarketOrderCallback,
                      @NotNull Consumer<Order> cancelOrderCallback,
-                     @NotNull Consumer<InterMarketOrder> cancelInterMarketOrderCallback,
                      @Nullable Function<Long, Float> volumeProvider)
     {
         this.itemID = id;
         this.consumedOrderCallback = consumedOrderCallback;
-        this.consumedInterMarketOrderCallback = consumedInterMarketOrderCallback;
         this.cancelOrderCallback = cancelOrderCallback;
-        this.cancelInterMarketOrderCallback = cancelInterMarketOrderCallback;
         this.virtualOrderbook = new VirtualOrderbook();
         this.virtualOrderbook.setDefaultVolumeProvider(volumeProvider);
     }
@@ -94,12 +86,6 @@ public class Orderbook implements ServerSaveable
         }
         return true;
     }
-    public boolean putOrder(InterMarketOrder order)
-    {
-        interMarketBuyOrders.add(order);
-        return true;
-    }
-
     public PriorityQueue<Order> getBuyLimitOrders()
     {
         return buyLimitOrders;
@@ -108,15 +94,10 @@ public class Orderbook implements ServerSaveable
     {
         return sellLimitOrders;
     }
-    PriorityQueue<InterMarketOrder>  getInterMarketBuyOrders()
-    {
-        return interMarketBuyOrders;
-    }
     public void clear()
     {
         buyLimitOrders.clear();
         sellLimitOrders.clear();
-        interMarketBuyOrders.clear();
     }
 
 
@@ -538,12 +519,6 @@ public class Orderbook implements ServerSaveable
         else
             return sellLimitOrders.remove(order);
     }
-    public boolean removeOrder(InterMarketOrder order)
-    {
-        return interMarketBuyOrders.remove(order);
-    }
-
-
     /*public long fillVolume(long price, long volume)
     {
         if(volume > 0)
@@ -625,20 +600,6 @@ public class Orderbook implements ServerSaveable
         }
         tag.put("sellLimitOrders", sellLimitOrdersTag);
 
-
-        ListTag interMarketBuyOrdersTag = new ListTag();
-        for(InterMarketOrder order : this.interMarketBuyOrders)
-        {
-            CompoundTag interMarketBuyOrderTag = new CompoundTag();
-            if(order.save(interMarketBuyOrderTag)){
-                interMarketBuyOrdersTag.add(interMarketBuyOrderTag);
-            }
-            else  {
-                error(String.format("Can't save order %s", order));
-            }
-        }
-        tag.put("interMarketBuyOrders", interMarketBuyOrdersTag);
-
         return success;
     }
 
@@ -699,27 +660,6 @@ public class Orderbook implements ServerSaveable
                 }
             }
         }
-
-
-        interMarketBuyOrders.clear();
-        if(tag.contains("interMarketBuyOrders"))
-        {
-            ListTag orders  = tag.getList("interMarketBuyOrders", CompoundTag.TAG_COMPOUND);
-            for(int i = 0; i < orders.size(); i++)
-            {
-                CompoundTag orderTag = orders.getCompound(i);
-                InterMarketOrder interMarketOrder = InterMarketOrder.createFromNBT(orderTag);
-                if(interMarketOrder != null)
-                {
-                    interMarketBuyOrders.add(interMarketOrder);
-                }
-                else
-                {
-                    error(String.format("Can't load interMarketBuyOrder [%s] from tag  %s", i, orderTag));
-                    success = false;
-                }
-            }
-        }
         return success;
     }
 
@@ -729,17 +669,9 @@ public class Orderbook implements ServerSaveable
     {
         consumedOrderCallback.accept(order);
     }
-    private void orderConsumed(InterMarketOrder order)
-    {
-        consumedInterMarketOrderCallback.accept(order);
-    }
     private void orderCanceled(Order order)
     {
         cancelOrderCallback.accept(order);
-    }
-    private void orderCanceled(InterMarketOrder order)
-    {
-        cancelInterMarketOrderCallback.accept(order);
     }
 
     protected void info(String message) {

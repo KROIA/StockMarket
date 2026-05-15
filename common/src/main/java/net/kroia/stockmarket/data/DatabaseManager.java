@@ -58,6 +58,20 @@ public class DatabaseManager {
             // Column already exists — expected for new databases
             try { connection.rollback(); } catch (SQLException e) { /* ignore */ }
         }
+
+        // Inter-market group UUID columns for linking cross-market trade records
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute("ALTER TABLE OrderHistory ADD COLUMN intermarket_group_one INTEGER NOT NULL DEFAULT 0");
+            connection.commit();
+        } catch (SQLException ignored) {
+            try { connection.rollback(); } catch (SQLException e) { /* ignore */ }
+        }
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute("ALTER TABLE OrderHistory ADD COLUMN intermarket_group_two INTEGER NOT NULL DEFAULT 0");
+            connection.commit();
+        } catch (SQLException ignored) {
+            try { connection.rollback(); } catch (SQLException e) { /* ignore */ }
+        }
     }
 
 

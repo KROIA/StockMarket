@@ -4,7 +4,6 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import net.kroia.stockmarket.stockmarket.market.MarketSettings;
 import net.kroia.stockmarket.stockmarket.market.core.Orderbook;
-import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 
 import java.util.List;
@@ -31,7 +30,6 @@ public interface ISyncServerMarket {
     float getRealVolume(double startPrice, double endPrice);
 
     boolean putOrder(Order order);
-    boolean putOrder(InterMarketOrder order);
 
     /**
      * Cancels a pending order identified by its executor, timestamp, type, start price, and target volume.

@@ -3,7 +3,6 @@ package net.kroia.stockmarket.api.market;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import net.kroia.stockmarket.stockmarket.market.MarketSettings;
-import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 
 import java.util.List;
@@ -21,7 +20,6 @@ public interface IAsyncMarket {
     CompletableFuture<Float> getRealVolumeAsync(double startPrice, double endPrice);
 
     CompletableFuture<Boolean> putOrderAsync(Order order);
-    CompletableFuture<Boolean> putOrderAsync(InterMarketOrder order);
     CompletableFuture<List<Order>> getLimitOrdersAsync();
     CompletableFuture<Boolean> isMarketOpenAsync();
     CompletableFuture<Boolean> setMarketOpenAsync(boolean marketOpen);
