@@ -88,6 +88,12 @@ public class InterMarketExecutorTestSuite extends TestSuite {
         // Price floor/cap enforcement tests
         addTest("sell_price_floor_prevents_rate_overshoot", this::test_sell_price_floor_prevents_rate_overshoot);
         addTest("buy_price_cap_prevents_rate_overshoot", this::test_buy_price_cap_prevents_rate_overshoot);
+
+        // Simulation-gated rate enforcement tests
+        addTest("rate_enforced_with_thin_depth", this::test_rate_enforced_with_thin_depth);
+        addTest("player_receives_target_amount", this::test_player_receives_target_amount);
+        addTest("cumulative_rate_across_many_ticks", this::test_cumulative_rate_across_many_ticks);
+        addTest("simulation_prevents_boundary_execution", this::test_simulation_prevents_boundary_execution);
     }
 
     @Override
@@ -620,14 +626,14 @@ public class InterMarketExecutorTestSuite extends TestSuite {
             if (finalB <= initialB)
                 return fail("B balance should have increased. Initial: " + initialB + ", Final: " + finalB);
 
-            // Verify effective rate does not exceed limit (with 1% rounding tolerance)
+            // Verify effective rate does not exceed limit (integer rounding tolerance only)
             long aDelta = initialA - finalA;
             long bDelta = finalB - initialB;
             double effectiveRate = computeEffectiveRate(aDelta, bDelta);
-            if (effectiveRate > 1.0 * 1.01)
-                return fail("Effective rate " + effectiveRate + " exceeds limit 1.0 (with 1% tolerance)");
+            if (effectiveRate > 1.0 + 1.0 / scaleFactor)
+                return fail("Effective rate " + effectiveRate + " exceeds limit 1.0 (with rounding tolerance 1/" + scaleFactor + ")");
 
-            return pass("Rate not exceeded. Effective rate: " + effectiveRate + " <= 1.0");
+            return pass("Rate not exceeded. Effective rate: " + effectiveRate + " <= 1.0 + rounding tolerance");
         } catch (Exception e) {
             return fail("Exception: " + e.getMessage());
         }
@@ -672,12 +678,12 @@ public class InterMarketExecutorTestSuite extends TestSuite {
             if (finalB <= initialB)
                 return fail("B balance should have increased near boundary rate. Initial: " + initialB + ", Final: " + finalB);
 
-            // Verify effective rate is at or below the limit (with 2% tolerance)
+            // Verify effective rate is at or below the limit (integer rounding tolerance only)
             long aDelta = initialA - finalA;
             long bDelta = finalB - initialB;
             double effectiveRate = computeEffectiveRate(aDelta, bDelta);
-            if (effectiveRate > 1.0 * 1.02)
-                return fail("Effective rate " + effectiveRate + " exceeds limit 1.0 (with 2% tolerance)");
+            if (effectiveRate > 1.0 + 1.0 / scaleFactor)
+                return fail("Effective rate " + effectiveRate + " exceeds limit 1.0 (with rounding tolerance 1/" + scaleFactor + ")");
 
             return pass("Near-boundary rate executed. Effective rate: " + effectiveRate);
         } catch (Exception e) {
@@ -1367,14 +1373,240 @@ public class InterMarketExecutorTestSuite extends TestSuite {
             // Buying B at 100 should give ~10 B. Rate = 5/10 = 0.5. Well within limit.
             if (aDelta > 0 && bDelta > 0) {
                 double effectiveRate = computeEffectiveRate(aDelta, bDelta);
-                if (effectiveRate > 1.0 * 1.05)
-                    return fail("Effective rate " + effectiveRate + " overshoots limit 1.0 (with 5% tolerance)");
+                if (effectiveRate > 1.0 + 1.0 / scaleFactor)
+                    return fail("Effective rate " + effectiveRate + " overshoots limit 1.0 (with rounding tolerance 1/" + scaleFactor + ")");
 
                 return pass("Buy cap held with thin depth. Effective rate: " + effectiveRate);
             }
 
             // If no fill happened, depth is too thin even for partial — acceptable
             return pass("No fill occurred with very thin buy depth");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  Test 25: Rate enforced with thin depth
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * With thin depth on BOTH markets (1.0f), the order fills gradually across ticks.
+     * The simulation gate must prevent any tick from pushing the cumulative effective
+     * rate above the cross-rate limit (integer rounding tolerance only).
+     */
+    private TestResult test_rate_enforced_with_thin_depth() {
+        try {
+            resetState(100, 95);
+
+            // Set BOTH markets to thin depth
+            marketA.test_setDefaultVolumeProviderFunction(p -> 1.0f);
+            marketA.test_resetVirtualOrderBookVolume();
+            marketB.test_setDefaultVolumeProviderFunction(p -> 1.0f);
+            marketB.test_resetVirtualOrderBookVolume();
+
+            long sellVolume = 10 * scaleFactor;
+            long crossRateLimit = (long)(1.0 * scaleFactor);
+
+            long initialA = bankAccount.getBank(itemA_ID).getTotalBalance();
+            long initialB = bankAccount.getBank(itemB_ID).getTotalBalance();
+
+            InterMarketOrder imo = createIMO(sellVolume, crossRateLimit);
+            bankAccount.getBank(itemA_ID).lockAmount(sellVolume);
+            boolean enqueued = marketManager.putInterMarketOrder(imo);
+            if (!enqueued)
+                return fail("InterMarketOrder was not enqueued");
+
+            // Run 20 update ticks to allow gradual filling
+            for (int i = 0; i < 20; i++) {
+                marketManager.update();
+            }
+
+            long finalA = bankAccount.getBank(itemA_ID).getTotalBalance();
+            long finalB = bankAccount.getBank(itemB_ID).getTotalBalance();
+
+            long aDelta = initialA - finalA;
+            long bDelta = finalB - initialB;
+
+            // Some fill should have happened
+            if (aDelta <= 0)
+                return fail("A balance should have decreased (some fill expected). Initial: " + initialA + ", Final: " + finalA);
+            if (bDelta <= 0)
+                return fail("B balance should have increased (some fill expected). Initial: " + initialB + ", Final: " + finalB);
+
+            // Effective rate must not exceed limit (integer rounding tolerance only)
+            double effectiveRate = computeEffectiveRate(aDelta, bDelta);
+            if (effectiveRate > 1.0 + 1.0 / scaleFactor)
+                return fail("Effective rate " + effectiveRate + " exceeds limit 1.0 with thin depth (rounding tolerance 1/" + scaleFactor + ")");
+
+            return pass("Rate enforced with thin depth. Effective rate: " + effectiveRate + " <= 1.0 + rounding tolerance");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  Test 26: Player receives target amount
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * With a very favorable rate (priceA=100, priceB=50, rate=0.5 vs limit=0.6),
+     * the player should receive close to the estimated buy volume. Selling 10*SF of A
+     * at price 100 to buy B at price 50 should yield approximately 20*SF of B.
+     * Asserts that the actual B received is at least 90% of the estimate.
+     */
+    private TestResult test_player_receives_target_amount() {
+        try {
+            resetState(100, 50);
+
+            long sellVolume = 10 * scaleFactor;
+            long crossRateLimit = (long)(0.6 * scaleFactor); // rate 0.5 < 0.6, very favorable
+
+            long initialB = bankAccount.getBank(itemB_ID).getTotalBalance();
+
+            InterMarketOrder imo = createIMO(sellVolume, crossRateLimit);
+            bankAccount.getBank(itemA_ID).lockAmount(sellVolume);
+            boolean enqueued = marketManager.putInterMarketOrder(imo);
+            if (!enqueued)
+                return fail("InterMarketOrder was not enqueued");
+
+            // Run 30 update ticks to allow full fill
+            for (int i = 0; i < 30; i++) {
+                marketManager.update();
+            }
+
+            long finalB = bankAccount.getBank(itemB_ID).getTotalBalance();
+            long bDelta = finalB - initialB;
+
+            // estimatedBuyVolume = sellVolume * havePrice / wantPrice = 10*SF * 100/50 = 20*SF
+            // Assert at least 90% of target (18*SF)
+            long minExpected = 18L * scaleFactor;
+            if (bDelta < minExpected)
+                return fail("Player received " + bDelta + " B-items, expected at least " + minExpected
+                        + " (90% of estimated 20*SF=" + (20L * scaleFactor) + ")");
+
+            return pass("Player received target amount. B increase: " + bDelta
+                    + " (min expected: " + minExpected + ", estimate: " + (20L * scaleFactor) + ")");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  Test 27: Cumulative rate across many ticks
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * With very thin depth (0.5f) on BOTH markets, the order fills slowly across
+     * 50 ticks. The cumulative effective rate (totalSold / totalBought) must not
+     * exceed the cross-rate limit even after many incremental fills.
+     */
+    private TestResult test_cumulative_rate_across_many_ticks() {
+        try {
+            resetState(100, 90);
+
+            // Set BOTH markets to very thin depth
+            marketA.test_setDefaultVolumeProviderFunction(p -> 0.5f);
+            marketA.test_resetVirtualOrderBookVolume();
+            marketB.test_setDefaultVolumeProviderFunction(p -> 0.5f);
+            marketB.test_resetVirtualOrderBookVolume();
+
+            long sellVolume = 10 * scaleFactor;
+            long crossRateLimit = (long)(1.0 * scaleFactor); // rate 0.9 < 1.0
+
+            long initialA = bankAccount.getBank(itemA_ID).getTotalBalance();
+            long initialB = bankAccount.getBank(itemB_ID).getTotalBalance();
+
+            InterMarketOrder imo = createIMO(sellVolume, crossRateLimit);
+            bankAccount.getBank(itemA_ID).lockAmount(sellVolume);
+            boolean enqueued = marketManager.putInterMarketOrder(imo);
+            if (!enqueued)
+                return fail("InterMarketOrder was not enqueued");
+
+            // Run 50 update ticks for gradual filling
+            for (int i = 0; i < 50; i++) {
+                marketManager.update();
+            }
+
+            long finalA = bankAccount.getBank(itemA_ID).getTotalBalance();
+            long finalB = bankAccount.getBank(itemB_ID).getTotalBalance();
+
+            long aDelta = initialA - finalA;
+            long bDelta = finalB - initialB;
+
+            // If any fill happened, verify cumulative rate
+            if (aDelta > 0 && bDelta > 0) {
+                double effectiveRate = computeEffectiveRate(aDelta, bDelta);
+                if (effectiveRate > 1.0 + 1.0 / scaleFactor)
+                    return fail("Cumulative rate " + effectiveRate + " exceeds limit 1.0 after 50 ticks (rounding tolerance 1/" + scaleFactor + ")."
+                            + " aDelta=" + aDelta + ", bDelta=" + bDelta);
+
+                return pass("Cumulative rate held across 50 ticks. Effective rate: " + effectiveRate
+                        + ", aDelta=" + aDelta + ", bDelta=" + bDelta);
+            }
+
+            // No fill at all — thin depth prevented execution, which is acceptable
+            return pass("No fill occurred with very thin depth (0.5f) — rate cannot be violated");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  Test 28: Boundary rate fills correctly without exceeding limit
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * At exact boundary (priceA=100, priceB=100), the rate = 100*SF/100 = 1.0*SF
+     * which equals crossRateLimit. With algebraic price constraints, fills are
+     * allowed at exactly the boundary rate (sell at havePrice, buy at ≤ cap).
+     * The effective rate must not exceed the limit even at the boundary.
+     */
+    private TestResult test_simulation_prevents_boundary_execution() {
+        try {
+            resetState(100, 100);
+
+            // Set BOTH markets to thin depth
+            marketA.test_setDefaultVolumeProviderFunction(p -> 1.0f);
+            marketA.test_resetVirtualOrderBookVolume();
+            marketB.test_setDefaultVolumeProviderFunction(p -> 1.0f);
+            marketB.test_resetVirtualOrderBookVolume();
+
+            long sellVolume = 10 * scaleFactor;
+            long crossRateLimit = (long)(1.0 * scaleFactor);
+
+            long initialA = bankAccount.getBank(itemA_ID).getTotalBalance();
+            long initialB = bankAccount.getBank(itemB_ID).getTotalBalance();
+
+            InterMarketOrder imo = createIMO(sellVolume, crossRateLimit);
+            bankAccount.getBank(itemA_ID).lockAmount(sellVolume);
+            boolean enqueued = marketManager.putInterMarketOrder(imo);
+            if (!enqueued)
+                return fail("InterMarketOrder was not enqueued");
+
+            // Run 5 update ticks — at boundary, fills happen at exactly the rate limit
+            for (int i = 0; i < 5; i++) {
+                marketManager.update();
+            }
+
+            long finalA = bankAccount.getBank(itemA_ID).getTotalBalance();
+            long finalB = bankAccount.getBank(itemB_ID).getTotalBalance();
+
+            long aDelta = initialA - finalA;
+            long bDelta = finalB - initialB;
+
+            // At exact boundary, the order may fill at rate = crossRateLimit.
+            // If any fill happened, verify the rate does not exceed the limit.
+            if (aDelta > 0 && bDelta > 0) {
+                double effectiveRate = computeEffectiveRate(aDelta, bDelta);
+                if (effectiveRate > 1.0 + 1.0 / scaleFactor)
+                    return fail("Effective rate " + effectiveRate + " exceeds limit at exact boundary (rounding tolerance 1/" + scaleFactor + ")");
+
+                return pass("Boundary rate fill correct. Effective rate: " + effectiveRate + " <= 1.0 + rounding tolerance");
+            }
+
+            // No fill is also acceptable — depth may have been insufficient
+            return pass("No fill at exact boundary (depth insufficient). Balances unchanged.");
         } catch (Exception e) {
             return fail("Exception: " + e.getMessage());
         }

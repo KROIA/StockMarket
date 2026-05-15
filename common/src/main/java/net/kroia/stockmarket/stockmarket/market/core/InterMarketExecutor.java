@@ -225,36 +225,10 @@ public class InterMarketExecutor
     // ═══════════════════════════════════════════════════════════════════════════
 
     /**
-     * Executes a limit-type inter-market order.
+     * Stub — limit order execution is disabled pending reimplementation
+     * with the CrossMarketMatchingEngine (bilateral depth walk approach).
      *
-     * <p>The cross-rate limit defines the maximum acceptable rate of sell-items
-     * per buy-item. Using integer arithmetic to avoid floating-point imprecision:
-     * {@code effectiveRate = sellVolume * SF / buyVolume} compared against
-     * {@code crossRateLimit}.</p>
-     *
-     * <p>Algorithm:</p>
-     * <ol>
-     *   <li>Quick check: if currentRate (wantPrice/havePrice) exceeds the limit,
-     *       skip immediately</li>
-     *   <li>Full simulation (same as market order)</li>
-     *   <li>Check effective rate; if within limit, execute full volume</li>
-     *   <li>If over limit, binary search for the max fillable buy-volume where
-     *       the rate stays within the limit</li>
-     *   <li>Partial fill: update the order's fill state, keep remainder pending</li>
-     * </ol>
-     */
-    /**
-     * Executes a limit-type inter-market order.
-     *
-     * <p>The cross-rate limit defines the maximum acceptable rate of sell-items
-     * per buy-item. When the current market rate is favorable (≤ limit), the
-     * order executes directly through the matching engine.</p>
-     *
-     * <p>To enforce the rate limit even with slippage, the sell volume is capped
-     * to only what's needed to buy the target amount of want-items at current
-     * prices. This keeps the effective rate close to the current rate (which
-     * already passed the check). The order fills partially each tick until the
-     * full target is met.</p>
+     * @see CrossMarketMatchingRedesign.md for the design document
      */
     private static ExecutionResult executeLimitOrder(
             InterMarketOrder order,
@@ -263,95 +237,8 @@ public class InterMarketExecutor
             @Nullable IServerBankAccount playerBankAccount,
             ItemID tradingCurrencyID)
     {
-        long SF = BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
-        long crossRateLimit = order.getCrossRateLimit();
-
-        long maxSellVolume = Math.abs(order.getSellOrder().getRemainingVolume());
-        if (maxSellVolume <= 0)
-        {
-            // Sell allotment exhausted. If we received any want-items, the order
-            // is complete (slippage consumed slightly more sell-items per buy-item
-            // than the rate limit assumed). If we received nothing, cancel.
-            if (Math.abs(order.getBuyOrder().getFilledVolume()) > 0)
-                return ExecutionResult.FILLED;
-            else
-                return ExecutionResult.CANCELED;
-        }
-
-        long havePrice = haveMarket.getCurrentMarketPrice();
-        long wantPrice = wantMarket.getCurrentMarketPrice();
-
-        if (wantPrice <= 0 || havePrice <= 0)
-        {
-            return ExecutionResult.SKIPPED;
-        }
-
-        // Rate check: currentRate = wantPrice * SF / havePrice.
-        // The sell budget cap (buyTarget * crossRateLimit / SF) enforces the rate
-        // limit across execution, so no additional margin is needed here.
-        long currentRate = wantPrice * SF / havePrice;
-        if (currentRate > crossRateLimit)
-        {
-            return ExecutionResult.SKIPPED;
-        }
-
-        // Cap the sell volume to enforce the rate limit across all ticks.
-        // Total glass sold must never exceed buyTarget * crossRateLimit / SF.
-        // The locked margin (10% extra) is a buffer, not an allowance to overspend.
-        long buyTarget = Math.abs(order.getBuyOrder().getTargetVolume());
-        long maxTotalSell = buyTarget * crossRateLimit / SF;
-        long alreadySold = Math.abs(order.getSellOrder().getFilledVolume());
-        long sellBudget = maxTotalSell - alreadySold;
-        if (sellBudget <= 0)
-        {
-            // Sell budget exhausted — can't sell more without exceeding the rate limit
-            if (Math.abs(order.getBuyOrder().getFilledVolume()) > 0)
-                return ExecutionResult.FILLED;
-            else
-                return ExecutionResult.CANCELED;
-        }
-
-        // Sell in small chunks (2 real units per tick) to minimize slippage.
-        // After each chunk, check the cumulative rate — stop if it would exceed the limit.
-        long buyRemaining = Math.abs(order.getBuyOrder().getRemainingVolume());
-        long sellNeeded = buyRemaining * wantPrice / havePrice;
-        if (sellNeeded <= 0) sellNeeded = 1;
-        // Small per-tick sell: limits depth walking, keeps per-chunk slippage minimal
-        long maxSellPerTick = Math.max(1, SF * 2);
-        long sellVolume = Math.min(maxSellVolume, Math.min(sellNeeded, Math.min(sellBudget, maxSellPerTick)));
-
-        long estimatedBuyVolume = sellVolume * havePrice / wantPrice;
-        if (estimatedBuyVolume <= 0) estimatedBuyVolume = 1;
-
-        long estimatedDollarBudget = sellVolume * havePrice / SF;
-        if (estimatedDollarBudget <= 0) estimatedDollarBudget = 1;
-
-        ExecutionResult result = executeBothLegs(
-                order, haveMarket, wantMarket, playerBankAccount, tradingCurrencyID,
-                sellVolume, estimatedDollarBudget, estimatedBuyVolume, wantPrice, SF,
-                0, 0);
-
-        if (result == ExecutionResult.FILLED || result == ExecutionResult.PARTIAL_FILL)
-        {
-            // Check cumulative rate across all ticks — stop if limit is exceeded
-            long totalSold = Math.abs(order.getSellOrder().getFilledVolume());
-            long totalBought = Math.abs(order.getBuyOrder().getFilledVolume());
-            if (totalSold > 0 && totalBought > 0)
-            {
-                long cumulativeRate = totalSold * SF / totalBought;
-                if (cumulativeRate > crossRateLimit)
-                {
-                    // Cumulative rate exceeded limit — stop filling to prevent further overshoot
-                    return ExecutionResult.FILLED;
-                }
-            }
-
-            if (order.isFilled())
-                return ExecutionResult.FILLED;
-            else
-                return ExecutionResult.PARTIAL_FILL;
-        }
-        return result;
+        // TODO: Replace with CrossMarketMatchingEngine.executeLimitOrder()
+        return ExecutionResult.SKIPPED;
     }
 
 
