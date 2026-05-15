@@ -149,27 +149,15 @@ public class PlaceInterMarketOrderRequest extends StockMarketGenericRequest<Plac
             return future;
         }
 
-        // For limit orders, add a slippage margin to the sell volume so that
-        // depth-walking costs don't prevent the buy target from being met.
-        // Unused sell-items are unlocked when the order completes.
-        long sellVolumeWithMargin = rawVolume;
-        if (input.crossRateLimit > 0) {
-            long margin = rawVolume / 10; // 10% margin
-            if (margin <= 0) margin = 1;
-            if (itemBank.getBalance() >= rawVolume + margin) {
-                sellVolumeWithMargin = rawVolume + margin;
-            }
-        }
-
-        if (itemBank.getBalance() < sellVolumeWithMargin) {
+        if (itemBank.getBalance() < rawVolume) {
             future.complete(new OutputData(false, "NOT_ENOUGH_ITEMS"));
             return future;
         }
 
-        // 6. Lock player's "have" items in the item bank (includes slippage margin)
-        BankStatus lockStatus = itemBank.lockAmount(sellVolumeWithMargin);
+        // 6. Lock player's "have" items in the item bank
+        BankStatus lockStatus = itemBank.lockAmount(rawVolume);
         if (lockStatus != BankStatus.SUCCESS) {
-            warn("Trying to lock " + sellVolumeWithMargin + " of " + input.haveItemID + " for bank: " + itemBank +
+            warn("Trying to lock " + rawVolume + " of " + input.haveItemID + " for bank: " + itemBank +
                     " of BankAccount: " + bankAccount.getAccountNumber() + "[" + bankAccount.getAccountName() + "]. Got status: " + lockStatus);
             future.complete(new OutputData(false, "UNABLE_TO_LOCK_ITEMS"));
             return future;
@@ -199,7 +187,7 @@ public class PlaceInterMarketOrderRequest extends StockMarketGenericRequest<Plac
                 input.wantItemID, input.haveItemID,  // buyItemID = want, sellItemID = have
                 orderType,
                 estimatedBuyVolume, wantPrice,       // buy leg: target quantity unchanged
-                sellVolumeWithMargin, havePrice,     // sell leg: includes slippage margin
+                rawVolume, havePrice,                 // sell leg
                 time, playerSender, input.bankAccountNr,
                 input.crossRateLimit
         );
