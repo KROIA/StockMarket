@@ -373,7 +373,7 @@ public class InterMarketExecutor
             long sellPriceFloor,
             long buyPriceCap)
     {
-        // ── Create the sell Order ─────────────────────────────────────────────
+        // ── Create and execute the sell Order ─────────────────────────────────
         // INTER_MARKET type: ServerMarket skips history/net-flow tracking.
         // The MatchingEngine uses startPrice as the minimum accepted sell price
         // for INTER_MARKET orders (0 = no floor for market-type orders).
@@ -399,9 +399,42 @@ public class InterMarketExecutor
                     order.getBankAccountNr());
         }
 
-        // ── Create the buy Order ──────────────────────────────────────────────
-        // INTER_MARKET type: startPrice is used as max accepted buy price (0 = no cap).
-        long buyVolume = estimatedBuyVolume;
+        boolean sellQueued = haveMarket.putOrder(sellOrder);
+        if (!sellQueued)
+        {
+            logWarn("Failed to queue sell order in haveMarket, canceling inter-market order");
+            return ExecutionResult.CANCELED;
+        }
+        haveMarket.update();
+
+        // Check actual sell results
+        long actualSellFilled = -sellOrder.getFilledVolume();
+        long actualDollarYield = sellOrder.getTransferredMoney();
+
+        if (actualSellFilled <= 0 || actualDollarYield <= 0)
+        {
+            logWarn("Sell leg filled 0 volume or yielded 0 dollars, canceling buy leg");
+            return ExecutionResult.CANCELED;
+        }
+
+        // ── Create and execute the buy Order ─────────────────────────────────
+        // Compute buy volume from actual dollars, and buy cap dynamically from
+        // actual sell results. Using the ACTUAL dollar yield gives a more accurate
+        // buy cap than the pre-computed estimate (which uses pre-sell market prices).
+        // dynamicBuyPriceCap = actualDollarYield * crossRateLimit / actualSellFilled
+        // ensures: sandBought ≥ glassSold * SF / crossRateLimit (rate within limit).
+        long dynamicBuyPriceCap = buyPriceCap;
+        if (buyPriceCap > 0 && actualSellFilled > 0)
+        {
+            long crossRateLimit = order.getCrossRateLimit();
+            if (crossRateLimit > 0)
+            {
+                dynamicBuyPriceCap = actualDollarYield * crossRateLimit / actualSellFilled;
+                if (dynamicBuyPriceCap <= 0) dynamicBuyPriceCap = 1;
+            }
+        }
+
+        long buyVolume = actualDollarYield * SF / wantPrice;
         if (buyVolume <= 0 && wantPrice > 0)
         {
             buyVolume = dollarBudget * SF / wantPrice;
@@ -412,70 +445,31 @@ public class InterMarketExecutor
             return ExecutionResult.CANCELED;
         }
 
-        // buyPriceCap: 0 = no cap (market orders), >0 = price cap (limit orders)
         Order buyOrder;
         if (order.isBotOrder())
         {
             buyOrder = new Order(
                     order.getBuyItemID(),
                     Order.Type.INTER_MARKET,
-                    buyVolume,                 // positive = buy
-                    buyPriceCap,               // startPrice: 0 = no cap, >0 = max buy price
-                    order.getTime());          // bot order (no player UUID)
+                    buyVolume,
+                    dynamicBuyPriceCap,
+                    order.getTime());
         }
         else
         {
             buyOrder = new Order(
                     order.getBuyItemID(),
                     Order.Type.INTER_MARKET,
-                    buyVolume,                 // positive = buy
-                    buyPriceCap,               // startPrice: 0 = no cap, >0 = max buy price
+                    buyVolume,
+                    dynamicBuyPriceCap,
                     order.getTime(),
                     order.getOwnerUUID(),
                     order.getBankAccountNr());
         }
 
-        // ── Execute sell leg ──────────────────────────────────────────────────
-        // Queue the sell order and immediately process it
-        boolean sellQueued = haveMarket.putOrder(sellOrder);
-        if (!sellQueued)
-        {
-            logWarn("Failed to queue sell order in haveMarket, canceling inter-market order");
-            return ExecutionResult.CANCELED;
-        }
-        haveMarket.update();
-
-        // Check actual sell results
-        long actualSellFilled = -sellOrder.getFilledVolume();  // filledVolume is negative for sells, negate for positive
-        long actualDollarYield = sellOrder.getTransferredMoney();  // positive for sells (money received)
-
-        if (actualSellFilled <= 0 || actualDollarYield <= 0)
-        {
-            // Sell leg failed to fill anything — the buy leg should not execute.
-            // The MatchingEngine already handled the sell order's lifecycle (cancel callback etc.)
-            logWarn("Sell leg filled 0 volume or yielded 0 dollars, canceling buy leg");
-            return ExecutionResult.CANCELED;
-        }
-
-        // ── Execute buy leg ───────────────────────────────────────────────────
-        // Adjust buy order's target volume based on actual dollar yield if it differs
-        // from what was simulated (e.g., due to orderbook changes between sim and exec).
-        // The buy order volume should be what the actual dollar yield can afford.
-        if (actualDollarYield != dollarBudget && wantPrice > 0)
-        {
-            long adjustedBuyVolume = actualDollarYield * SF / wantPrice;
-            if (adjustedBuyVolume > 0 && adjustedBuyVolume != buyVolume)
-            {
-                buyOrder.editTargetVolume(adjustedBuyVolume);
-            }
-        }
-
         boolean buyQueued = wantMarket.putOrder(buyOrder);
         if (!buyQueued)
         {
-            // Buy leg failed to queue. The sell leg already executed,
-            // so the dollars are in the player's money bank. This is acceptable —
-            // the player still has the dollars from the sell.
             logWarn("Failed to queue buy order in wantMarket after sell leg executed");
             return ExecutionResult.CANCELED;
         }
