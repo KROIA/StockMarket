@@ -169,13 +169,20 @@ public class PlaceInterMarketOrderRequest extends StockMarketGenericRequest<Plac
         long havePrice = haveMarket.getCurrentMarketPrice();
         long wantPrice = wantMarket.getCurrentMarketPrice();
 
-        // Estimate buy volume from the dollar yield of selling "have" items
-        long dollarEstimate = rawVolume * havePrice / SF;
-        long estimatedBuyVolume = dollarEstimate * SF / wantPrice;
-        if (estimatedBuyVolume <= 0) estimatedBuyVolume = 1;
-
         // crossRateLimit == 0 means market order, otherwise limit order
         Order.Type orderType = (input.crossRateLimit == 0) ? Order.Type.MARKET : Order.Type.LIMIT;
+
+        // For limit orders, derive the intended buy quantity from the have-volume and
+        // rate limit (haveVolume = wantQty * rate, so wantQty = haveVolume / rate).
+        // For market orders, estimate from current market prices.
+        long estimatedBuyVolume;
+        if (input.crossRateLimit > 0) {
+            estimatedBuyVolume = rawVolume * SF / input.crossRateLimit;
+        } else {
+            long dollarEstimate = rawVolume * havePrice / SF;
+            estimatedBuyVolume = (wantPrice > 0) ? dollarEstimate * SF / wantPrice : 1;
+        }
+        if (estimatedBuyVolume <= 0) estimatedBuyVolume = 1;
 
         InterMarketOrder imo = new InterMarketOrder(
                 input.wantItemID, input.haveItemID,  // buyItemID = want, sellItemID = have
