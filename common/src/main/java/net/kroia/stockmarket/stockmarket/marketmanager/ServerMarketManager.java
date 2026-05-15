@@ -464,20 +464,24 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
 
     /**
      * Called when an inter-market order is fully filled.
-     * Saves the historical record for both legs and unlocks any remaining sell-side funds.
+     * Deposits any remaining transactionMoneyBalance, saves the historical record,
+     * and unlocks any remaining sell-side funds.
      */
     private void onInterMarketOrderConsumed(InterMarketOrder order)
     {
+        depositTransactionMoneyBalance(order);
         saveInterMarketOrderRecord(order);
         unlockInterMarketRemainingFunds(order);
     }
 
     /**
      * Called when an inter-market order is canceled or encounters an error.
-     * Saves the historical record for both legs (if any fills occurred) and unlocks remaining sell-side funds.
+     * Deposits any remaining transactionMoneyBalance, saves the historical record,
+     * and unlocks remaining sell-side funds.
      */
     private void onInterMarketOrderCanceled(InterMarketOrder order)
     {
+        depositTransactionMoneyBalance(order);
         saveInterMarketOrderRecord(order);
         unlockInterMarketRemainingFunds(order);
     }
@@ -553,6 +557,37 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
             warn("Failed to unlock " + toUnlock + " items for inter-market order on account "
                     + order.getBankAccountNr() + ": " + status);
         }
+    }
+
+    /**
+     * Deposits any remaining transactionMoneyBalance to the player's money bank.
+     * Called on order completion or cancellation to return buffered dollars.
+     */
+    private void depositTransactionMoneyBalance(InterMarketOrder order)
+    {
+        if (order.isBotOrder()) return;
+        long balance = order.getTransactionMoneyBalance();
+        if (balance <= 0) return;
+        if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.BANK_SYSTEM_API == null) return;
+
+        IServerBankAccount bankAccount = BACKEND_INSTANCES.BANK_SYSTEM_API
+                .getServerBankManager().getSync().getBankAccount(order.getBankAccountNr());
+        if (bankAccount == null)
+        {
+            warn("Cannot deposit transactionMoneyBalance: bank account " + order.getBankAccountNr() + " not found");
+            return;
+        }
+
+        ItemID currencyID = BACKEND_INSTANCES.MARKET_MANAGER.getSync().getTradingCurrencyID();
+        IServerBank moneyBank = bankAccount.getBank(currencyID);
+        if (moneyBank == null)
+        {
+            warn("Cannot deposit transactionMoneyBalance: money bank not found on account " + order.getBankAccountNr());
+            return;
+        }
+
+        moneyBank.deposit(balance);
+        order.setTransactionMoneyBalance(0);
     }
 
     /**

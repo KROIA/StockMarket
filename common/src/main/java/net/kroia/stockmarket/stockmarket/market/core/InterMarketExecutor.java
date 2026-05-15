@@ -225,10 +225,7 @@ public class InterMarketExecutor
     // ═══════════════════════════════════════════════════════════════════════════
 
     /**
-     * Stub — limit order execution is disabled pending reimplementation
-     * with the CrossMarketMatchingEngine (bilateral depth walk approach).
-     *
-     * @see CrossMarketMatchingRedesign.md for the design document
+     * Delegates to {@link MatchingEngine#executeCrossMarketLimitOrder} for bilateral depth-walk execution.
      */
     private static ExecutionResult executeLimitOrder(
             InterMarketOrder order,
@@ -237,8 +234,8 @@ public class InterMarketExecutor
             @Nullable IServerBankAccount playerBankAccount,
             ItemID tradingCurrencyID)
     {
-        // TODO: Replace with CrossMarketMatchingEngine.executeLimitOrder()
-        return ExecutionResult.SKIPPED;
+        return MatchingEngine.executeCrossMarketLimitOrder(
+                order, haveMarket, wantMarket, playerBankAccount, tradingCurrencyID);
     }
 
 

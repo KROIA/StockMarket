@@ -27,6 +27,10 @@ public class InterMarketOrder implements ServerSaveable
     // Unique ID linking both legs of this inter-market trade in order history
     private UUID interMarketGroupID;
 
+    // Dollar buffer for bilateral matching: sells deposit here, buys withdraw.
+    // On completion/cancellation, remaining balance is deposited to player's money bank.
+    private long transactionMoneyBalance = 0;
+
 
     public static final StreamCodec<RegistryFriendlyByteBuf, InterMarketOrder> STREAM_CODEC = new StreamCodec<>() {
         @Override
@@ -35,6 +39,7 @@ public class InterMarketOrder implements ServerSaveable
             Order.STREAM_CODEC.encode(buf, data.sellOrder);
             ByteBufCodecs.VAR_LONG.encode(buf, data.crossRateLimit);
             UUIDUtil.STREAM_CODEC.encode(buf, data.interMarketGroupID);
+            ByteBufCodecs.VAR_LONG.encode(buf, data.transactionMoneyBalance);
         }
         @Override
         public @NotNull InterMarketOrder decode(RegistryFriendlyByteBuf buf) {
@@ -42,7 +47,10 @@ public class InterMarketOrder implements ServerSaveable
             Order sellOrder = Order.STREAM_CODEC.decode(buf);
             long crossRateLimit = ByteBufCodecs.VAR_LONG.decode(buf);
             UUID interMarketGroupID = UUIDUtil.STREAM_CODEC.decode(buf);
-            return new InterMarketOrder(buyOrder, sellOrder, crossRateLimit, interMarketGroupID);
+            long transactionMoneyBalance = ByteBufCodecs.VAR_LONG.decode(buf);
+            InterMarketOrder result = new InterMarketOrder(buyOrder, sellOrder, crossRateLimit, interMarketGroupID);
+            result.transactionMoneyBalance = transactionMoneyBalance;
+            return result;
         }
     };
 
@@ -117,7 +125,10 @@ public class InterMarketOrder implements ServerSaveable
         // Backward compatibility: missing fields get sensible defaults
         long crossRateLimit = tag.contains("crossRateLimit") ? tag.getLong("crossRateLimit") : 0;
         UUID groupID = tag.contains("interMarketGroupID") ? tag.getUUID("interMarketGroupID") : UUID.randomUUID();
-        return new InterMarketOrder(buyOrder, sellOrder, crossRateLimit, groupID);
+        long transactionMoneyBalance = tag.contains("transactionMoneyBalance") ? tag.getLong("transactionMoneyBalance") : 0;
+        InterMarketOrder result = new InterMarketOrder(buyOrder, sellOrder, crossRateLimit, groupID);
+        result.transactionMoneyBalance = transactionMoneyBalance;
+        return result;
     }
 
     public Pair<OrderRecordStruct, OrderRecordStruct> getHistoricalRecord()
@@ -191,6 +202,10 @@ public class InterMarketOrder implements ServerSaveable
     // Returns true if this is a limit inter-market order (crossRateLimit != 0)
     public boolean isLimitOrder() { return crossRateLimit != 0; }
 
+    // Dollar buffer for bilateral matching — sells deposit here, buys withdraw
+    public long getTransactionMoneyBalance() { return transactionMoneyBalance; }
+    public void setTransactionMoneyBalance(long transactionMoneyBalance) { this.transactionMoneyBalance = transactionMoneyBalance; }
+
 
     // ═══════════════════════════════════════════════════════════════════════════
     //  Accessors for InterMarketExecutor — expose inner order details needed
@@ -254,6 +269,7 @@ public class InterMarketOrder implements ServerSaveable
             tag.put("sellOrder", sellOrderTag);
             tag.putLong("crossRateLimit", crossRateLimit);
             tag.putUUID("interMarketGroupID", interMarketGroupID);
+            tag.putLong("transactionMoneyBalance", transactionMoneyBalance);
             return true;
         }
         return false;
@@ -274,6 +290,7 @@ public class InterMarketOrder implements ServerSaveable
             // Backward compatibility: missing fields get sensible defaults
             crossRateLimit = tag.contains("crossRateLimit") ? tag.getLong("crossRateLimit") : 0;
             interMarketGroupID = tag.contains("interMarketGroupID") ? tag.getUUID("interMarketGroupID") : UUID.randomUUID();
+            transactionMoneyBalance = tag.contains("transactionMoneyBalance") ? tag.getLong("transactionMoneyBalance") : 0;
         }
         return success;
     }

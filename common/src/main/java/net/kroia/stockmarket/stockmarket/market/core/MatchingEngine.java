@@ -6,6 +6,8 @@ import net.kroia.banksystem.api.bank.IServerBank;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.stockmarket.market.ServerMarket;
+import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -20,6 +22,121 @@ public class MatchingEngine
     private static StockMarketModBackend.ServerInstances BACKEND_INSTANCES;
     public static void setBackend(StockMarketModBackend.ServerInstances backend) {
         BACKEND_INSTANCES = backend;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  Shared types and static depth-consumption methods
+    //  Used by both the regular MatchingEngine loop and CrossMarketMatchingEngine.
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Result of consuming depth at a single price level (virtual + real orders).
+     * @param volumeConsumed total volume consumed (positive)
+     * @param dollarAmount   total dollars exchanged (positive)
+     */
+    public record DepthConsumeResult(long volumeConsumed, long dollarAmount) {}
+
+    /**
+     * Consumes buy-side depth at a specific price level.
+     * Fills virtual depth first, then real buy limit orders (FIFO).
+     * Handles counterparty bank operations for real orders.
+     *
+     * @param orderbook  the orderbook to consume from
+     * @param itemID     the item being traded (for counterparty bank resolution)
+     * @param price      the price level to consume at
+     * @param maxVolume  maximum volume to consume (positive)
+     * @return consumed volume and dollar amount received from selling into buy-side
+     */
+    public static DepthConsumeResult consumeBuySideDepthAtPrice(
+            Orderbook orderbook, ItemID itemID, long price, long maxVolume)
+    {
+        // Stub — will be implemented in T-050
+        return new DepthConsumeResult(0, 0);
+    }
+
+    /**
+     * Consumes sell-side depth at a specific price level.
+     * Fills virtual depth first, then real sell limit orders (FIFO).
+     * Handles counterparty bank operations for real orders.
+     *
+     * @param orderbook      the orderbook to consume from
+     * @param itemID         the item being traded (for counterparty bank resolution)
+     * @param price          the price level to consume at
+     * @param maxVolume      maximum volume to consume (positive)
+     * @param availableFunds maximum dollars available to spend (Long.MAX_VALUE for bots)
+     * @return consumed volume and dollar amount spent buying from sell-side
+     */
+    public static DepthConsumeResult consumeSellSideDepthAtPrice(
+            Orderbook orderbook, ItemID itemID, long price, long maxVolume, long availableFunds)
+    {
+        // Stub — will be implemented in T-050
+        return new DepthConsumeResult(0, 0);
+    }
+
+    /**
+     * Returns the total matchable volume at a price level (virtual + real limit orders).
+     *
+     * @param orderbook the orderbook to query
+     * @param price     the price level
+     * @param isBuySide true for buy-side depth (positive), false for sell-side (positive result either way)
+     * @return total matchable volume at this price (always positive or zero)
+     */
+    public static long getMatchableVolume(Orderbook orderbook, long price, boolean isBuySide)
+    {
+        // Stub — will be implemented in T-050
+        return 0;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  Cross-market bilateral matching (static entry point)
+    //  Walks both orderbooks simultaneously — have-market buy-side DOWN,
+    //  want-market sell-side UP. Uses the shared depth-consumption methods above.
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Executes a limit inter-market order using bilateral depth walking.
+     *
+     * <p>Algorithm overview:</p>
+     * <ol>
+     *   <li>Start at current market prices for both markets</li>
+     *   <li>Check cross rate: if wantPrice * SF / havePrice &gt; limit, stop</li>
+     *   <li>Sell have-items into buy-side depth (if money buffer needs funding)</li>
+     *   <li>Buy want-items from sell-side depth (using money buffer)</li>
+     *   <li>Advance prices when depth exhausted at current level</li>
+     *   <li>Update both market prices atomically at end</li>
+     *   <li>Persist state on order (transactionMoneyBalance, remaining volumes)</li>
+     * </ol>
+     *
+     * <p>Money flows through {@link InterMarketOrder#getTransactionMoneyBalance()} as a
+     * dollar buffer — sells deposit here, buys withdraw. No temporary Order objects are
+     * created. On completion/cancellation, the remaining buffer is deposited to the
+     * player's money bank by ServerMarketManager.</p>
+     *
+     * <h2>Stop Conditions</h2>
+     * <ol>
+     *   <li>Cross rate at current price pair exceeds crossMarketLimitPrice</li>
+     *   <li>Want-item target volume reached (order filled)</li>
+     *   <li>Have-item locked volume exhausted (sell budget spent)</li>
+     *   <li>No depth on either side</li>
+     * </ol>
+     *
+     * @param order             the inter-market limit order to execute
+     * @param haveMarket        market for the "sell" item (sell into buy-side depth, price walks DOWN)
+     * @param wantMarket        market for the "buy" item (buy from sell-side depth, price walks UP)
+     * @param playerBankAccount player's bank account (null for bot orders)
+     * @param tradingCurrencyID the money item ID used as intermediary
+     * @return FILLED if target volume reached, PARTIAL_FILL if some progress made,
+     *         SKIPPED if cross rate is unfavorable at current prices
+     */
+    public static InterMarketExecutor.ExecutionResult executeCrossMarketLimitOrder(
+            InterMarketOrder order,
+            ServerMarket haveMarket,
+            ServerMarket wantMarket,
+            @Nullable IServerBankAccount playerBankAccount,
+            ItemID tradingCurrencyID)
+    {
+        // Stub — will be implemented in T-052
+        return InterMarketExecutor.ExecutionResult.SKIPPED;
     }
 
     /** Tiny value-holder to return two banks together. */
