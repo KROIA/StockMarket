@@ -294,16 +294,12 @@ public class InterMarketExecutor
             return ExecutionResult.SKIPPED;
         }
 
-        // Compute a conservative sell volume: only sell enough glass to buy the
-        // remaining target sand at current prices, capped to at most 20% of the
-        // remaining sell volume per tick. This prevents catastrophic loss if the
-        // buy side has insufficient depth — at most a small fraction is risked per tick.
+        // Sell only enough glass to buy the remaining target sand at current prices.
+        // This prevents over-selling when the buy target is partially filled.
         long buyRemaining = Math.abs(order.getBuyOrder().getRemainingVolume());
         long sellNeeded = buyRemaining * wantPrice / havePrice;
         if (sellNeeded <= 0) sellNeeded = 1;
-        // Cap per-tick sell to prevent selling all glass when buy can't absorb
-        long maxSellPerTick = Math.max(SF, maxSellVolume / 5);
-        long sellVolume = Math.min(maxSellVolume, Math.min(sellNeeded, maxSellPerTick));
+        long sellVolume = Math.min(maxSellVolume, sellNeeded);
 
         long estimatedBuyVolume = sellVolume * havePrice / wantPrice;
         if (estimatedBuyVolume <= 0) estimatedBuyVolume = 1;
