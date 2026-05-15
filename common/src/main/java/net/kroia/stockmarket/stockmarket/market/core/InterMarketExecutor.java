@@ -286,10 +286,14 @@ public class InterMarketExecutor
             return ExecutionResult.SKIPPED;
         }
 
-        // Rate check: currentRate = wantPrice * SF / havePrice.
-        // If this exceeds the limit, the rate is unfavorable — skip.
+        // Rate check with slippage margin: currentRate = wantPrice * SF / havePrice.
+        // The currentRate uses last-matched prices (midpoint), but actual execution
+        // walks depth at progressively worse prices. A 5% margin ensures the order
+        // only fills when there's enough room for depth-walking slippage, preventing
+        // the effective rate from exceeding the limit after execution.
         long currentRate = wantPrice * SF / havePrice;
-        if (currentRate > crossRateLimit)
+        long rateThreshold = crossRateLimit * 95 / 100;
+        if (currentRate > rateThreshold)
         {
             return ExecutionResult.SKIPPED;
         }
