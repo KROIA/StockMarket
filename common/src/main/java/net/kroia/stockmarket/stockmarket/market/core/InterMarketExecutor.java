@@ -269,7 +269,13 @@ public class InterMarketExecutor
         long maxSellVolume = Math.abs(order.getSellOrder().getRemainingVolume());
         if (maxSellVolume <= 0)
         {
-            return ExecutionResult.CANCELED;
+            // Sell allotment exhausted. If we received any want-items, the order
+            // is complete (slippage consumed slightly more sell-items per buy-item
+            // than the rate limit assumed). If we received nothing, cancel.
+            if (Math.abs(order.getBuyOrder().getFilledVolume()) > 0)
+                return ExecutionResult.FILLED;
+            else
+                return ExecutionResult.CANCELED;
         }
 
         long havePrice = haveMarket.getCurrentMarketPrice();
