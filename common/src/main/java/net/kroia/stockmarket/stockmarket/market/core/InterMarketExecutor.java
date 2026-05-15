@@ -289,14 +289,15 @@ public class InterMarketExecutor
         }
 
         // Compute a conservative sell volume: only sell enough glass to buy the
-        // remaining target sand at current prices. This prevents overshoot —
-        // selling all glass at unfavorable depth prices would give too few sand.
+        // remaining target sand at current prices, capped to at most 20% of the
+        // remaining sell volume per tick. This prevents catastrophic loss if the
+        // buy side has insufficient depth — at most a small fraction is risked per tick.
         long buyRemaining = Math.abs(order.getBuyOrder().getRemainingVolume());
-        // Glass needed = sand * (sandPrice / glassPrice) in raw integer math
         long sellNeeded = buyRemaining * wantPrice / havePrice;
-        // Add 1 to avoid rounding down to 0 for small volumes
         if (sellNeeded <= 0) sellNeeded = 1;
-        long sellVolume = Math.min(maxSellVolume, sellNeeded);
+        // Cap per-tick sell to prevent selling all glass when buy can't absorb
+        long maxSellPerTick = Math.max(SF, maxSellVolume / 5);
+        long sellVolume = Math.min(maxSellVolume, Math.min(sellNeeded, maxSellPerTick));
 
         long estimatedBuyVolume = sellVolume * havePrice / wantPrice;
         if (estimatedBuyVolume <= 0) estimatedBuyVolume = 1;
@@ -304,16 +305,16 @@ public class InterMarketExecutor
         long estimatedDollarBudget = sellVolume * havePrice / SF;
         if (estimatedDollarBudget <= 0) estimatedDollarBudget = 1;
 
-        // Price constraints: sell glass only at prices that keep the cross-rate within limit.
-        // minSellPrice ensures each glass sold yields enough dollars for the rate to hold.
-        // maxBuyPrice caps the sand price to prevent overpaying.
+        // Sell price floor: prevent selling glass below the price that would break
+        // the cross-rate limit. No buy-side cap — the sell floor + sell volume cap
+        // are sufficient to constrain the rate, and a buy cap at the exact market
+        // price leaves zero room for depth walking.
         long minSellPrice = wantPrice * SF / crossRateLimit;
-        long maxBuyPrice = havePrice * crossRateLimit / SF;
 
         ExecutionResult result = executeBothLegs(
                 order, haveMarket, wantMarket, playerBankAccount, tradingCurrencyID,
                 sellVolume, estimatedDollarBudget, estimatedBuyVolume, wantPrice, SF,
-                minSellPrice, maxBuyPrice);
+                minSellPrice, 0);
 
         if (result == ExecutionResult.FILLED || result == ExecutionResult.PARTIAL_FILL)
         {
