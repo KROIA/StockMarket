@@ -103,9 +103,10 @@ public class MatchingEngine
         {
             for(Order order : sellMarketOrders_inputBuffer)
             {
-                // INTER_MARKET orders use startPrice as a price floor (set by InterMarketExecutor
-                // to enforce cross-rate limits). Regular market orders have no floor.
-                long minPrice = (order.getType() == Order.Type.INTER_MARKET) ? order.getStartPrice() : 0;
+                // INTER_MARKET orders with startPrice > 0 use it as a price floor
+                // (set by InterMarketExecutor to enforce cross-rate limits). startPrice = 0 means no floor.
+                long minPrice = (order.getType() == Order.Type.INTER_MARKET && order.getStartPrice() > 0)
+                        ? order.getStartPrice() : 0;
                 processMarketOrder(order, minPrice, Long.MAX_VALUE);
             }
             sellMarketOrders_inputBuffer.clear();
@@ -114,9 +115,10 @@ public class MatchingEngine
         {
             for(Order order : buyMarketOrders_inputBuffer)
             {
-                // INTER_MARKET orders use startPrice as a price cap (set by InterMarketExecutor
-                // to enforce cross-rate limits). Regular market orders have no cap.
-                long maxPrice = (order.getType() == Order.Type.INTER_MARKET) ? order.getStartPrice() : Long.MAX_VALUE;
+                // INTER_MARKET orders with startPrice > 0 use it as a price cap
+                // (set by InterMarketExecutor to enforce cross-rate limits). startPrice = 0 means no cap.
+                long maxPrice = (order.getType() == Order.Type.INTER_MARKET && order.getStartPrice() > 0)
+                        ? order.getStartPrice() : Long.MAX_VALUE;
                 processMarketOrder(order, 0, maxPrice);
             }
             buyMarketOrders_inputBuffer.clear();

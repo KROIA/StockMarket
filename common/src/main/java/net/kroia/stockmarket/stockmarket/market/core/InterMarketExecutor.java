@@ -408,6 +408,7 @@ public class InterMarketExecutor
             return ExecutionResult.CANCELED;
         }
 
+        // buyPriceCap: 0 = no cap (market orders), >0 = price cap (limit orders)
         Order buyOrder;
         if (order.isBotOrder())
         {
@@ -415,7 +416,7 @@ public class InterMarketExecutor
                     order.getBuyItemID(),
                     Order.Type.INTER_MARKET,
                     buyVolume,                 // positive = buy
-                    buyPriceCap > 0 ? buyPriceCap : wantPrice,
+                    buyPriceCap,               // startPrice: 0 = no cap, >0 = max buy price
                     order.getTime());          // bot order (no player UUID)
         }
         else
@@ -424,7 +425,7 @@ public class InterMarketExecutor
                     order.getBuyItemID(),
                     Order.Type.INTER_MARKET,
                     buyVolume,                 // positive = buy
-                    buyPriceCap > 0 ? buyPriceCap : wantPrice,
+                    buyPriceCap,               // startPrice: 0 = no cap, >0 = max buy price
                     order.getTime(),
                     order.getOwnerUUID(),
                     order.getBankAccountNr());
