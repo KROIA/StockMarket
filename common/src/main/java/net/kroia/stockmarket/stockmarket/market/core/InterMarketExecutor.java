@@ -215,7 +215,8 @@ public class InterMarketExecutor
 
         return executeBothLegs(
                 order, haveMarket, wantMarket, playerBankAccount, tradingCurrencyID,
-                exactSellVolume, dollarsSpent, itemsReceived, wantPrice, SF);
+                exactSellVolume, dollarsSpent, itemsReceived, wantPrice, SF,
+                0, 0);
     }
 
 
@@ -303,9 +304,16 @@ public class InterMarketExecutor
         long estimatedDollarBudget = sellVolume * havePrice / SF;
         if (estimatedDollarBudget <= 0) estimatedDollarBudget = 1;
 
+        // Price constraints: sell glass only at prices that keep the cross-rate within limit.
+        // minSellPrice ensures each glass sold yields enough dollars for the rate to hold.
+        // maxBuyPrice caps the sand price to prevent overpaying.
+        long minSellPrice = wantPrice * SF / crossRateLimit;
+        long maxBuyPrice = havePrice * crossRateLimit / SF;
+
         ExecutionResult result = executeBothLegs(
                 order, haveMarket, wantMarket, playerBankAccount, tradingCurrencyID,
-                sellVolume, estimatedDollarBudget, estimatedBuyVolume, wantPrice, SF);
+                sellVolume, estimatedDollarBudget, estimatedBuyVolume, wantPrice, SF,
+                minSellPrice, maxBuyPrice);
 
         if (result == ExecutionResult.FILLED || result == ExecutionResult.PARTIAL_FILL)
         {
@@ -341,6 +349,10 @@ public class InterMarketExecutor
      * @param estimatedBuyVolume estimated items to receive from buy leg
      * @param wantPrice          current buy-leg market price (for buy order startPrice)
      * @param SF                 scale factor (BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR)
+     * @param sellPriceFloor     minimum sell price (0 = no floor). INTER_MARKET orders use
+     *                           startPrice as a price floor in the MatchingEngine.
+     * @param buyPriceCap        maximum buy price (0 = no cap). INTER_MARKET orders use
+     *                           startPrice as a price cap in the MatchingEngine.
      * @return ExecutionResult (FILLED or CANCELED)
      */
     private static ExecutionResult executeBothLegs(
@@ -353,16 +365,14 @@ public class InterMarketExecutor
             long dollarBudget,
             long estimatedBuyVolume,
             long wantPrice,
-            long SF)
+            long SF,
+            long sellPriceFloor,
+            long buyPriceCap)
     {
         // ── Create the sell Order ─────────────────────────────────────────────
-        // Sell order: negative volume, INTER_MARKET type, in the haveMarket.
-        // We use INTER_MARKET type so that ServerMarket skips saving duplicate history
-        // records and skips net-flow tracking for these temporary orders — the
-        // InterMarketExecutor saves the authoritative records with interMarketGroupID.
-        // ServerMarket.putOrder() routes INTER_MARKET orders to the market-order buffer
-        // (same as MARKET) so the MatchingEngine processes them immediately.
-        long havePrice = haveMarket.getCurrentMarketPrice();
+        // INTER_MARKET type: ServerMarket skips history/net-flow tracking.
+        // The MatchingEngine uses startPrice as the minimum accepted sell price
+        // for INTER_MARKET orders (0 = no floor for market-type orders).
         Order sellOrder;
         if (order.isBotOrder())
         {
@@ -370,7 +380,7 @@ public class InterMarketExecutor
                     order.getSellItemID(),
                     Order.Type.INTER_MARKET,
                     -sellVolume,               // negative = sell
-                    havePrice,                 // startPrice
+                    sellPriceFloor,            // startPrice = price floor for matching engine
                     order.getTime());          // bot order (no player UUID)
         }
         else
@@ -379,15 +389,14 @@ public class InterMarketExecutor
                     order.getSellItemID(),
                     Order.Type.INTER_MARKET,
                     -sellVolume,               // negative = sell
-                    havePrice,                 // startPrice
+                    sellPriceFloor,            // startPrice = price floor for matching engine
                     order.getTime(),
                     order.getOwnerUUID(),
                     order.getBankAccountNr());
         }
 
         // ── Create the buy Order ──────────────────────────────────────────────
-        // Buy order: positive volume, INTER_MARKET type, in the wantMarket.
-        // Same reasoning as sell: INTER_MARKET type for immediate depth-walking execution.
+        // INTER_MARKET type: startPrice is used as max accepted buy price (0 = no cap).
         long buyVolume = estimatedBuyVolume;
         if (buyVolume <= 0 && wantPrice > 0)
         {
@@ -406,7 +415,7 @@ public class InterMarketExecutor
                     order.getBuyItemID(),
                     Order.Type.INTER_MARKET,
                     buyVolume,                 // positive = buy
-                    wantPrice,                 // startPrice
+                    buyPriceCap > 0 ? buyPriceCap : wantPrice,
                     order.getTime());          // bot order (no player UUID)
         }
         else
@@ -415,7 +424,7 @@ public class InterMarketExecutor
                     order.getBuyItemID(),
                     Order.Type.INTER_MARKET,
                     buyVolume,                 // positive = buy
-                    wantPrice,                 // startPrice
+                    buyPriceCap > 0 ? buyPriceCap : wantPrice,
                     order.getTime(),
                     order.getOwnerUUID(),
                     order.getBankAccountNr());
