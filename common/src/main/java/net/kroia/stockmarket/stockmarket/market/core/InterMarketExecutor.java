@@ -311,11 +311,14 @@ public class InterMarketExecutor
                 return ExecutionResult.CANCELED;
         }
 
-        // Also cap to what's needed for the remaining buy target at current prices
+        // Sell in small chunks (2 real units per tick) to minimize slippage.
+        // After each chunk, check the cumulative rate — stop if it would exceed the limit.
         long buyRemaining = Math.abs(order.getBuyOrder().getRemainingVolume());
         long sellNeeded = buyRemaining * wantPrice / havePrice;
         if (sellNeeded <= 0) sellNeeded = 1;
-        long sellVolume = Math.min(maxSellVolume, Math.min(sellNeeded, sellBudget));
+        // Small per-tick sell: limits depth walking, keeps per-chunk slippage minimal
+        long maxSellPerTick = Math.max(1, SF * 2);
+        long sellVolume = Math.min(maxSellVolume, Math.min(sellNeeded, Math.min(sellBudget, maxSellPerTick)));
 
         long estimatedBuyVolume = sellVolume * havePrice / wantPrice;
         if (estimatedBuyVolume <= 0) estimatedBuyVolume = 1;
@@ -323,13 +326,6 @@ public class InterMarketExecutor
         long estimatedDollarBudget = sellVolume * havePrice / SF;
         if (estimatedDollarBudget <= 0) estimatedDollarBudget = 1;
 
-        // Execute at market prices (no price floor/cap). Price constraints are
-        // too tight at the boundary — the sell floor and buy cap collapse to
-        // the exact market price, leaving zero depth to trade against.
-        // Rate enforcement relies on:
-        //  1. The rate check above (only execute when currentRate ≤ crossRateLimit)
-        //  2. The per-tick sell cap (limits slippage exposure per tick)
-        //  3. Small per-tick volumes keep the effective rate close to currentRate
         ExecutionResult result = executeBothLegs(
                 order, haveMarket, wantMarket, playerBankAccount, tradingCurrencyID,
                 sellVolume, estimatedDollarBudget, estimatedBuyVolume, wantPrice, SF,
@@ -337,6 +333,19 @@ public class InterMarketExecutor
 
         if (result == ExecutionResult.FILLED || result == ExecutionResult.PARTIAL_FILL)
         {
+            // Check cumulative rate across all ticks — stop if limit is exceeded
+            long totalSold = Math.abs(order.getSellOrder().getFilledVolume());
+            long totalBought = Math.abs(order.getBuyOrder().getFilledVolume());
+            if (totalSold > 0 && totalBought > 0)
+            {
+                long cumulativeRate = totalSold * SF / totalBought;
+                if (cumulativeRate > crossRateLimit)
+                {
+                    // Cumulative rate exceeded limit — stop filling to prevent further overshoot
+                    return ExecutionResult.FILLED;
+                }
+            }
+
             if (order.isFilled())
                 return ExecutionResult.FILLED;
             else
