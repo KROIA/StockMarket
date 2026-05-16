@@ -65,6 +65,7 @@ The sequence each tick:
 | Place market orders | `IPluginMarket.placeOrder(amount)` |
 | Place limit orders | `IPluginMarket.placeOrder(amount, price)` |
 | Read current/default price | `IPluginMarket.getPrice()`, `getDefaultRealPrice()` |
+| Read player supply/demand | `IPluginMarket.getNetPlayerItemFlow()` |
 | Manipulate virtual orderbook volume | `IPluginOrderBook.setRawVolume()`, `addRawVolume()`, `resetVirtualVolume()` |
 | Register volume distribution calculators | `IPluginOrderBook.registerDefaultVolumeDistributionCalculator()` |
 | Stream type-safe runtime data to client GUI | `ServerPlugin.runtimeDataCodec()`, `provideRuntimeData()`, `getRuntimeDataStreamInterval()` |

@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.data;
 
+import dev.architectury.platform.Platform;
+import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.persistence.DataPersistence;
 import net.kroia.modutilities.persistence.ServerSaveableChunked;
 import net.kroia.stockmarket.StockMarketModBackend;
@@ -34,6 +36,11 @@ public class DataManager extends DataPersistence {
     private static final String MARKET_MANAGER_FOLDER = "MarketManager";
     private static final String PLUGIN_MANAGER_FOLDER = "PluginManager";
     private static final String SETTINGS_FILE = "settings.json";
+    private static final String PRESET_DIR = "StockMarket/market_presets";
+
+    public static Path getPresetPath() {
+        return Platform.getConfigFolder().resolve(PRESET_DIR);
+    }
 
 
     private final AtomicBoolean candleDataSQL_saveLock = new AtomicBoolean(false);
@@ -53,7 +60,7 @@ public class DataManager extends DataPersistence {
         success &= saveSettings();
         success &= saveMarketManager();
         success &= savePluginManager();
-
+        success &= savePresets();
 
         if(!success)
         {
@@ -69,8 +76,7 @@ public class DataManager extends DataPersistence {
         success &= loadSettings();
         success &= loadMarketManager();
         success &= loadPluginManager();
-
-
+        success &= loadPresets();
 
         if(!success)
         {
@@ -194,6 +200,26 @@ public class DataManager extends DataPersistence {
         return true;
     }
 
+
+    public boolean savePresets()
+    {
+        if(BACKEND_INSTANCES == null || BACKEND_INSTANCES.PRESET_MANAGER == null) {
+            error("savePresets(): Backend is not set up to call this method.");
+            return false;
+        }
+        BACKEND_INSTANCES.PRESET_MANAGER.saveAll(getPresetPath());
+        return true;
+    }
+    private boolean loadPresets()
+    {
+        if(BACKEND_INSTANCES == null || BACKEND_INSTANCES.PRESET_MANAGER == null) {
+            error("loadPresets(): Backend is not set up to call this method.");
+            return false;
+        }
+        net.minecraft.server.MinecraftServer server = UtilitiesPlatform.getServer();
+        BACKEND_INSTANCES.PRESET_MANAGER.loadOrGenerate(getPresetPath(), server != null ? server.registryAccess() : null);
+        return true;
+    }
 
     public CompletableFuture<Boolean> savePriceCandlesToSQL()
     {

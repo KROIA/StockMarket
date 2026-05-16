@@ -16,7 +16,6 @@ import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
 import net.kroia.stockmarket.stockmarket.market.ServerMarket;
 import net.kroia.stockmarket.stockmarket.market.core.InterMarketExecutor;
 import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
-import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.market.preset.MarketPreset;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -125,8 +124,8 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
 
             MarketPreset preset = BACKEND_INSTANCES.PRESET_MANAGER != null
                     ? BACKEND_INSTANCES.PRESET_MANAGER.getPreset(marketID) : null;
-            long defaultPrice = (preset != null) ? MarketManager.convertToRawAmountStatic(preset.defaultPrice()) : 1000;
-            float abundance = (preset != null) ? preset.naturalAbundance() : 10f;
+            long defaultPrice = (preset != null) ? MarketManager.convertToRawAmountStatic(preset.getDefaultPrice()) : 1000;
+            float abundance = (preset != null) ? preset.getNaturalAbundance() : 10f;
             m = new ServerMarket(marketID, null, defaultPrice, abundance);
             m.setMarketClosedCallback(this::cancelInterMarketOrdersForMarket);
             markets.put(marketID, m);

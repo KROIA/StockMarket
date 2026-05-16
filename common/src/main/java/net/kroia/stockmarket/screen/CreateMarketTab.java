@@ -1,22 +1,19 @@
 package net.kroia.stockmarket.screen;
 
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.ClientPlayerUtilities;
 import net.kroia.modutilities.gui.elements.*;
-import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.gui.elements.base.ListView;
 import net.kroia.modutilities.gui.layout.LayoutGrid;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.api.preset.IAsyncPresetManager;
 import net.kroia.stockmarket.stockmarket.market.preset.MarketPreset;
 import net.kroia.stockmarket.stockmarket.market.preset.MarketPresetCategory;
-import net.kroia.stockmarket.stockmarket.market.preset.MarketPresetManager;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
-import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
@@ -27,15 +24,15 @@ import java.util.*;
  * and a list of selected items with a "Create All" button on the right.
  *
  * <pre>
- * +--[ Category1 ]--[ Category2 ]--[ Category3 ]--...--+
- * |                               |  Selected Items    |
- * |  [ item ] [ item ] [ item ]   |  - Iron Ingot      |
- * |  [ item ] [ item ] [ item ]   |    price: 10.0     |
- * |  [ item ] [ item ] [ item ]   |  - Gold Ingot      |
- * |                               |    price: 50.0     |
- * |                               |                    |
- * |                               |  [ Create All ]    |
- * +-------------------------------+--------------------+
+ * +-Categories-+--Search: ________--+-Selected Items--+
+ * | CommonBlock|  [item] [item]     | - Iron Ingot    |
+ * | Wood       |  [item] [item]     |   price: 10.0   |
+ * | Ore        |  [item] [item]     | - Gold Ingot    |
+ * | Food       |  [item] [item]     |   price: 50.0   |
+ * | ...        |                    |                  |
+ * |            |                    | [Clear]          |
+ * |            |                    | [Create All]     |
+ * +------------+--------------------+------------------+
  * </pre>
  */
 public class CreateMarketTab extends StockMarketGuiElement {
@@ -53,7 +50,8 @@ public class CreateMarketTab extends StockMarketGuiElement {
         public static final Component CLEAR_SELECTION = Component.translatable(PREFIX + "clear_selection");
     }
 
-    // Category buttons along the top row
+    // Scrollable vertical list of category buttons (left panel)
+    private final ListView categoryListView;
     private final List<Button> categoryButtons = new ArrayList<>();
     // Search box for filtering items within a category
     private final TextBox searchField;
@@ -69,14 +67,16 @@ public class CreateMarketTab extends StockMarketGuiElement {
 
     // Currently selected category name (null = none)
     private @Nullable String selectedCategory;
-    // Set of item registry IDs that the user has toggled for batch creation
-    private final LinkedHashSet<String> selectedItemIds = new LinkedHashSet<>();
+    // Map of unique preset keys to preset references for batch creation
+    private final LinkedHashMap<String, MarketPreset> selectedPresets = new LinkedHashMap<>();
     // Cached set of existing market item names for "already exists" detection
     private final Set<String> existingMarketNames = new HashSet<>();
     // Dirty flags — rebuilt in render() to avoid modifying child lists during event handling
     private boolean selectedListDirty = false;
     private boolean itemGridDirty = false;
     private @Nullable Runnable onMarketsChanged;
+    // Cached categories fetched asynchronously from the server
+    private final List<MarketPresetCategory> cachedCategories = new ArrayList<>();
 
     public void setOnMarketsChanged(@Nullable Runnable callback) {
         this.onMarketsChanged = callback;
@@ -85,6 +85,13 @@ public class CreateMarketTab extends StockMarketGuiElement {
     public CreateMarketTab() {
         super();
         setEnableBackground(false);
+
+        // Category list (scrollable vertical list on the left)
+        categoryListView = new VerticalListView();
+        LayoutVertical catLayout = new LayoutVertical();
+        catLayout.stretchX = true;
+        catLayout.stretchY = false;
+        categoryListView.setLayout(catLayout);
 
         // Search bar
         searchLabel = new Label(Texts.SEARCH.getString());
@@ -115,6 +122,7 @@ public class CreateMarketTab extends StockMarketGuiElement {
         clearButton = new Button(Texts.CLEAR_SELECTION.getString(), this::onClearSelectionClicked);
 
         // Add children
+        addChild(categoryListView);
         addChild(searchLabel);
         addChild(searchField);
         addChild(itemGridView);
@@ -123,30 +131,45 @@ public class CreateMarketTab extends StockMarketGuiElement {
         addChild(createButton);
         addChild(clearButton);
 
-        // Build category buttons from preset manager (loaded client-side)
-        buildCategoryButtons();
+        // Fetch categories from server asynchronously
+        loadCategoriesFromServer();
 
         // Cache existing markets
         refreshExistingMarkets();
     }
 
     /**
-     * Builds the category buttons from the preset manager categories.
+     * Fetches categories from the server asynchronously and builds the UI when data arrives.
+     */
+    private void loadCategoriesFromServer() {
+        IAsyncPresetManager pm = getPresetManager();
+        if (pm == null) return;
+        pm.getCategoriesAsync().thenAccept(categories -> {
+            Minecraft.getInstance().execute(() -> {
+                cachedCategories.clear();
+                cachedCategories.addAll(categories);
+                buildCategoryButtons();
+            });
+        });
+    }
+
+    /**
+     * Builds the category buttons from the cached categories.
      */
     private void buildCategoryButtons() {
-        MarketPresetManager presetManager = getPresetManager();
-        if (presetManager == null) return;
+        categoryListView.removeChilds();
+        categoryButtons.clear();
 
-        List<MarketPresetCategory> categories = presetManager.getCategories();
-        for (MarketPresetCategory category : categories) {
+        for (MarketPresetCategory category : cachedCategories) {
             Button btn = new Button(category.getCategory(), () -> onCategorySelected(category.getCategory()));
+            btn.setHeight(defaultElementHeight);
             categoryButtons.add(btn);
-            addChild(btn);
+            categoryListView.addChild(btn);
         }
 
         // Auto-select first category if available
-        if (!categories.isEmpty()) {
-            selectedCategory = categories.get(0).getCategory();
+        if (!cachedCategories.isEmpty()) {
+            selectedCategory = cachedCategories.get(0).getCategory();
             rebuildItemGrid();
         }
     }
@@ -181,10 +204,7 @@ public class CreateMarketTab extends StockMarketGuiElement {
 
         if (selectedCategory == null) return;
 
-        MarketPresetManager presetManager = getPresetManager();
-        if (presetManager == null) return;
-
-        MarketPresetCategory category = presetManager.getCategory(selectedCategory);
+        MarketPresetCategory category = findCategory(selectedCategory);
         if (category == null) return;
 
         String searchText = searchField.getText().toLowerCase().trim();
@@ -193,19 +213,20 @@ public class CreateMarketTab extends StockMarketGuiElement {
         refreshExistingMarkets();
 
         for (MarketPreset preset : category.getPresets()) {
-            ItemStack stack = itemIdToStack(preset.itemId());
-            if (stack == null || stack.isEmpty()) continue;
+            ItemStack stack = preset.toItemStack();
+            if (stack.isEmpty()) continue;
 
             // Apply search filter
             String displayName = stack.getHoverName().getString().toLowerCase();
-            if (!searchText.isEmpty() && !displayName.contains(searchText) && !preset.itemId().toLowerCase().contains(searchText)) {
+            if (!searchText.isEmpty() && !displayName.contains(searchText) && !preset.getItemId().toLowerCase().contains(searchText)) {
                 continue;
             }
 
-            boolean alreadyExists = existingMarketNames.contains(preset.itemId());
-            boolean isSelected = selectedItemIds.contains(preset.itemId());
+            String key = preset.getUniqueKey();
+            boolean alreadyExists = existingMarketNames.contains(preset.getItemId());
+            boolean isSelected = selectedPresets.containsKey(key);
 
-            SelectableItemView itemView = new SelectableItemView(stack, preset.itemId(), isSelected, alreadyExists, preset);
+            SelectableItemView itemView = new SelectableItemView(stack, key, isSelected, alreadyExists, preset);
             itemGridView.addChild(itemView);
         }
     }
@@ -216,18 +237,13 @@ public class CreateMarketTab extends StockMarketGuiElement {
     private void rebuildSelectedList() {
         selectedItemsView.removeChilds();
 
-        MarketPresetManager presetManager = getPresetManager();
-        if (presetManager == null) return;
+        for (Map.Entry<String, MarketPreset> entry : selectedPresets.entrySet()) {
+            MarketPreset preset = entry.getValue();
+            ItemStack stack = preset.toItemStack();
+            if (stack.isEmpty()) continue;
 
-        for (String itemId : selectedItemIds) {
-            MarketPreset preset = presetManager.getPreset(itemId);
-            if (preset == null) continue;
-
-            ItemStack stack = itemIdToStack(itemId);
-            if (stack == null || stack.isEmpty()) continue;
-
-            SelectedItemEntry entry = new SelectedItemEntry(stack, preset, itemId);
-            selectedItemsView.addChild(entry);
+            SelectedItemEntry selectedEntry = new SelectedItemEntry(stack, preset, entry.getKey());
+            selectedItemsView.addChild(selectedEntry);
         }
     }
 
@@ -235,28 +251,30 @@ public class CreateMarketTab extends StockMarketGuiElement {
      * Called when "Create All" is clicked. Creates markets for all selected items.
      */
     private void onCreateAllClicked() {
-        if (selectedItemIds.isEmpty()) return;
+        if (selectedPresets.isEmpty()) return;
 
-        // Copy the set since we'll modify it during iteration
-        List<String> toCreate = new ArrayList<>(selectedItemIds);
+        // Copy since we'll modify during iteration
+        List<Map.Entry<String, MarketPreset>> toCreate = new ArrayList<>(selectedPresets.entrySet());
 
-        for (String itemId : toCreate) {
-            ItemStack stack = itemIdToStack(itemId);
-            if (stack == null || stack.isEmpty()) continue;
+        for (Map.Entry<String, MarketPreset> entry : toCreate) {
+            String key = entry.getKey();
+            MarketPreset preset = entry.getValue();
+            ItemStack stack = preset.toItemStack();
+            if (stack.isEmpty()) continue;
 
             ItemID.getOrRegisterFromItemStackClientSide(stack).thenAccept(registeredID -> {
                 getMarketManager().requestCreateMarket(registeredID).thenAccept(success -> {
                     if (success) {
-                        info("Created market for " + itemId);
-                        net.minecraft.client.Minecraft.getInstance().execute(() -> {
-                            selectedItemIds.remove(itemId);
+                        info("Created market for " + preset.getItemId());
+                        Minecraft.getInstance().execute(() -> {
+                            selectedPresets.remove(key);
                             refreshExistingMarkets();
                             itemGridDirty = true;
                             selectedListDirty = true;
                             if (onMarketsChanged != null) onMarketsChanged.run();
                         });
                     } else {
-                        warn("Failed to create market for " + itemId);
+                        warn("Failed to create market for " + preset.getItemId());
                     }
                 });
             });
@@ -267,7 +285,7 @@ public class CreateMarketTab extends StockMarketGuiElement {
      * Called when "Clear Selection" is clicked.
      */
     private void onClearSelectionClicked() {
-        selectedItemIds.clear();
+        selectedPresets.clear();
         itemGridDirty = true;
         selectedListDirty = true;
     }
@@ -275,29 +293,22 @@ public class CreateMarketTab extends StockMarketGuiElement {
     /**
      * Toggles selection state of an item in the grid.
      */
-    private void toggleItemSelection(String itemId, SelectableItemView view) {
-        if (selectedItemIds.contains(itemId)) {
-            selectedItemIds.remove(itemId);
+    private void toggleItemSelection(String key, MarketPreset preset, SelectableItemView view) {
+        if (selectedPresets.containsKey(key)) {
+            selectedPresets.remove(key);
             view.selected = false;
         } else {
-            selectedItemIds.add(itemId);
+            selectedPresets.put(key, preset);
             view.selected = true;
         }
         selectedListDirty = true;
     }
 
-    /**
-     * Converts a registry item ID string (e.g. "minecraft:iron_ingot") to an ItemStack.
-     */
-    private static @Nullable ItemStack itemIdToStack(String itemId) {
-        try {
-            ResourceLocation loc = ResourceLocation.parse(itemId);
-            Item item = BuiltInRegistries.ITEM.get(loc);
-            if (item == Items.AIR) return null;
-            return item.getDefaultInstance();
-        } catch (Exception e) {
-            return null;
+    private @Nullable MarketPresetCategory findCategory(String name) {
+        for (MarketPresetCategory cat : cachedCategories) {
+            if (cat.getCategory().equals(name)) return cat;
         }
+        return null;
     }
 
     @Override
@@ -328,41 +339,36 @@ public class CreateMarketTab extends StockMarketGuiElement {
         int height = getHeight() - 2 * padding;
         int eh = defaultElementHeight;
 
-        // Row 0: Category buttons (horizontally arranged)
-        int catX = padding;
-        int catY = padding;
-        int catBtnWidth = categoryButtons.isEmpty() ? 0 : Math.min(80, (width - spacing * (categoryButtons.size() - 1)) / categoryButtons.size());
-        for (Button btn : categoryButtons) {
-            btn.setBounds(catX, catY, catBtnWidth, eh);
-            catX += catBtnWidth + spacing;
-        }
+        // 3-column layout: [categories | search+items | selected]
+        int catWidth = width / 6;
+        int rightWidth = width / 4;
+        int midWidth = width - catWidth - rightWidth - 2 * spacing;
 
-        // Row 1: Search bar below categories
-        int searchY = catY + eh + spacing;
-        int searchLabelWidth = width / 6;
-        searchLabel.setBounds(padding, searchY, searchLabelWidth, 15);
-        searchField.setBounds(searchLabel.getRight() + spacing, searchY, width * 3 / 5 - searchLabelWidth - spacing, 15);
+        int midX = padding + catWidth + spacing;
+        int rightX = midX + midWidth + spacing;
 
-        // Content area: left = item grid, right = selected items
-        int contentTop = searchY + 15 + spacing;
-        int contentHeight = height - (contentTop - padding);
-        int leftWidth = width * 3 / 5;
-        int rightWidth = width - leftWidth - spacing;
+        // Left column: category list (full height)
+        categoryListView.setBounds(padding, padding, catWidth, height);
 
-        // Item grid (left side)
-        itemGridView.setBounds(padding, contentTop, leftWidth, contentHeight);
-        // Update grid columns based on available width
+        // Middle column: search bar on top, item grid below
+        int searchLabelWidth = 50;
+        searchLabel.setBounds(midX, padding, searchLabelWidth, 15);
+        searchField.setBounds(searchLabel.getRight() + spacing, padding, midWidth - searchLabelWidth - spacing, 15);
+
+        int gridTop = searchLabel.getBottom() + spacing;
+        int gridHeight = height - (gridTop - padding);
+        itemGridView.setBounds(midX, gridTop, midWidth, gridHeight);
         int containerWidth = itemGridView.getContainerWidth();
         itemGridLayout.columns = Math.max(1, containerWidth / ItemView.DEFAULT_WIDTH);
 
-        // Right panel
-        int rightX = padding + leftWidth + spacing;
-        selectedLabel.setBounds(rightX, contentTop, rightWidth, eh);
+        // Right column: selected items label, list, buttons
+        selectedLabel.setBounds(rightX, padding, rightWidth, eh);
 
         int btnHeight = eh;
         int bottomBtnsHeight = btnHeight * 2 + spacing;
-        int listHeight = contentHeight - eh - spacing - bottomBtnsHeight - spacing;
-        selectedItemsView.setBounds(rightX, selectedLabel.getBottom() + spacing, rightWidth, listHeight);
+        int listTop = selectedLabel.getBottom() + spacing;
+        int listHeight = height - eh - spacing - bottomBtnsHeight - spacing;
+        selectedItemsView.setBounds(rightX, listTop, rightWidth, listHeight);
 
         clearButton.setBounds(rightX, selectedItemsView.getBottom() + spacing, rightWidth, btnHeight);
         createButton.setBounds(rightX, clearButton.getBottom() + spacing, rightWidth, btnHeight);
@@ -375,22 +381,22 @@ public class CreateMarketTab extends StockMarketGuiElement {
      * Shows a green overlay when selected, and a dark overlay when a market already exists.
      */
     private class SelectableItemView extends ItemView {
-        private final String itemRegistryId;
+        private final String presetKey;
         private boolean selected;
         private final boolean alreadyExists;
         private final MarketPreset preset;
 
-        SelectableItemView(ItemStack stack, String itemRegistryId, boolean selected, boolean alreadyExists, MarketPreset preset) {
+        SelectableItemView(ItemStack stack, String presetKey, boolean selected, boolean alreadyExists, MarketPreset preset) {
             super(stack);
-            this.itemRegistryId = itemRegistryId;
+            this.presetKey = presetKey;
             this.selected = selected;
             this.alreadyExists = alreadyExists;
             this.preset = preset;
 
-            // Build tooltip
-            String tooltip = stack.getHoverName().getString();
-            tooltip += "\n" + Texts.PRICE_LABEL.getString() + ": " + String.format("%.1f", preset.defaultPrice());
-            tooltip += "\n" + Texts.ABUNDANCE_LABEL.getString() + ": " + String.format("%.1f", preset.naturalAbundance());
+            // Build tooltip (includes enchantment/potion names via ClientPlayerUtilities)
+            String tooltip = ClientPlayerUtilities.getItemDisplayText(stack);
+            tooltip += "\n" + Texts.PRICE_LABEL.getString() + ": " + String.format("%.1f", preset.getDefaultPrice());
+            tooltip += "\n" + Texts.ABUNDANCE_LABEL.getString() + ": " + String.format("%.1f", preset.getNaturalAbundance());
             if (alreadyExists) {
                 tooltip += "\n" + Texts.ALREADY_EXISTS.getString();
             }
@@ -419,7 +425,7 @@ public class CreateMarketTab extends StockMarketGuiElement {
         @Override
         protected boolean mouseClickedOverElement(int button) {
             if (button == 0 && !alreadyExists) {
-                toggleItemSelection(itemRegistryId, this);
+                toggleItemSelection(presetKey, preset, this);
                 return true;
             }
             return false;
@@ -435,18 +441,18 @@ public class CreateMarketTab extends StockMarketGuiElement {
         private final Label infoLabel;
         private final Button removeButton;
 
-        SelectedItemEntry(ItemStack stack, MarketPreset preset, String itemId) {
+        SelectedItemEntry(ItemStack stack, MarketPreset preset, String presetKey) {
             super();
             setEnableBackground(true);
 
             itemView = new ItemView(stack);
             nameLabel = new Label(stack.getHoverName().getString());
             infoLabel = new Label(
-                    Texts.PRICE_LABEL.getString() + ": " + String.format("%.1f", preset.defaultPrice())
-                    + "  " + Texts.ABUNDANCE_LABEL.getString() + ": " + String.format("%.1f", preset.naturalAbundance()));
+                    Texts.PRICE_LABEL.getString() + ": " + String.format("%.1f", preset.getDefaultPrice())
+                    + "  " + Texts.ABUNDANCE_LABEL.getString() + ": " + String.format("%.1f", preset.getNaturalAbundance()));
 
             removeButton = new Button("x", () -> {
-                selectedItemIds.remove(itemId);
+                selectedPresets.remove(presetKey);
                 itemGridDirty = true;
                 selectedListDirty = true;
             });

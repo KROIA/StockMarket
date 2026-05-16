@@ -26,6 +26,9 @@ import net.kroia.stockmarket.minecraft.entity.StockMarketEntities;
 import net.kroia.stockmarket.event.EventRegistration;
 import net.kroia.stockmarket.minecraft.item.StockMarketCreativeModeTab;
 import net.kroia.stockmarket.minecraft.item.StockMarketItems;
+import net.kroia.stockmarket.api.preset.IAsyncPresetManager;
+import net.kroia.stockmarket.stockmarket.market.preset.AsyncPresetManager;
+import net.kroia.stockmarket.stockmarket.market.preset.MarketPreset;
 import net.kroia.stockmarket.stockmarket.market.preset.MarketPresetManager;
 import net.kroia.stockmarket.pluginsystem.Plugins;
 import net.kroia.stockmarket.pluginsystem.pluginmanager.ClientPluginManager;
@@ -50,6 +53,7 @@ import net.kroia.stockmarket.minecraft.menu.StockMarketMenus;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.kroia.stockmarket.networking.packet.PlayerJoinSyncPacket;
 import net.kroia.stockmarket.util.*;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.server.MinecraftServer;
@@ -90,7 +94,7 @@ public class StockMarketModBackend implements StockMarketAPI {
 
         public IClientMarketManager MARKET_MANAGER;
         public IClientPluginManager PLUGIN_MANAGER;
-        public MarketPresetManager PRESET_MANAGER;
+        public IAsyncPresetManager PRESET_MANAGER;
         public StockMarketNetworking NETWORKING;
         public StockMarketLogger LOGGER;
         public ClientSettings SETTINGS;
@@ -198,8 +202,10 @@ public class StockMarketModBackend implements StockMarketAPI {
         SERVER_INSTANCES.SERVER_SETTINGS = new StockMarketModSettings();
         SERVER_INSTANCES.SERVER_SETTINGS.setLogger(SERVER_INSTANCES.LOGGER::error, SERVER_INSTANCES.LOGGER::error, SERVER_INSTANCES.LOGGER::debug);
 
+        MarketPreset.setRegistryAccess(UtilitiesPlatform.getServer().registryAccess());
         SERVER_INSTANCES.PRESET_MANAGER = new MarketPresetManager();
-        SERVER_INSTANCES.PRESET_MANAGER.loadOrGenerate();
+        SERVER_INSTANCES.PRESET_MANAGER.loadOrGenerate(DataManager.getPresetPath(), UtilitiesPlatform.getServer().registryAccess());
+        AsyncPresetManager.setServerBackend(SERVER_INSTANCES);
 
         MarketManager.setBackend(SERVER_INSTANCES);
         PluginManager.setBackend(SERVER_INSTANCES);
@@ -320,9 +326,10 @@ public class StockMarketModBackend implements StockMarketAPI {
         CLIENT_INSTANCES.BANK_SYSTEM_API = BankSystemMod.getAPI();
         CLIENT_INSTANCES.MARKET_MANAGER = MarketManager.createClient();
         CLIENT_INSTANCES.PLUGIN_MANAGER = new ClientPluginManager();
-        CLIENT_INSTANCES.PRESET_MANAGER = new MarketPresetManager();
-        CLIENT_INSTANCES.PRESET_MANAGER.loadOrGenerate();
+        AsyncPresetManager.setClientBackend(CLIENT_INSTANCES);
+        CLIENT_INSTANCES.PRESET_MANAGER = AsyncPresetManager.createClientManager();
         CLIENT_INSTANCES.SETTINGS = new ClientSettings();
+        MarketPreset.setRegistryAccess(Minecraft.getInstance().getConnection().registryAccess());
 
 
 

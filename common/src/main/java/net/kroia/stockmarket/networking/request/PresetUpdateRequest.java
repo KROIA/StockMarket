@@ -2,6 +2,7 @@ package net.kroia.stockmarket.networking.request;
 
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
+import net.kroia.stockmarket.data.DataManager;
 import net.kroia.stockmarket.stockmarket.market.preset.MarketPreset;
 import net.kroia.stockmarket.stockmarket.market.preset.MarketPresetCategory;
 import net.kroia.stockmarket.stockmarket.market.preset.MarketPresetManager;
@@ -13,7 +14,6 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -80,7 +80,7 @@ public class PresetUpdateRequest extends StockMarketGenericRequest<PresetUpdateR
             for (MarketPresetCategory cat : presetManager.getCategories()) {
                 List<MarketPreset> presets = cat.getPresets();
                 for (int i = 0; i < presets.size(); i++) {
-                    if (presets.get(i).itemId().equals(pd.itemId())) {
+                    if (presets.get(i).getItemId().equals(pd.itemId())) {
                         presets.set(i, new MarketPreset(pd.itemId(), pd.defaultPrice(), pd.naturalAbundance()));
                         break;
                     }
@@ -89,7 +89,7 @@ public class PresetUpdateRequest extends StockMarketGenericRequest<PresetUpdateR
         }
 
         // Persist updated presets to JSON files
-        presetManager.saveAll();
+        presetManager.saveAll(DataManager.getPresetPath());
         info("Updated " + input.presets().size() + " preset(s)");
         return CompletableFuture.completedFuture(true);
     }
