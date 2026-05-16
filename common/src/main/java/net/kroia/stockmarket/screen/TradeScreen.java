@@ -762,10 +762,13 @@ public class TradeScreen extends StockMarketGuiScreen {
 
                         if (orderMatchesPairDirection) {
                             // Order sells have-items → buys want-items (buy direction in pair view)
-                            // Keep the buy (want) volume constant, recalculate have volume from new rate
-                            double buyVolume = MarketManager.convertToRealAmountStatic(order.getTargetBuyVolume());
-                            double haveVolume = buyVolume * newRate;
-                            long rawRateLimit = (long) (newRate * getItemFractionScaleFactor());
+                            // Compute haveVolume in integer space to match the server's formula exactly:
+                            // server: buyVol = rawHaveVol * SF / rawRate → must equal rawBuyVol
+                            long rawBuyVolume = order.getTargetBuyVolume();
+                            long SF = getItemFractionScaleFactor();
+                            long rawRateLimit = (long) (newRate * SF);
+                            long rawHaveVolume = rawBuyVolume * rawRateLimit / SF;
+                            double haveVolume = MarketManager.convertToRealAmountStatic(rawHaveVolume);
                             PlaceInterMarketOrderRequest.InputData input = new PlaceInterMarketOrderRequest.InputData(
                                     pairHaveMarketID, pairWantMarketID, selectedBankAccountNr, haveVolume, rawRateLimit);
                             BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(input)
