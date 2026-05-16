@@ -30,6 +30,7 @@ public class MarketPresetCategory {
     }
 
     public String getCategory() { return category; }
+    public void setCategory(String name) { this.category = name; }
     public List<MarketPreset> getPresets() { return presets; }
 
     public @Nullable MarketPreset findPreset(String itemId) {

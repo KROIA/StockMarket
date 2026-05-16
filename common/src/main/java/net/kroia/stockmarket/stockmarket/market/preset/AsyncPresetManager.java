@@ -54,6 +54,18 @@ public class AsyncPresetManager implements IAsyncPresetManager {
     public enum FunctionType {
         GetCategories,
         UpdatePresets,
+        SaveCategory,
+        DeleteCategory,
+        RenameCategory,
+    }
+
+    // Parameter group for functions that take two string arguments
+    private record ParamGroup_String_String(String first, String second) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, ParamGroup_String_String> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.STRING_UTF8, p -> p.first,
+                ByteBufCodecs.STRING_UTF8, p -> p.second,
+                ParamGroup_String_String::new
+        );
     }
 
     // Codec pairs for each function (null = no params / no return)
@@ -64,6 +76,9 @@ public class AsyncPresetManager implements IAsyncPresetManager {
     public static final Map<FunctionType, AsyncFunctionDataCodecs> codecs = new HashMap<>() {{
         put(FunctionType.GetCategories,  codecPacket(null, ExtraCodecUtils.listStreamCodec(MarketPresetCategory.STREAM_CODEC)));
         put(FunctionType.UpdatePresets,  codecPacket(ExtraCodecUtils.listStreamCodec(MarketPreset.STREAM_CODEC), ByteBufCodecs.BOOL.cast()));
+        put(FunctionType.SaveCategory,   codecPacket(MarketPresetCategory.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
+        put(FunctionType.DeleteCategory,  codecPacket(ByteBufCodecs.STRING_UTF8.cast(), ByteBufCodecs.BOOL.cast()));
+        put(FunctionType.RenameCategory,  codecPacket(ParamGroup_String_String.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
     }};
 
     // InputData container
@@ -161,6 +176,33 @@ public class AsyncPresetManager implements IAsyncPresetManager {
                     info("Updated " + updates.size() + " preset(s)");
                     yield OutputData.of(input.function, true);
                 }
+                case FunctionType.SaveCategory -> {
+                    if (playerSender == null || !hasPermission(playerSender)) {
+                        yield OutputData.of(input.function, false);
+                    }
+                    MarketPresetCategory category = input.decodeParams();
+                    presetManager.addOrReplaceCategory(category, DataManager.getPresetPath());
+                    info("Saved category: " + category.getCategory());
+                    yield OutputData.of(input.function, true);
+                }
+                case FunctionType.DeleteCategory -> {
+                    if (playerSender == null || !hasPermission(playerSender)) {
+                        yield OutputData.of(input.function, false);
+                    }
+                    String catName = input.decodeParams();
+                    boolean deleted = presetManager.removeCategory(catName, DataManager.getPresetPath());
+                    if (deleted) info("Deleted category: " + catName);
+                    yield OutputData.of(input.function, deleted);
+                }
+                case FunctionType.RenameCategory -> {
+                    if (playerSender == null || !hasPermission(playerSender)) {
+                        yield OutputData.of(input.function, false);
+                    }
+                    ParamGroup_String_String names = input.decodeParams();
+                    boolean renamed = presetManager.renameCategory(names.first(), names.second(), DataManager.getPresetPath());
+                    if (renamed) info("Renamed category: " + names.first() + " -> " + names.second());
+                    yield OutputData.of(input.function, renamed);
+                }
             });
         }
 
@@ -175,7 +217,10 @@ public class AsyncPresetManager implements IAsyncPresetManager {
         protected boolean isAllowedToCallByClient(InputData input) {
             return switch (input.function) {
                 case FunctionType.GetCategories,
-                     FunctionType.UpdatePresets -> true;
+                     FunctionType.UpdatePresets,
+                     FunctionType.SaveCategory,
+                     FunctionType.DeleteCategory,
+                     FunctionType.RenameCategory -> true;
             };
         }
 
@@ -234,6 +279,39 @@ public class AsyncPresetManager implements IAsyncPresetManager {
             return CompletableFuture.completedFuture(false);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.UpdatePresets, updatedPresets);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept(outputData -> future.complete(outputData.decodeResult()));
+        return future;
+    }
+
+    @Override
+    public CompletableFuture<Boolean> saveCategoryAsync(MarketPresetCategory category) {
+        if (!MultiServerUtils.canInteractWithStockMarket())
+            return CompletableFuture.completedFuture(false);
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.SaveCategory, category);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept(outputData -> future.complete(outputData.decodeResult()));
+        return future;
+    }
+
+    @Override
+    public CompletableFuture<Boolean> deleteCategoryAsync(String categoryName) {
+        if (!MultiServerUtils.canInteractWithStockMarket())
+            return CompletableFuture.completedFuture(false);
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.DeleteCategory, categoryName);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept(outputData -> future.complete(outputData.decodeResult()));
+        return future;
+    }
+
+    @Override
+    public CompletableFuture<Boolean> renameCategoryAsync(String oldName, String newName) {
+        if (!MultiServerUtils.canInteractWithStockMarket())
+            return CompletableFuture.completedFuture(false);
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.RenameCategory, new ParamGroup_String_String(oldName, newName));
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept(outputData -> future.complete(outputData.decodeResult()));
         return future;

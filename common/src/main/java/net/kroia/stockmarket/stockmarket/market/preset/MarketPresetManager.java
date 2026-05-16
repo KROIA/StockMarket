@@ -63,7 +63,7 @@ public class MarketPresetManager {
         }
     }
 
-    private void saveCategory(Path presetDir, MarketPresetCategory category) throws IOException {
+    public void saveCategory(Path presetDir, MarketPresetCategory category) throws IOException {
         String filename = category.getCategory() + ".json";
         Path file = presetDir.resolve(filename);
         Files.writeString(file, GSON.toJson(category));
@@ -103,5 +103,58 @@ public class MarketPresetManager {
             if (cat.getCategory().equals(name)) return cat;
         }
         return null;
+    }
+
+    // Adds a new category or replaces existing with the same name, then saves
+    public void addOrReplaceCategory(MarketPresetCategory category, Path presetDir) {
+        for (int i = 0; i < categories.size(); i++) {
+            if (categories.get(i).getCategory().equals(category.getCategory())) {
+                categories.set(i, category);
+                try { saveCategory(presetDir, category); } catch (IOException e) {
+                    StockMarketMod.LOGGER.error("Failed to save category: {}", category.getCategory(), e);
+                }
+                return;
+            }
+        }
+        categories.add(category);
+        try { saveCategory(presetDir, category); } catch (IOException e) {
+            StockMarketMod.LOGGER.error("Failed to save category: {}", category.getCategory(), e);
+        }
+    }
+
+    // Removes a category by name and deletes its JSON file
+    public boolean removeCategory(String name, Path presetDir) {
+        boolean removed = categories.removeIf(c -> c.getCategory().equals(name));
+        if (removed) {
+            try {
+                Path file = presetDir.resolve(name + ".json");
+                Files.deleteIfExists(file);
+            } catch (IOException e) {
+                StockMarketMod.LOGGER.error("Failed to delete category file: {}", name, e);
+            }
+        }
+        return removed;
+    }
+
+    // Renames a category and its JSON file
+    public boolean renameCategory(String oldName, String newName, Path presetDir) {
+        for (MarketPresetCategory cat : categories) {
+            if (cat.getCategory().equals(oldName)) {
+                // Delete old file
+                try {
+                    Path oldFile = presetDir.resolve(oldName + ".json");
+                    Files.deleteIfExists(oldFile);
+                } catch (IOException e) {
+                    StockMarketMod.LOGGER.error("Failed to delete old category file: {}", oldName, e);
+                }
+                // Rename in memory and save new file
+                cat.setCategory(newName);
+                try { saveCategory(presetDir, cat); } catch (IOException e) {
+                    StockMarketMod.LOGGER.error("Failed to save renamed category: {}", newName, e);
+                }
+                return true;
+            }
+        }
+        return false;
     }
 }

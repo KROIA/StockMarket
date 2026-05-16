@@ -14,4 +14,13 @@ public interface IAsyncPresetManager {
 
     // Sends updated preset values to the server for persistence
     CompletableFuture<Boolean> updatePresetsAsync(List<MarketPreset> updatedPresets);
+
+    // Saves or creates a complete category (all presets) on the server
+    CompletableFuture<Boolean> saveCategoryAsync(MarketPresetCategory category);
+
+    // Deletes a category by name from the server
+    CompletableFuture<Boolean> deleteCategoryAsync(String categoryName);
+
+    // Renames a category on the server
+    CompletableFuture<Boolean> renameCategoryAsync(String oldName, String newName);
 }

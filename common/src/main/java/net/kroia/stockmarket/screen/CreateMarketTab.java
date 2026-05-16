@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.screen;
 
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.ClientPlayerUtilities;
 import net.kroia.modutilities.gui.elements.*;
 import net.kroia.modutilities.gui.elements.base.ListView;
 import net.kroia.modutilities.gui.layout.LayoutGrid;
@@ -392,8 +393,8 @@ public class CreateMarketTab extends StockMarketGuiElement {
             this.alreadyExists = alreadyExists;
             this.preset = preset;
 
-            // Build tooltip
-            String tooltip = stack.getHoverName().getString();
+            // Build tooltip (includes enchantment/potion names via ClientPlayerUtilities)
+            String tooltip = ClientPlayerUtilities.getItemDisplayText(stack);
             tooltip += "\n" + Texts.PRICE_LABEL.getString() + ": " + String.format("%.1f", preset.getDefaultPrice());
             tooltip += "\n" + Texts.ABUNDANCE_LABEL.getString() + ": " + String.format("%.1f", preset.getNaturalAbundance());
             if (alreadyExists) {
