@@ -2,7 +2,6 @@ package net.kroia.stockmarket.stockmarket.market.preset;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import dev.architectury.platform.Platform;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.StockMarketMod;
 import org.jetbrains.annotations.Nullable;
@@ -14,15 +13,13 @@ import java.util.List;
 
 public class MarketPresetManager {
 
-    private static final String PRESET_DIR = "StockMarket/market_presets";
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     private final List<MarketPresetCategory> categories = new ArrayList<>();
 
     // Call on server startup
-    public void loadOrGenerate() {
+    public void loadOrGenerate(Path presetDir) {
         categories.clear();
-        Path presetDir = Platform.getConfigFolder().resolve(PRESET_DIR);
 
         try {
             if (!Files.exists(presetDir)) {
@@ -72,8 +69,7 @@ public class MarketPresetManager {
     }
 
     // Save all categories back to JSON (for when values are edited)
-    public void saveAll() {
-        Path presetDir = Platform.getConfigFolder().resolve(PRESET_DIR);
+    public void saveAll(Path presetDir) {
         try {
             for (MarketPresetCategory cat : categories) {
                 saveCategory(presetDir, cat);

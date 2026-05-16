@@ -201,7 +201,7 @@ public class StockMarketModBackend implements StockMarketAPI {
         SERVER_INSTANCES.SERVER_SETTINGS.setLogger(SERVER_INSTANCES.LOGGER::error, SERVER_INSTANCES.LOGGER::error, SERVER_INSTANCES.LOGGER::debug);
 
         SERVER_INSTANCES.PRESET_MANAGER = new MarketPresetManager();
-        SERVER_INSTANCES.PRESET_MANAGER.loadOrGenerate();
+        SERVER_INSTANCES.PRESET_MANAGER.loadOrGenerate(DataManager.getPresetPath());
         AsyncPresetManager.setServerBackend(SERVER_INSTANCES);
 
         MarketManager.setBackend(SERVER_INSTANCES);

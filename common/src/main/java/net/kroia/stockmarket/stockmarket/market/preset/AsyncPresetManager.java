@@ -9,6 +9,7 @@ import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.modutilities.networking.client_server.arrs.AsynchronousRequestResponseSystem;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.preset.IAsyncPresetManager;
+import net.kroia.stockmarket.data.DataManager;
 import net.kroia.stockmarket.util.MultiServerUtils;
 import net.kroia.stockmarket.util.StockMarketLogger;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -156,7 +157,7 @@ public class AsyncPresetManager implements IAsyncPresetManager {
                             }
                         }
                     }
-                    presetManager.saveAll();
+                    presetManager.saveAll(DataManager.getPresetPath());
                     info("Updated " + updates.size() + " preset(s)");
                     yield OutputData.of(input.function, true);
                 }

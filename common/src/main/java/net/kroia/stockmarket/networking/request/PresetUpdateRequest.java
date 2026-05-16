@@ -2,6 +2,7 @@ package net.kroia.stockmarket.networking.request;
 
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
+import net.kroia.stockmarket.data.DataManager;
 import net.kroia.stockmarket.stockmarket.market.preset.MarketPreset;
 import net.kroia.stockmarket.stockmarket.market.preset.MarketPresetCategory;
 import net.kroia.stockmarket.stockmarket.market.preset.MarketPresetManager;
@@ -89,7 +90,7 @@ public class PresetUpdateRequest extends StockMarketGenericRequest<PresetUpdateR
         }
 
         // Persist updated presets to JSON files
-        presetManager.saveAll();
+        presetManager.saveAll(DataManager.getPresetPath());
         info("Updated " + input.presets().size() + " preset(s)");
         return CompletableFuture.completedFuture(true);
     }
