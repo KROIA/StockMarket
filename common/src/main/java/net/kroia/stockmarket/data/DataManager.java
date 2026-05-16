@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.data;
 
 import dev.architectury.platform.Platform;
+import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.persistence.DataPersistence;
 import net.kroia.modutilities.persistence.ServerSaveableChunked;
 import net.kroia.stockmarket.StockMarketModBackend;
@@ -215,7 +216,8 @@ public class DataManager extends DataPersistence {
             error("loadPresets(): Backend is not set up to call this method.");
             return false;
         }
-        BACKEND_INSTANCES.PRESET_MANAGER.loadOrGenerate(getPresetPath());
+        net.minecraft.server.MinecraftServer server = UtilitiesPlatform.getServer();
+        BACKEND_INSTANCES.PRESET_MANAGER.loadOrGenerate(getPresetPath(), server != null ? server.registryAccess() : null);
         return true;
     }
 

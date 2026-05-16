@@ -29,7 +29,7 @@ public class MarketPresetTestSuite extends TestSuite {
         addTest("category_find_existing", this::test_categoryFindExisting);
         addTest("category_find_missing", this::test_categoryFindMissing);
         addTest("default_presets_not_empty", this::test_defaultPresetsNotEmpty);
-        addTest("default_presets_five_categories", this::test_defaultPresetsFiveCategories);
+        addTest("default_presets_many_categories", this::test_defaultPresetsManyCategories);
         addTest("default_presets_no_duplicate_items_within_category", this::test_noDuplicatesWithinCategory);
         addTest("default_presets_all_prices_positive", this::test_allPricesPositive);
         addTest("default_presets_all_abundances_positive", this::test_allAbundancesPositive);
@@ -73,7 +73,7 @@ public class MarketPresetTestSuite extends TestSuite {
     }
 
     private TestResult test_defaultPresetsNotEmpty() {
-        List<MarketPresetCategory> categories = DefaultPresets.generate();
+        List<MarketPresetCategory> categories = DefaultPresets.generate(null);
         TestResult r = assertFalse("Default presets should not be empty", categories.isEmpty());
         if (!r.passed()) return r;
         for (MarketPresetCategory cat : categories) {
@@ -84,26 +84,30 @@ public class MarketPresetTestSuite extends TestSuite {
         return pass("All default categories have presets");
     }
 
-    private TestResult test_defaultPresetsFiveCategories() {
-        List<MarketPresetCategory> categories = DefaultPresets.generate();
-        return assertEquals("Should have 5 default categories", 5, categories.size());
+    private TestResult test_defaultPresetsManyCategories() {
+        List<MarketPresetCategory> categories = DefaultPresets.generate(null);
+        if (categories.size() < 27) {
+            return fail("Expected at least 27 default categories, got " + categories.size());
+        }
+        return pass("Default presets have " + categories.size() + " categories");
     }
 
     private TestResult test_noDuplicatesWithinCategory() {
-        List<MarketPresetCategory> categories = DefaultPresets.generate();
+        List<MarketPresetCategory> categories = DefaultPresets.generate(null);
         for (MarketPresetCategory cat : categories) {
             Set<String> seen = new HashSet<>();
             for (MarketPreset preset : cat.getPresets()) {
-                if (!seen.add(preset.getItemId())) {
-                    return fail("Duplicate item '" + preset.getItemId() + "' in category '" + cat.getCategory() + "'");
+                String key = preset.getUniqueKey();
+                if (!seen.add(key)) {
+                    return fail("Duplicate preset '" + key + "' in category '" + cat.getCategory() + "'");
                 }
             }
         }
-        return pass("No duplicate items within any category");
+        return pass("No duplicate presets within any category");
     }
 
     private TestResult test_allPricesPositive() {
-        List<MarketPresetCategory> categories = DefaultPresets.generate();
+        List<MarketPresetCategory> categories = DefaultPresets.generate(null);
         for (MarketPresetCategory cat : categories) {
             for (MarketPreset preset : cat.getPresets()) {
                 if (preset.getDefaultPrice() <= 0) {
@@ -115,7 +119,7 @@ public class MarketPresetTestSuite extends TestSuite {
     }
 
     private TestResult test_allAbundancesPositive() {
-        List<MarketPresetCategory> categories = DefaultPresets.generate();
+        List<MarketPresetCategory> categories = DefaultPresets.generate(null);
         for (MarketPresetCategory cat : categories) {
             for (MarketPreset preset : cat.getPresets()) {
                 if (preset.getNaturalAbundance() <= 0) {
@@ -127,7 +131,7 @@ public class MarketPresetTestSuite extends TestSuite {
     }
 
     private TestResult test_allItemIdsValidFormat() {
-        List<MarketPresetCategory> categories = DefaultPresets.generate();
+        List<MarketPresetCategory> categories = DefaultPresets.generate(null);
         for (MarketPresetCategory cat : categories) {
             for (MarketPreset preset : cat.getPresets()) {
                 String id = preset.getItemId();
@@ -174,7 +178,7 @@ public class MarketPresetTestSuite extends TestSuite {
     }
 
     private TestResult test_categoryNamesUnique() {
-        List<MarketPresetCategory> categories = DefaultPresets.generate();
+        List<MarketPresetCategory> categories = DefaultPresets.generate(null);
         Set<String> names = new HashSet<>();
         for (MarketPresetCategory cat : categories) {
             if (!names.add(cat.getCategory())) {
@@ -189,7 +193,7 @@ public class MarketPresetTestSuite extends TestSuite {
      * allowing in-place replacement of presets (used by PresetUpdateRequest).
      */
     private TestResult test_presetReplacementInCategory() {
-        List<MarketPresetCategory> categories = DefaultPresets.generate();
+        List<MarketPresetCategory> categories = DefaultPresets.generate(null);
         MarketPresetCategory cat = categories.get(0);
         List<MarketPreset> presets = cat.getPresets();
 

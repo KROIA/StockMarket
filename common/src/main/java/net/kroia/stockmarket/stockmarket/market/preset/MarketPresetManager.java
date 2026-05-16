@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.StockMarketMod;
+import net.minecraft.core.RegistryAccess;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
@@ -18,7 +19,7 @@ public class MarketPresetManager {
     private final List<MarketPresetCategory> categories = new ArrayList<>();
 
     // Call on server startup
-    public void loadOrGenerate(Path presetDir) {
+    public void loadOrGenerate(Path presetDir, @Nullable RegistryAccess registries) {
         categories.clear();
 
         try {
@@ -34,7 +35,7 @@ public class MarketPresetManager {
 
             if (!hasFiles) {
                 // First startup: generate defaults and write to JSON
-                List<MarketPresetCategory> defaults = DefaultPresets.generate();
+                List<MarketPresetCategory> defaults = DefaultPresets.generate(registries);
                 for (MarketPresetCategory cat : defaults) {
                     saveCategory(presetDir, cat);
                 }
