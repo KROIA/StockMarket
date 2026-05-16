@@ -23,15 +23,15 @@ import java.util.*;
  * and a list of selected items with a "Create All" button on the right.
  *
  * <pre>
- * +--[ Category1 ]--[ Category2 ]--[ Category3 ]--...--+
- * |                               |  Selected Items    |
- * |  [ item ] [ item ] [ item ]   |  - Iron Ingot      |
- * |  [ item ] [ item ] [ item ]   |    price: 10.0     |
- * |  [ item ] [ item ] [ item ]   |  - Gold Ingot      |
- * |                               |    price: 50.0     |
- * |                               |                    |
- * |                               |  [ Create All ]    |
- * +-------------------------------+--------------------+
+ * +-Categories-+--Search: ________--+-Selected Items--+
+ * | CommonBlock|  [item] [item]     | - Iron Ingot    |
+ * | Wood       |  [item] [item]     |   price: 10.0   |
+ * | Ore        |  [item] [item]     | - Gold Ingot    |
+ * | Food       |  [item] [item]     |   price: 50.0   |
+ * | ...        |                    |                  |
+ * |            |                    | [Clear]          |
+ * |            |                    | [Create All]     |
+ * +------------+--------------------+------------------+
  * </pre>
  */
 public class CreateMarketTab extends StockMarketGuiElement {
@@ -49,7 +49,8 @@ public class CreateMarketTab extends StockMarketGuiElement {
         public static final Component CLEAR_SELECTION = Component.translatable(PREFIX + "clear_selection");
     }
 
-    // Category buttons along the top row
+    // Scrollable vertical list of category buttons (left panel)
+    private final ListView categoryListView;
     private final List<Button> categoryButtons = new ArrayList<>();
     // Search box for filtering items within a category
     private final TextBox searchField;
@@ -84,6 +85,13 @@ public class CreateMarketTab extends StockMarketGuiElement {
         super();
         setEnableBackground(false);
 
+        // Category list (scrollable vertical list on the left)
+        categoryListView = new VerticalListView();
+        LayoutVertical catLayout = new LayoutVertical();
+        catLayout.stretchX = true;
+        catLayout.stretchY = false;
+        categoryListView.setLayout(catLayout);
+
         // Search bar
         searchLabel = new Label(Texts.SEARCH.getString());
         searchLabel.setAlignment(Label.Alignment.RIGHT);
@@ -113,6 +121,7 @@ public class CreateMarketTab extends StockMarketGuiElement {
         clearButton = new Button(Texts.CLEAR_SELECTION.getString(), this::onClearSelectionClicked);
 
         // Add children
+        addChild(categoryListView);
         addChild(searchLabel);
         addChild(searchField);
         addChild(itemGridView);
@@ -147,16 +156,14 @@ public class CreateMarketTab extends StockMarketGuiElement {
      * Builds the category buttons from the cached categories.
      */
     private void buildCategoryButtons() {
-        // Remove old category buttons
-        for (Button btn : categoryButtons) {
-            removeChild(btn);
-        }
+        categoryListView.removeChilds();
         categoryButtons.clear();
 
         for (MarketPresetCategory category : cachedCategories) {
             Button btn = new Button(category.getCategory(), () -> onCategorySelected(category.getCategory()));
+            btn.setHeight(defaultElementHeight);
             categoryButtons.add(btn);
-            addChild(btn);
+            categoryListView.addChild(btn);
         }
 
         // Auto-select first category if available
@@ -164,7 +171,6 @@ public class CreateMarketTab extends StockMarketGuiElement {
             selectedCategory = cachedCategories.get(0).getCategory();
             rebuildItemGrid();
         }
-        layoutChanged();
     }
 
     /**
@@ -332,41 +338,36 @@ public class CreateMarketTab extends StockMarketGuiElement {
         int height = getHeight() - 2 * padding;
         int eh = defaultElementHeight;
 
-        // Row 0: Category buttons (horizontally arranged)
-        int catX = padding;
-        int catY = padding;
-        int catBtnWidth = categoryButtons.isEmpty() ? 0 : Math.min(80, (width - spacing * (categoryButtons.size() - 1)) / categoryButtons.size());
-        for (Button btn : categoryButtons) {
-            btn.setBounds(catX, catY, catBtnWidth, eh);
-            catX += catBtnWidth + spacing;
-        }
+        // 3-column layout: [categories | search+items | selected]
+        int catWidth = width / 6;
+        int rightWidth = width / 4;
+        int midWidth = width - catWidth - rightWidth - 2 * spacing;
 
-        // Row 1: Search bar below categories
-        int searchY = catY + eh + spacing;
-        int searchLabelWidth = width / 6;
-        searchLabel.setBounds(padding, searchY, searchLabelWidth, 15);
-        searchField.setBounds(searchLabel.getRight() + spacing, searchY, width * 3 / 5 - searchLabelWidth - spacing, 15);
+        int midX = padding + catWidth + spacing;
+        int rightX = midX + midWidth + spacing;
 
-        // Content area: left = item grid, right = selected items
-        int contentTop = searchY + 15 + spacing;
-        int contentHeight = height - (contentTop - padding);
-        int leftWidth = width * 3 / 5;
-        int rightWidth = width - leftWidth - spacing;
+        // Left column: category list (full height)
+        categoryListView.setBounds(padding, padding, catWidth, height);
 
-        // Item grid (left side)
-        itemGridView.setBounds(padding, contentTop, leftWidth, contentHeight);
-        // Update grid columns based on available width
+        // Middle column: search bar on top, item grid below
+        int searchLabelWidth = 50;
+        searchLabel.setBounds(midX, padding, searchLabelWidth, 15);
+        searchField.setBounds(searchLabel.getRight() + spacing, padding, midWidth - searchLabelWidth - spacing, 15);
+
+        int gridTop = searchLabel.getBottom() + spacing;
+        int gridHeight = height - (gridTop - padding);
+        itemGridView.setBounds(midX, gridTop, midWidth, gridHeight);
         int containerWidth = itemGridView.getContainerWidth();
         itemGridLayout.columns = Math.max(1, containerWidth / ItemView.DEFAULT_WIDTH);
 
-        // Right panel
-        int rightX = padding + leftWidth + spacing;
-        selectedLabel.setBounds(rightX, contentTop, rightWidth, eh);
+        // Right column: selected items label, list, buttons
+        selectedLabel.setBounds(rightX, padding, rightWidth, eh);
 
         int btnHeight = eh;
         int bottomBtnsHeight = btnHeight * 2 + spacing;
-        int listHeight = contentHeight - eh - spacing - bottomBtnsHeight - spacing;
-        selectedItemsView.setBounds(rightX, selectedLabel.getBottom() + spacing, rightWidth, listHeight);
+        int listTop = selectedLabel.getBottom() + spacing;
+        int listHeight = height - eh - spacing - bottomBtnsHeight - spacing;
+        selectedItemsView.setBounds(rightX, listTop, rightWidth, listHeight);
 
         clearButton.setBounds(rightX, selectedItemsView.getBottom() + spacing, rightWidth, btnHeight);
         createButton.setBounds(rightX, clearButton.getBottom() + spacing, rightWidth, btnHeight);

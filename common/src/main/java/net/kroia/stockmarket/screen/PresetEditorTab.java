@@ -21,13 +21,14 @@ import java.util.*;
  * preset entries with editable text fields, and a save button at the bottom.
  *
  * <pre>
- * +--[ Ore ]--[ Food ]--[ CommonBlock ]--[ ... ]-----+
- * +--[ Search: _____________________ ]---------------+
- * +--Item Grid (scrollable)-------------------------+
- * | [Icon] [item name]    [Price: ___] [Abund: ___] |
- * | [Icon] [item name]    [Price: ___] [Abund: ___] |
- * | ...                                              |
- * +--[ Save Changes ]-------------------------------+
+ * +-Categories-+--Search: ___________________-+
+ * | CommonBlock| [Icon] [name] [Price] [Abund]|
+ * | Wood       | [Icon] [name] [Price] [Abund]|
+ * | Ore        | ...                          |
+ * | Food       |                              |
+ * | ...        |                              |
+ * |            | [Save Changes]               |
+ * +------------+------------------------------+
  * </pre>
  */
 public class PresetEditorTab extends StockMarketGuiElement {
@@ -43,7 +44,8 @@ public class PresetEditorTab extends StockMarketGuiElement {
         public static final Component SAVE_FAILED = Component.translatable(PREFIX + "save_failed");
     }
 
-    // Category buttons along the top row
+    // Scrollable vertical list of category buttons (left panel)
+    private final ListView categoryListView;
     private final List<Button> categoryButtons = new ArrayList<>();
     // Search bar
     private final Label searchLabel;
@@ -67,6 +69,13 @@ public class PresetEditorTab extends StockMarketGuiElement {
         super();
         setEnableBackground(false);
 
+        // Category list (scrollable vertical list on the left)
+        categoryListView = new VerticalListView();
+        LayoutVertical catLayout = new LayoutVertical();
+        catLayout.stretchX = true;
+        catLayout.stretchY = false;
+        categoryListView.setLayout(catLayout);
+
         // Search bar
         searchLabel = new Label(Texts.SEARCH.getString());
         searchLabel.setAlignment(Label.Alignment.RIGHT);
@@ -87,6 +96,7 @@ public class PresetEditorTab extends StockMarketGuiElement {
         saveButton.setPressedColor(0xFF1a6b30);
 
         // Add children
+        addChild(categoryListView);
         addChild(searchLabel);
         addChild(searchField);
         addChild(itemGridView);
@@ -115,16 +125,14 @@ public class PresetEditorTab extends StockMarketGuiElement {
      * Builds category buttons from the cached categories.
      */
     private void buildCategoryButtons() {
-        // Remove old category buttons
-        for (Button btn : categoryButtons) {
-            removeChild(btn);
-        }
+        categoryListView.removeChilds();
         categoryButtons.clear();
 
         for (MarketPresetCategory category : cachedCategories) {
             Button btn = new Button(category.getCategory(), () -> onCategorySelected(category.getCategory()));
+            btn.setHeight(defaultElementHeight);
             categoryButtons.add(btn);
-            addChild(btn);
+            categoryListView.addChild(btn);
         }
 
         // Auto-select first category if available
@@ -132,7 +140,6 @@ public class PresetEditorTab extends StockMarketGuiElement {
             selectedCategory = cachedCategories.get(0).getCategory();
             rebuildItemGrid();
         }
-        layoutChanged();
     }
 
     /**
@@ -252,30 +259,27 @@ public class PresetEditorTab extends StockMarketGuiElement {
         int height = getHeight() - 2 * padding;
         int eh = defaultElementHeight;
 
-        // Row 0: Category buttons (horizontally arranged)
-        int catX = padding;
-        int catY = padding;
-        int catBtnWidth = categoryButtons.isEmpty() ? 0
-                : Math.min(80, (width - spacing * (categoryButtons.size() - 1)) / categoryButtons.size());
-        for (Button btn : categoryButtons) {
-            btn.setBounds(catX, catY, catBtnWidth, eh);
-            catX += catBtnWidth + spacing;
-        }
+        // 2-column layout: [categories | search+items+save]
+        int catWidth = width / 6;
+        int rightWidth = width - catWidth - spacing;
+        int rightX = padding + catWidth + spacing;
 
-        // Row 1: Search bar below categories
-        int searchY = catY + eh + spacing;
-        int searchLabelWidth = width / 6;
-        searchLabel.setBounds(padding, searchY, searchLabelWidth, 15);
-        searchField.setBounds(searchLabel.getRight() + spacing, searchY, width - searchLabelWidth - spacing, 15);
+        // Left column: category list (full height)
+        categoryListView.setBounds(padding, padding, catWidth, height);
 
-        // Bottom: Save button
+        // Right column: search bar on top
+        int searchLabelWidth = 50;
+        searchLabel.setBounds(rightX, padding, searchLabelWidth, 15);
+        searchField.setBounds(searchLabel.getRight() + spacing, padding, rightWidth - searchLabelWidth - spacing, 15);
+
+        // Save button at bottom
         int btnHeight = eh;
-        saveButton.setBounds(padding, padding + height - btnHeight, width, btnHeight);
+        saveButton.setBounds(rightX, padding + height - btnHeight, rightWidth, btnHeight);
 
-        // Content area: scrollable item grid between search bar and save button
-        int contentTop = searchY + 15 + spacing;
-        int contentHeight = (padding + height - btnHeight - spacing) - contentTop;
-        itemGridView.setBounds(padding, contentTop, width, contentHeight);
+        // Item grid between search bar and save button
+        int gridTop = searchLabel.getBottom() + spacing;
+        int gridHeight = (padding + height - btnHeight - spacing) - gridTop;
+        itemGridView.setBounds(rightX, gridTop, rightWidth, gridHeight);
     }
 
     // ---- Inner class: single preset entry with editable price and abundance ----
