@@ -762,7 +762,9 @@ public class TradeScreen extends StockMarketGuiScreen {
 
                         if (orderMatchesPairDirection) {
                             // Order sells have-items → buys want-items (buy direction in pair view)
-                            double haveVolume = MarketManager.convertToRealAmountStatic(order.getTargetSellVolume());
+                            // Keep the buy (want) volume constant, recalculate have volume from new rate
+                            double buyVolume = MarketManager.convertToRealAmountStatic(order.getTargetBuyVolume());
+                            double haveVolume = buyVolume * newRate;
                             long rawRateLimit = (long) (newRate * getItemFractionScaleFactor());
                             PlaceInterMarketOrderRequest.InputData input = new PlaceInterMarketOrderRequest.InputData(
                                     pairHaveMarketID, pairWantMarketID, selectedBankAccountNr, haveVolume, rawRateLimit);
