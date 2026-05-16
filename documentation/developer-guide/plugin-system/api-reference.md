@@ -70,6 +70,36 @@ GenericPluginData getGenericPluginData()
 ```
 Returns the underlying metadata object containing name, description, enabled state, and instance ID.
 
+```java
+boolean getAutoSubscribeNewMarkets()
+```
+Returns whether this plugin automatically subscribes to newly created markets.
+
+```java
+void setAutoSubscribeNewMarkets(boolean autoSubscribe)
+```
+Sets whether this plugin automatically subscribes to newly created markets. Default: `true`.
+
+```java
+int getSubscriptionOrder()
+```
+Returns the subscription order used for sorting in the plugin list.
+
+```java
+void setSubscriptionOrder(int order)
+```
+Sets the subscription order used for sorting in the plugin list.
+
+```java
+void setNetworkStreamPacketTickInterval(int tickInterval)
+```
+Sets the tick-based interval for runtime data stream packets.
+
+```java
+int getNetworkStreamPacketTickInterval()
+```
+Returns the tick-based interval for runtime data stream packets.
+
 ### Lifecycle (abstract -- must implement)
 
 ```java
@@ -315,6 +345,13 @@ void placeOrder(double amount)
 ```
 Places a market order at the best available price. Positive `amount` = buy, negative `amount` = sell. Queued in the cache.
 
+### Player Metrics
+
+```java
+double getNetPlayerItemFlow()
+```
+Returns the cumulative net items sold/bought by players for this market. Positive = players net-sold into the market (supply exceeds demand), negative = players net-bought from the market (demand exceeds supply). Useful for supply/demand-driven pricing plugins.
+
 ---
 
 ## IPluginOrderBook
@@ -358,7 +395,7 @@ float getRealVirtualVolume(long backendPrice)
 Returns real virtual volume at a specific backend price.
 
 ```java
-long getRawVolume(long backendPrice)
+float getRawVolume(long backendPrice)
 ```
 Returns raw (unscaled) volume at a specific backend price.
 
