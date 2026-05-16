@@ -53,7 +53,7 @@ public class DataManager extends DataPersistence {
         success &= saveSettings();
         success &= saveMarketManager();
         success &= savePluginManager();
-
+        success &= savePresets();
 
         if(!success)
         {
@@ -69,8 +69,7 @@ public class DataManager extends DataPersistence {
         success &= loadSettings();
         success &= loadMarketManager();
         success &= loadPluginManager();
-
-
+        success &= loadPresets();
 
         if(!success)
         {
@@ -194,6 +193,25 @@ public class DataManager extends DataPersistence {
         return true;
     }
 
+
+    public boolean savePresets()
+    {
+        if(BACKEND_INSTANCES == null || BACKEND_INSTANCES.PRESET_MANAGER == null) {
+            error("savePresets(): Backend is not set up to call this method.");
+            return false;
+        }
+        BACKEND_INSTANCES.PRESET_MANAGER.saveAll();
+        return true;
+    }
+    private boolean loadPresets()
+    {
+        if(BACKEND_INSTANCES == null || BACKEND_INSTANCES.PRESET_MANAGER == null) {
+            error("loadPresets(): Backend is not set up to call this method.");
+            return false;
+        }
+        BACKEND_INSTANCES.PRESET_MANAGER.loadOrGenerate();
+        return true;
+    }
 
     public CompletableFuture<Boolean> savePriceCandlesToSQL()
     {

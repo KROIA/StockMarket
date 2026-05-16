@@ -8,7 +8,7 @@ import net.kroia.stockmarket.api.market.IClientMarket;
 import net.kroia.stockmarket.api.marketmanager.IClientMarketManager;
 import net.kroia.stockmarket.api.pluginmanager.IClientPluginManager;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
-import net.kroia.stockmarket.stockmarket.market.preset.MarketPresetManager;
+import net.kroia.stockmarket.api.preset.IAsyncPresetManager;
 import net.kroia.stockmarket.stockmarket.marketmanager.PlayerPreferences;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
@@ -78,7 +78,7 @@ public abstract class StockMarketGuiElement extends GuiElement {
     {
         return BACKEND_INSTANCES.PLUGIN_MANAGER;
     }
-    protected MarketPresetManager getPresetManager()
+    protected IAsyncPresetManager getPresetManager()
     {
         return BACKEND_INSTANCES.PRESET_MANAGER;
     }

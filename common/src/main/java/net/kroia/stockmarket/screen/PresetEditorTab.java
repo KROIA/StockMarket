@@ -5,11 +5,11 @@ import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.gui.elements.base.ListView;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.kroia.stockmarket.StockMarketMod;
-import net.kroia.stockmarket.networking.request.PresetUpdateRequest;
+import net.kroia.stockmarket.api.preset.IAsyncPresetManager;
 import net.kroia.stockmarket.stockmarket.market.preset.MarketPreset;
 import net.kroia.stockmarket.stockmarket.market.preset.MarketPresetCategory;
-import net.kroia.stockmarket.stockmarket.market.preset.MarketPresetManager;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
+import net.minecraft.client.Minecraft;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -66,6 +66,8 @@ public class PresetEditorTab extends StockMarketGuiElement {
     // Tracks edited values: itemId -> [price, abundance]
     // Only entries that differ from the original preset are stored here.
     private final Map<String, float[]> editedValues = new HashMap<>();
+    // Cached categories fetched asynchronously from the server
+    private final List<MarketPresetCategory> cachedCategories = new ArrayList<>();
 
     public PresetEditorTab() {
         super();
@@ -96,29 +98,47 @@ public class PresetEditorTab extends StockMarketGuiElement {
         addChild(itemGridView);
         addChild(saveButton);
 
-        // Build category buttons from the preset manager
-        buildCategoryButtons();
+        // Fetch categories from server asynchronously
+        loadCategoriesFromServer();
     }
 
     /**
-     * Builds category buttons from the preset manager categories.
+     * Fetches categories from the server asynchronously and builds the UI when data arrives.
+     */
+    private void loadCategoriesFromServer() {
+        IAsyncPresetManager pm = getPresetManager();
+        if (pm == null) return;
+        pm.getCategoriesAsync().thenAccept(categories -> {
+            Minecraft.getInstance().execute(() -> {
+                cachedCategories.clear();
+                cachedCategories.addAll(categories);
+                buildCategoryButtons();
+            });
+        });
+    }
+
+    /**
+     * Builds category buttons from the cached categories.
      */
     private void buildCategoryButtons() {
-        MarketPresetManager presetManager = getPresetManager();
-        if (presetManager == null) return;
+        // Remove old category buttons
+        for (Button btn : categoryButtons) {
+            removeChild(btn);
+        }
+        categoryButtons.clear();
 
-        List<MarketPresetCategory> categories = presetManager.getCategories();
-        for (MarketPresetCategory category : categories) {
+        for (MarketPresetCategory category : cachedCategories) {
             Button btn = new Button(category.getCategory(), () -> onCategorySelected(category.getCategory()));
             categoryButtons.add(btn);
             addChild(btn);
         }
 
         // Auto-select first category if available
-        if (!categories.isEmpty()) {
-            selectedCategory = categories.get(0).getCategory();
+        if (!cachedCategories.isEmpty()) {
+            selectedCategory = cachedCategories.get(0).getCategory();
             rebuildItemGrid();
         }
+        layoutChanged();
     }
 
     /**
@@ -138,10 +158,7 @@ public class PresetEditorTab extends StockMarketGuiElement {
 
         if (selectedCategory == null) return;
 
-        MarketPresetManager presetManager = getPresetManager();
-        if (presetManager == null) return;
-
-        MarketPresetCategory category = presetManager.getCategory(selectedCategory);
+        MarketPresetCategory category = findCategory(selectedCategory);
         if (category == null) return;
 
         String searchText = searchField.getText().toLowerCase().trim();
@@ -178,38 +195,38 @@ public class PresetEditorTab extends StockMarketGuiElement {
     private void onSaveClicked() {
         if (editedValues.isEmpty()) return;
 
-        List<PresetUpdateRequest.PresetData> allPresets = new ArrayList<>();
+        List<MarketPreset> allPresets = new ArrayList<>();
         for (Map.Entry<String, float[]> entry : editedValues.entrySet()) {
             float[] vals = entry.getValue();
-            allPresets.add(new PresetUpdateRequest.PresetData(entry.getKey(), vals[0], vals[1]));
+            allPresets.add(new MarketPreset(entry.getKey(), vals[0], vals[1]));
         }
 
         if (allPresets.isEmpty()) return;
 
-        BACKEND_INSTANCES.NETWORKING.PRESET_UPDATE_REQUEST.sendRequestToServer(
-                new PresetUpdateRequest.InputData(allPresets)
-        ).thenAccept(success -> {
-            if (success) {
-                // Update local preset manager with new values so the client reflects the save
-                MarketPresetManager mgr = getPresetManager();
-                if (mgr != null) {
-                    for (PresetUpdateRequest.PresetData pd : allPresets) {
-                        for (MarketPresetCategory cat : mgr.getCategories()) {
+        IAsyncPresetManager pm = getPresetManager();
+        if (pm == null) return;
+
+        pm.updatePresetsAsync(allPresets).thenAccept(success -> {
+            Minecraft.getInstance().execute(() -> {
+                if (success) {
+                    // Update cached categories with the new values
+                    for (MarketPreset updated : allPresets) {
+                        for (MarketPresetCategory cat : cachedCategories) {
                             List<MarketPreset> presets = cat.getPresets();
                             for (int i = 0; i < presets.size(); i++) {
-                                if (presets.get(i).itemId().equals(pd.itemId())) {
-                                    presets.set(i, new MarketPreset(pd.itemId(), pd.defaultPrice(), pd.naturalAbundance()));
+                                if (presets.get(i).itemId().equals(updated.itemId())) {
+                                    presets.set(i, updated);
                                     break;
                                 }
                             }
                         }
                     }
+                    editedValues.clear();
+                    info(Texts.SAVED_OK.getString());
+                } else {
+                    warn(Texts.SAVE_FAILED.getString());
                 }
-                editedValues.clear();
-                info(Texts.SAVED_OK.getString());
-            } else {
-                warn(Texts.SAVE_FAILED.getString());
-            }
+            });
         });
     }
 
@@ -225,6 +242,13 @@ public class PresetEditorTab extends StockMarketGuiElement {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    private @Nullable MarketPresetCategory findCategory(String name) {
+        for (MarketPresetCategory cat : cachedCategories) {
+            if (cat.getCategory().equals(name)) return cat;
+        }
+        return null;
     }
 
     @Override

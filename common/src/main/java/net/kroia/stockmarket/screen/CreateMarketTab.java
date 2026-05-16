@@ -7,10 +7,11 @@ import net.kroia.modutilities.gui.elements.base.ListView;
 import net.kroia.modutilities.gui.layout.LayoutGrid;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.api.preset.IAsyncPresetManager;
 import net.kroia.stockmarket.stockmarket.market.preset.MarketPreset;
 import net.kroia.stockmarket.stockmarket.market.preset.MarketPresetCategory;
-import net.kroia.stockmarket.stockmarket.market.preset.MarketPresetManager;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
+import net.minecraft.client.Minecraft;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -77,6 +78,8 @@ public class CreateMarketTab extends StockMarketGuiElement {
     private boolean selectedListDirty = false;
     private boolean itemGridDirty = false;
     private @Nullable Runnable onMarketsChanged;
+    // Cached categories fetched asynchronously from the server
+    private final List<MarketPresetCategory> cachedCategories = new ArrayList<>();
 
     public void setOnMarketsChanged(@Nullable Runnable callback) {
         this.onMarketsChanged = callback;
@@ -123,32 +126,50 @@ public class CreateMarketTab extends StockMarketGuiElement {
         addChild(createButton);
         addChild(clearButton);
 
-        // Build category buttons from preset manager (loaded client-side)
-        buildCategoryButtons();
+        // Fetch categories from server asynchronously
+        loadCategoriesFromServer();
 
         // Cache existing markets
         refreshExistingMarkets();
     }
 
     /**
-     * Builds the category buttons from the preset manager categories.
+     * Fetches categories from the server asynchronously and builds the UI when data arrives.
+     */
+    private void loadCategoriesFromServer() {
+        IAsyncPresetManager pm = getPresetManager();
+        if (pm == null) return;
+        pm.getCategoriesAsync().thenAccept(categories -> {
+            Minecraft.getInstance().execute(() -> {
+                cachedCategories.clear();
+                cachedCategories.addAll(categories);
+                buildCategoryButtons();
+            });
+        });
+    }
+
+    /**
+     * Builds the category buttons from the cached categories.
      */
     private void buildCategoryButtons() {
-        MarketPresetManager presetManager = getPresetManager();
-        if (presetManager == null) return;
+        // Remove old category buttons
+        for (Button btn : categoryButtons) {
+            removeChild(btn);
+        }
+        categoryButtons.clear();
 
-        List<MarketPresetCategory> categories = presetManager.getCategories();
-        for (MarketPresetCategory category : categories) {
+        for (MarketPresetCategory category : cachedCategories) {
             Button btn = new Button(category.getCategory(), () -> onCategorySelected(category.getCategory()));
             categoryButtons.add(btn);
             addChild(btn);
         }
 
         // Auto-select first category if available
-        if (!categories.isEmpty()) {
-            selectedCategory = categories.get(0).getCategory();
+        if (!cachedCategories.isEmpty()) {
+            selectedCategory = cachedCategories.get(0).getCategory();
             rebuildItemGrid();
         }
+        layoutChanged();
     }
 
     /**
@@ -181,10 +202,7 @@ public class CreateMarketTab extends StockMarketGuiElement {
 
         if (selectedCategory == null) return;
 
-        MarketPresetManager presetManager = getPresetManager();
-        if (presetManager == null) return;
-
-        MarketPresetCategory category = presetManager.getCategory(selectedCategory);
+        MarketPresetCategory category = findCategory(selectedCategory);
         if (category == null) return;
 
         String searchText = searchField.getText().toLowerCase().trim();
@@ -216,11 +234,8 @@ public class CreateMarketTab extends StockMarketGuiElement {
     private void rebuildSelectedList() {
         selectedItemsView.removeChilds();
 
-        MarketPresetManager presetManager = getPresetManager();
-        if (presetManager == null) return;
-
         for (String itemId : selectedItemIds) {
-            MarketPreset preset = presetManager.getPreset(itemId);
+            MarketPreset preset = findPreset(itemId);
             if (preset == null) continue;
 
             ItemStack stack = itemIdToStack(itemId);
@@ -298,6 +313,21 @@ public class CreateMarketTab extends StockMarketGuiElement {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    private @Nullable MarketPresetCategory findCategory(String name) {
+        for (MarketPresetCategory cat : cachedCategories) {
+            if (cat.getCategory().equals(name)) return cat;
+        }
+        return null;
+    }
+
+    private @Nullable MarketPreset findPreset(String itemId) {
+        for (MarketPresetCategory cat : cachedCategories) {
+            MarketPreset preset = cat.findPreset(itemId);
+            if (preset != null) return preset;
+        }
+        return null;
     }
 
     @Override

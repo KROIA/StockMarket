@@ -1,5 +1,9 @@
 package net.kroia.stockmarket.stockmarket.market.preset;
 
+import net.kroia.modutilities.networking.ExtraCodecUtils;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
 import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.List;
@@ -8,6 +12,12 @@ import java.util.List;
 public class MarketPresetCategory {
     private String category;
     private List<MarketPreset> presets;
+
+    public static final StreamCodec<RegistryFriendlyByteBuf, MarketPresetCategory> STREAM_CODEC = StreamCodec.composite(
+            ByteBufCodecs.STRING_UTF8, MarketPresetCategory::getCategory,
+            ExtraCodecUtils.listStreamCodec(MarketPreset.STREAM_CODEC), MarketPresetCategory::getPresets,
+            MarketPresetCategory::new
+    );
 
     public MarketPresetCategory() {
         this.category = "";
