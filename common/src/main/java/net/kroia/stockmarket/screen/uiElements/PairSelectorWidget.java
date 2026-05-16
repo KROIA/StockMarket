@@ -172,7 +172,7 @@ public class PairSelectorWidget extends StockMarketGuiElement {
         dropdownFrame.setEnabled(false);
 
         dropdownList = new VerticalListView();
-        dropdownGridLayout = new LayoutGrid(0, 0, false, false, 0, 1, Alignment.TOP);
+        dropdownGridLayout = new LayoutGrid(0, 0, false, false, 0, 0, Alignment.TOP);
         dropdownList.setLayout(dropdownGridLayout);
         dropdownFrame.addChild(dropdownList);
         addChild(dropdownFrame);
@@ -306,12 +306,12 @@ public class PairSelectorWidget extends StockMarketGuiElement {
         swapButton.setEnabled(false);
 
         dropdownFrame.setEnabled(true);
-        layoutChanged();
-
         // Pre-compute grid columns from known dropdown width (don't wait for container layout)
         int dropdownWidth = getWidth() - 2 * 2; // p = 2 on each side
         int cols = Math.max(1, dropdownWidth / ItemView.DEFAULT_WIDTH);
         dropdownGridLayout.columns = cols;
+
+        layoutChanged();
     }
 
     /**
@@ -543,11 +543,11 @@ public class PairSelectorWidget extends StockMarketGuiElement {
 
             dropdownFrame.setBounds(leftX, dropdownY, w - 2 * p, Math.max(0, dropdownH));
 
-            // Update grid columns based on container width
+            /*// Update grid columns based on container width
             int containerWidth = dropdownList.getContainerWidth();
             if (containerWidth > 0) {
                 dropdownGridLayout.columns = Math.max(1, containerWidth / ItemView.DEFAULT_WIDTH);
-            }
+            }*/
             dropdownList.setBounds(0, 0, dropdownFrame.getWidth(), dropdownFrame.getHeight());
         }
     }

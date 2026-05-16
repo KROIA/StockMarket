@@ -12,7 +12,7 @@ import net.kroia.stockmarket.util.StockMarketGuiElement;
 import org.jetbrains.annotations.Nullable;
 import net.kroia.modutilities.gui.InputConstants;
 
-import net.kroia.banksystem.util.ItemID;
+
 
 import java.awt.*;
 import java.text.SimpleDateFormat;
@@ -61,7 +61,7 @@ public class CandlestickChart extends StockMarketGuiElement {
     private record ViewportState(double viewX, double viewY, double viewWidth, double viewHeight,
                                  double zoomLevel, int candleTimeIdx) {}
 
-    private static final Map<ItemID, ViewportState> savedViewports = new HashMap<>();
+    private static final Map<String, ViewportState> savedViewports = new HashMap<>();
 
     private final List<Overlay> overlays = new ArrayList<>();
 
@@ -144,7 +144,7 @@ public class CandlestickChart extends StockMarketGuiElement {
         this.data = null;
 
         if (provider != null) {
-            if (!restoreViewportState(provider.getItemID())) {
+            if (!restoreViewportState(provider.getViewportKey())) {
                 selectCandleTimeDeltaByIndex(currentCandleTimeIdx);
                 firstDraw = true;
             }
@@ -737,11 +737,11 @@ public class CandlestickChart extends StockMarketGuiElement {
 
     /**
      * Saves the current viewport state (position, zoom, candle time index)
-     * into the static map, keyed by the current market's ItemID.
+     * into the static map, keyed by the current provider's viewport key.
      */
     private void saveViewportState() {
         if (this.priceDataProvider != null) {
-            savedViewports.put(this.priceDataProvider.getItemID(), new ViewportState(
+            savedViewports.put(this.priceDataProvider.getViewportKey(), new ViewportState(
                     chartviewRect.x, chartviewRect.y,
                     chartviewRect.width, chartviewRect.height,
                     zoomLevel, currentCandleTimeIdx));
@@ -749,11 +749,11 @@ public class CandlestickChart extends StockMarketGuiElement {
     }
 
     /**
-     * Restores a previously saved viewport state for the given item.
+     * Restores a previously saved viewport state for the given key.
      * @return true if a saved state existed and was restored
      */
-    private boolean restoreViewportState(ItemID itemID) {
-        ViewportState state = savedViewports.get(itemID);
+    private boolean restoreViewportState(String viewportKey) {
+        ViewportState state = savedViewports.get(viewportKey);
         if (state == null)
             return false;
 

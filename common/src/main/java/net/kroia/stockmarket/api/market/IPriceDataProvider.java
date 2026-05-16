@@ -40,4 +40,15 @@ public interface IPriceDataProvider {
      * @return the item ID associated with this provider
      */
     @NotNull ItemID getItemID();
+
+    /**
+     * Returns a unique string key for viewport state persistence in the chart.
+     * Different data sources that share the same ItemID (e.g. cross-rate pairs
+     * using the same "have" market) must return distinct keys.
+     *
+     * @return a unique viewport cache key for this provider
+     */
+    default @NotNull String getViewportKey() {
+        return getItemID().getName();
+    }
 }

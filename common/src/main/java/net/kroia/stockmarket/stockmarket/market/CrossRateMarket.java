@@ -101,11 +101,21 @@ public class CrossRateMarket implements IPriceDataProvider {
 
     /**
      * {@inheritDoc}
-     * Returns the "have" market's item ID (used for viewport persistence).
+     * Returns the "have" market's item ID.
      */
     @Override
     public @NotNull ItemID getItemID() {
         return haveMarket.getItemID();
+    }
+
+    /**
+     * {@inheritDoc}
+     * Returns a unique key combining both markets so viewport state
+     * is stored per pair, not per individual market.
+     */
+    @Override
+    public @NotNull String getViewportKey() {
+        return "pair:" + haveMarket.getItemID().getName() + "/" + wantMarket.getItemID().getName();
     }
 
     // --- Accessors for the underlying markets (used by TradeScreen for display/trading) ---
