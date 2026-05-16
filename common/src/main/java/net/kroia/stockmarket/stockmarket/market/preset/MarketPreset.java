@@ -4,10 +4,19 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.modutilities.setting.parser.ItemStackJsonParser;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.core.component.DataComponentPatch;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtOps;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -42,6 +51,14 @@ import org.jetbrains.annotations.Nullable;
 public class MarketPreset {
 
     private static final ItemStackJsonParser ITEM_STACK_PARSER = new ItemStackJsonParser();
+
+    // Registry context for encoding/decoding data-driven components (enchantments, etc.)
+    // Set by both server (onBankSystemSetupComplete) and client (onPlayerJoinClientSide)
+    private static @Nullable HolderLookup.Provider registryAccess;
+
+    public static void setRegistryAccess(@Nullable HolderLookup.Provider provider) {
+        registryAccess = provider;
+    }
 
     private String itemId;
     @Nullable
@@ -99,17 +116,7 @@ public class MarketPreset {
      */
     public ItemStack toItemStack() {
         if (cachedItemStack == null) {
-            JsonObject json = new JsonObject();
-            json.addProperty("id", itemId);
-            json.addProperty("count", 1);
-            if (hasComponents()) {
-                json.add("components", components);
-            }
-            try {
-                cachedItemStack = ITEM_STACK_PARSER.fromJson(json);
-            } catch (Exception e) {
-                cachedItemStack = ItemStack.EMPTY;
-            }
+            cachedItemStack = buildItemStack(itemId, components);
         }
         return cachedItemStack;
     }
@@ -118,8 +125,8 @@ public class MarketPreset {
 
     /**
      * Serializes an ItemStack to a human-readable JsonObject.
-     * The output contains "id", "count", and optionally "components" for items
-     * with non-default data components (enchantments, potion effects, etc.).
+     * Uses RegistryOps for data-driven components (enchantments) when registry context is available.
+     * The output contains "id", "count", and optionally "components".
      *
      * @param stack the ItemStack to serialize
      * @return a JsonObject representing the item, or an empty object for empty stacks
@@ -130,23 +137,77 @@ public class MarketPreset {
             empty.addProperty("id", "minecraft:air");
             return empty;
         }
-        JsonElement json = ITEM_STACK_PARSER.toJson(stack);
-        return json.isJsonObject() ? json.getAsJsonObject() : new JsonObject();
+
+        JsonObject json = new JsonObject();
+        ResourceLocation itemId = BuiltInRegistries.ITEM.getKey(stack.getItem());
+        json.addProperty("id", itemId.toString());
+        json.addProperty("count", stack.getCount());
+
+        DataComponentPatch patch = stack.getComponentsPatch();
+        if (!patch.isEmpty()) {
+            try {
+                // Use RegistryOps for data-driven component types (enchantments, etc.)
+                Tag componentTag;
+                if (registryAccess != null) {
+                    componentTag = DataComponentPatch.CODEC
+                            .encodeStart(registryAccess.createSerializationContext(NbtOps.INSTANCE), patch)
+                            .getOrThrow();
+                } else {
+                    componentTag = DataComponentPatch.CODEC
+                            .encodeStart(NbtOps.INSTANCE, patch)
+                            .getOrThrow();
+                }
+                if (componentTag instanceof CompoundTag compoundTag) {
+                    json.add("components", ITEM_STACK_PARSER.nbtToJson(compoundTag));
+                }
+            } catch (Exception ignored) {
+            }
+        }
+
+        return json;
     }
 
     /**
      * Deserializes an ItemStack from a JsonObject produced by {@link #serializeItemStack}.
-     * Expects at minimum an "id" field; "count" defaults to 1 if absent.
+     * Uses RegistryOps for data-driven components when registry context is available.
      *
      * @param json the JsonObject to deserialize
      * @return the reconstructed ItemStack, or {@link ItemStack#EMPTY} on failure
      */
     public static ItemStack deserializeItemStack(JsonObject json) {
-        if (json == null || json.isEmpty()) {
+        if (json == null || json.isEmpty()) return ItemStack.EMPTY;
+        try {
+            String id = json.has("id") ? json.get("id").getAsString() : "minecraft:air";
+            JsonObject comps = json.has("components") ? json.getAsJsonObject("components") : null;
+            return buildItemStack(id, comps);
+        } catch (Exception e) {
             return ItemStack.EMPTY;
         }
+    }
+
+    private static ItemStack buildItemStack(String itemIdStr, @Nullable JsonObject components) {
         try {
-            return ITEM_STACK_PARSER.fromJson(json);
+            ResourceLocation loc = ResourceLocation.tryParse(itemIdStr);
+            if (loc == null) return ItemStack.EMPTY;
+            Item item = BuiltInRegistries.ITEM.get(loc);
+            if (item == Items.AIR && !itemIdStr.equals("minecraft:air")) return ItemStack.EMPTY;
+
+            ItemStack stack = new ItemStack(item);
+            if (components != null && components.size() > 0) {
+                CompoundTag componentTag = ITEM_STACK_PARSER.jsonToNbt(components);
+                DataComponentPatch patch;
+                if (registryAccess != null) {
+                    patch = DataComponentPatch.CODEC
+                            .parse(registryAccess.createSerializationContext(NbtOps.INSTANCE), componentTag)
+                            .getOrThrow();
+                } else {
+                    patch = DataComponentPatch.CODEC
+                            .parse(NbtOps.INSTANCE, componentTag)
+                            .getOrThrow();
+                }
+                stack.applyComponents(patch);
+            }
+            return stack;
         } catch (Exception e) {
             return ItemStack.EMPTY;
         }
