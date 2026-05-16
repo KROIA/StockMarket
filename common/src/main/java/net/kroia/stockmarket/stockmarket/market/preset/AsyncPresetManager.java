@@ -150,7 +150,7 @@ public class AsyncPresetManager implements IAsyncPresetManager {
                         for (MarketPresetCategory cat : presetManager.getCategories()) {
                             List<MarketPreset> presets = cat.getPresets();
                             for (int i = 0; i < presets.size(); i++) {
-                                if (presets.get(i).itemId().equals(updated.itemId())) {
+                                if (presets.get(i).getItemId().equals(updated.getItemId())) {
                                     presets.set(i, updated);
                                     break;
                                 }

@@ -34,7 +34,14 @@ public class MarketPresetCategory {
 
     public @Nullable MarketPreset findPreset(String itemId) {
         for (MarketPreset preset : presets) {
-            if (preset.itemId().equals(itemId)) return preset;
+            if (preset.getItemId().equals(itemId)) return preset;
+        }
+        return null;
+    }
+
+    public @Nullable MarketPreset findPresetByKey(String uniqueKey) {
+        for (MarketPreset preset : presets) {
+            if (preset.getUniqueKey().equals(uniqueKey)) return preset;
         }
         return null;
     }

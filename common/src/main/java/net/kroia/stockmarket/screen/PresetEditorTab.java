@@ -1,7 +1,6 @@
 package net.kroia.stockmarket.screen;
 
 import net.kroia.modutilities.gui.elements.*;
-import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.gui.elements.base.ListView;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.kroia.stockmarket.StockMarketMod;
@@ -10,12 +9,8 @@ import net.kroia.stockmarket.stockmarket.market.preset.MarketPreset;
 import net.kroia.stockmarket.stockmarket.market.preset.MarketPresetCategory;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.minecraft.client.Minecraft;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
@@ -63,9 +58,8 @@ public class PresetEditorTab extends StockMarketGuiElement {
     // Dirty flag for deferred grid rebuild
     private boolean itemGridDirty = false;
 
-    // Tracks edited values: itemId -> [price, abundance]
-    // Only entries that differ from the original preset are stored here.
-    private final Map<String, float[]> editedValues = new HashMap<>();
+    // Tracks edited presets: uniqueKey -> edited MarketPreset with updated price/abundance
+    private final Map<String, MarketPreset> editedPresets = new HashMap<>();
     // Cached categories fetched asynchronously from the server
     private final List<MarketPresetCategory> cachedCategories = new ArrayList<>();
 
@@ -164,27 +158,28 @@ public class PresetEditorTab extends StockMarketGuiElement {
         String searchText = searchField.getText().toLowerCase().trim();
 
         for (MarketPreset preset : category.getPresets()) {
-            ItemStack stack = itemIdToStack(preset.itemId());
-            if (stack == null || stack.isEmpty()) continue;
+            ItemStack stack = preset.toItemStack();
+            if (stack.isEmpty()) continue;
 
             // Apply search filter on display name and registry ID
             String displayName = stack.getHoverName().getString().toLowerCase();
             if (!searchText.isEmpty()
                     && !displayName.contains(searchText)
-                    && !preset.itemId().toLowerCase().contains(searchText)) {
+                    && !preset.getItemId().toLowerCase().contains(searchText)) {
                 continue;
             }
 
             // Use edited values if available, otherwise use original preset values
-            float price = preset.defaultPrice();
-            float abundance = preset.naturalAbundance();
-            float[] edited = editedValues.get(preset.itemId());
+            String key = preset.getUniqueKey();
+            float price = preset.getDefaultPrice();
+            float abundance = preset.getNaturalAbundance();
+            MarketPreset edited = editedPresets.get(key);
             if (edited != null) {
-                price = edited[0];
-                abundance = edited[1];
+                price = edited.getDefaultPrice();
+                abundance = edited.getNaturalAbundance();
             }
 
-            PresetEntryWidget entry = new PresetEntryWidget(stack, preset.itemId(), price, abundance);
+            PresetEntryWidget entry = new PresetEntryWidget(stack, preset, price, abundance);
             itemGridView.addChild(entry);
         }
     }
@@ -193,14 +188,9 @@ public class PresetEditorTab extends StockMarketGuiElement {
      * Collects all edited preset values and sends them to the server for persistence.
      */
     private void onSaveClicked() {
-        if (editedValues.isEmpty()) return;
+        if (editedPresets.isEmpty()) return;
 
-        List<MarketPreset> allPresets = new ArrayList<>();
-        for (Map.Entry<String, float[]> entry : editedValues.entrySet()) {
-            float[] vals = entry.getValue();
-            allPresets.add(new MarketPreset(entry.getKey(), vals[0], vals[1]));
-        }
-
+        List<MarketPreset> allPresets = new ArrayList<>(editedPresets.values());
         if (allPresets.isEmpty()) return;
 
         IAsyncPresetManager pm = getPresetManager();
@@ -211,37 +201,24 @@ public class PresetEditorTab extends StockMarketGuiElement {
                 if (success) {
                     // Update cached categories with the new values
                     for (MarketPreset updated : allPresets) {
+                        String key = updated.getUniqueKey();
                         for (MarketPresetCategory cat : cachedCategories) {
                             List<MarketPreset> presets = cat.getPresets();
                             for (int i = 0; i < presets.size(); i++) {
-                                if (presets.get(i).itemId().equals(updated.itemId())) {
+                                if (presets.get(i).getUniqueKey().equals(key)) {
                                     presets.set(i, updated);
                                     break;
                                 }
                             }
                         }
                     }
-                    editedValues.clear();
+                    editedPresets.clear();
                     info(Texts.SAVED_OK.getString());
                 } else {
                     warn(Texts.SAVE_FAILED.getString());
                 }
             });
         });
-    }
-
-    /**
-     * Converts a registry item ID string (e.g. "minecraft:iron_ingot") to an ItemStack.
-     */
-    private static @Nullable ItemStack itemIdToStack(String itemId) {
-        try {
-            ResourceLocation loc = ResourceLocation.parse(itemId);
-            Item item = BuiltInRegistries.ITEM.get(loc);
-            if (item == Items.AIR) return null;
-            return item.getDefaultInstance();
-        } catch (Exception e) {
-            return null;
-        }
     }
 
     private @Nullable MarketPresetCategory findCategory(String name) {
@@ -314,11 +291,13 @@ public class PresetEditorTab extends StockMarketGuiElement {
         private final TextBox priceTextBox;
         private final Label abundanceLabel;
         private final TextBox abundanceTextBox;
-        private final String itemId;
+        private final MarketPreset originalPreset;
+        private final String presetKey;
 
-        PresetEntryWidget(ItemStack stack, String itemId, float currentPrice, float currentAbundance) {
+        PresetEntryWidget(ItemStack stack, MarketPreset preset, float currentPrice, float currentAbundance) {
             super();
-            this.itemId = itemId;
+            this.originalPreset = preset;
+            this.presetKey = preset.getUniqueKey();
             setEnableBackground(true);
 
             itemView = new ItemView(stack);
@@ -355,37 +334,24 @@ public class PresetEditorTab extends StockMarketGuiElement {
             setHeight(24);
         }
 
-        /**
-         * Called when the price text field changes.
-         */
         private void onPriceChanged(String text) {
             float price = parseFloat(text, -1f);
             if (price < 0) return;
-            float[] vals = editedValues.computeIfAbsent(itemId, k -> {
-                // Initialize from current abundance value
-                float abund = parseFloat(abundanceTextBox.getText(), 0f);
-                return new float[]{price, abund};
-            });
-            vals[0] = price;
+            float abundance = parseFloat(abundanceTextBox.getText(), originalPreset.getNaturalAbundance());
+            editedPresets.put(presetKey, new MarketPreset(
+                    originalPreset.getItemId(), originalPreset.components(), price, abundance));
         }
 
-        /**
-         * Called when the abundance text field changes.
-         */
         private void onAbundanceChanged(String text) {
             float abundance = parseFloat(text, -1f);
             if (abundance < 0) return;
-            float[] vals = editedValues.computeIfAbsent(itemId, k -> {
-                // Initialize from current price value
-                float p = parseFloat(priceTextBox.getText(), 0f);
-                return new float[]{p, abundance};
-            });
-            vals[1] = abundance;
+            float price = parseFloat(priceTextBox.getText(), originalPreset.getDefaultPrice());
+            editedPresets.put(presetKey, new MarketPreset(
+                    originalPreset.getItemId(), originalPreset.components(), price, abundance));
         }
 
         @Override
         protected void render() {
-            // No dynamic rendering needed
         }
 
         @Override
@@ -395,7 +361,6 @@ public class PresetEditorTab extends StockMarketGuiElement {
             int iconSize = 16;
             int fieldHeight = h - 2;
 
-            // Layout: [icon 16px] [name ~25%] [priceLabel] [priceField] [abundLabel] [abundField]
             int nameLabelWidth = w / 4;
             int priceLabelWidth = 50;
             int abundanceLabelWidth = 65;

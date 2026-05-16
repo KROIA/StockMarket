@@ -42,11 +42,11 @@ public class MarketPresetTestSuite extends TestSuite {
 
     private TestResult test_presetRecordFields() {
         MarketPreset preset = new MarketPreset("minecraft:iron_ingot", 15.0f, 30.0f);
-        TestResult r = assertEquals("itemId", "minecraft:iron_ingot", preset.itemId());
+        TestResult r = assertEquals("itemId", "minecraft:iron_ingot", preset.getItemId());
         if (!r.passed()) return r;
-        r = assertEquals("defaultPrice", 15.0f, preset.defaultPrice());
+        r = assertEquals("defaultPrice", 15.0f, preset.getDefaultPrice());
         if (!r.passed()) return r;
-        r = assertEquals("naturalAbundance", 30.0f, preset.naturalAbundance());
+        r = assertEquals("naturalAbundance", 30.0f, preset.getNaturalAbundance());
         if (!r.passed()) return r;
         return pass("MarketPreset record fields correct");
     }
@@ -59,7 +59,7 @@ public class MarketPresetTestSuite extends TestSuite {
         MarketPreset found = cat.findPreset("minecraft:dirt");
         TestResult r = assertNotNull("findPreset should return dirt", found);
         if (!r.passed()) return r;
-        r = assertEquals("found price", 0.3f, found.defaultPrice());
+        r = assertEquals("found price", 0.3f, found.getDefaultPrice());
         if (!r.passed()) return r;
         return pass("Category findPreset finds existing item");
     }
@@ -94,8 +94,8 @@ public class MarketPresetTestSuite extends TestSuite {
         for (MarketPresetCategory cat : categories) {
             Set<String> seen = new HashSet<>();
             for (MarketPreset preset : cat.getPresets()) {
-                if (!seen.add(preset.itemId())) {
-                    return fail("Duplicate item '" + preset.itemId() + "' in category '" + cat.getCategory() + "'");
+                if (!seen.add(preset.getItemId())) {
+                    return fail("Duplicate item '" + preset.getItemId() + "' in category '" + cat.getCategory() + "'");
                 }
             }
         }
@@ -106,8 +106,8 @@ public class MarketPresetTestSuite extends TestSuite {
         List<MarketPresetCategory> categories = DefaultPresets.generate();
         for (MarketPresetCategory cat : categories) {
             for (MarketPreset preset : cat.getPresets()) {
-                if (preset.defaultPrice() <= 0) {
-                    return fail("Non-positive price for '" + preset.itemId() + "' in '" + cat.getCategory() + "': " + preset.defaultPrice());
+                if (preset.getDefaultPrice() <= 0) {
+                    return fail("Non-positive price for '" + preset.getItemId() + "' in '" + cat.getCategory() + "': " + preset.getDefaultPrice());
                 }
             }
         }
@@ -118,8 +118,8 @@ public class MarketPresetTestSuite extends TestSuite {
         List<MarketPresetCategory> categories = DefaultPresets.generate();
         for (MarketPresetCategory cat : categories) {
             for (MarketPreset preset : cat.getPresets()) {
-                if (preset.naturalAbundance() <= 0) {
-                    return fail("Non-positive abundance for '" + preset.itemId() + "' in '" + cat.getCategory() + "': " + preset.naturalAbundance());
+                if (preset.getNaturalAbundance() <= 0) {
+                    return fail("Non-positive abundance for '" + preset.getItemId() + "' in '" + cat.getCategory() + "': " + preset.getNaturalAbundance());
                 }
             }
         }
@@ -130,7 +130,7 @@ public class MarketPresetTestSuite extends TestSuite {
         List<MarketPresetCategory> categories = DefaultPresets.generate();
         for (MarketPresetCategory cat : categories) {
             for (MarketPreset preset : cat.getPresets()) {
-                String id = preset.itemId();
+                String id = preset.getItemId();
                 if (id == null || !id.contains(":")) {
                     return fail("Invalid itemId format in '" + cat.getCategory() + "': " + id);
                 }
@@ -166,9 +166,9 @@ public class MarketPresetTestSuite extends TestSuite {
 
         TestResult r = assertNotNull("Should find gold_ingot after round-trip", found);
         if (!r.passed()) return r;
-        r = assertEquals("defaultPrice preserved", 40.0f, found.defaultPrice());
+        r = assertEquals("defaultPrice preserved", 40.0f, found.getDefaultPrice());
         if (!r.passed()) return r;
-        r = assertEquals("naturalAbundance preserved", 15.0f, found.naturalAbundance());
+        r = assertEquals("naturalAbundance preserved", 15.0f, found.getNaturalAbundance());
         if (!r.passed()) return r;
         return pass("JSON round-trip preserves preset values exactly");
     }
@@ -197,18 +197,18 @@ public class MarketPresetTestSuite extends TestSuite {
         if (!r.passed()) return r;
 
         MarketPreset original = presets.get(0);
-        float newPrice = original.defaultPrice() + 100f;
-        MarketPreset replacement = new MarketPreset(original.itemId(), newPrice, original.naturalAbundance());
+        float newPrice = original.getDefaultPrice() + 100f;
+        MarketPreset replacement = new MarketPreset(original.getItemId(), newPrice, original.getNaturalAbundance());
         presets.set(0, replacement);
 
         // Read back through the category to confirm mutation is visible
         MarketPreset updated = cat.getPresets().get(0);
-        r = assertEquals("Price should be updated", newPrice, updated.defaultPrice());
+        r = assertEquals("Price should be updated", newPrice, updated.getDefaultPrice());
         if (!r.passed()) return r;
-        r = assertEquals("ItemId should be unchanged", original.itemId(), updated.itemId());
+        r = assertEquals("ItemId should be unchanged", original.getItemId(), updated.getItemId());
         if (!r.passed()) return r;
         r = assertEquals("NaturalAbundance should be unchanged",
-                original.naturalAbundance(), updated.naturalAbundance());
+                original.getNaturalAbundance(), updated.getNaturalAbundance());
         if (!r.passed()) return r;
         return pass("Preset replacement in category works via list.set()");
     }
