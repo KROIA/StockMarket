@@ -14,7 +14,7 @@ import java.util.List;
 
 public class MarketPresetManager {
 
-    private static final String PRESET_DIR = "stockmarket/market_presets";
+    private static final String PRESET_DIR = "StockMarket/market_presets";
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     private final List<MarketPresetCategory> categories = new ArrayList<>();
