@@ -115,6 +115,7 @@ public class TradeScreen extends StockMarketGuiScreen {
         orderMarkerOverlay.setOnCancelOrder(this::onCancelOrderFromChart);
         orderMarkerOverlay.setOnMoveOrder(this::onMoveOrderFromChart);
         orderMarkerOverlay.setOnCancelInterMarketOrder(this::onCancelInterMarketOrderFromChart);
+        orderMarkerOverlay.setOnMoveInterMarketOrder(this::onMoveInterMarketOrderFromChart);
 
         orderbookVolumeHistogram = new OrderbookVolumeHistogram(candlestickChart);
         tradingPanel = new TradingPanel(this::onBuyMarket, this::onSellMarket, this::onBuyLimit, this::onSellLimit);
@@ -738,6 +739,47 @@ public class TradeScreen extends StockMarketGuiScreen {
      */
     private void onCancelInterMarketOrderFromChart(InterMarketOrder order) {
         BACKEND_INSTANCES.NETWORKING.CANCEL_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(order.getInterMarketGroupID());
+    }
+
+    /**
+     * Moves an inter-market order by cancelling the old one and placing a new limit order
+     * at the new rate with the same volume. The newRate is in the pair view's direction
+     * (have-per-want).
+     */
+    private void onMoveInterMarketOrderFromChart(InterMarketOrder order, double newRate) {
+        if (pairHaveMarketID == null || pairWantMarketID == null || selectedBankAccountNr == -1) return;
+        if (newRate <= 0) return;
+
+        boolean orderMatchesPairDirection = order.getSellItemID().equals(pairHaveMarketID);
+
+        BACKEND_INSTANCES.NETWORKING.CANCEL_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(order.getInterMarketGroupID())
+                .thenAccept(success -> {
+                    Minecraft.getInstance().execute(() -> {
+                        if (!success) {
+                            warn("Failed to cancel inter-market order for move");
+                            return;
+                        }
+
+                        if (orderMatchesPairDirection) {
+                            // Order sells have-items → buys want-items (buy direction in pair view)
+                            double haveVolume = MarketManager.convertToRealAmountStatic(order.getTargetSellVolume());
+                            long rawRateLimit = (long) (newRate * getItemFractionScaleFactor());
+                            PlaceInterMarketOrderRequest.InputData input = new PlaceInterMarketOrderRequest.InputData(
+                                    pairHaveMarketID, pairWantMarketID, selectedBankAccountNr, haveVolume, rawRateLimit);
+                            BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(input)
+                                    .thenAccept(result -> info("Move inter-market order: " + (result.success ? "OK" : result.errorMessage)));
+                        } else {
+                            // Order sells want-items → buys have-items (sell direction in pair view)
+                            double wantVolume = MarketManager.convertToRealAmountStatic(order.getTargetSellVolume());
+                            double invertedRate = 1.0 / newRate;
+                            long rawRateLimit = (long) (invertedRate * getItemFractionScaleFactor());
+                            PlaceInterMarketOrderRequest.InputData input = new PlaceInterMarketOrderRequest.InputData(
+                                    pairWantMarketID, pairHaveMarketID, selectedBankAccountNr, wantVolume, rawRateLimit);
+                            BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(input)
+                                    .thenAccept(result -> info("Move inter-market order: " + (result.success ? "OK" : result.errorMessage)));
+                        }
+                    });
+                });
     }
 
     /**

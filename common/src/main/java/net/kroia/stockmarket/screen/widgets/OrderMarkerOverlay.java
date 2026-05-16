@@ -46,6 +46,7 @@ public class OrderMarkerOverlay implements CandlestickChart.InteractiveOverlay {
     // ── Drag state ──
 
     private @Nullable Order draggingOrder = null;
+    private @Nullable InterMarketOrder draggingInterMarketOrder = null;
     private int dragMouseY = 0;
 
     // ── Hit-test regions rebuilt each frame ──
@@ -64,6 +65,9 @@ public class OrderMarkerOverlay implements CandlestickChart.InteractiveOverlay {
     /** Called when the user clicks the cancel button on an inter-market order. */
     private @Nullable Consumer<InterMarketOrder> onCancelInterMarketOrder;
 
+    /** Called when the user drags an inter-market order to a new rate: (order, newRate). */
+    private @Nullable BiConsumer<InterMarketOrder, Double> onMoveInterMarketOrder;
+
     // ── Inner class for hit testing ──
 
     private static class MarkerHitRegion {
@@ -80,15 +84,19 @@ public class OrderMarkerOverlay implements CandlestickChart.InteractiveOverlay {
         }
     }
 
-    // Hit region for inter-market order markers (no drag support)
     private static class InterMarketMarkerHitRegion {
         InterMarketOrder order;
+        Rectangle dragHandleRect;
         Rectangle cancelButtonRect;
+        boolean orderMatchesPairDirection;
         int lineY;
 
-        InterMarketMarkerHitRegion(InterMarketOrder order, Rectangle cancelButtonRect, int lineY) {
+        InterMarketMarkerHitRegion(InterMarketOrder order, Rectangle dragHandleRect,
+                                    Rectangle cancelButtonRect, boolean orderMatchesPairDirection, int lineY) {
             this.order = order;
+            this.dragHandleRect = dragHandleRect;
             this.cancelButtonRect = cancelButtonRect;
+            this.orderMatchesPairDirection = orderMatchesPairDirection;
             this.lineY = lineY;
         }
     }
@@ -150,6 +158,10 @@ public class OrderMarkerOverlay implements CandlestickChart.InteractiveOverlay {
 
     public void setOnCancelInterMarketOrder(@Nullable Consumer<InterMarketOrder> callback) {
         this.onCancelInterMarketOrder = callback;
+    }
+
+    public void setOnMoveInterMarketOrder(@Nullable BiConsumer<InterMarketOrder, Double> callback) {
+        this.onMoveInterMarketOrder = callback;
     }
 
     // ── Rendering ──
@@ -256,69 +268,84 @@ public class OrderMarkerOverlay implements CandlestickChart.InteractiveOverlay {
     }
 
     /**
-     * Renders inter-market limit orders as non-draggable horizontal lines with a cancel button.
-     * Only shown in pair mode, where the chart Y axis represents the cross-rate.
+     * Renders inter-market limit orders as draggable horizontal lines with a cancel button.
+     * Color indicates direction: green for buy (matches pair direction), red for sell (opposite).
+     * Label shows the pending buy volume.
      */
     private void renderInterMarketOrders(CandlestickChart chart, Rectangle bounds,
                                           int canvasTop, int canvasBottom) {
-        // Cyan/blue color for inter-market pair orders (bidirectional)
-        int solidColor = 0xFF44BBEE;
-        int lineColor = ColorUtilities.setAlpha(solidColor, LINE_ALPHA);
-        int handleColor = ColorUtilities.setAlpha(solidColor, HANDLE_ALPHA);
-        int cancelBgColor = ColorUtilities.setAlpha(
-                ColorUtilities.setBrightness(solidColor, 0.6f), HANDLE_ALPHA);
-
         int markerWidth = bounds.width / 2;
 
         for (InterMarketOrder order : interMarketOrders) {
             if (!order.isLimitOrder()) continue;
 
-            // Convert raw cross-rate limit to real rate, inverting if the order direction
-            // is opposite to the current pair view direction
             double rawRate = (double) order.getCrossRateLimit() / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
             boolean orderMatchesPairDirection = pairHaveItemID != null
                     && order.getSellItemID().equals(pairHaveItemID);
             double ratePrice = orderMatchesPairDirection ? rawRate : (rawRate > 0 ? 1.0 / rawRate : 0);
-            int lineY = chart.toCanvasSpaceY(ratePrice);
 
-            // Skip if outside canvas bounds (with margin for the buttons)
+            int lineY;
+            boolean isDragging = draggingInterMarketOrder != null
+                    && draggingInterMarketOrder.getInterMarketGroupID().equals(order.getInterMarketGroupID());
+            if (isDragging) {
+                lineY = dragMouseY;
+            } else {
+                lineY = chart.toCanvasSpaceY(ratePrice);
+            }
+
             int halfHeight = HANDLE_HEIGHT / 2 + MARGIN;
             if (lineY + halfHeight < canvasTop || lineY - halfHeight > canvasBottom) continue;
 
-            // Build label: show the rate limit value (e.g., "≤10.50")
-            String label = "≤" + formatAmount(ratePrice);
+            // Green for buy (matches pair direction), red for sell (opposite)
+            int solidColor = orderMatchesPairDirection ? UI_Colors.buyColorGreen : UI_Colors.sellColorRed;
+            int lineColor = ColorUtilities.setAlpha(solidColor, LINE_ALPHA);
+            int handleColor = ColorUtilities.setAlpha(solidColor, HANDLE_ALPHA);
+            int cancelBgColor = ColorUtilities.setAlpha(
+                    ColorUtilities.setBrightness(solidColor, 0.6f), HANDLE_ALPHA);
+
+            // Label shows pending volume (buy leg remaining)
+            double remaining = Math.abs(MarketManager.convertToRealAmountStatic(order.getTargetBuyVolume()));
+            String label = formatAmount(remaining);
 
             int textWidth = chart.getTextWidth(label);
             int textHeight = chart.getTextHeight();
 
-            // Handle dimensions — right-aligned within the chart (same layout as regular orders)
             int handleWidth = textWidth + 8;
             int markerStartX = bounds.x + bounds.width - markerWidth;
             int handleX = markerStartX;
             int handleY = lineY - HANDLE_HEIGHT / 2;
 
-            // Cancel button right after the handle
             int cancelX = handleX + handleWidth + 1;
             int cancelY = handleY;
 
-            // Draw horizontal line from cancel button right edge to chart right edge
             int lineStartX = cancelX + CANCEL_BUTTON_SIZE;
             int lineEndX = bounds.x + bounds.width;
             chart.drawRect(lineStartX, lineY - LINE_THICKNESS / 2, lineEndX - lineStartX, LINE_THICKNESS, lineColor);
 
-            // Draw handle background with label
             chart.drawRect(handleX, handleY, handleWidth, HANDLE_HEIGHT, handleColor);
             chart.drawText(label, handleX + 4, handleY + (HANDLE_HEIGHT - textHeight) / 2, 0xFFFFFFFF, LABEL_FONT_SCALE);
 
-            // Draw cancel [X] button
             chart.drawRect(cancelX, cancelY, CANCEL_BUTTON_SIZE, CANCEL_BUTTON_SIZE, cancelBgColor);
             int xPad = 3;
             StockMarketGuiElement.drawXMark(chart, cancelX, cancelY, CANCEL_BUTTON_SIZE, CANCEL_BUTTON_SIZE, xPad, 1.0f, 0xFFFFFFFF);
 
-            // Store hit region for cancel click handling (no drag support)
+            // Draw price label while dragging
+            if (isDragging) {
+                double newRate = chart.fromCanvasSpaceY(dragMouseY);
+                if (newRate < 0) newRate = 0;
+                String priceLabel = String.format("%.4f", newRate);
+                int priceLabelWidth = chart.getTextWidth(priceLabel);
+                int priceLabelX = handleX - priceLabelWidth - 6;
+                chart.drawRect(priceLabelX - 2, handleY, priceLabelWidth + 4, HANDLE_HEIGHT, 0xCC333333);
+                chart.drawText(priceLabel, priceLabelX, handleY + (HANDLE_HEIGHT - textHeight) / 2,
+                        0xFFFFFFFF, LABEL_FONT_SCALE);
+            }
+
             interMarketHitRegions.add(new InterMarketMarkerHitRegion(
                     order,
+                    new Rectangle(handleX, handleY, handleWidth, HANDLE_HEIGHT),
                     new Rectangle(cancelX, cancelY, CANCEL_BUTTON_SIZE, CANCEL_BUTTON_SIZE),
+                    orderMatchesPairDirection,
                     lineY
             ));
         }
@@ -350,10 +377,19 @@ public class OrderMarkerOverlay implements CandlestickChart.InteractiveOverlay {
             }
         }
 
-        // Check drag handles (regular orders only; inter-market orders are not draggable)
+        // Check drag handles for regular orders
         for (MarkerHitRegion region : hitRegions) {
             if (isInsideRect(mouseX, mouseY, region.dragHandleRect)) {
                 draggingOrder = region.order;
+                dragMouseY = mouseY;
+                return true;
+            }
+        }
+
+        // Check drag handles for inter-market orders
+        for (InterMarketMarkerHitRegion region : interMarketHitRegions) {
+            if (isInsideRect(mouseX, mouseY, region.dragHandleRect)) {
+                draggingInterMarketOrder = region.order;
                 dragMouseY = mouseY;
                 return true;
             }
@@ -364,7 +400,7 @@ public class OrderMarkerOverlay implements CandlestickChart.InteractiveOverlay {
 
     @Override
     public boolean mouseDragged(CandlestickChart chart, int mouseX, int mouseY, int button, double deltaX, double deltaY) {
-        if (draggingOrder != null) {
+        if (draggingOrder != null || draggingInterMarketOrder != null) {
             dragMouseY = mouseY;
             return true;
         }
@@ -379,7 +415,6 @@ public class OrderMarkerOverlay implements CandlestickChart.InteractiveOverlay {
 
             double originalPrice = MarketManager.convertToRealAmountStatic(draggingOrder.getStartPrice());
 
-            // Only trigger move if the price actually changed meaningfully
             if (Math.abs(newPrice - originalPrice) > 0.001) {
                 if (onMoveOrder != null) {
                     onMoveOrder.accept(draggingOrder, newPrice);
@@ -387,6 +422,18 @@ public class OrderMarkerOverlay implements CandlestickChart.InteractiveOverlay {
             }
 
             draggingOrder = null;
+            return true;
+        }
+
+        if (draggingInterMarketOrder != null) {
+            double newRate = chart.fromCanvasSpaceY(mouseY);
+            if (newRate < 0) newRate = 0;
+
+            if (onMoveInterMarketOrder != null) {
+                onMoveInterMarketOrder.accept(draggingInterMarketOrder, newRate);
+            }
+
+            draggingInterMarketOrder = null;
             return true;
         }
         return false;
