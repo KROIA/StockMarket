@@ -1,13 +1,18 @@
 package net.kroia.stockmarket.util;
 
+import net.kroia.modutilities.gui.client.RecipeImageExporter;
 import net.kroia.stockmarket.networking.packet.OpenUIPacket;
 import net.kroia.stockmarket.screen.DevTestScreen;
 import net.kroia.stockmarket.screen.ManagementScreen;
 import net.kroia.stockmarket.screen.TradeScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.level.block.entity.BlockEntity;
+
+import java.nio.file.Path;
+import java.util.Map;
 
 public class StockMarketClientHooks {
     public static InteractionResult openStockMarketBlockScreen(BlockEntity entity, BlockPos pos)
@@ -32,6 +37,66 @@ public class StockMarketClientHooks {
                 ManagementScreen.openScreen();
                 break;
             }
+            case EXPORT_RECIPES:
+            {
+                exportRecipeImages();
+                break;
+            }
         }
+    }
+
+    /**
+     * Exports all StockMarket mod recipe images to the game directory.
+     * Runs on the render thread via Minecraft.execute() for GL safety.
+     * Output: <gameDir>/recipe_exports/stockmarket/recipe_<name>.png
+     */
+    private static void exportRecipeImages()
+    {
+        Minecraft mc = Minecraft.getInstance();
+
+        // Schedule on the render thread to ensure GL context is available
+        mc.execute(() -> {
+            Path exportDir = mc.gameDirectory.toPath().resolve("recipe_exports/stockmarket");
+            int successCount = 0;
+
+            // Recipe 1: Trading Software
+            // Pattern: "ST" (1x2 shaped recipe)
+            // S = banksystem:software, T = minecraft:emerald
+            {
+                String[] pattern = {"ST"};
+                Map<Character, String> keys = Map.of(
+                        'S', "banksystem:software",
+                        'T', "minecraft:emerald"
+                );
+                Path outputPath = exportDir.resolve("recipe_trading_software.png");
+                if (RecipeImageExporter.exportShapedRecipe(pattern, keys, "stockmarket:trading_software", outputPath))
+                {
+                    successCount++;
+                }
+            }
+
+            // Recipe 2: Stock Market Display Block
+            // Pattern: 3x3 shaped recipe
+            // I = minecraft:iron_nugget, G = minecraft:glass_pane,
+            // D = banksystem:display, E = minecraft:emerald
+            {
+                String[] pattern = {"IGI", "GDG", "IEI"};
+                Map<Character, String> keys = Map.of(
+                        'I', "minecraft:iron_nugget",
+                        'G', "minecraft:glass_pane",
+                        'D', "banksystem:display",
+                        'E', "minecraft:emerald"
+                );
+                Path outputPath = exportDir.resolve("recipe_stockmarket_display_block.png");
+                if (RecipeImageExporter.exportShapedRecipe(pattern, keys, "stockmarket:stockmarket_display_block", outputPath))
+                {
+                    successCount++;
+                }
+            }
+
+            // Notify the player in chat
+            String message = "StockMarket: Exported " + successCount + "/2 recipe images to " + exportDir;
+            mc.gui.getChat().addMessage(Component.literal(message));
+        });
     }
 }
