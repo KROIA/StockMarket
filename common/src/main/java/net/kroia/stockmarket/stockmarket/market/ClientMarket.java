@@ -154,7 +154,7 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
     public void requestFullPriceHistoryUpdate()
     {
         long endTime = System.currentTimeMillis();
-        long startTime = endTime - CANDLE_TIME_1_DAY;
+        long startTime = endTime - CANDLE_TIME_1_DAY * 5;
         //requestFullPriceHistoryUpdate(0, Long.MAX_VALUE);
         requestFullPriceHistoryUpdate(startTime, endTime);
     }
