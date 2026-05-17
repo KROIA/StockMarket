@@ -7,6 +7,7 @@ import dev.architectury.registry.registries.RegistrySupplier;
 import net.kroia.banksystem.minecraft.block.custom.TerminalBlock;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.minecraft.block.custom.StockMarketBlock;
+import net.kroia.stockmarket.minecraft.block.custom.StockMarketDisplayBlock;
 import net.kroia.stockmarket.minecraft.item.StockMarketItems;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
@@ -32,8 +33,7 @@ public class StockMarketBlocks {
 
 
     public static final RegistrySupplier<TerminalBlock> STOCK_MARKET_BLOCK = registerBlock(StockMarketBlock.NAME, StockMarketBlock::new);
-
-
+    public static final RegistrySupplier<Block> STOCKMARKET_DISPLAY_BLOCK = registerBlock(StockMarketDisplayBlock.NAME, StockMarketDisplayBlock::new);
 
 
 

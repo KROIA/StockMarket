@@ -131,8 +131,7 @@ public class StockMarketModBackend implements StockMarketAPI {
     {
 
         StockMarketMenus.setupScreens();
-
-
+        StockMarketEntities.registerRenderers();
 
         ClientPlayerEvent.CLIENT_PLAYER_QUIT.register(StockMarketModBackend::onPlayerLeaveClientSide);
         ClientPlayerEvent.CLIENT_PLAYER_JOIN.register(StockMarketModBackend::onPlayerJoinClientSide);

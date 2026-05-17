@@ -9,6 +9,7 @@ import net.kroia.stockmarket.screen.UI_Colors;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.util.PriceHistoryData;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
+import net.minecraft.nbt.CompoundTag;
 import org.jetbrains.annotations.Nullable;
 import net.kroia.modutilities.gui.InputConstants;
 
@@ -734,6 +735,55 @@ public class CandlestickChart extends StockMarketGuiElement {
     }
 
     // ── Viewport persistence ──
+
+    /**
+     * Serializes the current viewport state into a CompoundTag for NBT storage.
+     */
+    protected CompoundTag serializeViewport() {
+        CompoundTag tag = new CompoundTag();
+        tag.putDouble("viewX", chartviewRect.x);
+        tag.putDouble("viewY", chartviewRect.y);
+        tag.putDouble("viewW", chartviewRect.width);
+        tag.putDouble("viewH", chartviewRect.height);
+        tag.putDouble("zoom", zoomLevel);
+        tag.putInt("candleTimeIdx", currentCandleTimeIdx);
+        return tag;
+    }
+
+    /**
+     * Restores viewport state from a CompoundTag previously created by
+     * {@link #serializeViewport()}. Skips auto-centering after applying.
+     */
+    protected void deserializeViewport(CompoundTag tag) {
+        if (tag == null || tag.isEmpty()) return;
+        chartviewRect.x = tag.getDouble("viewX");
+        chartviewRect.y = tag.getDouble("viewY");
+        chartviewRect.width = tag.getDouble("viewW");
+        chartviewRect.height = tag.getDouble("viewH");
+        zoomLevel = tag.getDouble("zoom");
+        skipAutoCenterOnce = true;
+        selectCandleTimeDeltaByIndex(tag.getInt("candleTimeIdx"));
+        firstDraw = false;
+    }
+
+    /**
+     * Looks up a previously saved viewport state by key and returns it as a
+     * CompoundTag, or null if no state is saved for that key. Allows subclasses
+     * to read another chart's viewport (e.g. copying the TradeScreen's viewport
+     * as initial state for a display chart).
+     */
+    protected static CompoundTag lookupSavedViewport(String viewportKey) {
+        ViewportState state = savedViewports.get(viewportKey);
+        if (state == null) return null;
+        CompoundTag tag = new CompoundTag();
+        tag.putDouble("viewX", state.viewX);
+        tag.putDouble("viewY", state.viewY);
+        tag.putDouble("viewW", state.viewWidth);
+        tag.putDouble("viewH", state.viewHeight);
+        tag.putDouble("zoom", state.zoomLevel);
+        tag.putInt("candleTimeIdx", state.candleTimeIdx);
+        return tag;
+    }
 
     /**
      * Saves the current viewport state (position, zoom, candle time index)

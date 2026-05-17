@@ -5,6 +5,8 @@ import net.kroia.modutilities.networking.NetworkPacketManager;
 import net.kroia.modutilities.networking.client_server.arrs.AsynchronousRequestResponseSystem;
 import net.kroia.modutilities.networking.client_server.streaming.StreamSystem;
 import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.networking.entity.UpdateDisplayViewportPacket;
+import net.kroia.stockmarket.networking.entity.UpdateStockMarketDisplayConfigPacket;
 import net.kroia.stockmarket.networking.packet.OpenUIPacket;
 import net.kroia.stockmarket.networking.packet.PlayerJoinSyncPacket;
 import net.kroia.stockmarket.networking.request.*;
@@ -86,9 +88,8 @@ public class StockMarketNetworking extends NetworkPacketManager {
 
     @Override
     public void setupServerReceiverPackets() {
-
-        //registerC2S(TestPacket.TYPE, TestPacket.STREAM_CODEC);
-
+        registerC2S(UpdateStockMarketDisplayConfigPacket.TYPE, UpdateStockMarketDisplayConfigPacket.STREAM_CODEC);
+        registerC2S(UpdateDisplayViewportPacket.TYPE, UpdateDisplayViewportPacket.STREAM_CODEC);
     }
 
     @Override

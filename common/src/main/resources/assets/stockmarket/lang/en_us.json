@@ -1,6 +1,8 @@
 {
   "block.stockmarket.stock_market_block": "Stock Market Terminal Block",
   "item.stockmarket.stock_market_block": "Stock Market Block",
+  "block.stockmarket.stockmarket_display_block": "Stock Market Display",
+  "item.stockmarket.stockmarket_display_block": "Stock Market Display",
   "item.stockmarket.trading_software": "Trading Software",
   "gui.stockmarket.stock_market_block_screen": "Stock Market Block",
   "gui.stockmarket.trade_screen.your_balance": "Your Balance",
