@@ -17,6 +17,8 @@ import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Tab content element for creating markets from preset categories.
@@ -256,29 +258,42 @@ public class CreateMarketTab extends StockMarketGuiElement {
         // Copy since we'll modify during iteration
         List<Map.Entry<String, MarketPreset>> toCreate = new ArrayList<>(selectedPresets.entrySet());
 
+        // Collect all creation futures so we fire the callback only once when all complete
+        List<CompletableFuture<Void>> futures = new ArrayList<>();
+        AtomicBoolean anyCreated = new AtomicBoolean(false);
+
         for (Map.Entry<String, MarketPreset> entry : toCreate) {
             String key = entry.getKey();
             MarketPreset preset = entry.getValue();
             ItemStack stack = preset.toItemStack();
             if (stack.isEmpty()) continue;
 
-            ItemID.getOrRegisterFromItemStackClientSide(stack).thenAccept(registeredID -> {
+            CompletableFuture<Void> future = ItemID.getOrRegisterFromItemStackClientSide(stack).thenCompose(registeredID ->
                 getMarketManager().requestCreateMarket(registeredID).thenAccept(success -> {
                     if (success) {
                         info("Created market for " + preset.getItemId());
+                        anyCreated.set(true);
                         Minecraft.getInstance().execute(() -> {
                             selectedPresets.remove(key);
-                            refreshExistingMarkets();
                             itemGridDirty = true;
                             selectedListDirty = true;
-                            if (onMarketsChanged != null) onMarketsChanged.run();
                         });
                     } else {
                         warn("Failed to create market for " + preset.getItemId());
                     }
-                });
-            });
+                })
+            );
+            futures.add(future);
         }
+
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).thenRun(() -> {
+            if (anyCreated.get()) {
+                Minecraft.getInstance().execute(() -> {
+                    refreshExistingMarkets();
+                    if (onMarketsChanged != null) onMarketsChanged.run();
+                });
+            }
+        });
     }
 
     /**

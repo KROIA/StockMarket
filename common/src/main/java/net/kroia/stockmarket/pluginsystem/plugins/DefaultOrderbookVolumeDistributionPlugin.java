@@ -233,13 +233,13 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
         data.speed = this.speed;
         data.accumulationRate = this.accumulationRate;
         data.decumulationRate = this.decumulationRate;
-        data.calculator.volumeScale = this.volumeScale;
         marketData.put(marketID, data);
 
         MarketInterface interf = getMarketInterface(marketID);
         if(interf == null)
             return;
         data.calculator.defaultPrice = interf.market.getDefaultRealPrice();
+        data.calculator.volumeScale = this.volumeScale * interf.market.getNaturalAbundance();
         interf.oderBook.registerDefaultVolumeDistributionCalculator(data.calculator);
         interf.oderBook.resetVirtualVolume();
     }
@@ -303,10 +303,13 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
         // Update all existing market runtimes
         for (Map.Entry<ItemID, RuntimeData> entry : marketData.entrySet()) {
             RuntimeData data = entry.getValue();
-            data.calculator.volumeScale = volumeScale;
             data.speed = speed;
             data.accumulationRate = accumulationRate;
             data.decumulationRate = decumulationRate;
+
+            MarketInterface interf = getMarketInterface(entry.getKey());
+            float abundance = (interf != null) ? interf.market.getNaturalAbundance() : 1.0f;
+            data.calculator.volumeScale = volumeScale * abundance;
 
             if (settings.resetVolume()) {
                 data.pendingReset = true;

@@ -202,7 +202,7 @@ public class OrderMarkerOverlay implements CandlestickChart.InteractiveOverlay {
 
             // Choose color based on order direction
             boolean isBuy = order.isBuyOrder();
-            int solidColor = isBuy ? UI_Colors.buyColorGreen : UI_Colors.sellColorRed;
+            int solidColor = isBuy ? UI_Colors.buyColorGreen_dark : UI_Colors.sellColorRed_dark;
             int lineColor = ColorUtilities.setAlpha(solidColor, LINE_ALPHA);
             int handleColor = ColorUtilities.setAlpha(solidColor, HANDLE_ALPHA);
             int cancelBgColor = ColorUtilities.setAlpha(
@@ -297,7 +297,7 @@ public class OrderMarkerOverlay implements CandlestickChart.InteractiveOverlay {
             if (lineY + halfHeight < canvasTop || lineY - halfHeight > canvasBottom) continue;
 
             // Green for buy (matches pair direction), red for sell (opposite)
-            int solidColor = orderMatchesPairDirection ? UI_Colors.buyColorGreen : UI_Colors.sellColorRed;
+            int solidColor = orderMatchesPairDirection ? UI_Colors.buyColorGreen_dark : UI_Colors.sellColorRed_dark;
             int lineColor = ColorUtilities.setAlpha(solidColor, LINE_ALPHA);
             int handleColor = ColorUtilities.setAlpha(solidColor, HANDLE_ALPHA);
             int cancelBgColor = ColorUtilities.setAlpha(
