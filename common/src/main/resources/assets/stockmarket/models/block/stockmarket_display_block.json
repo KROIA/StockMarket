@@ -1,8 +1,8 @@
 {
   "ambientocclusion": false,
   "textures": {
-    "particle": "stockmarket:block/stockmarket_display_panel",
-    "pane": "stockmarket:block/stockmarket_display_panel",
+    "particle": "banksystem:block/metal_case_block",
+    "pane": "banksystem:block/metal_case_block",
     "front": "stockmarket:block/stockmarket_display_front",
     "edge": "stockmarket:block/stockmarket_display_side"
   },
