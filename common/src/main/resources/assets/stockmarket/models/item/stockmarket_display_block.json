@@ -1,10 +1,10 @@
 {
   "ambientocclusion": false,
   "textures": {
-    "particle": "modutilities:block/display_panel",
-    "pane": "modutilities:block/display_panel",
-    "front": "modutilities:block/display_block_front",
-    "edge": "modutilities:block/display_block_side"
+    "particle": "stockmarket:block/stockmarket_display_panel",
+    "pane": "stockmarket:block/stockmarket_display_panel",
+    "front": "stockmarket:block/stockmarket_display_front",
+    "edge": "stockmarket:block/stockmarket_display_side"
   },
   "elements": [
     {
