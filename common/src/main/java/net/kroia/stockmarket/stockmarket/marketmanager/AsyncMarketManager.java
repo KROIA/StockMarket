@@ -232,6 +232,7 @@ public class AsyncMarketManager implements IAsyncMarketManager {
                      FunctionType.CreateMarket,
                      FunctionType.DeleteMarket,
                      FunctionType.GetMarket,
+                     FunctionType.IsStockmarketAdmin,
                      FunctionType.GetPlayerPreferences,
                      FunctionType.UpdatePlayerPreferences -> true;
 
@@ -246,6 +247,7 @@ public class AsyncMarketManager implements IAsyncMarketManager {
                 case FunctionType.GetTradingCurrencyID,
                      FunctionType.GetAvailableMarketIDs,
                      FunctionType.MarketExists,
+                     FunctionType.IsStockmarketAdmin,
                      FunctionType.GetMarket-> true;
 
                 default -> false;
