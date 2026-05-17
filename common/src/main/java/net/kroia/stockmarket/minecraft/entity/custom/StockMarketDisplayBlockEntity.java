@@ -66,6 +66,7 @@ public class StockMarketDisplayBlockEntity extends AbstractDisplayBlockEntity {
 
     private DisplayType displayType = DisplayType.NONE;
     private ItemID selectedItemID = null;
+    private ItemID secondItemID = null;
 
     // ── GUI widget references ──
 
@@ -86,17 +87,30 @@ public class StockMarketDisplayBlockEntity extends AbstractDisplayBlockEntity {
 
     public DisplayType getDisplayType() { return displayType; }
     public ItemID getSelectedItemID() { return selectedItemID; }
+    public ItemID getSecondItemID() { return secondItemID; }
     public CandlestickChart getChart() { return chart; }
+
+    /**
+     * Convenience overload for Item/Money mode (no second item).
+     */
+    public void setConfig(DisplayType type, ItemID itemID) {
+        setConfig(type, itemID, null);
+    }
 
     /**
      * Sets the display configuration. Propagates the config to all displays in
      * the group so they stay connected, then recalculates groups if the type
      * changed and rebuilds the GUI.
+     *
+     * @param type         the display type
+     * @param itemID       the primary market item
+     * @param secondItemID optional second market item for cross-rate (Item/Item) display; null for Item/Money
      */
-    public void setConfig(DisplayType type, ItemID itemID) {
+    public void setConfig(DisplayType type, ItemID itemID, ItemID secondItemID) {
         DisplayType oldType = this.displayType;
         this.displayType = type;
         this.selectedItemID = itemID;
+        this.secondItemID = secondItemID;
 
         if (level != null && !level.isClientSide()) {
             propagateConfigToGroup();
@@ -127,6 +141,7 @@ public class StockMarketDisplayBlockEntity extends AbstractDisplayBlockEntity {
                 if (myPos.equals(other.getControllerPos())) {
                     other.displayType = this.displayType;
                     other.selectedItemID = this.selectedItemID;
+                    other.secondItemID = this.secondItemID;
                     other.setChanged();
                 }
             }
@@ -146,8 +161,9 @@ public class StockMarketDisplayBlockEntity extends AbstractDisplayBlockEntity {
             case NONE -> StockMarketDisplayBlockEntity::buildUnconfiguredUI;
             case PRICE_CHART -> {
                 final ItemID itemID = selectedItemID;
+                final ItemID secondID = secondItemID;
                 final long blockKey = getBlockPos().asLong();
-                yield (gui, w, h) -> buildPriceChart(gui, w, h, itemID, blockKey);
+                yield (gui, w, h) -> buildPriceChart(gui, w, h, itemID, secondID, blockKey);
             }
         };
     }
@@ -156,7 +172,12 @@ public class StockMarketDisplayBlockEntity extends AbstractDisplayBlockEntity {
     public String getChannelId() {
         return switch (displayType) {
             case NONE -> "sm_none";
-            case PRICE_CHART -> "sm_chart_" + (selectedItemID != null ? selectedItemID.getShort() : "none");
+            case PRICE_CHART -> {
+                if (selectedItemID != null && secondItemID != null) {
+                    yield "sm_pair_" + selectedItemID.getShort() + "_" + secondItemID.getShort();
+                }
+                yield "sm_chart_" + (selectedItemID != null ? selectedItemID.getShort() : "none");
+            }
         };
     }
 
@@ -212,6 +233,9 @@ public class StockMarketDisplayBlockEntity extends AbstractDisplayBlockEntity {
         if (selectedItemID != null) {
             tag.putShort("selectedItemID", selectedItemID.getShort());
         }
+        if (secondItemID != null) {
+            tag.putShort("secondItemID", secondItemID.getShort());
+        }
         // Only save viewport if it contains real user-set state (connected chart
         // or previously saved pending state). The server-side chart is never connected,
         // so its default viewport values won't be saved and won't prevent auto-centering.
@@ -232,6 +256,11 @@ public class StockMarketDisplayBlockEntity extends AbstractDisplayBlockEntity {
         } else {
             selectedItemID = null;
         }
+        if (tag.contains("secondItemID")) {
+            secondItemID = new ItemID(tag.getShort("secondItemID"));
+        } else {
+            secondItemID = null;
+        }
         if (tag.contains("viewport")) {
             pendingViewport = tag.getCompound("viewport");
         }
@@ -241,10 +270,11 @@ public class StockMarketDisplayBlockEntity extends AbstractDisplayBlockEntity {
     protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         DisplayType oldType = this.displayType;
         ItemID oldItemID = this.selectedItemID;
+        ItemID oldSecondID = this.secondItemID;
         super.loadAdditional(tag, registries);
 
         if (level != null && level.isClientSide() && isController()) {
-            if (oldType != this.displayType || !itemIDEquals(oldItemID, this.selectedItemID)) {
+            if (oldType != this.displayType || !itemIDEquals(oldItemID, this.selectedItemID) || !itemIDEquals(oldSecondID, this.secondItemID)) {
                 // Disconnect old chart before rebuilding
                 if (chart instanceof DisplayCandlestickChart dcc) {
                     dcc.disconnect();
@@ -290,24 +320,42 @@ public class StockMarketDisplayBlockEntity extends AbstractDisplayBlockEntity {
 
     // ── Price Chart UI ──
 
-    private static void buildPriceChart(Gui gui, int w, int h, ItemID itemID, long blockKey) {
+    private static void buildPriceChart(Gui gui, int w, int h, ItemID itemID, ItemID secondItemID, long blockKey) {
         int margin = 4;
         int iconSize = 16;
         int iconAreaWidth = iconSize + margin;
 
-        // Chart fills display area, with right margin for the icon
-        DisplayCandlestickChart chart = new DisplayCandlestickChart(itemID, blockKey);
+        // Chart fills display area, with right margin for the icon(s)
+        DisplayCandlestickChart chart = new DisplayCandlestickChart(itemID, secondItemID, blockKey);
         chart.setBounds(margin, margin, w - margin * 2 - iconAreaWidth, h - margin * 2);
         gui.addElement(chart);
 
-        // Item icon on the right edge, vertically centered
+        // Show market icon(s) on the right edge
         if (itemID != null) {
-            int iconX = w - margin - iconSize;
-            int iconY = (h - iconSize) / 2;
-            ItemView icon = new ItemView(iconX, iconY, iconSize, iconSize);
-            icon.setItemStack(itemID.getStack());
-            icon.setShowTooltip(true);
-            gui.addElement(icon);
+            if (secondItemID != null) {
+                // Pair mode: show both icons vertically centered
+                int totalHeight = iconSize * 2 + 2;
+                int iconX = w - margin - iconSize;
+                int startY = (h - totalHeight) / 2;
+
+                ItemView haveIcon = new ItemView(iconX, startY, iconSize, iconSize);
+                haveIcon.setItemStack(itemID.getStack());
+                haveIcon.setShowTooltip(true);
+                gui.addElement(haveIcon);
+
+                ItemView wantIcon = new ItemView(iconX, startY + iconSize + 2, iconSize, iconSize);
+                wantIcon.setItemStack(secondItemID.getStack());
+                wantIcon.setShowTooltip(true);
+                gui.addElement(wantIcon);
+            } else {
+                // Single mode: one icon vertically centered
+                int iconX = w - margin - iconSize;
+                int iconY = (h - iconSize) / 2;
+                ItemView icon = new ItemView(iconX, iconY, iconSize, iconSize);
+                icon.setItemStack(itemID.getStack());
+                icon.setShowTooltip(true);
+                gui.addElement(icon);
+            }
         }
     }
 

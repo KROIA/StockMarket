@@ -27,25 +27,28 @@ public class UpdateStockMarketDisplayConfigPacket extends StockMarketNetworkPack
                     BlockPos.STREAM_CODEC, p -> p.pos,
                     ByteBufCodecs.STRING_UTF8, p -> p.displayType,
                     ByteBufCodecs.SHORT, p -> p.itemIdShort,
+                    ByteBufCodecs.SHORT, p -> p.secondItemIdShort,
                     UpdateStockMarketDisplayConfigPacket::new
             );
 
     private final BlockPos pos;
     private final String displayType;
     private final short itemIdShort;
+    private final short secondItemIdShort;
 
-    public UpdateStockMarketDisplayConfigPacket(BlockPos pos, String displayType, short itemIdShort) {
+    public UpdateStockMarketDisplayConfigPacket(BlockPos pos, String displayType, short itemIdShort, short secondItemIdShort) {
         super();
         this.pos = pos;
         this.displayType = displayType;
         this.itemIdShort = itemIdShort;
+        this.secondItemIdShort = secondItemIdShort;
     }
 
     @Override
     protected boolean needsRoutingToMaster() { return false; }
 
-    public static void sendToServer(BlockPos pos, String displayType, short itemIdShort) {
-        new UpdateStockMarketDisplayConfigPacket(pos, displayType, itemIdShort).sendToServer();
+    public static void sendToServer(BlockPos pos, String displayType, short itemIdShort, short secondItemIdShort) {
+        new UpdateStockMarketDisplayConfigPacket(pos, displayType, itemIdShort, secondItemIdShort).sendToServer();
     }
 
     @Override
@@ -59,8 +62,9 @@ public class UpdateStockMarketDisplayConfigPacket extends StockMarketNetworkPack
             StockMarketDisplayBlockEntity.DisplayType type =
                     StockMarketDisplayBlockEntity.DisplayType.fromId(this.displayType);
             ItemID itemID = (this.itemIdShort >= 0) ? new ItemID(this.itemIdShort) : null;
+            ItemID secondItemID = (this.secondItemIdShort >= 0) ? new ItemID(this.secondItemIdShort) : null;
             if (type != StockMarketDisplayBlockEntity.DisplayType.NONE && itemID != null) {
-                displayEntity.setConfig(type, itemID);
+                displayEntity.setConfig(type, itemID, secondItemID);
             }
         }
     }

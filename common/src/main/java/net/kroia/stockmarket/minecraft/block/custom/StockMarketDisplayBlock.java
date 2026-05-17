@@ -68,7 +68,7 @@ public class StockMarketDisplayBlock extends AbstractDisplayBlock {
                 ClientScreenHelper.openChartScreen(ctrl);
             } else {
                 ClientScreenHelper.openConfigScreen(ctrl.getBlockPos(),
-                        ctrl.getDisplayType(), ctrl.getSelectedItemID());
+                        ctrl.getDisplayType(), ctrl.getSelectedItemID(), ctrl.getSecondItemID());
             }
         }
         return InteractionResult.SUCCESS;
@@ -88,13 +88,15 @@ public class StockMarketDisplayBlock extends AbstractDisplayBlock {
             net.minecraft.client.Minecraft.getInstance().setScreen(
                     new net.kroia.stockmarket.screen.custom.DisplayChartScreen(
                             ctrl.getBlockPos(), ctrl.getSelectedItemID(),
+                            ctrl.getSecondItemID(),
                             ctrl.getBlockPos().asLong(), viewport));
         }
 
         static void openConfigScreen(BlockPos pos, StockMarketDisplayBlockEntity.DisplayType type,
-                                      net.kroia.banksystem.util.ItemID itemID) {
+                                      net.kroia.banksystem.util.ItemID itemID,
+                                      net.kroia.banksystem.util.ItemID secondItemID) {
             net.minecraft.client.Minecraft.getInstance().setScreen(
-                    new net.kroia.stockmarket.screen.custom.DisplayConfigScreen(pos, type, itemID));
+                    new net.kroia.stockmarket.screen.custom.DisplayConfigScreen(pos, type, itemID, secondItemID));
         }
     }
 }

@@ -26,6 +26,7 @@ public class DisplayConfigScreen extends StockMarketGuiScreen {
     private final BlockPos blockPos;
     private StockMarketDisplayBlockEntity.DisplayType selectedType;
     private ItemID selectedItemID;
+    private ItemID selectedSecondItemID;
 
     private final Label titleLabel;
     private final Label typeLabel;
@@ -33,18 +34,23 @@ public class DisplayConfigScreen extends StockMarketGuiScreen {
     private final Label marketLabel;
     private final VerticalListView marketListView;
     private final Label selectedLabel;
+    private final Label secondMarketLabel;
+    private final VerticalListView secondMarketListView;
+    private final Label secondSelectedLabel;
+    private final Button clearSecondButton;
     private final Button applyButton;
 
     private static final int ACTIVE_COLOR = ColorUtilities.getRGB(40, 120, 80);
     private static final int INACTIVE_COLOR = ColorUtilities.getRGB(60, 60, 60);
     private static final int HOVER_COLOR = ColorUtilities.getRGB(60, 140, 100);
 
-    public DisplayConfigScreen(BlockPos blockPos, StockMarketDisplayBlockEntity.DisplayType currentType, ItemID currentItemID) {
+    public DisplayConfigScreen(BlockPos blockPos, StockMarketDisplayBlockEntity.DisplayType currentType, ItemID currentItemID, ItemID currentSecondItemID) {
         super(Component.literal("Configure Display"));
         this.blockPos = blockPos;
         this.selectedType = (currentType != null && currentType != StockMarketDisplayBlockEntity.DisplayType.NONE)
                 ? currentType : StockMarketDisplayBlockEntity.DisplayType.PRICE_CHART;
         this.selectedItemID = currentItemID;
+        this.selectedSecondItemID = currentSecondItemID;
 
         titleLabel = new Label("Configure Display");
         titleLabel.setAlignment(GuiElement.Alignment.CENTER);
@@ -60,7 +66,7 @@ public class DisplayConfigScreen extends StockMarketGuiScreen {
         });
         addElement(priceChartButton);
 
-        marketLabel = new Label("Select Market:");
+        marketLabel = new Label("I want (item to display):");
         addElement(marketLabel);
 
         marketListView = new VerticalListView();
@@ -72,12 +78,33 @@ public class DisplayConfigScreen extends StockMarketGuiScreen {
         selectedLabel = new Label("");
         addElement(selectedLabel);
 
+        secondMarketLabel = new Label("I have / currency (optional):");
+        addElement(secondMarketLabel);
+
+        secondMarketListView = new VerticalListView();
+        LayoutVertical secondLayout = new LayoutVertical();
+        secondLayout.stretchX = true;
+        secondMarketListView.setLayout(secondLayout);
+        addElement(secondMarketListView);
+
+        secondSelectedLabel = new Label("");
+        addElement(secondSelectedLabel);
+
+        clearSecondButton = new Button("Clear pair");
+        clearSecondButton.setOnFallingEdge(() -> {
+            selectedSecondItemID = null;
+            loadSecondMarkets();
+            updateSelectedLabel();
+        });
+        addElement(clearSecondButton);
+
         applyButton = new Button("Apply");
         applyButton.setOnFallingEdge(this::onApply);
         addElement(applyButton);
 
         updateTypeButtons();
         loadMarkets();
+        loadSecondMarkets();
     }
 
     @Override
@@ -89,27 +116,46 @@ public class DisplayConfigScreen extends StockMarketGuiScreen {
         int x = (w - centerW) / 2;
         int y = p;
 
-        titleLabel.setBounds(x, y, centerW, 18);
-        y += 24;
-
-        typeLabel.setBounds(x, y, centerW, 14);
+        // Fixed-height elements above the lists
+        titleLabel.setBounds(x, y, centerW, 14);
         y += 18;
 
-        // Single type button for now (structured for future types)
-        priceChartButton.setBounds(x, y, centerW, 20);
-        y += 28;
+        typeLabel.setBounds(x, y, centerW, 12);
+        y += 14;
 
-        marketLabel.setBounds(x, y, centerW, 14);
-        y += 18;
+        priceChartButton.setBounds(x, y, centerW, 18);
+        y += 22;
 
-        int listH = h - y - 60;
-        marketListView.setBounds(x, y, centerW, Math.max(40, listH));
-        y += Math.max(40, listH) + p;
+        marketLabel.setBounds(x, y, centerW, 12);
+        y += 14;
+
+        // Fixed-height elements below the lists:
+        // selectedLabel(14+2) + secondMarketLabel(12+2) + secondList + secondSelectedLabel(14+2)
+        // + clearSecondButton(18+4) + applyButton(20) + bottom padding(p)
+        int bottomFixedH = 14 + 2 + 12 + 2 + 14 + 2 + 18 + 4 + 20 + p;
+
+        // Split remaining height between the two market lists
+        int availableForLists = h - y - bottomFixedH;
+        int listH = Math.max(20, availableForLists / 2);
+
+        marketListView.setBounds(x, y, centerW, listH);
+        y += listH + 2;
 
         selectedLabel.setBounds(x, y, centerW, 14);
-        y += 20;
+        y += 16;
 
-        applyButton.setBounds(x, y, centerW, 22);
+        secondMarketLabel.setBounds(x, y, centerW, 12);
+        y += 14;
+
+        secondMarketListView.setBounds(x, y, centerW, listH);
+        y += listH + 2;
+
+        secondSelectedLabel.setBounds(x, y, centerW, 14);
+        y += 16;
+
+        int halfW = (centerW - p) / 2;
+        clearSecondButton.setBounds(x, y, halfW, 18);
+        applyButton.setBounds(x + halfW + p, y, halfW, 18);
     }
 
     private void updateTypeButtons() {
@@ -124,6 +170,14 @@ public class DisplayConfigScreen extends StockMarketGuiScreen {
             selectedLabel.setText("Selected: " + name);
         } else {
             selectedLabel.setText("No market selected");
+        }
+
+        if (selectedSecondItemID != null) {
+            String firstName = selectedItemID != null ? selectedItemID.getStack().getHoverName().getString() : "?";
+            String secondName = selectedSecondItemID.getStack().getHoverName().getString();
+            secondSelectedLabel.setText("Pair: " + firstName + " / " + secondName);
+        } else {
+            secondSelectedLabel.setText("No pair (Item/Money mode)");
         }
     }
 
@@ -168,7 +222,12 @@ public class DisplayConfigScreen extends StockMarketGuiScreen {
             final ItemID capturedItemID = itemID;
             btn.setOnFallingEdge(() -> {
                 selectedItemID = capturedItemID;
+                // Clear second selection if it matches the new first selection
+                if (selectedSecondItemID != null && selectedSecondItemID.getShort() == capturedItemID.getShort()) {
+                    selectedSecondItemID = null;
+                }
                 refreshMarketHighlights();
+                loadSecondMarkets();
                 updateSelectedLabel();
             });
             row.addChild(btn);
@@ -198,6 +257,86 @@ public class DisplayConfigScreen extends StockMarketGuiScreen {
         }
     }
 
+    /**
+     * Populates the second market list with all available markets except the
+     * currently selected first market (can't pair with yourself).
+     */
+    private void loadSecondMarkets() {
+        List<ItemID> markets = getAvailableMarkets();
+        secondMarketListView.removeChilds();
+
+        if (markets == null || markets.isEmpty()) {
+            Label noMarkets = new Label("No markets available");
+            noMarkets.setAlignment(GuiElement.Alignment.CENTER);
+            secondMarketListView.addChild(noMarkets);
+            return;
+        }
+
+        for (ItemID itemID : markets) {
+            // Exclude the first selected market from the second list
+            if (selectedItemID != null && itemID.getShort() == selectedItemID.getShort()) {
+                continue;
+            }
+
+            GuiElement row = new GuiElement(0, 0, 100, 22) {
+                @Override protected void render() {}
+                @Override protected void layoutChanged() {
+                    for (var child : getChilds()) {
+                        if (child instanceof ItemView iv) {
+                            iv.setBounds(2, 2, 18, 18);
+                        } else if (child instanceof Button btn) {
+                            btn.setBounds(22, 0, getWidth() - 22, 22);
+                        }
+                    }
+                }
+            };
+            row.setEnableBackground(false);
+            row.setEnableOutline(false);
+
+            ItemView icon = new ItemView();
+            icon.setItemStack(itemID.getStack());
+            icon.setShowTooltip(true);
+            row.addChild(icon);
+
+            boolean isSelected = selectedSecondItemID != null && selectedSecondItemID.getShort() == itemID.getShort();
+            String displayName = itemID.getStack().getHoverName().getString();
+            Button btn = new Button(displayName);
+            btn.setBackgroundColor(isSelected ? ACTIVE_COLOR : INACTIVE_COLOR);
+            btn.setHoverColor(HOVER_COLOR);
+            final ItemID capturedItemID = itemID;
+            btn.setOnFallingEdge(() -> {
+                selectedSecondItemID = capturedItemID;
+                refreshSecondMarketHighlights();
+                updateSelectedLabel();
+            });
+            row.addChild(btn);
+
+            secondMarketListView.addChild(row);
+        }
+    }
+
+    /**
+     * Updates button highlight colors in the second market list to reflect selection.
+     */
+    private void refreshSecondMarketHighlights() {
+        for (var child : secondMarketListView.getChilds()) {
+            for (var sub : child.getChilds()) {
+                if (sub instanceof Button btn) {
+                    boolean isThis = false;
+                    for (var sibling : child.getChilds()) {
+                        if (sibling instanceof ItemView iv && selectedSecondItemID != null) {
+                            ItemID rowItemID = ItemID.getFromItemStack(iv.getItemStack());
+                            if (rowItemID != null && rowItemID.getShort() == selectedSecondItemID.getShort()) {
+                                isThis = true;
+                            }
+                        }
+                    }
+                    btn.setBackgroundColor(isThis ? ACTIVE_COLOR : INACTIVE_COLOR);
+                }
+            }
+        }
+    }
+
     private void onApply() {
         if (selectedItemID == null || selectedType == null
                 || selectedType == StockMarketDisplayBlockEntity.DisplayType.NONE) {
@@ -205,7 +344,8 @@ public class DisplayConfigScreen extends StockMarketGuiScreen {
         }
         UpdateStockMarketDisplayConfigPacket.sendToServer(
                 blockPos, selectedType.getId(),
-                selectedItemID.getShort());
+                selectedItemID.getShort(),
+                selectedSecondItemID != null ? selectedSecondItemID.getShort() : (short) -1);
         onClose();
     }
 }

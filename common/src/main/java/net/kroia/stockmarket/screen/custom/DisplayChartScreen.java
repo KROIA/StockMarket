@@ -23,16 +23,18 @@ public class DisplayChartScreen extends StockMarketGuiScreen {
 
     private final BlockPos controllerPos;
     private final ItemID itemID;
+    private final ItemID secondItemID;
     private final long blockKey;
     private DisplayCandlestickChart chart;
 
-    public DisplayChartScreen(BlockPos controllerPos, ItemID itemID, long blockKey, CompoundTag initialViewport) {
+    public DisplayChartScreen(BlockPos controllerPos, ItemID itemID, ItemID secondItemID, long blockKey, CompoundTag initialViewport) {
         super(Component.literal("Price Chart"));
         this.controllerPos = controllerPos;
         this.itemID = itemID;
+        this.secondItemID = secondItemID;
         this.blockKey = blockKey;
 
-        chart = new DisplayCandlestickChart(itemID, blockKey);
+        chart = new DisplayCandlestickChart(itemID, secondItemID, blockKey);
         if (initialViewport != null && !initialViewport.isEmpty()) {
             chart.setInitialViewport(initialViewport);
         }

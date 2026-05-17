@@ -13,25 +13,40 @@ import org.jetbrains.annotations.Nullable;
  * Uses a display-specific viewport key so the display's zoom/position
  * is independent from the TradeScreen's viewport for the same market.
  * Manages stream subscription lifecycle.
+ *
+ * Supports two modes:
+ * - Item/Money (single market): only targetMarketID is set
+ * - Item/Item (cross-rate): both targetMarketID and secondMarketID are set
  */
 public class DisplayCandlestickChart extends CandlestickChart {
     private final ItemID targetMarketID;
+    private final @Nullable ItemID secondMarketID;
     private final String displayViewportKey;
     private boolean connected = false;
     private @Nullable CompoundTag initialViewport = null;
 
     /**
-     * @param itemID   the market to display
-     * @param blockKey unique identifier for this display (e.g. blockPos.asLong())
+     * @param itemID       the primary market to display
+     * @param secondItemID optional second market for cross-rate (Item/Item) display; null for Item/Money
+     * @param blockKey     unique identifier for this display (e.g. blockPos.asLong())
      */
-    public DisplayCandlestickChart(ItemID itemID, long blockKey) {
+    public DisplayCandlestickChart(ItemID itemID, @Nullable ItemID secondItemID, long blockKey) {
         super();
         this.targetMarketID = itemID;
-        this.displayViewportKey = "display_" + blockKey + "_" + (itemID != null ? itemID.getShort() : "none");
+        this.secondMarketID = secondItemID;
+        if (secondItemID != null) {
+            this.displayViewportKey = "display_" + blockKey + "_pair_" + (itemID != null ? itemID.getShort() : "none") + "_" + secondItemID.getShort();
+        } else {
+            this.displayViewportKey = "display_" + blockKey + "_" + (itemID != null ? itemID.getShort() : "none");
+        }
     }
 
     public ItemID getTargetMarketID() {
         return targetMarketID;
+    }
+
+    public @Nullable ItemID getSecondMarketID() {
+        return secondMarketID;
     }
 
     public boolean isConnected() {
@@ -73,10 +88,14 @@ public class DisplayCandlestickChart extends CandlestickChart {
     }
 
     public void disconnect() {
-        if (connected && targetMarketID != null && BACKEND_INSTANCES != null) {
-            ClientMarket market = BACKEND_INSTANCES.MARKET_MANAGER.getMarket(targetMarketID);
-            if (market != null) {
-                market.unsubscribeFromMarketPriceUpdate();
+        if (connected && BACKEND_INSTANCES != null) {
+            if (targetMarketID != null) {
+                ClientMarket market = BACKEND_INSTANCES.MARKET_MANAGER.getMarket(targetMarketID);
+                if (market != null) market.unsubscribeFromMarketPriceUpdate();
+            }
+            if (secondMarketID != null) {
+                ClientMarket market = BACKEND_INSTANCES.MARKET_MANAGER.getMarket(secondMarketID);
+                if (market != null) market.unsubscribeFromMarketPriceUpdate();
             }
         }
         connected = false;
@@ -85,36 +104,59 @@ public class DisplayCandlestickChart extends CandlestickChart {
 
     private boolean tryConnect() {
         if (BACKEND_INSTANCES == null) return false;
-        ClientMarket market = BACKEND_INSTANCES.MARKET_MANAGER.getMarket(targetMarketID);
-        if (market != null) {
-            market.subscribeToMarketPriceUpdate();
-            // Wrap the market with a display-specific viewport key so the
-            // display's zoom/position is independent from the TradeScreen
-            setPriceDataProvider(new DisplayProviderWrapper(market, displayViewportKey));
 
+        if (secondMarketID != null) {
+            // Cross-rate (Item/Item) mode
+            // targetMarketID = "I want" item (numerator in the price ratio)
+            // secondMarketID = "I have" / currency item (denominator)
+            ClientMarket wantMarket = BACKEND_INSTANCES.MARKET_MANAGER.getMarket(targetMarketID);
+            ClientMarket haveMarket = BACKEND_INSTANCES.MARKET_MANAGER.getMarket(secondMarketID);
+            if (haveMarket == null || wantMarket == null) return false;
+
+            haveMarket.subscribeToMarketPriceUpdate();
+            wantMarket.subscribeToMarketPriceUpdate();
+
+            IPriceDataProvider provider = BACKEND_INSTANCES.MARKET_MANAGER.getCrossRateMarket(secondMarketID, targetMarketID);
+            if (provider == null) return false;
+
+            setPriceDataProvider(new DisplayProviderWrapper(provider, displayViewportKey));
             if (initialViewport != null) {
-                // Restore viewport saved by the block entity (from previous session)
                 deserializeViewport(initialViewport);
                 initialViewport = null;
             } else {
-                // No display-specific viewport yet — check if the player has a
-                // TradeScreen viewport for this market and use it as initial state
+                CompoundTag tradeViewport = lookupSavedViewport(provider.getViewportKey());
+                if (tradeViewport != null) {
+                    deserializeViewport(tradeViewport);
+                }
+            }
+            return true;
+        } else {
+            // Single market (Item/Money) mode
+            ClientMarket market = BACKEND_INSTANCES.MARKET_MANAGER.getMarket(targetMarketID);
+            if (market == null) return false;
+
+            market.subscribeToMarketPriceUpdate();
+            setPriceDataProvider(new DisplayProviderWrapper(market, displayViewportKey));
+
+            if (initialViewport != null) {
+                deserializeViewport(initialViewport);
+                initialViewport = null;
+            } else {
                 CompoundTag tradeViewport = lookupSavedViewport(market.getViewportKey());
                 if (tradeViewport != null) {
                     deserializeViewport(tradeViewport);
                 }
-                // else: firstDraw stays true → auto-center once candle data loads
             }
             return true;
         }
-        return false;
     }
 
     /**
-     * Wraps a ClientMarket to override the viewport key so the display chart
+     * Wraps an IPriceDataProvider to override the viewport key so the display chart
      * stores its own zoom/position separately from the TradeScreen chart.
+     * Accepts both ClientMarket (Item/Money) and CrossRateMarket (Item/Item).
      */
-    private record DisplayProviderWrapper(ClientMarket delegate, String key) implements IPriceDataProvider {
+    private record DisplayProviderWrapper(IPriceDataProvider delegate, String key) implements IPriceDataProvider {
         @Override
         public @Nullable PriceHistoryData getPriceHistoryData(long candleTimeDelta) {
             return delegate.getPriceHistoryData(candleTimeDelta);
