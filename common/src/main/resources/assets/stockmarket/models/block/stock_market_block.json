@@ -4,9 +4,9 @@
     "west": "stockmarket:block/stock_market_block_side",
     "east": "stockmarket:block/stock_market_block_side",
     "north": "stockmarket:block/stock_market_block_front",
-    "south": "stockmarket:block/stock_market_block_side",
-    "down": "stockmarket:block/stock_market_block_side",
-    "up": "stockmarket:block/stock_market_block_side",
-    "particle": "stockmarket:block/stock_market_block_side"
+    "south": "banksystem:block/metal_case_block",
+    "down": "banksystem:block/metal_case_block",
+    "up": "banksystem:block/metal_case_block",
+    "particle": "banksystem:block/metal_case_block"
   }
 }
