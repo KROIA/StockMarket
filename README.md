@@ -19,6 +19,7 @@ You want to support me?<br>
 * [Features](#features)
 * [Blocks](#blocks)
 * [Items](#items)
+  * [Crafting Recipes](#crafting-recipes)
 * [Matching Engine](#matching-engine)
     * [serverMarket-order](#serverMarket-order)
     * [Limit Order](#limit-order)
@@ -136,6 +137,19 @@ Used to programm the <b>Terminal Block</b> to be a <b>Stock Market Terminal Bloc
     <img src="documentation/images/tradingSoftware.png" width="300"> 
 </div>
 </td>
+</tr>
+</table>
+
+### Crafting Recipes
+
+<table>
+<tr>
+<td><b>Trading Software</b></td>
+<td><b>Stock Market Display Block</b></td>
+</tr>
+<tr>
+<td><img src="documentation/images/recipe_trading_software.png" width="350"></td>
+<td><img src="documentation/images/recipe_stockmarket_display_block.png" width="350"></td>
 </tr>
 </table>
 
