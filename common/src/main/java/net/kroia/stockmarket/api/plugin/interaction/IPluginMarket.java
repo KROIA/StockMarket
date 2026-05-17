@@ -109,6 +109,14 @@ public interface IPluginMarket {
 
 
     /**
+     * Gets the natural abundance of this market's item.
+     * Higher values mean the item is more common (e.g. cobblestone),
+     * lower values mean it is rarer (e.g. diamond).
+     * @return the natural abundance factor
+     */
+    float getNaturalAbundance();
+
+    /**
      * Gets the net player item flow for this market.
      * Positive means players have net-sold items into the market.
      * Negative means players have net-bought items from the market.

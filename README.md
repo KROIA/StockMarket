@@ -18,7 +18,7 @@ You want to support me?<br>
 ## Chapters 
 * [Features](#features)
 * [Blocks](#blocks)
-* [Items](#items)
+* [Crafting Recipes](#crafting-recipes)
 * [Matching Engine](#matching-engine)
     * [serverMarket-order](#serverMarket-order)
     * [Limit Order](#limit-order)
@@ -122,20 +122,16 @@ Right click on a <b>Terminal Block</b> using a <b>Trading Software</b> to create
 </table>
 
 ---
-## Items
+## Crafting Recipes
+
 <table>
 <tr>
-<td>
-<b>Trading Software</b><br>
-Used to programm the <b>Terminal Block</b> to be a <b>Stock Market Terminal Block</b><br>
-1 Empty Software<br>
-1 Emerald<br>
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/tradingSoftware.png" width="300"> 
-</div>
-</td>
+<td><b>Trading Software</b></td>
+<td><b>Stock Market Display Block</b></td>
+</tr>
+<tr>
+<td><img src="documentation/images/recipe_trading_software.png" width="350"></td>
+<td><img src="documentation/images/recipe_stockmarket_display_block.png" width="350"></td>
 </tr>
 </table>
 

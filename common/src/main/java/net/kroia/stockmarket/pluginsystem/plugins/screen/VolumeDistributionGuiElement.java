@@ -214,7 +214,7 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
 
         for (int i = 0; i <= chunkCount; i++) {
             double price = startPrice + chunkPriceDelta * i;
-            float targetVolume = Math.abs(interpolateVolume(distribution, price)) * backendPricesPerChunk;
+            float targetVolume = Math.abs(interpolateVolume(distribution, price)) * backendPricesPerChunk / scaleFactor;
             int x = histogram.toCanvasSpaceX(targetVolume);
             int y = histogram.toCanvasSpaceY(price);
 

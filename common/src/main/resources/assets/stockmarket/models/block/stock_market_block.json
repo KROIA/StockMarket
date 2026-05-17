@@ -1,8 +1,8 @@
 {
   "parent": "minecraft:block/cube_all",
   "textures": {
-    "west": "banksystem:block/metal_case_block",
-    "east": "banksystem:block/metal_case_block",
+    "west": "stockmarket:block/stock_market_block_side",
+    "east": "stockmarket:block/stock_market_block_side",
     "north": "stockmarket:block/stock_market_block_front",
     "south": "banksystem:block/metal_case_block",
     "down": "banksystem:block/metal_case_block",

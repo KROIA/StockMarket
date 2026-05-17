@@ -10,7 +10,9 @@ import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.stockmarket.api.command.IAsyncStockMarketCommandHandler;
 import net.kroia.stockmarket.api.command.IServerStockMarketCommandHandler;
 import net.kroia.modutilities.testing.TestCommandRegistration;
+import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.networking.packet.OpenUIPacket;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import net.kroia.stockmarket.data.table.MarketPriceManager;
 import net.kroia.stockmarket.data.filter.DateFilter;
@@ -245,7 +247,7 @@ public class StockMarketCommands {
 
                 )
                 .then(Commands.literal("devTestScreen")
-                                .requires(source -> source.hasPermission(2))
+                                .requires(source -> source.hasPermission(2) && StockMarketMod.ENABLE_DEV_FEATURES)
                                 .executes(context -> {
                                     CommandSourceStack source = context.getSource();
                                     ServerPlayer player = source.getPlayerOrException();
@@ -254,6 +256,16 @@ public class StockMarketCommands {
                                 })
 
                         )
+                // Dev-only: export recipe images to PNG files
+                .then(Commands.literal("exportrecipes")
+                        .requires(source -> source.hasPermission(2) && StockMarketMod.ENABLE_DEV_FEATURES)
+                        .executes(context -> {
+                            CommandSourceStack source = context.getSource();
+                            ServerPlayer player = source.getPlayerOrException();
+                            OpenUIPacket.sendToClient(player, OpenUIPacket.GUIType.EXPORT_RECIPES);
+                            return Command.SINGLE_SUCCESS;
+                        })
+                )
         );
 
         boolean isSlave = BACKEND_INSTANCES != null

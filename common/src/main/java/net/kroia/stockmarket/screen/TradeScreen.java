@@ -22,6 +22,7 @@ import net.kroia.stockmarket.api.market.IPriceDataProvider;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.screen.widgets.CandlestickChart;
 import net.kroia.stockmarket.networking.request.CancelOrderRequest;
+import net.kroia.stockmarket.networking.request.CreateOrderRequest;
 import net.kroia.stockmarket.networking.request.PlaceInterMarketOrderRequest;
 import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
@@ -751,6 +752,9 @@ public class TradeScreen extends StockMarketGuiScreen {
         if (newRate <= 0) return;
 
         boolean orderMatchesPairDirection = order.getSellItemID().equals(pairHaveMarketID);
+        // Capture original parameters for rollback if the new order placement fails
+        double fallbackHaveVolume = MarketManager.convertToRealAmountStatic(-order.getSellOrder().getRemainingVolume());
+        long fallbackRateLimit = order.getCrossRateLimit();
 
         BACKEND_INSTANCES.NETWORKING.CANCEL_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(order.getInterMarketGroupID())
                 .thenAccept(success -> {
@@ -760,6 +764,7 @@ public class TradeScreen extends StockMarketGuiScreen {
                             return;
                         }
 
+                        PlaceInterMarketOrderRequest.InputData input;
                         if (orderMatchesPairDirection) {
                             // Order sells have-items → buys want-items (buy direction in pair view)
                             // Compute haveVolume in integer space to match the server's formula exactly:
@@ -769,20 +774,32 @@ public class TradeScreen extends StockMarketGuiScreen {
                             long rawRateLimit = (long) (newRate * SF);
                             long rawHaveVolume = rawBuyVolume * rawRateLimit / SF;
                             double haveVolume = MarketManager.convertToRealAmountStatic(rawHaveVolume);
-                            PlaceInterMarketOrderRequest.InputData input = new PlaceInterMarketOrderRequest.InputData(
+                            input = new PlaceInterMarketOrderRequest.InputData(
                                     pairHaveMarketID, pairWantMarketID, selectedBankAccountNr, haveVolume, rawRateLimit);
-                            BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(input)
-                                    .thenAccept(result -> info("Move inter-market order: " + (result.success ? "OK" : result.errorMessage)));
                         } else {
                             // Order sells want-items → buys have-items (sell direction in pair view)
                             double wantVolume = MarketManager.convertToRealAmountStatic(order.getTargetSellVolume());
                             double invertedRate = 1.0 / newRate;
                             long rawRateLimit = (long) (invertedRate * getItemFractionScaleFactor());
-                            PlaceInterMarketOrderRequest.InputData input = new PlaceInterMarketOrderRequest.InputData(
+                            input = new PlaceInterMarketOrderRequest.InputData(
                                     pairWantMarketID, pairHaveMarketID, selectedBankAccountNr, wantVolume, rawRateLimit);
-                            BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(input)
-                                    .thenAccept(result -> info("Move inter-market order: " + (result.success ? "OK" : result.errorMessage)));
                         }
+
+                        BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(input)
+                                .thenAccept(result -> {
+                                    if (!result.success) {
+                                        warn("Move inter-market order failed (" + result.errorMessage + "), restoring original");
+                                        PlaceInterMarketOrderRequest.InputData fallback = new PlaceInterMarketOrderRequest.InputData(
+                                                order.getSellItemID(), order.getBuyItemID(), selectedBankAccountNr,
+                                                fallbackHaveVolume, fallbackRateLimit);
+                                        BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(fallback)
+                                                .thenAccept(fb -> {
+                                                    if (!fb.success) {
+                                                        error("Failed to restore original inter-market order: " + fb.errorMessage);
+                                                    }
+                                                });
+                                    }
+                                });
                     });
                 });
     }
@@ -799,21 +816,31 @@ public class TradeScreen extends StockMarketGuiScreen {
                 order.getStartPrice(),
                 order.getTargetVolume()
         );
+        double originalPrice = MarketManager.convertToRealAmountStatic(order.getStartPrice());
         BACKEND_INSTANCES.NETWORKING.CANCEL_ORDER_REQUEST.sendRequestToServer(cancelInput)
                 .thenAccept(success -> {
-                    if (success) {
-                        // Re-create the order at the new price with remaining volume
-                        double remainingVolume = MarketManager.convertToRealAmountStatic(order.getRemainingVolume());
-                        ClientMarket market = getMarket(order.getItemID());
-                        if (market != null && selectedBankAccountNr != -1) {
-                            market.createLimitOrder(selectedBankAccountNr, remainingVolume, newPrice)
-                                    .thenAccept(result -> {
-                                        info("Move order response: " + result.status);
-                                    });
-                        }
-                    } else {
+                    if (!success) {
                         warn("Failed to cancel order for move operation");
+                        return;
                     }
+                    double remainingVolume = MarketManager.convertToRealAmountStatic(order.getRemainingVolume());
+                    ClientMarket market = getMarket(order.getItemID());
+                    if (market == null || selectedBankAccountNr == -1) {
+                        warn("Cannot place moved order: market or bank account unavailable");
+                        return;
+                    }
+                    market.createLimitOrder(selectedBankAccountNr, remainingVolume, newPrice)
+                            .thenAccept(result -> {
+                                if (result.status != CreateOrderRequest.Status.CREATED) {
+                                    warn("Move order failed (" + result.status + "), restoring at original price");
+                                    market.createLimitOrder(selectedBankAccountNr, remainingVolume, originalPrice)
+                                            .thenAccept(fallback -> {
+                                                if (fallback.status != CreateOrderRequest.Status.CREATED) {
+                                                    error("Failed to restore original order: " + fallback.status);
+                                                }
+                                            });
+                                }
+                            });
                 });
     }
 

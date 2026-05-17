@@ -90,6 +90,7 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
             };
 
     private @Nullable UUID marketPriceUpdateStreamID = null;
+    private int streamSubscriberCount = 0;
 
     private final int itemScaleFactor;
     private long currentMarketPrice;
@@ -154,7 +155,7 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
     public void requestFullPriceHistoryUpdate()
     {
         long endTime = System.currentTimeMillis();
-        long startTime = endTime - CANDLE_TIME_1_DAY;
+        long startTime = endTime - CANDLE_TIME_1_DAY * 5;
         //requestFullPriceHistoryUpdate(0, Long.MAX_VALUE);
         requestFullPriceHistoryUpdate(startTime, endTime);
     }
@@ -178,8 +179,9 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
     }
     public boolean subscribeToMarketPriceUpdate()
     {
+        streamSubscriberCount++;
         if(marketPriceUpdateStreamID != null)
-            return false;
+            return true; // Stream already active, just counted the new subscriber
 
         //if(priceHistoryData.getCandles().isEmpty())
         {
@@ -202,6 +204,10 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
     }
     public boolean unsubscribeFromMarketPriceUpdate()
     {
+        if(streamSubscriberCount > 0)
+            streamSubscriberCount--;
+        if(streamSubscriberCount > 0)
+            return false; // Other subscribers still need the stream
         if(marketPriceUpdateStreamID == null)
             return false;
         StreamSystem.stopStream(marketPriceUpdateStreamID);

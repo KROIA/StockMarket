@@ -28,6 +28,7 @@ public class OpenUIPacket extends StockMarketNetworkPacket {
     {
         DEVELOPMENT,
         MANAGEMENT,
+        EXPORT_RECIPES,
     }
 
 

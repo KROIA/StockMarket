@@ -92,6 +92,11 @@ public class PluginMarket implements IPluginMarket
     }
 
     @Override
+    public float getNaturalAbundance() {
+        return serverMarket.getSettings().naturalAbundance;
+    }
+
+    @Override
     public double getNetPlayerItemFlow() {
         return MarketManager.convertToRealAmountStatic(serverMarket.getNetPlayerItemFlow());
     }

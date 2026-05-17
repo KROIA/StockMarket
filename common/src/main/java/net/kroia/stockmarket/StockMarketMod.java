@@ -10,6 +10,9 @@ public final class StockMarketMod {
     public static final String VERSION = "2.0.0_ALPHA";
     public static final Logger LOGGER = LogUtils.getLogger();
 
+    // Set to false for release builds to hide dev-only commands (exportrecipes, devTestScreen, etc.)
+    public static final boolean ENABLE_DEV_FEATURES = true;
+
     private static StockMarketModBackend backend;
 
     public static void init() {
