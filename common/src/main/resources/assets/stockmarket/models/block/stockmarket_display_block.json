@@ -2,9 +2,10 @@
   "ambientocclusion": false,
   "textures": {
     "particle": "banksystem:block/metal_case_block",
-    "pane": "banksystem:block/metal_case_block",
     "front": "stockmarket:block/stockmarket_display_front",
-    "edge": "stockmarket:block/stockmarket_display_side"
+    "back": "banksystem:block/metal_case_block",
+    "side": "banksystem:block/metal_case_block_vent",
+    "top": "banksystem:block/metal_case_block"
   },
   "elements": [
     {
@@ -12,11 +13,11 @@
       "to": [16, 16, 16],
       "faces": {
         "north": { "texture": "#front" },
-        "south": { "texture": "#pane" },
-        "east":  { "uv": [7, 0, 9, 16], "texture": "#edge" },
-        "west":  { "uv": [7, 0, 9, 16], "texture": "#edge" },
-        "up":    { "uv": [7, 0, 9, 16], "texture": "#edge", "rotation": 90 },
-        "down":  { "uv": [7, 0, 9, 16], "texture": "#edge", "rotation": 90 }
+        "south": { "texture": "#back" },
+        "east":  { "uv": [0, 0, 2, 16], "texture": "#side" },
+        "west":  { "uv": [0, 0, 2, 16], "texture": "#side" },
+        "up":    { "uv": [0, 0, 2, 16], "texture": "#top", "rotation": 90 },
+        "down":  { "uv": [0, 0, 2, 16], "texture": "#top", "rotation": 90 }
       }
     }
   ]
