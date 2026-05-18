@@ -213,8 +213,9 @@ public class StockMarketModBackend implements StockMarketAPI {
         StockMarketCommands.setBackend(SERVER_INSTANCES);
         StockMarketCommandHandler.setBackend(SERVER_INSTANCES);
         DataManager.setBackend(SERVER_INSTANCES);
+        StockMarketLogger.setBackend(SERVER_INSTANCES);
 
-        if (TestRegistry.ENABLE_TESTS) {
+        if (TestRegistry.ENABLE_TESTS && StockMarketMod.ENABLE_DEV_FEATURES) {
             MarketIntegrationTestSuite.setBackend(SERVER_INSTANCES);
             InterMarketExecutorTestSuite.setBackend(SERVER_INSTANCES);
             StockMarketTestRegistration.register();
@@ -235,7 +236,7 @@ public class StockMarketModBackend implements StockMarketAPI {
             registerItemPriceProvider();
             TickEvent.SERVER_POST.register(StockMarketModBackend::onServerTick);
 
-            if (TestRegistry.ENABLE_TESTS) {
+            if (TestRegistry.ENABLE_TESTS && StockMarketMod.ENABLE_DEV_FEATURES) {
                 MatchingEngineTestSuite.setBackend(SERVER_INSTANCES);
                 OrderbookTestSuite.setBackend(SERVER_INSTANCES);
                 CreateOrderRequestTestSuite.setBackend(SERVER_INSTANCES);

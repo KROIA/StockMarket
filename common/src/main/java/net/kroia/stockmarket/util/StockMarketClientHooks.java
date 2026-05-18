@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.util;
 
 import net.kroia.modutilities.gui.client.RecipeImageExporter;
+import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.networking.packet.OpenUIPacket;
 import net.kroia.stockmarket.screen.DevTestScreen;
 import net.kroia.stockmarket.screen.ManagementScreen;
@@ -28,8 +29,10 @@ public class StockMarketClientHooks {
         {
             case DEVELOPMENT:
             {
-                DevTestScreen screen = new DevTestScreen();
-                mc.setScreen(screen);
+                if(StockMarketMod.ENABLE_DEV_FEATURES) {
+                    DevTestScreen screen = new DevTestScreen();
+                    mc.setScreen(screen);
+                }
                 break;
             }
             case MANAGEMENT:

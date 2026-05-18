@@ -4,6 +4,7 @@ import dev.architectury.platform.Platform;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.persistence.DataPersistence;
 import net.kroia.modutilities.persistence.ServerSaveableChunked;
+import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
@@ -27,7 +28,7 @@ public class DataManager extends DataPersistence {
         BACKEND_INSTANCES = backend;
         StockMarketModSettings.setBackend(backend);
     }
-    private static final boolean ENABLE_DEBUG_PERFORMANCE = false;
+    private static final boolean ENABLE_DEBUG_PERFORMANCE = StockMarketMod.ENABLE_DEV_FEATURES;
 
 
     public static final Path BASE_PATH = Path.of("data", "StockMarket");
