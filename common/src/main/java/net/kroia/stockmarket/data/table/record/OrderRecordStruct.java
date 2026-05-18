@@ -7,9 +7,6 @@ import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
 import java.util.UUID;
 
 /**
@@ -59,22 +56,4 @@ public record OrderRecordStruct(/*long orderID, */short itemID, int bankaccountI
         }
     };
 
-    private static final Random RANDOM = new Random();
-
-
-
-    public static List<OrderRecordStruct> generateExampleData(int num){
-        int[] ints = RANDOM.ints(num*3L,0, Short.MAX_VALUE).toArray();
-        int bankaccountID = RANDOM.nextInt();
-        long time = Long.MAX_VALUE;
-        UUID uuid = UUID.randomUUID();
-        ArrayList<OrderRecordStruct> list = new ArrayList<>();
-        for(int i=0;i<num;i++){
-            int idx = i*3;
-            list.add(new OrderRecordStruct(/*System.currentTimeMillis(),*/ (short) ints[idx], bankaccountID, uuid,0, ints[idx+1], ints[idx+2], time));
-        }
-
-        return list;
-
-    }
 }

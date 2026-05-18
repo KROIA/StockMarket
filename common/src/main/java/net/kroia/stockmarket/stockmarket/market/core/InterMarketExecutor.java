@@ -343,11 +343,11 @@ public class InterMarketExecutor
             }
         }
 
-        long buyVolume = actualDollarYield * SF / wantPrice;
-        if (buyVolume <= 0 && wantPrice > 0)
-        {
-            buyVolume = dollarBudget * SF / wantPrice;
-        }
+        // Use the order's target buy volume rather than recomputing from dollars —
+        // integer division (dollars * SF / price) systematically rounds down, causing
+        // the player to receive e.g. 0.99 instead of 1.00.
+        // The matching engine already caps to what the player can actually afford.
+        long buyVolume = order.getBuyOrder().getRemainingVolume();
         if (buyVolume <= 0)
         {
             logWarn("Computed buy volume is 0, canceling inter-market order");
@@ -398,17 +398,9 @@ public class InterMarketExecutor
         // Edit the sell leg: add filled volume (negative) and transferred money (positive)
         imoSellOrder.edit(sellOrder.getFilledVolume(), sellOrder.getTransferredMoney());
 
-        // ── Rounding dust: deposit leftover dollars to player's money bank ────
-        // dust = actual dollars received from sell - actual dollars spent on buy
-        long dust = actualDollarYield - actualDollarSpent;
-        if (dust > 0 && playerBankAccount != null && !order.isBotOrder())
-        {
-            IServerBank moneyBank = playerBankAccount.getBank(tradingCurrencyID);
-            if (moneyBank != null)
-            {
-                moneyBank.deposit(dust);
-            }
-        }
+        // No dust deposit needed here — commitSell already deposited the sell
+        // proceeds and commitBuy already withdrew the buy cost, so the net
+        // difference (rounding dust) is already reflected in the money bank.
 
         // Determine if the order is fully or partially filled
         if (order.isFilled())

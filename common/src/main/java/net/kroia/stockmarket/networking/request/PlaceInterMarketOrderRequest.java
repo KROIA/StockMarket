@@ -178,8 +178,10 @@ public class PlaceInterMarketOrderRequest extends StockMarketGenericRequest<Plac
         if (input.crossRateLimit > 0) {
             estimatedBuyVolume = rawVolume * SF / input.crossRateLimit;
         } else {
-            long dollarEstimate = rawVolume * havePrice / SF;
-            estimatedBuyVolume = (wantPrice > 0) ? dollarEstimate * SF / wantPrice : 1;
+            // Single division avoids cascading truncation from two floor divisions
+            // (rawVolume * havePrice / SF) * SF / wantPrice.  +1 ensures the target is
+            // never under the achievable amount; the matching engine caps to what's affordable.
+            estimatedBuyVolume = (wantPrice > 0) ? rawVolume * havePrice / wantPrice + 1 : 1;
         }
         if (estimatedBuyVolume <= 0) estimatedBuyVolume = 1;
 

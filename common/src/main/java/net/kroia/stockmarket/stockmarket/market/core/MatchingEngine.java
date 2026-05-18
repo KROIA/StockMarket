@@ -97,10 +97,8 @@ public class MatchingEngine
                     continue;
                 }
 
-                // Cap fill to what the buyer can actually afford
-                // maxAffordable = buyerFunds * SF / price
                 long buyerFunds = other.moneyBank.getTotalBalance();
-                long maxAffordable = buyerFunds * SF / price;
+                long maxAffordable = affordableVolume(buyerFunds, price);
                 if (maxAffordable < fillPotential)
                 {
                     fillPotential = maxAffordable;
@@ -169,13 +167,11 @@ public class MatchingEngine
         long virtualVol = orderbook.getRawVirtualVolumeRounded(price);
         if (virtualVol < 0)
         {
-            // Cap by available funds: maxByFunds = availableFunds * SF / price
-            // Guard against overflow for bot orders where availableFunds can be Long.MAX_VALUE
             long maxByFunds;
             if (price <= 0 || availableFunds >= Long.MAX_VALUE / SF)
                 maxByFunds = remaining;
             else
-                maxByFunds = availableFunds * SF / price;
+                maxByFunds = affordableVolume(availableFunds, price);
 
             long toFill = Math.min(remaining, Math.min(Math.abs(virtualVol), maxByFunds));
             if (toFill > 0)
@@ -233,20 +229,16 @@ public class MatchingEngine
                 // costFull is negative (fillPotential is negative)
                 if (availableFunds < -costFull)
                 {
-                    // fillPotential = -funds * SF / price (negative volume for sells)
-                    fillPotential = -availableFunds * SF / price;
+                    fillPotential = -affordableVolume(availableFunds, price);
                 }
 
                 if (fillPotential >= 0) continue;
 
-                // cost = rawVolume * rawPrice / scaleFactor (negative because fillPotential < 0)
                 long cost = Math.round((double) fillPotential * price / SF);
-                // Update counterparty order: loses items (fillPotential, negative), receives money (-cost, positive)
                 sellOrder.edit(fillPotential, -cost);
                 other.itemBank.withdrawLockedPrefered(-fillPotential);
                 other.moneyBank.deposit(-cost);
 
-                // Track consumed volume (positive) and dollars spent (positive)
                 long absConsumed = -fillPotential;
                 long absCost     = -cost;
                 totalConsumed  += absConsumed;
@@ -260,10 +252,9 @@ public class MatchingEngine
             else
             {
                 // Bot order — no bank operations needed
-                // Still cap to buyer's remaining funds
                 long costFull = Math.round((double) fillPotential * price / SF);
                 if (availableFunds < -costFull)
-                    fillPotential = -availableFunds * SF / price;
+                    fillPotential = -affordableVolume(availableFunds, price);
 
                 if (fillPotential >= 0) continue;
 
@@ -434,7 +425,7 @@ public class MatchingEngine
             }
 
             // 4. Sell have-items if needed to fund want-item purchase
-            long canAffordWant = (wantSamplePrice > 0) ? transactionMoneyBalance * SF / wantSamplePrice : 0;
+            long canAffordWant = (wantSamplePrice > 0) ? affordableVolume(transactionMoneyBalance, wantSamplePrice) : 0;
 
             if (canAffordWant < wantVolume && canAffordWant < wantTargetVolume)
             {
@@ -478,7 +469,7 @@ public class MatchingEngine
             long wantToBuy = Math.min(wantVolume, wantTargetVolume);
             if (wantSamplePrice > 0)
             {
-                long canBuy = transactionMoneyBalance * SF / wantSamplePrice;
+                long canBuy = affordableVolume(transactionMoneyBalance, wantSamplePrice);
                 wantToBuy = Math.min(wantToBuy, canBuy);
             }
 
@@ -493,7 +484,7 @@ public class MatchingEngine
 
                 if (!order.isBotOrder() && playerBankAccount != null && consumed.volumeConsumed() > 0)
                 {
-                    IServerBank wantItemBank = playerBankAccount.getBank(order.getBuyItemID());
+                    IServerBank wantItemBank = playerBankAccount.getOrCreateBank(order.getBuyItemID());
                     if (wantItemBank != null)
                         wantItemBank.deposit(consumed.volumeConsumed());
                 }
@@ -693,6 +684,12 @@ public class MatchingEngine
 
         IServerBank itemBank  = account.getBank(itemID);
         IServerBank moneyBank = account.getBank(BACKEND_INSTANCES.MARKET_MANAGER.getSync().getTradingCurrencyID());
+
+        // For buy orders, create the item bank if it doesn't exist yet
+        // (inter-market buy legs bypass CreateOrderRequest which normally creates the bank)
+        if (itemBank == null && orderVolume > 0)
+            itemBank = account.getOrCreateBank(itemID);
+
         if (itemBank == null || moneyBank == null) { orderCanceled(order); return; }
 
 
@@ -764,10 +761,8 @@ public class MatchingEngine
                     continue;
                 }
 
-                // Cap fill to what the buyer can actually afford
-                // maxAffordable = buyerFunds * SF / price (since cost = vol * price / SF)
                 long buyerFunds = other.moneyBank.getTotalBalance();
-                long maxAffordable = buyerFunds * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR / buyOrder.getStartPrice();
+                long maxAffordable = affordableVolume(buyerFunds, buyOrder.getStartPrice());
                 if (maxAffordable < fillPotential)
                 {
                     fillPotential = maxAffordable;    // partial – buyer is broke
@@ -853,15 +848,12 @@ public class MatchingEngine
     {
         long availableFunds = Long.MAX_VALUE;
         if(moneyBank != null) {
-            // Cap buy volume to what the player can afford at the current stockmarket price.
-            // This is a conservative upper bound; actual cost may be lower if fills happen
-            // at cheaper ask prices. Any overshoot is harmless — the loop stops when
-            // orderVolume reaches 0.
             availableFunds = moneyBank.getTotalBalance();
-            // maxAffordable = funds * SF / price (since cost = vol * price / SF)
-            long maxAffordable = (currentMarketPrice > 0) ? availableFunds * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR / currentMarketPrice : orderVolume;
+            long maxAffordable = (currentMarketPrice > 0)
+                    ? affordableVolume(availableFunds, currentMarketPrice)
+                    : orderVolume;
             if (maxAffordable < orderVolume)
-                orderVolume = maxAffordable;                      // still positive
+                orderVolume = maxAffordable;
         }
 
         // Quick check: is there enough depth to fill at all?
@@ -925,17 +917,14 @@ public class MatchingEngine
                 }
 
                 // Cap fill to what the buyer can still afford
-                // costFull = rawVolume * rawPrice / scaleFactor (fillPotential is negative for sells)
                 long costFull = Math.round((double)fillPotential * sellOrder.getStartPrice() / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
                 if (availableFunds < -costFull)
                 {
-                    // fillPotential = -funds * SF / price (negative volume for sells)
-                    fillPotential  = -availableFunds * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR / sellOrder.getStartPrice();
-                    // Buyer exhausted — order will finish after this fill
+                    fillPotential = -affordableVolume(availableFunds, sellOrder.getStartPrice());
                 }
 
                 if (fillPotential >= 0)
-                    break;  // buyer is completely broke, stop
+                    break;
 
                 // cost = rawVolume * rawPrice / scaleFactor
                 long cost = Math.round((double)fillPotential * sellOrder.getStartPrice() / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
@@ -958,11 +947,9 @@ public class MatchingEngine
             else
             {
                 // Bot / virtual limit order — no counterparty account needed
-                // Still cap to buyer's remaining funds
-                // costFull = rawVolume * rawPrice / scaleFactor (fillPotential is negative for sells)
                 long costFull = Math.round((double)fillPotential * sellOrder.getStartPrice() / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
                 if (availableFunds < -costFull)
-                    fillPotential = -availableFunds * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR / sellOrder.getStartPrice();
+                    fillPotential = -affordableVolume(availableFunds, sellOrder.getStartPrice());
 
                 if (fillPotential >= 0) break;
 
@@ -1097,14 +1084,11 @@ public class MatchingEngine
             long virtualVol = orderbook.getRawVirtualVolumeRounded(nextExecutedPrice);
             if (virtualVol < 0)
             {
-                // Also cap to what the buyer can afford at this price level
-                // maxByFunds = funds * SF / price (since cost = vol * price / SF)
-                // Guard against overflow for bot orders where availableFunds can be Long.MAX_VALUE
                 long maxByFunds;
                 if (nextExecutedPrice <= 0 || availableFunds >= Long.MAX_VALUE / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR) {
                     maxByFunds = orderVolume;
                 } else {
-                    maxByFunds = availableFunds * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR / nextExecutedPrice;
+                    maxByFunds = affordableVolume(availableFunds, nextExecutedPrice);
                 }
                 long wantToFill = Math.min(orderVolume, maxByFunds);
 
@@ -1286,5 +1270,21 @@ public class MatchingEngine
     }
     protected void debug(String message) {
         BACKEND_INSTANCES.LOGGER.debug("[MatchingEngine:"+itemID+"]: "+message);
+    }
+
+    /**
+     * Returns the maximum volume affordable at the given price, using the same
+     * cost formula as the matching loop: cost = Math.round(price * volume / SF).
+     * Floor division (funds * SF / price) can under-count by 1 when Math.round
+     * would round the cost down, so this method checks if +1 is still affordable.
+     */
+    static long affordableVolume(long funds, long price)
+    {
+        long SF = BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+        long vol = funds * SF / price;
+        long costOfNext = Math.round((double) price * (vol + 1) / SF);
+        if (costOfNext <= funds)
+            vol++;
+        return vol;
     }
 }
