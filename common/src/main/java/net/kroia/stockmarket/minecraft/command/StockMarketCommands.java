@@ -2,7 +2,6 @@ package net.kroia.stockmarket.minecraft.command;
 
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
-import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
@@ -13,19 +12,12 @@ import net.kroia.modutilities.testing.TestCommandRegistration;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.networking.packet.OpenUIPacket;
-import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
-import net.kroia.stockmarket.data.table.MarketPriceManager;
-import net.kroia.stockmarket.data.filter.DateFilter;
-import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
 import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 
@@ -88,105 +80,6 @@ public class StockMarketCommands {
 
 
         dispatcher.register(Commands.literal("stockmarket")
-                .then(Commands.literal("testdb")
-                        .then(Commands.argument("table", StringArgumentType.string())
-                                .suggests((x, y) -> {
-                                    y.suggest("OrderRecord");
-                                    y.suggest("MarketPrice");
-                                    return y.buildFuture();
-                                })
-
-                                .then(Commands.argument("record_count", IntegerArgumentType.integer())
-                                        .executes(context -> {
-                                            int numRecords = IntegerArgumentType.getInteger(context, "record_count");
-                                            String table = StringArgumentType.getString(context, "table");
-                                            CommandSourceStack source = context.getSource();
-
-                                            if ("OrderRecord".equals(table)) {
-                                                List<OrderRecordStruct> exData = OrderRecordStruct.generateExampleData(numRecords);
-                                                var manager = BACKEND_INSTANCES.ORDER_RECORD_MANAGER;
-                                                long time = System.currentTimeMillis();
-                                                manager.save(exData).thenRun(() -> {
-                                                    long writeTime = System.currentTimeMillis() - time;
-                                                    try {
-                                                        source.sendSystemMessage(Component.literal("Database write for " + numRecords + " records took " + writeTime + " ms"));
-                                                    } catch (Exception e) {
-                                                    }
-                                                    long time2 = System.currentTimeMillis();
-                                                    manager.getHistory(Optional.of(new DateFilter(Long.MAX_VALUE, Long.MAX_VALUE)), Optional.empty(), Optional.empty(), Optional.empty())
-                                                            .thenRun(() -> {
-                                                                long readTime = System.currentTimeMillis() - time2;
-                                                                try {
-                                                                    source.sendSystemMessage(Component.literal("Database read for " + numRecords + " records took " + readTime + " ms"));
-                                                                } catch (Exception e) {
-                                                                }
-                                                                long time3 = System.currentTimeMillis();
-                                                                manager.removeHistory(Optional.of(new DateFilter(Long.MAX_VALUE, Long.MAX_VALUE)), Optional.empty(), Optional.empty(), Optional.empty())
-                                                                        .thenRun(() -> {
-                                                                            long deleteTime = System.currentTimeMillis() - time3;
-                                                                            try {
-                                                                                source.sendSystemMessage(Component.literal("Database delete for " + numRecords + " records took " + deleteTime + " ms"));
-                                                                            } catch (Exception e) {
-                                                                            }
-                                                                        });
-                                                            });
-
-                                                });
-                                            } else {
-                                                List<MarketPriceStruct> exData = MarketPriceStruct.generateExampleData(numRecords);
-                                                MarketPriceManager manager = BACKEND_INSTANCES.MARKET_PRICE_HISTORY_MANAGER;
-                                                long time = System.currentTimeMillis();
-                                                manager.save(exData).thenRun(() -> {
-                                                    long writeTime = System.currentTimeMillis() - time;
-                                                    try {
-                                                        source.sendSystemMessage(Component.literal("Database write for " + numRecords + " records took " + writeTime + " ms"));
-                                                    } catch (Exception e) {
-                                                    }
-                                                    long time2 = System.currentTimeMillis();
-                                                    manager.getHistory(Optional.of(new DateFilter(Long.MAX_VALUE, Long.MAX_VALUE)), Optional.empty(), -1)
-                                                            .thenRun(() -> {
-                                                                long readTime = System.currentTimeMillis() - time2;
-                                                                try {
-                                                                    source.sendSystemMessage(Component.literal("Database read for " + numRecords + " records took " + readTime + " ms"));
-                                                                } catch (Exception e) {
-                                                                }
-                                                                long time3 = System.currentTimeMillis();
-                                                                manager.removeHistory(Optional.of(new DateFilter(Long.MAX_VALUE, Long.MAX_VALUE)), Optional.empty())
-                                                                        .thenRun(() -> {
-                                                                            long deleteTime = System.currentTimeMillis() - time3;
-                                                                            try {
-                                                                                source.sendSystemMessage(Component.literal("Database delete for " + numRecords + " records took " + deleteTime + " ms"));
-                                                                            } catch (Exception e) {
-                                                                            }
-                                                                        });
-                                                            });
-
-                                                });
-                                            }
-                                            return 1;
-                                        }))))
-                .then(Commands.literal("db")
-                        .then(Commands.argument("table", StringArgumentType.string())
-                                .suggests((x, y) -> {
-                                    y.suggest("OrderRecord");
-                                    y.suggest("MarketPrice");
-                                    return y.buildFuture();
-                                })
-                                .then(Commands.literal("count")
-                                        .executes(context -> {
-                                            String table = StringArgumentType.getString(context, "table");
-                                            CommandSourceStack source = context.getSource();
-                                            if ("OrderRecord".equals(table)) {
-                                                BACKEND_INSTANCES.ORDER_RECORD_MANAGER.getRecordCount(Optional.empty(), Optional.empty())
-                                                        .thenAccept(count -> source.sendSystemMessage(Component.literal("OrderRecord table currently has " + count + " records.")));
-                                            } else if ("MarketPrice".equals(table)) {
-                                                BACKEND_INSTANCES.MARKET_PRICE_HISTORY_MANAGER.getRecordCount(Optional.empty(), Optional.empty())
-                                                        .thenAccept(count -> source.sendSystemMessage(Component.literal("MarketPrice table currently has " + count + " records.")));
-                                            } else {
-                                                source.sendFailure(Component.literal("Unknown table: " + table + " (expected OrderRecord or MarketPrice)"));
-                                            }
-                                            return 1;
-                                        }))))
                 .then(Commands.literal("op")
                         .requires(source -> source.hasPermission(2)) // Admin-only
                         .executes(context -> {
