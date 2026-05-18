@@ -89,6 +89,9 @@ public class NormalizedRandomPriceGenerator implements ServerSaveable {
 
     public void testToFile(int steps)
     {
+        if(!StockMarketMod.ENABLE_DEV_FEATURES)
+            return;
+
         String fileName = "normalized_random_walk.csv";
 
         StringBuilder sb = new StringBuilder();

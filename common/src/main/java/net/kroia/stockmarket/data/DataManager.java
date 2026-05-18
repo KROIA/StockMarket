@@ -246,7 +246,7 @@ public class DataManager extends DataPersistence {
         List<MarketPriceStruct> candles = marketManager.getCurrentMarketPricesAndStartNewCandle();
         long gatheringCandlesTime = System.nanoTime() - saveStartTime;
         if(ENABLE_DEBUG_PERFORMANCE)
-            info("savePriceCandlesToSQL(): Gathering time: "+gatheringCandlesTime/1000000.0 + "ms");
+            debug("savePriceCandlesToSQL(): Gathering time: "+gatheringCandlesTime/1000000.0 + "ms");
         long finalSaveStartTime = System.nanoTime();
 
         CompletableFuture<Boolean> result = new CompletableFuture<>();
@@ -260,7 +260,7 @@ public class DataManager extends DataPersistence {
             if(ENABLE_DEBUG_PERFORMANCE) {
                 long finalSaveEndTime = System.nanoTime();
                 long writeTime = finalSaveEndTime - finalSaveStartTime;
-                info("savePriceCandlesToSQL async(): Database write for " + candles.size() + " records took " + writeTime / 1000000.0 + " ms\n"+
+                debug("savePriceCandlesToSQL async(): Database write for " + candles.size() + " records took " + writeTime / 1000000.0 + " ms\n"+
                         "saveCandlesToSQL: took " + (double) (finalSaveEndTime - saveStartTime) / 1000000.0 + " ms");
             }
             candleDataSQL_saveLock.set(false);
