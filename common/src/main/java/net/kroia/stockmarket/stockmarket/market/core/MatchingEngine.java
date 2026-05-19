@@ -504,7 +504,36 @@ public class MatchingEngine
                 break;
         }
 
-        // 7. Update reported market prices only if fills occurred, using the last actual fill prices.
+        // 7. Sell remaining rounding dust: per-level rounding can leave a few raw units
+        //    unsold because the main loop only sells when it needs dollars for Gold
+        //    purchases. Only clean up small remainders (≤1% of original target) to avoid
+        //    selling large amounts that the main loop intentionally skipped due to rate limits.
+        long originalTarget = Math.abs(order.getSellOrder().getTargetVolume());
+        long dustThreshold = Math.max(originalTarget / 100, 2);
+        if (haveLockedVolume > 0 && haveLockedVolume <= dustThreshold
+                && madeProgress && !order.isBotOrder() && playerBankAccount != null)
+        {
+            IServerBank haveItemBank = playerBankAccount.getBank(order.getSellItemID());
+            if (haveItemBank != null && haveItemBank.withdrawLockedPrefered(haveLockedVolume) == BankStatus.SUCCESS)
+            {
+                long sellPrice = lastHaveFillPrice > 0 ? lastHaveFillPrice : haveSamplePrice;
+                DepthConsumeResult consumed = consumeBuySideDepthAtPrice(
+                        haveMarket.getOrderbook(), haveMarket.getItemID(), sellPrice, haveLockedVolume);
+
+                long unsold = haveLockedVolume - consumed.volumeConsumed();
+                haveLockedVolume -= consumed.volumeConsumed();
+                transactionMoneyBalance += consumed.dollarAmount();
+                order.getSellOrder().edit(-consumed.volumeConsumed(), consumed.dollarAmount());
+
+                if (consumed.volumeConsumed() > 0)
+                    lastHaveFillPrice = sellPrice;
+
+                if (unsold > 0)
+                    haveItemBank.lockAmount(unsold);
+            }
+        }
+
+        // 8. Update reported market prices only if fills occurred, using the last actual fill prices.
         //    Uses setCurrentMarketPriceNoRedistribute to avoid shifting the VirtualOrderbook's
         //    DynamicIndexedArray window — the bilateral walk already consumed depth directly
         //    via fillVirtual, and redistributing would regenerate default volumes at new price
@@ -515,11 +544,13 @@ public class MatchingEngine
             wantMarket.setCurrentMarketPriceNoRedistribute(lastWantFillPrice);
         }
 
-        // 8. Persist state on order
+        // 9. Persist state on order
         order.setTransactionMoneyBalance(transactionMoneyBalance);
 
-        // 9. Determine result
-        if (wantTargetVolume <= 0 || order.isFilled())
+        // 10. Determine result
+        long remainingSell = Math.abs(order.getSellOrder().getRemainingVolume());
+        boolean sellExhausted = remainingSell <= 0 && transactionMoneyBalance <= 0;
+        if (wantTargetVolume <= 0 || order.isFilled() || (sellExhausted && madeProgress))
             return InterMarketExecutor.ExecutionResult.FILLED;
         else if (madeProgress)
             return InterMarketExecutor.ExecutionResult.PARTIAL_FILL;

@@ -303,8 +303,15 @@ public class OrderMarkerOverlay implements CandlestickChart.InteractiveOverlay {
             int cancelBgColor = ColorUtilities.setAlpha(
                     ColorUtilities.setBrightness(solidColor, 0.6f), HANDLE_ALPHA);
 
-            // Label shows pending volume (buy leg remaining)
-            double remaining = Math.abs(MarketManager.convertToRealAmountStatic(order.getTargetBuyVolume()));
+            // Label shows pending volume in terms of the pair's want-item.
+            // Buy direction (matches pair): show buy target (want-items to receive).
+            // Sell direction (opposite): show sell volume (want-items being sold).
+            double remaining;
+            if (orderMatchesPairDirection) {
+                remaining = Math.abs(MarketManager.convertToRealAmountStatic(order.getTargetBuyVolume()));
+            } else {
+                remaining = Math.abs(MarketManager.convertToRealAmountStatic(order.getTargetSellVolume()));
+            }
             String label = formatAmount(remaining);
 
             int textWidth = chart.getTextWidth(label);

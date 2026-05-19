@@ -495,8 +495,10 @@ public class TradeScreen extends StockMarketGuiScreen {
                 }
                 // Set pair direction on the overlay so order markers display at the correct rate
                 orderMarkerOverlay.setPairDirection(pairHaveMarketID, pairWantMarketID);
+                pendingOrdersPanel.setPairDirection(pairHaveMarketID);
             }
         } else {
+            pendingOrdersPanel.setPairDirection(null);
             // When returning to money mode, switch back to the "want" market (primary slot)
             if (pairWantMarketID != null && !pairWantMarketID.equals(currentMarketID)) {
                 switchMarket(pairWantMarketID);
