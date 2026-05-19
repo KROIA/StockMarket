@@ -3,13 +3,16 @@ package net.kroia.stockmarket.minecraft.command;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.command.IAsyncStockMarketCommandHandler;
 import net.kroia.stockmarket.api.command.IServerStockMarketCommandHandler;
+import net.kroia.stockmarket.data.StarterKitData;
 import net.kroia.stockmarket.networking.packet.OpenUIPacket;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
@@ -70,6 +73,31 @@ public class ServerStockMarketCommandHandler implements IServerStockMarketComman
             return true;
         }
         return false;
+    }
+
+    @Override
+    public boolean stockmarket_starterKit(@NotNull UUID executor) {
+        ServerPlayer player = ServerPlayerUtilities.getOnlinePlayer(executor);
+        if (player == null) return false;
+
+        StarterKitData starterKitData = BACKEND_INSTANCES.DATA_MANAGER.getStarterKitData();
+        if (starterKitData.hasClaimed(executor)) {
+            sendMessage(executor, "You have already claimed the starter kit!");
+            return false;
+        }
+
+        List<ItemStack> items = StarterKitData.getStarterKitItems();
+        for (ItemStack itemStack : items) {
+            if (!player.getInventory().add(itemStack)) {
+                // Inventory full — drop the item on the ground
+                player.drop(itemStack, false);
+            }
+        }
+
+        starterKitData.markClaimed(executor);
+        BACKEND_INSTANCES.DATA_MANAGER.saveStarterKit();
+        sendMessage(executor, "Starter kit claimed! Check your inventory.");
+        return true;
     }
 
     // === Helper methods ===

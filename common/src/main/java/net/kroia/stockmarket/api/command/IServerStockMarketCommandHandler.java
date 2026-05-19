@@ -11,4 +11,7 @@ import java.util.UUID;
 public interface IServerStockMarketCommandHandler {
     boolean stockmarket_setStockmarketAdminMode(@NotNull UUID executor, boolean isAdmin);
     boolean stockmarket_setStockmarketAdminMode_user(@NotNull UUID executor, String userName, boolean isAdmin);
+
+    // Give the player a one-time starter kit of items for testing the stock market
+    boolean stockmarket_starterKit(@NotNull UUID executor);
 }
