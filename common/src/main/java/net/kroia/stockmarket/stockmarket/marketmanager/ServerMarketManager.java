@@ -157,7 +157,28 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
     @Override
     public boolean deleteMarket(@NotNull ItemID marketID)
     {
-        return markets.remove(marketID) != null;
+        ServerMarket market = markets.get(marketID);
+        if (market == null) return false;
+
+        // Close market: cancels player orders and inter-market orders via callback
+        if (market.isMarketOpen()) {
+            market.setMarketOpen(false);
+        }
+
+        // Clear remaining orders (bot orders that survived close)
+        market.getOrderbook().clear();
+
+        // Unsubscribe from all plugins
+        if (BACKEND_INSTANCES.PLUGIN_MANAGER != null) {
+            var pluginManager = BACKEND_INSTANCES.PLUGIN_MANAGER.getSync();
+            if (pluginManager != null) {
+                pluginManager.removeCache(marketID);
+            }
+        }
+
+        // Remove from map
+        markets.remove(marketID);
+        return true;
     }
     @Override
     public CompletableFuture<Boolean> deleteMarketAsync(@NotNull ItemID marketID) {

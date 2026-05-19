@@ -153,7 +153,7 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
 
     @Override
     protected Settings provideDefaultCustomSettings() {
-        return new Settings(1.0f);
+        return new Settings(0.3f);
     }
 
     @Override

@@ -234,6 +234,7 @@ public class StockMarketModBackend implements StockMarketAPI {
 
             loadDataFromFiles(UtilitiesPlatform.getServer());
             registerItemPriceProvider();
+            autosaveTimer_lastMs = System.currentTimeMillis();
             TickEvent.SERVER_POST.register(StockMarketModBackend::onServerTick);
 
             if (TestRegistry.ENABLE_TESTS && StockMarketMod.ENABLE_DEV_FEATURES) {
@@ -366,11 +367,21 @@ public class StockMarketModBackend implements StockMarketAPI {
             CLIENT_INSTANCES.MARKET_MANAGER.update();
     }
 
+    private static long autosaveTimer_lastMs = 0;
+
     // Called from the master side
     private static void onServerTick(MinecraftServer server)
     {
         SERVER_INSTANCES.PLUGIN_MANAGER.getSync().update();
         SERVER_INSTANCES.MARKET_MANAGER.getSync().update();
+
+        // Periodic full NBT autosave
+        long now = System.currentTimeMillis();
+        long intervalMs = SERVER_INSTANCES.SERVER_SETTINGS.UTILITIES.SAVE_INTERVAL_MINUTES.get() * 60_000L;
+        if (intervalMs > 0 && now - autosaveTimer_lastMs >= intervalMs) {
+            autosaveTimer_lastMs = now;
+            saveDataToFiles(server);
+        }
     }
 
     public static void loadDataFromFiles(MinecraftServer server)

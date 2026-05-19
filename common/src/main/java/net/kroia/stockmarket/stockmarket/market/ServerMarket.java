@@ -266,7 +266,9 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     @Override
     public boolean putOrder(Order order)
     {
-        if(order.isFilled() || !settings.marketOpen)
+        if(order.isFilled())
+            return false;
+        if(!settings.marketOpen && order.isPlayerOrder())
             return false;
         if(!order.getItemID().equals(itemID))
             return false; // Wrong stockmarket for this order
@@ -504,11 +506,8 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     {
         orderbook.setCurrentMarketPrice(currentMarketPrice);
 
-        if(settings.marketOpen)
-        {
-            matchingEngine.update(currentMarketPrice);
-            candleTradedVolume += matchingEngine.getLastTradedVolume();
-        }
+        matchingEngine.update(currentMarketPrice);
+        candleTradedVolume += matchingEngine.getLastTradedVolume();
 
         // Update the current candle
         candleLowPrice = Math.min(candleLowPrice, currentMarketPrice);

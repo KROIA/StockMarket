@@ -71,8 +71,8 @@ public class CreateMarketTab extends StockMarketGuiElement {
     private @Nullable String selectedCategory;
     // Map of unique preset keys to preset references for batch creation
     private final LinkedHashMap<String, MarketPreset> selectedPresets = new LinkedHashMap<>();
-    // Cached set of existing market item names for "already exists" detection
-    private final Set<String> existingMarketNames = new HashSet<>();
+    // Cached list of existing market ItemStacks for component-aware "already exists" detection
+    private final List<ItemStack> existingMarketStacks = new ArrayList<>();
     // Dirty flags — rebuilt in render() to avoid modifying child lists during event handling
     private boolean selectedListDirty = false;
     private boolean itemGridDirty = false;
@@ -177,14 +177,19 @@ public class CreateMarketTab extends StockMarketGuiElement {
     }
 
     /**
-     * Caches existing market item names so we can show them as "already exists" in the grid.
+     * Caches existing market ItemStacks so we can do component-aware "already exists" detection.
+     * Uses full ItemStack comparison instead of just item ID strings, so that e.g.
+     * "Enchanted Book (Infinity)" and "Enchanted Book (Mending)" are treated as distinct items.
      */
     private void refreshExistingMarkets() {
-        existingMarketNames.clear();
+        existingMarketStacks.clear();
         List<ItemID> markets = getAvailableMarkets();
         if (markets != null) {
             for (ItemID id : markets) {
-                existingMarketNames.add(id.getName());
+                ItemStack stack = id.getStack();
+                if (stack != null && !stack.isEmpty()) {
+                    existingMarketStacks.add(stack);
+                }
             }
         }
     }
@@ -225,7 +230,9 @@ public class CreateMarketTab extends StockMarketGuiElement {
             }
 
             String key = preset.getUniqueKey();
-            boolean alreadyExists = existingMarketNames.contains(preset.getItemId());
+            // Component-aware comparison: matches item type AND components (e.g. enchantments)
+            boolean alreadyExists = existingMarketStacks.stream()
+                    .anyMatch(existing -> ItemStack.isSameItemSameComponents(existing, stack));
             boolean isSelected = selectedPresets.containsKey(key);
 
             SelectableItemView itemView = new SelectableItemView(stack, key, isSelected, alreadyExists, preset);

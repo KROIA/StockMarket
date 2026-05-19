@@ -2,7 +2,6 @@ package net.kroia.stockmarket.screen;
 
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.ClientPlayerUtilities;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.Label;
@@ -170,7 +169,7 @@ public class TradeScreen extends StockMarketGuiScreen {
                 market.subscribeToMarketPriceUpdate();
                 candlestickChart.setMarket(market);
                 orderMarkerOverlay.setCurrentMarket(currentMarketID);
-                tradingPanel.setItemName(ClientPlayerUtilities.getItemDisplayText(currentMarketID.getStack()));
+                tradingPanel.setItemName(currentMarketID.getStack().getHoverName().getString());
                 tradingPanel.setLimitPrice(market.getCurrentMarketRealPrice());
             }
             // Update last market in preferences
@@ -203,7 +202,7 @@ public class TradeScreen extends StockMarketGuiScreen {
             if(currentMarketID == null)
                 tradingPanel.setCurrencyName("?");
             else
-                tradingPanel.setCurrencyName(ClientPlayerUtilities.getItemDisplayText(currencyID.getStack()));
+                tradingPanel.setCurrencyName(currencyID.getStack().getHoverName().getString());
         });
 
         // Set initial market price on the trading panel
@@ -334,7 +333,7 @@ public class TradeScreen extends StockMarketGuiScreen {
             market.subscribeToMarketPriceUpdate();
             candlestickChart.setMarket(market);
             orderMarkerOverlay.setCurrentMarket(newMarketID);
-            tradingPanel.setItemName(ClientPlayerUtilities.getItemDisplayText(newMarketID.getStack()));
+            tradingPanel.setItemName(newMarketID.getStack().getHoverName().getString());
             tradingPanel.setLimitPrice(market.getCurrentMarketRealPrice());
             tradingPanel.setCurrentMarketPrice(market.getCurrentMarketRealPrice());
 
@@ -556,10 +555,10 @@ public class TradeScreen extends StockMarketGuiScreen {
 
         // Update inter-market trading panel item names
         if (pairHaveMarketID != null) {
-            interMarketTradingPanel.setHaveItemName(ClientPlayerUtilities.getItemDisplayText(pairHaveMarketID.getStack()));
+            interMarketTradingPanel.setHaveItemName(pairHaveMarketID.getStack().getHoverName().getString());
         }
         if (pairWantMarketID != null) {
-            interMarketTradingPanel.setWantItemName(ClientPlayerUtilities.getItemDisplayText(pairWantMarketID.getStack()));
+            interMarketTradingPanel.setWantItemName(pairWantMarketID.getStack().getHoverName().getString());
         }
     }
 
@@ -582,7 +581,7 @@ public class TradeScreen extends StockMarketGuiScreen {
             market.subscribeToMarketPriceUpdate();
             candlestickChart.setMarket(market);
             orderMarkerOverlay.setCurrentMarket(newMarketID);
-            tradingPanel.setItemName(ClientPlayerUtilities.getItemDisplayText(newMarketID.getStack()));
+            tradingPanel.setItemName(newMarketID.getStack().getHoverName().getString());
             tradingPanel.setLimitPrice(market.getCurrentMarketRealPrice());
             tradingPanel.setCurrentMarketPrice(market.getCurrentMarketRealPrice());
 

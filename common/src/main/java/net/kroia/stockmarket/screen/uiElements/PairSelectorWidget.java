@@ -2,7 +2,6 @@ package net.kroia.stockmarket.screen.uiElements;
 
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.ClientPlayerUtilities;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.Frame;
 import net.kroia.modutilities.gui.elements.ItemView;
@@ -376,7 +375,7 @@ public class PairSelectorWidget extends StockMarketGuiElement {
         if (haveMarketID != null) {
             haveItemView.setItemStack(haveMarketID.getStack());
             haveItemView.setEnabled(true);
-            haveNameLabel.setText(ClientPlayerUtilities.getItemDisplayText(haveMarketID.getStack()));
+            haveNameLabel.setText(haveMarketID.getStack().getHoverName().getString());
         } else {
             haveItemView.setEnabled(false);
             haveNameLabel.setText(Component.translatable("gui.stockmarket.pair_selector.select").getString());
@@ -390,7 +389,7 @@ public class PairSelectorWidget extends StockMarketGuiElement {
         if (wantMarketID != null) {
             wantItemView.setItemStack(wantMarketID.getStack());
             wantItemView.setEnabled(true);
-            wantNameLabel.setText(ClientPlayerUtilities.getItemDisplayText(wantMarketID.getStack()));
+            wantNameLabel.setText(wantMarketID.getStack().getHoverName().getString());
         } else {
             wantItemView.setEnabled(false);
             wantNameLabel.setText(Component.translatable("gui.stockmarket.pair_selector.select").getString());
@@ -423,8 +422,8 @@ public class PairSelectorWidget extends StockMarketGuiElement {
         }
 
         double rate = wantPrice / havePrice;
-        String haveName = ClientPlayerUtilities.getItemDisplayText(haveMarketID.getStack());
-        String wantName = ClientPlayerUtilities.getItemDisplayText(wantMarketID.getStack());
+        String haveName = haveMarketID.getStack().getHoverName().getString();
+        String wantName = wantMarketID.getStack().getHoverName().getString();
         rateLabel.setText(String.format("%.2f %s / %s", rate, haveName, wantName));
     }
 

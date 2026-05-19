@@ -176,7 +176,8 @@ public class ManagementScreen extends StockMarketGuiScreen {
         private void onRemoveTradingPairButtonClicked()
         {
             ClientMarket currentMarket = getSelectedMarket();
-            // TODO: implement market removal confirmation popup
+            if (currentMarket == null) return;
+            setScreen(new ConfirmDeletePopup(parentScreen, currentMarket.getItemID()));
         }
         private void onMarketSettingsButtonClicked()
         {
@@ -539,5 +540,85 @@ public class ManagementScreen extends StockMarketGuiScreen {
                 );
             }
         });
+    }
+
+    /**
+     * Confirmation popup shown before deleting a market.
+     * Displays the market name, a warning message, and Yes/No buttons.
+     * On confirm, sends the delete request to the server and returns to a fresh ManagementScreen.
+     */
+    private static class ConfirmDeletePopup extends StockMarketGuiScreen {
+        private final ManagementScreen parentScreen;
+        private final ItemID marketID;
+
+        private final Label titleLabel;
+        private final Label msgLabel;
+        private final Button confirmButton;
+        private final Button cancelButton;
+
+        ConfirmDeletePopup(ManagementScreen parent, ItemID marketID) {
+            super(Texts.ASK_TITLE, parent);
+            this.parentScreen = parent;
+            this.marketID = marketID;
+
+            titleLabel = new Label(Texts.ASK_TITLE.getString());
+            titleLabel.setAlignment(Label.Alignment.CENTER);
+
+            msgLabel = new Label(Texts.ASK_MSG.getString());
+            msgLabel.setAlignment(Label.Alignment.CENTER);
+
+            confirmButton = new Button("Yes", this::onConfirm);
+            confirmButton.setBackgroundColor(0xFFe8711c);
+            confirmButton.setHoverColor(0xFFe04c12);
+            confirmButton.setPressedColor(0xFFe04c12);
+
+            cancelButton = new Button("No", this::onCancel);
+
+            addElement(titleLabel);
+            addElement(msgLabel);
+            addElement(confirmButton);
+            addElement(cancelButton);
+        }
+
+        @Override
+        protected void updateLayout(Gui gui) {
+            int p = StockMarketGuiElement.padding;
+            int s = StockMarketGuiElement.spacing;
+            int eh = StockMarketGuiElement.defaultElementHeight;
+
+            int panelW = (int)(getWidth() * 0.4);
+            int panelH = 4 * eh + 5 * s;
+            int panelX = (getWidth() - panelW) / 2;
+            int panelY = (getHeight() - panelH) / 2;
+
+            titleLabel.setBounds(panelX, panelY, panelW, eh);
+            msgLabel.setBounds(panelX, titleLabel.getBottom() + s, panelW, eh * 2);
+
+            int btnW = (panelW - s) / 2;
+            int btnY = msgLabel.getBottom() + s;
+            confirmButton.setBounds(panelX, btnY, btnW, eh);
+            cancelButton.setBounds(confirmButton.getRight() + s, btnY, btnW, eh);
+        }
+
+        private void onConfirm() {
+            getMarketManager().requestDeleteMarket(marketID).thenAccept(success -> {
+                Minecraft.getInstance().execute(() -> {
+                    if (success) {
+                        // Unsubscribe from price updates and deselect
+                        ClientMarket market = getMarket(marketID);
+                        if (market != null) {
+                            market.unsubscribeFromMarketPriceUpdate();
+                        }
+                        StockMarketGuiElement.selectMarket(null);
+                    }
+                    // Return to a fresh ManagementScreen so the market list is refreshed
+                    setScreen(new ManagementScreen());
+                });
+            });
+        }
+
+        private void onCancel() {
+            setScreen(parentScreen);
+        }
     }
 }
