@@ -37,6 +37,8 @@ public class CandlestickChart extends StockMarketGuiElement {
     public static final SimpleDateFormat monthFormat = new SimpleDateFormat(" MMMM ", Locale.getDefault());
     public static final SimpleDateFormat yearFormat  = new SimpleDateFormat("yyyy", Locale.getDefault());
     public static final SimpleDateFormat timeFormat  = new SimpleDateFormat("HH:mm", Locale.getDefault());
+    // Number of candles shown by default when a market is opened for the first time
+    private static final int DEFAULT_VISIBLE_CANDLES = 50;
 
     // ── Overlay interfaces ──
 
@@ -83,6 +85,7 @@ public class CandlestickChart extends StockMarketGuiElement {
     private final RectangleF chartviewRect = new RectangleF(200, 0, 200, 500);
     private final Point lastDragMousePos = new Point();
     private int maxPriceLabelTextWidth = 0;
+    private double currentPriceStep = 0;
     private int firstVisibleCandleIndex = 0;
     private int lastVisibleCandleIndex = 0;
     private int maxTimeDateLabelWidth = 0;
@@ -146,7 +149,14 @@ public class CandlestickChart extends StockMarketGuiElement {
 
         if (provider != null) {
             if (!restoreViewportState(provider.getViewportKey())) {
+                skipAutoCenterOnce = true;
                 selectCandleTimeDeltaByIndex(currentCandleTimeIdx);
+                if (data != null && !data.getCandles().isEmpty()) {
+                    int targetCandles = Math.min(DEFAULT_VISIBLE_CANDLES, data.getCandles().size());
+                    chartviewRect.width = Math.max(targetCandles, 1);
+                    zoomLevel = chartviewRect.width;
+                    chartviewRect.x = chartviewRect.width;
+                }
                 firstDraw = true;
             }
         }
@@ -333,6 +343,9 @@ public class CandlestickChart extends StockMarketGuiElement {
         disableScissor();
         if (firstDraw) {
             firstDraw = false;
+            int targetCandles = Math.min(DEFAULT_VISIBLE_CANDLES, data.getCandles().size());
+            chartviewRect.width = Math.max(targetCandles, 1);
+            zoomLevel = chartviewRect.width;
             autoCenterView();
         }
     }
@@ -428,6 +441,7 @@ public class CandlestickChart extends StockMarketGuiElement {
 
         // Draw all lines within the visible range
         double topPrice = chartviewRect.y + chartviewRect.height;
+        currentPriceStep = niceStep;
         maxPriceLabelTextWidth = 0;
         scissorPause();
         for (double price = firstLine; price <= topPrice; price += niceStep) {
@@ -927,16 +941,36 @@ public class CandlestickChart extends StockMarketGuiElement {
     }
 
     private String formatPrice(double price) {
-        if      (price >= 1_000_000_000) return formatCompact(price / 1_000_000_000, "B");
-        else if (price >= 1_000_000)     return formatCompact(price / 1_000_000,     "M");
-        else if (price >= 1_000)         return formatCompact(price / 1_000,         "k");
-        else                             return String.format("%6.2f", price);
+        if      (price >= 1_000_000_000) return formatCompact(price / 1_000_000_000, 1_000_000_000, "B");
+        else if (price >= 1_000_000)     return formatCompact(price / 1_000_000,     1_000_000,     "M");
+        else if (price >= 1_000)         return formatCompact(price / 1_000,         1_000,         "k");
+        else                             return formatCompact(price, 1, "");
     }
 
-    private String formatCompact(double value, String suffix) {
-        if      (value >= 100) return String.format("%3.0f%s", value, suffix);
-        else if (value >= 10)  return String.format("%4.1f%s", value, suffix);
-        else                   return String.format("%4.2f%s", value, suffix);
+    private String formatCompact(double value, double divisor, String suffix) {
+        int decimals = 0;
+        if (currentPriceStep > 0) {
+            double stepInUnits = currentPriceStep / divisor;
+            if (stepInUnits > 0 && stepInUnits < 1) {
+                decimals = Math.max(0, (int) Math.ceil(-Math.log10(stepInUnits)));
+            }
+        }
+        if (value >= 100)     decimals = Math.max(decimals, 0);
+        else if (value >= 10) decimals = Math.max(decimals, 1);
+        else                  decimals = Math.max(decimals, 2);
+        String formatted = String.format("%." + decimals + "f", value);
+        if (decimals > 3) {
+            int dot = formatted.indexOf('.');
+            String intPart = formatted.substring(0, dot + 1);
+            String decPart = formatted.substring(dot + 1);
+            StringBuilder sb = new StringBuilder(intPart);
+            for (int i = 0; i < decPart.length(); i++) {
+                if (i > 0 && i % 3 == 0) sb.append('\'');
+                sb.append(decPart.charAt(i));
+            }
+            formatted = sb.toString();
+        }
+        return formatted + suffix;
     }
 
     private String timeToShortString(long timeMs) {

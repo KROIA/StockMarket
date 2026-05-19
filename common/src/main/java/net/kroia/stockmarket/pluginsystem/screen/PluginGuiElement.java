@@ -9,9 +9,12 @@ import net.kroia.stockmarket.pluginsystem.plugin.core.PluginSyncData;
 import net.kroia.stockmarket.screen.widgets.CandlestickChart;
 import net.kroia.stockmarket.screen.widgets.OrderbookVolumeHistogram;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
+import net.kroia.banksystem.util.ItemID;
 import net.minecraft.network.codec.StreamCodec;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -36,6 +39,7 @@ public class PluginGuiElement<TSettings, TRuntimeData> extends StockMarketGuiEle
 
     private UUID runtimeStreamID = null;
     private PluginSyncData pluginSyncData = null;
+    private @Nullable ItemID activeMarketID = null;
 
     /**
      * Returns whether this plugin GUI element needs a dedicated full screen
@@ -71,25 +75,25 @@ public class PluginGuiElement<TSettings, TRuntimeData> extends StockMarketGuiEle
     /**
      * Called internally by the framework to provide plugin sync data.
      * Stores the data, decodes custom settings, and forwards to
-     * {@link #onPluginSyncDataReceived(PluginSyncData, Object)}.
+     * {@link #onPluginSyncDataReceived(PluginSyncData, Map)}.
      * Do not override — override {@link #onPluginSyncDataReceived} instead.
      *
      * @param data the plugin sync data containing subscribed markets and metadata
      */
     public final void setPluginSyncData(PluginSyncData data) {
         this.pluginSyncData = data;
-        TSettings settings = decodeSettings(data.getCustomSettings());
-        onPluginSyncDataReceived(data, settings);
+        Map<ItemID, TSettings> settingsMap = decodeAllSettings(data.getCustomSettings());
+        onPluginSyncDataReceived(data, settingsMap);
     }
 
     /**
      * Called when the plugin's sync data is received from the server.
      * Override to initialize the element with market data, subscriptions, etc.
      *
-     * @param data           the plugin sync data containing subscribed markets and metadata
-     * @param customSettings the decoded custom settings, or null if not available
+     * @param data              the plugin sync data containing subscribed markets and metadata
+     * @param customSettingsMap the decoded per-market custom settings map, or null if not available
      */
-    protected void onPluginSyncDataReceived(PluginSyncData data, @Nullable TSettings customSettings) {
+    protected void onPluginSyncDataReceived(PluginSyncData data, @Nullable Map<ItemID, TSettings> customSettingsMap) {
         // Default: no-op. Subclasses override.
     }
 
@@ -101,6 +105,30 @@ public class PluginGuiElement<TSettings, TRuntimeData> extends StockMarketGuiEle
     /** Returns the plugin instance UUID, or null if sync data not yet received. */
     public UUID getPluginInstanceID() {
         return pluginSyncData != null ? pluginSyncData.getInstanceID() : null;
+    }
+
+    /**
+     * Sets the active market for settings editing.
+     * Called by the management screen when a market button is clicked.
+     */
+    public final void setActiveMarket(@Nullable ItemID marketID) {
+        this.activeMarketID = marketID;
+        onActiveMarketChanged(marketID);
+    }
+
+    /**
+     * Returns the currently active market for settings editing.
+     */
+    public @Nullable ItemID getActiveMarket() {
+        return activeMarketID;
+    }
+
+    /**
+     * Called when the active market for settings editing changes.
+     * Override to update the settings UI for the newly selected market.
+     */
+    protected void onActiveMarketChanged(@Nullable ItemID marketID) {
+        // Default: no-op. Subclasses override to update settings display.
     }
 
     /**
@@ -166,12 +194,12 @@ public class PluginGuiElement<TSettings, TRuntimeData> extends StockMarketGuiEle
      *
      * @param settings the typed custom settings to send
      */
-    protected final void sendCustomSettings(TSettings settings) {
+    protected final void sendCustomSettings(ItemID marketID, TSettings settings) {
         StreamCodec<ByteBuf, TSettings> codec = customSettingsCodec();
         UUID id = getPluginInstanceID();
-        if (codec == null || id == null || settings == null) {
-            StockMarketMod.LOGGER.warn("[PluginGuiElement] sendCustomSettings aborted: codec={}, id={}, settings={}",
-                    codec != null ? "ok" : "null", id != null ? id : "null", settings != null ? "ok" : "null");
+        if (codec == null || id == null || settings == null || marketID == null) {
+            StockMarketMod.LOGGER.warn("[PluginGuiElement] sendCustomSettings aborted: codec={}, id={}, market={}, settings={}",
+                    codec != null ? "ok" : "null", id != null ? id : "null", marketID != null ? marketID : "null", settings != null ? "ok" : "null");
             return;
         }
         ByteBuf buf = Unpooled.buffer();
@@ -179,13 +207,13 @@ public class PluginGuiElement<TSettings, TRuntimeData> extends StockMarketGuiEle
             codec.encode(buf, settings);
             byte[] bytes = new byte[buf.readableBytes()];
             buf.readBytes(bytes);
-            getPluginManager().requestUpdateCustomSettings(id, bytes).thenAccept(response -> {
+            getPluginManager().requestUpdateCustomSettings(id, marketID, bytes).thenAccept(response -> {
                 if (response.success() && response.confirmedPayload() != null) {
                     TSettings confirmed = decodeSettings(response.confirmedPayload());
-                    onCustomSettingsResponse(true, confirmed);
+                    onCustomSettingsResponse(true, response.marketID(), confirmed);
                 } else {
-                    StockMarketMod.LOGGER.warn("[PluginGuiElement] Custom settings update failed for plugin {}", id);
-                    onCustomSettingsResponse(false, null);
+                    StockMarketMod.LOGGER.warn("[PluginGuiElement] Custom settings update failed for plugin {} market {}", id, marketID);
+                    onCustomSettingsResponse(false, marketID, null);
                 }
             });
         } finally {
@@ -200,7 +228,7 @@ public class PluginGuiElement<TSettings, TRuntimeData> extends StockMarketGuiEle
      * @param success           true if the settings were applied on the server
      * @param confirmedSettings the server's confirmed decoded settings, or null on failure
      */
-    protected void onCustomSettingsResponse(boolean success, @Nullable TSettings confirmedSettings) {
+    protected void onCustomSettingsResponse(boolean success, @Nullable ItemID marketID, @Nullable TSettings confirmedSettings) {
         // Default: no-op. Subclasses override to react to settings confirmation.
     }
 
@@ -219,6 +247,23 @@ public class PluginGuiElement<TSettings, TRuntimeData> extends StockMarketGuiEle
         } finally {
             buf.release();
         }
+    }
+
+    /**
+     * Decodes per-market custom settings from a map of raw bytes.
+     */
+    private @Nullable Map<ItemID, TSettings> decodeAllSettings(@Nullable Map<ItemID, byte[]> data) {
+        if (data == null) return null;
+        StreamCodec<ByteBuf, TSettings> codec = customSettingsCodec();
+        if (codec == null) return null;
+        Map<ItemID, TSettings> result = new HashMap<>();
+        for (Map.Entry<ItemID, byte[]> entry : data.entrySet()) {
+            TSettings settings = decodeSettings(entry.getValue());
+            if (settings != null) {
+                result.put(entry.getKey(), settings);
+            }
+        }
+        return result.isEmpty() ? null : result;
     }
 
 

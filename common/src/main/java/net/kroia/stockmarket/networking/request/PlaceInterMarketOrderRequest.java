@@ -37,13 +37,14 @@ public class PlaceInterMarketOrderRequest extends StockMarketGenericRequest<Plac
      * @param volume        amount of "have" items to sell (positive, real format)
      * @param crossRateLimit rate limit in raw format (0 = market order)
      */
-    public record InputData(ItemID haveItemID, ItemID wantItemID, int bankAccountNr, double volume, long crossRateLimit) {
+    public record InputData(ItemID haveItemID, ItemID wantItemID, int bankAccountNr, double volume, long crossRateLimit, long targetBuyVolume) {
         public static final StreamCodec<RegistryFriendlyByteBuf, InputData> STREAM_CODEC = StreamCodec.composite(
                 ItemID.STREAM_CODEC, p -> p.haveItemID,
                 ItemID.STREAM_CODEC, p -> p.wantItemID,
                 ByteBufCodecs.INT, p -> p.bankAccountNr,
                 ByteBufCodecs.DOUBLE, p -> p.volume,
                 ByteBufCodecs.VAR_LONG, p -> p.crossRateLimit,
+                ByteBufCodecs.VAR_LONG, p -> p.targetBuyVolume,
                 InputData::new
         );
     }
@@ -149,15 +150,26 @@ public class PlaceInterMarketOrderRequest extends StockMarketGenericRequest<Plac
             return future;
         }
 
-        if (itemBank.getBalance() < rawVolume) {
+        // For buy-direction market orders, add a margin to the sell volume to compensate
+        // for spread and rounding losses. The execution only sells what's needed;
+        // any unused locked items are unlocked after the order completes.
+        // Sell-direction orders (targetBuyVolume == 0) use the exact volume the user specified.
+        long lockVolume = rawVolume;
+        if (input.crossRateLimit == 0 && input.targetBuyVolume > 0) {
+            long margin = Math.max(rawVolume / 20, 1);
+            lockVolume = Math.min(rawVolume + margin, itemBank.getBalance());
+            if (lockVolume < rawVolume) lockVolume = rawVolume;
+        }
+
+        if (itemBank.getBalance() < lockVolume) {
             future.complete(new OutputData(false, "NOT_ENOUGH_ITEMS"));
             return future;
         }
 
         // 6. Lock player's "have" items in the item bank
-        BankStatus lockStatus = itemBank.lockAmount(rawVolume);
+        BankStatus lockStatus = itemBank.lockAmount(lockVolume);
         if (lockStatus != BankStatus.SUCCESS) {
-            warn("Trying to lock " + rawVolume + " of " + input.haveItemID + " for bank: " + itemBank +
+            warn("Trying to lock " + lockVolume + " of " + input.haveItemID + " for bank: " + itemBank +
                     " of BankAccount: " + bankAccount.getAccountNumber() + "[" + bankAccount.getAccountName() + "]. Got status: " + lockStatus);
             future.complete(new OutputData(false, "UNABLE_TO_LOCK_ITEMS"));
             return future;
@@ -175,21 +187,25 @@ public class PlaceInterMarketOrderRequest extends StockMarketGenericRequest<Plac
         // For limit orders, derive the intended buy quantity from the ORIGINAL volume
         // (without margin) and rate limit. The margin is extra sell capacity, not extra buy target.
         long estimatedBuyVolume;
-        if (input.crossRateLimit > 0) {
-            estimatedBuyVolume = rawVolume * SF / input.crossRateLimit;
+        if (input.targetBuyVolume > 0) {
+            // Buy-direction: exact target from client
+            estimatedBuyVolume = input.targetBuyVolume;
+        } else if (input.crossRateLimit > 0) {
+            // Sell-direction limit order: estimate for partial-fill tracking
+            estimatedBuyVolume = Math.round((double)(rawVolume * SF) / input.crossRateLimit);
         } else {
-            // Single division avoids cascading truncation from two floor divisions
-            // (rawVolume * havePrice / SF) * SF / wantPrice.  +1 ensures the target is
-            // never under the achievable amount; the matching engine caps to what's affordable.
-            estimatedBuyVolume = (wantPrice > 0) ? rawVolume * havePrice / wantPrice + 1 : 1;
+            // Sell-direction market order: no explicit buy target.
+            // Use 0 to signal sell-direction to the execution layer.
+            // Market orders always return FILLED regardless of isFilled().
+            estimatedBuyVolume = 0;
         }
-        if (estimatedBuyVolume <= 0) estimatedBuyVolume = 1;
+        if (estimatedBuyVolume <= 0 && input.crossRateLimit > 0) estimatedBuyVolume = 1;
 
         InterMarketOrder imo = new InterMarketOrder(
                 input.wantItemID, input.haveItemID,  // buyItemID = want, sellItemID = have
                 orderType,
                 estimatedBuyVolume, wantPrice,       // buy leg: target quantity unchanged
-                rawVolume, havePrice,                 // sell leg
+                lockVolume, havePrice,               // sell leg: includes margin for market orders
                 time, playerSender, input.bankAccountNr,
                 input.crossRateLimit
         );
@@ -198,9 +214,9 @@ public class PlaceInterMarketOrderRequest extends StockMarketGenericRequest<Plac
         ServerMarketManager smm = (ServerMarketManager) getServerMarketManager();
         if (!smm.putInterMarketOrder(imo)) {
             // Enqueue failed — unlock the items
-            BankStatus unlockStatus = itemBank.unlockAmount(rawVolume);
+            BankStatus unlockStatus = itemBank.unlockAmount(lockVolume);
             if (unlockStatus != BankStatus.SUCCESS) {
-                warn("Trying to unlock " + rawVolume + " of " + input.haveItemID + " for bank: " + itemBank +
+                warn("Trying to unlock " + lockVolume + " of " + input.haveItemID + " for bank: " + itemBank +
                         " of BankAccount: " + bankAccount.getAccountNumber() + "[" + bankAccount.getAccountName() + "] " +
                         "after failed to enqueue inter-market order. Got status: " + unlockStatus);
             }

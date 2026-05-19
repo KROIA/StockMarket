@@ -36,6 +36,16 @@ public interface IClientMarketManager {
     CompletableFuture<Boolean> requestCreateMarket(ItemID itemID);
 
     /**
+     * Requests the server to delete an existing market and removes the local client market.
+     * The server performs full cleanup: closing the market, canceling orders,
+     * clearing the orderbook, and unsubscribing from plugins.
+     *
+     * @param marketID the market to delete
+     * @return a future that completes with {@code true} if the market was deleted successfully
+     */
+    CompletableFuture<Boolean> requestDeleteMarket(ItemID marketID);
+
+    /**
      * Returns a synthetic cross-rate data provider for the given pair,
      * or null if either underlying market is unavailable.
      * The returned provider derives OHLC candles from the ratio wantPrice / havePrice.

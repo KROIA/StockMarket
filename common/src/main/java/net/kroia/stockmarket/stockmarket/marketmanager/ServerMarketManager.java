@@ -1,6 +1,5 @@
 package net.kroia.stockmarket.stockmarket.marketmanager;
 
-import com.ibm.icu.impl.Pair;
 import net.kroia.banksystem.api.bank.BankStatus;
 import net.kroia.banksystem.api.bank.IServerBank;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
@@ -158,7 +157,28 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
     @Override
     public boolean deleteMarket(@NotNull ItemID marketID)
     {
-        return markets.remove(marketID) != null;
+        ServerMarket market = markets.get(marketID);
+        if (market == null) return false;
+
+        // Close market: cancels player orders and inter-market orders via callback
+        if (market.isMarketOpen()) {
+            market.setMarketOpen(false);
+        }
+
+        // Clear remaining orders (bot orders that survived close)
+        market.getOrderbook().clear();
+
+        // Unsubscribe from all plugins
+        if (BACKEND_INSTANCES.PLUGIN_MANAGER != null) {
+            var pluginManager = BACKEND_INSTANCES.PLUGIN_MANAGER.getSync();
+            if (pluginManager != null) {
+                pluginManager.removeCache(marketID);
+            }
+        }
+
+        // Remove from map
+        markets.remove(marketID);
+        return true;
     }
     @Override
     public CompletableFuture<Boolean> deleteMarketAsync(@NotNull ItemID marketID) {
@@ -503,17 +523,17 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
         if (order.isBotOrder()) return;
         if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.ORDER_RECORD_MANAGER == null) return;
 
-        Pair<OrderRecordStruct, OrderRecordStruct> records = order.getHistoricalRecord();
+        InterMarketOrder.HistoricalRecordPair records = order.getHistoricalRecord();
 
         // Save buy-leg record if it has fills
-        OrderRecordStruct buyRecord = records.first;
+        OrderRecordStruct buyRecord = records.buyRecord();
         if (buyRecord != null && buyRecord.amount() != 0)
         {
             BACKEND_INSTANCES.ORDER_RECORD_MANAGER.save(buyRecord);
         }
 
         // Save sell-leg record if it has fills
-        OrderRecordStruct sellRecord = records.second;
+        OrderRecordStruct sellRecord = records.sellRecord();
         if (sellRecord != null && sellRecord.amount() != 0)
         {
             BACKEND_INSTANCES.ORDER_RECORD_MANAGER.save(sellRecord);

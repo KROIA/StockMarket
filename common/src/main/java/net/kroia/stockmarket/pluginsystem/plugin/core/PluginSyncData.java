@@ -8,7 +8,9 @@ import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -20,18 +22,18 @@ public class PluginSyncData {
     public static final StreamCodec<RegistryFriendlyByteBuf, PluginSyncData> STREAM_CODEC = StreamCodec.composite(
             GenericPluginData.STREAM_CODEC, p -> p.genericData,
             ExtraCodecUtils.listStreamCodec(ItemID.STREAM_CODEC), p -> p.subscribedMarkets,
-            ExtraCodecUtils.nullable(ByteBufCodecs.BYTE_ARRAY), p -> p.customSettings,
+            ExtraCodecUtils.nullable(ExtraCodecUtils.mapStreamCodec(ItemID.STREAM_CODEC, ByteBufCodecs.BYTE_ARRAY, HashMap::new)), p -> p.customSettingsMap,
             PluginSyncData::new
     );
 
     private final GenericPluginData genericData;
     private final List<ItemID> subscribedMarkets;
-    private final @Nullable byte[] customSettings;
+    private final @Nullable Map<ItemID, byte[]> customSettingsMap;
 
-    public PluginSyncData(GenericPluginData genericData, List<ItemID> subscribedMarkets, @Nullable byte[] customSettings) {
+    public PluginSyncData(GenericPluginData genericData, List<ItemID> subscribedMarkets, @Nullable Map<ItemID, byte[]> customSettingsMap) {
         this.genericData = genericData;
         this.subscribedMarkets = subscribedMarkets;
-        this.customSettings = customSettings;
+        this.customSettingsMap = customSettingsMap;
     }
 
     /**
@@ -41,12 +43,12 @@ public class PluginSyncData {
      * @return a new PluginSyncData with current generic data, subscriptions, and custom settings
      */
     public static PluginSyncData fromServerPlugin(ServerPlugin<?, ?> plugin) {
-        return new PluginSyncData(plugin.getGenericPluginData(), plugin.getSubscribedMarkets(), plugin.encodeCustomSettings());
+        return new PluginSyncData(plugin.getGenericPluginData(), plugin.getSubscribedMarkets(), plugin.encodeAllCustomSettings());
     }
 
     public GenericPluginData getGenericData() { return genericData; }
     public List<ItemID> getSubscribedMarkets() { return subscribedMarkets; }
-    public @Nullable byte[] getCustomSettings() { return customSettings; }
+    public @Nullable Map<ItemID, byte[]> getCustomSettings() { return customSettingsMap; }
     public UUID getInstanceID() { return genericData.getInstanceID(); }
     public String getName() { return genericData.getName(); }
     public String getDescription() { return genericData.getDescription(); }

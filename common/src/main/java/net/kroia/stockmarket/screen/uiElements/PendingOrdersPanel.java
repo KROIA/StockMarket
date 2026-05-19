@@ -34,6 +34,9 @@ public class PendingOrdersPanel extends StockMarketGuiElement {
     /** Called when the user clicks an item icon to switch to that market. */
     private @Nullable Consumer<ItemID> onMarketSwitch;
 
+    // Pair direction for inter-market order display: determines which volume to show
+    private @Nullable ItemID pairHaveItemID;
+
     public PendingOrdersPanel() {
         super();
         setEnableBackground(true);
@@ -76,6 +79,15 @@ public class PendingOrdersPanel extends StockMarketGuiElement {
      */
     public void setOnMarketSwitch(@Nullable Consumer<ItemID> callback) {
         this.onMarketSwitch = callback;
+    }
+
+    /**
+     * Sets the pair direction so inter-market order widgets can show the correct volume.
+     * When set, orders whose sell-item matches pairHaveItemID are buy-direction (show buy volume),
+     * and orders in the opposite direction are sell-direction (show sell volume).
+     */
+    public void setPairDirection(@Nullable ItemID pairHaveItemID) {
+        this.pairHaveItemID = pairHaveItemID;
     }
 
     @Override
@@ -310,18 +322,34 @@ public class PendingOrdersPanel extends StockMarketGuiElement {
             typeLabel.setTextFontScale(0.8f);
             addChild(typeLabel);
 
-            // Amount: filled/total of the buy (want) side — what the player receives
-            Order buyOrder = order.getBuyOrder();
-            double filled = Math.abs(MarketManager.convertToRealAmountStatic(buyOrder.getFilledVolume()));
-            double total = Math.abs(MarketManager.convertToRealAmountStatic(buyOrder.getTargetVolume()));
+            // Amount: show volume in terms of the pair's want-item.
+            // Buy direction (sell matches pairHave): show buy target (want-items to receive).
+            // Sell direction (opposite): show sell volume (want-items being sold).
+            boolean orderMatchesPairDirection = pairHaveItemID != null
+                    && order.getSellItemID().equals(pairHaveItemID);
+            double filled, total;
+            if (orderMatchesPairDirection) {
+                filled = Math.abs(MarketManager.convertToRealAmountStatic(order.getBuyOrder().getFilledVolume()));
+                total = Math.abs(MarketManager.convertToRealAmountStatic(order.getBuyOrder().getTargetVolume()));
+            } else {
+                filled = Math.abs(MarketManager.convertToRealAmountStatic(order.getSellOrder().getFilledVolume()));
+                total = Math.abs(MarketManager.convertToRealAmountStatic(order.getTargetSellVolume()));
+            }
             amountLabel = new Label(String.format("%.2f/%.2f", filled, total));
             amountLabel.setTextFontScale(0.8f);
             addChild(amountLabel);
 
-            // Rate: cross-rate limit (sellItems/buyItem), or "MKT" for market orders
+            // Rate: cross-rate limit in pair format (have-per-want), or "MKT" for market orders.
+            // Buy direction: "≤ rate" (max you'll pay). Sell direction: "≥ rate" (min you'll accept).
+            // Sell orders store the inverted rate, so invert it back for display.
             if (isLimit) {
-                double realRate = (double) order.getCrossRateLimit() / net.kroia.banksystem.BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
-                rateLabel = new Label(String.format("≤ %.2f", realRate));
+                double rawRate = (double) order.getCrossRateLimit() / net.kroia.banksystem.BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+                if (orderMatchesPairDirection) {
+                    rateLabel = new Label(String.format("≤ %.2f", rawRate));
+                } else {
+                    double pairRate = (rawRate > 0) ? 1.0 / rawRate : 0;
+                    rateLabel = new Label(String.format("≥ %.2f", pairRate));
+                }
             } else {
                 rateLabel = new Label("MKT");
             }

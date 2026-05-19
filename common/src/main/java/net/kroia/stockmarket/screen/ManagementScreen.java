@@ -2,6 +2,7 @@ package net.kroia.stockmarket.screen;
 
 
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.ClientPlayerUtilities;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.elements.*;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
@@ -176,7 +177,8 @@ public class ManagementScreen extends StockMarketGuiScreen {
         private void onRemoveTradingPairButtonClicked()
         {
             ClientMarket currentMarket = getSelectedMarket();
-            // TODO: implement market removal confirmation popup
+            if (currentMarket == null) return;
+            setScreen(new ConfirmDeletePopup(parentScreen, currentMarket.getItemID()));
         }
         private void onMarketSettingsButtonClicked()
         {
@@ -345,7 +347,9 @@ public class ManagementScreen extends StockMarketGuiScreen {
             marketGridView.removeChilds();
             getMarketManager().requestMarkets().thenAccept(markets -> {
                 Minecraft.getInstance().execute(() -> {
-                    for (ItemID id : markets) {
+                    List<ItemID> sorted = new ArrayList<>(markets);
+                    sorted.sort(MARKET_TYPE_COMPARATOR);
+                    for (ItemID id : sorted) {
                         ItemStack stack = id.getStack();
                         if (stack == null) continue;
                         MarketItemView view = new MarketItemView(stack, id);
@@ -357,11 +361,18 @@ public class ManagementScreen extends StockMarketGuiScreen {
             });
         }
 
+        /**
+         * Filters the market grid based on the search field text.
+         * Matches against the item display name first, then falls back to the full
+         * tooltip text (includes enchantment names, potion effects, etc.).
+         */
         private void applySearchFilter() {
             String filter = searchField.getText().toLowerCase();
             marketGridView.removeChilds();
             for (MarketItemView view : allMarketItems) {
-                if (filter.isEmpty() || view.itemName.toLowerCase().contains(filter)) {
+                if (filter.isEmpty()
+                        || view.itemName.toLowerCase().contains(filter)
+                        || ClientPlayerUtilities.getItemDisplayText(view.getItemStack()).toLowerCase().contains(filter)) {
                     marketGridView.addChild(view);
                 }
             }
@@ -537,5 +548,85 @@ public class ManagementScreen extends StockMarketGuiScreen {
                 );
             }
         });
+    }
+
+    /**
+     * Confirmation popup shown before deleting a market.
+     * Displays the market name, a warning message, and Yes/No buttons.
+     * On confirm, sends the delete request to the server and returns to a fresh ManagementScreen.
+     */
+    private static class ConfirmDeletePopup extends StockMarketGuiScreen {
+        private final ManagementScreen parentScreen;
+        private final ItemID marketID;
+
+        private final Label titleLabel;
+        private final Label msgLabel;
+        private final Button confirmButton;
+        private final Button cancelButton;
+
+        ConfirmDeletePopup(ManagementScreen parent, ItemID marketID) {
+            super(Texts.ASK_TITLE, parent);
+            this.parentScreen = parent;
+            this.marketID = marketID;
+
+            titleLabel = new Label(Texts.ASK_TITLE.getString());
+            titleLabel.setAlignment(Label.Alignment.CENTER);
+
+            msgLabel = new Label(Texts.ASK_MSG.getString());
+            msgLabel.setAlignment(Label.Alignment.CENTER);
+
+            confirmButton = new Button("Yes", this::onConfirm);
+            confirmButton.setBackgroundColor(0xFFe8711c);
+            confirmButton.setHoverColor(0xFFe04c12);
+            confirmButton.setPressedColor(0xFFe04c12);
+
+            cancelButton = new Button("No", this::onCancel);
+
+            addElement(titleLabel);
+            addElement(msgLabel);
+            addElement(confirmButton);
+            addElement(cancelButton);
+        }
+
+        @Override
+        protected void updateLayout(Gui gui) {
+            int p = StockMarketGuiElement.padding;
+            int s = StockMarketGuiElement.spacing;
+            int eh = StockMarketGuiElement.defaultElementHeight;
+
+            int panelW = (int)(getWidth() * 0.4);
+            int panelH = 4 * eh + 5 * s;
+            int panelX = (getWidth() - panelW) / 2;
+            int panelY = (getHeight() - panelH) / 2;
+
+            titleLabel.setBounds(panelX, panelY, panelW, eh);
+            msgLabel.setBounds(panelX, titleLabel.getBottom() + s, panelW, eh * 2);
+
+            int btnW = (panelW - s) / 2;
+            int btnY = msgLabel.getBottom() + s;
+            confirmButton.setBounds(panelX, btnY, btnW, eh);
+            cancelButton.setBounds(confirmButton.getRight() + s, btnY, btnW, eh);
+        }
+
+        private void onConfirm() {
+            getMarketManager().requestDeleteMarket(marketID).thenAccept(success -> {
+                Minecraft.getInstance().execute(() -> {
+                    if (success) {
+                        // Unsubscribe from price updates and deselect
+                        ClientMarket market = getMarket(marketID);
+                        if (market != null) {
+                            market.unsubscribeFromMarketPriceUpdate();
+                        }
+                        StockMarketGuiElement.selectMarket(null);
+                    }
+                    // Return to a fresh ManagementScreen so the market list is refreshed
+                    setScreen(new ManagementScreen());
+                });
+            });
+        }
+
+        private void onCancel() {
+            setScreen(parentScreen);
+        }
     }
 }

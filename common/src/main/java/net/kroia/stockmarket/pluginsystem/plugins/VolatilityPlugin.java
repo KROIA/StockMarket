@@ -35,6 +35,7 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
     static class MarketData {
         final NormalizedRandomPriceGenerator priceGenerator;
         final TimerMillis timer;
+        float volatilityScale = 0.3f;
 
         MarketData() {
             priceGenerator = new NormalizedRandomPriceGenerator(5);
@@ -45,7 +46,6 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
 
     private static final Random random = new Random();
     private final Map<ItemID, MarketData> marketData = new HashMap<>();
-    private float volatilityScale = 1.0f;
 
     public VolatilityPlugin()
     {
@@ -76,7 +76,7 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
 
             // Scale random walk proportionally to default price for equal percentage volatility
             double defaultPrice = market.market.getDefaultRealPrice();
-            double deviation = data.priceGenerator.getCurrentValue() * volatilityScale;
+            double deviation = data.priceGenerator.getCurrentValue() * data.volatilityScale;
             market.market.setTargetPrice(Math.max(0, defaultPrice * (1.0 + deviation)));
         }
     }
@@ -108,8 +108,6 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
 
     @Override
     public boolean save(CompoundTag tag) {
-        tag.putFloat("volatilityScale", volatilityScale);
-
         // Save per-market price generator state so random walks persist across restarts
         ListTag marketsTag = new ListTag();
         for (Map.Entry<ItemID, MarketData> entry : marketData.entrySet()) {
@@ -118,6 +116,7 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
             CompoundTag generatorTag = new CompoundTag();
             entry.getValue().priceGenerator.save(generatorTag);
             marketTag.put("priceGenerator", generatorTag);
+            marketTag.putFloat("volatilityScale", entry.getValue().volatilityScale);
             marketsTag.add(marketTag);
         }
         tag.put("marketData", marketsTag);
@@ -126,8 +125,6 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
 
     @Override
     public boolean load(CompoundTag tag) {
-        if (tag.contains("volatilityScale")) volatilityScale = tag.getFloat("volatilityScale");
-
         // Restore per-market price generator state (marketData map is already populated
         // because subscribeToMarket() is called before load() in ServerPluginManager)
         if (tag.contains("marketData")) {
@@ -137,8 +134,11 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
                 ItemID marketID = ItemID.createFromTag(marketTag);
                 if (marketID != null && marketID.isValid()) {
                     MarketData data = marketData.get(marketID);
-                    if (data != null && marketTag.contains("priceGenerator")) {
-                        data.priceGenerator.load(marketTag.getCompound("priceGenerator"));
+                    if (data != null) {
+                        if (marketTag.contains("priceGenerator")) {
+                            data.priceGenerator.load(marketTag.getCompound("priceGenerator"));
+                        }
+                        if (marketTag.contains("volatilityScale")) data.volatilityScale = marketTag.getFloat("volatilityScale");
                     }
                 }
             }
@@ -152,13 +152,15 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
     }
 
     @Override
-    protected Settings provideCustomSettings() {
-        return new Settings(volatilityScale);
+    protected Settings provideDefaultCustomSettings() {
+        return new Settings(0.3f);
     }
 
     @Override
-    protected boolean applyCustomSettings(Settings settings) {
-        volatilityScale = settings.volatilityScale();
-        return true;
+    protected void onCustomSettingsApplied(ItemID marketID, Settings settings) {
+        MarketData data = marketData.get(marketID);
+        if (data != null) {
+            data.volatilityScale = settings.volatilityScale();
+        }
     }
 }

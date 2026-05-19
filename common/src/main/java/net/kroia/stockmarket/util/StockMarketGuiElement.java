@@ -15,6 +15,7 @@ import net.minecraft.client.player.LocalPlayer;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
@@ -46,6 +47,27 @@ public abstract class StockMarketGuiElement extends GuiElement {
 
     /** Client-side cache of the player's trading preferences, fetched from server on join. */
     protected static @Nullable PlayerPreferences playerPreferences;
+
+    /**
+     * Comparator that groups markets by item type using reversed registry path segments.
+     * e.g. "minecraft:red_stained_glass" sorts as "glass_stained_red",
+     * grouping all glass, ore, planks, etc. together.
+     */
+    public static final Comparator<ItemID> MARKET_TYPE_COMPARATOR =
+            Comparator.comparing(id -> marketTypeSortKey(id.getName()));
+
+    // Reverses underscore-separated segments of a registry path for type-based sorting.
+    public static String marketTypeSortKey(String registryName) {
+        int colon = registryName.indexOf(':');
+        String path = colon >= 0 ? registryName.substring(colon + 1) : registryName;
+        String[] parts = path.split("_");
+        StringBuilder sb = new StringBuilder();
+        for (int i = parts.length - 1; i >= 0; i--) {
+            sb.append(parts[i]);
+            if (i > 0) sb.append('_');
+        }
+        return sb.toString();
+    }
 
     public final static float hoverToolTipFontSize = 0.8f;
     public final static int padding = 4;

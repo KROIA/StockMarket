@@ -201,7 +201,7 @@ public class DepthSimulation
         // maxAffordable = funds * SF / price
         long remainingBuyVolume;
         if (currentPrice > 0)
-            remainingBuyVolume = dollarBudget * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR / currentPrice;
+            remainingBuyVolume = dollarBudget * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR / currentPrice + 1;
         else
             remainingBuyVolume = Long.MAX_VALUE;
 

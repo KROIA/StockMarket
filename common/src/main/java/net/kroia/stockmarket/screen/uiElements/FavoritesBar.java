@@ -3,17 +3,19 @@ package net.kroia.stockmarket.screen.uiElements;
 import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.ClientPlayerUtilities;
 import net.kroia.modutilities.gui.elements.Frame;
 import net.kroia.modutilities.gui.elements.ItemView;
 import net.kroia.modutilities.gui.elements.Label;
+import net.kroia.modutilities.gui.elements.TextBox;
 import net.kroia.modutilities.gui.elements.VerticalListView;
 import net.kroia.modutilities.gui.layout.LayoutGrid;
+import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.minecraft.client.Minecraft;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -33,8 +35,14 @@ public class FavoritesBar extends StockMarketGuiElement {
     private final Consumer<ItemID> onMarketSelected;
 
     private final ItemView selectedMarketView;
+    private final Label priceLabel;
+    private final Label searchLabel;
+    private final TextBox searchField;
     private final VerticalListView marketGrid;
     private final LayoutGrid gridLayout;
+
+    /** All market buttons in display order, kept for search filtering. */
+    private final List<MarketFavoriteButton> allMarketButtons = new ArrayList<>();
 
     // Bank balance display section
     private final Frame balanceFrame;
@@ -75,6 +83,24 @@ public class FavoritesBar extends StockMarketGuiElement {
         selectedMarketView = new ItemView();
         selectedMarketView.setEnabled(false);
         addChild(selectedMarketView);
+
+        // Live price label next to the selected market icon
+        priceLabel = new Label("--");
+        priceLabel.setTextFontScale(0.7f);
+        priceLabel.setEnabled(false);
+        addChild(priceLabel);
+
+        // Search label and field for filtering the market grid
+        searchLabel = new Label("Search");
+        searchLabel.setTextFontScale(0.7f);
+        searchLabel.setAlignment(Label.Alignment.RIGHT);
+        addChild(searchLabel);
+
+        searchField = new TextBox();
+        searchField.setTextFontScale(0.7f);
+        searchField.setMaxChars(40);
+        searchField.setOnTextChanged(text -> applySearchFilter());
+        addChild(searchField);
 
         // Scrollable grid for all market buttons
         marketGrid = new VerticalListView();
@@ -119,16 +145,18 @@ public class FavoritesBar extends StockMarketGuiElement {
                         @Nullable ItemID selectedMarketID) {
         this.currentMarketID = selectedMarketID;
         marketGrid.removeChilds();
+        allMarketButtons.clear();
 
         // Update selected market icon
         if (selectedMarketID != null) {
             selectedMarketView.setItemStack(selectedMarketID.getStack());
             selectedMarketView.setEnabled(true);
-            // Update market item balance icon
+            priceLabel.setEnabled(true);
             marketItemIcon.setItemStack(selectedMarketID.getStack());
             marketItemIcon.setEnabled(true);
         } else {
             selectedMarketView.setEnabled(false);
+            priceLabel.setEnabled(false);
             marketItemIcon.setEnabled(false);
         }
 
@@ -145,10 +173,10 @@ public class FavoritesBar extends StockMarketGuiElement {
                 nonFavorites.add(market);
             }
         }
-        nonFavorites.sort(Comparator.comparing(id -> id.getStack().getHoverName().getString()));
+        nonFavorites.sort(StockMarketGuiElement.MARKET_TYPE_COMPARATOR);
         sorted.addAll(nonFavorites);
 
-        // Create buttons
+        // Create buttons (stored for search filtering)
         for (ItemID marketID : sorted) {
             boolean isFav = favoriteIDs.contains(marketID);
             boolean isSel = marketID.equals(selectedMarketID);
@@ -160,8 +188,11 @@ public class FavoritesBar extends StockMarketGuiElement {
             );
             btn.setFavorite(isFav);
             btn.setSelected(isSel);
-            marketGrid.addChild(btn);
+            allMarketButtons.add(btn);
         }
+
+        // Apply current search filter to populate the grid
+        applySearchFilter();
 
         // Fetch updated bank balances
         refreshBalances();
@@ -195,6 +226,23 @@ public class FavoritesBar extends StockMarketGuiElement {
         }
         updatePlayerPreferences(prefs);
         scheduleRebuild(getAvailableMarkets(), prefs.getFavoriteMarketIDs(), currentMarketID);
+    }
+
+    /**
+     * Filters the market grid based on the current search field text.
+     * Matches against the item display name first, then falls back to the full
+     * tooltip text (includes enchantment names, potion effects, etc.).
+     */
+    private void applySearchFilter() {
+        marketGrid.removeChilds();
+        String filter = searchField.getText().toLowerCase().trim();
+        for (MarketFavoriteButton btn : allMarketButtons) {
+            if (filter.isEmpty()
+                    || btn.getItemStack().getHoverName().getString().toLowerCase().contains(filter)
+                    || ClientPlayerUtilities.getItemDisplayText(btn.getItemStack()).toLowerCase().contains(filter)) {
+                marketGrid.addChild(btn);
+            }
+        }
     }
 
     /**
@@ -250,12 +298,35 @@ public class FavoritesBar extends StockMarketGuiElement {
             rebuild(pendingAllMarkets, pendingFavoriteIDs, pendingSelectedID);
         }
 
+        // Update live price label
+        if (currentMarketID != null) {
+            ClientMarket market = getMarket(currentMarketID);
+            if (market != null) {
+                priceLabel.setText(formatPriceWithSeparators(market.getCurrentMarketRealPrice()));
+            }
+        }
+
         // Periodic balance refresh
         long now = System.currentTimeMillis();
         if (now - lastBalanceRefreshMs > BALANCE_REFRESH_INTERVAL_MS) {
             lastBalanceRefreshMs = now;
             refreshBalances();
         }
+    }
+
+    private static String formatPriceWithSeparators(double price) {
+        String str = String.format("%.2f", price);
+        int dot = str.indexOf('.');
+        String intPart = str.substring(0, dot);
+        String decPart = str.substring(dot);
+        StringBuilder sb = new StringBuilder();
+        int count = 0;
+        for (int i = intPart.length() - 1; i >= 0; i--) {
+            if (count > 0 && count % 3 == 0) sb.insert(0, '\'');
+            sb.insert(0, intPart.charAt(i));
+            count++;
+        }
+        return sb.toString() + decPart;
     }
 
     /**
@@ -279,13 +350,22 @@ public class FavoritesBar extends StockMarketGuiElement {
         int y = p;
         int w = getWidth();
 
-        // Selected market icon at top-left
+        // Selected market icon at top-left, price label to its right
         if (selectedMarketView.isEnabled()) {
             selectedMarketView.setBounds(p, y, selectedIconSize, selectedIconSize);
+            int labelX = selectedMarketView.getRight() + s;
+            priceLabel.setBounds(labelX, y, w - labelX - p, selectedIconSize);
             y = selectedMarketView.getBottom() + s;
         }
 
-        // Market grid fills the space between the icon and the balance frame
+        // Search label + field between the selected market icon and the market grid
+        int searchHeight = 14;
+        int searchLabelW = w / 4;
+        searchLabel.setBounds(p, y, searchLabelW, searchHeight);
+        searchField.setBounds(p + searchLabelW + s, y, w - 2 * p - searchLabelW - s, searchHeight);
+        y += searchHeight + s;
+
+        // Market grid fills the space between the search field and the balance frame
         int gridWidth = w - 2 * p;
         int gridHeight = getHeight() - y - s - balanceFrameHeight - p;
         marketGrid.setBounds(p, y, gridWidth, Math.max(0, gridHeight));

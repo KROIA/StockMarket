@@ -1,6 +1,5 @@
 package net.kroia.stockmarket.testing.tests;
 
-import com.ibm.icu.impl.Pair;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
@@ -57,15 +56,15 @@ public class InterMarketOrderTestSuite extends TestSuite {
         );
         // Neither buy nor sell order has been filled (filledVolume==0 for both)
         try {
-            Pair<OrderRecordStruct, OrderRecordStruct> records = imo.getHistoricalRecord();
+            InterMarketOrder.HistoricalRecordPair records = imo.getHistoricalRecord();
             TestResult r = assertNotNull("Historical record pair should not be null", records);
             if (!r.passed()) return r;
-            r = assertNotNull("Buy record should not be null", records.first);
+            r = assertNotNull("Buy record should not be null", records.buyRecord());
             if (!r.passed()) return r;
-            r = assertNotNull("Sell record should not be null", records.second);
+            r = assertNotNull("Sell record should not be null", records.sellRecord());
             if (!r.passed()) return r;
             // Average execution price should be 0 for unfilled orders (no ArithmeticException)
-            return assertEquals("Buy record price should be 0 for unfilled order", 0L, records.first.price());
+            return assertEquals("Buy record price should be 0 for unfilled order", 0L, records.buyRecord().price());
         } catch (ArithmeticException e) {
             return fail("getHistoricalRecord() threw ArithmeticException due to division by zero");
         }

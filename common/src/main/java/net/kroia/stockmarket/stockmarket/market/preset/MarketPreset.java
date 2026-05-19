@@ -69,6 +69,15 @@ public class MarketPreset {
     // Cached ItemStack, rebuilt on first access — not serialized by Gson
     private transient ItemStack cachedItemStack;
 
+    // Pre-registered ItemID short value assigned by the server during startup.
+    // Sent to clients via STREAM_CODEC so they can create markets without
+    // building ItemStacks locally (avoids cross-registry Holder issues).
+    private transient short registeredItemIDShort = -1;
+
+    public void setRegisteredItemIDShort(short id) { this.registeredItemIDShort = id; }
+    public short getRegisteredItemIDShort() { return registeredItemIDShort; }
+    public boolean hasRegisteredItemID() { return registeredItemIDShort > 0; }
+
     // Default constructor for Gson deserialization
     public MarketPreset() {
         this.itemId = "";
@@ -197,10 +206,17 @@ public class MarketPreset {
                 CompoundTag componentTag = ITEM_STACK_PARSER.jsonToNbt(components);
                 DataComponentPatch patch;
                 if (registryAccess != null) {
-                    patch = DataComponentPatch.CODEC
-                            .parse(registryAccess.createSerializationContext(NbtOps.INSTANCE), componentTag)
-                            .getOrThrow();
+                    var result = DataComponentPatch.CODEC
+                            .parse(registryAccess.createSerializationContext(NbtOps.INSTANCE), componentTag);
+                    if (result.isError()) {
+                        net.kroia.stockmarket.StockMarketMod.LOGGER.error(
+                                "[MarketPreset] Failed to parse components for {}: {} | NBT: {}",
+                                itemIdStr, result.error().map(Object::toString).orElse("?"), componentTag);
+                    }
+                    patch = result.getOrThrow();
                 } else {
+                    net.kroia.stockmarket.StockMarketMod.LOGGER.warn(
+                            "[MarketPreset] No registryAccess for component parsing of {}", itemIdStr);
                     patch = DataComponentPatch.CODEC
                             .parse(NbtOps.INSTANCE, componentTag)
                             .getOrThrow();
@@ -209,6 +225,8 @@ public class MarketPreset {
             }
             return stack;
         } catch (Exception e) {
+            net.kroia.stockmarket.StockMarketMod.LOGGER.error(
+                    "[MarketPreset] Exception building ItemStack for {}: {}", itemIdStr, e.getMessage());
             return ItemStack.EMPTY;
         }
     }
@@ -226,6 +244,7 @@ public class MarketPreset {
             }
             ByteBufCodecs.FLOAT.encode(buf, preset.defaultPrice);
             ByteBufCodecs.FLOAT.encode(buf, preset.naturalAbundance);
+            ByteBufCodecs.SHORT.encode(buf, preset.registeredItemIDShort);
         }
 
         @Override
@@ -239,7 +258,9 @@ public class MarketPreset {
             }
             float price = ByteBufCodecs.FLOAT.decode(buf);
             float abundance = ByteBufCodecs.FLOAT.decode(buf);
-            return new MarketPreset(id, comps, price, abundance);
+            MarketPreset preset = new MarketPreset(id, comps, price, abundance);
+            preset.registeredItemIDShort = ByteBufCodecs.SHORT.decode(buf);
+            return preset;
         }
     };
 }

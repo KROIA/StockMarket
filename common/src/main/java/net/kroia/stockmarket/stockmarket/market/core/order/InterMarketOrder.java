@@ -1,6 +1,5 @@
 package net.kroia.stockmarket.stockmarket.market.core.order;
 
-import com.ibm.icu.impl.Pair;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.modutilities.persistence.ServerSaveable;
@@ -18,6 +17,8 @@ import java.util.UUID;
 
 public class InterMarketOrder implements ServerSaveable
 {
+    public record HistoricalRecordPair(OrderRecordStruct buyRecord, OrderRecordStruct sellRecord) {}
+
     private final Order buyOrder;
     private final Order sellOrder;
 
@@ -131,7 +132,7 @@ public class InterMarketOrder implements ServerSaveable
         return result;
     }
 
-    public Pair<OrderRecordStruct, OrderRecordStruct> getHistoricalRecord()
+    public HistoricalRecordPair getHistoricalRecord()
     {
         OrderRecordStruct buyRecord = new OrderRecordStruct(
                 buyOrder.getItemID().getShort(),
@@ -151,7 +152,7 @@ public class InterMarketOrder implements ServerSaveable
                 sellOrder.getAverageExecutionPrice(),
                 sellOrder.getTime(),
                 interMarketGroupID);
-        return Pair.of(buyRecord, sellRecord);
+        return new HistoricalRecordPair(buyRecord, sellRecord);
     }
 
 

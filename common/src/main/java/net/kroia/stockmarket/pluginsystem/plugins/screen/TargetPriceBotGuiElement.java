@@ -66,6 +66,7 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
     private final TextBox rateTextBox;
     private final Button applyButton;
     private List<ItemID> subscribedMarkets = new ArrayList<>();
+    private Map<ItemID, TargetPriceBot.Settings> allSettings = new HashMap<>();
     private final Map<Short, Double> marketTargetPrices = new HashMap<>();
     private @Nullable ItemID selectedMarketID;
     private @Nullable ClientMarket currentMarket;
@@ -166,12 +167,14 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
      * @param customSettings the decoded PID settings, or null if not available
      */
     @Override
-    protected void onPluginSyncDataReceived(PluginSyncData data, @Nullable TargetPriceBot.Settings customSettings) {
+    protected void onPluginSyncDataReceived(PluginSyncData data, @Nullable Map<ItemID, TargetPriceBot.Settings> customSettingsMap) {
         this.subscribedMarkets = data.getSubscribedMarkets();
 
-        // Populate the item selection view with subscribed market items
+        // Populate the item selection view with subscribed market items, sorted by market type
+        List<ItemID> sortedMarkets = new ArrayList<>(subscribedMarkets);
+        sortedMarkets.sort(MARKET_TYPE_COMPARATOR);
         List<ItemStack> stacks = new ArrayList<>();
-        for (ItemID id : subscribedMarkets) {
+        for (ItemID id : sortedMarkets) {
             ItemStack stack = id.getStack();
             if (stack != null) {
                 stacks.add(stack);
@@ -179,12 +182,13 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
         }
         marketSelectionView.setItems(stacks);
 
-        // Populate settings from decoded custom settings
-        if (customSettings != null) {
-            pGainTextBox.setText(customSettings.pidP());
-            iGainTextBox.setText(customSettings.pidI());
-            dGainTextBox.setText(customSettings.pidD());
-            rateTextBox.setText(customSettings.pidRate());
+        // Store per-market settings
+        if (customSettingsMap != null) {
+            allSettings = new HashMap<>(customSettingsMap);
+        }
+        // Populate textboxes if a market is already selected
+        if (selectedMarketID != null && allSettings.containsKey(selectedMarketID)) {
+            populateSettingsFromMarket(selectedMarketID);
         }
 
         // Start the runtime data stream for live target price updates
@@ -206,6 +210,7 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
         // Look up the ItemID from the stack and select the market
         ItemID.getOrRegisterFromItemStackClientSide(item).thenAccept(itemID -> {
             this.selectedMarketID = itemID;
+            populateSettingsFromMarket(itemID);
             ClientMarket market = getMarket(itemID);
             if (market != null) {
                 market.subscribeToMarketPriceUpdate();
@@ -245,10 +250,34 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
     }
 
     /**
-     * Sends the current PID gain input values to the server as typed settings.
+     * Populates the PID textboxes from the stored settings for the given market.
+     *
+     * @param marketID the market whose settings should be displayed
      */
+    private void populateSettingsFromMarket(ItemID marketID) {
+        TargetPriceBot.Settings s = allSettings.get(marketID);
+        if (s != null) {
+            pGainTextBox.setText(s.pidP());
+            iGainTextBox.setText(s.pidI());
+            dGainTextBox.setText(s.pidD());
+            rateTextBox.setText(s.pidRate());
+        }
+    }
+
+    /**
+     * Sends the current PID gain input values to the server as typed settings
+     * for the currently selected market.
+     */
+    @Override
+    protected void onCustomSettingsResponse(boolean success, @Nullable ItemID marketID, @Nullable TargetPriceBot.Settings confirmedSettings) {
+        if (success && marketID != null && confirmedSettings != null) {
+            allSettings.put(marketID, confirmedSettings);
+        }
+    }
+
     private void onApplySettings() {
-        sendCustomSettings(new TargetPriceBot.Settings(
+        if (selectedMarketID == null) return;
+        sendCustomSettings(selectedMarketID, new TargetPriceBot.Settings(
                 (float) pGainTextBox.getDouble(),
                 (float) iGainTextBox.getDouble(),
                 (float) dGainTextBox.getDouble(),

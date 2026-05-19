@@ -71,8 +71,8 @@ public class CreateMarketTab extends StockMarketGuiElement {
     private @Nullable String selectedCategory;
     // Map of unique preset keys to preset references for batch creation
     private final LinkedHashMap<String, MarketPreset> selectedPresets = new LinkedHashMap<>();
-    // Cached set of existing market item names for "already exists" detection
-    private final Set<String> existingMarketNames = new HashSet<>();
+    // Cached list of existing market ItemStacks for component-aware "already exists" detection
+    private final List<ItemStack> existingMarketStacks = new ArrayList<>();
     // Dirty flags — rebuilt in render() to avoid modifying child lists during event handling
     private boolean selectedListDirty = false;
     private boolean itemGridDirty = false;
@@ -177,14 +177,19 @@ public class CreateMarketTab extends StockMarketGuiElement {
     }
 
     /**
-     * Caches existing market item names so we can show them as "already exists" in the grid.
+     * Caches existing market ItemStacks so we can do component-aware "already exists" detection.
+     * Uses full ItemStack comparison instead of just item ID strings, so that e.g.
+     * "Enchanted Book (Infinity)" and "Enchanted Book (Mending)" are treated as distinct items.
      */
     private void refreshExistingMarkets() {
-        existingMarketNames.clear();
+        existingMarketStacks.clear();
         List<ItemID> markets = getAvailableMarkets();
         if (markets != null) {
             for (ItemID id : markets) {
-                existingMarketNames.add(id.getName());
+                ItemStack stack = id.getStack();
+                if (stack != null && !stack.isEmpty()) {
+                    existingMarketStacks.add(stack);
+                }
             }
         }
     }
@@ -218,14 +223,19 @@ public class CreateMarketTab extends StockMarketGuiElement {
             ItemStack stack = preset.toItemStack();
             if (stack.isEmpty()) continue;
 
-            // Apply search filter
+            // Apply search filter on display name, registry ID, and component text (enchantments, potions, etc.)
             String displayName = stack.getHoverName().getString().toLowerCase();
-            if (!searchText.isEmpty() && !displayName.contains(searchText) && !preset.getItemId().toLowerCase().contains(searchText)) {
+            if (!searchText.isEmpty()
+                    && !displayName.contains(searchText)
+                    && !preset.getItemId().toLowerCase().contains(searchText)
+                    && !ClientPlayerUtilities.getItemDisplayText(stack).toLowerCase().contains(searchText)) {
                 continue;
             }
 
             String key = preset.getUniqueKey();
-            boolean alreadyExists = existingMarketNames.contains(preset.getItemId());
+            // Component-aware comparison: matches item type AND components (e.g. enchantments)
+            boolean alreadyExists = existingMarketStacks.stream()
+                    .anyMatch(existing -> ItemStack.isSameItemSameComponents(existing, stack));
             boolean isSelected = selectedPresets.containsKey(key);
 
             SelectableItemView itemView = new SelectableItemView(stack, key, isSelected, alreadyExists, preset);
@@ -265,10 +275,19 @@ public class CreateMarketTab extends StockMarketGuiElement {
         for (Map.Entry<String, MarketPreset> entry : toCreate) {
             String key = entry.getKey();
             MarketPreset preset = entry.getValue();
-            ItemStack stack = preset.toItemStack();
-            if (stack.isEmpty()) continue;
 
-            CompletableFuture<Void> future = ItemID.getOrRegisterFromItemStackClientSide(stack).thenCompose(registeredID ->
+            // Use pre-registered ItemID from server when available (avoids cross-registry
+            // Holder issues with enchanted books/potions in singleplayer)
+            CompletableFuture<ItemID> itemIDFuture;
+            if (preset.hasRegisteredItemID()) {
+                itemIDFuture = CompletableFuture.completedFuture(new ItemID(preset.getRegisteredItemIDShort()));
+            } else {
+                ItemStack stack = preset.toItemStack();
+                if (stack.isEmpty()) continue;
+                itemIDFuture = ItemID.getOrRegisterFromItemStackClientSide(stack);
+            }
+
+            CompletableFuture<Void> future = itemIDFuture.thenCompose(registeredID ->
                 getMarketManager().requestCreateMarket(registeredID).thenAccept(success -> {
                     if (success) {
                         info("Created market for " + preset.getItemId());

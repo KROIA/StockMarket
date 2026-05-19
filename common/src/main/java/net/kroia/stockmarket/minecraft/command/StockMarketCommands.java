@@ -158,6 +158,19 @@ public class StockMarketCommands {
                             return Command.SINGLE_SUCCESS;
                         })
                 )
+                // Dev-only: give a one-time starter kit of items for testing the stock market
+                .then(Commands.literal("starterkit")
+                        .requires(source -> StockMarketMod.ENABLE_DEV_FEATURES)
+                        .executes(context -> {
+                            CommandSourceStack source = context.getSource();
+                            ServerPlayer player = source.getPlayerOrException();
+                            if (isMaster())
+                                masterHandler().stockmarket_starterKit(player.getUUID());
+                            else
+                                ServerPlayerUtilities.printToClientConsole(player, "This command can only be used on the master server!");
+                            return Command.SINGLE_SUCCESS;
+                        })
+                )
         );
 
         boolean isSlave = BACKEND_INSTANCES != null
@@ -165,7 +178,7 @@ public class StockMarketCommands {
                 && BACKEND_INSTANCES.MARKET_MANAGER.getSync() == null;
 
         if (StockMarketMod.ENABLE_DEV_FEATURES)
-            TestCommandRegistration.register(dispatcher, "stockmarket", "StockMarket", isSlave);
+            TestCommandRegistration.register(dispatcher, "stockmarket", "StockMarket", "stockmarket", isSlave);
     }
 
 

@@ -2,7 +2,6 @@ package net.kroia.stockmarket.screen;
 
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.ClientPlayerUtilities;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.Label;
@@ -170,7 +169,7 @@ public class TradeScreen extends StockMarketGuiScreen {
                 market.subscribeToMarketPriceUpdate();
                 candlestickChart.setMarket(market);
                 orderMarkerOverlay.setCurrentMarket(currentMarketID);
-                tradingPanel.setItemName(ClientPlayerUtilities.getItemDisplayText(currentMarketID.getStack()));
+                tradingPanel.setItemName(currentMarketID.getStack().getHoverName().getString());
                 tradingPanel.setLimitPrice(market.getCurrentMarketRealPrice());
             }
             // Update last market in preferences
@@ -203,7 +202,7 @@ public class TradeScreen extends StockMarketGuiScreen {
             if(currentMarketID == null)
                 tradingPanel.setCurrencyName("?");
             else
-                tradingPanel.setCurrencyName(ClientPlayerUtilities.getItemDisplayText(currencyID.getStack()));
+                tradingPanel.setCurrencyName(currencyID.getStack().getHoverName().getString());
         });
 
         // Set initial market price on the trading panel
@@ -334,7 +333,7 @@ public class TradeScreen extends StockMarketGuiScreen {
             market.subscribeToMarketPriceUpdate();
             candlestickChart.setMarket(market);
             orderMarkerOverlay.setCurrentMarket(newMarketID);
-            tradingPanel.setItemName(ClientPlayerUtilities.getItemDisplayText(newMarketID.getStack()));
+            tradingPanel.setItemName(newMarketID.getStack().getHoverName().getString());
             tradingPanel.setLimitPrice(market.getCurrentMarketRealPrice());
             tradingPanel.setCurrentMarketPrice(market.getCurrentMarketRealPrice());
 
@@ -495,8 +494,10 @@ public class TradeScreen extends StockMarketGuiScreen {
                 }
                 // Set pair direction on the overlay so order markers display at the correct rate
                 orderMarkerOverlay.setPairDirection(pairHaveMarketID, pairWantMarketID);
+                pendingOrdersPanel.setPairDirection(pairHaveMarketID);
             }
         } else {
+            pendingOrdersPanel.setPairDirection(null);
             // When returning to money mode, switch back to the "want" market (primary slot)
             if (pairWantMarketID != null && !pairWantMarketID.equals(currentMarketID)) {
                 switchMarket(pairWantMarketID);
@@ -554,10 +555,10 @@ public class TradeScreen extends StockMarketGuiScreen {
 
         // Update inter-market trading panel item names
         if (pairHaveMarketID != null) {
-            interMarketTradingPanel.setHaveItemName(ClientPlayerUtilities.getItemDisplayText(pairHaveMarketID.getStack()));
+            interMarketTradingPanel.setHaveItemName(pairHaveMarketID.getStack().getHoverName().getString());
         }
         if (pairWantMarketID != null) {
-            interMarketTradingPanel.setWantItemName(ClientPlayerUtilities.getItemDisplayText(pairWantMarketID.getStack()));
+            interMarketTradingPanel.setWantItemName(pairWantMarketID.getStack().getHoverName().getString());
         }
     }
 
@@ -580,7 +581,7 @@ public class TradeScreen extends StockMarketGuiScreen {
             market.subscribeToMarketPriceUpdate();
             candlestickChart.setMarket(market);
             orderMarkerOverlay.setCurrentMarket(newMarketID);
-            tradingPanel.setItemName(ClientPlayerUtilities.getItemDisplayText(newMarketID.getStack()));
+            tradingPanel.setItemName(newMarketID.getStack().getHoverName().getString());
             tradingPanel.setLimitPrice(market.getCurrentMarketRealPrice());
             tradingPanel.setCurrentMarketPrice(market.getCurrentMarketRealPrice());
 
@@ -664,8 +665,9 @@ public class TradeScreen extends StockMarketGuiScreen {
         double wantPrice = wantM.getCurrentMarketRealPrice();
         double haveVolume = (havePrice > 0) ? wantQuantity * wantPrice / havePrice : 0;
         if (haveVolume <= 0) return;
+        long targetBuyRaw = Math.round(wantQuantity * getItemFractionScaleFactor());
         PlaceInterMarketOrderRequest.InputData input = new PlaceInterMarketOrderRequest.InputData(
-                pairHaveMarketID, pairWantMarketID, selectedBankAccountNr, haveVolume, 0L);
+                pairHaveMarketID, pairWantMarketID, selectedBankAccountNr, haveVolume, 0L, targetBuyRaw);
         BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(input)
                 .thenAccept(result -> info("Inter-market buy: " + (result.success ? "OK" : result.errorMessage)));
     }
@@ -679,7 +681,7 @@ public class TradeScreen extends StockMarketGuiScreen {
         if (pairHaveMarketID == null || pairWantMarketID == null || selectedBankAccountNr == -1) return;
         // Reverse direction: selling want-items to receive have-items
         PlaceInterMarketOrderRequest.InputData input = new PlaceInterMarketOrderRequest.InputData(
-                pairWantMarketID, pairHaveMarketID, selectedBankAccountNr, wantQuantity, 0L);
+                pairWantMarketID, pairHaveMarketID, selectedBankAccountNr, wantQuantity, 0L, 0L);
         BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(input)
                 .thenAccept(result -> info("Inter-market sell: " + (result.success ? "OK" : result.errorMessage)));
     }
@@ -694,9 +696,10 @@ public class TradeScreen extends StockMarketGuiScreen {
         // haveVolume = wantQuantity * rateLimit (rate is have-per-want)
         double haveVolume = wantQuantity * rateLimit;
         if (haveVolume <= 0) return;
-        long rawRateLimit = (long)(rateLimit * getItemFractionScaleFactor());
+        long rawRateLimit = Math.round(rateLimit * getItemFractionScaleFactor());
+        long targetBuyRaw = Math.round(wantQuantity * getItemFractionScaleFactor());
         PlaceInterMarketOrderRequest.InputData input = new PlaceInterMarketOrderRequest.InputData(
-                pairHaveMarketID, pairWantMarketID, selectedBankAccountNr, haveVolume, rawRateLimit);
+                pairHaveMarketID, pairWantMarketID, selectedBankAccountNr, haveVolume, rawRateLimit, targetBuyRaw);
         BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(input)
                 .thenAccept(result -> info("Inter-market buy limit: " + (result.success ? "OK" : result.errorMessage)));
     }
@@ -710,9 +713,9 @@ public class TradeScreen extends StockMarketGuiScreen {
         if (pairHaveMarketID == null || pairWantMarketID == null || selectedBankAccountNr == -1) return;
         // Reverse direction: selling want-items to receive have-items
         // Invert rate: original rateLimit is have-per-want, reversed is want-per-have = 1/rateLimit
-        long rawRateLimit = (rateLimit > 0) ? (long)((1.0 / rateLimit) * getItemFractionScaleFactor()) : 0L;
+        long rawRateLimit = (rateLimit > 0) ? Math.round((1.0 / rateLimit) * getItemFractionScaleFactor()) : 0L;
         PlaceInterMarketOrderRequest.InputData input = new PlaceInterMarketOrderRequest.InputData(
-                pairWantMarketID, pairHaveMarketID, selectedBankAccountNr, wantQuantity, rawRateLimit);
+                pairWantMarketID, pairHaveMarketID, selectedBankAccountNr, wantQuantity, rawRateLimit, 0L);
         BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(input)
                 .thenAccept(result -> info("Inter-market sell limit: " + (result.success ? "OK" : result.errorMessage)));
     }
@@ -755,6 +758,7 @@ public class TradeScreen extends StockMarketGuiScreen {
         // Capture original parameters for rollback if the new order placement fails
         double fallbackHaveVolume = MarketManager.convertToRealAmountStatic(-order.getSellOrder().getRemainingVolume());
         long fallbackRateLimit = order.getCrossRateLimit();
+        long fallbackTargetBuy = order.getTargetBuyVolume();
 
         BACKEND_INSTANCES.NETWORKING.CANCEL_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(order.getInterMarketGroupID())
                 .thenAccept(success -> {
@@ -771,18 +775,18 @@ public class TradeScreen extends StockMarketGuiScreen {
                             // server: buyVol = rawHaveVol * SF / rawRate → must equal rawBuyVol
                             long rawBuyVolume = order.getTargetBuyVolume();
                             long SF = getItemFractionScaleFactor();
-                            long rawRateLimit = (long) (newRate * SF);
+                            long rawRateLimit = Math.round(newRate * SF);
                             long rawHaveVolume = rawBuyVolume * rawRateLimit / SF;
                             double haveVolume = MarketManager.convertToRealAmountStatic(rawHaveVolume);
                             input = new PlaceInterMarketOrderRequest.InputData(
-                                    pairHaveMarketID, pairWantMarketID, selectedBankAccountNr, haveVolume, rawRateLimit);
+                                    pairHaveMarketID, pairWantMarketID, selectedBankAccountNr, haveVolume, rawRateLimit, rawBuyVolume);
                         } else {
                             // Order sells want-items → buys have-items (sell direction in pair view)
                             double wantVolume = MarketManager.convertToRealAmountStatic(order.getTargetSellVolume());
                             double invertedRate = 1.0 / newRate;
-                            long rawRateLimit = (long) (invertedRate * getItemFractionScaleFactor());
+                            long rawRateLimit = Math.round(invertedRate * getItemFractionScaleFactor());
                             input = new PlaceInterMarketOrderRequest.InputData(
-                                    pairWantMarketID, pairHaveMarketID, selectedBankAccountNr, wantVolume, rawRateLimit);
+                                    pairWantMarketID, pairHaveMarketID, selectedBankAccountNr, wantVolume, rawRateLimit, 0L);
                         }
 
                         BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(input)
@@ -791,7 +795,7 @@ public class TradeScreen extends StockMarketGuiScreen {
                                         warn("Move inter-market order failed (" + result.errorMessage + "), restoring original");
                                         PlaceInterMarketOrderRequest.InputData fallback = new PlaceInterMarketOrderRequest.InputData(
                                                 order.getSellItemID(), order.getBuyItemID(), selectedBankAccountNr,
-                                                fallbackHaveVolume, fallbackRateLimit);
+                                                fallbackHaveVolume, fallbackRateLimit, fallbackTargetBuy);
                                         BACKEND_INSTANCES.NETWORKING.PLACE_INTER_MARKET_ORDER_REQUEST.sendRequestToServer(fallback)
                                                 .thenAccept(fb -> {
                                                     if (!fb.success) {

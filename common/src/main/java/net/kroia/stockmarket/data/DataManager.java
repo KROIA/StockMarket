@@ -14,8 +14,12 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
 
+import com.google.gson.reflect.TypeToken;
+
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -37,6 +41,7 @@ public class DataManager extends DataPersistence {
     private static final String MARKET_MANAGER_FOLDER = "MarketManager";
     private static final String PLUGIN_MANAGER_FOLDER = "PluginManager";
     private static final String SETTINGS_FILE = "settings.json";
+    private static final String STARTER_KIT_FILE = "starterkit_claims.json";
     private static final String PRESET_DIR = "StockMarket/market_presets";
 
     public static Path getPresetPath() {
@@ -44,13 +49,16 @@ public class DataManager extends DataPersistence {
     }
 
 
+    private StarterKitData starterKitData = new StarterKitData();
     private final AtomicBoolean candleDataSQL_saveLock = new AtomicBoolean(false);
 
     public DataManager() {
         super(JsonFormat.PRETTY, NbtFormat.COMPRESSED, BASE_PATH);
         setLogger(this::error, this::error, this::info, this::warn);
+    }
 
-
+    public StarterKitData getStarterKitData() {
+        return starterKitData;
     }
     public boolean save(MinecraftServer server)
     {
@@ -62,6 +70,7 @@ public class DataManager extends DataPersistence {
         success &= saveMarketManager();
         success &= savePluginManager();
         success &= savePresets();
+        success &= saveStarterKit();
 
         if(!success)
         {
@@ -78,6 +87,7 @@ public class DataManager extends DataPersistence {
         success &= loadMarketManager();
         success &= loadPluginManager();
         success &= loadPresets();
+        success &= loadStarterKit();
 
         if(!success)
         {
@@ -219,6 +229,38 @@ public class DataManager extends DataPersistence {
         }
         net.minecraft.server.MinecraftServer server = UtilitiesPlatform.getServer();
         BACKEND_INSTANCES.PRESET_MANAGER.loadOrGenerate(getPresetPath(), server != null ? server.registryAccess() : null);
+        return true;
+    }
+
+    // Starter kit claim persistence
+    public boolean saveStarterKit()
+    {
+        Path path = getAbsoluteSavePath(STARTER_KIT_FILE);
+        if(!saveAsJson(starterKitData.getClaimedPlayerUUIDs(), path))
+        {
+            error("saveStarterKit(): Failed to save starter kit claims to Json file");
+            return false;
+        }
+        return true;
+    }
+    private boolean loadStarterKit()
+    {
+        Path path = getAbsoluteSavePath(STARTER_KIT_FILE);
+        if(!Files.exists(path))
+        {
+            // First run — no claims file yet, keep the empty set
+            return true;
+        }
+        HashSet<String> claimed = loadFromJson(path, new TypeToken<HashSet<String>>(){}.getType());
+        if(claimed != null)
+        {
+            starterKitData.setClaimedPlayerUUIDs(claimed);
+        }
+        else
+        {
+            error("loadStarterKit(): Failed to load starter kit claims from Json file");
+            return false;
+        }
         return true;
     }
 

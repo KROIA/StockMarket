@@ -11,10 +11,12 @@ import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.kroia.stockmarket.minecraft.entity.custom.StockMarketDisplayBlockEntity;
 import net.kroia.stockmarket.networking.entity.UpdateStockMarketDisplayConfigPacket;
+import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.kroia.stockmarket.util.StockMarketGuiScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -182,7 +184,8 @@ public class DisplayConfigScreen extends StockMarketGuiScreen {
     }
 
     private void loadMarkets() {
-        List<ItemID> markets = getAvailableMarkets();
+        List<ItemID> markets = new ArrayList<>(getAvailableMarkets());
+        markets.sort(StockMarketGuiElement.MARKET_TYPE_COMPARATOR);
         marketListView.removeChilds();
 
         if (markets == null || markets.isEmpty()) {
@@ -262,7 +265,8 @@ public class DisplayConfigScreen extends StockMarketGuiScreen {
      * currently selected first market (can't pair with yourself).
      */
     private void loadSecondMarkets() {
-        List<ItemID> markets = getAvailableMarkets();
+        List<ItemID> markets = new ArrayList<>(getAvailableMarkets());
+        markets.sort(StockMarketGuiElement.MARKET_TYPE_COMPARATOR);
         secondMarketListView.removeChilds();
 
         if (markets == null || markets.isEmpty()) {

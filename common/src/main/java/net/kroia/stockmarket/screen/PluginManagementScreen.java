@@ -24,6 +24,7 @@ import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -94,6 +95,9 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
 
     @Override
     public void onClose() {
+        for (PluginEntryWidget entry : entryWidgets) {
+            entry.cleanupPluginGuiElement();
+        }
         if (currentChartMarket != null) {
             currentChartMarket.unsubscribeFromMarketPriceUpdate();
             currentChartMarket = null;
@@ -126,6 +130,11 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         candlestickChart.setBounds(padding, contentTop, chartWidth, contentHeight);
         orderbookVolumeHistogram.setBounds(candlestickChart.getRight(), contentTop, histogramWidth, contentHeight);
         listView.setBounds(orderbookVolumeHistogram.getRight() + spacing, contentTop, listWidth, contentHeight);
+
+        // Restart data streams (e.g. after returning from PluginDetailScreen)
+        for (PluginEntryWidget entry : entryWidgets) {
+            entry.startPluginDataStream();
+        }
     }
 
     /**
@@ -212,6 +221,7 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             for (MarketItemButton btn : entry.marketItemViews) {
                 btn.setSelected(selectedChartMarket != null && selectedChartMarket.equals(btn.getMarketID()));
             }
+            entry.setActiveMarketFromScreen(selectedChartMarket);
         }
     }
 
@@ -229,6 +239,8 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         private final List<Label> descriptionLabels = new ArrayList<>();
         private static final float descriptionFontScale = 0.8f;
         private final List<MarketItemButton> marketItemViews = new ArrayList<>();
+        private final VerticalListView marketItemListView;
+        private final LayoutGrid marketItemGridLayout;
         private final Button subscribeButton;
         private final CheckBox enabledCheckBox;
         private final Button deleteButton;
@@ -281,6 +293,18 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
                 }
             }
 
+            // Sort by item type (reversed registry path segments)
+            marketItemViews.sort(Comparator.comparing(btn -> marketTypeSortKey(btn.getMarketID().getName())));
+
+            // Scrollable grid container for market item icons
+            marketItemListView = new VerticalListView();
+            marketItemListView.setEnableBackground(true);
+            marketItemGridLayout = new LayoutGrid(0, 2, false, false, 0, 1, GuiElement.Alignment.TOP);
+            marketItemListView.setLayout(marketItemGridLayout);
+            for (MarketItemButton iv : marketItemViews) {
+                marketItemListView.addChild(iv);
+            }
+
             // "+" button to subscribe to a new market
             subscribeButton = new Button("+", this::onSubscribeClicked);
 
@@ -312,9 +336,7 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             // Add children
             this.addChild(nameLabel);
             for (Label dl : descriptionLabels) this.addChild(dl);
-            for (MarketItemButton iv : marketItemViews) {
-                this.addChild(iv);
-            }
+            this.addChild(marketItemListView);
             this.addChild(subscribeButton);
             this.addChild(enabledCheckBox);
             this.addChild(deleteButton);
@@ -351,7 +373,7 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             int row5Y = padding                              // top padding
                     + (defaultElementHeight + spacing)       // row 1: name
                     + (descTotalH + spacing)                 // row 2: description line(s)
-                    + (18 + spacing)                         // row 3: market icons (16px + 2px)
+                    + (40 + spacing)                         // row 3: market icons grid
                     + (defaultElementHeight + spacing);      // row 4: auto-subscribe
             int totalHeight = row5Y;
             if (openPluginScreenButton != null) {
@@ -392,18 +414,17 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
                 descY = dl.getBottom();
             }
 
-            // Row 3: market item icons, plus subscribe button
-            int iconX = padding;
+            // Row 3: scrollable grid of market item icons, plus subscribe button
             int iconY = descY + spacing;
-            for (int idx = 0; idx < marketItemViews.size(); idx++) {
-                MarketItemButton iv = marketItemViews.get(idx);
-                iv.setBounds(iconX, iconY, 16, 16);
-                iconX += 16 + 2;
-            }
-            subscribeButton.setBounds(iconX, iconY, 20, 16);
+            int subscribeBtnWidth = 20;
+            int listViewWidth = width - subscribeBtnWidth - spacing;
+            int listViewHeight = 40;
+            marketItemGridLayout.columns = Math.max(1, (listViewWidth + 2) / (16 + 2));
+            marketItemListView.setBounds(padding, iconY, listViewWidth, listViewHeight);
+            subscribeButton.setBounds(marketItemListView.getRight() + spacing, iconY, subscribeBtnWidth, 16);
 
             // Row 4: auto-subscribe checkbox + subscription order
-            int row4Y = iconY + 18 + spacing;
+            int row4Y = iconY + listViewHeight + spacing;
             int autoSubWidth = width / 2;
             autoSubscribeCheckBox.setBounds(padding, row4Y, autoSubWidth, defaultElementHeight);
             int orderLabelWidth = width / 4;
@@ -533,6 +554,18 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             }
         }
 
+        void startPluginDataStream() {
+            if (pluginGuiElement != null) {
+                pluginGuiElement.startDataStream();
+            }
+        }
+
+        void setActiveMarketFromScreen(@Nullable ItemID marketID) {
+            if (pluginGuiElement != null) {
+                pluginGuiElement.setActiveMarket(marketID);
+            }
+        }
+
         private void onUnsubscribeClicked(ItemID marketID) {
             getPluginManager().requestUpdateSubscription(pluginData.getInstanceID(), marketID, false).thenAccept(result -> {
                 if (result.success()) {
@@ -577,7 +610,10 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             LayoutGrid gridLayout = new LayoutGrid(1, 1, true, false, 0, 4, GuiElement.Alignment.TOP);
             marketListView.setLayout(gridLayout);
 
-            for (ItemID marketID : allMarkets) {
+            List<ItemID> sortedMarkets = new ArrayList<>(allMarkets);
+            sortedMarkets.sort(StockMarketGuiElement.MARKET_TYPE_COMPARATOR);
+
+            for (ItemID marketID : sortedMarkets) {
                 ItemStack stack = marketID.getStack();
                 if (stack == null) continue;
                 boolean subscribed = this.subscribedMarkets.contains(marketID);

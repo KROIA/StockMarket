@@ -8,6 +8,7 @@ import net.kroia.stockmarket.api.plugin.interaction.IVolumeDistributionCalculato
 import net.kroia.stockmarket.pluginsystem.interaction.MarketInterface;
 import net.kroia.stockmarket.pluginsystem.plugin.ServerPlugin;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.util.Tuple;
@@ -124,14 +125,20 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
         }
     }
 
+    private static final float DEFAULT_VOLUME_SCALE = 1.0f;
+    private static final float DEFAULT_SPEED = 0.05f;
+    private static final float DEFAULT_ACCUMULATION_RATE = 0.1f;
+    private static final float DEFAULT_DECUMULATION_RATE = 0.01f;
+
     static class RuntimeData
     {
         public long lastMillis;
         public float currentMarketPrice = 0;
         public final DistributionCalculator calculator;
-        public float speed = 0.05f;
-        public float accumulationRate = 0.1f;
-        public float decumulationRate = 0.01f;
+        public float volumeScale = DEFAULT_VOLUME_SCALE;
+        public float speed = DEFAULT_SPEED;
+        public float accumulationRate = DEFAULT_ACCUMULATION_RATE;
+        public float decumulationRate = DEFAULT_DECUMULATION_RATE;
         public boolean pendingReset = false;
 
         public RuntimeData()
@@ -141,10 +148,6 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
         }
     }
     private final Map<ItemID, RuntimeData> marketData = new HashMap<>();
-    private float volumeScale = 1.0f;
-    private float speed = 0.05f;
-    private float accumulationRate = 0.1f;
-    private float decumulationRate = 0.01f;
 
     public DefaultOrderbookVolumeDistributionPlugin()
     {
@@ -230,16 +233,17 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
     @Override
     public void onMarketSubscribed(ItemID marketID) {
         RuntimeData data = new RuntimeData();
-        data.speed = this.speed;
-        data.accumulationRate = this.accumulationRate;
-        data.decumulationRate = this.decumulationRate;
+        data.speed = DEFAULT_SPEED;
+        data.accumulationRate = DEFAULT_ACCUMULATION_RATE;
+        data.decumulationRate = DEFAULT_DECUMULATION_RATE;
+        data.volumeScale = DEFAULT_VOLUME_SCALE;
         marketData.put(marketID, data);
 
         MarketInterface interf = getMarketInterface(marketID);
         if(interf == null)
             return;
         data.calculator.defaultPrice = interf.market.getDefaultRealPrice();
-        data.calculator.volumeScale = this.volumeScale * interf.market.getNaturalAbundance();
+        data.calculator.volumeScale = DEFAULT_VOLUME_SCALE * interf.market.getNaturalAbundance();
         interf.oderBook.registerDefaultVolumeDistributionCalculator(data.calculator);
         interf.oderBook.resetVirtualVolume();
     }
@@ -268,19 +272,42 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
 
     @Override
     public boolean save(CompoundTag tag) {
-        tag.putFloat("volumeScale", volumeScale);
-        tag.putFloat("speed", speed);
-        tag.putFloat("accumulationRate", accumulationRate);
-        tag.putFloat("decumulationRate", decumulationRate);
+        ListTag marketDataTag = new ListTag();
+        for (Map.Entry<ItemID, RuntimeData> entry : marketData.entrySet()) {
+            CompoundTag marketTag = new CompoundTag();
+            entry.getKey().save(marketTag);
+            marketTag.putFloat("volumeScale", entry.getValue().volumeScale);
+            marketTag.putFloat("speed", entry.getValue().speed);
+            marketTag.putFloat("accumulationRate", entry.getValue().accumulationRate);
+            marketTag.putFloat("decumulationRate", entry.getValue().decumulationRate);
+            marketDataTag.add(marketTag);
+        }
+        tag.put("marketData", marketDataTag);
         return true;
     }
 
     @Override
     public boolean load(CompoundTag tag) {
-        if (tag.contains("volumeScale")) volumeScale = tag.getFloat("volumeScale");
-        if (tag.contains("speed")) speed = tag.getFloat("speed");
-        if (tag.contains("accumulationRate")) accumulationRate = tag.getFloat("accumulationRate");
-        if (tag.contains("decumulationRate")) decumulationRate = tag.getFloat("decumulationRate");
+        if (tag.contains("marketData")) {
+            ListTag marketDataTag = tag.getList("marketData", 10);
+            for (int i = 0; i < marketDataTag.size(); i++) {
+                CompoundTag marketTag = marketDataTag.getCompound(i);
+                ItemID marketID = ItemID.createFromTag(marketTag);
+                if (marketID != null) {
+                    RuntimeData data = marketData.get(marketID);
+                    if (data != null) {
+                        if (marketTag.contains("volumeScale")) data.volumeScale = marketTag.getFloat("volumeScale");
+                        if (marketTag.contains("speed")) data.speed = marketTag.getFloat("speed");
+                        if (marketTag.contains("accumulationRate")) data.accumulationRate = marketTag.getFloat("accumulationRate");
+                        if (marketTag.contains("decumulationRate")) data.decumulationRate = marketTag.getFloat("decumulationRate");
+
+                        MarketInterface interf = getMarketInterface(marketID);
+                        float abundance = (interf != null) ? interf.market.getNaturalAbundance() : 1.0f;
+                        data.calculator.volumeScale = data.volumeScale * abundance;
+                    }
+                }
+            }
+        }
         return true;
     }
 
@@ -290,32 +317,26 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
     }
 
     @Override
-    protected Settings provideCustomSettings() {
-        return new Settings(volumeScale, speed, accumulationRate, decumulationRate);
+    protected Settings provideDefaultCustomSettings() {
+        return new Settings(DEFAULT_VOLUME_SCALE, DEFAULT_SPEED, DEFAULT_ACCUMULATION_RATE, DEFAULT_DECUMULATION_RATE);
     }
 
     @Override
-    protected boolean applyCustomSettings(Settings settings) {
-        volumeScale = settings.volumeScale();
-        speed = settings.speed();
-        accumulationRate = settings.accumulationRate();
-        decumulationRate = settings.decumulationRate();
-        // Update all existing market runtimes
-        for (Map.Entry<ItemID, RuntimeData> entry : marketData.entrySet()) {
-            RuntimeData data = entry.getValue();
-            data.speed = speed;
-            data.accumulationRate = accumulationRate;
-            data.decumulationRate = decumulationRate;
+    protected void onCustomSettingsApplied(ItemID marketID, Settings settings) {
+        RuntimeData data = marketData.get(marketID);
+        if (data == null) return;
+        data.volumeScale = settings.volumeScale();
+        data.speed = settings.speed();
+        data.accumulationRate = settings.accumulationRate();
+        data.decumulationRate = settings.decumulationRate();
 
-            MarketInterface interf = getMarketInterface(entry.getKey());
-            float abundance = (interf != null) ? interf.market.getNaturalAbundance() : 1.0f;
-            data.calculator.volumeScale = volumeScale * abundance;
+        MarketInterface interf = getMarketInterface(marketID);
+        float abundance = (interf != null) ? interf.market.getNaturalAbundance() : 1.0f;
+        data.calculator.volumeScale = settings.volumeScale() * abundance;
 
-            if (settings.resetVolume()) {
-                data.pendingReset = true;
-            }
+        if (settings.resetVolume()) {
+            data.pendingReset = true;
         }
-        return true;
     }
 
     private static final int SAMPLE_COUNT = 64;

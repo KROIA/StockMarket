@@ -152,6 +152,26 @@ public class ClientMarketManager implements IClientMarketManager
 
 
 
+    @Override
+    public CompletableFuture<Boolean> requestDeleteMarket(ItemID marketID)
+    {
+        return asyncMarketManager.deleteMarketAsync(marketID).thenApply(success -> {
+            if (success) {
+                info("Market deleted on server for: " + marketID);
+                // Remove the local client market and any cross-rate markets referencing it
+                clientMarkets.remove(marketID);
+                crossRateMarkets.entrySet().removeIf(entry ->
+                        entry.getKey().haveItemID().equals(marketID) || entry.getKey().wantItemID().equals(marketID));
+            } else {
+                warn("Server returned false for deleteMarketAsync: " + marketID);
+            }
+            return success;
+        }).exceptionally(ex -> {
+            error("Exception during market deletion for: " + marketID, (Exception) ex);
+            return false;
+        });
+    }
+
     /**
      * {@inheritDoc}
      * Lazily creates and caches the CrossRateMarket on first request.

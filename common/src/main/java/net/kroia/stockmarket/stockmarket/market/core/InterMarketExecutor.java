@@ -173,6 +173,11 @@ public class InterMarketExecutor
         long havePrice = haveMarket.getCurrentMarketPrice();
         long wantPrice = wantMarket.getCurrentMarketPrice();
 
+        // Sell-direction orders (buyOrder.targetVolume == 0) sell the full amount
+        // and buy whatever the proceeds can afford. Buy-direction orders use
+        // back-calculation to sell only what's needed to hit the buy target.
+        boolean sellDirection = (order.getBuyOrder().getTargetVolume() == 0);
+
         // ═══ PHASE 1: SIMULATE ═══
 
         // Step A — Forward simulation: sell maxSellVolume items into haveMarket
@@ -195,27 +200,41 @@ public class InterMarketExecutor
             return ExecutionResult.CANCELED;
         }
 
-        // Step C — Back-calculate: find the exact sell volume that produces exactly
-        // what the buy leg will spend, minimizing leftover dollars
-        DepthSimulation.SimResult simSellExact = DepthSimulation.simulateSellForDollars(
-                haveOrderbook, simBuy.dollarAmount(), havePrice);
+        long finalSellVolume;
+        long dollarsSpent;
+        long itemsReceived;
 
-        if (simSellExact.volumeFilled() <= 0)
+        if (sellDirection)
         {
-            logWarn("Back-calculation yielded 0 sell volume, canceling order");
-            return ExecutionResult.CANCELED;
+            // Sell-direction: sell the full requested amount, buy whatever we can.
+            // Use maxSellVolume (the user's exact request), not simSell.volumeFilled()
+            // which may be slightly less due to simulation rounding.
+            finalSellVolume = maxSellVolume;
+            dollarsSpent = simBuy.dollarAmount();
+            itemsReceived = simBuy.volumeFilled();
         }
+        else
+        {
+            // Buy-direction: back-calculate the minimum sell to fund the buy target
+            DepthSimulation.SimResult simSellExact = DepthSimulation.simulateSellForDollars(
+                    haveOrderbook, simBuy.dollarAmount(), havePrice);
 
-        long exactSellVolume = simSellExact.volumeFilled();
-        long exactDollarYield = simSellExact.dollarAmount();
-        long dollarsSpent = simBuy.dollarAmount();
-        long itemsReceived = simBuy.volumeFilled();
+            if (simSellExact.volumeFilled() <= 0)
+            {
+                logWarn("Back-calculation yielded 0 sell volume, canceling order");
+                return ExecutionResult.CANCELED;
+            }
+
+            finalSellVolume = simSellExact.volumeFilled();
+            dollarsSpent = simBuy.dollarAmount();
+            itemsReceived = simBuy.volumeFilled();
+        }
 
         // ═══ PHASE 2: EXECUTE ═══
 
         return executeBothLegs(
                 order, haveMarket, wantMarket, playerBankAccount, tradingCurrencyID,
-                exactSellVolume, dollarsSpent, itemsReceived, wantPrice, SF,
+                finalSellVolume, dollarsSpent, itemsReceived, wantPrice, SF,
                 0, 0);
     }
 
@@ -327,11 +346,33 @@ public class InterMarketExecutor
         }
 
         // ── Create and execute the buy Order ─────────────────────────────────
-        // Compute buy volume from actual dollars, and buy cap dynamically from
-        // actual sell results. Using the ACTUAL dollar yield gives a more accurate
-        // buy cap than the pre-computed estimate (which uses pre-sell market prices).
-        // dynamicBuyPriceCap = actualDollarYield * crossRateLimit / actualSellFilled
-        // ensures: sandBought ≥ glassSold * SF / crossRateLimit (rate within limit).
+        // Re-simulate the buy using ACTUAL sell proceeds so the buy leg never
+        // spends more than the sell leg earned. Without this, the original target
+        // volume could cause the matching engine to dip into the player's existing
+        // money balance.
+        DepthSimulation.SimResult reBuy = DepthSimulation.simulateBuy(
+                wantMarket.getOrderbook(), actualDollarYield, wantMarket.getCurrentMarketPrice());
+
+        if (reBuy.volumeFilled() <= 0 || reBuy.dollarAmount() <= 0)
+        {
+            logWarn("Post-sell buy simulation yielded 0 items, canceling buy leg");
+            return ExecutionResult.CANCELED;
+        }
+
+        long buyVolume = reBuy.volumeFilled();
+
+        // Cap buy volume at the target to ensure we never buy more than requested.
+        // Only applies when there's an explicit buy target (buy-direction orders).
+        // Sell-direction orders (targetVolume == 0) buy whatever the proceeds afford.
+        long targetBuyVolume = Math.abs(order.getBuyOrder().getTargetVolume());
+        if (targetBuyVolume > 0) {
+            long alreadyFilled = Math.abs(order.getBuyOrder().getFilledVolume());
+            long maxBuyThisRound = targetBuyVolume - alreadyFilled;
+            if (maxBuyThisRound > 0 && buyVolume > maxBuyThisRound) {
+                buyVolume = maxBuyThisRound;
+            }
+        }
+
         long dynamicBuyPriceCap = buyPriceCap;
         if (buyPriceCap > 0 && actualSellFilled > 0)
         {
@@ -341,17 +382,6 @@ public class InterMarketExecutor
                 dynamicBuyPriceCap = actualDollarYield * crossRateLimit / actualSellFilled;
                 if (dynamicBuyPriceCap <= 0) dynamicBuyPriceCap = 1;
             }
-        }
-
-        // Use the order's target buy volume rather than recomputing from dollars —
-        // integer division (dollars * SF / price) systematically rounds down, causing
-        // the player to receive e.g. 0.99 instead of 1.00.
-        // The matching engine already caps to what the player can actually afford.
-        long buyVolume = order.getBuyOrder().getRemainingVolume();
-        if (buyVolume <= 0)
-        {
-            logWarn("Computed buy volume is 0, canceling inter-market order");
-            return ExecutionResult.CANCELED;
         }
 
         Order buyOrder;

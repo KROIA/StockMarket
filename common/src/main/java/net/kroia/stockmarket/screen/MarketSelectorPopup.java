@@ -11,6 +11,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -48,7 +49,8 @@ public class MarketSelectorPopup extends StockMarketGuiScreen {
         itemSelectionView = new ItemSelectionView(this::onItemSelected);
 
         // Populate with all available market items
-        List<ItemID> markets = getAvailableMarkets();
+        List<ItemID> markets = new ArrayList<>(getAvailableMarkets());
+        markets.sort(StockMarketGuiElement.MARKET_TYPE_COMPARATOR);
         List<ItemStack> stacks = markets.stream().map(ItemID::getStack).toList();
         itemSelectionView.setItems(stacks);
 

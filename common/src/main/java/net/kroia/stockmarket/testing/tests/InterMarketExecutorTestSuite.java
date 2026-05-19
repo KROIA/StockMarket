@@ -414,9 +414,9 @@ public class InterMarketExecutorTestSuite extends TestSuite {
         long finalMoney = bankAccount.getBank(moneyID).getTotalBalance();
         long moneyDelta = Math.abs(finalMoney - initialMoney);
 
-        // The money difference should be small (rounding dust only).
-        // With priceA=100 and selling 10 items, the dollar volume is ~1000.
-        // Allow up to 5% of dollar volume as rounding tolerance.
+        // The buy leg re-simulates with actual sell proceeds, so the player
+        // should never lose money. Any leftover dust is positive (player gains).
+        // Allow a small tolerance for rounding in the buy leg itself.
         long dollarVolume = 10 * 100; // approximate sell proceeds
         long tolerance = Math.max(dollarVolume / 20, 5);
 
