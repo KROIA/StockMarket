@@ -6,9 +6,13 @@ import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.pluginsystem.plugin.core.PluginSyncData;
 import net.kroia.stockmarket.pluginsystem.plugins.VolatilityPlugin;
 import net.kroia.stockmarket.pluginsystem.screen.PluginGuiElement;
+import net.kroia.banksystem.util.ItemID;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.StreamCodec;
 import org.jetbrains.annotations.Nullable;
+
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Inline settings GUI for the VolatilityPlugin.
@@ -25,6 +29,7 @@ public class VolatilityPluginGuiElement extends PluginGuiElement<VolatilityPlugi
     private final Label scaleLabel;
     private final TextBox scaleTextBox;
     private final Button applyButton;
+    private Map<ItemID, VolatilityPlugin.Settings> allSettings = new HashMap<>();
 
     public VolatilityPluginGuiElement() {
         scaleLabel = new Label(Texts.SCALE_LABEL.getString());
@@ -47,14 +52,35 @@ public class VolatilityPluginGuiElement extends PluginGuiElement<VolatilityPlugi
     }
 
     @Override
-    protected void onPluginSyncDataReceived(PluginSyncData data, @Nullable VolatilityPlugin.Settings customSettings) {
-        if (customSettings != null) {
-            scaleTextBox.setText(customSettings.volatilityScale());
+    protected void onPluginSyncDataReceived(PluginSyncData data, @Nullable Map<ItemID, VolatilityPlugin.Settings> customSettingsMap) {
+        if (customSettingsMap != null) {
+            allSettings = new HashMap<>(customSettingsMap);
+        }
+        // If a market is already selected, populate from its settings
+        ItemID active = getActiveMarket();
+        if (active != null && allSettings.containsKey(active)) {
+            scaleTextBox.setText(allSettings.get(active).volatilityScale());
+        }
+    }
+
+    @Override
+    protected void onActiveMarketChanged(@Nullable ItemID marketID) {
+        if (marketID != null && allSettings.containsKey(marketID)) {
+            scaleTextBox.setText(allSettings.get(marketID).volatilityScale());
+        }
+    }
+
+    @Override
+    protected void onCustomSettingsResponse(boolean success, @Nullable ItemID marketID, @Nullable VolatilityPlugin.Settings confirmedSettings) {
+        if (success && marketID != null && confirmedSettings != null) {
+            allSettings.put(marketID, confirmedSettings);
         }
     }
 
     private void onApply() {
-        sendCustomSettings(new VolatilityPlugin.Settings((float) scaleTextBox.getDouble()));
+        ItemID market = getActiveMarket();
+        if (market == null) return;
+        sendCustomSettings(market, new VolatilityPlugin.Settings((float) scaleTextBox.getDouble()));
     }
 
     @Override

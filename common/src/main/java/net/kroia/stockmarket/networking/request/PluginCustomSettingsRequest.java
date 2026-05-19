@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.networking.request;
 
 import net.kroia.modutilities.UtilitiesPlatform;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.pluginsystem.plugin.ServerPlugin;
@@ -28,9 +29,10 @@ public class PluginCustomSettingsRequest extends StockMarketGenericRequest<Plugi
      * @param instanceID the UUID of the plugin instance to update
      * @param payload    the encoded custom settings bytes
      */
-    public record InputData(UUID instanceID, byte[] payload) {
+    public record InputData(UUID instanceID, ItemID marketID, byte[] payload) {
         public static final StreamCodec<RegistryFriendlyByteBuf, InputData> STREAM_CODEC = StreamCodec.composite(
                 UUIDUtil.STREAM_CODEC, InputData::instanceID,
+                ItemID.STREAM_CODEC, InputData::marketID,
                 ByteBufCodecs.BYTE_ARRAY, InputData::payload,
                 InputData::new
         );
@@ -40,9 +42,10 @@ public class PluginCustomSettingsRequest extends StockMarketGenericRequest<Plugi
      * @param success          true if the custom settings were applied successfully
      * @param confirmedPayload the plugin's confirmed custom settings after update, or null on failure
      */
-    public record OutputData(boolean success, @Nullable byte[] confirmedPayload) {
+    public record OutputData(boolean success, @Nullable ItemID marketID, @Nullable byte[] confirmedPayload) {
         public static final StreamCodec<RegistryFriendlyByteBuf, OutputData> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.BOOL, OutputData::success,
+                ExtraCodecUtils.nullable(ItemID.STREAM_CODEC), OutputData::marketID,
                 ExtraCodecUtils.nullable(ByteBufCodecs.BYTE_ARRAY), OutputData::confirmedPayload,
                 OutputData::new
         );
@@ -55,27 +58,27 @@ public class PluginCustomSettingsRequest extends StockMarketGenericRequest<Plugi
 
     @Override
     protected OutputData getDefaultResponse() {
-        return new OutputData(false, null);
+        return new OutputData(false, null, null);
     }
 
     @Override
     public CompletableFuture<OutputData> handleOnMasterServer(InputData input, String slaveID, @Nullable UUID playerSender) {
         if (playerSender == null || !hasPermission(playerSender)) {
-            return CompletableFuture.completedFuture(new OutputData(false, null));
+            return CompletableFuture.completedFuture(new OutputData(false, null, null));
         }
 
         ServerPluginManager pluginManager = (ServerPluginManager) getPluginManager();
         if (pluginManager == null) {
-            return CompletableFuture.completedFuture(new OutputData(false, null));
+            return CompletableFuture.completedFuture(new OutputData(false, null, null));
         }
 
         ServerPlugin plugin = pluginManager.getPlugins().get(input.instanceID());
         if (plugin == null) {
-            return CompletableFuture.completedFuture(new OutputData(false, null));
+            return CompletableFuture.completedFuture(new OutputData(false, null, null));
         }
 
-        boolean applied = plugin.decodeAndApplyCustomSettings(input.payload());
-        byte[] confirmed = applied ? plugin.encodeCustomSettings() : null;
+        boolean applied = plugin.decodeAndApplyCustomSettings(input.marketID(), input.payload());
+        byte[] confirmed = applied ? plugin.encodeCustomSettings(input.marketID()) : null;
 
         if (!applied) {
             StockMarketMod.LOGGER.warn("[PluginCustomSettingsRequest] Failed to apply custom settings for plugin '{}' (instance {})",
@@ -88,7 +91,7 @@ public class PluginCustomSettingsRequest extends StockMarketGenericRequest<Plugi
                     getPlayerName(playerSender) + " updated custom settings for plugin '" + plugin.getName() + "'");
         }
 
-        return CompletableFuture.completedFuture(new OutputData(applied, confirmed));
+        return CompletableFuture.completedFuture(new OutputData(applied, input.marketID(), confirmed));
     }
 
     /**

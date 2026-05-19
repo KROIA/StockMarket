@@ -72,8 +72,8 @@ public class ClientPluginManager implements IClientPluginManager {
     }
 
     @Override
-    public CompletableFuture<PluginCustomSettingsRequest.OutputData> requestUpdateCustomSettings(UUID instanceID, byte[] payload) {
-        PluginCustomSettingsRequest.InputData input = new PluginCustomSettingsRequest.InputData(instanceID, payload);
+    public CompletableFuture<PluginCustomSettingsRequest.OutputData> requestUpdateCustomSettings(UUID instanceID, ItemID marketID, byte[] payload) {
+        PluginCustomSettingsRequest.InputData input = new PluginCustomSettingsRequest.InputData(instanceID, marketID, payload);
         return AsynchronousRequestResponseSystem.sendRequestToServer(BACKEND_INSTANCES.NETWORKING.PLUGIN_CUSTOM_SETTINGS_REQUEST, input);
     }
 

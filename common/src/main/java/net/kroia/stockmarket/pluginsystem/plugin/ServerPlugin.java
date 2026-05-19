@@ -17,7 +17,9 @@ import net.minecraft.network.codec.StreamCodec;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public abstract class ServerPlugin<TSettings, TRuntimeData> implements ServerSaveable, IServerPlugin {
@@ -44,6 +46,7 @@ public abstract class ServerPlugin<TSettings, TRuntimeData> implements ServerSav
     private int networkStreamPacketTickInterval = 20;
 
     private final GenericPluginData genericPluginData;
+    private final Map<ItemID, TSettings> customSettingsMap = new HashMap<>();
 
     public ServerPlugin()
     {
@@ -189,6 +192,11 @@ public abstract class ServerPlugin<TSettings, TRuntimeData> implements ServerSav
         if(cache.putCache(itemID, marketCache))
         {
             onMarketSubscribed(itemID);
+            TSettings defaults = provideDefaultCustomSettings();
+            if (defaults != null) {
+                customSettingsMap.put(itemID, defaults);
+                onCustomSettingsApplied(itemID, defaults);
+            }
         }
     }
     public void unsubscribeFromMarket(ItemID itemID)
@@ -202,6 +210,7 @@ public abstract class ServerPlugin<TSettings, TRuntimeData> implements ServerSav
         if(cache.removeMarketCache(itemID))
         {
             onMarketUnsubscribed(itemID);
+            customSettingsMap.remove(itemID);
         }
     }
 
@@ -339,28 +348,37 @@ public abstract class ServerPlugin<TSettings, TRuntimeData> implements ServerSav
     }
 
     /**
-     * Provides the current custom settings for network transfer to the client.
-     * Only called if customSettingsCodec() returns non-null.
+     * Provides default custom settings for newly subscribed markets.
+     * Override to supply initial settings values. Return null if no defaults.
      */
-    protected @Nullable TSettings provideCustomSettings() {
+    protected @Nullable TSettings provideDefaultCustomSettings() {
         return null;
     }
 
     /**
-     * Applies custom settings received from the client GUI.
-     * Only called if customSettingsCodec() returns non-null.
+     * Called after per-market custom settings are stored in the map.
+     * Override to update per-market runtime data from the new settings.
+     *
+     * @param marketID the market whose settings changed
+     * @param settings the new settings for that market
      */
-    protected boolean applyCustomSettings(@NotNull TSettings settings) {
-        return false;
+    protected void onCustomSettingsApplied(ItemID marketID, @NotNull TSettings settings) {
+        // Default: no-op. Subclasses override to react to per-market settings changes.
     }
 
     /**
-     * Framework method: encodes custom settings to bytes using the plugin's codec.
-     * Called by the networking infrastructure — plugin developers should not call this directly.
+     * Returns the custom settings for a specific market, or null if not set.
      */
-    public final byte[] encodeCustomSettings() {
+    public final @Nullable TSettings getCustomSettings(ItemID marketID) {
+        return customSettingsMap.get(marketID);
+    }
+
+    /**
+     * Framework method: encodes custom settings for a single market to bytes.
+     */
+    public final byte[] encodeCustomSettings(ItemID marketID) {
         StreamCodec<ByteBuf, TSettings> codec = customSettingsCodec();
-        TSettings settings = provideCustomSettings();
+        TSettings settings = customSettingsMap.get(marketID);
         if (codec == null || settings == null) return null;
         ByteBuf buf = Unpooled.buffer();
         try {
@@ -374,18 +392,68 @@ public abstract class ServerPlugin<TSettings, TRuntimeData> implements ServerSav
     }
 
     /**
-     * Framework method: decodes and applies custom settings from bytes.
-     * Called by the networking infrastructure — plugin developers should not call this directly.
+     * Framework method: encodes custom settings for all subscribed markets.
+     * Returns a map from market ID to encoded settings bytes.
      */
-    public final boolean decodeAndApplyCustomSettings(byte[] data) {
+    public final Map<ItemID, byte[]> encodeAllCustomSettings() {
+        StreamCodec<ByteBuf, TSettings> codec = customSettingsCodec();
+        if (codec == null) return null;
+        Map<ItemID, byte[]> result = new HashMap<>();
+        for (Map.Entry<ItemID, TSettings> entry : customSettingsMap.entrySet()) {
+            ByteBuf buf = Unpooled.buffer();
+            try {
+                codec.encode(buf, entry.getValue());
+                byte[] bytes = new byte[buf.readableBytes()];
+                buf.readBytes(bytes);
+                result.put(entry.getKey(), bytes);
+            } finally {
+                buf.release();
+            }
+        }
+        return result.isEmpty() ? null : result;
+    }
+
+    /**
+     * Framework method: decodes and applies custom settings for a specific market.
+     * Stores the decoded settings in the per-market map and calls onCustomSettingsApplied.
+     */
+    public final boolean decodeAndApplyCustomSettings(ItemID marketID, byte[] data) {
         StreamCodec<ByteBuf, TSettings> codec = customSettingsCodec();
         if (codec == null || data == null) return false;
         ByteBuf buf = Unpooled.wrappedBuffer(data);
         try {
             TSettings settings = codec.decode(buf);
-            return applyCustomSettings(settings);
+            customSettingsMap.put(marketID, settings);
+            onCustomSettingsApplied(marketID, settings);
+            return true;
         } catch (Exception e) {
-            error("Failed to decode custom settings", e);
+            error("Failed to decode custom settings for market " + marketID, e);
+            return false;
+        } finally {
+            buf.release();
+        }
+    }
+
+    /**
+     * Framework method: decodes a single legacy byte[] payload and applies it
+     * to all currently subscribed markets. Used for backwards-compatible loading
+     * of old save data that stored one settings instance per plugin.
+     */
+    public final boolean decodeAndApplyCustomSettingsLegacy(byte[] data) {
+        StreamCodec<ByteBuf, TSettings> codec = customSettingsCodec();
+        if (codec == null || data == null) return false;
+        ByteBuf buf = Unpooled.wrappedBuffer(data);
+        try {
+            TSettings settings = codec.decode(buf);
+            boolean anyApplied = false;
+            for (ItemID marketID : getSubscribedMarkets()) {
+                customSettingsMap.put(marketID, settings);
+                onCustomSettingsApplied(marketID, settings);
+                anyApplied = true;
+            }
+            return anyApplied;
+        } catch (Exception e) {
+            error("Failed to decode legacy custom settings", e);
             return false;
         } finally {
             buf.release();

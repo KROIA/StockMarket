@@ -265,10 +265,17 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
             }
             pluginTag.put("subscribedMarkets", marketsTag);
 
-            // Custom settings (opaque byte[] encoded by the plugin's codec)
-            byte[] customSettings = plugin.encodeCustomSettings();
-            if (customSettings != null) {
-                pluginTag.putByteArray("customSettings", customSettings);
+            // Per-market custom settings
+            Map<ItemID, byte[]> customSettingsMap = plugin.encodeAllCustomSettings();
+            if (customSettingsMap != null && !customSettingsMap.isEmpty()) {
+                ListTag settingsListTag = new ListTag();
+                for (Map.Entry<ItemID, byte[]> entry : customSettingsMap.entrySet()) {
+                    CompoundTag entryTag = new CompoundTag();
+                    entry.getKey().save(entryTag);
+                    entryTag.putByteArray("settingsData", entry.getValue());
+                    settingsListTag.add(entryTag);
+                }
+                pluginTag.put("customSettingsMap", settingsListTag);
             }
 
             // Plugin-specific NBT data
@@ -344,10 +351,21 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
                 }
             }
 
-            // Restore custom settings
-            if (pluginTag.contains("customSettings")) {
-                byte[] customSettings = pluginTag.getByteArray("customSettings");
-                plugin.decodeAndApplyCustomSettings(customSettings);
+            // Restore per-market custom settings (with backwards compatibility for legacy single-settings format)
+            if (pluginTag.contains("customSettingsMap")) {
+                ListTag settingsListTag = pluginTag.getList("customSettingsMap", 10);
+                for (int j = 0; j < settingsListTag.size(); j++) {
+                    CompoundTag entryTag = settingsListTag.getCompound(j);
+                    ItemID marketID = ItemID.createFromTag(entryTag);
+                    if (marketID != null && marketID.isValid() && entryTag.contains("settingsData")) {
+                        byte[] settingsBytes = entryTag.getByteArray("settingsData");
+                        plugin.decodeAndApplyCustomSettings(marketID, settingsBytes);
+                    }
+                }
+            } else if (pluginTag.contains("customSettings")) {
+                // Legacy: single settings applied to all subscribed markets
+                byte[] legacySettings = pluginTag.getByteArray("customSettings");
+                plugin.decodeAndApplyCustomSettingsLegacy(legacySettings);
             }
 
             // Restore plugin-specific NBT data

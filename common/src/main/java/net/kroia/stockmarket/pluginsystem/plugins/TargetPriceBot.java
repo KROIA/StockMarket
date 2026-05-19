@@ -62,18 +62,23 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
         public PID pid;
         public int tickCounter = 0;
         public double targetPrice = 0;
+        float pidP, pidI, pidD, pidRate;
 
         RuntimeData(float p, float i, float d, float rate) {
+            this.pidP = p;
+            this.pidI = i;
+            this.pidD = d;
+            this.pidRate = rate;
             this.pid = new PID(p, i, d, rate);
         }
     }
     private final Map<ItemID, RuntimeData> marketData = new HashMap<>();
 
-    // Default PID gains — configurable via custom settings
-    private float pidP = 0.5f;
-    private float pidI = 0.1f;
-    private float pidD = 0.0f;
-    private float pidRate = 0.1f;
+    // Default PID gains — configurable via custom settings (per-market)
+    private static final float DEFAULT_PID_P = 0.5f;
+    private static final float DEFAULT_PID_I = 0.1f;
+    private static final float DEFAULT_PID_D = 0.0f;
+    private static final float DEFAULT_PID_RATE = 0.1f;
 
 
 
@@ -146,7 +151,7 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
 
     @Override
     public void onMarketSubscribed(ItemID marketID) {
-        RuntimeData data = new RuntimeData(pidP, pidI, pidD, pidRate);
+        RuntimeData data = new RuntimeData(DEFAULT_PID_P, DEFAULT_PID_I, DEFAULT_PID_D, DEFAULT_PID_RATE);
         marketData.put(marketID, data);
     }
 
@@ -196,37 +201,34 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
     }
 
     @Override
-    protected Settings provideCustomSettings() {
-        return new Settings(pidP, pidI, pidD, pidRate);
+    protected Settings provideDefaultCustomSettings() {
+        return new Settings(DEFAULT_PID_P, DEFAULT_PID_I, DEFAULT_PID_D, DEFAULT_PID_RATE);
     }
 
     @Override
-    protected boolean applyCustomSettings(Settings settings) {
-        pidP = settings.pidP();
-        pidI = settings.pidI();
-        pidD = settings.pidD();
-        pidRate = settings.pidRate();
-
-        // Update all existing market PIDs with the new gains
-        for (RuntimeData data : marketData.values()) {
-            data.pid = new PID(pidP, pidI, pidD, pidRate);
+    protected void onCustomSettingsApplied(ItemID marketID, Settings settings) {
+        RuntimeData data = marketData.get(marketID);
+        if (data != null) {
+            data.pidP = settings.pidP();
+            data.pidI = settings.pidI();
+            data.pidD = settings.pidD();
+            data.pidRate = settings.pidRate();
+            data.pid = new PID(data.pidP, data.pidI, data.pidD, data.pidRate);
         }
-        return true;
     }
 
     @Override
     public boolean save(CompoundTag tag) {
-        tag.putFloat("pidP", pidP);
-        tag.putFloat("pidI", pidI);
-        tag.putFloat("pidD", pidD);
-        tag.putFloat("pidRate", pidRate);
-
-        // Save per-market PID state, target prices, and tick counters
+        // Save per-market PID settings, state, target prices, and tick counters
         ListTag marketsTag = new ListTag();
         for (Map.Entry<ItemID, RuntimeData> entry : marketData.entrySet()) {
             CompoundTag marketTag = new CompoundTag();
             entry.getKey().save(marketTag);
             RuntimeData data = entry.getValue();
+            marketTag.putFloat("pidP", entry.getValue().pidP);
+            marketTag.putFloat("pidI", entry.getValue().pidI);
+            marketTag.putFloat("pidD", entry.getValue().pidD);
+            marketTag.putFloat("pidRate", entry.getValue().pidRate);
             marketTag.putDouble("targetPrice", data.targetPrice);
             marketTag.putInt("tickCounter", data.tickCounter);
             CompoundTag pidTag = new CompoundTag();
@@ -240,12 +242,7 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
 
     @Override
     public boolean load(CompoundTag tag) {
-        if (tag.contains("pidP")) pidP = tag.getFloat("pidP");
-        if (tag.contains("pidI")) pidI = tag.getFloat("pidI");
-        if (tag.contains("pidD")) pidD = tag.getFloat("pidD");
-        if (tag.contains("pidRate")) pidRate = tag.getFloat("pidRate");
-
-        // Restore per-market PID state (marketData map is already populated
+        // Restore per-market PID settings and state (marketData map is already populated
         // because subscribeToMarket() is called before load() in ServerPluginManager)
         if (tag.contains("marketData")) {
             ListTag marketsTag = tag.getList("marketData", 10);
@@ -255,6 +252,13 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
                 if (marketID != null && marketID.isValid()) {
                     RuntimeData data = marketData.get(marketID);
                     if (data != null) {
+                        if (marketTag.contains("pidP")) {
+                            data.pidP = marketTag.getFloat("pidP");
+                            data.pidI = marketTag.getFloat("pidI");
+                            data.pidD = marketTag.getFloat("pidD");
+                            data.pidRate = marketTag.getFloat("pidRate");
+                            data.pid = new PID(data.pidP, data.pidI, data.pidD, data.pidRate);
+                        }
                         if (marketTag.contains("targetPrice")) data.targetPrice = marketTag.getDouble("targetPrice");
                         if (marketTag.contains("tickCounter")) data.tickCounter = marketTag.getInt("tickCounter");
                         if (marketTag.contains("pid")) data.pid.load(marketTag.getCompound("pid"));

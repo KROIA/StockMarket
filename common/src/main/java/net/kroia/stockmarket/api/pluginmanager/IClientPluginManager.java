@@ -36,7 +36,7 @@ public interface IClientPluginManager {
     CompletableFuture<List<PluginSyncData>> requestReorderPlugin(UUID instanceID, int direction);
 
     /** Sends a custom settings update request for a plugin instance to the server. */
-    CompletableFuture<PluginCustomSettingsRequest.OutputData> requestUpdateCustomSettings(UUID instanceID, byte[] payload);
+    CompletableFuture<PluginCustomSettingsRequest.OutputData> requestUpdateCustomSettings(UUID instanceID, ItemID marketID, byte[] payload);
 
     /** Sends a subscription change request for a plugin instance to the server. */
     CompletableFuture<PluginSubscriptionRequest.OutputData> requestUpdateSubscription(UUID instanceID, ItemID marketID, boolean subscribe);

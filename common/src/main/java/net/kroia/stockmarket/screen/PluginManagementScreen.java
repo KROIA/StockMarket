@@ -220,6 +220,7 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             for (MarketItemButton btn : entry.marketItemViews) {
                 btn.setSelected(selectedChartMarket != null && selectedChartMarket.equals(btn.getMarketID()));
             }
+            entry.setActiveMarketFromScreen(selectedChartMarket);
         }
     }
 
@@ -290,6 +291,13 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
                     marketItemViews.add(itemBtn);
                 }
             }
+
+            // Sort by reversed registry path segments to group types (glass, ore, etc.)
+            marketItemViews.sort((a, b) -> {
+                String keyA = reverseSortKey(a.getMarketID().getName());
+                String keyB = reverseSortKey(b.getMarketID().getName());
+                return keyA.compareTo(keyB);
+            });
 
             // Scrollable grid container for market item icons
             marketItemListView = new VerticalListView();
@@ -385,6 +393,20 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         @Override
         protected void render() {
             // No dynamic rendering needed
+        }
+
+        // Reverses underscore-separated segments of a registry path for sorting.
+        // e.g. "minecraft:red_stained_glass" → "glass_stained_red"
+        private static String reverseSortKey(String registryName) {
+            int colon = registryName.indexOf(':');
+            String path = colon >= 0 ? registryName.substring(colon + 1) : registryName;
+            String[] parts = path.split("_");
+            StringBuilder sb = new StringBuilder();
+            for (int i = parts.length - 1; i >= 0; i--) {
+                sb.append(parts[i]);
+                if (i > 0) sb.append('_');
+            }
+            return sb.toString();
         }
 
         @Override
@@ -552,6 +574,12 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         void startPluginDataStream() {
             if (pluginGuiElement != null) {
                 pluginGuiElement.startDataStream();
+            }
+        }
+
+        void setActiveMarketFromScreen(@Nullable ItemID marketID) {
+            if (pluginGuiElement != null) {
+                pluginGuiElement.setActiveMarket(marketID);
             }
         }
 

@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.pluginsystem.plugins.screen;
 
 import io.netty.buffer.ByteBuf;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.elements.*;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.pluginsystem.plugin.core.PluginSyncData;
@@ -45,6 +46,7 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
     private @Nullable OrderbookVolumeHistogram.Overlay volumeOverlay;
     private float currentVolumeScale = 1.0f;
     private final Map<Short, DefaultOrderbookVolumeDistributionPlugin.RuntimeStreamData.MarketDistribution> marketDistributions = new HashMap<>();
+    private Map<ItemID, DefaultOrderbookVolumeDistributionPlugin.Settings> allSettings = new HashMap<>();
 
     public VolumeDistributionGuiElement() {
         volumeScaleLabel = new Label(Texts.VOLUME_SCALE.getString());
@@ -118,19 +120,47 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
     }
 
     @Override
-    protected void onPluginSyncDataReceived(PluginSyncData data, @Nullable DefaultOrderbookVolumeDistributionPlugin.Settings customSettings) {
-        if (customSettings != null) {
-            volumeScaleTextBox.setText(customSettings.volumeScale());
-            speedTextBox.setText(customSettings.speed());
-            accumulationRateTextBox.setText(customSettings.accumulationRate());
-            decumulationRateTextBox.setText(customSettings.decumulationRate());
-            currentVolumeScale = customSettings.volumeScale();
+    protected void onPluginSyncDataReceived(PluginSyncData data, @Nullable Map<ItemID, DefaultOrderbookVolumeDistributionPlugin.Settings> customSettingsMap) {
+        if (customSettingsMap != null) {
+            allSettings = new HashMap<>(customSettingsMap);
+        }
+        // Populate textboxes if a market is already selected
+        ItemID active = getActiveMarket();
+        if (active != null && allSettings.containsKey(active)) {
+            populateSettingsFromMarket(active);
         }
         startDataStream();
     }
 
+    private void populateSettingsFromMarket(ItemID marketID) {
+        DefaultOrderbookVolumeDistributionPlugin.Settings s = allSettings.get(marketID);
+        if (s != null) {
+            volumeScaleTextBox.setText(s.volumeScale());
+            speedTextBox.setText(s.speed());
+            accumulationRateTextBox.setText(s.accumulationRate());
+            decumulationRateTextBox.setText(s.decumulationRate());
+            currentVolumeScale = s.volumeScale();
+        }
+    }
+
+    @Override
+    protected void onActiveMarketChanged(@Nullable ItemID marketID) {
+        if (marketID != null && allSettings.containsKey(marketID)) {
+            populateSettingsFromMarket(marketID);
+        }
+    }
+
+    @Override
+    protected void onCustomSettingsResponse(boolean success, @Nullable ItemID marketID, @Nullable DefaultOrderbookVolumeDistributionPlugin.Settings confirmedSettings) {
+        if (success && marketID != null && confirmedSettings != null) {
+            allSettings.put(marketID, confirmedSettings);
+        }
+    }
+
     private void onApply() {
-        sendCustomSettings(new DefaultOrderbookVolumeDistributionPlugin.Settings(
+        ItemID market = getActiveMarket();
+        if (market == null) return;
+        sendCustomSettings(market, new DefaultOrderbookVolumeDistributionPlugin.Settings(
                 (float) volumeScaleTextBox.getDouble(),
                 (float) speedTextBox.getDouble(),
                 (float) accumulationRateTextBox.getDouble(),
@@ -141,7 +171,9 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
     }
 
     private void onResetVolume() {
-        sendCustomSettings(new DefaultOrderbookVolumeDistributionPlugin.Settings(
+        ItemID market = getActiveMarket();
+        if (market == null) return;
+        sendCustomSettings(market, new DefaultOrderbookVolumeDistributionPlugin.Settings(
                 (float) volumeScaleTextBox.getDouble(),
                 (float) speedTextBox.getDouble(),
                 (float) accumulationRateTextBox.getDouble(),
