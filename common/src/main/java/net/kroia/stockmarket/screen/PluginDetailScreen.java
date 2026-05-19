@@ -54,7 +54,6 @@ public class PluginDetailScreen extends StockMarketGuiScreen {
 
     @Override
     public void onClose() {
-        // Stop the runtime data stream when closing the screen
         if (pluginGuiElement != null) {
             pluginGuiElement.stopDataStream();
         }

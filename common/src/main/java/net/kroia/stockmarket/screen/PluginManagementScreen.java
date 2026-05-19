@@ -94,6 +94,9 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
 
     @Override
     public void onClose() {
+        for (PluginEntryWidget entry : entryWidgets) {
+            entry.cleanupPluginGuiElement();
+        }
         if (currentChartMarket != null) {
             currentChartMarket.unsubscribeFromMarketPriceUpdate();
             currentChartMarket = null;
@@ -126,6 +129,11 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         candlestickChart.setBounds(padding, contentTop, chartWidth, contentHeight);
         orderbookVolumeHistogram.setBounds(candlestickChart.getRight(), contentTop, histogramWidth, contentHeight);
         listView.setBounds(orderbookVolumeHistogram.getRight() + spacing, contentTop, listWidth, contentHeight);
+
+        // Restart data streams (e.g. after returning from PluginDetailScreen)
+        for (PluginEntryWidget entry : entryWidgets) {
+            entry.startPluginDataStream();
+        }
     }
 
     /**
@@ -285,8 +293,7 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
 
             // Scrollable grid container for market item icons
             marketItemListView = new VerticalListView();
-            marketItemListView.setEnableBackground(false);
-            marketItemListView.setEnableOutline(false);
+            marketItemListView.setEnableBackground(true);
             marketItemGridLayout = new LayoutGrid(0, 2, false, false, 0, 1, GuiElement.Alignment.TOP);
             marketItemListView.setLayout(marketItemGridLayout);
             for (MarketItemButton iv : marketItemViews) {
@@ -539,6 +546,12 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
                 pluginGuiElement.setCandlestickChart(null);
                 pluginGuiElement.setOrderbookVolumeHistogram(null);
                 pluginGuiElement.stopDataStream();
+            }
+        }
+
+        void startPluginDataStream() {
+            if (pluginGuiElement != null) {
+                pluginGuiElement.startDataStream();
             }
         }
 
