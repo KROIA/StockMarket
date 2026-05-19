@@ -343,6 +343,9 @@ public class CandlestickChart extends StockMarketGuiElement {
         disableScissor();
         if (firstDraw) {
             firstDraw = false;
+            int targetCandles = Math.min(DEFAULT_VISIBLE_CANDLES, data.getCandles().size());
+            chartviewRect.width = Math.max(targetCandles, 1);
+            zoomLevel = chartviewRect.width;
             autoCenterView();
         }
     }

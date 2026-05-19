@@ -35,7 +35,7 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
     static class MarketData {
         final NormalizedRandomPriceGenerator priceGenerator;
         final TimerMillis timer;
-        float volatilityScale = 1.0f;
+        float volatilityScale = 0.3f;
 
         MarketData() {
             priceGenerator = new NormalizedRandomPriceGenerator(5);
