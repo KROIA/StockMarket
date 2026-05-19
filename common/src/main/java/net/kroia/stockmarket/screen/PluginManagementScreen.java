@@ -229,6 +229,8 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         private final List<Label> descriptionLabels = new ArrayList<>();
         private static final float descriptionFontScale = 0.8f;
         private final List<MarketItemButton> marketItemViews = new ArrayList<>();
+        private final VerticalListView marketItemListView;
+        private final LayoutGrid marketItemGridLayout;
         private final Button subscribeButton;
         private final CheckBox enabledCheckBox;
         private final Button deleteButton;
@@ -281,6 +283,16 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
                 }
             }
 
+            // Scrollable grid container for market item icons
+            marketItemListView = new VerticalListView();
+            marketItemListView.setEnableBackground(false);
+            marketItemListView.setEnableOutline(false);
+            marketItemGridLayout = new LayoutGrid(0, 2, false, false, 0, 1, GuiElement.Alignment.TOP);
+            marketItemListView.setLayout(marketItemGridLayout);
+            for (MarketItemButton iv : marketItemViews) {
+                marketItemListView.addChild(iv);
+            }
+
             // "+" button to subscribe to a new market
             subscribeButton = new Button("+", this::onSubscribeClicked);
 
@@ -312,9 +324,7 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             // Add children
             this.addChild(nameLabel);
             for (Label dl : descriptionLabels) this.addChild(dl);
-            for (MarketItemButton iv : marketItemViews) {
-                this.addChild(iv);
-            }
+            this.addChild(marketItemListView);
             this.addChild(subscribeButton);
             this.addChild(enabledCheckBox);
             this.addChild(deleteButton);
@@ -351,7 +361,7 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             int row5Y = padding                              // top padding
                     + (defaultElementHeight + spacing)       // row 1: name
                     + (descTotalH + spacing)                 // row 2: description line(s)
-                    + (18 + spacing)                         // row 3: market icons (16px + 2px)
+                    + (40 + spacing)                         // row 3: market icons grid
                     + (defaultElementHeight + spacing);      // row 4: auto-subscribe
             int totalHeight = row5Y;
             if (openPluginScreenButton != null) {
@@ -392,18 +402,17 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
                 descY = dl.getBottom();
             }
 
-            // Row 3: market item icons, plus subscribe button
-            int iconX = padding;
+            // Row 3: scrollable grid of market item icons, plus subscribe button
             int iconY = descY + spacing;
-            for (int idx = 0; idx < marketItemViews.size(); idx++) {
-                MarketItemButton iv = marketItemViews.get(idx);
-                iv.setBounds(iconX, iconY, 16, 16);
-                iconX += 16 + 2;
-            }
-            subscribeButton.setBounds(iconX, iconY, 20, 16);
+            int subscribeBtnWidth = 20;
+            int listViewWidth = width - subscribeBtnWidth - spacing;
+            int listViewHeight = 40;
+            marketItemGridLayout.columns = Math.max(1, (listViewWidth + 2) / (16 + 2));
+            marketItemListView.setBounds(padding, iconY, listViewWidth, listViewHeight);
+            subscribeButton.setBounds(marketItemListView.getRight() + spacing, iconY, subscribeBtnWidth, 16);
 
             // Row 4: auto-subscribe checkbox + subscription order
-            int row4Y = iconY + 18 + spacing;
+            int row4Y = iconY + listViewHeight + spacing;
             int autoSubWidth = width / 2;
             autoSubscribeCheckBox.setBounds(padding, row4Y, autoSubWidth, defaultElementHeight);
             int orderLabelWidth = width / 4;
