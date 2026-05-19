@@ -16,6 +16,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -275,7 +276,8 @@ public class PairSelectorWidget extends StockMarketGuiElement {
         dropdownTarget = side;
         dropdownList.removeChilds();
 
-        List<ItemID> markets = getAvailableMarkets();
+        List<ItemID> markets = new ArrayList<>(getAvailableMarkets());
+        markets.sort(StockMarketGuiElement.MARKET_TYPE_COMPARATOR);
         // Exclude the item already selected on the opposite side
         ItemID excludeID = (side == Side.HAVE) ? wantMarketID : haveMarketID;
 

@@ -8,12 +8,12 @@ import net.kroia.modutilities.gui.elements.ItemView;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.VerticalListView;
 import net.kroia.modutilities.gui.layout.LayoutGrid;
+import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.minecraft.client.Minecraft;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -33,6 +33,7 @@ public class FavoritesBar extends StockMarketGuiElement {
     private final Consumer<ItemID> onMarketSelected;
 
     private final ItemView selectedMarketView;
+    private final Label priceLabel;
     private final VerticalListView marketGrid;
     private final LayoutGrid gridLayout;
 
@@ -75,6 +76,12 @@ public class FavoritesBar extends StockMarketGuiElement {
         selectedMarketView = new ItemView();
         selectedMarketView.setEnabled(false);
         addChild(selectedMarketView);
+
+        // Live price label next to the selected market icon
+        priceLabel = new Label("--");
+        priceLabel.setTextFontScale(0.7f);
+        priceLabel.setEnabled(false);
+        addChild(priceLabel);
 
         // Scrollable grid for all market buttons
         marketGrid = new VerticalListView();
@@ -124,11 +131,12 @@ public class FavoritesBar extends StockMarketGuiElement {
         if (selectedMarketID != null) {
             selectedMarketView.setItemStack(selectedMarketID.getStack());
             selectedMarketView.setEnabled(true);
-            // Update market item balance icon
+            priceLabel.setEnabled(true);
             marketItemIcon.setItemStack(selectedMarketID.getStack());
             marketItemIcon.setEnabled(true);
         } else {
             selectedMarketView.setEnabled(false);
+            priceLabel.setEnabled(false);
             marketItemIcon.setEnabled(false);
         }
 
@@ -145,7 +153,7 @@ public class FavoritesBar extends StockMarketGuiElement {
                 nonFavorites.add(market);
             }
         }
-        nonFavorites.sort(Comparator.comparing(id -> id.getStack().getHoverName().getString()));
+        nonFavorites.sort(StockMarketGuiElement.MARKET_TYPE_COMPARATOR);
         sorted.addAll(nonFavorites);
 
         // Create buttons
@@ -250,12 +258,35 @@ public class FavoritesBar extends StockMarketGuiElement {
             rebuild(pendingAllMarkets, pendingFavoriteIDs, pendingSelectedID);
         }
 
+        // Update live price label
+        if (currentMarketID != null) {
+            ClientMarket market = getMarket(currentMarketID);
+            if (market != null) {
+                priceLabel.setText(formatPriceWithSeparators(market.getCurrentMarketRealPrice()));
+            }
+        }
+
         // Periodic balance refresh
         long now = System.currentTimeMillis();
         if (now - lastBalanceRefreshMs > BALANCE_REFRESH_INTERVAL_MS) {
             lastBalanceRefreshMs = now;
             refreshBalances();
         }
+    }
+
+    private static String formatPriceWithSeparators(double price) {
+        String str = String.format("%.2f", price);
+        int dot = str.indexOf('.');
+        String intPart = str.substring(0, dot);
+        String decPart = str.substring(dot);
+        StringBuilder sb = new StringBuilder();
+        int count = 0;
+        for (int i = intPart.length() - 1; i >= 0; i--) {
+            if (count > 0 && count % 3 == 0) sb.insert(0, '\'');
+            sb.insert(0, intPart.charAt(i));
+            count++;
+        }
+        return sb.toString() + decPart;
     }
 
     /**
@@ -279,9 +310,11 @@ public class FavoritesBar extends StockMarketGuiElement {
         int y = p;
         int w = getWidth();
 
-        // Selected market icon at top-left
+        // Selected market icon at top-left, price label to its right
         if (selectedMarketView.isEnabled()) {
             selectedMarketView.setBounds(p, y, selectedIconSize, selectedIconSize);
+            int labelX = selectedMarketView.getRight() + s;
+            priceLabel.setBounds(labelX, y, w - labelX - p, selectedIconSize);
             y = selectedMarketView.getBottom() + s;
         }
 

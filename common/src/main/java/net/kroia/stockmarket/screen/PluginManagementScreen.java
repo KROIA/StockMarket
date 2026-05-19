@@ -24,6 +24,7 @@ import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -292,12 +293,8 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
                 }
             }
 
-            // Sort by reversed registry path segments to group types (glass, ore, etc.)
-            marketItemViews.sort((a, b) -> {
-                String keyA = reverseSortKey(a.getMarketID().getName());
-                String keyB = reverseSortKey(b.getMarketID().getName());
-                return keyA.compareTo(keyB);
-            });
+            // Sort by item type (reversed registry path segments)
+            marketItemViews.sort(Comparator.comparing(btn -> marketTypeSortKey(btn.getMarketID().getName())));
 
             // Scrollable grid container for market item icons
             marketItemListView = new VerticalListView();
@@ -393,20 +390,6 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         @Override
         protected void render() {
             // No dynamic rendering needed
-        }
-
-        // Reverses underscore-separated segments of a registry path for sorting.
-        // e.g. "minecraft:red_stained_glass" → "glass_stained_red"
-        private static String reverseSortKey(String registryName) {
-            int colon = registryName.indexOf(':');
-            String path = colon >= 0 ? registryName.substring(colon + 1) : registryName;
-            String[] parts = path.split("_");
-            StringBuilder sb = new StringBuilder();
-            for (int i = parts.length - 1; i >= 0; i--) {
-                sb.append(parts[i]);
-                if (i > 0) sb.append('_');
-            }
-            return sb.toString();
         }
 
         @Override
@@ -627,7 +610,10 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             LayoutGrid gridLayout = new LayoutGrid(1, 1, true, false, 0, 4, GuiElement.Alignment.TOP);
             marketListView.setLayout(gridLayout);
 
-            for (ItemID marketID : allMarkets) {
+            List<ItemID> sortedMarkets = new ArrayList<>(allMarkets);
+            sortedMarkets.sort(StockMarketGuiElement.MARKET_TYPE_COMPARATOR);
+
+            for (ItemID marketID : sortedMarkets) {
                 ItemStack stack = marketID.getStack();
                 if (stack == null) continue;
                 boolean subscribed = this.subscribedMarkets.contains(marketID);

@@ -345,7 +345,9 @@ public class ManagementScreen extends StockMarketGuiScreen {
             marketGridView.removeChilds();
             getMarketManager().requestMarkets().thenAccept(markets -> {
                 Minecraft.getInstance().execute(() -> {
-                    for (ItemID id : markets) {
+                    List<ItemID> sorted = new ArrayList<>(markets);
+                    sorted.sort(MARKET_TYPE_COMPARATOR);
+                    for (ItemID id : sorted) {
                         ItemStack stack = id.getStack();
                         if (stack == null) continue;
                         MarketItemView view = new MarketItemView(stack, id);

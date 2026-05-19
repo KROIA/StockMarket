@@ -170,9 +170,11 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
     protected void onPluginSyncDataReceived(PluginSyncData data, @Nullable Map<ItemID, TargetPriceBot.Settings> customSettingsMap) {
         this.subscribedMarkets = data.getSubscribedMarkets();
 
-        // Populate the item selection view with subscribed market items
+        // Populate the item selection view with subscribed market items, sorted by market type
+        List<ItemID> sortedMarkets = new ArrayList<>(subscribedMarkets);
+        sortedMarkets.sort(MARKET_TYPE_COMPARATOR);
         List<ItemStack> stacks = new ArrayList<>();
-        for (ItemID id : subscribedMarkets) {
+        for (ItemID id : sortedMarkets) {
             ItemStack stack = id.getStack();
             if (stack != null) {
                 stacks.add(stack);
