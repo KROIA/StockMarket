@@ -1,6 +1,5 @@
 package net.kroia.stockmarket.stockmarket.marketmanager;
 
-import com.ibm.icu.impl.Pair;
 import net.kroia.banksystem.api.bank.BankStatus;
 import net.kroia.banksystem.api.bank.IServerBank;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
@@ -503,17 +502,17 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
         if (order.isBotOrder()) return;
         if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.ORDER_RECORD_MANAGER == null) return;
 
-        Pair<OrderRecordStruct, OrderRecordStruct> records = order.getHistoricalRecord();
+        InterMarketOrder.HistoricalRecordPair records = order.getHistoricalRecord();
 
         // Save buy-leg record if it has fills
-        OrderRecordStruct buyRecord = records.first;
+        OrderRecordStruct buyRecord = records.buyRecord();
         if (buyRecord != null && buyRecord.amount() != 0)
         {
             BACKEND_INSTANCES.ORDER_RECORD_MANAGER.save(buyRecord);
         }
 
         // Save sell-leg record if it has fills
-        OrderRecordStruct sellRecord = records.second;
+        OrderRecordStruct sellRecord = records.sellRecord();
         if (sellRecord != null && sellRecord.amount() != 0)
         {
             BACKEND_INSTANCES.ORDER_RECORD_MANAGER.save(sellRecord);
