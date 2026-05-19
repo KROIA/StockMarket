@@ -178,7 +178,7 @@ public class StockMarketCommands {
                 && BACKEND_INSTANCES.MARKET_MANAGER.getSync() == null;
 
         if (StockMarketMod.ENABLE_DEV_FEATURES)
-            TestCommandRegistration.register(dispatcher, "stockmarket", "StockMarket", isSlave);
+            TestCommandRegistration.register(dispatcher, "stockmarket", "StockMarket", "stockmarket", isSlave);
     }
 
 
