@@ -37,6 +37,8 @@ public class CandlestickChart extends StockMarketGuiElement {
     public static final SimpleDateFormat monthFormat = new SimpleDateFormat(" MMMM ", Locale.getDefault());
     public static final SimpleDateFormat yearFormat  = new SimpleDateFormat("yyyy", Locale.getDefault());
     public static final SimpleDateFormat timeFormat  = new SimpleDateFormat("HH:mm", Locale.getDefault());
+    // Number of candles shown by default when a market is opened for the first time
+    private static final int DEFAULT_VISIBLE_CANDLES = 50;
 
     // ── Overlay interfaces ──
 
@@ -146,7 +148,14 @@ public class CandlestickChart extends StockMarketGuiElement {
 
         if (provider != null) {
             if (!restoreViewportState(provider.getViewportKey())) {
+                skipAutoCenterOnce = true;
                 selectCandleTimeDeltaByIndex(currentCandleTimeIdx);
+                if (data != null && !data.getCandles().isEmpty()) {
+                    int targetCandles = Math.min(DEFAULT_VISIBLE_CANDLES, data.getCandles().size());
+                    chartviewRect.width = Math.max(targetCandles, 1);
+                    zoomLevel = chartviewRect.width;
+                    chartviewRect.x = chartviewRect.width;
+                }
                 firstDraw = true;
             }
         }
