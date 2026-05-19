@@ -403,7 +403,10 @@ public class StockMarketModBackend implements StockMarketAPI {
             for (MarketPreset preset : category.getPresets()) {
                 net.minecraft.world.item.ItemStack stack = preset.toItemStack();
                 if (!stack.isEmpty()) {
-                    net.kroia.banksystem.util.ItemIDManager.registerItemStackServerSide_direct(stack);
+                    ItemID id = net.kroia.banksystem.util.ItemIDManager.registerItemStackServerSide_direct(stack);
+                    if (id.isValid()) {
+                        preset.setRegisteredItemIDShort(id.getShort());
+                    }
                     count++;
                 }
             }

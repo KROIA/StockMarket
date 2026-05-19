@@ -272,10 +272,19 @@ public class CreateMarketTab extends StockMarketGuiElement {
         for (Map.Entry<String, MarketPreset> entry : toCreate) {
             String key = entry.getKey();
             MarketPreset preset = entry.getValue();
-            ItemStack stack = preset.toItemStack();
-            if (stack.isEmpty()) continue;
 
-            CompletableFuture<Void> future = ItemID.getOrRegisterFromItemStackClientSide(stack).thenCompose(registeredID ->
+            // Use pre-registered ItemID from server when available (avoids cross-registry
+            // Holder issues with enchanted books/potions in singleplayer)
+            CompletableFuture<ItemID> itemIDFuture;
+            if (preset.hasRegisteredItemID()) {
+                itemIDFuture = CompletableFuture.completedFuture(new ItemID(preset.getRegisteredItemIDShort()));
+            } else {
+                ItemStack stack = preset.toItemStack();
+                if (stack.isEmpty()) continue;
+                itemIDFuture = ItemID.getOrRegisterFromItemStackClientSide(stack);
+            }
+
+            CompletableFuture<Void> future = itemIDFuture.thenCompose(registeredID ->
                 getMarketManager().requestCreateMarket(registeredID).thenAccept(success -> {
                     if (success) {
                         info("Created market for " + preset.getItemId());
