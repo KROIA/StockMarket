@@ -2,6 +2,7 @@ package net.kroia.stockmarket.screen.uiElements;
 
 import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.ClientPlayerUtilities;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.Frame;
 import net.kroia.modutilities.gui.elements.ItemView;
@@ -356,13 +357,16 @@ public class PairSelectorWidget extends StockMarketGuiElement {
 
     /**
      * Filters the dropdown list based on the current search field text.
-     * Only buttons whose item display name contains the search string are shown.
+     * Matches against the item display name first, then falls back to the full
+     * tooltip text (includes enchantment names, potion effects, etc.).
      */
     private void applyDropdownFilter() {
         dropdownList.removeChilds();
         String filter = dropdownSearchField.getText().toLowerCase().trim();
         for (MarketFavoriteButton btn : allDropdownButtons) {
-            if (filter.isEmpty() || btn.getItemStack().getHoverName().getString().toLowerCase().contains(filter)) {
+            if (filter.isEmpty()
+                    || btn.getItemStack().getHoverName().getString().toLowerCase().contains(filter)
+                    || ClientPlayerUtilities.getItemDisplayText(btn.getItemStack()).toLowerCase().contains(filter)) {
                 dropdownList.addChild(btn);
             }
         }

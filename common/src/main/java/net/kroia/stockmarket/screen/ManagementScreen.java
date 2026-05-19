@@ -2,6 +2,7 @@ package net.kroia.stockmarket.screen;
 
 
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.ClientPlayerUtilities;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.elements.*;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
@@ -360,11 +361,18 @@ public class ManagementScreen extends StockMarketGuiScreen {
             });
         }
 
+        /**
+         * Filters the market grid based on the search field text.
+         * Matches against the item display name first, then falls back to the full
+         * tooltip text (includes enchantment names, potion effects, etc.).
+         */
         private void applySearchFilter() {
             String filter = searchField.getText().toLowerCase();
             marketGridView.removeChilds();
             for (MarketItemView view : allMarketItems) {
-                if (filter.isEmpty() || view.itemName.toLowerCase().contains(filter)) {
+                if (filter.isEmpty()
+                        || view.itemName.toLowerCase().contains(filter)
+                        || ClientPlayerUtilities.getItemDisplayText(view.getItemStack()).toLowerCase().contains(filter)) {
                     marketGridView.addChild(view);
                 }
             }

@@ -232,11 +232,12 @@ public class PresetEditorTab extends StockMarketGuiElement {
             ItemStack stack = preset.toItemStack();
             if (stack.isEmpty()) continue;
 
-            // Apply search filter on display name and registry ID
+            // Apply search filter on display name, registry ID, and component text (enchantments, potions, etc.)
             String displayName = stack.getHoverName().getString().toLowerCase();
             if (!searchText.isEmpty()
                     && !displayName.contains(searchText)
-                    && !preset.getItemId().toLowerCase().contains(searchText)) {
+                    && !preset.getItemId().toLowerCase().contains(searchText)
+                    && !ClientPlayerUtilities.getItemDisplayText(stack).toLowerCase().contains(searchText)) {
                 continue;
             }
 
