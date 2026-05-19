@@ -6,6 +6,7 @@ import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.Frame;
 import net.kroia.modutilities.gui.elements.ItemView;
 import net.kroia.modutilities.gui.elements.Label;
+import net.kroia.modutilities.gui.elements.TextBox;
 import net.kroia.modutilities.gui.elements.VerticalListView;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.gui.layout.LayoutGrid;
@@ -62,8 +63,13 @@ public class PairSelectorWidget extends StockMarketGuiElement {
 
     // Dropdown for item selection (shown one at a time)
     private final Frame dropdownFrame;
+    private final Label dropdownSearchLabel;
+    private final TextBox dropdownSearchField;
     private final VerticalListView dropdownList;
     private final LayoutGrid dropdownGridLayout;
+
+    /** All dropdown buttons in display order, kept for search filtering. */
+    private final List<MarketFavoriteButton> allDropdownButtons = new ArrayList<>();
 
     /** Which side the dropdown is currently selecting for, or null if closed. */
     @Nullable
@@ -171,6 +177,17 @@ public class PairSelectorWidget extends StockMarketGuiElement {
         dropdownFrame.setBackgroundColor(0xFF2a2a2a);  // dark opaque background for clear overlay
         dropdownFrame.setEnabled(false);
 
+        dropdownSearchLabel = new Label("Search");
+        dropdownSearchLabel.setTextFontScale(0.7f);
+        dropdownSearchLabel.setAlignment(Label.Alignment.RIGHT);
+        dropdownFrame.addChild(dropdownSearchLabel);
+
+        dropdownSearchField = new TextBox();
+        dropdownSearchField.setTextFontScale(0.7f);
+        dropdownSearchField.setMaxChars(40);
+        dropdownSearchField.setOnTextChanged(text -> applyDropdownFilter());
+        dropdownFrame.addChild(dropdownSearchField);
+
         dropdownList = new VerticalListView();
         dropdownGridLayout = new LayoutGrid(0, 0, false, false, 0, 0, Alignment.TOP);
         dropdownList.setLayout(dropdownGridLayout);
@@ -274,6 +291,8 @@ public class PairSelectorWidget extends StockMarketGuiElement {
     private void openDropdown(Side side) {
         dropdownTarget = side;
         dropdownList.removeChilds();
+        allDropdownButtons.clear();
+        dropdownSearchField.setText("");
 
         List<ItemID> markets = new ArrayList<>(getAvailableMarkets());
         markets.sort(StockMarketGuiElement.MARKET_TYPE_COMPARATOR);
@@ -293,8 +312,9 @@ public class PairSelectorWidget extends StockMarketGuiElement {
             ItemID currentSelection = (side == Side.HAVE) ? haveMarketID : wantMarketID;
             btn.setSelected(marketID.equals(currentSelection));
             btn.setFavorite(false);
-            dropdownList.addChild(btn);
+            allDropdownButtons.add(btn);
         }
+        applyDropdownFilter();
 
         // Hide elements that the dropdown covers
         haveItemView.setEnabled(false);
@@ -321,6 +341,7 @@ public class PairSelectorWidget extends StockMarketGuiElement {
     private void closeDropdown() {
         dropdownTarget = null;
         dropdownFrame.setEnabled(false);
+        allDropdownButtons.clear();
 
         // Restore hidden elements
         if (haveMarketID != null) haveItemView.setEnabled(true);
@@ -331,6 +352,20 @@ public class PairSelectorWidget extends StockMarketGuiElement {
         wantBalanceLabel.setEnabled(true);
         rateLabel.setEnabled(true);
         swapButton.setEnabled(true);
+    }
+
+    /**
+     * Filters the dropdown list based on the current search field text.
+     * Only buttons whose item display name contains the search string are shown.
+     */
+    private void applyDropdownFilter() {
+        dropdownList.removeChilds();
+        String filter = dropdownSearchField.getText().toLowerCase().trim();
+        for (MarketFavoriteButton btn : allDropdownButtons) {
+            if (filter.isEmpty() || btn.getItemStack().getHoverName().getString().toLowerCase().contains(filter)) {
+                dropdownList.addChild(btn);
+            }
+        }
     }
 
     /**
@@ -544,12 +579,15 @@ public class PairSelectorWidget extends StockMarketGuiElement {
 
             dropdownFrame.setBounds(leftX, dropdownY, w - 2 * p, Math.max(0, dropdownH));
 
-            /*// Update grid columns based on container width
-            int containerWidth = dropdownList.getContainerWidth();
-            if (containerWidth > 0) {
-                dropdownGridLayout.columns = Math.max(1, containerWidth / ItemView.DEFAULT_WIDTH);
-            }*/
-            dropdownList.setBounds(0, 0, dropdownFrame.getWidth(), dropdownFrame.getHeight());
+            // Search label + field at the top of the dropdown, list below it
+            int searchH = 14;
+            int innerP = 2;
+            int dw = dropdownFrame.getWidth() - 2 * innerP;
+            int searchLabelW = dw / 4;
+            dropdownSearchLabel.setBounds(innerP, innerP, searchLabelW, searchH);
+            dropdownSearchField.setBounds(innerP + searchLabelW + innerP, innerP, dw - searchLabelW - innerP, searchH);
+            int listY = dropdownSearchField.getBottom() + innerP;
+            dropdownList.setBounds(0, listY, dropdownFrame.getWidth(), Math.max(0, dropdownFrame.getHeight() - listY));
         }
     }
 }

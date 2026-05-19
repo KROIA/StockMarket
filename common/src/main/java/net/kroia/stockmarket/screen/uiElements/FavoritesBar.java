@@ -6,6 +6,7 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.elements.Frame;
 import net.kroia.modutilities.gui.elements.ItemView;
 import net.kroia.modutilities.gui.elements.Label;
+import net.kroia.modutilities.gui.elements.TextBox;
 import net.kroia.modutilities.gui.elements.VerticalListView;
 import net.kroia.modutilities.gui.layout.LayoutGrid;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
@@ -34,8 +35,13 @@ public class FavoritesBar extends StockMarketGuiElement {
 
     private final ItemView selectedMarketView;
     private final Label priceLabel;
+    private final Label searchLabel;
+    private final TextBox searchField;
     private final VerticalListView marketGrid;
     private final LayoutGrid gridLayout;
+
+    /** All market buttons in display order, kept for search filtering. */
+    private final List<MarketFavoriteButton> allMarketButtons = new ArrayList<>();
 
     // Bank balance display section
     private final Frame balanceFrame;
@@ -83,6 +89,18 @@ public class FavoritesBar extends StockMarketGuiElement {
         priceLabel.setEnabled(false);
         addChild(priceLabel);
 
+        // Search label and field for filtering the market grid
+        searchLabel = new Label("Search");
+        searchLabel.setTextFontScale(0.7f);
+        searchLabel.setAlignment(Label.Alignment.RIGHT);
+        addChild(searchLabel);
+
+        searchField = new TextBox();
+        searchField.setTextFontScale(0.7f);
+        searchField.setMaxChars(40);
+        searchField.setOnTextChanged(text -> applySearchFilter());
+        addChild(searchField);
+
         // Scrollable grid for all market buttons
         marketGrid = new VerticalListView();
         gridLayout = new LayoutGrid(0, 0, false, false, 0, 1, Alignment.TOP);
@@ -126,6 +144,7 @@ public class FavoritesBar extends StockMarketGuiElement {
                         @Nullable ItemID selectedMarketID) {
         this.currentMarketID = selectedMarketID;
         marketGrid.removeChilds();
+        allMarketButtons.clear();
 
         // Update selected market icon
         if (selectedMarketID != null) {
@@ -156,7 +175,7 @@ public class FavoritesBar extends StockMarketGuiElement {
         nonFavorites.sort(StockMarketGuiElement.MARKET_TYPE_COMPARATOR);
         sorted.addAll(nonFavorites);
 
-        // Create buttons
+        // Create buttons (stored for search filtering)
         for (ItemID marketID : sorted) {
             boolean isFav = favoriteIDs.contains(marketID);
             boolean isSel = marketID.equals(selectedMarketID);
@@ -168,8 +187,11 @@ public class FavoritesBar extends StockMarketGuiElement {
             );
             btn.setFavorite(isFav);
             btn.setSelected(isSel);
-            marketGrid.addChild(btn);
+            allMarketButtons.add(btn);
         }
+
+        // Apply current search filter to populate the grid
+        applySearchFilter();
 
         // Fetch updated bank balances
         refreshBalances();
@@ -203,6 +225,20 @@ public class FavoritesBar extends StockMarketGuiElement {
         }
         updatePlayerPreferences(prefs);
         scheduleRebuild(getAvailableMarkets(), prefs.getFavoriteMarketIDs(), currentMarketID);
+    }
+
+    /**
+     * Filters the market grid based on the current search field text.
+     * Only buttons whose item display name contains the search string are shown.
+     */
+    private void applySearchFilter() {
+        marketGrid.removeChilds();
+        String filter = searchField.getText().toLowerCase().trim();
+        for (MarketFavoriteButton btn : allMarketButtons) {
+            if (filter.isEmpty() || btn.getItemStack().getHoverName().getString().toLowerCase().contains(filter)) {
+                marketGrid.addChild(btn);
+            }
+        }
     }
 
     /**
@@ -318,7 +354,14 @@ public class FavoritesBar extends StockMarketGuiElement {
             y = selectedMarketView.getBottom() + s;
         }
 
-        // Market grid fills the space between the icon and the balance frame
+        // Search label + field between the selected market icon and the market grid
+        int searchHeight = 14;
+        int searchLabelW = w / 4;
+        searchLabel.setBounds(p, y, searchLabelW, searchHeight);
+        searchField.setBounds(p + searchLabelW + s, y, w - 2 * p - searchLabelW - s, searchHeight);
+        y += searchHeight + s;
+
+        // Market grid fills the space between the search field and the balance frame
         int gridWidth = w - 2 * p;
         int gridHeight = getHeight() - y - s - balanceFrameHeight - p;
         marketGrid.setBounds(p, y, gridWidth, Math.max(0, gridHeight));

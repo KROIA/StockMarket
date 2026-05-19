@@ -233,6 +233,7 @@ public class StockMarketModBackend implements StockMarketAPI {
             SERVER_INSTANCES.DATA_MANAGER = new DataManager();
 
             loadDataFromFiles(UtilitiesPlatform.getServer());
+            preRegisterPresetItemStacks();
             registerItemPriceProvider();
             autosaveTimer_lastMs = System.currentTimeMillis();
             TickEvent.SERVER_POST.register(StockMarketModBackend::onServerTick);
@@ -389,6 +390,27 @@ public class StockMarketModBackend implements StockMarketAPI {
         if(SERVER_INSTANCES != null && SERVER_INSTANCES.DATA_MANAGER != null)
             SERVER_INSTANCES.DATA_MANAGER.load(server);
     }
+    /**
+     * Pre-registers all preset ItemStacks in the BankSystem ItemIDManager using
+     * the server's registry.  This ensures enchanted books, potions, etc. have
+     * Holder.References bound to the server's registry and can be saved to NBT.
+     * Called after loadDataFromFiles so existing ItemIDs are loaded first.
+     */
+    private static void preRegisterPresetItemStacks() {
+        if (SERVER_INSTANCES == null || SERVER_INSTANCES.PRESET_MANAGER == null) return;
+        int count = 0;
+        for (var category : SERVER_INSTANCES.PRESET_MANAGER.getCategories()) {
+            for (MarketPreset preset : category.getPresets()) {
+                net.minecraft.world.item.ItemStack stack = preset.toItemStack();
+                if (!stack.isEmpty()) {
+                    net.kroia.banksystem.util.ItemIDManager.registerItemStackServerSide_direct(stack);
+                    count++;
+                }
+            }
+        }
+        SERVER_INSTANCES.LOGGER.info("[StockMarketModBackend] Pre-registered " + count + " preset ItemStacks in ItemIDManager");
+    }
+
     public static void saveDataToFiles(MinecraftServer server)
     {
         if(SERVER_INSTANCES != null && SERVER_INSTANCES.DATA_MANAGER != null)
