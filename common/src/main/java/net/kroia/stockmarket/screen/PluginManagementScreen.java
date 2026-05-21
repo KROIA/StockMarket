@@ -259,6 +259,7 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         @SuppressWarnings("rawtypes")
         private final PluginGuiElement pluginGuiElement;  // may be null if registry lookup fails
         private final Button openPluginScreenButton;      // only used if needsCustomScreen() is true
+        private final Label missingPluginLabel;            // shown when plugin mod is not installed on client
 
         /**
          * Creates a plugin entry widget for the given plugin data.
@@ -373,12 +374,18 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
                 // Show button to open dedicated screen
                 openPluginScreenButton = new Button(Texts.OPEN_PLUGIN_SCREEN.getString(), this::onOpenPluginScreen);
                 this.addChild(openPluginScreenButton);
+                missingPluginLabel = null;
             } else if (pluginGuiElement != null) {
                 // Embed inline
                 openPluginScreenButton = null;
+                missingPluginLabel = null;
                 this.addChild(pluginGuiElement);
             } else {
+                // Plugin mod not installed on client — show placeholder
                 openPluginScreenButton = null;
+                missingPluginLabel = new Label("Plugin mod not installed — custom UI unavailable");
+                missingPluginLabel.setTextColor(0xFFFF4444);
+                this.addChild(missingPluginLabel);
             }
 
             int descLineH = (int)(defaultElementHeight * descriptionFontScale);
@@ -393,6 +400,8 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
                 totalHeight += defaultElementHeight + padding;
             } else if (pluginGuiElement != null) {
                 totalHeight += pluginGuiElement.getHeight() + padding;
+            } else if (missingPluginLabel != null) {
+                totalHeight += defaultElementHeight + padding;
             }
             this.setHeight(totalHeight);
 
@@ -453,6 +462,8 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
                 openPluginScreenButton.setBounds(padding, row5Y, width, defaultElementHeight);
             } else if (pluginGuiElement != null) {
                 pluginGuiElement.setBounds(padding, row5Y, width, pluginGuiElement.getHeight());
+            } else if (missingPluginLabel != null) {
+                missingPluginLabel.setBounds(padding, row5Y, width, defaultElementHeight);
             }
         }
 
