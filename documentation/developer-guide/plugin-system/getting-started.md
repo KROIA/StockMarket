@@ -1,6 +1,6 @@
 # Getting Started
 
-Step-by-step guide to creating a StockMarket plugin from scratch.
+Step-by-step guide to creating a StockMarket plugin from scratch. For a complete working project you can fork and modify, see the [Example Plugin Template](https://github.com/KROIA/StockMarketExamplePlugin).
 
 ## Step 1: Create a ServerPlugin Subclass
 

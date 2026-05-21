@@ -130,6 +130,7 @@ pluginsystem/
 
 ## Next Steps
 
+- [Example Plugin Template](https://github.com/KROIA/StockMarketExamplePlugin) -- ready-to-use Architectury project template with a working PriceFloorPlugin
 - [Getting Started](getting-started.md) -- step-by-step guide to creating your first plugin
 - [API Reference](api-reference.md) -- complete method reference for all plugin API classes
 - [Examples](examples.md) -- three complete example plugins
