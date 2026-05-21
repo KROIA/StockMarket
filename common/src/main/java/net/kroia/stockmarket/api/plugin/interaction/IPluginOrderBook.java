@@ -138,4 +138,29 @@ public interface IPluginOrderBook {
      */
     float getDefaultRealVolume(double pickPrice);
     float getDefaultRawVolume(double pickPrice);
+
+    /**
+     * Gets the total capital (volume × price) in the given backend price range.
+     * Useful for measuring monetary depth in a price region.
+     * @param startPrice the start of the price range (backend/unscaled price)
+     * @param endPrice the end of the price range (backend/unscaled price)
+     * @return the total capital in the price range
+     */
+    float getCapital(long startPrice, long endPrice);
+
+    /**
+     * Gets all buy orders within the given backend price range.
+     * @param startPrice the minimum price (backend/unscaled, inclusive)
+     * @param endPrice the maximum price (backend/unscaled, inclusive)
+     * @return list of buy orders in the price range
+     */
+    @NotNull List<Order> getBuyOrders(long startPrice, long endPrice);
+
+    /**
+     * Gets all sell orders within the given backend price range.
+     * @param startPrice the minimum price (backend/unscaled, inclusive)
+     * @param endPrice the maximum price (backend/unscaled, inclusive)
+     * @return list of sell orders in the price range
+     */
+    @NotNull List<Order> getSellOrders(long startPrice, long endPrice);
 }

@@ -64,8 +64,10 @@ The sequence each tick:
 | Set/adjust target prices | `IPluginMarket.setTargetPrice()`, `addToTargetPrice()` |
 | Place market orders | `IPluginMarket.placeOrder(amount)` |
 | Place limit orders | `IPluginMarket.placeOrder(amount, price)` |
-| Read current/default price | `IPluginMarket.getPrice()`, `getDefaultRealPrice()` |
+| Read current/default/target price | `IPluginMarket.getPrice()`, `getDefaultRealPrice()`, `getTargetPrice()`, `getPreviousTargetPrice()` |
+| Check market state | `IPluginMarket.isMarketOpen()`, `getCurrentCandleTradedVolume()` |
 | Read player supply/demand | `IPluginMarket.getNetPlayerItemFlow()` |
+| Query orderbook depth and capital | `IPluginOrderBook.getRealVolume()`, `getCapital()`, `getBuyOrders(range)`, `getSellOrders(range)` |
 | Manipulate virtual orderbook volume | `IPluginOrderBook.setRawVolume()`, `addRawVolume()`, `resetVirtualVolume()` |
 | Register volume distribution calculators | `IPluginOrderBook.registerDefaultVolumeDistributionCalculator()` |
 | Stream type-safe runtime data to client GUI | `ServerPlugin.runtimeDataCodec()`, `provideRuntimeData()`, `getRuntimeDataStreamInterval()` |
@@ -128,6 +130,7 @@ pluginsystem/
 
 ## Next Steps
 
+- [Example Plugin Template](https://github.com/KROIA/StockMarketExamplePlugin) -- ready-to-use Architectury project template with a working PriceFloorPlugin
 - [Getting Started](getting-started.md) -- step-by-step guide to creating your first plugin
 - [API Reference](api-reference.md) -- complete method reference for all plugin API classes
 - [Examples](examples.md) -- three complete example plugins

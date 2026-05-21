@@ -160,4 +160,19 @@ public class PluginOrderBook implements IPluginOrderBook
     {
         return getDefaultRealVolume(pickPrice) * BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync().getItemFractionScaleFactor();
     }
+
+    @Override
+    public float getCapital(long startPrice, long endPrice) {
+        return orderbook.getCapital(startPrice, endPrice);
+    }
+
+    @Override
+    public @NotNull List<Order> getBuyOrders(long startPrice, long endPrice) {
+        return orderbook.getBuyOrders(startPrice, endPrice);
+    }
+
+    @Override
+    public @NotNull List<Order> getSellOrders(long startPrice, long endPrice) {
+        return orderbook.getSellOrders(startPrice, endPrice);
+    }
 }
