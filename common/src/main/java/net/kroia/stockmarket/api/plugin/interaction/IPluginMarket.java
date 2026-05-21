@@ -74,6 +74,15 @@ public interface IPluginMarket {
     double getPreviousTargetPrice();
 
 
+    /**
+     * Gets the current target price that the market is moving towards.
+     * This is the value set by plugins during the current tick.
+     * If no plugin has set a target price yet this tick, returns the previous target price.
+     * @return the current target price as a real (scaled) value
+     */
+    double getTargetPrice();
+
+
     void setTargetPrice(double targetPrice);
 
 
@@ -125,32 +134,20 @@ public interface IPluginMarket {
      */
     double getNetPlayerItemFlow();
 
-    /**
-     * Checks if a market plugin with the given registration object exists for this market.
-     * @param registrationObject The registration object of the plugin to check.
-     * @return True if the plugin exists, false otherwise.
-     */
-    //boolean marketPluginExists(PluginRegistry.MarketPluginRegistrationObject registrationObject);
+
 
     /**
-     * Checks if a market plugin with the given type ID exists for this market.
-     * @param pluginTypeID The type ID of the plugin to check.
-     * @return True if the plugin exists, false otherwise.
+     * Checks whether this market is currently open for trading.
+     * Closed markets do not process orders.
+     * @return true if the market is open, false otherwise
      */
-    //boolean marketPluginExists(String pluginTypeID);
+    boolean isMarketOpen();
 
     /**
-     * Gets the market plugin with the given registration object.
-     * @param registrationObject The registration object of the plugin to get.
-     * @return The market plugin instance, or null if it does not exist.
+     * Gets the accumulated traded volume for the current price candle.
+     * Resets when a new candle starts.
+     * @return the traded volume for the current candle
      */
-    //MarketPlugin getMarketPlugin(PluginRegistry.MarketPluginRegistrationObject registrationObject);
-
-    /**
-     * Gets the market plugin with the given type ID.
-     * @param pluginTypeID The type ID of the plugin to get.
-     * @return The market plugin instance, or null if it does not exist.
-     */
-    //MarketPlugin getMarketPlugin(String pluginTypeID);
+    float getCurrentCandleTradedVolume();
 
 }

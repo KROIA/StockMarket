@@ -353,6 +353,11 @@ double getPreviousTargetPrice()
 Returns the target price used in the last market update.
 
 ```java
+double getTargetPrice()
+```
+Returns the current target price that the market is moving towards. This is the value set by plugins during the current tick. If no plugin has set a target price yet this tick, returns the previous target price.
+
+```java
 void setTargetPrice(double targetPrice)
 ```
 Sets the target price the market moves toward. Queued in the cache -- applied after all plugins update.
@@ -373,6 +378,18 @@ Places a limit order. Positive `amount` = buy, negative `amount` = sell. Returns
 void placeOrder(double amount)
 ```
 Places a market order at the best available price. Positive `amount` = buy, negative `amount` = sell. Queued in the cache.
+
+### Market State
+
+```java
+boolean isMarketOpen()
+```
+Returns whether this market is currently open for trading. Closed markets do not process orders.
+
+```java
+float getCurrentCandleTradedVolume()
+```
+Returns the accumulated traded volume for the current price candle. Resets when a new candle starts. Useful for tracking market activity and building volume-based indicators.
 
 ### Player Metrics
 
@@ -400,6 +417,16 @@ Returns all current buy orders in the orderbook.
 @NotNull List<Order> getSellOrders()
 ```
 Returns all current sell orders in the orderbook.
+
+```java
+@NotNull List<Order> getBuyOrders(long startPrice, long endPrice)
+```
+Returns buy orders within the given backend price range (inclusive).
+
+```java
+@NotNull List<Order> getSellOrders(long startPrice, long endPrice)
+```
+Returns sell orders within the given backend price range (inclusive).
 
 ```java
 @NotNull List<Order> getNewOrders()
@@ -432,6 +459,13 @@ Returns raw (unscaled) volume at a specific backend price.
 float getRawVirtualVolume(long backendPrice)
 ```
 Returns raw virtual volume at a specific backend price.
+
+### Capital Queries
+
+```java
+float getCapital(long startPrice, long endPrice)
+```
+Returns the total capital (volume x price) in the given backend price range. Useful for measuring monetary depth in a price region.
 
 ### Virtual Volume Management
 

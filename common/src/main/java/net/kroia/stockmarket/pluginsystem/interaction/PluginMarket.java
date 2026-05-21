@@ -74,6 +74,11 @@ public class PluginMarket implements IPluginMarket
     }
 
     @Override
+    public double getTargetPrice() {
+        return cache.getNextTargetPrice();
+    }
+
+    @Override
     public void addToTargetPrice(double delta) {
         cache.addToNextTargetPrice(delta);
     }
@@ -99,5 +104,17 @@ public class PluginMarket implements IPluginMarket
     @Override
     public double getNetPlayerItemFlow() {
         return MarketManager.convertToRealAmountStatic(serverMarket.getNetPlayerItemFlow());
+    }
+
+
+
+    @Override
+    public boolean isMarketOpen() {
+        return serverMarket.isMarketOpen();
+    }
+
+    @Override
+    public float getCurrentCandleTradedVolume() {
+        return serverMarket.getCurrentCandleTradedVolume();
     }
 }
