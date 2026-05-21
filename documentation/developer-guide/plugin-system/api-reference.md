@@ -51,6 +51,11 @@ UUID getInstanceID()
 Returns the unique instance ID for this plugin instance.
 
 ```java
+void setInstanceID(UUID id)
+```
+Restores the instance ID from saved data. Used when loading a plugin instance from persistence.
+
+```java
 String getPluginTypeID()
 ```
 Returns the type ID string from the plugin's registry entry, or null if not registered.
@@ -195,30 +200,47 @@ Framework method: encodes runtime data to bytes using the plugin's codec. Called
 
 ### Custom Settings
 
+Custom settings are stored **per market** using an internal `Map<ItemID, TSettings>`. The framework manages this map automatically. When a market is first subscribed, the framework calls `provideDefaultCustomSettings()` to get initial settings, stores them in the per-market map, and then calls `onCustomSettingsApplied(marketID, settings)`.
+
 ```java
 protected @Nullable StreamCodec<ByteBuf, TSettings> customSettingsCodec()
 ```
 Override to return the codec for this plugin's custom settings type. Return null if this plugin has no custom settings.
 
 ```java
-protected @Nullable TSettings provideCustomSettings()
+protected @Nullable TSettings provideDefaultCustomSettings()
 ```
-Override to provide the current custom settings for network transfer to the client. Only called if `customSettingsCodec()` returns non-null.
+Override to provide default settings for newly subscribed markets. Called when a market is first subscribed. Return null if this plugin has no custom settings.
 
 ```java
-protected boolean applyCustomSettings(@NotNull TSettings settings)
+protected void onCustomSettingsApplied(ItemID marketID, @NotNull TSettings settings)
 ```
-Override to apply custom settings received from the client GUI. Only called if `customSettingsCodec()` returns non-null. Return true on success.
+Override to react when settings are applied to a specific market. Called after decoding. Use this to update internal plugin state from the received settings.
 
 ```java
-final byte[] encodeCustomSettings()
+final @Nullable TSettings getCustomSettings(ItemID marketID)
 ```
-Framework method: encodes custom settings to bytes using the plugin's codec. Called by the networking infrastructure -- plugin developers should not call this directly.
+Returns the current settings for the given market, or null if no settings exist for that market.
 
 ```java
-final boolean decodeAndApplyCustomSettings(byte[] data)
+final byte[] encodeCustomSettings(ItemID marketID)
 ```
-Framework method: decodes and applies custom settings from bytes. Called by the networking infrastructure -- plugin developers should not call this directly.
+Framework method: encodes settings for a single market to bytes using the plugin's codec. Called by the networking infrastructure -- plugin developers should not call this directly.
+
+```java
+final Map<ItemID, byte[]> encodeAllCustomSettings()
+```
+Framework method: encodes settings for all subscribed markets. Called by the networking infrastructure -- plugin developers should not call this directly.
+
+```java
+final boolean decodeAndApplyCustomSettings(ItemID marketID, byte[] data)
+```
+Framework method: decodes and applies per-market settings from bytes. Called by the networking infrastructure -- plugin developers should not call this directly.
+
+```java
+final boolean decodeAndApplyCustomSettingsLegacy(byte[] data)
+```
+Framework method: backward-compatible decode that applies the same settings to all subscribed markets. Used for migration from the old global settings model.
 
 ### Data Persistence
 
@@ -303,6 +325,13 @@ Returns the default (initial) price of the market.
 double getPrice()
 ```
 Returns the current market price.
+
+### Market Metadata
+
+```java
+float getNaturalAbundance()
+```
+Returns the natural abundance factor for this market. Used by volume distribution plugins to scale orderbook depth.
 
 ### Price Conversion
 
@@ -395,7 +424,7 @@ float getRealVirtualVolume(long backendPrice)
 Returns real virtual volume at a specific backend price.
 
 ```java
-float getRawVolume(long backendPrice)
+long getRawVolume(long backendPrice)
 ```
 Returns raw (unscaled) volume at a specific backend price.
 
@@ -509,9 +538,9 @@ Override to return the codec for this plugin's runtime data type. Must match the
 ### Data Reception
 
 ```java
-protected void onPluginSyncDataReceived(PluginSyncData data, @Nullable TSettings customSettings)
+protected void onPluginSyncDataReceived(PluginSyncData data, @Nullable Map<ItemID, TSettings> customSettingsMap)
 ```
-Override to initialize the element when sync data arrives from the server. The framework automatically decodes the custom settings bytes using `customSettingsCodec()` and passes the typed result. Access subscribed markets via `data.getSubscribedMarkets()`.
+Override to initialize the element when sync data arrives from the server. The framework automatically decodes the per-market custom settings bytes using `customSettingsCodec()` and passes the typed result as a map from market ID to settings. Access subscribed markets via `data.getSubscribedMarkets()`.
 
 ```java
 PluginSyncData getPluginSyncData()
@@ -543,14 +572,31 @@ Override to process incoming runtime data. The framework decodes the raw bytes u
 ### Custom Settings
 
 ```java
-protected final void sendCustomSettings(TSettings settings)
+protected final void sendCustomSettings(ItemID marketID, TSettings settings)
 ```
-Sends typed custom settings to the server. The framework encodes the object to bytes using `customSettingsCodec()`. The response arrives via `onCustomSettingsResponse`.
+Sends typed custom settings for a specific market to the server. The framework encodes the object to bytes using `customSettingsCodec()`. The response arrives via `onCustomSettingsResponse`.
 
 ```java
-protected void onCustomSettingsResponse(boolean success, @Nullable TSettings confirmedSettings)
+protected void onCustomSettingsResponse(boolean success, @Nullable ItemID marketID, @Nullable TSettings confirmedSettings)
 ```
-Override to handle the server's response to a settings update. `success` is true if the server applied the settings. `confirmedSettings` contains the server's confirmed decoded settings object.
+Override to handle the server's response to a settings update. `success` is true if the server applied the settings. `marketID` identifies which market the response is for. `confirmedSettings` contains the server's confirmed decoded settings object.
+
+### Active Market
+
+```java
+public final void setActiveMarket(@Nullable ItemID marketID)
+```
+Sets the active market for settings editing. Triggers `onActiveMarketChanged`. Typically called from `onPluginSyncDataReceived` after receiving the list of subscribed markets.
+
+```java
+public @Nullable ItemID getActiveMarket()
+```
+Returns the currently active market ID, or null if no market is active.
+
+```java
+protected void onActiveMarketChanged(@Nullable ItemID marketID)
+```
+Override to react when the active market changes. Use this to update text fields and UI elements with the new market's settings.
 
 ### Rendering
 
@@ -644,9 +690,9 @@ List<ItemID> getSubscribedMarkets()
 List of markets the plugin is subscribed to.
 
 ```java
-@Nullable byte[] getCustomSettings()
+@Nullable Map<ItemID, byte[]> getCustomSettings()
 ```
-Raw custom settings bytes from `ServerPlugin.encodeCustomSettings()`, or null. Plugin developers typically do not need to call this directly -- the `PluginGuiElement` framework decodes the bytes using `customSettingsCodec()` and passes the typed result to `onPluginSyncDataReceived(data, settings)`.
+Per-market encoded custom settings map from `ServerPlugin.encodeAllCustomSettings()`, or null. Each entry maps a market ID to the encoded settings bytes for that market. Plugin developers typically do not need to call this directly -- the `PluginGuiElement` framework decodes the bytes using `customSettingsCodec()` and passes the typed result to `onPluginSyncDataReceived(data, customSettingsMap)`.
 
 ```java
 GenericPluginData getGenericData()
@@ -980,6 +1026,6 @@ Supported `ByteBuf` methods: `readFloat`/`writeFloat`, `readDouble`/`writeDouble
 
 Both the server plugin and client GUI element override `customSettingsCodec()` and/or `runtimeDataCodec()` to return the same codec. The framework uses these codecs to encode/decode the data transparently:
 
-- **Server to client**: `provideCustomSettings()` returns a typed `TSettings` object. The framework calls `customSettingsCodec().encode()` to convert it to bytes for network transfer. On the client, the framework calls `customSettingsCodec().decode()` and passes the typed result to `onPluginSyncDataReceived(data, settings)`.
-- **Client to server**: `sendCustomSettings(settings)` accepts a typed `TSettings` object. The framework encodes it, sends it over the network, and calls `decodeAndApplyCustomSettings()` on the server which decodes and delegates to `applyCustomSettings(settings)`.
+- **Server to client**: The framework encodes per-market settings using `encodeAllCustomSettings()`, which calls `customSettingsCodec().encode()` for each subscribed market. On the client, the framework decodes each entry and passes the typed result as a `Map<ItemID, TSettings>` to `onPluginSyncDataReceived(data, customSettingsMap)`.
+- **Client to server**: `sendCustomSettings(marketID, settings)` accepts a market ID and a typed `TSettings` object. The framework encodes it, sends it over the network, and calls `decodeAndApplyCustomSettings(marketID, data)` on the server which decodes and delegates to `onCustomSettingsApplied(marketID, settings)`.
 - **Runtime data**: Same pattern -- `provideRuntimeData()` returns a typed `TRuntimeData` object, and `onRuntimeDataReceived(data)` receives the decoded typed object.

@@ -106,6 +106,7 @@ The pattern: Label + TextBox for each setting, plus an Apply button that sends a
 package com.example.myplugin;
 
 import io.netty.buffer.ByteBuf;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.TextBox;
@@ -113,6 +114,9 @@ import net.kroia.stockmarket.pluginsystem.plugin.core.PluginSyncData;
 import net.kroia.stockmarket.pluginsystem.screen.PluginGuiElement;
 import net.minecraft.network.codec.StreamCodec;
 import org.jetbrains.annotations.Nullable;
+
+import java.util.List;
+import java.util.Map;
 
 public class MyPluginGuiElement extends PluginGuiElement<MyPlugin.Settings, Void> {
 
@@ -138,16 +142,26 @@ public class MyPluginGuiElement extends PluginGuiElement<MyPlugin.Settings, Void
     }
 
     @Override
-    protected void onPluginSyncDataReceived(PluginSyncData data, @Nullable MyPlugin.Settings settings) {
-        // Settings are already decoded by the framework -- just use the typed object
-        if (settings != null) {
+    protected void onPluginSyncDataReceived(PluginSyncData data,
+                                            @Nullable Map<ItemID, MyPlugin.Settings> customSettingsMap) {
+        // Settings are per-market -- extract settings from the map
+        if (customSettingsMap != null && !customSettingsMap.isEmpty()) {
+            MyPlugin.Settings settings = customSettingsMap.values().iterator().next();
             settingTextBox.setText(settings.mySetting());
+        }
+        // Set active market for sendCustomSettings
+        List<ItemID> markets = data.getSubscribedMarkets();
+        if (!markets.isEmpty()) {
+            setActiveMarket(markets.get(0));
         }
     }
 
     private void onApply() {
-        // Send a typed settings object -- the framework encodes it via the codec
-        sendCustomSettings(new MyPlugin.Settings((float) settingTextBox.getDouble()));
+        // Send per-market settings -- requires an active market
+        ItemID market = getActiveMarket();
+        if (market != null) {
+            sendCustomSettings(market, new MyPlugin.Settings((float) settingTextBox.getDouble()));
+        }
     }
 
     @Override
@@ -178,7 +192,7 @@ public boolean needsCustomScreen() {
 
 ## Step 4: Add Custom Settings
 
-Custom settings allow the management UI to read and write plugin-specific configuration. Define an inner record type with a `StreamCodec`, then override three methods on your `ServerPlugin`:
+Custom settings allow the management UI to read and write plugin-specific configuration. Settings are stored **per market** -- the framework manages a `Map<ItemID, TSettings>` internally. Define an inner record type with a `StreamCodec`, then override three methods on your `ServerPlugin`:
 
 **1. Define a Settings record with a CODEC:**
 
@@ -226,19 +240,20 @@ protected StreamCodec<ByteBuf, Settings> customSettingsCodec() {
 }
 
 @Override
-protected Settings provideCustomSettings() {
+protected Settings provideDefaultCustomSettings() {
+    // Called when a market is first subscribed -- provide initial settings
     return new Settings(mySetting, myOtherSetting);
 }
 
 @Override
-protected boolean applyCustomSettings(Settings settings) {
+protected void onCustomSettingsApplied(ItemID marketID, @NotNull Settings settings) {
+    // Called when settings are applied for a specific market
     mySetting = settings.mySetting();
     myOtherSetting = settings.myOtherSetting();
-    return true;
 }
 ```
 
-The framework handles all byte-level encoding and decoding. The `PluginGuiElement` on the client side uses the same codec and works with the same `Settings` type directly. Return `null` from `customSettingsCodec()` if the plugin has no custom settings. Return `false` from `applyCustomSettings()` to reject invalid settings.
+The framework handles all byte-level encoding and decoding. Settings are stored per market in an internal map managed by the framework. When a market is first subscribed, `provideDefaultCustomSettings()` is called to get initial settings. When settings are received from the client GUI, the framework decodes them and calls `onCustomSettingsApplied(marketID, settings)`. The `PluginGuiElement` on the client side uses the same codec and works with the same `Settings` type directly. Return `null` from `customSettingsCodec()` if the plugin has no custom settings.
 
 ## Step 5: Add Persistence
 
@@ -320,7 +335,8 @@ public class MyGuiElement extends PluginGuiElement<MyPlugin.Settings, MyPlugin.S
     }
 
     @Override
-    protected void onPluginSyncDataReceived(PluginSyncData data, @Nullable MyPlugin.Settings settings) {
+    protected void onPluginSyncDataReceived(PluginSyncData data,
+                                            @Nullable Map<ItemID, MyPlugin.Settings> customSettingsMap) {
         // Start streaming when sync data arrives
         startDataStream();
     }

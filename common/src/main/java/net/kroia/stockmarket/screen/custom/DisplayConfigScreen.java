@@ -3,9 +3,11 @@ package net.kroia.stockmarket.screen.custom;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ColorUtilities;
 import net.kroia.modutilities.gui.Gui;
+import net.kroia.modutilities.ClientPlayerUtilities;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.ItemView;
 import net.kroia.modutilities.gui.elements.Label;
+import net.kroia.modutilities.gui.elements.TextBox;
 import net.kroia.modutilities.gui.elements.VerticalListView;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
@@ -34,13 +36,22 @@ public class DisplayConfigScreen extends StockMarketGuiScreen {
     private final Label typeLabel;
     private final Button priceChartButton;
     private final Label marketLabel;
+    private final Label searchLabel;
+    private final TextBox searchField;
     private final VerticalListView marketListView;
     private final Label selectedLabel;
     private final Label secondMarketLabel;
+    private final Label secondSearchLabel;
+    private final TextBox secondSearchField;
     private final VerticalListView secondMarketListView;
     private final Label secondSelectedLabel;
     private final Button clearSecondButton;
     private final Button applyButton;
+
+    /** All primary market row elements, kept for search filtering. */
+    private List<GuiElement> allMarketRows = new ArrayList<>();
+    /** All secondary market row elements, kept for search filtering. */
+    private List<GuiElement> allSecondMarketRows = new ArrayList<>();
 
     private static final int ACTIVE_COLOR = ColorUtilities.getRGB(40, 120, 80);
     private static final int INACTIVE_COLOR = ColorUtilities.getRGB(60, 60, 60);
@@ -71,6 +82,15 @@ public class DisplayConfigScreen extends StockMarketGuiScreen {
         marketLabel = new Label("I want (item to display):");
         addElement(marketLabel);
 
+        searchLabel = new Label("Search");
+        addElement(searchLabel);
+
+        searchField = new TextBox();
+        searchField.setTextFontScale(0.7f);
+        searchField.setMaxChars(40);
+        searchField.setOnTextChanged(text -> applyMarketFilter());
+        addElement(searchField);
+
         marketListView = new VerticalListView();
         LayoutVertical layout = new LayoutVertical();
         layout.stretchX = true;
@@ -82,6 +102,15 @@ public class DisplayConfigScreen extends StockMarketGuiScreen {
 
         secondMarketLabel = new Label("I have / currency (optional):");
         addElement(secondMarketLabel);
+
+        secondSearchLabel = new Label("Search");
+        addElement(secondSearchLabel);
+
+        secondSearchField = new TextBox();
+        secondSearchField.setTextFontScale(0.7f);
+        secondSearchField.setMaxChars(40);
+        secondSearchField.setOnTextChanged(text -> applySecondMarketFilter());
+        addElement(secondSearchField);
 
         secondMarketListView = new VerticalListView();
         LayoutVertical secondLayout = new LayoutVertical();
@@ -131,10 +160,18 @@ public class DisplayConfigScreen extends StockMarketGuiScreen {
         marketLabel.setBounds(x, y, centerW, 12);
         y += 14;
 
+        // Search row for primary market list
+        int searchLabelW = centerW / 4;
+        int searchFieldX = x + searchLabelW + 2;
+        int searchFieldW = centerW - searchLabelW - 2;
+        searchLabel.setBounds(x, y, searchLabelW, 14);
+        searchField.setBounds(searchFieldX, y, searchFieldW, 14);
+        y += 16;
+
         // Fixed-height elements below the lists:
-        // selectedLabel(14+2) + secondMarketLabel(12+2) + secondList + secondSelectedLabel(14+2)
-        // + clearSecondButton(18+4) + applyButton(20) + bottom padding(p)
-        int bottomFixedH = 14 + 2 + 12 + 2 + 14 + 2 + 18 + 4 + 20 + p;
+        // selectedLabel(14+2) + secondMarketLabel(12+2) + secondSearch(14+2)
+        // + secondList + secondSelectedLabel(14+2) + clearSecondButton(18+4) + applyButton(20) + bottom padding(p)
+        int bottomFixedH = 14 + 2 + 12 + 2 + 14 + 2 + 14 + 2 + 18 + 4 + 20 + p;
 
         // Split remaining height between the two market lists
         int availableForLists = h - y - bottomFixedH;
@@ -148,6 +185,11 @@ public class DisplayConfigScreen extends StockMarketGuiScreen {
 
         secondMarketLabel.setBounds(x, y, centerW, 12);
         y += 14;
+
+        // Search row for secondary market list
+        secondSearchLabel.setBounds(x, y, searchLabelW, 14);
+        secondSearchField.setBounds(searchFieldX, y, searchFieldW, 14);
+        y += 16;
 
         secondMarketListView.setBounds(x, y, centerW, listH);
         y += listH + 2;
@@ -187,6 +229,7 @@ public class DisplayConfigScreen extends StockMarketGuiScreen {
         List<ItemID> markets = new ArrayList<>(getAvailableMarkets());
         markets.sort(StockMarketGuiElement.MARKET_TYPE_COMPARATOR);
         marketListView.removeChilds();
+        allMarketRows.clear();
 
         if (markets == null || markets.isEmpty()) {
             Label noMarkets = new Label("No markets available");
@@ -235,8 +278,9 @@ public class DisplayConfigScreen extends StockMarketGuiScreen {
             });
             row.addChild(btn);
 
-            marketListView.addChild(row);
+            allMarketRows.add(row);
         }
+        applyMarketFilter();
         updateSelectedLabel();
     }
 
@@ -268,6 +312,7 @@ public class DisplayConfigScreen extends StockMarketGuiScreen {
         List<ItemID> markets = new ArrayList<>(getAvailableMarkets());
         markets.sort(StockMarketGuiElement.MARKET_TYPE_COMPARATOR);
         secondMarketListView.removeChilds();
+        allSecondMarketRows.clear();
 
         if (markets == null || markets.isEmpty()) {
             Label noMarkets = new Label("No markets available");
@@ -315,8 +360,9 @@ public class DisplayConfigScreen extends StockMarketGuiScreen {
             });
             row.addChild(btn);
 
-            secondMarketListView.addChild(row);
+            allSecondMarketRows.add(row);
         }
+        applySecondMarketFilter();
     }
 
     /**
@@ -339,6 +385,55 @@ public class DisplayConfigScreen extends StockMarketGuiScreen {
                 }
             }
         }
+    }
+
+    /**
+     * Filters the primary market list based on search text.
+     * Matches against item display name and tooltip text.
+     */
+    private void applyMarketFilter() {
+        marketListView.removeChilds();
+        String filter = searchField.getText().toLowerCase().trim();
+        for (GuiElement row : allMarketRows) {
+            if (filter.isEmpty() || matchesFilter(row, filter)) {
+                marketListView.addChild(row);
+            }
+        }
+    }
+
+    /**
+     * Filters the secondary market list based on search text.
+     * Matches against item display name and tooltip text.
+     */
+    private void applySecondMarketFilter() {
+        secondMarketListView.removeChilds();
+        String filter = secondSearchField.getText().toLowerCase().trim();
+        for (GuiElement row : allSecondMarketRows) {
+            if (filter.isEmpty() || matchesFilter(row, filter)) {
+                secondMarketListView.addChild(row);
+            }
+        }
+    }
+
+    /**
+     * Checks if a market row matches the given filter text by comparing
+     * against the item's display name and full tooltip text (includes
+     * enchantment names, potion effects, component text, etc.).
+     *
+     * @param row    the market row element containing an ItemView child
+     * @param filter the lowercase search text to match against
+     * @return true if any child ItemView's name or tooltip contains the filter
+     */
+    private boolean matchesFilter(GuiElement row, String filter) {
+        for (var child : row.getChilds()) {
+            if (child instanceof ItemView iv) {
+                String name = iv.getItemStack().getHoverName().getString().toLowerCase();
+                if (name.contains(filter)) return true;
+                String displayText = ClientPlayerUtilities.getItemDisplayText(iv.getItemStack()).toLowerCase();
+                if (displayText.contains(filter)) return true;
+            }
+        }
+        return false;
     }
 
     private void onApply() {

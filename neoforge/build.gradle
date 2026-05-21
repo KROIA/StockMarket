@@ -14,10 +14,7 @@ repositories {
         dir "../../../MC_ModUtilities/mc_${minecraft_version}_MC_ModUtilities/neoforge/build/libs"
         dir "../../../BankSystem/mc_${minecraft_version}_BankSystem/neoforge/build/libs"
     }
-
-
-    //mavenLocal()
-    //maven { url 'https://jitpack.io' }
+    maven { url 'https://jitpack.io' }
 
 }
 architectury {
@@ -59,10 +56,10 @@ dependencies {
 
     common(project(path: ':common', configuration: 'namedElements')) { transitive false }
 
-    modImplementation("net.kroia:modutilities-neoforge:$rootProject.modutilities_version")
-    include("net.kroia:modutilities-neoforge:$rootProject.modutilities_version")
+    modImplementation("com.github.KROIA.MC_ModUtilities:modutilities-neoforge:$rootProject.modutilities_version")
+    include("com.github.KROIA.MC_ModUtilities:modutilities-neoforge:$rootProject.modutilities_version")
 
-    modImplementation("net.kroia:banksystem-neoforge:$rootProject.banksystem_version")
+    modImplementation("com.github.KROIA.BankSystem:banksystem-neoforge:$rootProject.banksystem_version")
 
 
 

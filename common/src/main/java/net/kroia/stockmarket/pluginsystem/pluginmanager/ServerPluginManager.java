@@ -166,7 +166,7 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
         sorted.sort(Comparator.comparingInt(ServerPlugin::getSubscriptionOrder));
         for (ServerPlugin plugin : sorted)
         {
-            if (plugin.getAutoSubscribeNewMarkets() && plugin.isEnabled())
+            if (plugin.getAutoSubscribeNewMarkets())
             {
                 plugin.subscribeToMarket(marketID);
             }
