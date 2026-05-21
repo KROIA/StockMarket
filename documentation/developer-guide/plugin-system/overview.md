@@ -69,7 +69,7 @@ The sequence each tick:
 | Manipulate virtual orderbook volume | `IPluginOrderBook.setRawVolume()`, `addRawVolume()`, `resetVirtualVolume()` |
 | Register volume distribution calculators | `IPluginOrderBook.registerDefaultVolumeDistributionCalculator()` |
 | Stream type-safe runtime data to client GUI | `ServerPlugin.runtimeDataCodec()`, `provideRuntimeData()`, `getRuntimeDataStreamInterval()` |
-| Define type-safe custom settings | `ServerPlugin.customSettingsCodec()`, `provideCustomSettings()`, `applyCustomSettings()` |
+| Define per-market type-safe custom settings | `ServerPlugin.customSettingsCodec()`, `provideDefaultCustomSettings()`, `onCustomSettingsApplied()` |
 | Persist state across server restarts | `ServerPlugin.save(CompoundTag)`, `load(CompoundTag)` |
 | Custom inline or full-screen GUI | `PluginGuiElement` subclass, registered via `PluginRegistryObject.setGuiElementFactory()` |
 | Draw overlays on candlestick chart | Override `PluginGuiElement.setCandlestickChart()`, register `CandlestickChart.Overlay` |

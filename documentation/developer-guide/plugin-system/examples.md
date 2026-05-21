@@ -72,7 +72,7 @@ public class PriceFloorPlugin extends ServerPlugin<PriceFloorPlugin.Settings, Vo
     @Override
     public void onDisable() {}
 
-    // --- Custom Settings (StreamCodec-based) ---
+    // --- Custom Settings (per-market, StreamCodec-based) ---
 
     @Override
     protected StreamCodec<ByteBuf, Settings> customSettingsCodec() {
@@ -80,14 +80,13 @@ public class PriceFloorPlugin extends ServerPlugin<PriceFloorPlugin.Settings, Vo
     }
 
     @Override
-    protected Settings provideCustomSettings() {
+    protected Settings provideDefaultCustomSettings() {
         return new Settings(minPrice);
     }
 
     @Override
-    protected boolean applyCustomSettings(Settings settings) {
+    protected void onCustomSettingsApplied(ItemID marketID, @NotNull Settings settings) {
         minPrice = settings.minPrice();
-        return true;
     }
 
     // --- Persistence ---
@@ -114,6 +113,7 @@ Inline element with a Label, TextBox, and Apply button. Settings are received as
 package com.example.plugins.screen;
 
 import io.netty.buffer.ByteBuf;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.TextBox;
@@ -122,6 +122,9 @@ import net.kroia.stockmarket.pluginsystem.plugins.PriceFloorPlugin;
 import net.kroia.stockmarket.pluginsystem.screen.PluginGuiElement;
 import net.minecraft.network.codec.StreamCodec;
 import org.jetbrains.annotations.Nullable;
+
+import java.util.List;
+import java.util.Map;
 
 public class PriceFloorGuiElement extends PluginGuiElement<PriceFloorPlugin.Settings, Void> {
 
@@ -148,16 +151,26 @@ public class PriceFloorGuiElement extends PluginGuiElement<PriceFloorPlugin.Sett
 
     @Override
     protected void onPluginSyncDataReceived(PluginSyncData data,
-                                            @Nullable PriceFloorPlugin.Settings settings) {
-        // Settings already decoded -- just use the typed fields
-        if (settings != null) {
+                                            @Nullable Map<ItemID, PriceFloorPlugin.Settings> customSettingsMap) {
+        // Settings are per-market -- for simple plugins, pick any market's settings
+        if (customSettingsMap != null && !customSettingsMap.isEmpty()) {
+            PriceFloorPlugin.Settings settings = customSettingsMap.values().iterator().next();
             minPriceTextBox.setText(settings.minPrice());
+        }
+        // Set active market for sendCustomSettings
+        List<ItemID> markets = data.getSubscribedMarkets();
+        if (!markets.isEmpty()) {
+            setActiveMarket(markets.get(0));
         }
     }
 
     private void onApply() {
-        // Send a typed settings object -- no manual byte encoding
-        sendCustomSettings(new PriceFloorPlugin.Settings((float) minPriceTextBox.getDouble()));
+        // Send per-market settings -- requires an active market
+        ItemID market = getActiveMarket();
+        if (market != null) {
+            sendCustomSettings(market,
+                    new PriceFloorPlugin.Settings((float) minPriceTextBox.getDouble()));
+        }
     }
 
     @Override
@@ -318,7 +331,7 @@ public class TradingHoursPlugin extends ServerPlugin<TradingHoursPlugin.Settings
         return 1000; // Update once per second
     }
 
-    // --- Custom Settings (StreamCodec-based) ---
+    // --- Custom Settings (per-market, StreamCodec-based) ---
 
     @Override
     protected StreamCodec<ByteBuf, Settings> customSettingsCodec() {
@@ -326,20 +339,18 @@ public class TradingHoursPlugin extends ServerPlugin<TradingHoursPlugin.Settings
     }
 
     @Override
-    protected Settings provideCustomSettings() {
+    protected Settings provideDefaultCustomSettings() {
         return new Settings(startHour, endHour);
     }
 
     @Override
-    protected boolean applyCustomSettings(Settings settings) {
-        // Validate hours
-        if (settings.startHour() < 0 || settings.startHour() > 23 ||
-            settings.endHour() < 0 || settings.endHour() > 23) {
-            return false;
+    protected void onCustomSettingsApplied(ItemID marketID, @NotNull Settings settings) {
+        // Validate and apply hours
+        if (settings.startHour() >= 0 && settings.startHour() <= 23 &&
+            settings.endHour() >= 0 && settings.endHour() <= 23) {
+            startHour = settings.startHour();
+            endHour = settings.endHour();
         }
-        startHour = settings.startHour();
-        endHour = settings.endHour();
-        return true;
     }
 
     // --- Persistence ---
@@ -379,6 +390,7 @@ Displays settings (start/end hour) and live runtime data (current hour, trading 
 package com.example.plugins.screen;
 
 import io.netty.buffer.ByteBuf;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.TextBox;
@@ -387,6 +399,9 @@ import net.kroia.stockmarket.pluginsystem.plugins.TradingHoursPlugin;
 import net.kroia.stockmarket.pluginsystem.screen.PluginGuiElement;
 import net.minecraft.network.codec.StreamCodec;
 import org.jetbrains.annotations.Nullable;
+
+import java.util.List;
+import java.util.Map;
 
 public class TradingHoursGuiElement extends PluginGuiElement<TradingHoursPlugin.Settings, TradingHoursPlugin.Status> {
 
@@ -430,11 +445,17 @@ public class TradingHoursGuiElement extends PluginGuiElement<TradingHoursPlugin.
 
     @Override
     protected void onPluginSyncDataReceived(PluginSyncData data,
-                                            @Nullable TradingHoursPlugin.Settings settings) {
-        // Settings already decoded -- use typed fields
-        if (settings != null) {
+                                            @Nullable Map<ItemID, TradingHoursPlugin.Settings> customSettingsMap) {
+        // Settings are per-market -- for simple plugins, pick any market's settings
+        if (customSettingsMap != null && !customSettingsMap.isEmpty()) {
+            TradingHoursPlugin.Settings settings = customSettingsMap.values().iterator().next();
             startTextBox.setText(settings.startHour());
             endTextBox.setText(settings.endHour());
+        }
+        // Set active market for sendCustomSettings
+        List<ItemID> markets = data.getSubscribedMarkets();
+        if (!markets.isEmpty()) {
+            setActiveMarket(markets.get(0));
         }
         // Start streaming for live status updates
         startDataStream();
@@ -448,11 +469,14 @@ public class TradingHoursGuiElement extends PluginGuiElement<TradingHoursPlugin.
     }
 
     private void onApply() {
-        // Send typed settings object
-        sendCustomSettings(new TradingHoursPlugin.Settings(
-                (int) startTextBox.getDouble(),
-                (int) endTextBox.getDouble()
-        ));
+        // Send per-market settings
+        ItemID market = getActiveMarket();
+        if (market != null) {
+            sendCustomSettings(market, new TradingHoursPlugin.Settings(
+                    (int) startTextBox.getDouble(),
+                    (int) endTextBox.getDouble()
+            ));
+        }
     }
 
     @Override
@@ -503,7 +527,7 @@ public static void clientSetup() {
 - The plugin does not cancel existing orders. It only prevents price movement by anchoring the target price. Other plugins that set target prices in the same tick may override this.
 - `isTradingHour()` handles midnight wraparound (e.g., 22:00 to 06:00) for markets that need overnight trading windows.
 - Runtime data updates at 1 second intervals -- frequent enough to show status changes, infrequent enough to avoid unnecessary network traffic.
-- Input validation in `applyCustomSettings()` rejects invalid hours (outside 0--23) and returns `false`.
+- Input validation in `onCustomSettingsApplied()` silently rejects invalid hours (outside 0--23).
 - Both `Settings` and `Status` are inner records with `StreamCodec` fields. The GUI element references them via `TradingHoursPlugin.Settings` and `TradingHoursPlugin.Status`.
 
 ---
@@ -684,7 +708,7 @@ public class LiquidityProviderPlugin extends ServerPlugin<LiquidityProviderPlugi
         return 1000;
     }
 
-    // --- Custom Settings (StreamCodec-based) ---
+    // --- Custom Settings (per-market, StreamCodec-based) ---
 
     @Override
     protected StreamCodec<ByteBuf, Settings> customSettingsCodec() {
@@ -692,18 +716,17 @@ public class LiquidityProviderPlugin extends ServerPlugin<LiquidityProviderPlugi
     }
 
     @Override
-    protected Settings provideCustomSettings() {
+    protected Settings provideDefaultCustomSettings() {
         return new Settings(spread, orderSize);
     }
 
     @Override
-    protected boolean applyCustomSettings(Settings settings) {
-        // Validate
-        if (settings.spread() <= 0 || settings.spread() > 1.0f) return false;
-        if (settings.orderSize() <= 0) return false;
-        spread = settings.spread();
-        orderSize = settings.orderSize();
-        return true;
+    protected void onCustomSettingsApplied(ItemID marketID, @NotNull Settings settings) {
+        // Validate and apply
+        if (settings.spread() > 0 && settings.spread() <= 1.0f && settings.orderSize() > 0) {
+            spread = settings.spread();
+            orderSize = settings.orderSize();
+        }
     }
 
     // --- Persistence ---
@@ -732,6 +755,7 @@ Inline settings for spread and order size, plus live display of buy/sell levels.
 package com.example.plugins.screen;
 
 import io.netty.buffer.ByteBuf;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.TextBox;
@@ -740,6 +764,9 @@ import net.kroia.stockmarket.pluginsystem.plugins.LiquidityProviderPlugin;
 import net.kroia.stockmarket.pluginsystem.screen.PluginGuiElement;
 import net.minecraft.network.codec.StreamCodec;
 import org.jetbrains.annotations.Nullable;
+
+import java.util.List;
+import java.util.Map;
 
 public class LiquidityProviderGuiElement extends PluginGuiElement<LiquidityProviderPlugin.Settings, LiquidityProviderPlugin.Levels> {
 
@@ -783,11 +810,17 @@ public class LiquidityProviderGuiElement extends PluginGuiElement<LiquidityProvi
 
     @Override
     protected void onPluginSyncDataReceived(PluginSyncData data,
-                                            @Nullable LiquidityProviderPlugin.Settings settings) {
-        // Settings already decoded -- use typed fields
-        if (settings != null) {
+                                            @Nullable Map<ItemID, LiquidityProviderPlugin.Settings> customSettingsMap) {
+        // Settings are per-market -- for simple plugins, pick any market's settings
+        if (customSettingsMap != null && !customSettingsMap.isEmpty()) {
+            LiquidityProviderPlugin.Settings settings = customSettingsMap.values().iterator().next();
             spreadTextBox.setText(settings.spread());
             orderSizeTextBox.setText(settings.orderSize());
+        }
+        // Set active market for sendCustomSettings
+        List<ItemID> markets = data.getSubscribedMarkets();
+        if (!markets.isEmpty()) {
+            setActiveMarket(markets.get(0));
         }
         startDataStream();
     }
@@ -803,11 +836,14 @@ public class LiquidityProviderGuiElement extends PluginGuiElement<LiquidityProvi
     }
 
     private void onApply() {
-        // Send typed settings object
-        sendCustomSettings(new LiquidityProviderPlugin.Settings(
-                (float) spreadTextBox.getDouble(),
-                (float) orderSizeTextBox.getDouble()
-        ));
+        // Send per-market settings
+        ItemID market = getActiveMarket();
+        if (market != null) {
+            sendCustomSettings(market, new LiquidityProviderPlugin.Settings(
+                    (float) spreadTextBox.getDouble(),
+                    (float) orderSizeTextBox.getDouble()
+            ));
+        }
     }
 
     @Override

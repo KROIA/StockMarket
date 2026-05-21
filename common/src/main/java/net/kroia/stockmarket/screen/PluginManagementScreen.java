@@ -160,6 +160,9 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
      * Rebuilds the plugin entry list from the current data.
      */
     private void applyFilter() {
+        // Save scroll position before clearing the list
+        int savedScroll = listView.getScrollOffset();
+
         for (PluginEntryWidget entry : entryWidgets) {
             entry.cleanupPluginGuiElement();
             listView.removeChild(entry);
@@ -172,6 +175,9 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             listView.addChild(entry);
         }
         updateMarketButtonSelection();
+
+        // Restore scroll position after rebuilding the list
+        listView.setScrollOffset(savedScroll);
     }
 
     /**
@@ -247,6 +253,7 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         private final Button moveUpButton;
         private final Button moveDownButton;
         private final CheckBox autoSubscribeCheckBox;
+        private final CheckBox loggerCheckBox;
         private final Label subscriptionOrderLabel;
         private final TextBox subscriptionOrderTextBox;
         @SuppressWarnings("rawtypes")
@@ -325,6 +332,11 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             autoSubscribeCheckBox.setChecked(data.getGenericData().getAutoSubscribeNewMarkets());
             autoSubscribeCheckBox.setOnStateChanged(this::onAutoSubscribeChanged);
 
+            // Logger checkbox — set state before attaching callback
+            loggerCheckBox = new CheckBox("Logger");
+            loggerCheckBox.setChecked(data.isLoggerEnabled());
+            loggerCheckBox.setOnStateChanged(this::onLoggerChanged);
+
             // Subscription order label + text box
             subscriptionOrderLabel = new Label(Texts.SUBSCRIPTION_ORDER.getString());
             subscriptionOrderLabel.setAlignment(Label.Alignment.RIGHT);
@@ -343,6 +355,7 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             this.addChild(moveUpButton);
             this.addChild(moveDownButton);
             this.addChild(autoSubscribeCheckBox);
+            this.addChild(loggerCheckBox);
             this.addChild(subscriptionOrderLabel);
             this.addChild(subscriptionOrderTextBox);
 
@@ -423,14 +436,16 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             marketItemListView.setBounds(padding, iconY, listViewWidth, listViewHeight);
             subscribeButton.setBounds(marketItemListView.getRight() + spacing, iconY, subscribeBtnWidth, 16);
 
-            // Row 4: auto-subscribe checkbox + subscription order
+            // Row 4: auto-subscribe checkbox + subscription order + logger checkbox
             int row4Y = iconY + listViewHeight + spacing;
-            int autoSubWidth = width / 2;
+            int loggerWidth = 60;
+            int autoSubWidth = (width - loggerWidth - spacing) / 2;
             autoSubscribeCheckBox.setBounds(padding, row4Y, autoSubWidth, defaultElementHeight);
-            int orderLabelWidth = width / 4;
-            int orderFieldWidth = width - autoSubWidth - orderLabelWidth - 2 * spacing;
+            int orderLabelWidth = (width - loggerWidth - spacing) / 4;
+            int orderFieldWidth = width - autoSubWidth - orderLabelWidth - loggerWidth - 3 * spacing;
             subscriptionOrderLabel.setBounds(autoSubscribeCheckBox.getRight() + spacing, row4Y, orderLabelWidth, defaultElementHeight);
             subscriptionOrderTextBox.setBounds(subscriptionOrderLabel.getRight() + spacing, row4Y, orderFieldWidth, defaultElementHeight);
+            loggerCheckBox.setBounds(subscriptionOrderTextBox.getRight() + spacing, row4Y, loggerWidth, defaultElementHeight);
 
             // Row 5: PluginGuiElement (inline) or "Open Plugin" button
             int row5Y = row4Y + defaultElementHeight + spacing;
@@ -476,6 +491,18 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
                     parentScreen.refreshPluginList();
                 }
             });
+        }
+
+        /**
+         * Called when the logger checkbox state changes.
+         * Sends a settings update request to the server to enable or disable logging for this plugin.
+         *
+         * @param enabled whether logging should be enabled
+         */
+        private void onLoggerChanged(Boolean enabled) {
+            GenericPluginData data = pluginData.getGenericData();
+            data.setLoggerEnabled(enabled);
+            getPluginManager().requestUpdateSettings(pluginData.getInstanceID(), data);
         }
 
         /**
