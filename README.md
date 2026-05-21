@@ -284,7 +284,7 @@ Open the **Plugin Management** screen from the Management GUI overview tab:
 - **Configure** — Each plugin has its own settings. Simple plugins show settings inline; complex ones open a dedicated configuration screen.
 - **Subscribe to markets** — Plugins can be subscribed to one or more markets. Use the subscribe button to choose which markets a plugin operates on.
 - **Enable/Disable** — Toggle plugins on or off without removing them.
-- **Reorder** — Move plugins up or down to change their execution priority.
+- **Reorder** — Move plugins up or down to change their execution priority. Plugins are executed from top to bottom.
 - **Auto-subscribe** — Enable to automatically subscribe a plugin to newly created markets.
 
 <div style="border-left: 7px solid #f39c12; background-color: #fcf8e3; padding: 20px; margin: 10px 0;">
