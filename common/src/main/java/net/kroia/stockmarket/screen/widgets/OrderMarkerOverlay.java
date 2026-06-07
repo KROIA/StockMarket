@@ -13,6 +13,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -244,7 +245,7 @@ public class OrderMarkerOverlay implements CandlestickChart.InteractiveOverlay {
             if (isDragging) {
                 double newPrice = chart.fromCanvasSpaceY(dragMouseY);
                 if (newPrice < 0) newPrice = 0;
-                String priceLabel = String.format("%.2f", newPrice);
+                String priceLabel = String.format(Locale.ROOT, "%.2f", newPrice);
                 int priceLabelWidth = chart.getTextWidth(priceLabel);
                 int priceLabelX = handleX - priceLabelWidth - 6;
                 chart.drawRect(priceLabelX - 2, handleY, priceLabelWidth + 4, HANDLE_HEIGHT, 0xCC333333);
@@ -340,7 +341,7 @@ public class OrderMarkerOverlay implements CandlestickChart.InteractiveOverlay {
             if (isDragging) {
                 double newRate = chart.fromCanvasSpaceY(dragMouseY);
                 if (newRate < 0) newRate = 0;
-                String priceLabel = String.format("%.4f", newRate);
+                String priceLabel = String.format(Locale.ROOT, "%.4f", newRate);
                 int priceLabelWidth = chart.getTextWidth(priceLabel);
                 int priceLabelX = handleX - priceLabelWidth - 6;
                 chart.drawRect(priceLabelX - 2, handleY, priceLabelWidth + 4, HANDLE_HEIGHT, 0xCC333333);
@@ -468,9 +469,9 @@ public class OrderMarkerOverlay implements CandlestickChart.InteractiveOverlay {
      * Formats an amount value compactly for the drag handle label.
      */
     private static String formatAmount(double value) {
-        if (value >= 1_000_000) return String.format("%.1fM", value / 1_000_000);
-        if (value >= 1_000) return String.format("%.1fk", value / 1_000);
-        if (value == Math.floor(value) && value < 10_000) return String.format("%.0f", value);
-        return String.format("%.2f", value);
+        if (value >= 1_000_000) return String.format(Locale.ROOT, "%.1fM", value / 1_000_000);
+        if (value >= 1_000) return String.format(Locale.ROOT, "%.1fk", value / 1_000);
+        if (value == Math.floor(value) && value < 10_000) return String.format(Locale.ROOT, "%.0f", value);
+        return String.format(Locale.ROOT, "%.2f", value);
     }
 }

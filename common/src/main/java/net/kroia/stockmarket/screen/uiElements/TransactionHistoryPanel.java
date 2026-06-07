@@ -13,6 +13,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Scrollable panel displaying all players' completed trades for a specific market.
@@ -135,13 +136,13 @@ public class TransactionHistoryPanel extends StockMarketGuiElement {
 
             // Amount (convert from backend to display values)
             double realAmount = Math.abs(MarketManager.convertToRealAmountStatic(record.amount()));
-            amountLabel = new Label(String.format("%.2f", realAmount));
+            amountLabel = new Label(String.format(Locale.ROOT, "%.2f", realAmount));
             amountLabel.setTextFontScale(0.8f);
             addChild(amountLabel);
 
             // Price (convert from backend to display values)
             double realPrice = MarketManager.convertToRealAmountStatic(record.price());
-            priceLabel = new Label("@ " + String.format("%.2f", realPrice));
+            priceLabel = new Label("@ " + String.format(Locale.ROOT, "%.2f", realPrice));
             priceLabel.setTextFontScale(0.8f);
             addChild(priceLabel);
 

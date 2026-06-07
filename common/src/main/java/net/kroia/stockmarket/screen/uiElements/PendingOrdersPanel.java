@@ -13,6 +13,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.function.Consumer;
 
 /**
@@ -197,14 +198,14 @@ public class PendingOrdersPanel extends StockMarketGuiElement {
             // Amount: filled / total (convert from backend to display values)
             double filled = Math.abs(MarketManager.convertToRealAmountStatic(order.getFilledVolume()));
             double total = Math.abs(MarketManager.convertToRealAmountStatic(order.getTargetVolume()));
-            amountLabel = new Label(String.format("%.2f/%.2f", filled, total));
+            amountLabel = new Label(String.format(Locale.ROOT, "%.2f/%.2f", filled, total));
             amountLabel.setTextFontScale(0.8f);
             addChild(amountLabel);
 
             // Price display (convert backend price to human-readable)
             double realPrice = MarketManager.convertToRealAmountStatic(order.getStartPrice());
             String priceStr = order.getType() == Order.Type.LIMIT
-                    ? "@ " + String.format("%.2f", realPrice)
+                    ? "@ " + String.format(Locale.ROOT, "%.2f", realPrice)
                     : "@ MKT";
             priceLabel = new Label(priceStr);
             priceLabel.setTextFontScale(0.8f);
@@ -335,7 +336,7 @@ public class PendingOrdersPanel extends StockMarketGuiElement {
                 filled = Math.abs(MarketManager.convertToRealAmountStatic(order.getSellOrder().getFilledVolume()));
                 total = Math.abs(MarketManager.convertToRealAmountStatic(order.getTargetSellVolume()));
             }
-            amountLabel = new Label(String.format("%.2f/%.2f", filled, total));
+            amountLabel = new Label(String.format(Locale.ROOT, "%.2f/%.2f", filled, total));
             amountLabel.setTextFontScale(0.8f);
             addChild(amountLabel);
 

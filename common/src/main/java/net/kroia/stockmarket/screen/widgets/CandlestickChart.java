@@ -958,9 +958,10 @@ public class CandlestickChart extends StockMarketGuiElement {
         if (value >= 100)     decimals = Math.max(decimals, 0);
         else if (value >= 10) decimals = Math.max(decimals, 1);
         else                  decimals = Math.max(decimals, 2);
-        String formatted = String.format("%." + decimals + "f", value);
+        String formatted = String.format(Locale.ROOT, "%." + decimals + "f", value);
         if (decimals > 3) {
             int dot = formatted.indexOf('.');
+            if (dot < 0) return formatted + suffix;
             String intPart = formatted.substring(0, dot + 1);
             String decPart = formatted.substring(dot + 1);
             StringBuilder sb = new StringBuilder(intPart);

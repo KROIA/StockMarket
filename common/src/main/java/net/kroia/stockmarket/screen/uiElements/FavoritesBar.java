@@ -17,6 +17,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.function.Consumer;
 
@@ -315,8 +316,11 @@ public class FavoritesBar extends StockMarketGuiElement {
     }
 
     private static String formatPriceWithSeparators(double price) {
-        String str = String.format("%.2f", price);
+        if (!Double.isFinite(price)) return "--";
+        // Locale.ROOT keeps '.' as the decimal separator regardless of JVM locale.
+        String str = String.format(Locale.ROOT, "%.2f", price);
         int dot = str.indexOf('.');
+        if (dot < 0) return str;
         String intPart = str.substring(0, dot);
         String decPart = str.substring(dot);
         StringBuilder sb = new StringBuilder();
