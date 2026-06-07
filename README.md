@@ -451,7 +451,8 @@ Since this is a complex field from control theory, I will not cover this here.
 
 | Version | Status | Highlights |
 |---|---|---|
-| [v2.0.2](changelog/v2.0.2.md) | In Development | |
+| [v2.0.3](changelog/v2.0.3.md) | In Development | |
+| [v2.0.2](changelog/v2.0.2.md) | Released | Crash hotfix and UI locale hardening |
 | [v2.0.1](changelog/v2.0.1.md) | Released | Plugin system frontend, inter-market trading, TradingView, preset editor, 30+ features |
 | [v2.0.0_ALPHA_1](changelog/v2.0.0_ALPHA_1.md) | Released | Plugin system, management UI, security hardening, 45 bug fixes |
 | v1.3.1 | Stable | Multi-version support (MC 1.19.2–1.21.1), bot settings GUI, market management |
