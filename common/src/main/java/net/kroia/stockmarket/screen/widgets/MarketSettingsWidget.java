@@ -10,6 +10,8 @@ import net.kroia.stockmarket.stockmarket.market.MarketSettings;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.minecraft.network.chat.Component;
 
+import java.util.Locale;
+
 public class MarketSettingsWidget extends StockMarketGuiElement {
 
     private static final String PREFIX = "gui." + StockMarketMod.MOD_ID + ".market_settings_widget.";
@@ -149,7 +151,7 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
     }
 
     private static String formatAbundance(float value) {
-        String s = String.format("%.4f", value);
+        String s = String.format(Locale.ROOT, "%.4f", value);
         s = s.contains(".") ? s.replaceAll("0+$", "").replaceAll("\\.$", "") : s;
         return s;
     }

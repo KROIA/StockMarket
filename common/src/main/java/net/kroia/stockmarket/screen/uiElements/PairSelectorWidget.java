@@ -19,6 +19,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.function.Consumer;
 
@@ -463,7 +464,7 @@ public class PairSelectorWidget extends StockMarketGuiElement {
         double rate = wantPrice / havePrice;
         String haveName = haveMarketID.getStack().getHoverName().getString();
         String wantName = wantMarketID.getStack().getHoverName().getString();
-        rateLabel.setText(String.format("%.2f %s / %s", rate, haveName, wantName));
+        rateLabel.setText(String.format(Locale.ROOT, "%.2f %s / %s", rate, haveName, wantName));
     }
 
     /**

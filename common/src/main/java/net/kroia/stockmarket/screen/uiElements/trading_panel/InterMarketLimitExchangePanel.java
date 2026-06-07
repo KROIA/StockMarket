@@ -10,6 +10,7 @@ import net.kroia.stockmarket.screen.UI_Colors;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.minecraft.network.chat.Component;
 
+import java.util.Locale;
 import java.util.function.BiConsumer;
 
 /**
@@ -275,7 +276,7 @@ class InterMarketLimitExchangePanel extends StockMarketGuiElement {
     /** Sets the rate limit input and updates the internal state. */
     public void setRateLimit(double rate) {
         this.rateLimit = rate;
-        String rateString = String.format("%.2f", rate);
+        String rateString = String.format(Locale.ROOT, "%.2f", rate);
         rateLimitTextBox.setText(rateString);
     }
 
@@ -372,7 +373,7 @@ class InterMarketLimitExchangePanel extends StockMarketGuiElement {
     private void updateEstimatedCost() {
         if (rateLimit > 0 && quantity > 0) {
             double cost = quantity * rateLimit;
-            estimatedCostLabel.setText(Texts.estimatedCost(String.format("%.2f", cost), haveItemName));
+            estimatedCostLabel.setText(Texts.estimatedCost(String.format(Locale.ROOT, "%.2f", cost), haveItemName));
         } else {
             estimatedCostLabel.setText(Texts.ESTIMATED_COST_UNKNOWN.getString());
         }

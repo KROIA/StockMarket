@@ -10,6 +10,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.function.Function;
 
 public class OrderbookVolumeHistogram extends StockMarketGuiElement {
@@ -168,10 +169,10 @@ public class OrderbookVolumeHistogram extends StockMarketGuiElement {
     }
 
     private static String formatVolume(double vol) {
-        if      (vol >= 1_000_000) return String.format("%.1fM", vol / 1_000_000);
-        else if (vol >= 1_000)     return String.format("%.1fk", vol / 1_000);
-        else if (vol >= 1)         return String.format("%.0f", vol);
-        else                       return String.format("%.2f", vol);
+        if      (vol >= 1_000_000) return String.format(Locale.ROOT, "%.1fM", vol / 1_000_000);
+        else if (vol >= 1_000)     return String.format(Locale.ROOT, "%.1fk", vol / 1_000);
+        else if (vol >= 1)         return String.format(Locale.ROOT, "%.0f", vol);
+        else                       return String.format(Locale.ROOT, "%.2f", vol);
     }
 
     protected void renderHistogram()

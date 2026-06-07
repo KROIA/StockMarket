@@ -10,6 +10,7 @@ import net.kroia.stockmarket.screen.UI_Colors;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.minecraft.network.chat.Component;
 
+import java.util.Locale;
 import java.util.function.Consumer;
 
 /**
@@ -317,13 +318,13 @@ class InterMarketMarketExchangePanel extends StockMarketGuiElement {
     private void updateEstimatedCost() {
         if (currentRate > 0 && quantity > 0) {
             double cost = quantity * currentRate;
-            estimatedCostLabel.setText(Texts.estimatedCost(String.format("%.2f", cost), haveItemName));
+            estimatedCostLabel.setText(Texts.estimatedCost(String.format(Locale.ROOT, "%.2f", cost), haveItemName));
         } else {
             estimatedCostLabel.setText(Texts.ESTIMATED_COST_UNKNOWN.getString());
         }
 
         if (currentRate > 0) {
-            currentRateLabel.setText(Texts.rate(String.format("%.2f", currentRate), haveItemName, wantItemName));
+            currentRateLabel.setText(Texts.rate(String.format(Locale.ROOT, "%.2f", currentRate), haveItemName, wantItemName));
         } else {
             currentRateLabel.setText(Texts.RATE_UNKNOWN.getString());
         }

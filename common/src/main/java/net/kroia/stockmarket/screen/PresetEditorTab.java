@@ -653,7 +653,7 @@ public class PresetEditorTab extends StockMarketGuiElement {
      */
     private static String formatFloat(float value) {
         // Use up to 4 decimal places, strip trailing zeros
-        String s = String.format("%.4f", value);
+        String s = String.format(Locale.ROOT, "%.4f", value);
         // Remove trailing zeros after decimal point
         if (s.contains(".")) {
             s = s.replaceAll("0+$", "");

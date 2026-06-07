@@ -429,8 +429,8 @@ public class CreateMarketTab extends StockMarketGuiElement {
 
             // Build tooltip (includes enchantment/potion names via ClientPlayerUtilities)
             String tooltip = ClientPlayerUtilities.getItemDisplayText(stack);
-            tooltip += "\n" + Texts.PRICE_LABEL.getString() + ": " + String.format("%.1f", preset.getDefaultPrice());
-            tooltip += "\n" + Texts.ABUNDANCE_LABEL.getString() + ": " + String.format("%.1f", preset.getNaturalAbundance());
+            tooltip += "\n" + Texts.PRICE_LABEL.getString() + ": " + String.format(Locale.ROOT, "%.1f", preset.getDefaultPrice());
+            tooltip += "\n" + Texts.ABUNDANCE_LABEL.getString() + ": " + String.format(Locale.ROOT, "%.1f", preset.getNaturalAbundance());
             if (alreadyExists) {
                 tooltip += "\n" + Texts.ALREADY_EXISTS.getString();
             }
@@ -482,8 +482,8 @@ public class CreateMarketTab extends StockMarketGuiElement {
             itemView = new ItemView(stack);
             nameLabel = new Label(stack.getHoverName().getString());
             infoLabel = new Label(
-                    Texts.PRICE_LABEL.getString() + ": " + String.format("%.1f", preset.getDefaultPrice())
-                    + "  " + Texts.ABUNDANCE_LABEL.getString() + ": " + String.format("%.1f", preset.getNaturalAbundance()));
+                    Texts.PRICE_LABEL.getString() + ": " + String.format(Locale.ROOT, "%.1f", preset.getDefaultPrice())
+                    + "  " + Texts.ABUNDANCE_LABEL.getString() + ": " + String.format(Locale.ROOT, "%.1f", preset.getNaturalAbundance()));
 
             removeButton = new Button("x", () -> {
                 selectedPresets.remove(presetKey);
