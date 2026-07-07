@@ -172,11 +172,19 @@ public class OrderMarkerOverlay implements CandlestickChart.InteractiveOverlay {
         hitRegions.clear();
         interMarketHitRegions.clear();
 
-        if (currentMarketItemID == null) return;
-
         Rectangle bounds = chart.getCanvasBounds();
         int canvasTop = bounds.y;
         int canvasBottom = bounds.y + bounds.height;
+
+        // In pair mode only inter-market orders are drawn: regular (money-market) limit
+        // orders have money-denominated prices which don't belong on a cross-rate chart —
+        // they would render at a wrong position on a wrong price scale.
+        if (pairMode) {
+            renderInterMarketOrders(chart, bounds, canvasTop, canvasBottom);
+            return;
+        }
+
+        if (currentMarketItemID == null) return;
 
         // Marker spans half the chart width
         int markerWidth = bounds.width / 2;
@@ -260,11 +268,6 @@ public class OrderMarkerOverlay implements CandlestickChart.InteractiveOverlay {
                     new Rectangle(cancelX, cancelY, CANCEL_BUTTON_SIZE, CANCEL_BUTTON_SIZE),
                     lineY
             ));
-        }
-
-        // ── Inter-market limit order markers (pair mode only) ──
-        if (pairMode) {
-            renderInterMarketOrders(chart, bounds, canvasTop, canvasBottom);
         }
     }
 

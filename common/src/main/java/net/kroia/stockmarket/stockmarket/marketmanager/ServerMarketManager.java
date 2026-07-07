@@ -12,6 +12,7 @@ import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
+import net.kroia.stockmarket.networking.packet.MarketRemovedPacket;
 import net.kroia.stockmarket.stockmarket.market.ServerMarket;
 import net.kroia.stockmarket.stockmarket.market.core.InterMarketExecutor;
 import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
@@ -178,6 +179,16 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
 
         // Remove from map
         markets.remove(marketID);
+
+        // Propagate the deletion to every connected client. deleteMarket only ever
+        // executes here on the master (slaves and clients reach it through the ARRS
+        // DeleteMarket request), so this is the single choke point for the broadcast:
+        //  - all players connected to this server receive the packet directly,
+        //  - all slave servers receive a relayed copy and forward it to their players.
+        // Clients react by purging their cached ClientMarket (which otherwise only
+        // grows and would keep the deleted market selectable in the trade screen)
+        // and by deselecting the market in any open GUI.
+        MarketRemovedPacket.broadcast(marketID);
         return true;
     }
     @Override

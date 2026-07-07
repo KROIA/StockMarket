@@ -97,6 +97,17 @@ public class ClientMarketManager implements IClientMarketManager
                 for(ItemID itemID : response) {
                     createClientMarket(itemID, factor);
                 }
+                // Prune cached markets the server no longer reports (deleted markets).
+                // Without this the cache only ever grows, so a market deleted on the
+                // server would remain selectable in every market list forever
+                // (until relog). Acts as a safety net alongside MarketRemovedPacket.
+                List<ItemID> staleMarkets = clientMarkets.keySet().stream()
+                        .filter(cached -> !response.contains(cached))
+                        .toList();
+                for(ItemID staleID : staleMarkets) {
+                    info("Removing stale ClientMarket (no longer on server): " + staleID);
+                    onMarketRemoved(staleID);
+                }
                 future.complete(response);
             });
         });
@@ -158,10 +169,11 @@ public class ClientMarketManager implements IClientMarketManager
         return asyncMarketManager.deleteMarketAsync(marketID).thenApply(success -> {
             if (success) {
                 info("Market deleted on server for: " + marketID);
-                // Remove the local client market and any cross-rate markets referencing it
-                clientMarkets.remove(marketID);
-                crossRateMarkets.entrySet().removeIf(entry ->
-                        entry.getKey().haveItemID().equals(marketID) || entry.getKey().wantItemID().equals(marketID));
+                // Remove the local client market, its stream subscription and any
+                // cross-rate markets referencing it. The server additionally broadcasts
+                // a MarketRemovedPacket to all clients (including this one) — the
+                // cleanup is idempotent, so handling it twice is harmless.
+                onMarketRemoved(marketID);
             } else {
                 warn("Server returned false for deleteMarketAsync: " + marketID);
             }
@@ -170,6 +182,32 @@ public class ClientMarketManager implements IClientMarketManager
             error("Exception during market deletion for: " + marketID, (Exception) ex);
             return false;
         });
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * This is the client-side half of the market-deletion propagation:
+     * the master server's {@code ServerMarketManager.deleteMarket} broadcasts a
+     * {@code MarketRemovedPacket} to every connected client (relayed through slave
+     * servers in a multi-server setup), whose handler calls this method on the
+     * client main thread. It drops the cached {@link ClientMarket}, force-stops its
+     * price stream so no orphaned subscription keeps polling the server, and evicts
+     * every cross-rate market built on top of the deleted market.
+     */
+    @Override
+    public void onMarketRemoved(ItemID marketID)
+    {
+        ClientMarket removedMarket = clientMarkets.remove(marketID);
+        if (removedMarket != null) {
+            // Stop the price stream even if GUI elements are still subscribed —
+            // the server-side market is gone, the stream can never deliver again.
+            removedMarket.forceStopMarketPriceStream();
+            info("Removed ClientMarket for deleted market: " + marketID);
+        }
+        // Cross-rate markets derived from the deleted market are now dead as well.
+        crossRateMarkets.entrySet().removeIf(entry ->
+                entry.getKey().haveItemID().equals(marketID) || entry.getKey().wantItemID().equals(marketID));
     }
 
     /**

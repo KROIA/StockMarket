@@ -74,18 +74,25 @@ public class MarketPriceStream extends StockMarketGenericStream<ItemID, MarketPr
                 return;
             }
             IServerMarket serverMarket = manager.getMarket(itemID);
-            if(serverMarket != null) {
-                 long currentPrice = serverMarket.getCurrentMarketPrice();
-                 long currentTime = serverMarket.getCurrentTime();
-                 float currentVolume = serverMarket.getCurrentCandleTradedVolume();
-                 if(currentPrice != lastPrice.marketPrice ||
-                    currentTime != lastPrice.timestamp ||
-                    currentVolume != lastPrice.tradedVolume) {
-                     lastPrice.marketPrice = currentPrice;
-                     lastPrice.timestamp = currentTime;
-                     lastPrice.tradedVolume = currentVolume;
-                     sendPacket();
-                 }
+            if(serverMarket == null) {
+                // The market was deleted while this stream was active. Clients
+                // normally stop their subscription themselves when they receive the
+                // MarketRemovedPacket — this is the server-side safety net so no
+                // orphaned stream keeps polling a nonexistent market forever.
+                info("Market " + itemID + " no longer exists — stopping price stream");
+                stopStream();
+                return;
+            }
+            long currentPrice = serverMarket.getCurrentMarketPrice();
+            long currentTime = serverMarket.getCurrentTime();
+            float currentVolume = serverMarket.getCurrentCandleTradedVolume();
+            if(currentPrice != lastPrice.marketPrice ||
+               currentTime != lastPrice.timestamp ||
+               currentVolume != lastPrice.tradedVolume) {
+                lastPrice.marketPrice = currentPrice;
+                lastPrice.timestamp = currentTime;
+                lastPrice.tradedVolume = currentVolume;
+                sendPacket();
             }
         }
     }

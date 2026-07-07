@@ -38,6 +38,24 @@ public abstract class StockMarketGuiScreen extends GuiScreen {
         BACKEND_INSTANCES.MARKET_MANAGER.requestMarkets();
     }
 
+    /**
+     * Called on the client main thread when the server reports that a market was
+     * deleted (see {@code MarketRemovedPacket}). Invoked after the client market
+     * caches have been purged, so {@code getMarket(marketID)} already returns null.
+     * <p>
+     * Default implementation does nothing. Screens that hold a market selection
+     * (TradeScreen, ManagementScreen) override this to deselect the dead market and
+     * refresh their market lists. Note: only the currently displayed screen is
+     * notified — screens hidden behind a popup must re-validate their selection
+     * when they resume (TradeScreen does this in {@code tick()}).
+     *
+     * @param marketID the market that no longer exists on the server
+     */
+    public void onMarketRemoved(ItemID marketID)
+    {
+        // Default: nothing to do. Screens without a market selection ignore this.
+    }
+
     protected IClientMarketManager getMarketManager()
     {
         return BACKEND_INSTANCES.MARKET_MANAGER;

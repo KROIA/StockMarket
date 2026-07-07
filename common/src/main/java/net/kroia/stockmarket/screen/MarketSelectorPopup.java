@@ -59,6 +59,17 @@ public class MarketSelectorPopup extends StockMarketGuiScreen {
     }
 
     /**
+     * {@inheritDoc}
+     * While this popup is displayed it is the screen receiving market-removed
+     * notifications — forward them to the covered parent screen (typically the
+     * TradeScreen) so its market selection stays consistent.
+     */
+    @Override
+    public void onMarketRemoved(ItemID marketID) {
+        parentScreen.onMarketRemoved(marketID);
+    }
+
+    /**
      * Called when a market item is selected from the ItemSelectionView.
      * Resolves the ItemID asynchronously, fires the callback, and returns to the parent screen.
      */

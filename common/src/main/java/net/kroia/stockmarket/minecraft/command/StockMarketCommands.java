@@ -5,6 +5,7 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.stockmarket.api.command.IAsyncStockMarketCommandHandler;
 import net.kroia.stockmarket.api.command.IServerStockMarketCommandHandler;
@@ -16,9 +17,17 @@ import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 
 public class StockMarketCommands {
@@ -171,6 +180,24 @@ public class StockMarketCommands {
                             return Command.SINGLE_SUCCESS;
                         })
                 )
+                // /stockmarket <market> remove
+                // Admin fallback to delete a market without the management GUI.
+                // The market is addressed purely by its registry name (e.g. "minecraft:iron_ingot",
+                // quotes required because of the ':') or by its numeric ItemID — never by an
+                // ItemStack — so even "broken" markets whose item can no longer be resolved
+                // (e.g. items with volatile data components) can be deleted.
+                .then(Commands.argument("market", StringArgumentType.string())
+                        .requires(source -> source.hasPermission(2)) // Admin-only, like the other management commands
+                        .suggests((context, builder) -> getMarketNamesSuggestion(builder))
+                        .then(Commands.literal("remove")
+                                .executes(context -> {
+                                    CommandSourceStack source = context.getSource();
+                                    String marketArg = StringArgumentType.getString(context, "market");
+                                    removeMarket(source, marketArg);
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                        )
+                )
         );
 
         boolean isSlave = BACKEND_INSTANCES != null
@@ -181,6 +208,96 @@ public class StockMarketCommands {
             TestCommandRegistration.register(dispatcher, "stockmarket", "StockMarket", "stockmarket", isSlave);
     }
 
+
+    /**
+     * Resolves the given market identifier and deletes the matching market.
+     * <p>
+     * A market matches if its registry name (e.g. "minecraft:iron_ingot") or its
+     * numeric ItemID equals {@code marketArg}. Broken markets whose item can no
+     * longer be resolved report their numeric ItemID as their name, so they are
+     * addressable by that number.
+     * <p>
+     * Uses the async market manager, so the command works on both master and slave
+     * servers (slaves forward the existing DeleteMarket request to the master).
+     * Feedback is sent to the command source as translatable messages once the
+     * async operations complete.
+     *
+     * @param source    the command source to send success/failure feedback to
+     * @param marketArg the market registry name or numeric ItemID entered by the user
+     */
+    private static void removeMarket(CommandSourceStack source, String marketArg)
+    {
+        MinecraftServer server = source.getServer();
+        BACKEND_INSTANCES.MARKET_MANAGER.getAsync().getAvailableMarketIDsAsync().thenAccept(marketIDs -> {
+            // Collect all markets matching the given name or numeric ItemID
+            List<ItemID> matches = new ArrayList<>();
+            for (ItemID marketID : marketIDs) {
+                if (marketID.getName().equals(marketArg) || String.valueOf(marketID.getShort()).equals(marketArg)) {
+                    matches.add(marketID);
+                }
+            }
+
+            if (matches.isEmpty()) {
+                server.execute(() -> source.sendFailure(
+                        Component.translatable("message.stockmarket.command_market_remove_not_found", marketArg)));
+                return;
+            }
+            if (matches.size() > 1) {
+                // Multiple markets share this registry name (e.g. component variants).
+                // List them as "name=id" pairs so the user can retry with the unique numeric ID.
+                String candidates = matches.stream().map(ItemID::toString).collect(Collectors.joining(", "));
+                server.execute(() -> source.sendFailure(
+                        Component.translatable("message.stockmarket.command_market_remove_ambiguous", marketArg, candidates)));
+                return;
+            }
+
+            ItemID target = matches.get(0);
+            BACKEND_INSTANCES.MARKET_MANAGER.getAsync().deleteMarketAsync(target).thenAccept(success ->
+                    server.execute(() -> {
+                        if (success)
+                            source.sendSuccess(() -> Component.translatable(
+                                    "message.stockmarket.command_market_removed", target.getName()), true);
+                        else
+                            source.sendFailure(Component.translatable(
+                                    "message.stockmarket.command_market_remove_failed", target.getName()));
+                    }));
+        });
+    }
+
+    /**
+     * Suggests all existing market identifiers for the {@code <market>} command argument.
+     * <p>
+     * Registry names are suggested in quotes because they contain a ':' which the
+     * brigadier string() argument type only accepts inside quotes. For markets that
+     * share the same registry name the unique numeric ItemID is suggested as well,
+     * so every market stays addressable. Broken markets (unresolvable item) report
+     * their numeric ItemID as their name and are therefore suggested by number.
+     *
+     * @param builder the suggestion builder provided by brigadier
+     * @return a future completing with the market name suggestions
+     */
+    private static CompletableFuture<Suggestions> getMarketNamesSuggestion(SuggestionsBuilder builder)
+    {
+        CompletableFuture<Suggestions> future = new CompletableFuture<>();
+        BACKEND_INSTANCES.MARKET_MANAGER.getAsync().getAvailableMarketIDsAsync().thenAccept(marketIDs -> {
+            // Count name occurrences to detect ambiguous registry names
+            Map<String, Integer> nameCounts = new HashMap<>();
+            for (ItemID marketID : marketIDs)
+                nameCounts.merge(marketID.getName(), 1, Integer::sum);
+
+            Set<String> suggestedNames = new HashSet<>();
+            for (ItemID marketID : marketIDs) {
+                String name = marketID.getName();
+                if (suggestedNames.add(name))
+                    builder.suggest("\"" + name + "\"");
+                // Ambiguous names can't be removed by name alone — offer the unique numeric ID too
+                if (nameCounts.get(name) > 1)
+                    builder.suggest(String.valueOf(marketID.getShort()));
+            }
+            future.complete(builder.build());
+        });
+        return future;
+    }
 
     private static CompletableFuture<Suggestions> getPlayerNamesSuggestion(SuggestionsBuilder builder)
     {

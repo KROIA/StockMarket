@@ -89,8 +89,34 @@ public class MarketPresetManager {
         return null;
     }
 
-    // Convenience: look up by ItemID
+    /**
+     * Looks up a preset by its {@link ItemID}.
+     * <p>
+     * Presets are pre-registered with their ItemID short during server startup
+     * (see {@code StockMarketModBackend.preRegisterPresetItemStacks}) and on the
+     * client via the preset sync stream codec. Matching on that registered ID is
+     * component-aware: two presets sharing the same registry name (e.g. enchanted
+     * books with different enchantments, or items whose data components drift over
+     * time) resolve to the correct entry, whereas a registry-name-only lookup would
+     * return the first name match regardless of components.
+     * <p>
+     * Falls back to the registry-name lookup of {@link #getPreset(String)} for
+     * presets that carry no registered ItemID (e.g. lookups performed before the
+     * startup registration ran, or presets whose stack failed to register).
+     *
+     * @param itemId the market's ItemID
+     * @return the matching preset, or {@code null} if none matches
+     */
     public @Nullable MarketPreset getPreset(ItemID itemId) {
+        // First pass: exact, component-aware match via the pre-registered ItemID short.
+        for (MarketPresetCategory cat : categories) {
+            for (MarketPreset preset : cat.getPresets()) {
+                if (preset.hasRegisteredItemID() && preset.getRegisteredItemIDShort() == itemId.getShort()) {
+                    return preset;
+                }
+            }
+        }
+        // Fallback: registry-name match (legacy behavior) for unregistered presets.
         return getPreset(itemId.getName());
     }
 

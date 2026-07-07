@@ -124,6 +124,14 @@
   "gui.stockmarket.management_screen.ask_remove_title": "Handels Item entfernen",
   "gui.stockmarket.management_screen.ask_remove_message": "Bist du sicher, dass du das item vom Stockmarket entfernen möchtest?\nAlle offenen Bestellungen werden storniert.",
   "gui.stockmarket.management_screen.bot_settings": "Bot Einstellungen",
+  "gui.stockmarket.management_screen.broken_market_name": "Broken market (ID %s)",
+  "gui.stockmarket.management_screen.broken_market.tooltip_line1": "The item for this market can no longer be resolved.",
+  "gui.stockmarket.management_screen.broken_market.tooltip_line2": "You can still select this market and delete it.",
+
+  "message.stockmarket.command_market_removed": "Market '%s' has been removed from the stock market",
+  "message.stockmarket.command_market_remove_failed": "Failed to remove market '%s'",
+  "message.stockmarket.command_market_remove_not_found": "No market found for '%s'",
+  "message.stockmarket.command_market_remove_ambiguous": "Multiple markets match '%s': %s - run the command again with the numeric ID",
 
   "gui.stockmarket.bot_settings_setup_screen_rarity.question": "Wie selten ist das Item?\nWie oft kommt es im Spiel vor?\n",
   "gui.stockmarket.bot_settings_setup_screen_rarity.low": "Eher häufig",

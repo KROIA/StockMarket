@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.util;
 
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.client.RecipeImageExporter;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.networking.packet.OpenUIPacket;
@@ -20,6 +21,22 @@ public class StockMarketClientHooks {
     {
         Minecraft.getInstance().submit(TradeScreen::openScreen);
         return InteractionResult.SUCCESS;
+    }
+
+    /**
+     * Notifies the currently open StockMarket screen that a market has been deleted
+     * on the server. Called by {@code MarketRemovedPacket} on the client main thread
+     * after the client market caches have already been purged.
+     * Screens that keep a market selection (TradeScreen, ManagementScreen) override
+     * {@link StockMarketGuiScreen#onMarketRemoved} to deselect the dead market.
+     *
+     * @param marketID the market that was deleted on the server
+     */
+    public static void notifyScreenMarketRemoved(ItemID marketID)
+    {
+        if (Minecraft.getInstance().screen instanceof StockMarketGuiScreen guiScreen) {
+            guiScreen.onMarketRemoved(marketID);
+        }
     }
 
     public static void openGUI(OpenUIPacket.GUIType type)

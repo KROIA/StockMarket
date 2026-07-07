@@ -214,6 +214,22 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
         return true;
     }
 
+    /**
+     * Force-stops the market price stream regardless of how many GUI elements are
+     * still subscribed. Used when the market ceases to exist on the server
+     * (market deleted) — keeping the stream open would leak an orphaned
+     * subscription that can never deliver data again.
+     */
+    public void forceStopMarketPriceStream()
+    {
+        streamSubscriberCount = 0;
+        if(marketPriceUpdateStreamID != null)
+        {
+            StreamSystem.stopStream(marketPriceUpdateStreamID);
+            marketPriceUpdateStreamID = null;
+        }
+    }
+
 
 
 
