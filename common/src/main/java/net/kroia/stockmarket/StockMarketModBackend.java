@@ -42,6 +42,7 @@ import net.kroia.stockmarket.testing.tests.CreateOrderRequestTestSuite;
 import net.kroia.stockmarket.testing.tests.DatabaseTestSuite;
 import net.kroia.stockmarket.testing.tests.InterMarketExecutorTestSuite;
 import net.kroia.stockmarket.testing.tests.MarketIntegrationTestSuite;
+import net.kroia.stockmarket.testing.tests.MarketMergeConsolidationTestSuite;
 import net.kroia.stockmarket.testing.tests.MarketPriceManagerTestSuite;
 import net.kroia.stockmarket.testing.tests.MatchingEngineTestSuite;
 import net.kroia.stockmarket.testing.tests.OrderRecordManagerTestSuite;
@@ -232,6 +233,19 @@ public class StockMarketModBackend implements StockMarketAPI {
             SERVER_INSTANCES.COMMAND_HANDLER = StockMarketCommandHandler.createMaster();
             SERVER_INSTANCES.DATA_MANAGER = new DataManager();
 
+            // Master-only: listen for BankSystem ItemID merges and consolidate our own
+            // markets under the resulting canonical IDs. The load-time reconcile inside
+            // ServerMarketManager.load() catches merges that fired during BankSystem's
+            // own startup (before this listener was registered); this listener catches
+            // merges that happen later (e.g. VolatileItemComponents config edits + admin
+            // confirmation via CONFIRM_ITEMID_MERGE).
+            BankSystemMod.getAPI().getEvents().getItemIDsMergedEvent().addListener(aliasToCanonical -> {
+                if (SERVER_INSTANCES == null || SERVER_INSTANCES.MARKET_MANAGER == null) return;
+                var serverMarketManager = SERVER_INSTANCES.MARKET_MANAGER.getServerMarketManager();
+                if (serverMarketManager == null) return; // slave; guard is redundant here but cheap
+                serverMarketManager.consolidateMergedMarkets(aliasToCanonical);
+            });
+
             loadDataFromFiles(UtilitiesPlatform.getServer());
             preRegisterPresetItemStacks();
             registerItemPriceProvider();
@@ -248,6 +262,7 @@ public class StockMarketModBackend implements StockMarketAPI {
                 OrderRecordManagerTestSuite.setBackend(SERVER_INSTANCES);
                 ServerMarketTestSuite.setBackend(SERVER_INSTANCES);
                 PluginTestSuite.setBackend(SERVER_INSTANCES);
+                MarketMergeConsolidationTestSuite.setBackend(SERVER_INSTANCES);
             }
         }
         else

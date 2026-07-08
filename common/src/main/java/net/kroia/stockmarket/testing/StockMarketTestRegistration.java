@@ -11,6 +11,7 @@ import net.kroia.stockmarket.testing.tests.InterMarketExecutorTestSuite;
 import net.kroia.stockmarket.testing.tests.InterMarketOrderTestSuite;
 import net.kroia.stockmarket.testing.tests.TradingPairTestSuite;
 import net.kroia.stockmarket.testing.tests.MarketIntegrationTestSuite;
+import net.kroia.stockmarket.testing.tests.MarketMergeConsolidationTestSuite;
 import net.kroia.stockmarket.testing.tests.MarketPriceManagerTestSuite;
 import net.kroia.stockmarket.testing.tests.MarketPresetTestSuite;
 import net.kroia.stockmarket.testing.tests.MarketSettingsTestSuite;
@@ -67,5 +68,6 @@ public class StockMarketTestRegistration {
         TestRegistry.register(new ServerMarketTestSuite());
         TestRegistry.register(new PluginTestSuite());
         TestRegistry.register(new InterMarketExecutorTestSuite());
+        TestRegistry.register(new MarketMergeConsolidationTestSuite());
     }
 }

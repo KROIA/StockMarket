@@ -609,8 +609,6 @@ public class MatchingEngine
         this.priceChanged = priceChanged;
     }
 
-
-
     // Total matched trade volume accumulated during the last update() call (real-scaled)
     public float getLastTradedVolume() { return tradedVolumeSinceLastReset; }
 

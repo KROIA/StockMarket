@@ -158,8 +158,6 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         return itemID;
     }
 
-
-
     @Override
     public long getDefaultPrice()
     {

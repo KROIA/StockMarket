@@ -73,7 +73,6 @@ public class Orderbook implements ServerSaveable
         virtualOrderbook.setCurrentMarketPrice(currentMarketPrice);
     }
 
-
     public boolean putOrder(Order order)
     {
         if(order.isBuyOrder())
