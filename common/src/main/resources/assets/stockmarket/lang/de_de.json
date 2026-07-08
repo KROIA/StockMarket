@@ -133,6 +133,14 @@
   "message.stockmarket.command_market_remove_not_found": "No market found for '%s'",
   "message.stockmarket.command_market_remove_ambiguous": "Multiple markets match '%s': %s - run the command again with the numeric ID",
 
+  "message.stockmarket.command_preset_add_not_player": "Only a player can use this command - the preset is captured from the main hand",
+  "message.stockmarket.command_preset_add_master_only": "Market presets can only be edited on the master server",
+  "message.stockmarket.command_preset_add_hand_empty": "Hold the item you want to capture in your main hand",
+  "message.stockmarket.command_preset_add_failed": "Failed to capture the held item as a preset",
+  "message.stockmarket.command_preset_add_duplicate": "A preset for '%s' already exists in category '%s'",
+  "message.stockmarket.command_preset_add_category_created": "Category '%s' did not exist and was created",
+  "message.stockmarket.command_preset_added": "Added preset '%s' to category '%s'",
+
   "gui.stockmarket.bot_settings_setup_screen_rarity.question": "Wie selten ist das Item?\nWie oft kommt es im Spiel vor?\n",
   "gui.stockmarket.bot_settings_setup_screen_rarity.low": "Eher häufig",
   "gui.stockmarket.bot_settings_setup_screen_rarity.high": "Eher selten",
