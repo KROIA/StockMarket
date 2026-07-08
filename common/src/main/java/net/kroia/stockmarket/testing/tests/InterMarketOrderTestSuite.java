@@ -40,6 +40,11 @@ public class InterMarketOrderTestSuite extends TestSuite {
         addTest("interMarketGroupID_unique", this::test_interMarketGroupID_unique);
         addTest("interMarketGroupID_nbt_roundtrip", this::test_interMarketGroupID_nbt_roundtrip);
         addTest("backward_compat_missing_fields", this::test_backward_compat_missing_fields);
+
+        // T-051: Tests for transactionMoneyBalance field (cross-market money buffer)
+        addTest("transactionMoneyBalance_default_zero", this::test_transactionMoneyBalance_default_zero);
+        addTest("transactionMoneyBalance_nbt_roundtrip", this::test_transactionMoneyBalance_nbt_roundtrip);
+        addTest("transactionMoneyBalance_backward_compat_missing_tag", this::test_transactionMoneyBalance_backward_compat_missing_tag);
     }
 
     /**
@@ -384,5 +389,112 @@ public class InterMarketOrderTestSuite extends TestSuite {
         if (!r.passed()) return r;
 
         return pass("Backward-compatible loading assigns correct defaults for missing fields");
+    }
+
+    // ── T-051: transactionMoneyBalance tests ─────────────────────────────
+
+    /**
+     * Newly constructed InterMarketOrder should have transactionMoneyBalance defaulted to 0.
+     */
+    private TestResult test_transactionMoneyBalance_default_zero() {
+        InterMarketOrder imo = new InterMarketOrder(
+                BUY_ITEM, SELL_ITEM, Order.Type.LIMIT,
+                10, 100,
+                5, 50,
+                System.currentTimeMillis(), UUID.randomUUID(), 1
+        );
+
+        TestResult r = assertEquals("transactionMoneyBalance should default to 0", 0L, imo.getTransactionMoneyBalance());
+        if (!r.passed()) return r;
+
+        return pass("transactionMoneyBalance defaults to 0 on new orders");
+    }
+
+    /**
+     * Set a non-zero transactionMoneyBalance, save to NBT, load via createFromNBT(),
+     * and verify the value is preserved.
+     */
+    private TestResult test_transactionMoneyBalance_nbt_roundtrip() {
+        long expectedBalance = 12345L;
+        InterMarketOrder original = new InterMarketOrder(
+                BUY_ITEM, SELL_ITEM, Order.Type.LIMIT,
+                10, 100,
+                5, 50,
+                System.currentTimeMillis(), UUID.randomUUID(), 1
+        );
+        original.setTransactionMoneyBalance(expectedBalance);
+
+        // Verify the setter worked before save
+        TestResult r = assertEquals("transactionMoneyBalance should be set via setter",
+                expectedBalance, original.getTransactionMoneyBalance());
+        if (!r.passed()) return r;
+
+        // Save and load via NBT
+        CompoundTag tag = new CompoundTag();
+        boolean saved = original.save(tag);
+        r = assertTrue("save() should return true", saved);
+        if (!r.passed()) return r;
+
+        // Sanity check: tag actually contains our key
+        r = assertTrue("NBT tag should contain 'transactionMoneyBalance' key after save",
+                tag.contains("transactionMoneyBalance"));
+        if (!r.passed()) return r;
+
+        InterMarketOrder loaded = InterMarketOrder.createFromNBT(tag);
+        r = assertNotNull("createFromNBT should not return null", loaded);
+        if (!r.passed()) return r;
+
+        r = assertEquals("transactionMoneyBalance should survive NBT round-trip",
+                expectedBalance, loaded.getTransactionMoneyBalance());
+        if (!r.passed()) return r;
+
+        // Also verify load() (in-place) restores the value
+        InterMarketOrder inPlace = new InterMarketOrder(
+                BUY_ITEM, SELL_ITEM, Order.Type.LIMIT,
+                1, 1,
+                1, 1,
+                0L, UUID.randomUUID(), 1
+        );
+        boolean loadedOk = inPlace.load(tag);
+        r = assertTrue("in-place load() should succeed", loadedOk);
+        if (!r.passed()) return r;
+
+        r = assertEquals("in-place load() should restore transactionMoneyBalance",
+                expectedBalance, inPlace.getTransactionMoneyBalance());
+        if (!r.passed()) return r;
+
+        return pass("transactionMoneyBalance preserved through NBT round-trip");
+    }
+
+    /**
+     * Loading a pre-v2.0.3 NBT tag (no transactionMoneyBalance key) should default the
+     * balance to 0 without throwing. This is a hard backward-compatibility requirement:
+     * existing worlds with saved InterMarketOrders must load cleanly.
+     */
+    private TestResult test_transactionMoneyBalance_backward_compat_missing_tag() {
+        // Build a tag that has all previously-existing fields but NOT transactionMoneyBalance
+        Order buy = new Order(BUY_ITEM, Order.Type.LIMIT, 10, 100, 0L, UUID.randomUUID(), 1);
+        Order sell = new Order(SELL_ITEM, Order.Type.LIMIT, -5, 50, 0L, UUID.randomUUID(), 1);
+        CompoundTag buyTag = new CompoundTag();
+        CompoundTag sellTag = new CompoundTag();
+        buy.save(buyTag);
+        sell.save(sellTag);
+
+        CompoundTag tag = new CompoundTag();
+        tag.put("buyOrder", buyTag);
+        tag.put("sellOrder", sellTag);
+        tag.putLong("crossRateLimit", 5000L);
+        tag.putUUID("interMarketGroupID", UUID.randomUUID());
+        // DO NOT add transactionMoneyBalance — simulating pre-v2.0.3 saved orders
+
+        InterMarketOrder loaded = InterMarketOrder.createFromNBT(tag);
+        TestResult r = assertNotNull("Should load successfully when transactionMoneyBalance tag is missing", loaded);
+        if (!r.passed()) return r;
+
+        r = assertEquals("transactionMoneyBalance should default to 0 for pre-v2.0.3 NBT",
+                0L, loaded.getTransactionMoneyBalance());
+        if (!r.passed()) return r;
+
+        return pass("Missing transactionMoneyBalance tag defaults to 0 (backward compatibility)");
     }
 }

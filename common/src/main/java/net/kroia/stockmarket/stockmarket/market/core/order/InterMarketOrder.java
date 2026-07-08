@@ -28,8 +28,22 @@ public class InterMarketOrder implements ServerSaveable
     // Unique ID linking both legs of this inter-market trade in order history
     private UUID interMarketGroupID;
 
-    // Dollar buffer for bilateral matching: sells deposit here, buys withdraw.
-    // On completion/cancellation, remaining balance is deposited to player's money bank.
+    /**
+     * Dollar intermediary buffer used during cross-market bilateral matching of a limit
+     * inter-market limit order (introduced in v2.0.3).
+     * <p>
+     * The bilateral matching engine walks both orderbooks simultaneously — the sell (have)
+     * leg deposits dollars into this buffer, and the buy (want) leg withdraws from it.
+     * Money never touches the player's money bank during execution, only this buffer.
+     * <p>
+     * This value may be non-zero while a cross-market limit order is partially filled
+     * (i.e. some sells have executed but the corresponding buys have not yet consumed
+     * all the intermediary dollars). On order completion (FILLED) or cancellation,
+     * any remaining balance is refunded to the player's money bank.
+     * <p>
+     * Persisted via NBT under the key {@code "transactionMoneyBalance"}. Defaults to 0
+     * when loading pre-v2.0.3 orders where the tag is absent (backward compatibility).
+     */
     private long transactionMoneyBalance = 0;
 
 
@@ -203,8 +217,24 @@ public class InterMarketOrder implements ServerSaveable
     // Returns true if this is a limit inter-market order (crossRateLimit != 0)
     public boolean isLimitOrder() { return crossRateLimit != 0; }
 
-    // Dollar buffer for bilateral matching — sells deposit here, buys withdraw
+    /**
+     * Returns the current dollar intermediary balance held by this cross-market limit
+     * order. Sells deposit into this balance and buys withdraw from it while matching.
+     * <p>
+     * Any non-zero remainder at order completion or cancellation is refunded to the
+     * player's money bank.
+     *
+     * @return the current transaction money balance (raw units, may be 0)
+     */
     public long getTransactionMoneyBalance() { return transactionMoneyBalance; }
+
+    /**
+     * Sets the dollar intermediary balance. Intended for the cross-market matching engine
+     * to persist buffer state between ticks while a limit order is partially filled, and
+     * for NBT/stream deserialization to restore the value.
+     *
+     * @param transactionMoneyBalance new buffer value (raw units)
+     */
     public void setTransactionMoneyBalance(long transactionMoneyBalance) { this.transactionMoneyBalance = transactionMoneyBalance; }
 
 
