@@ -2,6 +2,7 @@ package net.kroia.stockmarket.stockmarket.market.preset;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import net.kroia.banksystem.util.VolatileItemComponents;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.modutilities.setting.parser.ItemStackJsonParser;
 import net.minecraft.core.HolderLookup;
@@ -137,7 +138,16 @@ public class MarketPreset {
      * Uses RegistryOps for data-driven components (enchantments) when registry context is available.
      * The output contains "id", "count", and optionally "components".
      *
-     * @param stack the ItemStack to serialize
+     * <p>The stack is first passed through {@link VolatileItemComponents#normalize(ItemStack)}
+     * so that <b>volatile components never enter preset persistence</b>. Some mods (e.g.
+     * TerraFirmaCraft's {@code tfc:food} decay timestamp) attach time-varying components to
+     * stacks; serializing them here would freeze a point-in-time value (a creation date or a
+     * never-decay sentinel) into the preset JSON forever, corrupting BankSystem ItemID
+     * identity for every market later created from the preset. Normalizing at this capture
+     * boundary keeps preset JSON stable regardless of when/where the source stack was picked
+     * (creative tab, JEI, inventory) and makes {@link #getUniqueKey()} time-independent.
+     *
+     * @param stack the ItemStack to serialize (never mutated)
      * @return a JsonObject representing the item, or an empty object for empty stacks
      */
     public static JsonObject serializeItemStack(ItemStack stack) {
@@ -146,6 +156,11 @@ public class MarketPreset {
             empty.addProperty("id", "minecraft:air");
             return empty;
         }
+
+        // Strip volatile/deposit-gated components (BankSystem tag + config driven) before
+        // encoding — presets must never persist e.g. TFC creation dates. Works on a copy;
+        // the caller's stack is untouched.
+        stack = VolatileItemComponents.normalize(stack);
 
         JsonObject json = new JsonObject();
         ResourceLocation itemId = BuiltInRegistries.ITEM.getKey(stack.getItem());
@@ -194,6 +209,29 @@ public class MarketPreset {
         }
     }
 
+    /**
+     * Builds an ItemStack from a registry id and an optional serialized component patch.
+     *
+     * <p>The reconstructed stack is passed through
+     * {@link VolatileItemComponents#normalize(ItemStack)} before being returned, for two reasons:
+     * <ol>
+     *   <li><b>Legacy presets:</b> presets saved before normalization existed may already have
+     *       volatile components (e.g. {@code tfc:food} with a frozen creation date or a
+     *       never-decay sentinel) baked into their JSON. Cleaning here means such presets are
+     *       repaired on every load/use instead of poisoning ItemID registration.</li>
+     *   <li><b>Bypassed constructor hooks:</b> {@code applyComponents(patch)} skips third-party
+     *       {@code ItemStack}-constructor hooks (TFC re-attaches fresh food state only during
+     *       construction/copy), so a deserialized volatile component would keep its stale value
+     *       and a {@code null} internal parent. Volatile components must never reach ItemID
+     *       registration — BankSystem strips them at its own boundary too, but the preset cache
+     *       ({@link #toItemStack()}) would otherwise still hand out contaminated stacks.</li>
+     * </ol>
+     *
+     * @param itemIdStr  item registry id, e.g. {@code "minecraft:iron_ingot"}
+     * @param components serialized component patch as produced by {@link #serializeItemStack},
+     *                   or null for simple items
+     * @return the normalized reconstructed stack, or {@link ItemStack#EMPTY} on failure
+     */
     private static ItemStack buildItemStack(String itemIdStr, @Nullable JsonObject components) {
         try {
             ResourceLocation loc = ResourceLocation.tryParse(itemIdStr);
@@ -223,7 +261,10 @@ public class MarketPreset {
                 }
                 stack.applyComponents(patch);
             }
-            return stack;
+            // Normalize before returning so volatile components (frozen in old presets or
+            // re-attached by mod constructor hooks above) never reach ItemID registration
+            // or the preset's cached stack. See method Javadoc.
+            return VolatileItemComponents.normalize(stack);
         } catch (Exception e) {
             net.kroia.stockmarket.StockMarketMod.LOGGER.error(
                     "[MarketPreset] Exception building ItemStack for {}: {}", itemIdStr, e.getMessage());

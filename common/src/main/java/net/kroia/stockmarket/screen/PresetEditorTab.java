@@ -385,7 +385,11 @@ public class PresetEditorTab extends StockMarketGuiElement {
         MarketPresetCategory category = findCategory(selectedCategory);
         if (category == null) return;
 
-        // Build a MarketPreset from the selected ItemStack
+        // Build a MarketPreset from the selected ItemStack.
+        // serializeItemStack() internally normalizes the stack via BankSystem's
+        // VolatileItemComponents.normalize(), so volatile components (e.g. TFC's
+        // tfc:food creation date on creative-tab/JEI picker stacks) are stripped
+        // before they can be frozen into the persisted preset JSON.
         JsonObject serialized = MarketPreset.serializeItemStack(stack);
         String itemId = serialized.get("id").getAsString();
         JsonObject components = serialized.has("components") ? serialized.getAsJsonObject("components") : null;
