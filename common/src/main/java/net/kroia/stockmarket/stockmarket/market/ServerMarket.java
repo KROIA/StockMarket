@@ -127,6 +127,30 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         orderbook.clear();
         orderbook.resetVirtualVolumeDistribution();
     }
+
+    /**
+     * Test-only helper: empties all four incoming order buffers
+     * ({@code buyMarketOrders_inputBuffer}, {@code sellMarketOrders_inputBuffer},
+     * {@code buyLimitOrders_inputBuffer}, {@code sellLimitOrders_inputBuffer}).
+     *
+     * <p>These buffers stage orders submitted via {@link #putOrder(Order)} until the
+     * next {@link #update()} tick drains them into the matching engine. If a test
+     * leaves entries behind, a following test that calls {@code update()} will
+     * process those stale orders and observe unexpected price movement — this
+     * helper prevents that cross-test contamination.
+     *
+     * <p>This method does <b>not</b> touch the orderbook, market price, candle state,
+     * bank balances, or the market-open flag. Callers must reset any dependent state
+     * they rely on separately.
+     */
+    @Override
+    public void test_clearIncomingOrderBuffers()
+    {
+        buyMarketOrders_inputBuffer.clear();
+        sellMarketOrders_inputBuffer.clear();
+        buyLimitOrders_inputBuffer.clear();
+        sellLimitOrders_inputBuffer.clear();
+    }
     @Override
     public void test_setDefaultVolumeProviderFunction(Function<Double, Float> defaultVolumeProviderFunction)
     {

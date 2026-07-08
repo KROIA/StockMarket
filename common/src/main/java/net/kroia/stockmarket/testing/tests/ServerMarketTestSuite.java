@@ -102,6 +102,7 @@ public class ServerMarketTestSuite extends TestSuite {
     private void resetMarket(long price, boolean open) {
         serverMarket.test_setCurrentMarketPrice(price);
         serverMarket.test_clearOrderbook();
+        serverMarket.test_clearIncomingOrderBuffers();
         serverMarket.setMarketOpen(open);
         bankAccount.getBank(itemID).setBalance(100);
         bankAccount.getBank(moneyID).setBalance(10000);
