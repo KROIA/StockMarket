@@ -247,9 +247,20 @@ public class MarketPreset {
                     var result = DataComponentPatch.CODEC
                             .parse(registryAccess.createSerializationContext(NbtOps.INSTANCE), componentTag);
                     if (result.isError()) {
-                        net.kroia.stockmarket.StockMarketMod.LOGGER.error(
-                                "[MarketPreset] Failed to parse components for {}: {} | NBT: {}",
-                                itemIdStr, result.error().map(Object::toString).orElse("?"), componentTag);
+                        // WARN, not ERROR: a preset that references an enchantment/component
+                        // from an absent optional mod (e.g. Create's `create:capacity` when the
+                        // mod is removed from an existing world) is expected behavior — the
+                        // preset is skipped, the server continues, no admin action is required.
+                        // We keep the raw DataResult on DEBUG for non-obvious parse failures
+                        // (schema drift, corruption) so real bugs remain diagnosable.
+                        String rawError = result.error().map(Object::toString).orElse("?");
+                        String missingKey = extractMissingKey(rawError);
+                        net.kroia.stockmarket.StockMarketMod.LOGGER.warn(
+                                "[MarketPreset] Skipping preset for {}: enchantment/component {} is not registered (mod possibly absent).",
+                                itemIdStr, missingKey != null ? missingKey : "<unknown>");
+                        net.kroia.stockmarket.StockMarketMod.LOGGER.debug(
+                                "[MarketPreset] Raw parse error for {}: {} | NBT: {}",
+                                itemIdStr, rawError, componentTag);
                     }
                     patch = result.getOrThrow();
                 } else {
@@ -266,10 +277,53 @@ public class MarketPreset {
             // or the preset's cached stack. See method Javadoc.
             return VolatileItemComponents.normalize(stack);
         } catch (Exception e) {
-            net.kroia.stockmarket.StockMarketMod.LOGGER.error(
-                    "[MarketPreset] Exception building ItemStack for {}: {}", itemIdStr, e.getMessage());
+            // WARN, not ERROR: the dominant cause of this exception is `result.getOrThrow()`
+            // above rethrowing a missing-mod parse failure — expected behavior for optional
+            // content on a world where the referenced mod is no longer present. Keep the raw
+            // stack trace / message on DEBUG for non-obvious failures.
+            String message = e.getMessage();
+            String missingKey = message != null ? extractMissingKey(message) : null;
+            if (missingKey != null) {
+                net.kroia.stockmarket.StockMarketMod.LOGGER.warn(
+                        "[MarketPreset] Skipping preset for {}: enchantment/component {} is not registered (mod possibly absent).",
+                        itemIdStr, missingKey);
+            } else {
+                net.kroia.stockmarket.StockMarketMod.LOGGER.warn(
+                        "[MarketPreset] Skipping preset for {}: {}", itemIdStr, message);
+            }
+            net.kroia.stockmarket.StockMarketMod.LOGGER.debug(
+                    "[MarketPreset] Exception building ItemStack for {}", itemIdStr, e);
             return ItemStack.EMPTY;
         }
+    }
+
+    /**
+     * Best-effort extraction of the missing enchantment / component registry key from a
+     * {@code DataResult.Error} message. The vanilla codec framework produces messages
+     * of the form {@code "Failed to get element <namespace>:<path> missed input: ..."}
+     * when a referenced registry entry is absent (e.g. an enchantment provided by a mod
+     * that is no longer loaded).
+     *
+     * @param errorMessage the DataResult error string or exception message
+     * @return the missing key (e.g. {@code "create:capacity"}) or {@code null} if the
+     *         message shape does not match — callers should fall back to a generic message
+     */
+    @Nullable
+    private static String extractMissingKey(String errorMessage) {
+        if (errorMessage == null) return null;
+        final String marker = "Failed to get element ";
+        int idx = errorMessage.indexOf(marker);
+        if (idx < 0) return null;
+        int start = idx + marker.length();
+        int end = start;
+        while (end < errorMessage.length()) {
+            char c = errorMessage.charAt(end);
+            // Registry keys are namespace:path with lowercase letters, digits, _, -, /, .
+            // Break on whitespace, quotes, commas, brackets, etc.
+            if (Character.isWhitespace(c) || c == '\'' || c == '"' || c == ',' || c == ']' || c == '}' || c == ')') break;
+            end++;
+        }
+        return end > start ? errorMessage.substring(start, end) : null;
     }
 
     // ===== Network serialization =====
