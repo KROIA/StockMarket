@@ -19,6 +19,21 @@ public interface ISyncServerMarket {
     void test_setDefaultVolumeProviderFunction(Function<Double, Float> defaultVolumeProviderFunction);
     void test_resetVirtualOrderBookVolume();
 
+    /**
+     * Test-only helper: empties all four incoming order buffers
+     * (buyMarket, sellMarket, buyLimit, sellLimit input queues) that
+     * {@code putOrder} stages before {@code update()} drains them into the matching engine.
+     *
+     * <p>Used to guarantee isolation between tests: without this, orders staged by a
+     * preceding test can leak into a subsequent test's {@code update()} call and shift
+     * the market price unexpectedly.
+     *
+     * <p>This does <b>not</b> reset any dependent state (bank balances, orderbook,
+     * candle fields, market price, market-open flag). Callers are responsible for
+     * resetting whatever else their test needs.
+     */
+    void test_clearIncomingOrderBuffers();
+
 
     ItemID getItemID();
     long getDefaultPrice();

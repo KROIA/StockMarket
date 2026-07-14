@@ -1,24 +1,41 @@
 package net.kroia.stockmarket.minecraft.command;
 
+import com.google.gson.JsonObject;
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.stockmarket.api.command.IAsyncStockMarketCommandHandler;
 import net.kroia.stockmarket.api.command.IServerStockMarketCommandHandler;
 import net.kroia.modutilities.testing.TestCommandRegistration;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.data.DataManager;
 import net.kroia.stockmarket.networking.packet.OpenUIPacket;
+import net.kroia.stockmarket.stockmarket.market.preset.MarketPreset;
+import net.kroia.stockmarket.stockmarket.market.preset.MarketPresetCategory;
+import net.kroia.stockmarket.stockmarket.market.preset.MarketPresetManager;
 import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.ItemStack;
+import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 
 public class StockMarketCommands {
@@ -171,6 +188,52 @@ public class StockMarketCommands {
                             return Command.SINGLE_SUCCESS;
                         })
                 )
+                // /stockmarket preset add <category> [name]
+                // Captures the executing player's MAIN-HAND ItemStack as a new market preset.
+                // Unlike the PresetEditorTab item picker (which builds stacks from the item
+                // registry), this captures component-bearing survival items too: renamed items,
+                // TFC food, enchanted gear, etc. The optional [name] sets a custom name on the
+                // captured stack, which is how a preset's display name is represented; without
+                // it the preset keeps the item's normal hover name.
+                .then(Commands.literal("preset")
+                        .requires(source -> source.hasPermission(2)) // Admin-only, like the other management commands
+                        .then(Commands.literal("add")
+                                .then(Commands.argument("category", StringArgumentType.string())
+                                        .suggests((context, builder) -> getPresetCategoryNamesSuggestion(builder))
+                                        .executes(context -> {
+                                            addHeldItemPreset(context.getSource(),
+                                                    StringArgumentType.getString(context, "category"), null);
+                                            return Command.SINGLE_SUCCESS;
+                                        })
+                                        .then(Commands.argument("name", StringArgumentType.string())
+                                                .executes(context -> {
+                                                    addHeldItemPreset(context.getSource(),
+                                                            StringArgumentType.getString(context, "category"),
+                                                            StringArgumentType.getString(context, "name"));
+                                                    return Command.SINGLE_SUCCESS;
+                                                })
+                                        )
+                                )
+                        )
+                )
+                // /stockmarket <market> remove
+                // Admin fallback to delete a market without the management GUI.
+                // The market is addressed purely by its registry name (e.g. "minecraft:iron_ingot",
+                // quotes required because of the ':') or by its numeric ItemID — never by an
+                // ItemStack — so even "broken" markets whose item can no longer be resolved
+                // (e.g. items with volatile data components) can be deleted.
+                .then(Commands.argument("market", StringArgumentType.string())
+                        .requires(source -> source.hasPermission(2)) // Admin-only, like the other management commands
+                        .suggests((context, builder) -> getMarketNamesSuggestion(builder))
+                        .then(Commands.literal("remove")
+                                .executes(context -> {
+                                    CommandSourceStack source = context.getSource();
+                                    String marketArg = StringArgumentType.getString(context, "market");
+                                    removeMarket(source, marketArg);
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                        )
+                )
         );
 
         boolean isSlave = BACKEND_INSTANCES != null
@@ -181,6 +244,209 @@ public class StockMarketCommands {
             TestCommandRegistration.register(dispatcher, "stockmarket", "StockMarket", "stockmarket", isSlave);
     }
 
+
+    /**
+     * Captures the executing player's main-hand ItemStack as a new market preset.
+     * <p>
+     * The stack is serialized through {@link MarketPreset#serializeItemStack(ItemStack)},
+     * which already normalizes volatile components (BankSystem's
+     * {@code VolatileItemComponents.normalize}) — no extra normalization happens here.
+     * The new preset receives the same default price/abundance values a GUI-created
+     * preset gets (see {@code PresetEditorTab.onItemSelectedFromPicker}: 10.0 / 10.0)
+     * and is persisted via {@link MarketPresetManager#addOrReplaceCategory}, the exact
+     * server-side path the GUI's SaveCategory request lands in
+     * ({@code AsyncPresetManager.Request.handleOnMasterServer}). Clients always pull
+     * preset categories from the server when opening the editor/creation UI, so no
+     * extra push is needed for them to see the new preset.
+     * <p>
+     * Preset editing is master-only (the preset request handler rejects SaveCategory
+     * from slave servers), so on a slave this command fails with a translatable
+     * message instead of writing to the slave's local preset files.
+     *
+     * @param source       the command source; must be a player (the main hand is read from it)
+     * @param categoryName target preset category; created on the fly if it does not exist yet
+     * @param presetName   optional display name for the preset — applied as a custom name
+     *                     component on the captured stack; {@code null} keeps the item's
+     *                     normal hover name
+     */
+    private static void addHeldItemPreset(CommandSourceStack source, String categoryName, @Nullable String presetName)
+    {
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            source.sendFailure(Component.translatable("message.stockmarket.command_preset_add_not_player"));
+            return;
+        }
+        if (!isMaster()) {
+            // Preset persistence lives on the master; the GUI request path rejects
+            // SaveCategory from slaves too. Fail cleanly instead of corrupting state.
+            source.sendFailure(Component.translatable("message.stockmarket.command_preset_add_master_only"));
+            return;
+        }
+
+        ItemStack held = player.getMainHandItem();
+        if (held.isEmpty()) {
+            source.sendFailure(Component.translatable("message.stockmarket.command_preset_add_hand_empty"));
+            return;
+        }
+
+        // Work on a copy so the player's actual stack is never mutated.
+        ItemStack stack = held.copy();
+        if (presetName != null && !presetName.isBlank()) {
+            // The preset's display name is represented by the stack's custom name component.
+            stack.set(DataComponents.CUSTOM_NAME, Component.literal(presetName));
+        }
+
+        // Serialize (includes volatile-component normalization — do not normalize again).
+        JsonObject serialized = MarketPreset.serializeItemStack(stack);
+        String itemId = serialized.get("id").getAsString();
+        if (itemId.equals("minecraft:air")) {
+            source.sendFailure(Component.translatable("message.stockmarket.command_preset_add_failed"));
+            return;
+        }
+        JsonObject components = serialized.has("components") ? serialized.getAsJsonObject("components") : null;
+        // Same defaults as a preset created through the GUI item picker (PresetEditorTab).
+        MarketPreset newPreset = new MarketPreset(itemId, components, 10.0f, 10.0f);
+        String displayName = stack.getHoverName().getString();
+
+        MarketPresetManager presetManager = BACKEND_INSTANCES.PRESET_MANAGER;
+        MarketPresetCategory category = presetManager.getCategory(categoryName);
+        boolean createdCategory = category == null;
+        if (createdCategory) {
+            category = new MarketPresetCategory(categoryName, List.of());
+        }
+
+        // Reject duplicates by unique key (itemId + component hash) — no silent replace.
+        if (category.findPresetByKey(newPreset.getUniqueKey()) != null) {
+            source.sendFailure(Component.translatable(
+                    "message.stockmarket.command_preset_add_duplicate", displayName, categoryName));
+            return;
+        }
+
+        category.getPresets().add(newPreset);
+        // Same add/save path as the GUI's SaveCategory request handler: updates the
+        // in-memory category list and writes the category's JSON file.
+        presetManager.addOrReplaceCategory(category, DataManager.getPresetPath());
+
+        if (createdCategory) {
+            source.sendSuccess(() -> Component.translatable(
+                    "message.stockmarket.command_preset_add_category_created", categoryName), true);
+        }
+        source.sendSuccess(() -> Component.translatable(
+                "message.stockmarket.command_preset_added", displayName, categoryName), true);
+    }
+
+    /**
+     * Suggests all existing preset category names for the {@code <category>} argument
+     * of {@code /stockmarket preset add}.
+     * <p>
+     * Names are suggested in quotes (same pattern as {@link #getMarketNamesSuggestion})
+     * so category names containing spaces or other special characters stay valid for
+     * the brigadier string() argument type. The local sync preset manager is available
+     * on both master and slave servers, so suggestions never need a network round-trip.
+     *
+     * @param builder the suggestion builder provided by brigadier
+     * @return a future completing with the category name suggestions
+     */
+    private static CompletableFuture<Suggestions> getPresetCategoryNamesSuggestion(SuggestionsBuilder builder)
+    {
+        MarketPresetManager presetManager = BACKEND_INSTANCES == null ? null : BACKEND_INSTANCES.PRESET_MANAGER;
+        if (presetManager != null) {
+            for (MarketPresetCategory category : presetManager.getCategories()) {
+                builder.suggest("\"" + category.getCategory() + "\"");
+            }
+        }
+        return CompletableFuture.completedFuture(builder.build());
+    }
+
+    /**
+     * Resolves the given market identifier and deletes the matching market.
+     * <p>
+     * A market matches if its registry name (e.g. "minecraft:iron_ingot") or its
+     * numeric ItemID equals {@code marketArg}. Broken markets whose item can no
+     * longer be resolved report their numeric ItemID as their name, so they are
+     * addressable by that number.
+     * <p>
+     * Uses the async market manager, so the command works on both master and slave
+     * servers (slaves forward the existing DeleteMarket request to the master).
+     * Feedback is sent to the command source as translatable messages once the
+     * async operations complete.
+     *
+     * @param source    the command source to send success/failure feedback to
+     * @param marketArg the market registry name or numeric ItemID entered by the user
+     */
+    private static void removeMarket(CommandSourceStack source, String marketArg)
+    {
+        MinecraftServer server = source.getServer();
+        BACKEND_INSTANCES.MARKET_MANAGER.getAsync().getAvailableMarketIDsAsync().thenAccept(marketIDs -> {
+            // Collect all markets matching the given name or numeric ItemID
+            List<ItemID> matches = new ArrayList<>();
+            for (ItemID marketID : marketIDs) {
+                if (marketID.getName().equals(marketArg) || String.valueOf(marketID.getShort()).equals(marketArg)) {
+                    matches.add(marketID);
+                }
+            }
+
+            if (matches.isEmpty()) {
+                server.execute(() -> source.sendFailure(
+                        Component.translatable("message.stockmarket.command_market_remove_not_found", marketArg)));
+                return;
+            }
+            if (matches.size() > 1) {
+                // Multiple markets share this registry name (e.g. component variants).
+                // List them as "name=id" pairs so the user can retry with the unique numeric ID.
+                String candidates = matches.stream().map(ItemID::toString).collect(Collectors.joining(", "));
+                server.execute(() -> source.sendFailure(
+                        Component.translatable("message.stockmarket.command_market_remove_ambiguous", marketArg, candidates)));
+                return;
+            }
+
+            ItemID target = matches.get(0);
+            BACKEND_INSTANCES.MARKET_MANAGER.getAsync().deleteMarketAsync(target).thenAccept(success ->
+                    server.execute(() -> {
+                        if (success)
+                            source.sendSuccess(() -> Component.translatable(
+                                    "message.stockmarket.command_market_removed", target.getName()), true);
+                        else
+                            source.sendFailure(Component.translatable(
+                                    "message.stockmarket.command_market_remove_failed", target.getName()));
+                    }));
+        });
+    }
+
+    /**
+     * Suggests all existing market identifiers for the {@code <market>} command argument.
+     * <p>
+     * Registry names are suggested in quotes because they contain a ':' which the
+     * brigadier string() argument type only accepts inside quotes. For markets that
+     * share the same registry name the unique numeric ItemID is suggested as well,
+     * so every market stays addressable. Broken markets (unresolvable item) report
+     * their numeric ItemID as their name and are therefore suggested by number.
+     *
+     * @param builder the suggestion builder provided by brigadier
+     * @return a future completing with the market name suggestions
+     */
+    private static CompletableFuture<Suggestions> getMarketNamesSuggestion(SuggestionsBuilder builder)
+    {
+        CompletableFuture<Suggestions> future = new CompletableFuture<>();
+        BACKEND_INSTANCES.MARKET_MANAGER.getAsync().getAvailableMarketIDsAsync().thenAccept(marketIDs -> {
+            // Count name occurrences to detect ambiguous registry names
+            Map<String, Integer> nameCounts = new HashMap<>();
+            for (ItemID marketID : marketIDs)
+                nameCounts.merge(marketID.getName(), 1, Integer::sum);
+
+            Set<String> suggestedNames = new HashSet<>();
+            for (ItemID marketID : marketIDs) {
+                String name = marketID.getName();
+                if (suggestedNames.add(name))
+                    builder.suggest("\"" + name + "\"");
+                // Ambiguous names can't be removed by name alone — offer the unique numeric ID too
+                if (nameCounts.get(name) > 1)
+                    builder.suggest(String.valueOf(marketID.getShort()));
+            }
+            future.complete(builder.build());
+        });
+        return future;
+    }
 
     private static CompletableFuture<Suggestions> getPlayerNamesSuggestion(SuggestionsBuilder builder)
     {

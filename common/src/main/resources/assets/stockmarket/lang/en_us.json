@@ -89,6 +89,20 @@
   "message.stockmarket.order_invalid_reason_market_closed": "Market is closed",
 
   "message.stockmarket.no_trading_item_available": "No trading item available",
+
+  "message.stockmarket.command_market_removed": "Market '%s' has been removed from the stock market",
+  "message.stockmarket.command_market_remove_failed": "Failed to remove market '%s'",
+  "message.stockmarket.command_market_remove_not_found": "No market found for '%s'",
+  "message.stockmarket.command_market_remove_ambiguous": "Multiple markets match '%s': %s - run the command again with the numeric ID",
+
+  "message.stockmarket.command_preset_add_not_player": "Only a player can use this command - the preset is captured from the main hand",
+  "message.stockmarket.command_preset_add_master_only": "Market presets can only be edited on the master server",
+  "message.stockmarket.command_preset_add_hand_empty": "Hold the item you want to capture in your main hand",
+  "message.stockmarket.command_preset_add_failed": "Failed to capture the held item as a preset",
+  "message.stockmarket.command_preset_add_duplicate": "A preset for '%s' already exists in category '%s'",
+  "message.stockmarket.command_preset_add_category_created": "Category '%s' did not exist and was created",
+  "message.stockmarket.command_preset_added": "Added preset '%s' to category '%s'",
+
   "gui.stockmarket.bot_settings_screen.change_item": "Change Item",
   "gui.stockmarket.bot_settings_screen.save_settings": "Save Settings",
   "gui.stockmarket.bot_settings_screen.bot_create": "Create Bot",
@@ -131,6 +145,9 @@
   "gui.stockmarket.management_screen.new_custom_market.tooltip": "Create new market",
   "gui.stockmarket.management_screen.new_market_by_category.tooltip": "Create new market by category",
   "gui.stockmarket.management_screen.remove_selected_trading_pair.tooltip": "Remove current selected trading pair",
+  "gui.stockmarket.management_screen.broken_market_name": "Broken market (ID %s)",
+  "gui.stockmarket.management_screen.broken_market.tooltip_line1": "The item for this market can no longer be resolved.",
+  "gui.stockmarket.management_screen.broken_market.tooltip_line2": "You can still select this market and delete it.",
   "gui.stockmarket.management_screen.general.title": "All Markets",
   "gui.stockmarket.management_screen.general.close_all_markets": "Close all",
   "gui.stockmarket.management_screen.general.close_all_markets.tooltip": "Closes all markets so that players no longer can place orders.\nThis is useful when you want to change settings of the market and\nprevent players from exploiting strong changes in price due to changing settings.\nOr if things get out of hand and you need a quick way to close all markets.",

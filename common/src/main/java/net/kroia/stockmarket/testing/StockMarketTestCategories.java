@@ -95,4 +95,7 @@ public class StockMarketTestCategories {
 
     public static final TestCategory INTER_MARKET_EXECUTOR = new TestCategory(
             "stockmarket", "sm_inter_market_executor", "InterMarketExecutor two-leg execution tests", MASTER_ONLY, true);
+
+    public static final TestCategory MERGE_CONSOLIDATION = new TestCategory(
+            "stockmarket", "sm_merge_consolidation", "BankSystem ItemID-merge market consolidation tests", MASTER_ONLY, true);
 }

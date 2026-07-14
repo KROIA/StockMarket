@@ -5,6 +5,7 @@ import net.kroia.banksystem.api.bank.IServerBank;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.modutilities.persistence.ServerSaveableChunked;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IAsyncMarket;
@@ -12,6 +13,7 @@ import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
+import net.kroia.stockmarket.networking.packet.MarketRemovedPacket;
 import net.kroia.stockmarket.stockmarket.market.ServerMarket;
 import net.kroia.stockmarket.stockmarket.market.core.InterMarketExecutor;
 import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
@@ -178,11 +180,115 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
 
         // Remove from map
         markets.remove(marketID);
+
+        // Propagate the deletion to every connected client. deleteMarket only ever
+        // executes here on the master (slaves and clients reach it through the ARRS
+        // DeleteMarket request), so this is the single choke point for the broadcast:
+        //  - all players connected to this server receive the packet directly,
+        //  - all slave servers receive a relayed copy and forward it to their players.
+        // Clients react by purging their cached ClientMarket (which otherwise only
+        // grows and would keep the deleted market selectable in the trade screen)
+        // and by deselecting the market in any open GUI.
+        MarketRemovedPacket.broadcast(marketID);
         return true;
     }
     @Override
     public CompletableFuture<Boolean> deleteMarketAsync(@NotNull ItemID marketID) {
         return CompletableFuture.completedFuture(deleteMarket(marketID));
+    }
+
+    /**
+     * Reconciles this manager's {@code markets} map against a BankSystem ItemID merge
+     * by deleting any market keyed under a merged-away alias ID.
+     * <p>
+     * Reconcile policy per merge group ({aliasIDs} → canonicalID):
+     * <ol>
+     *   <li><b>Delete alias-keyed duplicates:</b> for every alias in the group that has
+     *       an entry in {@code markets}, call {@link #deleteMarket(ItemID)} — which
+     *       cancels the market's open player orders, refunds their locked funds,
+     *       unsubscribes it from plugins, and broadcasts {@code MarketRemovedPacket}.</li>
+     *   <li><b>Canonical-keyed market is left completely alone.</b> If a market for
+     *       {@code canonicalID} exists, it is not a duplicate — it stays untouched.</li>
+     *   <li><b>Never re-key.</b> An alias-keyed market is deleted outright rather than
+     *       re-keyed to canonical. Plugin subscriptions, price history, and orderbook
+     *       state are dropped along with it.</li>
+     *   <li><b>Never auto-create.</b> If the merge group has no canonical-keyed market,
+     *       reconcile does not synthesize one — merges only remove duplicates.</li>
+     * </ol>
+     * A single INFO log line per merge group with at least one deletion records
+     * canonical, deleted alias IDs, and the count of refunded player orders per market.
+     * <p>
+     * <b>Idempotent:</b> once the alias-keyed markets are gone, subsequent invocations
+     * with the same alias table are no-ops. This is what the load-time reconcile at the
+     * end of {@link #load(Map)} relies on to handle merges that fired during BankSystem
+     * startup before this manager registered its listener.
+     * <p>
+     * <b>Master-only.</b> Slaves receive the reconciled state via the existing sync
+     * path — this method must not run on slave servers.
+     *
+     * @param aliasToCanonical unmodifiable alias→canonical map from
+     *                         {@code IBankSystemEvents.getItemIDsMergedEvent()} or
+     *                         {@link ItemIDManager#getItemIDAliasMap()}
+     */
+    public void consolidateMergedMarkets(@NotNull Map<ItemID, ItemID> aliasToCanonical)
+    {
+        if (aliasToCanonical.isEmpty())
+            return;
+
+        // Group aliases by canonical: canonical → set of alias IDs that resolve to it.
+        Map<ItemID, Set<ItemID>> groups = new HashMap<>();
+        for (Map.Entry<ItemID, ItemID> entry : aliasToCanonical.entrySet())
+        {
+            ItemID alias = entry.getKey();
+            ItemID canonical = entry.getValue();
+            if (alias == null || canonical == null || alias.equals(canonical))
+                continue; // defensive: alias == canonical means nothing to consolidate
+            groups.computeIfAbsent(canonical, k -> new HashSet<>()).add(alias);
+        }
+
+        for (Map.Entry<ItemID, Set<ItemID>> group : groups.entrySet())
+        {
+            ItemID canonical = group.getKey();
+            Set<ItemID> aliases = group.getValue();
+
+            // Delete every alias-keyed market in the group. A canonical-keyed market
+            // (if any) is left completely alone — it is not a duplicate.
+            StringBuilder deletedSummary = new StringBuilder();
+            for (ItemID alias : aliases)
+            {
+                if (!markets.containsKey(alias))
+                    continue;
+                int refunded = countRefundableOrders(alias);
+                deleteMarket(alias);
+                if (deletedSummary.length() > 0) deletedSummary.append(", ");
+                deletedSummary.append(alias).append(" (refunded ").append(refunded).append(" order(s))");
+            }
+
+            if (deletedSummary.length() > 0)
+            {
+                info("ItemID merge consolidation: canonical=" + canonical
+                        + ", deleted alias-keyed duplicate(s)=" + deletedSummary);
+            }
+        }
+    }
+
+    /**
+     * Counts the player limit orders on the given market that will be refunded when
+     * {@link #deleteMarket(ItemID)} closes it. Bot orders are excluded — they never
+     * had bank reservations. Used only for the merge consolidation log line.
+     */
+    private int countRefundableOrders(ItemID marketID)
+    {
+        ServerMarket market = markets.get(marketID);
+        if (market == null)
+            return 0;
+        int count = 0;
+        for (net.kroia.stockmarket.stockmarket.market.core.order.Order order : market.getLimitOrders())
+        {
+            if (!order.isBotOrder())
+                count++;
+        }
+        return count;
     }
 
 
@@ -794,6 +900,14 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
                     success = false;
             }
         }
+
+        // Catch any BankSystem ItemID merges that fired before StockMarket registered its
+        // event listener (e.g. during BankSystem's own startup / world load). Reads the
+        // current alias table and consolidates any markets still keyed under a merged ID.
+        // Idempotent: on a fresh world with no aliases, or after a previous consolidation,
+        // this is a no-op.
+        consolidateMergedMarkets(ItemIDManager.getItemIDAliasMap());
+
         return success;
     }
 

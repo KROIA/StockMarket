@@ -15,8 +15,12 @@ import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.kroia.stockmarket.util.StockMarketGuiScreen;
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.ItemLore;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -48,6 +52,15 @@ public class ManagementScreen extends StockMarketGuiScreen {
         public static final Component TOOLTIP_NEW_MARKET_BY_CATEGORY = Component.translatable(PREFIX + "new_market_by_category.tooltip");
         public static final Component TOOLTIP_REMOVE_SELECTED_TRADING_PAIR = Component.translatable(PREFIX + "remove_selected_trading_pair.tooltip");
         //public static final Component TOOLTIP_SELECTED_TRADING_PAIR = Component.translatable(PREFIX + "selected_trading_pair.tooltip");
+
+        // "Broken market" placeholder texts: shown when a market's ItemID can no
+        // longer be resolved to an ItemStack (dangling registry entry, e.g. caused
+        // by items whose data components drift over time).
+        public static Component brokenMarketName(short marketID) {
+            return Component.translatable(PREFIX + "broken_market_name", String.valueOf(marketID));
+        }
+        public static final Component BROKEN_MARKET_TOOLTIP_LINE1 = Component.translatable(PREFIX + "broken_market.tooltip_line1");
+        public static final Component BROKEN_MARKET_TOOLTIP_LINE2 = Component.translatable(PREFIX + "broken_market.tooltip_line2");
 
 
         public static final Component GENERAL_TITLE = Component.translatable(PREFIX + "general.title");
@@ -163,10 +176,17 @@ public class ManagementScreen extends StockMarketGuiScreen {
             closeAllMarketsButton.setBounds(openAllMarketsButton.getRight() + spacing, btnY, btnW, elementHeight);
         }
         public void setCurrentMarket(ItemID marketID) {
-            if(marketID == null)
+            if(marketID == null) {
                 currentItemView.setItemStack(ItemStack.EMPTY);
-            else
-                currentItemView.setItemStack(marketID.getStack());
+                return;
+            }
+            ItemStack stack = marketID.getStack();
+            if(stack.isEmpty()) {
+                // Dangling ItemID: show the "broken market" placeholder instead of a
+                // blank slot so the admin can see what is selected and delete it.
+                stack = createBrokenMarketPlaceholder(marketID);
+            }
+            currentItemView.setItemStack(stack);
         }
         public void setMarketOpenCheckBoxChecked(boolean isOpen) {
             loadingCheckBox = true;
@@ -176,9 +196,12 @@ public class ManagementScreen extends StockMarketGuiScreen {
 
         private void onRemoveTradingPairButtonClicked()
         {
-            ClientMarket currentMarket = getSelectedMarket();
-            if (currentMarket == null) return;
-            setScreen(new ConfirmDeletePopup(parentScreen, currentMarket.getItemID()));
+            // Delete by the screen's selected ItemID instead of the selected ClientMarket:
+            // broken markets (unresolvable item stack) never get a ClientMarket instance
+            // on the client, but the server can still delete them by their ItemID.
+            ItemID marketID = parentScreen.getSelectedMarketID();
+            if (marketID == null) return;
+            setScreen(new ConfirmDeletePopup(parentScreen, marketID));
         }
         private void onMarketSettingsButtonClicked()
         {
@@ -351,7 +374,13 @@ public class ManagementScreen extends StockMarketGuiScreen {
                     sorted.sort(MARKET_TYPE_COMPARATOR);
                     for (ItemID id : sorted) {
                         ItemStack stack = id.getStack();
-                        if (stack == null) continue;
+                        if (stack.isEmpty()) {
+                            // The ItemID can no longer be resolved to an item (dangling
+                            // registry entry). Show an explicit "broken market" placeholder
+                            // instead of skipping the entry, so the market stays visible,
+                            // selectable and deletable.
+                            stack = createBrokenMarketPlaceholder(id);
+                        }
                         MarketItemView view = new MarketItemView(stack, id);
                         allMarketItems.add(view);
                         marketGridView.addChild(view);
@@ -457,7 +486,10 @@ public class ManagementScreen extends StockMarketGuiScreen {
             @Override
             protected boolean mouseClickedOverElement(int button) {
                 if (button == 0) {
-                    onMarketSelected(marketID.getStack());
+                    // Select strictly by the market's ItemID. Never round-trip through the
+                    // ItemStack: a stack whose components drifted away from the registry
+                    // template would re-register as a *new* ItemID and select nothing.
+                    onMarketSelected(marketID);
                     return true;
                 }
                 return false;
@@ -471,6 +503,22 @@ public class ManagementScreen extends StockMarketGuiScreen {
     private final OverviewTab overviewTab;
     private final CreateMarketTab createMarketTab;
     private final PresetEditorTab presetEditorTab;
+
+    /**
+     * The ItemID of the market currently selected in the overview tab.
+     * Tracked separately from {@link StockMarketGuiElement#getSelectedMarket()} because
+     * broken markets (whose item can no longer be resolved) have no ClientMarket
+     * instance, yet must still be selectable so they can be removed.
+     */
+    private @Nullable ItemID selectedMarketID = null;
+
+    /**
+     * @return the ItemID of the market currently selected in the overview tab,
+     *         or {@code null} if none is selected
+     */
+    public @Nullable ItemID getSelectedMarketID() {
+        return selectedMarketID;
+    }
 
     public ManagementScreen() {
         super(Texts.TITLE);
@@ -508,6 +556,7 @@ public class ManagementScreen extends StockMarketGuiScreen {
             currentMarket.unsubscribeFromMarketPriceUpdate();
             StockMarketGuiElement.selectMarket(null);
         }
+        selectedMarketID = null;
         super.onClose();
     }
 
@@ -523,8 +572,17 @@ public class ManagementScreen extends StockMarketGuiScreen {
 
     /**
      * Called when a market item is selected in the overview tab's market selector.
+     * <p>
+     * Selection is done strictly by the market's {@link ItemID}. The ItemStack is
+     * intentionally never re-registered via
+     * {@code ItemID.getOrRegisterFromItemStackClientSide}: for items with volatile
+     * data components (e.g. TerraFirmaCraft food decay) the displayed stack may no
+     * longer component-match the registry template, so a stack round-trip would
+     * mint a different ItemID and the market would become unselectable.
+     *
+     * @param itemID the ItemID key of the clicked market
      */
-    private void onMarketSelected(ItemStack item)
+    private void onMarketSelected(ItemID itemID)
     {
         ClientMarket currentMarket = StockMarketGuiElement.getSelectedMarket();
         if(currentMarket != null)
@@ -533,21 +591,66 @@ public class ManagementScreen extends StockMarketGuiScreen {
             StockMarketGuiElement.selectMarket(null);
             overviewTab.getCurrentMarketManagerWidget().setCurrentMarket(null);
         }
-        ItemID.getOrRegisterFromItemStackClientSide(item).thenAccept(itemID ->
-        {
-            ClientMarket market = getMarket(itemID);
-            if(market != null) {
-                market.subscribeToMarketPriceUpdate();
-                StockMarketGuiElement.selectMarket(itemID);
-                overviewTab.getCandlestickChart().setMarket(market);
-                overviewTab.getCurrentMarketManagerWidget().setCurrentMarket(itemID);
-                market.isMarketOpenAsync().thenAccept(isOpen ->
-                    Minecraft.getInstance().execute(() ->
-                        overviewTab.getCurrentMarketManagerWidget().setMarketOpenCheckBoxChecked(isOpen)
-                    )
-                );
-            }
-        });
+        selectedMarketID = itemID;
+        ClientMarket market = getMarket(itemID);
+        if(market != null) {
+            market.subscribeToMarketPriceUpdate();
+            StockMarketGuiElement.selectMarket(itemID);
+            overviewTab.getCandlestickChart().setMarket(market);
+            overviewTab.getCurrentMarketManagerWidget().setCurrentMarket(itemID);
+            market.isMarketOpenAsync().thenAccept(isOpen ->
+                Minecraft.getInstance().execute(() ->
+                    overviewTab.getCurrentMarketManagerWidget().setMarketOpenCheckBoxChecked(isOpen)
+                )
+            );
+        }
+        else {
+            // Broken market: no ClientMarket exists because the item can't be resolved.
+            // Still display it as the selected market so the Remove button can delete it.
+            overviewTab.getCurrentMarketManagerWidget().setCurrentMarket(itemID);
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     * Server broadcast: a market was deleted (possibly by another admin or via the
+     * {@code /stockmarket <market> remove} command). Deselects the market if it was
+     * the current selection and reloads the market grid from the server.
+     */
+    @Override
+    public void onMarketRemoved(ItemID marketID) {
+        if (marketID.equals(selectedMarketID)) {
+            // The ClientMarket (and its price stream) is already gone — only clear
+            // the screen-side selection state.
+            selectedMarketID = null;
+            StockMarketGuiElement.selectMarket(null);
+            overviewTab.getCurrentMarketManagerWidget().setCurrentMarket(null);
+            overviewTab.getCandlestickChart().setMarket(null);
+        }
+        // Refresh the grid so the deleted market disappears from the selector.
+        overviewTab.refreshMarketList();
+    }
+
+    /**
+     * Builds a placeholder ItemStack for a market whose {@link ItemID} can no longer
+     * be resolved to an item ("broken" market). This happens when the registered item
+     * template dangles or drifts — e.g. items with volatile data components such as
+     * TerraFirmaCraft food decay. Instead of rendering an invisible entry (which made
+     * such markets unselectable and undeletable in this GUI), the market is shown as
+     * a barrier icon with an explanatory name and tooltip so it stays visible and can
+     * still be selected and removed.
+     *
+     * @param marketID the dangling market ItemID
+     * @return a barrier stack carrying a translatable "broken market" name and tooltip
+     */
+    private static ItemStack createBrokenMarketPlaceholder(ItemID marketID) {
+        ItemStack placeholder = new ItemStack(Items.BARRIER);
+        placeholder.set(DataComponents.CUSTOM_NAME,
+                Texts.brokenMarketName(marketID.getShort()).copy().withStyle(style -> style.withItalic(false)));
+        placeholder.set(DataComponents.LORE, new ItemLore(List.of(
+                Texts.BROKEN_MARKET_TOOLTIP_LINE1,
+                Texts.BROKEN_MARKET_TOOLTIP_LINE2)));
+        return placeholder;
     }
 
     /**
@@ -627,6 +730,17 @@ public class ManagementScreen extends StockMarketGuiScreen {
 
         private void onCancel() {
             setScreen(parentScreen);
+        }
+
+        /**
+         * {@inheritDoc}
+         * While this popup is displayed it is the screen receiving market-removed
+         * notifications — forward them to the covered ManagementScreen so its
+         * selection/grid stay consistent when e.g. another admin deletes a market.
+         */
+        @Override
+        public void onMarketRemoved(ItemID removedMarketID) {
+            parentScreen.onMarketRemoved(removedMarketID);
         }
     }
 }

@@ -257,7 +257,20 @@ public class TradeScreen extends StockMarketGuiScreen {
                 ClientMarket market = getMarket(currentMarketID);
                 if (market != null) {
                     tradingPanel.setCurrentMarketPrice(market.getCurrentMarketRealPrice());
+                } else {
+                    // Safety net: the market vanished from the client cache (deleted on
+                    // the server) but this screen was not notified directly — e.g. the
+                    // MarketRemovedPacket arrived while a popup covered this screen.
+                    // Re-validate and fall back gracefully.
+                    handleMarketRemoved(currentMarketID);
                 }
+            }
+            // Same validation for the pair-mode legs
+            if (pairHaveMarketID != null && getMarket(pairHaveMarketID) == null) {
+                handleMarketRemoved(pairHaveMarketID);
+            }
+            if (pairWantMarketID != null && getMarket(pairWantMarketID) == null) {
+                handleMarketRemoved(pairWantMarketID);
             }
         }
 
@@ -362,6 +375,77 @@ public class TradeScreen extends StockMarketGuiScreen {
         favoritesBar.scheduleRebuild(getAvailableMarkets(), prefs.getFavoriteMarketIDs(), currentMarketID);
     }
 
+    /**
+     * {@inheritDoc}
+     * Server broadcast: a market was deleted. The client caches are already purged
+     * (getMarket returns null for it), so this only has to fix up the screen state.
+     */
+    @Override
+    public void onMarketRemoved(ItemID marketID) {
+        handleMarketRemoved(marketID);
+    }
+
+    /**
+     * Removes every reference this screen holds to a market that no longer exists.
+     * Idempotent — safe to call again for an already-handled market.
+     * <ul>
+     *   <li>Pair mode: clears the deleted "have"/"want" leg and the (now dead)
+     *       cross-rate chart so the user can pick a new pair.</li>
+     *   <li>Money mode: if the deleted market was selected, switches to the first
+     *       remaining market, or clears the chart when no markets are left.</li>
+     *   <li>Always rebuilds the favorites bar so the deleted entry disappears.</li>
+     * </ul>
+     *
+     * @param deletedMarketID the market that was deleted on the server
+     */
+    private void handleMarketRemoved(ItemID deletedMarketID) {
+        // ── Pair-mode legs ──
+        boolean pairBroken = false;
+        if (deletedMarketID.equals(pairHaveMarketID)) {
+            pairHaveMarketID = null;
+            pairSelectorWidget.setHaveMarketID(null);
+            pairBroken = true;
+        }
+        if (deletedMarketID.equals(pairWantMarketID)) {
+            pairWantMarketID = null;
+            pairSelectorWidget.setWantMarketID(null);
+            pairBroken = true;
+        }
+        if (pairBroken) {
+            // The cross-rate provider was built on the deleted market and is dead.
+            orderMarkerOverlay.setPairDirection(pairHaveMarketID, pairWantMarketID);
+            pendingOrdersPanel.setPairDirection(isPairMode ? pairHaveMarketID : null);
+            if (isPairMode) {
+                // Clear the dead cross-rate chart; a new one is set once the user
+                // selects a replacement pair via the pair selector.
+                candlestickChart.setPriceDataProvider(null);
+            }
+        }
+
+        // ── Money-mode selection ──
+        if (deletedMarketID.equals(currentMarketID)) {
+            List<ItemID> markets = getAvailableMarkets();
+            ItemID fallback = markets.isEmpty() ? null : markets.getFirst();
+            if (!isPairMode && fallback != null) {
+                // Graceful fallback: show the first remaining market
+                // (also rebuilds the favorites bar).
+                switchMarket(fallback);
+                return;
+            }
+            // No market left (or pair mode active): clear the dead selection.
+            currentMarketID = null;
+            orderHistoryPanel.setCurrentMarketID(null);
+            if (!isPairMode) {
+                candlestickChart.setMarket(null);
+                orderMarkerOverlay.setCurrentMarket(null);
+            }
+        }
+
+        // Rebuild the market list so the deleted entry disappears immediately.
+        favoritesBar.scheduleRebuild(getAvailableMarkets(),
+                StockMarketGuiElement.getPlayerPreferences().getFavoriteMarketIDs(), currentMarketID);
+    }
+
     @Override
     public void onClose()
     {
@@ -464,6 +548,11 @@ public class TradeScreen extends StockMarketGuiScreen {
         interMarketTradingPanel.setEnabled(pairMode);
 
         if (pairMode) {
+            // Clear the overlay's market association — regular money-market limit orders
+            // must not be drawn on the cross-rate chart (wrong price scale), so no stale
+            // market ID may leak into pair mode.
+            orderMarkerOverlay.setCurrentMarket(null);
+
             // Restore pair selections from preferences, or initialize from current market
             PlayerPreferences prefs = StockMarketGuiElement.getPlayerPreferences();
             if (pairWantMarketID == null && prefs.getLastPairWantMarketID() != null) {
@@ -502,11 +591,13 @@ public class TradeScreen extends StockMarketGuiScreen {
             if (pairWantMarketID != null && !pairWantMarketID.equals(currentMarketID)) {
                 switchMarket(pairWantMarketID);
             } else if (currentMarketID != null) {
-                // Restore the current market on the chart
+                // Restore the current market on the chart and the order marker overlay
+                // (the overlay's market was cleared when pair mode was entered)
                 ClientMarket market = getMarket(currentMarketID);
                 if (market != null) {
                     candlestickChart.setMarket(market);
                 }
+                orderMarkerOverlay.setCurrentMarket(currentMarketID);
             }
         }
 
@@ -580,7 +671,12 @@ public class TradeScreen extends StockMarketGuiScreen {
         if (market != null) {
             market.subscribeToMarketPriceUpdate();
             candlestickChart.setMarket(market);
-            orderMarkerOverlay.setCurrentMarket(newMarketID);
+            // Only bind the overlay to the market in money mode — in pair mode the overlay
+            // must stay unbound so money-market limit orders are never drawn on the
+            // cross-rate chart (their prices are money-denominated, not cross rates).
+            if (!isPairMode) {
+                orderMarkerOverlay.setCurrentMarket(newMarketID);
+            }
             tradingPanel.setItemName(newMarketID.getStack().getHoverName().getString());
             tradingPanel.setLimitPrice(market.getCurrentMarketRealPrice());
             tradingPanel.setCurrentMarketPrice(market.getCurrentMarketRealPrice());

@@ -46,6 +46,21 @@ public interface IClientMarketManager {
     CompletableFuture<Boolean> requestDeleteMarket(ItemID marketID);
 
     /**
+     * Removes all client-side state for a market that no longer exists on the server.
+     * Called when the server broadcasts a market deletion
+     * (see {@code MarketRemovedPacket}) and when {@link #requestMarkets()} detects
+     * that a cached market is no longer reported by the server.
+     * <p>
+     * Cleanup includes: the cached {@link ClientMarket} instance, its market price
+     * stream subscription (force-stopped, regardless of subscriber count), and any
+     * cached cross-rate markets referencing the deleted market.
+     * Safe to call for markets that are not cached (no-op).
+     *
+     * @param marketID the market that was deleted on the server
+     */
+    void onMarketRemoved(ItemID marketID);
+
+    /**
      * Returns a synthetic cross-rate data provider for the given pair,
      * or null if either underlying market is unavailable.
      * The returned provider derives OHLC candles from the ratio wantPrice / havePrice.

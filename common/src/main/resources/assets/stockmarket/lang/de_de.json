@@ -124,6 +124,22 @@
   "gui.stockmarket.management_screen.ask_remove_title": "Handels Item entfernen",
   "gui.stockmarket.management_screen.ask_remove_message": "Bist du sicher, dass du das item vom Stockmarket entfernen möchtest?\nAlle offenen Bestellungen werden storniert.",
   "gui.stockmarket.management_screen.bot_settings": "Bot Einstellungen",
+  "gui.stockmarket.management_screen.broken_market_name": "Broken market (ID %s)",
+  "gui.stockmarket.management_screen.broken_market.tooltip_line1": "The item for this market can no longer be resolved.",
+  "gui.stockmarket.management_screen.broken_market.tooltip_line2": "You can still select this market and delete it.",
+
+  "message.stockmarket.command_market_removed": "Market '%s' has been removed from the stock market",
+  "message.stockmarket.command_market_remove_failed": "Failed to remove market '%s'",
+  "message.stockmarket.command_market_remove_not_found": "No market found for '%s'",
+  "message.stockmarket.command_market_remove_ambiguous": "Multiple markets match '%s': %s - run the command again with the numeric ID",
+
+  "message.stockmarket.command_preset_add_not_player": "Only a player can use this command - the preset is captured from the main hand",
+  "message.stockmarket.command_preset_add_master_only": "Market presets can only be edited on the master server",
+  "message.stockmarket.command_preset_add_hand_empty": "Hold the item you want to capture in your main hand",
+  "message.stockmarket.command_preset_add_failed": "Failed to capture the held item as a preset",
+  "message.stockmarket.command_preset_add_duplicate": "A preset for '%s' already exists in category '%s'",
+  "message.stockmarket.command_preset_add_category_created": "Category '%s' did not exist and was created",
+  "message.stockmarket.command_preset_added": "Added preset '%s' to category '%s'",
 
   "gui.stockmarket.bot_settings_setup_screen_rarity.question": "Wie selten ist das Item?\nWie oft kommt es im Spiel vor?\n",
   "gui.stockmarket.bot_settings_setup_screen_rarity.low": "Eher häufig",

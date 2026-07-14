@@ -7,6 +7,7 @@ import net.kroia.modutilities.networking.client_server.streaming.StreamSystem;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.networking.entity.UpdateDisplayViewportPacket;
 import net.kroia.stockmarket.networking.entity.UpdateStockMarketDisplayConfigPacket;
+import net.kroia.stockmarket.networking.packet.MarketRemovedPacket;
 import net.kroia.stockmarket.networking.packet.OpenUIPacket;
 import net.kroia.stockmarket.networking.packet.PlayerJoinSyncPacket;
 import net.kroia.stockmarket.networking.request.*;
@@ -84,6 +85,10 @@ public class StockMarketNetworking extends NetworkPacketManager {
     public void setupClientReceiverPackets() {
         registerS2C(PlayerJoinSyncPacket.TYPE, PlayerJoinSyncPacket.STREAM_CODEC);
         registerS2C(OpenUIPacket.TYPE, OpenUIPacket.STREAM_CODEC);
+        // Market-deleted broadcast. The default registerS2C overload also registers
+        // the packet with the MultiServerPacketRegistry, enabling the master→slave
+        // relay used to reach players connected to slave servers.
+        registerS2C(MarketRemovedPacket.TYPE, MarketRemovedPacket.STREAM_CODEC);
     }
 
     @Override

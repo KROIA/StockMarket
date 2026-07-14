@@ -5,7 +5,6 @@ import dev.architectury.event.events.client.ClientTickEvent;
 import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.api.BankSystemAPI;
-import net.kroia.banksystem.minecraft.item.custom.money.MoneyItem;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.api.marketmanager.ISyncServerMarketManager;
@@ -42,6 +41,7 @@ import net.kroia.stockmarket.testing.tests.CreateOrderRequestTestSuite;
 import net.kroia.stockmarket.testing.tests.DatabaseTestSuite;
 import net.kroia.stockmarket.testing.tests.InterMarketExecutorTestSuite;
 import net.kroia.stockmarket.testing.tests.MarketIntegrationTestSuite;
+import net.kroia.stockmarket.testing.tests.MarketMergeConsolidationTestSuite;
 import net.kroia.stockmarket.testing.tests.MarketPriceManagerTestSuite;
 import net.kroia.stockmarket.testing.tests.MatchingEngineTestSuite;
 import net.kroia.stockmarket.testing.tests.OrderRecordManagerTestSuite;
@@ -232,6 +232,38 @@ public class StockMarketModBackend implements StockMarketAPI {
             SERVER_INSTANCES.COMMAND_HANDLER = StockMarketCommandHandler.createMaster();
             SERVER_INSTANCES.DATA_MANAGER = new DataManager();
 
+            // Master-only: listen for BankSystem ItemID merges and consolidate our own
+            // markets under the resulting canonical IDs. The load-time reconcile inside
+            // ServerMarketManager.load() catches merges that fired during BankSystem's
+            // own startup (before this listener was registered); this listener catches
+            // merges that happen later (e.g. VolatileItemComponents config edits + admin
+            // confirmation via CONFIRM_ITEMID_MERGE).
+            BankSystemMod.getAPI().getEvents().getItemIDsMergedEvent().addListener(aliasToCanonical -> {
+                if (SERVER_INSTANCES == null || SERVER_INSTANCES.MARKET_MANAGER == null) return;
+                var serverMarketManager = SERVER_INSTANCES.MARKET_MANAGER.getServerMarketManager();
+                if (serverMarketManager == null) return; // slave; guard is redundant here but cheap
+                serverMarketManager.consolidateMergedMarkets(aliasToCanonical);
+
+                // Refresh the currency id used by BankSystem's Total-Wealth balance-history
+                // calculation. It MUST equal the market TRADING currency (the item short where
+                // trades settle and where player cash is actually stored) — NOT
+                // MoneyItem.getItemID().getShort(), which resolves via a ConcurrentHashMap scan
+                // and can land on the WRONG money denomination. A wrong short pushes the real
+                // cash bank into the market-price branch (money has no market -> price 0), which
+                // silently zeroes out the player's total wealth. An ItemID merge can also re-key
+                // the trading currency, so we re-publish it here. Guarded like the startup path
+                // to avoid an NPE during teardown/ordering edge cases.
+                if (SERVER_INSTANCES.BANK_SYSTEM_API != null) {
+                    ISyncServerMarketManager syncMarketManager = SERVER_INSTANCES.MARKET_MANAGER.getSync();
+                    if (syncMarketManager != null) {
+                        ItemID tradingCurrency = syncMarketManager.getTradingCurrencyID();
+                        if (tradingCurrency != null) {
+                            SERVER_INSTANCES.BANK_SYSTEM_API.setPriceCurrencyItem(tradingCurrency.getShort());
+                        }
+                    }
+                }
+            });
+
             loadDataFromFiles(UtilitiesPlatform.getServer());
             preRegisterPresetItemStacks();
             registerItemPriceProvider();
@@ -248,6 +280,7 @@ public class StockMarketModBackend implements StockMarketAPI {
                 OrderRecordManagerTestSuite.setBackend(SERVER_INSTANCES);
                 ServerMarketTestSuite.setBackend(SERVER_INSTANCES);
                 PluginTestSuite.setBackend(SERVER_INSTANCES);
+                MarketMergeConsolidationTestSuite.setBackend(SERVER_INSTANCES);
             }
         }
         else
@@ -268,7 +301,21 @@ public class StockMarketModBackend implements StockMarketAPI {
             if (market == null) return 0;
             return market.getCurrentMarketPrice();
         });
-        api.setPriceCurrencyItem(MoneyItem.getItemID().getShort());
+
+        // The wealth currency handed to BankSystem MUST equal the market TRADING currency
+        // (the item short where cash is actually stored / trades settle), NOT
+        // MoneyItem.getItemID().getShort(): that call mis-resolves via a ConcurrentHashMap
+        // scan to the wrong money denomination, which would make BankSystem value the real
+        // cash bank at market price (0) and drop it from the "Total Wealth" figure.
+        // Guard for the sync manager / trading currency not being ready yet — skip rather
+        // than NPE (mirrors the getSync() null-guard used above for the price provider).
+        ISyncServerMarketManager marketManager = SERVER_INSTANCES.MARKET_MANAGER.getSync();
+        if (marketManager != null) {
+            ItemID tradingCurrency = marketManager.getTradingCurrencyID();
+            if (tradingCurrency != null) {
+                api.setPriceCurrencyItem(tradingCurrency.getShort());
+            }
+        }
     }
 
     // Called from the server side

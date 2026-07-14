@@ -11,6 +11,7 @@ import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.marketmanager.ISyncServerMarketManager;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.util.List;
 import java.util.UUID;
 
 public abstract class StockMarketNetworkPacket extends NetworkPacket {
@@ -120,6 +121,17 @@ public abstract class StockMarketNetworkPacket extends NetworkPacket {
     protected void sendToClient(ServerPlayer player)
     {
         BACKEND_SERVER_INSTANCES.NETWORKING.sendToClient(player, this);
+    }
+
+    /**
+     * Sends this packet to a group of clients (e.g. all players of this server).
+     * Mirrors {@code BankSystemNetworkPacket.sendToClients}.
+     *
+     * @param players the players who will receive the packet
+     */
+    protected void sendToClients(List<ServerPlayer> players)
+    {
+        BACKEND_SERVER_INSTANCES.NETWORKING.sendToClients(players, this);
     }
 
     protected void info(String message) {
