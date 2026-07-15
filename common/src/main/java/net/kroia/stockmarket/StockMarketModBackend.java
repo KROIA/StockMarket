@@ -53,6 +53,8 @@ import net.kroia.stockmarket.minecraft.menu.StockMarketMenus;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.kroia.stockmarket.networking.packet.PlayerJoinSyncPacket;
 import net.kroia.stockmarket.util.*;
+import net.kroia.stockmarket.villagertrading.VillagerTradeManager;
+import net.kroia.stockmarket.villagertrading.VillagerTradeRewriter;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
@@ -84,6 +86,9 @@ public class StockMarketModBackend implements StockMarketAPI {
         public OrderRecordManager ORDER_RECORD_MANAGER;
 
         public MarketPresetManager PRESET_MANAGER;
+
+        /** Villager trade repricing (master: computes/broadcasts the price table; slave: receives it). */
+        public VillagerTradeManager VILLAGER_TRADE_MANAGER;
 
         public StockMarketNetworking NETWORKING;
         public StockMarketLogger LOGGER;
@@ -214,6 +219,7 @@ public class StockMarketModBackend implements StockMarketAPI {
         StockMarketCommandHandler.setBackend(SERVER_INSTANCES);
         DataManager.setBackend(SERVER_INSTANCES);
         StockMarketLogger.setBackend(SERVER_INSTANCES);
+        VillagerTradeRewriter.setBackend(SERVER_INSTANCES);
 
         if (TestRegistry.ENABLE_TESTS && StockMarketMod.ENABLE_DEV_FEATURES) {
             MarketIntegrationTestSuite.setBackend(SERVER_INSTANCES);
@@ -231,6 +237,7 @@ public class StockMarketModBackend implements StockMarketAPI {
             SERVER_INSTANCES.PLUGIN_MANAGER = PluginManager.createMaster();
             SERVER_INSTANCES.COMMAND_HANDLER = StockMarketCommandHandler.createMaster();
             SERVER_INSTANCES.DATA_MANAGER = new DataManager();
+            SERVER_INSTANCES.VILLAGER_TRADE_MANAGER = new VillagerTradeManager(SERVER_INSTANCES);
 
             // Master-only: listen for BankSystem ItemID merges and consolidate our own
             // markets under the resulting canonical IDs. The load-time reconcile inside
@@ -267,6 +274,17 @@ public class StockMarketModBackend implements StockMarketAPI {
             loadDataFromFiles(UtilitiesPlatform.getServer());
             preRegisterPresetItemStacks();
             registerItemPriceProvider();
+
+            // Villager trade repricing: build the initial price table now that
+            // settings + markets are loaded, and push a fresh table to every
+            // slave that connects (fires AFTER BankSystem's ItemID sync, so the
+            // table's ItemID shorts are resolvable on the slave).
+            SERVER_INSTANCES.VILLAGER_TRADE_MANAGER.recomputeTable();
+            BankSystemMod.getAPI().getEvents().getMasterServerSlaveConnected().addListener(() -> {
+                if (SERVER_INSTANCES == null || SERVER_INSTANCES.VILLAGER_TRADE_MANAGER == null) return;
+                SERVER_INSTANCES.VILLAGER_TRADE_MANAGER.broadcastTable();
+            });
+
             autosaveTimer_lastMs = System.currentTimeMillis();
             TickEvent.SERVER_POST.register(StockMarketModBackend::onServerTick);
 
@@ -288,6 +306,9 @@ public class StockMarketModBackend implements StockMarketAPI {
             SERVER_INSTANCES.MARKET_MANAGER = MarketManager.createSlave();
             SERVER_INSTANCES.PLUGIN_MANAGER = PluginManager.createSlave();
             SERVER_INSTANCES.COMMAND_HANDLER = StockMarketCommandHandler.createSlave();
+            // Slave: only receives price tables from the master (applyTable);
+            // recompute/tick are inert without sync market access.
+            SERVER_INSTANCES.VILLAGER_TRADE_MANAGER = new VillagerTradeManager(SERVER_INSTANCES);
         }
     }
 
@@ -422,6 +443,11 @@ public class StockMarketModBackend implements StockMarketAPI {
     {
         SERVER_INSTANCES.PLUGIN_MANAGER.getSync().update();
         SERVER_INSTANCES.MARKET_MANAGER.getSync().update();
+
+        // Villager trade repricing: refresh + broadcast the price table when
+        // the configured interval elapsed (master-only tick).
+        if (SERVER_INSTANCES.VILLAGER_TRADE_MANAGER != null)
+            SERVER_INSTANCES.VILLAGER_TRADE_MANAGER.tickMaster();
 
         // Periodic full NBT autosave
         long now = System.currentTimeMillis();

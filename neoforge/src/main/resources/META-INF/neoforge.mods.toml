@@ -37,6 +37,9 @@ side = "BOTH"
 [[dependencies.stockmarket]]
 modId = "banksystem"
 mandatory = true
-versionRange = "[1.21.1-2.0.0, 1.21.1-2.1.0)"
+versionRange = "[1.21.1-2.0.4, 1.21.1-2.1.0)"
 ordering = "BEFORE"
 side = "BOTH"
+
+[[mixins]]
+config = "stockmarket.mixins.json"

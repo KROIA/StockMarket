@@ -27,6 +27,9 @@ import net.kroia.stockmarket.testing.tests.RandomWalkTestSuite;
 import net.kroia.stockmarket.testing.tests.ServerMarketTestSuite;
 import net.kroia.stockmarket.testing.tests.PlayerPreferencesTestSuite;
 import net.kroia.stockmarket.testing.tests.UserTestSuite;
+import net.kroia.stockmarket.testing.tests.VillagerMoneyPaymentTestSuite;
+import net.kroia.stockmarket.testing.tests.VillagerTradePricingTestSuite;
+import net.kroia.stockmarket.testing.tests.VillagerTradeRewriteTestSuite;
 import net.kroia.stockmarket.testing.tests.VirtualOrderbookTestSuite;
 
 public class StockMarketTestRegistration {
@@ -56,6 +59,8 @@ public class StockMarketTestRegistration {
         TestRegistry.register(new MarketPresetTestSuite());
         TestRegistry.register(new ClientMarketTestSuite());
         TestRegistry.register(new NormalizedRandomPriceGeneratorTestSuite());
+        TestRegistry.register(new VillagerTradePricingTestSuite());
+        TestRegistry.register(new VillagerMoneyPaymentTestSuite());
 
         // New master-only test suites
         TestRegistry.register(new MatchingEngineTestSuite());
@@ -69,5 +74,6 @@ public class StockMarketTestRegistration {
         TestRegistry.register(new PluginTestSuite());
         TestRegistry.register(new InterMarketExecutorTestSuite());
         TestRegistry.register(new MarketMergeConsolidationTestSuite());
+        TestRegistry.register(new VillagerTradeRewriteTestSuite());
     }
 }

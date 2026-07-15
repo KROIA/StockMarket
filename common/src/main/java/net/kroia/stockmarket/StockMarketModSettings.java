@@ -18,6 +18,7 @@ public class StockMarketModSettings extends ModSettings {
 
     public final Utilities UTILITIES = createGroup(new Utilities());
     public final Market MARKET = createGroup(new Market());
+    public final VillagerTrading VILLAGER_TRADING = createGroup(new VillagerTrading());
     //public final Networking NETWORKING = createGroup(new Networking());
 
     public StockMarketModSettings() {
@@ -60,6 +61,48 @@ public class StockMarketModSettings extends ModSettings {
         public final Setting<Long> CANDLE_TIME = registerSetting("CANDLE_TIME", 60000L, Long.class); // Time interval of candle sticks in ms
 
         public Market() { super("ServerMarket"); }
+    }
+
+
+    /**
+     * Settings for the stock-market-driven villager trade repricing feature.
+     * <p>
+     * When {@code ENABLED}, villager (and wandering trader) offers whose traded
+     * item is listed on the stock market no longer use emeralds: both directions
+     * of such a trade are converted to the configured trading currency
+     * ({@link Market#CURRENCY}) and priced from the market. Offers for items
+     * <b>without</b> a market keep their vanilla emerald form.
+     * <p>
+     * These settings are only read on the <b>master</b> server (slave servers never
+     * load {@code settings.json}); the master broadcasts the resulting price table
+     * to all slaves, so enabling the feature here also enables it on slaves.
+     */
+    public static final class VillagerTrading extends SettingsGroup
+    {
+        /** Master switch for villager trade repricing. Disabled by default. */
+        public final Setting<Boolean> ENABLED = registerSetting("ENABLED", false, Boolean.class);
+
+        /**
+         * Wall-clock interval (in minutes) between price-table refreshes/broadcasts.
+         * Default 20 minutes = one Minecraft day.
+         */
+        public final Setting<Long> PRICE_REFRESH_INTERVAL_MINUTES = registerSetting("PRICE_REFRESH_INTERVAL_MINUTES", 20L, Long.class);
+
+        /**
+         * Margin applied when the villager BUYS items from the player (player sells):
+         * the villager pays {@code market price × margin}. Below 1.0 means the
+         * villager pays less than market value.
+         */
+        public final Setting<Float> VILLAGER_BUY_MARGIN = registerSetting("VILLAGER_BUY_MARGIN", 0.8f, Float.class);
+
+        /**
+         * Margin applied when the villager SELLS items to the player (player buys):
+         * the villager charges {@code market price × margin}. Above 1.0 means the
+         * villager charges more than market value.
+         */
+        public final Setting<Float> VILLAGER_SELL_MARGIN = registerSetting("VILLAGER_SELL_MARGIN", 1.2f, Float.class);
+
+        public VillagerTrading() { super("VillagerTrading"); }
     }
 
 

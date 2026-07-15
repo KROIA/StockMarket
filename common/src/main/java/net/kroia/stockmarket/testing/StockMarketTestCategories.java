@@ -56,6 +56,12 @@ public class StockMarketTestCategories {
     public static final TestCategory MARKET_PRESET = new TestCategory(
             "stockmarket", "sm_market_preset", "Market preset system tests", BOTH, false);
 
+    public static final TestCategory VILLAGER_PRICING = new TestCategory(
+            "stockmarket", "sm_villager_pricing", "Villager trade pricing / currency fitting tests", BOTH, false);
+
+    public static final TestCategory VILLAGER_MONEY_PAYMENT = new TestCategory(
+            "stockmarket", "sm_villager_money_payment", "Value-based merchant money payment tests", BOTH, false);
+
     // Master-only tests (ServerType.MASTER_ONLY, needsMinecraftContext=true)
     public static final TestCategory MARKET = new TestCategory(
             "stockmarket", "sm_market", "Server market tests", MASTER_ONLY, true);
@@ -98,4 +104,7 @@ public class StockMarketTestCategories {
 
     public static final TestCategory MERGE_CONSOLIDATION = new TestCategory(
             "stockmarket", "sm_merge_consolidation", "BankSystem ItemID-merge market consolidation tests", MASTER_ONLY, true);
+
+    public static final TestCategory VILLAGER_REWRITE = new TestCategory(
+            "stockmarket", "sm_villager_rewrite", "Villager trade offer rewrite tests", MASTER_ONLY, true);
 }

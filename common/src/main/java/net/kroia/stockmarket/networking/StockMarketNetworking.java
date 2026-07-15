@@ -10,6 +10,7 @@ import net.kroia.stockmarket.networking.entity.UpdateStockMarketDisplayConfigPac
 import net.kroia.stockmarket.networking.packet.MarketRemovedPacket;
 import net.kroia.stockmarket.networking.packet.OpenUIPacket;
 import net.kroia.stockmarket.networking.packet.PlayerJoinSyncPacket;
+import net.kroia.stockmarket.networking.packet.VillagerTradePriceTablePacket;
 import net.kroia.stockmarket.networking.request.*;
 import net.kroia.stockmarket.networking.stream.ActiveOrdersStream;
 import net.kroia.stockmarket.networking.stream.MarketPriceStream;
@@ -71,6 +72,7 @@ public class StockMarketNetworking extends NetworkPacketManager {
 
         setupClientReceiverPackets();
         setupServerReceiverPackets();
+        setupServerServerPackets();
 
         AsyncMarket.setupNetworkPacket();
         AsyncMarketManager.setupNetworkPacket();
@@ -99,6 +101,9 @@ public class StockMarketNetworking extends NetworkPacketManager {
 
     @Override
     public void setupServerServerPackets() {
-
+        // Master→slave villager-trade price table broadcast (pure S2S packet:
+        // registered only with the MultiServerPacketRegistry, never with a
+        // client/server receiver).
+        registerS2S(VillagerTradePriceTablePacket.TYPE, VillagerTradePriceTablePacket.STREAM_CODEC);
     }
 }

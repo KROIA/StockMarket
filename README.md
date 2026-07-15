@@ -27,6 +27,7 @@ You want to support me?<br>
     * [For Admins / Single Player](#for-admins--single-player)
 * [Commands](#commands)
 * [Plugins](#plugins)
+* [Villager Trading](#villager-trading)
 * [Changelog](#changelog)
 * [Discord to help me improve the mod](https://discord.gg/qHNVaDGAyB)
 
@@ -360,6 +361,36 @@ The three plugins combine to create a functioning market:
 
 
 ---
+## Villager Trading
+When enabled, villager (and wandering trader) trade offers for **market-listed items** no longer use emeralds — both trade directions are converted to the configured trading-currency item (`ServerMarket.CURRENCY` in `world/data/StockMarket/settings.json`) and priced from the stock market:
+* Only offers whose traded item exists on the stock market are repriced (component-aware, so e.g. specific enchanted books can have their own markets). A trade where the villager sells requires a market for the sold item; a trade where the villager buys requires a market for every item it asks for.
+* Items **without** a market keep their normal vanilla emerald trades. If a market is created for such an item later, the offer converts to currency pricing on the next price refresh; if a market is deleted, affected offers return to their original emerald form.
+* Prices refresh automatically on the configured interval (default 20 real minutes ≈ one Minecraft day).
+* Original emerald offers are stored in world data; disabling the feature restores every villager's original offers the next time it is interacted with. Partially used offers stay partially used.
+
+### Settings (`VillagerTrading` group in `settings.json`)
+| Setting | Default | Description |
+|-----------|---------|-------------|
+| `ENABLED` | `false` | Master switch for villager trade repricing. |
+| `PRICE_REFRESH_INTERVAL_MINUTES` | `20` | Real-time minutes between price refreshes/broadcasts. |
+| `VILLAGER_BUY_MARGIN` | `0.8` | Multiplier on the market price when the villager **buys** from the player (villager pays below market). |
+| `VILLAGER_SELL_MARGIN` | `1.2` | Multiplier on the market price when the villager **sells** to the player (villager charges above market). |
+
+### Paying with money
+When an offer's price is BankSystem money, the trade accepts **any combination of denominations** — the price is matched by value, not by exact note type. A 20.00 cost can be paid with 1×20, 2×10, 4×5, 20×1, or even a single 50 note:
+* Overpayment returns **exact change** (fewest notes), placed back into the payment slots when possible, otherwise into your inventory (or dropped at your feet if that is full too). No value is ever lost — shift-clicking through a whole stack of large notes settles every trade to the cent.
+* Clicking an offer row **auto-fills** the payment slots with money from your inventory, even when you don't own the exact denomination shown on the offer.
+* Only genuine BankSystem money is matched by value — renamed/modified notes and other mods' currencies are treated as regular items. Non-money offers (emerald trades, generic currency items) keep exact vanilla matching.
+
+### Behavior notes
+* **Master-authoritative:** in a multi-server setup only the master server's `settings.json` matters. The master broadcasts a price table to all slave servers, so enabling it on the master enables it everywhere.
+* **Any currency item works:** BankSystem money prices are expressed in a single denomination per slot — the note/coin type that best matches the price (e.g. 1×20$ instead of 1×10$ + 2×5$), lightly rounding when no denomination fits exactly; any other item is valued at 1 item = 1.00 currency units and respects its own max stack size (including 16 or 1).
+* **Low-capacity currencies:** if a price cannot fit into the offer's currency slots (e.g. an unstackable currency), the price is capped at the maximum representable amount — in the player's favor — and a one-time warning is logged. Use a finer-grained currency to avoid this.
+* **Reputation & demand:** offers where the player pays currency ignore demand scaling and gossip/Hero-of-the-Village discounts (the price stays at the configured margin). Offers where the player hands over items keep vanilla discount behavior on the item amount.
+* **Item cost slots are preserved:** trades like enchanted books (book + emeralds) or treasure maps (compass + emeralds) keep their item ingredient; only the emerald part becomes currency.
+* Known limitation: rewritten offers always grant trade XP (all vanilla offers do anyway).
+
+---
 
 ## Why does a price move?
 If you don't know what a [Order Book](#order-book) is, learn the basics first and come back later.<br>
@@ -453,7 +484,8 @@ Since this is a complex field from control theory, I will not cover this here.
 
 | Version | Status | Highlights |
 |---|---|---|
-| [v2.0.3](changelog/v2.0.3.md) | In Development | |
+| [v2.0.4](changelog/v2.0.4.md) | In Development | Stock-market-driven villager trading, value-based money payment |
+| [v2.0.3](changelog/v2.0.3.md) | Released | Market lifecycle fixes — deletion sync, broken-market recovery, ItemID-merge consolidation |
 | [v2.0.2](changelog/v2.0.2.md) | Released | Crash hotfix and UI locale hardening |
 | [v2.0.1](changelog/v2.0.1.md) | Released | Plugin system frontend, inter-market trading, TradingView, preset editor, 30+ features |
 | [v2.0.0_ALPHA_1](changelog/v2.0.0_ALPHA_1.md) | Released | Plugin system, management UI, security hardening, 45 bug fixes |
