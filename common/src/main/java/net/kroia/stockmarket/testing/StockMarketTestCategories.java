@@ -110,4 +110,7 @@ public class StockMarketTestCategories {
 
     public static final TestCategory VILLAGER_REWRITE = new TestCategory(
             "stockmarket", "sm_villager_rewrite", "Villager trade offer rewrite tests", MASTER_ONLY, true);
+
+    public static final TestCategory MOD_SETTINGS = new TestCategory(
+            "stockmarket", "sm_mod_settings", "Mod settings JSON round-trip and sanitize-bounds tests", BOTH, false);
 }

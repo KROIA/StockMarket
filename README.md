@@ -275,6 +275,13 @@ Run <code>/stockmarket manage</code> to open the management interface. It has th
     - Click <b>Save</b> to persist your changes.<br>
 </details>
 
+#### Mod Settings (master server only)
+The **Mod Settings** button on the Management GUI's overview tab opens an editor for the server's `settings.json` (`world/data/StockMarket/settings.json`), so autosave interval, logging, market and villager-trading settings can be changed without touching the file:
+* The button is only shown when connected to the **master server** — slave servers never load `settings.json`; the master pushes derived data (e.g. villager prices) to them automatically. The server additionally enforces op level 2 and master status for every request.
+* **Apply** validates and clamps the values server-side, saves them to `settings.json` and re-displays the confirmed state. **Reload** re-fetches the current server values, **Defaults** resets the fields to the compile-time defaults (nothing is saved until Apply).
+* Most settings take effect immediately. Fields marked with an orange **⟳ Restart required** label (orderbook array size, trading currency) are only read once at startup — the new value is saved but only applies after a server restart.
+* Changes to the **Villager Trading** group are propagated to all connected slave servers right away (the villager price table is recomputed and re-broadcast).
+
 #### Plugin System
 Plugins replace the old bot system. They are modular components that can be added to markets to provide liquidity, simulate price movements, and more.
 

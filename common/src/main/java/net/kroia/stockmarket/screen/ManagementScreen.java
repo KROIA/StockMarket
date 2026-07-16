@@ -81,6 +81,9 @@ public class ManagementScreen extends StockMarketGuiScreen {
         public static final Component PLUGINS_ENABLED = Component.translatable(PREFIX + "plugins.enabled");
         public static final Component PLUGINS_MANAGE = Component.translatable(PREFIX + "plugins.manage");
 
+        public static final Component MOD_SETTINGS = Component.translatable(PREFIX + "mod_settings");
+        public static final Component MOD_SETTINGS_TOOLTIP = Component.translatable(PREFIX + "mod_settings.tooltip");
+
     }
     public static final int elementHeight = 20;
 
@@ -354,6 +357,21 @@ public class ManagementScreen extends StockMarketGuiScreen {
 
             pluginOverviewWidget = new PluginOverviewWidget(parent);
             listView.addChild(pluginOverviewWidget);
+
+            // Master-only: button that opens the Mod Settings screen (edits the
+            // server's settings.json in-game). Only the master server loads/owns
+            // settings.json, so the button is hidden on slave servers — the flag
+            // is synced at join via PlayerJoinSyncPacket/ClientSettings. The server
+            // additionally enforces op level 2 + master status in ModSettingsRequest.
+            if (isMasterServer()) {
+                Button modSettingsButton = new Button(Texts.MOD_SETTINGS.getString(),
+                        () -> setScreen(new ModSettingsScreen(parent)));
+                modSettingsButton.setHeight(elementHeight);
+                modSettingsButton.setHoverTooltipSupplier(Texts.MOD_SETTINGS_TOOLTIP::getString);
+                modSettingsButton.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
+                modSettingsButton.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.TOP_RIGHT);
+                listView.addChild(modSettingsButton);
+            }
 
             addChild(candlestickChart);
             addChild(searchLabel);

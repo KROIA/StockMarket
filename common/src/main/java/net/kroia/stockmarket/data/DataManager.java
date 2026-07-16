@@ -180,6 +180,24 @@ public class DataManager extends DataPersistence {
     }
 
 
+    /**
+     * Saves ONLY the settings.json file (no market/plugin/preset NBT data).
+     * <p>
+     * Used by {@code ModSettingsRequest} to persist in-game settings edits:
+     * a targeted settings-only write avoids the (potentially large) full
+     * market/plugin save on every "Apply" click. The periodic autosave and
+     * server-stop save still perform the full {@link #save(MinecraftServer)}.
+     *
+     * @param server the running server (used to resolve the world save path)
+     * @return true if settings.json was written successfully
+     */
+    public boolean saveSettingsToFile(MinecraftServer server)
+    {
+        setLevelSavePath(server.getWorldPath(LevelResource.ROOT));
+        createSaveFolder();
+        return saveSettings();
+    }
+
     private boolean saveSettings()
     {
         if(BACKEND_INSTANCES == null || BACKEND_INSTANCES.SERVER_SETTINGS == null) {

@@ -1,6 +1,7 @@
 package net.kroia.stockmarket;
 
 
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.modutilities.setting.ModSettings;
 import net.kroia.modutilities.setting.Setting;
@@ -9,6 +10,32 @@ import net.kroia.modutilities.setting.parser.ItemStackJsonParser;
 import net.kroia.stockmarket.util.ClientSettings;
 import net.minecraft.world.item.ItemStack;
 
+import java.util.List;
+
+/**
+ * All server-side settings of the StockMarket mod, persisted to
+ * {@code world/data/StockMarket/settings.json}. The file is loaded once at startup
+ * on the MASTER server only; slave servers keep the compile-time defaults.
+ * <p>
+ * Admins can edit these settings in-game via the "Mod Settings" screen
+ * ({@code net.kroia.stockmarket.screen.ModSettingsScreen}, reachable from the
+ * ManagementScreen on the master server).
+ * <p>
+ * <b>DEVELOPER NOTE — when adding a new setting:</b>
+ * <ol>
+ *   <li>You MUST also add a matching editing field to the Mod Settings screen
+ *       ({@code ModSettingsScreen}). The screen builds its fields generically from
+ *       {@link #getEditableGroups()}, so a setting in a registered group with a
+ *       supported type (Boolean/Integer/Long/Float/ItemStack) appears automatically —
+ *       but you still must add its label/tooltip lang keys and verify the field works.</li>
+ *   <li>If the new setting is only read ONCE at startup (cached for the server
+ *       lifetime), mark the field as restart-required in
+ *       {@code ModSettingsScreen.RESTART_REQUIRED_SETTINGS}.</li>
+ *   <li>Consider whether the value must be propagated to slave servers after a
+ *       change (see the per-group propagation decision in
+ *       {@code ModSettingsRequest.handleOnMasterServer}).</li>
+ * </ol>
+ */
 public class StockMarketModSettings extends ModSettings {
 
     private static StockMarketModBackend.ServerInstances BACKEND_INSTANCES;
@@ -120,10 +147,41 @@ public class StockMarketModSettings extends ModSettings {
     }*/
 
 
+    /**
+     * Returns the list of settings groups that are editable through the in-game
+     * "Mod Settings" screen and the {@code ModSettingsRequest} GET/SET payloads.
+     * <p>
+     * This is exactly the set of groups registered via {@code createGroup(...)}
+     * (Utilities, ServerMarket, VillagerTrading). The {@link Player} group is
+     * intentionally EXCLUDED: it is never registered, never serialized to
+     * settings.json and therefore dead — do not expose it in the UI.
+     *
+     * @return the registered, editable settings groups in display order
+     */
+    public List<SettingsGroup> getEditableGroups()
+    {
+        return List.of(UTILITIES, MARKET, VILLAGER_TRADING);
+    }
+
+    /**
+     * Builds the {@link ClientSettings} snapshot that is synced to a client at
+     * player join (via {@code PlayerJoinSyncPacket}). Server-side only.
+     *
+     * @return the settings snapshot to send to the joining client
+     */
     public ClientSettings getClientSettings()
     {
         ClientSettings settings = new ClientSettings();
         //settings.setCandleTimeMs(MARKET.CANDLE_TIME.get());
+
+        // Tell the client whether this server is the master server. Used to gate
+        // master-only UI (the "Mod Settings" button in the ManagementScreen).
+        // Server-side enforcement happens separately in ModSettingsRequest.
+        try {
+            settings.setMasterServer(BankSystemMod.getAPI().getServerBankManager().isMaster());
+        } catch (Exception e) {
+            // BankSystem not ready — leave the flag at its safe default (false).
+        }
 
         return settings;
     }
