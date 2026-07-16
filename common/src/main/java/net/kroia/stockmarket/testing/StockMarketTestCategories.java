@@ -62,6 +62,9 @@ public class StockMarketTestCategories {
     public static final TestCategory VILLAGER_MONEY_PAYMENT = new TestCategory(
             "stockmarket", "sm_villager_money_payment", "Value-based merchant money payment tests", BOTH, false);
 
+    public static final TestCategory VOLATILITY_PLUGIN = new TestCategory(
+            "stockmarket", "sm_volatility_plugin", "VolatilityPlugin flow-equilibrium price tests", BOTH, false);
+
     // Master-only tests (ServerType.MASTER_ONLY, needsMinecraftContext=true)
     public static final TestCategory MARKET = new TestCategory(
             "stockmarket", "sm_market", "Server market tests", MASTER_ONLY, true);

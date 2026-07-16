@@ -321,10 +321,16 @@ The mod ships with three built-in plugins:
 ### VolatilityPlugin
 Simulates realistic price movements using a [random walk](#random-walk) algorithm. Each market gets independent price fluctuations around its default price, creating the organic-looking charts you see in-game.
 
+The random walk is anchored on a flow-driven [price equilibrium](#price-equilibrium) instead of the static default price: sustained net selling by players permanently lowers a market's price range, sustained net buying permanently raises it — so the server economy balances itself (heavily farmed items get cheap, sought-after items get expensive). The equilibrium shifts exponentially with the net item flow, so the price can approach but never reach 0, and it is clamped between the Min/Max Price Multipliers. Items with a higher Abundance absorb more trading before their price moves. To re-anchor a market at its default price, reset its **Net Flow** in the market settings.
+
 **Settings:**
 | Parameter | Description |
 |-----------|-------------|
-| Volatility Scale | Multiplier for how far the price deviates from the default price. Higher values produce larger swings. |
+| Volatility Scale | Multiplier for how far the price deviates from the equilibrium price. Higher values produce larger swings. |
+| Player Flow Influence | Enables the flow-driven equilibrium. When off, the price wanders around the static default price. Enabled by default. |
+| Flow Sensitivity | How many items (per unit of the market's Abundance) players must net-sell to lower the equilibrium price to ~37% of its default. Higher values make the market more inert. Default: 500. |
+| Min Price Multiplier | Lower clamp for the equilibrium as a fraction of the default price. Default: 0.05 (never below 5% of the default price). |
+| Max Price Multiplier | Upper clamp for the equilibrium as a multiple of the default price. Default: 20 (never above 20x the default price). |
 
 ### TargetPriceBot
 The market-making bot that drives prices toward a target value. It places [market orders](#market-order) to push the price in the desired direction. A [PID controller](#pid-controller) determines the size and direction of each order to smoothly converge on the target price without overshooting.
@@ -355,7 +361,7 @@ The distribution uses a power-law shape near the current price (tighter spreads 
 
 ### How the plugins work together
 The three plugins combine to create a functioning market:
-1. The **VolatilityPlugin** generates a wandering target price using random walk noise.
+1. The **VolatilityPlugin** generates a wandering target price using random walk noise, centered on the flow-adjusted [price equilibrium](#price-equilibrium).
 2. The **TargetPriceBot** places market orders to push the actual price toward the target, using a PID controller for smooth convergence.
 3. The **DefaultOrderbookVolumeDistributionPlugin** keeps the order book filled with liquidity so that both bot orders and player orders can be executed.
 
@@ -468,6 +474,11 @@ Below is a short animation to show how a price movement can be visualized using 
 ### Random Walk
 A random walk is a way to generate pseudorandom values ​​that depend on the previous values.
 This value is a great source to create random market prive movements.
+
+
+### Price Equilibrium
+The base price a market's random walk oscillates around.
+With player flow influence enabled, it shifts permanently with the cumulative net amount of items players traded on that market: net selling lowers it, net buying raises it.
 
 
 

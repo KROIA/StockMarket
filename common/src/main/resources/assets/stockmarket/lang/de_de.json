@@ -183,6 +183,10 @@
   "gui.stockmarket.target_price_bot.markets_title": "Abonnierte Marktplätze",
 
   "gui.stockmarket.volatility_plugin.scale": "Volatilitätsskala",
+  "gui.stockmarket.volatility_plugin.flow_enabled": "Spieler-Handelsfluss Einfluss",
+  "gui.stockmarket.volatility_plugin.flow_sensitivity": "Fluss-Empfindlichkeit",
+  "gui.stockmarket.volatility_plugin.min_price_mult": "Min. Preismultiplikator",
+  "gui.stockmarket.volatility_plugin.max_price_mult": "Max. Preismultiplikator",
   "gui.stockmarket.volatility_plugin.apply": "Anwenden",
   "gui.stockmarket.volume_distribution.volume_scale": "Volumenskalierung",
   "gui.stockmarket.volume_distribution.speed": "Geschwindigkeit",
