@@ -45,6 +45,8 @@ public class TradeScreen extends StockMarketGuiScreen {
         private static final Component MARKET_CLOSED = Component.translatable(PREFIX +"market_closed");
         private static final String MONEY_MODE = Component.translatable(PREFIX + "mode_money").getString();
         private static final String PAIR_MODE = Component.translatable(PREFIX + "mode_pair").getString();
+        private static final String NEWS = Component.translatable(PREFIX + "news").getString();
+        private static final Component NEWS_TOOLTIP = Component.translatable(PREFIX + "news.tooltip");
     }
 
     // Color for the active mode toggle button
@@ -72,6 +74,8 @@ public class TradeScreen extends StockMarketGuiScreen {
     // Mode toggle: Item/Money vs Item/Item
     private final Button moneyModeButton;
     private final Button pairModeButton;
+    // Opens the newspaper screen (T-074)
+    private final Button newsButton;
     private final PairSelectorWidget pairSelectorWidget;
     private boolean isPairMode = false;
 
@@ -100,6 +104,12 @@ public class TradeScreen extends StockMarketGuiScreen {
         pairModeButton = new Button(Texts.PAIR_MODE, () -> setMode(true));
         pairModeButton.setTextFontScale(0.8f);
         pairModeButton.setBackgroundColor(MODE_BUTTON_DEFAULT_COLOR);
+
+        // News button: opens the newspaper screen (returns here on close)
+        newsButton = new Button(Texts.NEWS, () -> setScreen(new NewsScreen(this)));
+        newsButton.setTextFontScale(0.8f);
+        newsButton.setHoverTooltipSupplier(Texts.NEWS_TOOLTIP::getString);
+        newsButton.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
 
         // Pair selector widget (hidden by default in money mode)
         pairSelectorWidget = new PairSelectorWidget(this::onPairSelected);
@@ -144,6 +154,7 @@ public class TradeScreen extends StockMarketGuiScreen {
 
         addElement(moneyModeButton);
         addElement(pairModeButton);
+        addElement(newsButton);
         addElement(favoritesBar);
         addElement(pairSelectorWidget);
         addElement(candlestickChart);
@@ -499,6 +510,9 @@ public class TradeScreen extends StockMarketGuiScreen {
         // Mode toggle buttons at the top of the right panel
         moneyModeButton.setBounds(rightPanelX, padding, modeButtonWidth, modeButtonHeight);
         pairModeButton.setBounds(rightPanelX + modeButtonWidth + spacing, padding, modeButtonWidth, modeButtonHeight);
+        // News button right-aligned in the same row
+        int newsButtonWidth = 40;
+        newsButton.setBounds(rightPanelX + rightPanelWidth - newsButtonWidth, padding, newsButtonWidth, modeButtonHeight);
 
         int selectorTop = padding + modeButtonHeight + spacing;
 

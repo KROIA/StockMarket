@@ -3,6 +3,7 @@ package net.kroia.stockmarket.minecraft.command;
 import com.google.gson.JsonObject;
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.LongArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
@@ -13,8 +14,14 @@ import net.kroia.stockmarket.api.command.IServerStockMarketCommandHandler;
 import net.kroia.modutilities.testing.TestCommandRegistration;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.api.pluginmanager.IServerPluginManager;
 import net.kroia.stockmarket.data.DataManager;
 import net.kroia.stockmarket.networking.packet.OpenUIPacket;
+import net.kroia.stockmarket.networking.request.NewsAdminRequest;
+import net.kroia.stockmarket.pluginsystem.plugin.ServerPlugin;
+import net.kroia.stockmarket.pluginsystem.pluginmanager.ServerPluginManager;
+import net.kroia.stockmarket.pluginsystem.plugins.NewsPlugin;
+import net.kroia.stockmarket.util.MultiServerUtils;
 import net.kroia.stockmarket.stockmarket.market.preset.MarketPreset;
 import net.kroia.stockmarket.stockmarket.market.preset.MarketPresetCategory;
 import net.kroia.stockmarket.stockmarket.market.preset.MarketPresetManager;
@@ -210,6 +217,240 @@ public class StockMarketCommands {
                                                     addHeldItemPreset(context.getSource(),
                                                             StringArgumentType.getString(context, "category"),
                                                             StringArgumentType.getString(context, "name"));
+                                                    return Command.SINGLE_SUCCESS;
+                                                })
+                                        )
+                                )
+                        )
+                )
+                // /stockmarket news                              - open the newspaper screen (player-level)
+                // /stockmarket news reload                       - reload the JSON event definitions (admin)
+                // /stockmarket news trigger <eventId> [market]   - fire an event now, bypassing cooldown/weights (admin)
+                // /stockmarket news list                         - loaded definitions + active events + cooldowns (admin)
+                // /stockmarket news stop <eventId|all>           - hard-stop active event(s): influence removed in any phase, full cooldown restarts (admin, T-093 semantics)
+                // /stockmarket news skipphase <eventId>          - fast-forward an active event to the start of its next phase (admin, T-093)
+                // /stockmarket news info <eventId>               - full event details: texts, impact, matched markets (admin)
+                // /stockmarket news enable <eventId>             - re-enable a disabled event (admin, T-081)
+                // /stockmarket news disable <eventId>            - disable an event; it can never activate while disabled (admin, T-081)
+                // /stockmarket news resetcooldown <eventId>      - clear an event's remaining cooldown (admin, T-085)
+                // /stockmarket news scheduler show               - effective scheduler values + upcoming timeline (admin, T-082)
+                // /stockmarket news scheduler set <key> <value>  - override one scheduler value (admin, T-082)
+                // /stockmarket news scheduler reset [key]        - reset one/all overrides to the file values (admin, T-082)
+                // /stockmarket news registry list                - world-event registry: fire records + custom key/values (admin, T-099)
+                // /stockmarket news registry clear all           - wipe the whole registry (admin, T-099)
+                // /stockmarket news registry clear <eventId>     - delete one event's fire record ("never fired" again) (admin, T-099)
+                // /stockmarket news registry clear key <key>     - delete one custom key/value pair (admin, T-099)
+                // All admin ops go through the single NewsAdminRequest (auto master-routing),
+                // so they work identically on master and slave servers (T-076).
+                .then(Commands.literal("news")
+                        // No-args: player-level, NOT admin — opens the newspaper client-side
+                        // via OpenUIPacket (commands run server-side, same pattern as
+                        // /stockmarket exportrecipes and the management GUI open).
+                        .executes(context -> {
+                            ServerPlayer player = context.getSource().getPlayerOrException();
+                            OpenUIPacket.sendToClient(player, OpenUIPacket.GUIType.NEWS);
+                            return Command.SINGLE_SUCCESS;
+                        })
+                        .then(Commands.literal("reload")
+                                .requires(source -> source.hasPermission(2)) // Admin-only, like preset
+                                .executes(context -> {
+                                    executeNewsAdminOp(context.getSource(),
+                                            NewsAdminRequest.Op.RELOAD, null, null);
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                        )
+                        .then(Commands.literal("trigger")
+                                .requires(source -> source.hasPermission(2)) // Admin-only, like preset
+                                .then(Commands.argument("eventId", StringArgumentType.string())
+                                        .suggests((context, builder) -> getNewsEventIdsSuggestion(builder))
+                                        .executes(context -> {
+                                            executeNewsAdminOp(context.getSource(), NewsAdminRequest.Op.TRIGGER,
+                                                    StringArgumentType.getString(context, "eventId"), null);
+                                            return Command.SINGLE_SUCCESS;
+                                        })
+                                        .then(Commands.argument("market", StringArgumentType.string())
+                                                .suggests((context, builder) -> getMarketNamesSuggestion(builder))
+                                                .executes(context -> {
+                                                    executeNewsAdminOp(context.getSource(), NewsAdminRequest.Op.TRIGGER,
+                                                            StringArgumentType.getString(context, "eventId"),
+                                                            StringArgumentType.getString(context, "market"));
+                                                    return Command.SINGLE_SUCCESS;
+                                                })
+                                        )
+                                )
+                        )
+                        .then(Commands.literal("list")
+                                .requires(source -> source.hasPermission(2)) // Admin-only, like preset
+                                .executes(context -> {
+                                    executeNewsAdminOp(context.getSource(),
+                                            NewsAdminRequest.Op.LIST, null, null);
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                        )
+                        .then(Commands.literal("stop")
+                                .requires(source -> source.hasPermission(2)) // Admin-only, like preset
+                                .then(Commands.argument("eventId", StringArgumentType.string())
+                                        .suggests((context, builder) -> getActiveNewsEventIdsSuggestion(builder, true))
+                                        .executes(context -> {
+                                            executeNewsAdminOp(context.getSource(), NewsAdminRequest.Op.STOP,
+                                                    StringArgumentType.getString(context, "eventId"), null);
+                                            return Command.SINGLE_SUCCESS;
+                                        })
+                                )
+                        )
+                        // T-093: fast-forward an active event out of its current phase
+                        // (pending → ramp-up → hold → recovery → ended). Unlike stop —
+                        // which cancels the event — skipping the last phase ends it
+                        // normally (reversal:none bakes like a natural completion).
+                        .then(Commands.literal("skipphase")
+                                .requires(source -> source.hasPermission(2)) // Admin-only, like preset
+                                .then(Commands.argument("eventId", StringArgumentType.string())
+                                        // Active ids only — no "all" keyword for skipphase.
+                                        .suggests((context, builder) -> getActiveNewsEventIdsSuggestion(builder, false))
+                                        .executes(context -> {
+                                            executeNewsAdminOp(context.getSource(), NewsAdminRequest.Op.SKIP_PHASE,
+                                                    StringArgumentType.getString(context, "eventId"), null);
+                                            return Command.SINGLE_SUCCESS;
+                                        })
+                                )
+                        )
+                        .then(Commands.literal("info")
+                                .requires(source -> source.hasPermission(2)) // Admin-only, like preset
+                                .then(Commands.argument("eventId", StringArgumentType.string())
+                                        .suggests((context, builder) -> getNewsEventIdsSuggestion(builder))
+                                        .executes(context -> {
+                                            executeNewsAdminOp(context.getSource(), NewsAdminRequest.Op.INFO,
+                                                    StringArgumentType.getString(context, "eventId"), null);
+                                            return Command.SINGLE_SUCCESS;
+                                        })
+                                )
+                        )
+                        .then(Commands.literal("enable")
+                                .requires(source -> source.hasPermission(2)) // Admin-only, like preset
+                                .then(Commands.argument("eventId", StringArgumentType.string())
+                                        // Only disabled ids are useful enable targets
+                                        .suggests((context, builder) -> getNewsEventIdsSuggestionFiltered(builder, false))
+                                        .executes(context -> {
+                                            executeNewsAdminOp(context.getSource(), NewsAdminRequest.Op.SET_ENABLED,
+                                                    StringArgumentType.getString(context, "eventId"), null, true);
+                                            return Command.SINGLE_SUCCESS;
+                                        })
+                                )
+                        )
+                        .then(Commands.literal("disable")
+                                .requires(source -> source.hasPermission(2)) // Admin-only, like preset
+                                .then(Commands.argument("eventId", StringArgumentType.string())
+                                        // Only enabled ids are useful disable targets
+                                        .suggests((context, builder) -> getNewsEventIdsSuggestionFiltered(builder, true))
+                                        .executes(context -> {
+                                            executeNewsAdminOp(context.getSource(), NewsAdminRequest.Op.SET_ENABLED,
+                                                    StringArgumentType.getString(context, "eventId"), null, false);
+                                            return Command.SINGLE_SUCCESS;
+                                        })
+                                )
+                        )
+                        .then(Commands.literal("resetcooldown")
+                                .requires(source -> source.hasPermission(2)) // Admin-only, like preset
+                                .then(Commands.argument("eventId", StringArgumentType.string())
+                                        .suggests((context, builder) -> getNewsEventIdsSuggestion(builder))
+                                        .executes(context -> {
+                                            executeNewsAdminOp(context.getSource(), NewsAdminRequest.Op.RESET_COOLDOWN,
+                                                    StringArgumentType.getString(context, "eventId"), null);
+                                            return Command.SINGLE_SUCCESS;
+                                        })
+                                )
+                        )
+                        // T-082 scheduler subtree — all three verbs map onto the single
+                        // SET_SCHEDULER op (show = pure query payload, reset = negative
+                        // per-value sentinel / resetAll flag), so slave routing and the
+                        // admin audit work exactly like the other news admin commands.
+                        .then(Commands.literal("scheduler")
+                                .requires(source -> source.hasPermission(2)) // Admin-only, like preset
+                                .then(Commands.literal("show")
+                                        .executes(context -> {
+                                            executeNewsSchedulerOp(context.getSource(),
+                                                    NewsAdminRequest.SchedulerInput.query());
+                                            return Command.SINGLE_SUCCESS;
+                                        })
+                                )
+                                .then(Commands.literal("set")
+                                        .then(Commands.argument("key", StringArgumentType.word())
+                                                .suggests((context, builder) -> getSchedulerKeySuggestion(builder))
+                                                // longArg(1): 0/negative values are rejected by
+                                                // brigadier already (negative = internal reset
+                                                // sentinel, must never come from user input).
+                                                .then(Commands.argument("value", LongArgumentType.longArg(1))
+                                                        .executes(context -> {
+                                                            executeNewsSchedulerSet(context.getSource(),
+                                                                    StringArgumentType.getString(context, "key"),
+                                                                    LongArgumentType.getLong(context, "value"));
+                                                            return Command.SINGLE_SUCCESS;
+                                                        })
+                                                )
+                                        )
+                                )
+                                .then(Commands.literal("reset")
+                                        // No key: reset ALL overrides back to the file values.
+                                        .executes(context -> {
+                                            executeNewsSchedulerOp(context.getSource(),
+                                                    new NewsAdminRequest.SchedulerInput(
+                                                            null, null, null, null, true));
+                                            return Command.SINGLE_SUCCESS;
+                                        })
+                                        .then(Commands.argument("key", StringArgumentType.word())
+                                                .suggests((context, builder) -> getSchedulerKeySuggestion(builder))
+                                                .executes(context -> {
+                                                    // -1 = per-value reset sentinel (see SchedulerInput).
+                                                    executeNewsSchedulerSet(context.getSource(),
+                                                            StringArgumentType.getString(context, "key"), -1L);
+                                                    return Command.SINGLE_SUCCESS;
+                                                })
+                                        )
+                                )
+                        )
+                        // T-099 world-event registry subtree — both verbs map onto the
+                        // appended REGISTRY_LIST/REGISTRY_CLEAR ops of the single
+                        // NewsAdminRequest, so slave routing and the admin audit work
+                        // exactly like the other news admin commands. The clear target
+                        // travels in the eventId field; "key" mode is flagged via the
+                        // (otherwise unused) market field — see NewsAdminRequest.
+                        .then(Commands.literal("registry")
+                                .requires(source -> source.hasPermission(2)) // Admin-only, like preset
+                                .then(Commands.literal("list")
+                                        .executes(context -> {
+                                            executeNewsAdminOp(context.getSource(),
+                                                    NewsAdminRequest.Op.REGISTRY_LIST, null, null);
+                                            return Command.SINGLE_SUCCESS;
+                                        })
+                                )
+                                .then(Commands.literal("clear")
+                                        // Literal subtrees ("all", "key") take precedence
+                                        // over the generic eventId argument in brigadier.
+                                        .then(Commands.literal("all")
+                                                .executes(context -> {
+                                                    executeNewsAdminOp(context.getSource(),
+                                                            NewsAdminRequest.Op.REGISTRY_CLEAR,
+                                                            NewsAdminRequest.REGISTRY_CLEAR_ALL, null);
+                                                    return Command.SINGLE_SUCCESS;
+                                                })
+                                        )
+                                        .then(Commands.literal("key")
+                                                .then(Commands.argument("key", StringArgumentType.string())
+                                                        .executes(context -> {
+                                                            executeNewsAdminOp(context.getSource(),
+                                                                    NewsAdminRequest.Op.REGISTRY_CLEAR,
+                                                                    StringArgumentType.getString(context, "key"),
+                                                                    NewsAdminRequest.REGISTRY_CLEAR_KEY_MODE);
+                                                            return Command.SINGLE_SUCCESS;
+                                                        })
+                                                )
+                                        )
+                                        .then(Commands.argument("eventId", StringArgumentType.string())
+                                                .suggests((context, builder) -> getNewsEventIdsSuggestion(builder))
+                                                .executes(context -> {
+                                                    executeNewsAdminOp(context.getSource(),
+                                                            NewsAdminRequest.Op.REGISTRY_CLEAR,
+                                                            StringArgumentType.getString(context, "eventId"), null);
                                                     return Command.SINGLE_SUCCESS;
                                                 })
                                         )
@@ -446,6 +687,300 @@ public class StockMarketCommands {
             future.complete(builder.build());
         });
         return future;
+    }
+
+    /**
+     * Runs one news admin operation (T-076) through the shared {@link NewsAdminRequest}
+     * and prints the result to the command sender.
+     * <p>
+     * <b>Slave-awareness:</b> the request handles the topology itself
+     * ({@link NewsAdminRequest#sendFromServerCommand}): on the master it executes
+     * directly, on a slave it is forwarded to the master with the executing player's
+     * UUID — so the same command works on both server types. The response future may
+     * complete on a network thread, so all feedback is re-dispatched onto the server
+     * main thread before printing.
+     * <p>
+     * The response {@code message}/{@code lines} are server-generated admin diagnostics
+     * (validation report entries, event ids, factors) and are printed literally — only
+     * the local failure wrappers are translatable, mirroring the preset command style.
+     *
+     * @param source  the command source (must be a player — the admin check needs an identity)
+     * @param op      the operation to run
+     * @param eventId the event id argument, or null when the op takes none
+     * @param market  the optional market restriction (TRIGGER), or null
+     */
+    private static void executeNewsAdminOp(CommandSourceStack source, NewsAdminRequest.Op op,
+                                           @Nullable String eventId, @Nullable String market)
+    {
+        executeNewsAdminOp(source, op, eventId, market, false);
+    }
+
+    /**
+     * Same as {@link #executeNewsAdminOp(CommandSourceStack, NewsAdminRequest.Op, String, String)}
+     * but with the target state for {@link NewsAdminRequest.Op#SET_ENABLED}
+     * ({@code /stockmarket news enable|disable <eventId>}, T-081). All other ops ignore
+     * the flag.
+     *
+     * @param source  the command source (must be a player — the admin check needs an identity)
+     * @param op      the operation to run
+     * @param eventId the event id argument, or null when the op takes none
+     * @param market  the optional market restriction (TRIGGER), or null
+     * @param enabled the target enabled state (SET_ENABLED only)
+     */
+    private static void executeNewsAdminOp(CommandSourceStack source, NewsAdminRequest.Op op,
+                                           @Nullable String eventId, @Nullable String market,
+                                           boolean enabled)
+    {
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            source.sendFailure(Component.translatable("message.stockmarket.command_news_not_player"));
+            return;
+        }
+        // On a slave without a master connection the request could never be answered —
+        // fail fast with the standard "not connected" console message.
+        if (!MultiServerUtils.canInteractWithStockMarket(player.getUUID())) {
+            return;
+        }
+
+        MinecraftServer server = source.getServer();
+        BACKEND_INSTANCES.NETWORKING.NEWS_ADMIN_REQUEST
+                .sendFromServerCommand(player, op, eventId, market, enabled)
+                .whenComplete((response, throwable) -> server.execute(() -> {
+                    if (throwable != null || response == null) {
+                        // Timeout / transport failure (e.g. master connection dropped mid-request).
+                        source.sendFailure(Component.translatable(
+                                "message.stockmarket.command_news_request_failed"));
+                        return;
+                    }
+                    if (response.success()) {
+                        source.sendSuccess(() -> Component.literal(response.message()), false);
+                    } else {
+                        source.sendFailure(Component.literal(response.message()));
+                    }
+                    for (String line : response.lines()) {
+                        source.sendSuccess(() -> Component.literal(line), false);
+                    }
+                }));
+    }
+
+    /** The scheduler override keys accepted by {@code /stockmarket news scheduler set|reset} (T-082). */
+    private static final String[] SCHEDULER_KEYS = {
+            "minSecondsBetweenEvents", "maxSecondsBetweenEvents",
+            "maxActiveEventsGlobal", "maxActiveEventsPerMarket"};
+
+    /**
+     * Maps one {@code /stockmarket news scheduler set|reset <key> <value>} pair onto a
+     * {@link NewsAdminRequest.SchedulerInput} and runs it — or fails locally with the
+     * valid key list when the key is unknown (no server round-trip for a typo).
+     * A negative {@code value} is the per-value reset sentinel; positive values are
+     * range-validated server-side ({@code 0 < min <= max}, caps {@code >= 1}).
+     *
+     * @param source the command source (must be a player)
+     * @param key    the scheduler value name (one of {@link #SCHEDULER_KEYS})
+     * @param value  the value to set, or a negative number to reset that value
+     */
+    private static void executeNewsSchedulerSet(CommandSourceStack source, String key, long value)
+    {
+        // Caps are ints on the wire — clamp instead of overflowing for absurd inputs.
+        Integer intValue = (int) Math.min(Integer.MAX_VALUE, Math.max(Integer.MIN_VALUE, value));
+        NewsAdminRequest.SchedulerInput change = switch (key) {
+            case "minSecondsBetweenEvents" ->
+                    new NewsAdminRequest.SchedulerInput(value, null, null, null, false);
+            case "maxSecondsBetweenEvents" ->
+                    new NewsAdminRequest.SchedulerInput(null, value, null, null, false);
+            case "maxActiveEventsGlobal" ->
+                    new NewsAdminRequest.SchedulerInput(null, null, intValue, null, false);
+            case "maxActiveEventsPerMarket" ->
+                    new NewsAdminRequest.SchedulerInput(null, null, null, intValue, false);
+            default -> null;
+        };
+        if (change == null) {
+            source.sendFailure(Component.literal("Unknown scheduler key '" + key
+                    + "' — valid keys: " + String.join(", ", SCHEDULER_KEYS)));
+            return;
+        }
+        executeNewsSchedulerOp(source, change);
+    }
+
+    /**
+     * Runs one T-082 scheduler operation ({@link NewsAdminRequest.Op#SET_SCHEDULER})
+     * through the shared request — same slave routing, admin check and main-thread
+     * feedback dispatch as {@link #executeNewsAdminOp}.
+     *
+     * @param source the command source (must be a player — the admin check needs an identity)
+     * @param change the override change, or {@link NewsAdminRequest.SchedulerInput#query()}
+     *               for a pure state display ({@code scheduler show})
+     */
+    private static void executeNewsSchedulerOp(CommandSourceStack source,
+                                               NewsAdminRequest.SchedulerInput change)
+    {
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            source.sendFailure(Component.translatable("message.stockmarket.command_news_not_player"));
+            return;
+        }
+        // On a slave without a master connection the request could never be answered —
+        // fail fast with the standard "not connected" console message.
+        if (!MultiServerUtils.canInteractWithStockMarket(player.getUUID())) {
+            return;
+        }
+
+        MinecraftServer server = source.getServer();
+        BACKEND_INSTANCES.NETWORKING.NEWS_ADMIN_REQUEST
+                .sendSchedulerFromServerCommand(player, change)
+                .whenComplete((response, throwable) -> server.execute(() -> {
+                    if (throwable != null || response == null) {
+                        source.sendFailure(Component.translatable(
+                                "message.stockmarket.command_news_request_failed"));
+                        return;
+                    }
+                    if (response.success()) {
+                        source.sendSuccess(() -> Component.literal(response.message()), false);
+                    } else {
+                        source.sendFailure(Component.literal(response.message()));
+                    }
+                    for (String line : response.lines()) {
+                        source.sendSuccess(() -> Component.literal(line), false);
+                    }
+                }));
+    }
+
+    /**
+     * Suggests the four scheduler override keys for
+     * {@code /stockmarket news scheduler set|reset} (T-082). Keys are static — no
+     * master/slave lookup needed.
+     *
+     * @param builder the suggestion builder provided by brigadier
+     * @return a future completing with the key suggestions
+     */
+    private static CompletableFuture<Suggestions> getSchedulerKeySuggestion(SuggestionsBuilder builder)
+    {
+        for (String key : SCHEDULER_KEYS) {
+            builder.suggest(key);
+        }
+        return CompletableFuture.completedFuture(builder.build());
+    }
+
+    /**
+     * Finds the local NewsPlugin instance for tab-completion. Only available on the
+     * master server (slaves have no sync plugin manager) — suggestion helpers fall
+     * back to no/minimal suggestions there, see {@link #getNewsEventIdsSuggestion}.
+     *
+     * @return the NewsPlugin, or null on a slave server / when no instance exists
+     */
+    private static @Nullable NewsPlugin findLocalNewsPlugin()
+    {
+        if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.PLUGIN_MANAGER == null) return null;
+        IServerPluginManager syncManager = BACKEND_INSTANCES.PLUGIN_MANAGER.getSync();
+        if (!(syncManager instanceof ServerPluginManager pluginManager)) return null;
+        for (ServerPlugin<?, ?> plugin : pluginManager.getPlugins().values()) {
+            if (plugin instanceof NewsPlugin newsPlugin) {
+                return newsPlugin;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Suggests the loaded news event definition ids for {@code /stockmarket news trigger}.
+     * <p>
+     * Suggestions come from the master's local NewsPlugin library. On a <b>slave</b> server
+     * the definitions are not locally known (the library lives on the master and there is
+     * no suggestion round-trip), so this deliberately falls back to no suggestions — the
+     * command itself still works there via the request routing.
+     *
+     * @param builder the suggestion builder provided by brigadier
+     * @return a future completing with the event id suggestions
+     */
+    private static CompletableFuture<Suggestions> getNewsEventIdsSuggestion(SuggestionsBuilder builder)
+    {
+        NewsPlugin plugin = findLocalNewsPlugin();
+        if (plugin != null) {
+            for (String id : plugin.getLibrary().getDefinitions().keySet()) {
+                builder.suggest(quoteIfNeeded(id));
+            }
+        }
+        return CompletableFuture.completedFuture(builder.build());
+    }
+
+    /**
+     * Suggests news event ids filtered by their enabled state (T-081): for
+     * {@code /stockmarket news disable} the currently <b>enabled</b> loaded ids, for
+     * {@code /stockmarket news enable} the currently <b>disabled</b> ids — including
+     * disabled ids whose definition is absent from the library, so a stale disabled
+     * state stays discoverable and clearable. Same slave fallback as
+     * {@link #getNewsEventIdsSuggestion} (no suggestions there).
+     *
+     * @param builder        the suggestion builder provided by brigadier
+     * @param suggestEnabled true to suggest enabled ids (disable command),
+     *                       false to suggest disabled ids (enable command)
+     * @return a future completing with the filtered event id suggestions
+     */
+    private static CompletableFuture<Suggestions> getNewsEventIdsSuggestionFiltered(
+            SuggestionsBuilder builder, boolean suggestEnabled)
+    {
+        NewsPlugin plugin = findLocalNewsPlugin();
+        if (plugin != null) {
+            if (suggestEnabled) {
+                for (String id : plugin.getLibrary().getDefinitions().keySet()) {
+                    if (plugin.isEventEnabled(id)) {
+                        builder.suggest(quoteIfNeeded(id));
+                    }
+                }
+            } else {
+                for (String id : plugin.getDisabledEventIds()) {
+                    builder.suggest(quoteIfNeeded(id));
+                }
+            }
+        }
+        return CompletableFuture.completedFuture(builder.build());
+    }
+
+    /**
+     * Suggests the currently active event ids — optionally prefixed with the
+     * {@code "all"} keyword — for {@code /stockmarket news stop} (with {@code "all"})
+     * and {@code /stockmarket news skipphase} (ids only, T-093). Same slave fallback
+     * as {@link #getNewsEventIdsSuggestion} (only {@code "all"} — when included — is
+     * suggested there).
+     *
+     * @param builder           the suggestion builder provided by brigadier
+     * @param includeAllKeyword true to additionally suggest {@link NewsAdminRequest#STOP_ALL}
+     * @return a future completing with the suggestions
+     */
+    private static CompletableFuture<Suggestions> getActiveNewsEventIdsSuggestion(SuggestionsBuilder builder,
+                                                                                  boolean includeAllKeyword)
+    {
+        if (includeAllKeyword) {
+            builder.suggest(NewsAdminRequest.STOP_ALL);
+        }
+        NewsPlugin plugin = findLocalNewsPlugin();
+        if (plugin != null) {
+            Set<String> suggested = new HashSet<>();
+            for (net.kroia.stockmarket.news.ActiveNewsEvent event : plugin.getActiveEvents()) {
+                if (suggested.add(event.getDefinitionId())) {
+                    builder.suggest(quoteIfNeeded(event.getDefinitionId()));
+                }
+            }
+        }
+        return CompletableFuture.completedFuture(builder.build());
+    }
+
+    /**
+     * Quotes a suggestion when it contains characters the brigadier string() argument
+     * type only accepts inside quotes (anything outside {@code [A-Za-z0-9_.+-]}).
+     * Event ids are usually simple identifiers, but they are admin-defined free text.
+     */
+    private static String quoteIfNeeded(String value)
+    {
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            boolean allowed = (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z')
+                    || (c >= 'a' && c <= 'z') || c == '_' || c == '-' || c == '.' || c == '+';
+            if (!allowed) {
+                return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
+            }
+        }
+        return value;
     }
 
     private static CompletableFuture<Suggestions> getPlayerNamesSuggestion(SuggestionsBuilder builder)

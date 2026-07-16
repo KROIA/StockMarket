@@ -36,6 +36,9 @@ public class PlayerPreferencesTestSuite extends TestSuite {
         addTest("nbt_save_load_with_data", this::test_nbt_saveLoadWithData);
         addTest("nbt_save_load_favorites_order", this::test_nbt_saveLoadFavoritesOrder);
         addTest("nbt_backward_compat", this::test_nbt_backwardCompat);
+        addTest("news_toast_default_off", this::test_newsToast_defaultOff);
+        addTest("news_toast_nbt_round_trip", this::test_newsToast_nbtRoundTrip);
+        addTest("news_toast_missing_key_stays_off", this::test_newsToast_missingKeyStaysOff);
     }
 
     // -----------------------------------------------------------------------
@@ -286,5 +289,52 @@ public class PlayerPreferencesTestSuite extends TestSuite {
                 loaded.getFavoriteMarketIDs().isEmpty());
         if (!r.passed()) return r;
         return pass("Backward-compatible load from empty tag produces empty preferences");
+    }
+
+    // -----------------------------------------------------------------------
+    // News toast opt-in flag tests (T-074)
+    // -----------------------------------------------------------------------
+
+    /**
+     * The news toast opt-in must default to OFF (user decision: players who never
+     * touched the newspaper checkbox get no notification at all).
+     */
+    private TestResult test_newsToast_defaultOff() {
+        PlayerPreferences prefs = new PlayerPreferences();
+        TestResult r = assertFalse("newsToastEnabled must default to false", prefs.isNewsToastEnabled());
+        if (!r.passed()) return r;
+        return pass("News toast opt-in defaults to off");
+    }
+
+    /**
+     * The enabled flag survives an NBT save/load round-trip (checkbox state must
+     * persist across relogs).
+     */
+    private TestResult test_newsToast_nbtRoundTrip() {
+        PlayerPreferences original = new PlayerPreferences();
+        original.setNewsToastEnabled(true);
+
+        CompoundTag tag = new CompoundTag();
+        original.save(tag);
+
+        PlayerPreferences loaded = new PlayerPreferences();
+        loaded.load(tag);
+        TestResult r = assertTrue("enabled flag must survive NBT round-trip", loaded.isNewsToastEnabled());
+        if (!r.passed()) return r;
+        return pass("News toast opt-in survives NBT save/load");
+    }
+
+    /**
+     * Loading a pre-T-074 tag (no "newsToastEnabled" key) must yield OFF — even if
+     * the in-memory instance had the flag set before load().
+     */
+    private TestResult test_newsToast_missingKeyStaysOff() {
+        PlayerPreferences loaded = new PlayerPreferences();
+        loaded.setNewsToastEnabled(true); // must be overwritten by the (missing) tag value
+        loaded.load(new CompoundTag());
+        TestResult r = assertFalse("missing key must load as false (default off)",
+                loaded.isNewsToastEnabled());
+        if (!r.passed()) return r;
+        return pass("Pre-T-074 tags load with the news toast off");
     }
 }

@@ -30,6 +30,7 @@ public class PlayerPreferences implements ServerSaveable {
             ExtraCodecUtils.nullable(ItemID.STREAM_CODEC).encode(buf, prefs.lastPairWantMarketID);
             ExtraCodecUtils.listStreamCodec(ItemID.STREAM_CODEC).encode(buf, prefs.favoriteMarketIDs);
             buf.writeLong(prefs.orderHistoryClearedBeforeMs);
+            buf.writeBoolean(prefs.newsToastEnabled);
         }
 
         @Override
@@ -40,6 +41,7 @@ public class PlayerPreferences implements ServerSaveable {
             prefs.lastPairWantMarketID = ExtraCodecUtils.nullable(ItemID.STREAM_CODEC).decode(buf);
             prefs.favoriteMarketIDs = new ArrayList<>(ExtraCodecUtils.listStreamCodec(ItemID.STREAM_CODEC).decode(buf));
             prefs.orderHistoryClearedBeforeMs = buf.readLong();
+            prefs.newsToastEnabled = buf.readBoolean();
             return prefs;
         }
     };
@@ -63,7 +65,17 @@ public class PlayerPreferences implements ServerSaveable {
     private long orderHistoryClearedBeforeMs = 0;
 
     /**
-     * Creates empty default preferences (no last market, no favorites, no clear timestamp).
+     * News toast opt-in (T-074): when true, the player gets a headline toast popup
+     * whenever a news event publishes. <b>Default is false (off)</b> — the opt-in
+     * checkbox lives in the newspaper screen, and players who never touched it must
+     * receive no notification at all (user decision: no chat message, opt-in toast
+     * is the only push notification).
+     */
+    private boolean newsToastEnabled = false;
+
+    /**
+     * Creates empty default preferences (no last market, no favorites, no clear timestamp,
+     * news toasts off).
      */
     public PlayerPreferences() {
         this.lastMarketID = null;
@@ -71,6 +83,7 @@ public class PlayerPreferences implements ServerSaveable {
         this.lastPairWantMarketID = null;
         this.favoriteMarketIDs = new ArrayList<>();
         this.orderHistoryClearedBeforeMs = 0;
+        this.newsToastEnabled = false;
     }
 
     // --- Getters / Setters ---
@@ -150,6 +163,21 @@ public class PlayerPreferences implements ServerSaveable {
         this.orderHistoryClearedBeforeMs = timestamp;
     }
 
+    /**
+     * @return true if the player opted in to news toast popups (default false — off)
+     */
+    public boolean isNewsToastEnabled() {
+        return newsToastEnabled;
+    }
+
+    /**
+     * Sets the news toast opt-in flag (checkbox in the newspaper screen).
+     * @param newsToastEnabled true to show a headline toast on every news publish
+     */
+    public void setNewsToastEnabled(boolean newsToastEnabled) {
+        this.newsToastEnabled = newsToastEnabled;
+    }
+
     // --- Favorite management ---
 
     /**
@@ -219,6 +247,9 @@ public class PlayerPreferences implements ServerSaveable {
 
         // Save order history clear timestamp
         tag.putLong("orderHistoryClearedBeforeMs", orderHistoryClearedBeforeMs);
+
+        // Save news toast opt-in flag
+        tag.putBoolean("newsToastEnabled", newsToastEnabled);
         return true;
     }
 
@@ -266,6 +297,10 @@ public class PlayerPreferences implements ServerSaveable {
 
         // Load order history clear timestamp (getLong returns 0 if key missing — backward compatible)
         orderHistoryClearedBeforeMs = tag.getLong("orderHistoryClearedBeforeMs");
+
+        // Load news toast opt-in flag (getBoolean returns false if key missing —
+        // backward compatible AND guarantees the default-off contract for old saves)
+        newsToastEnabled = tag.getBoolean("newsToastEnabled");
         return true;
     }
 }

@@ -84,6 +84,9 @@ public class ManagementScreen extends StockMarketGuiScreen {
         public static final Component MOD_SETTINGS = Component.translatable(PREFIX + "mod_settings");
         public static final Component MOD_SETTINGS_TOOLTIP = Component.translatable(PREFIX + "mod_settings.tooltip");
 
+        public static final Component NEWS = Component.translatable(PREFIX + "news");
+        public static final Component NEWS_TOOLTIP = Component.translatable(PREFIX + "news.tooltip");
+
     }
     public static final int elementHeight = 20;
 
@@ -357,6 +360,16 @@ public class ManagementScreen extends StockMarketGuiScreen {
 
             pluginOverviewWidget = new PluginOverviewWidget(parent);
             listView.addChild(pluginOverviewWidget);
+
+            // News button: opens the newspaper screen (T-074) — available to
+            // everyone, the news feed is not admin-gated.
+            Button newsButton = new Button(Texts.NEWS.getString(),
+                    () -> setScreen(new NewsScreen(parent)));
+            newsButton.setHeight(elementHeight);
+            newsButton.setHoverTooltipSupplier(Texts.NEWS_TOOLTIP::getString);
+            newsButton.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
+            newsButton.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.TOP_RIGHT);
+            listView.addChild(newsButton);
 
             // Master-only: button that opens the Mod Settings screen (edits the
             // server's settings.json in-game). Only the master server loads/owns

@@ -44,6 +44,7 @@ import net.kroia.stockmarket.testing.tests.MarketIntegrationTestSuite;
 import net.kroia.stockmarket.testing.tests.MarketMergeConsolidationTestSuite;
 import net.kroia.stockmarket.testing.tests.MarketPriceManagerTestSuite;
 import net.kroia.stockmarket.testing.tests.MatchingEngineTestSuite;
+import net.kroia.stockmarket.testing.tests.NewsHistoryRequestTestSuite;
 import net.kroia.stockmarket.testing.tests.OrderRecordManagerTestSuite;
 import net.kroia.stockmarket.testing.tests.OrderbookTestSuite;
 import net.kroia.stockmarket.testing.tests.PluginTestSuite;
@@ -52,6 +53,8 @@ import net.kroia.modutilities.testing.TestRegistry;
 import net.kroia.stockmarket.minecraft.menu.StockMarketMenus;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.kroia.stockmarket.networking.packet.PlayerJoinSyncPacket;
+import net.kroia.stockmarket.news.ClientNewsCache;
+import net.kroia.stockmarket.news.ClientNewsPictureCache;
 import net.kroia.stockmarket.util.*;
 import net.kroia.stockmarket.villagertrading.VillagerTradeManager;
 import net.kroia.stockmarket.villagertrading.VillagerTradeRewriter;
@@ -103,6 +106,20 @@ public class StockMarketModBackend implements StockMarketAPI {
         public StockMarketNetworking NETWORKING;
         public StockMarketLogger LOGGER;
         public ClientSettings SETTINGS;
+        /**
+         * Recently published news records received via NewsPublishedPacket (T-073).
+         * Per-connection like the other client managers: created on join, discarded
+         * with the whole ClientInstances on disconnect (implicit clear).
+         */
+        public ClientNewsCache NEWS_CACHE;
+        /**
+         * Published news pictures fetched by content hash, converted to newsprint
+         * grayscale and registered as GPU textures (T-090). Per-connection like
+         * NEWS_CACHE — but unlike it, discarding the object is NOT enough: its
+         * DynamicTextures hold GL resources, so releaseAll() MUST be called at the
+         * disconnect discard site (see onPlayerLeaveClientSide).
+         */
+        public ClientNewsPictureCache NEWS_PICTURE_CACHE;
     }
 
     private static final CommonInstances COMMON_INSTANCES = new CommonInstances();
@@ -299,6 +316,7 @@ public class StockMarketModBackend implements StockMarketAPI {
                 ServerMarketTestSuite.setBackend(SERVER_INSTANCES);
                 PluginTestSuite.setBackend(SERVER_INSTANCES);
                 MarketMergeConsolidationTestSuite.setBackend(SERVER_INSTANCES);
+                NewsHistoryRequestTestSuite.setBackend(SERVER_INSTANCES);
             }
         }
         else
@@ -399,6 +417,13 @@ public class StockMarketModBackend implements StockMarketAPI {
         AsyncPresetManager.setClientBackend(CLIENT_INSTANCES);
         CLIENT_INSTANCES.PRESET_MANAGER = AsyncPresetManager.createClientManager();
         CLIENT_INSTANCES.SETTINGS = new ClientSettings();
+        CLIENT_INSTANCES.NEWS_CACHE = new ClientNewsCache();
+        // Picture cache (T-090): real network fetcher (batched NewsPictureRequest,
+        // response hopped onto the client main thread) + real GL texture sink.
+        // Flushed once per client tick in onClientTickEvent, released on disconnect.
+        CLIENT_INSTANCES.NEWS_PICTURE_CACHE = new ClientNewsPictureCache(
+                new ClientNewsPictureCache.RequestFetcher(CLIENT_INSTANCES.NETWORKING),
+                new ClientNewsPictureCache.MinecraftTextureSink());
         MarketPreset.setRegistryAccess(Minecraft.getInstance().getConnection().registryAccess());
 
 
@@ -412,6 +437,12 @@ public class StockMarketModBackend implements StockMarketAPI {
         if(CLIENT_INSTANCES == null)
             return;
         CLIENT_INSTANCES.MARKET_MANAGER.onPlayerLeave(localPlayer);
+
+        // Free the news-picture GPU textures BEFORE the ClientInstances object is
+        // discarded — dropping the object alone would leak the registered
+        // DynamicTextures across connect/disconnect cycles (T-090).
+        if (CLIENT_INSTANCES.NEWS_PICTURE_CACHE != null)
+            CLIENT_INSTANCES.NEWS_PICTURE_CACHE.releaseAll();
 
         StockMarketNetworking.setBackend((ClientInstances)null);
         StockMarketGuiScreen.setBackend(null);
@@ -432,8 +463,13 @@ public class StockMarketModBackend implements StockMarketAPI {
 
     private static void onClientTickEvent(ClientLevel clientLevel)
     {
-        if (CLIENT_INSTANCES != null)
+        if (CLIENT_INSTANCES != null) {
             CLIENT_INSTANCES.MARKET_MANAGER.update();
+            // Flush the news-picture fetch queue: at most one batched request per
+            // tick, HIGH (visible widgets) before BACKGROUND (prefetch) — T-090.
+            if (CLIENT_INSTANCES.NEWS_PICTURE_CACHE != null)
+                CLIENT_INSTANCES.NEWS_PICTURE_CACHE.clientTick();
+        }
     }
 
     private static long autosaveTimer_lastMs = 0;
