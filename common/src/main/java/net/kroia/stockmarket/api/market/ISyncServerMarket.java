@@ -16,6 +16,25 @@ public interface ISyncServerMarket {
     void test_resetVirtualVolumeDistribution();
     void test_setCurrentMarketPrice(long currentMarketPrice);
     void test_clearOrderbook();
+    /**
+     * Sets the default-volume provider used to fill the {@code VirtualOrderbook} with virtual
+     * liquidity when its window re-centers on large price moves or is reset.
+     *
+     * <p><b>Contract:</b> the function receives a <b>real</b> price (backend price divided by the
+     * item fraction scale factor) and must return the <b>real</b> (unscaled) volume at that price.
+     * {@code ServerMarket.defaultVolumeProvider(long)} adapts this to the raw
+     * {@code VirtualOrderbook} provider contract (backend price in, raw volume out) by performing
+     * the price and volume conversions itself — implementations must not convert.
+     * The sign of the returned volume only matters in magnitude:
+     * {@code VirtualOrderbook.getDefaultVolume} re-normalizes the sign against the current
+     * backend market price (positive below, negative above).
+     *
+     * <p>Despite the {@code test_} prefix this is also part of the production wiring
+     * (registered by {@code PluginOrderBook} for the volume distribution plugins).
+     *
+     * @param defaultVolumeProviderFunction real price to real volume function, or {@code null}
+     *                                      to fall back to the built-in default distribution
+     */
     void test_setDefaultVolumeProviderFunction(Function<Double, Float> defaultVolumeProviderFunction);
     void test_resetVirtualOrderBookVolume();
 

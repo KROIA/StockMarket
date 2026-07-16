@@ -36,6 +36,13 @@ public class PluginOrderBook implements IPluginOrderBook
     {
         this.serverMarket = serverMarket;
         this.orderbook = serverMarket.getOrderbook();
+        // Register the default-volume provider used to fill the VirtualOrderbook with virtual liquidity
+        // on re-center (large price moves) and reset.
+        // Contract of test_setDefaultVolumeProviderFunction: REAL price in -> REAL volume out.
+        // ServerMarket.defaultVolumeProvider(long) adapts this to the raw VirtualOrderbook contract
+        // (backend price in -> raw volume out) by converting the backend price to a real price before
+        // invoking this function and scaling the returned real volume up to raw volume.
+        // Therefore no raw/real conversion must be done here.
         serverMarket.test_setDefaultVolumeProviderFunction(this::getDefaultRealVolume);
         //serverMarket.test_resetVirtualOrderBookVolume();
         this.cache = cache;
