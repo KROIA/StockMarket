@@ -79,8 +79,8 @@ public class StockMarketModSettings extends ModSettings {
      */
     public static final class VillagerTrading extends SettingsGroup
     {
-        /** Master switch for villager trade repricing. Disabled by default. */
-        public final Setting<Boolean> ENABLED = registerSetting("ENABLED", false, Boolean.class);
+        /** Master switch for villager trade repricing. Enabled by default. */
+        public final Setting<Boolean> ENABLED = registerSetting("ENABLED", true, Boolean.class);
 
         /**
          * Wall-clock interval (in minutes) between price-table refreshes/broadcasts.

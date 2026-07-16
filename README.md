@@ -368,7 +368,7 @@ The three plugins combine to create a functioning market:
 
 ---
 ## Villager Trading
-When enabled, villager (and wandering trader) trade offers for **market-listed items** no longer use emeralds — both trade directions are converted to the configured trading-currency item (`ServerMarket.CURRENCY` in `world/data/StockMarket/settings.json`) and priced from the stock market:
+Villager (and wandering trader) trade offers for **market-listed items** no longer use emeralds — both trade directions are converted to the configured trading-currency item (`ServerMarket.CURRENCY` in `world/data/StockMarket/settings.json`) and priced from the stock market:
 * Only offers whose traded item exists on the stock market are repriced (component-aware, so e.g. specific enchanted books can have their own markets). A trade where the villager sells requires a market for the sold item; a trade where the villager buys requires a market for every item it asks for.
 * Items **without** a market keep their normal vanilla emerald trades. If a market is created for such an item later, the offer converts to currency pricing on the next price refresh; if a market is deleted, affected offers return to their original emerald form.
 * Prices refresh automatically on the configured interval (default 20 real minutes ≈ one Minecraft day).
@@ -377,7 +377,7 @@ When enabled, villager (and wandering trader) trade offers for **market-listed i
 ### Settings (`VillagerTrading` group in `settings.json`)
 | Setting | Default | Description |
 |-----------|---------|-------------|
-| `ENABLED` | `false` | Master switch for villager trade repricing. |
+| `ENABLED` | `true` | Master switch for villager trade repricing. Enabled by default; set to `false` in `settings.json` to disable the feature. |
 | `PRICE_REFRESH_INTERVAL_MINUTES` | `20` | Real-time minutes between price refreshes/broadcasts. |
 | `VILLAGER_BUY_MARGIN` | `0.8` | Multiplier on the market price when the villager **buys** from the player (villager pays below market). |
 | `VILLAGER_SELL_MARGIN` | `1.2` | Multiplier on the market price when the villager **sells** to the player (villager charges above market). |
