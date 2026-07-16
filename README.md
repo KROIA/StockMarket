@@ -37,6 +37,7 @@ You want to support me?<br>
 - Adds new [blocks](#blocks) to interact with the market or bank account.
 - Implementation of a [matching engine](#matching-engine) inspired by the real market.
 - Configurable [plugins](#plugins) that provide the market with liquidity, volatility and price movements.
+- A JSON-configurable [news event system](documentation/user-guide/news-system/overview.md) that publishes headlines with [pictures](documentation/user-guide/news-system/pictures.md) and moves market prices — players follow the market through a craftable newspaper item.
 
 ## Dependencies
 - [Bank System Mod](https://github.com/KROIA/BankSystem)
@@ -311,6 +312,7 @@ Open the **Plugin Management** screen from the Management GUI overview tab:
 | /stockmarket deop [username]       | Revoke StockMarket admin privileges (from yourself if no username given) | :heavy_check_mark: |
 | /stockmarket \<market\> remove     | Delete a market without the GUI. `<market>` is the item's registry name in quotes (e.g. `"minecraft:iron_ingot"`) or the numeric market ID shown when a name is ambiguous. Also works for broken markets whose item can no longer be resolved | :heavy_check_mark: |
 | /stockmarket preset add \<category\> [name] | Capture the item in your main hand (including data components like enchantments or custom names) as a market preset in `<category>` (created if it doesn't exist yet; quote names containing spaces). The optional `[name]` gives the captured item a custom name; otherwise the preset uses the item's normal display name | :heavy_check_mark: |
+| /stockmarket news                  | Open the in-game newspaper with the latest market news. The admin subcommands `reload`, `trigger`, `list` and `stop` manage the [news event system](documentation/user-guide/news-system/configuration.md) | Subcommands only |
 
 
 
@@ -323,7 +325,7 @@ Open the **Plugin Management** screen from the Management GUI overview tab:
 ## Plugins
 Since v2.0, the old monolithic StockMarketBot has been replaced by a modular **plugin system**. Each plugin handles one aspect of market simulation and can be independently configured, enabled, or subscribed to specific markets through the [Plugin Management](#plugin-system) screen.
 
-The mod ships with three built-in plugins:
+The mod ships with four built-in plugins:
 
 ### VolatilityPlugin
 Simulates realistic price movements using a [random walk](#random-walk) algorithm. Each market gets independent price fluctuations around its default price, creating the organic-looking charts you see in-game.
@@ -366,11 +368,18 @@ The distribution uses a power-law shape near the current price (tighter spreads 
 | Decumulation Rate | How fast excess volume decreases (slower for stability). |
 | Reset Volume | Force an immediate reset of the order book to the target distribution. |
 
+### NewsPlugin
+Randomly publishes news events defined in JSON files (`config/StockMarket/news/`) and moves the prices of the affected markets — shocks, trends, crashes and even permanent shifts. Players read the headlines with a craftable **newspaper item**; an opt-in popup notifies interested players when news breaks. Admins control everything through the plugin's management window and the `/stockmarket news` commands.
+
+See the [News Event System overview](documentation/user-guide/news-system/overview.md) and the [JSON configuration reference](documentation/user-guide/news-system/configuration.md).
+
 ### How the plugins work together
 The three plugins combine to create a functioning market:
 1. The **VolatilityPlugin** generates a wandering target price using random walk noise, centered on the flow-adjusted [price equilibrium](#price-equilibrium).
 2. The **TargetPriceBot** places market orders to push the actual price toward the target, using a PID controller for smooth convergence.
 3. The **DefaultOrderbookVolumeDistributionPlugin** keeps the order book filled with liquidity so that both bot orders and player orders can be executed.
+
+While a news event is active, the **NewsPlugin** multiplies the target price from step 1 before the bot acts on it — turning headlines into real price movement.
 
 
 ---

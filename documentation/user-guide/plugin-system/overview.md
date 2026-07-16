@@ -8,7 +8,7 @@ Plugins run entirely on the server. Players do not interact with plugins directl
 
 ## Default Plugins
 
-The StockMarket mod ships with three built-in plugins. Together, they create a functioning market with realistic price behavior.
+The StockMarket mod ships with four built-in plugins. Together, they create a functioning market with realistic price behavior.
 
 ### 1. VolatilityPlugin
 
@@ -50,6 +50,12 @@ Without this plugin, the orderbook would be empty except for player orders and b
 | Volume Scale | Controls how much depth appears in the orderbook. Higher values produce more volume at each price level. Default: `1.0`. |
 | Speed | How quickly the orderbook depth rebuilds after trades consume existing volume. Higher values mean faster recovery. Default: `0.05`. |
 
+### 4. NewsPlugin
+
+Publishes JSON-defined news events that temporarily (or permanently) move the prices of the affected markets. Players read the headlines through a craftable newspaper item.
+
+The plugin has its own dedicated management window (active events, per-market impact, trigger/reload/stop buttons) and per-market settings (news enabled, sensitivity). See the [News Event System](../news-system/overview.md) documentation for the full feature description and the [JSON configuration reference](../news-system/configuration.md).
+
 ## How Plugins Work Together
 
 Plugins execute in order from top to bottom in the plugin list. The default order is:
@@ -59,6 +65,8 @@ Plugins execute in order from top to bottom in the plugin list. The default orde
 3. **DefaultOrderbookVolumeDistributionPlugin** -- Fills the orderbook with virtual volume around the current market price.
 
 This order matters because each plugin can depend on the output of the plugins that ran before it. The TargetPriceBot reads the target price that the VolatilityPlugin just set. If you reversed their order, the TargetPriceBot would act on the previous tick's target price before the VolatilityPlugin updates it.
+
+The **NewsPlugin** is the exception: it multiplies the target price in a separate finalize stage that runs after all plugins have updated, so its position in the list does not matter.
 
 ### General Rule
 
