@@ -138,6 +138,14 @@ Right click on a <b>Terminal Block</b> using a <b>Trading Software</b> to create
 <td><img src="documentation/images/recipe_trading_software.png" width="350"></td>
 <td><img src="documentation/images/recipe_stockmarket_display_block.png" width="350"></td>
 </tr>
+<tr>
+<td><b>Newspaper</b></td>
+<td></td>
+</tr>
+<tr>
+<td><img src="documentation/images/recepe_newspaper.png" width="350" alt="Newspaper crafting recipe -- paper and ink sac shapeless in a 3x3 grid yielding one newspaper"></td>
+<td></td>
+</tr>
 </table>
 
 ---
@@ -312,7 +320,7 @@ Open the **Plugin Management** screen from the Management GUI overview tab:
 | /stockmarket deop [username]       | Revoke StockMarket admin privileges (from yourself if no username given) | :heavy_check_mark: |
 | /stockmarket \<market\> remove     | Delete a market without the GUI. `<market>` is the item's registry name in quotes (e.g. `"minecraft:iron_ingot"`) or the numeric market ID shown when a name is ambiguous. Also works for broken markets whose item can no longer be resolved | :heavy_check_mark: |
 | /stockmarket preset add \<category\> [name] | Capture the item in your main hand (including data components like enchantments or custom names) as a market preset in `<category>` (created if it doesn't exist yet; quote names containing spaces). The optional `[name]` gives the captured item a custom name; otherwise the preset uses the item's normal display name | :heavy_check_mark: |
-| /stockmarket news                  | Open the in-game newspaper with the latest market news. The admin subcommands `reload`, `trigger`, `list` and `stop` manage the [news event system](documentation/user-guide/news-system/configuration.md) | Subcommands only |
+| /stockmarket news                  | Open the in-game newspaper with the latest market news. Admin subcommands manage the news event system — see the [full command reference](documentation/user-guide/news-system/configuration.md#admin-commands) | Subcommands only |
 
 
 

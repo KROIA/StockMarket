@@ -12,29 +12,17 @@ Players read the news in-game through a craftable **newspaper item**. Reacting t
 
 ### Getting the Newspaper
 
-The newspaper (`stockmarket:newspaper`) is a **shapeless** crafting recipe -- drop the two ingredients anywhere in the crafting grid, in any order or slot:
+The newspaper (`stockmarket:newspaper`) is a **shapeless** crafting recipe -- drop the two ingredients anywhere in the crafting grid, in any order or
 
-| Slot | Item |
-|------|------|
-| any | `minecraft:paper` |
-| any | `minecraft:ink_sac` |
+<img src="../../images/recepe_newspaper.png" width="350" alt="Newspaper crafting recipe -- paper and ink sac shapeless in a 3x3 crafting grid yielding one newspaper">
 
-```
-+---+---+---+
-|   |   |   |
-+---+---+---+       -->    1x newspaper
-| P | I |   |               (stockmarket:newspaper)
-+---+---+---+
-|   |   |   |
-+---+---+---+
-   P = paper,  I = ink sac  (positions don't matter -- shapeless)
-```
+*Newspaper crafting recipe.*
 
 Every crafting yields **one** newspaper. The item is reusable -- once you have it, you never need to craft another one.
 
 **Other ways to open the news screen:**
 
-- The **News** button on the [trading screen](#the-news-screen).
+- The **News** button on the [trading screen](../../../README.md#opening-the-trading-terminal).
 - The **News** button on the [Management Screen](../../../README.md#opening-the-management-gui)'s overview tab (admins).
 - The command `/stockmarket news` -- available to every player, no admin permission needed.
 - For admins on creative servers: `/give @s stockmarket:newspaper`.
@@ -45,6 +33,12 @@ Right-click with the newspaper to open the news screen. It works from any hand, 
 
 ### The News Screen
 
+<p align="center">
+  <img src="../../images/news_screen_feed.png" width="1000" alt="Newspaper feed -- masthead at the top, two-column list of dated headlines with pictures, in-game day separators grouping entries by publish day">
+  <br>
+  <em>The newspaper feed -- headlines grouped by in-game day, newest first.</em>
+</p>
+
 The news screen is styled like a printed newspaper: a masthead at the top and a chronological feed of headlines below it, newest first. Each entry shows:
 
 - The **headline** and the **article text**.
@@ -53,7 +47,7 @@ The news screen is styled like a printed newspaper: a masthead at the top and a 
 - The **timestamp** (your local date and time) plus the in-game "Day N" the news was published on.
 - A red **LIVE** badge while the event's price impact is still running. The badge compares the publish time against your local clock, so it is an approximation -- it tells you the story is still moving the market right now.
 
-The feed loads the most recent news immediately and fetches older entries in pages -- click **Load more** at the bottom to go further back. How far back the history reaches is capped by the server (1000 entries by default).
+The feed loads the most recent news immediately and fetches older entries in pages of up to **100 entries** per request (the server-side page-size ceiling) -- click **Load more** at the bottom to go further back. How far back the history reaches is capped by the server (1000 entries by default).
 
 ### News Popups (Toast Opt-In)
 
@@ -62,6 +56,22 @@ By default, news is **pull only**: nothing pops up, nothing is printed to chat -
 If you want to be notified, enable the **news popups checkbox** in the news screen. Opted-in players get a small vanilla-style toast (top right, no sound) with the headline whenever an event is published. The setting is stored per player on the server, survives relogs, and is **off by default**.
 
 Opted-in players who join the server shortly after an event was published still get caught up: on join, the newest headlines from the last 10 minutes are shown as toasts (at most 3, oldest first). Players who did not opt in get nothing at all.
+
+### Clearing Your Newspaper
+
+<p align="center">
+  <img src="../../images/news_screen_clear_button.png" width="1000" alt="Clear button in the top-right corner of the newspaper's settings row, with a tooltip explaining that it is a soft per-player filter that leaves other players and admins unaffected">
+  <br>
+  <em>The Clear button and its tooltip -- a soft, per-player filter.</em>
+</p>
+
+Opposite the popup checkbox, in the top-right corner of the newspaper's settings row, the **Clear** button removes every currently visible entry from **your own** newspaper. The clear is:
+
+- **Soft and per-player** -- the underlying news records are never touched. Other players and admins still see everything as before.
+- **Server-persisted** across relogs and restarts. The cutoff is stored on the master server as `newsClearedBeforeMs` in your player preferences.
+- **Forward-safe** -- new events published after the clear appear in your feed normally. Only entries whose publish timestamp is at or before the moment you clicked Clear are hidden.
+
+Pagination still walks past the hidden entries, so a `Load more` click after a clear correctly advances into older records that would have been visible if you had not cleared.
 
 ### Languages
 
@@ -128,14 +138,56 @@ Like every plugin, the NewsPlugin has per-market custom settings, editable in it
 
 ## The News Plugin Management Window
 
-Admins manage the plugin through the [Plugin Management Screen](../plugin-system/management.md): the NewsPlugin entry has an **Open Plugin** button that opens its dedicated window showing, live:
+Admins manage the plugin through the [Plugin Management Screen](../plugin-system/management.md): the NewsPlugin entry has an **Open Plugin** button that opens its dedicated window. The window has three tabs across the top -- **Active**, **All events** and **Scheduler** -- above the global **Reload** and **Stop all** buttons and a status line. The right side of the window holds the per-market **News enabled** / **Sensitivity** editor and the price chart of the currently selected market.
 
-- All currently **active events** with their phase (pending / ramping / holding / reverting / permanent -- or, for [sequence events](advanced-events.md#multi-step-sequences), the current step name with a countdown to the next step and "phase i of n"), remaining time, and whether the headline is already published.
-- **Which markets** each event impacts (item icons + names) and the current price factor per market (e.g. `+25%`).
-- The per-market **News enabled** / **Sensitivity** settings editor.
-- **Trigger / Reload / Stop all** buttons -- the same operations as the [admin commands](configuration.md#admin-commands). Triggering an event whose [trigger requirements](advanced-events.md#trigger-requirements) are unmet asks for confirmation first, listing the unmet requirements.
-- Per active event, a **Skip phase** and a **Stop** button at the right edge of its row: Skip phase fast-forwards the event to the start of its next phase or [sequence step](advanced-events.md#multi-step-sequences) (skipping the last one ends it normally), Stop hard-stops it in any phase -- the price influence is removed and the full cooldown restarts (same as `/stockmarket news skipphase` / `stop`).
-- Clicking an event opens its **details screen**: full texts, impact or per-sequence step breakdown, matched markets, trigger requirements with their live met/unmet status, and chained events.
+### Active tab
+
+<p align="center">
+  <img src="../../images/news_screen_active_tab.png" width="1000" alt="Active tab of the news plugin management window -- one row per currently running event with phase, remaining time, impacted markets, per-market price factor, and per-row Skip phase / Stop buttons">
+  <br>
+  <em>The Active tab -- one row per currently running event.</em>
+</p>
+
+The Active tab lists every currently running event with its phase (pending / ramping / holding / reverting / permanent -- or, for [sequence events](advanced-events.md#multi-step-sequences), the current step name with "phase i of n" and a countdown to the next step), the remaining time, and whether the headline is already published. Each row shows the **impacted markets** (item icons + names) and the current price factor per market (e.g. `+25%`); clicking a market icon selects it in the right-side editor. At the right edge of every row a **Skip phase** button fast-forwards the event into its next phase or [sequence step](advanced-events.md#multi-step-sequences) (skipping the last phase ends the event normally), and a **Stop** button hard-stops it in any phase -- the price influence is removed and the full cooldown restarts (same as `/stockmarket news skipphase` and `/stockmarket news stop`). Clicking anywhere else on the row opens the [event details screen](#event-details-screen).
+
+### All events tab
+
+<p align="center">
+  <img src="../../images/news_screen_all_events_tab.png" width="1000" alt="All events tab of the news plugin management window -- one row per loaded event definition with enable checkbox, headline, state markers, and right-aligned Reset CD and Trigger buttons">
+  <br>
+  <em>The All events tab -- every loaded event definition with per-event admin controls.</em>
+</p>
+
+The All events tab lists **every loaded event definition** (server-confirmed, refreshed on every admin response) with the state markers `[adminOnly]`, `[active]`, `[disabled]` and `[cooldown <remaining>]` next to the locale-resolved headline. Each row has an **Enable / Disable checkbox** on the left (server-authoritative -- the visual state reverts to the confirmed value on click and only flips when the response snapshot arrives), a right-aligned **Trigger** button that fires the event on all its matched markets, and a **Reset CD** button that appears next to Trigger while the event is still on cooldown. Triggering an event whose cooldown is still running or whose [trigger requirements](advanced-events.md#trigger-requirements) are unmet opens a confirmation dialog first, listing the unmet requirements. Clicking anywhere else on the row opens the [event details screen](#event-details-screen).
+
+### Scheduler tab
+
+<p align="center">
+  <img src="../../images/news_screen_scheduler_tab.png" width="1000" alt="Scheduler tab of the news plugin management window -- four numeric fields for the scheduler timings and caps with (overridden) markers, Apply and Reset to file buttons, and an upcoming events timeline below">
+  <br>
+  <em>The Scheduler tab -- live scheduler override editor and the upcoming events timeline.</em>
+</p>
+
+The Scheduler tab exposes the four **effective** scheduler values as editable numeric fields: **Min seconds between events**, **Max seconds between events**, **Max active events (global)** and **Max active events (per market)**. Values that differ from the JSON config are marked `(overridden)`. The stream refreshes each field every 500 ms, but a box that the admin has edited is left alone until Apply resolves it. **Apply** sends only the actually edited values (validated and confirmed server-side); **Reset to file** clears every override so the JSON scheduler block applies again. Below the fields, the **Upcoming events** timeline lists the pre-planned scheduler slots (each is re-validated when it fires and may be skipped or replaced); planned entries are clickable and open the event's details screen, while time-only slots state that the event is picked at trigger time.
+
+### Event details screen
+
+<p align="center">
+  <img src="../../images/news_event_details_screen.png" width="1000" alt="News event details modal -- locale-resolved headline and article text, event picture in the top-right, definition parameters, per-sequence step table, impacted markets list, trigger requirements and chained events">
+  <br>
+  <em>The event details screen -- opened by clicking a row in either the Active or the All events tab.</em>
+</p>
+
+Clicking a row in the Active or the All events tab (or a planned entry in the Scheduler tab's upcoming timeline) opens a dedicated details screen with the full snapshot of the definition:
+
+- The locale-resolved **headline** and **article text**.
+- The **event picture** in the top-right corner (hidden when the event has no picture; see [News Event Pictures](pictures.md)).
+- The **definition parameters**: `enabled`, `adminOnly`, `weight`, remaining cooldown, and the announce-delay range.
+- The **per-sequence step table** with columns for step number, name, duration, remaining countdown (live-highlighted for the running step), target factor, curve, and a permanent-shift marker.
+- One row per **impacted market** with the item icon, the signed peak percentage and the matcher weight factor.
+- The **trigger requirements** list (with per-line met / unmet markers) and the **chained events** list, when the event defines any.
+
+ESC returns to the plugin management window with its full state (selected tab, scroll position, market selection) intact.
 
 ## Master/Slave Servers
 
