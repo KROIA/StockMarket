@@ -431,7 +431,7 @@
   "gui.stockmarket.news_plugin.details_table_step_no": "#",
   "gui.stockmarket.news_plugin.details_table_name": "Name",
   "gui.stockmarket.news_plugin.details_table_duration": "Duration",
-  "gui.stockmarket.news_plugin.details_table_countdown": "Countdown",
+  "gui.stockmarket.news_plugin.details_table_countdown": "Remaining",
   "gui.stockmarket.news_plugin.details_table_target": "Target",
   "gui.stockmarket.news_plugin.details_table_curve": "Curve",
   "gui.stockmarket.news_plugin.details_table_permanent": "Perm.",

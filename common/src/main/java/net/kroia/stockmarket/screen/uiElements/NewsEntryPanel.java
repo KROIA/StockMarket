@@ -20,19 +20,26 @@ import java.util.List;
  * <ul>
  *   <li><b>headline</b> — prominent (larger font), resolved from the record's inline
  *       translation map at every rebuild (see {@link NewsTranslations}),</li>
- *   <li><b>picture</b> (T-091) — records carrying a picture hash show a square,
- *       horizontally centered {@link NewsPictureElement} (COVER mode, side capped at
- *       {@value #PICTURE_MAX_SIDE} px) between headline and body; text-only records
- *       render exactly as before,</li>
- *   <li><b>newspaper text</b> — word-wrapped body below the headline,</li>
+ *   <li><b>picture</b> (T-091, layout redesigned in T-113) — records carrying a
+ *       loaded picture hash show a square {@link NewsPictureElement} (COVER mode,
+ *       side capped at {@value #PICTURE_MAX_SIDE} px) at the <b>top-right corner</b>
+ *       of the card; the headline and body wrap around the image (reduced-width
+ *       region on the left for lines that would overlap the image, full-width
+ *       region below the image bottom edge — real-newspaper column style). Text-
+ *       only records and records whose picture is not (yet) available render at
+ *       full width with no image slot at all — no placeholder, no ink outline
+ *       (T-113 hide-when-absent contract),</li>
+ *   <li><b>newspaper text</b> — word-wrapped body below the headline, flowing
+ *       around the picture as described above,</li>
  *   <li><b>timestamp line</b> — client-local formatted publish date/time plus the
- *       immersive "Day N" game day,</li>
+ *       immersive "Day N" game day (bottom-left of the meta row),</li>
  *   <li><b>LIVE badge</b> — shown while
- *       {@code timestampEpochMs + totalDurationSeconds * 1000 > now}. This is an
- *       approximation: it compares the master's publish timestamp against the client
- *       clock and ignores server pauses (envelopes only advance while the server
- *       ticks), so the badge can linger slightly longer than the actual impact.
- *       Good enough for a newspaper.</li>
+ *       {@code timestampEpochMs + totalDurationSeconds * 1000 > now}. Sits on the
+ *       meta row (bottom-right of the card) instead of the historical top-right
+ *       corner so it never fights the image slot (T-113). Approximation: compares
+ *       the master's publish timestamp against the client clock and ignores server
+ *       pauses (envelopes only advance while the server ticks), so the badge can
+ *       linger slightly longer than the actual impact. Good enough for a newspaper.</li>
  * </ul>
  * <p>
  * <b>No market-impact info (task T-084):</b> the panel deliberately shows neither a
@@ -86,6 +93,12 @@ public class NewsEntryPanel extends StockMarketGuiElement {
      * full wrap width as the side.
      */
     private static final int PICTURE_MAX_SIDE = 100;
+    /**
+     * Horizontal gutter between the picture (top-right, T-113) and the text on its
+     * left. Kept intentionally slim so the reduced-width column above the picture
+     * still fits a couple of body words per line.
+     */
+    private static final int PICTURE_TEXT_GUTTER = 4;
 
     private static final DateTimeFormatter TIME_FORMATTER =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault());
@@ -93,11 +106,15 @@ public class NewsEntryPanel extends StockMarketGuiElement {
     private final NewsRecord record;
 
     /**
-     * The record's picture box (COVER mode), or null for text-only records (T-091).
-     * Created once in the constructor — its hash never changes — and re-positioned/
-     * re-sized by every {@link #rebuildForWidth(int)}. The element polls the picture
-     * cache itself, so an entry built before the texture arrived simply pops in on a
-     * later frame (the screen's picture-cache listener additionally rebuilds the feed).
+     * The record's picture box (COVER mode, hide-when-absent per T-113), or null
+     * for text-only records that never had a hash to begin with (T-091). Created
+     * once in the constructor — its hash never changes — and re-positioned/re-sized
+     * by every {@link #rebuildForWidth(int)}. The picture cache's change listener
+     * (wired by {@link net.kroia.stockmarket.screen.NewsScreen}) triggers a feed
+     * rebuild once a picture lands, so the layout reflows around the newly-arrived
+     * image without a manual repaint here. When the picture is not (yet) available,
+     * the element is given zero bounds and paints nothing (T-113) — the text uses
+     * the full card width instead of framing an empty paper-gray box.
      */
     private final @Nullable NewsPictureElement pictureElement;
 
@@ -139,12 +156,15 @@ public class NewsEntryPanel extends StockMarketGuiElement {
         setBackgroundColor(COLOR_ENTRY_PAPER);
         setOutlineColor(COLOR_ENTRY_EDGE);
 
-        // T-091: records with a picture hash get a square COVER picture box between
-        // headline and body; the child must exist before the first rebuildForWidth
-        // call positions it. Text-only records stay pixel-identical (no child).
+        // T-091/T-113: records with a picture hash get a square COVER picture box
+        // at the top-right of the card (hide-when-absent — see class Javadoc). The
+        // child must exist before the first rebuildForWidth call positions it.
+        // Text-only records (null hash) stay pixel-identical to the no-image path
+        // (no child, no allocation).
         byte[] pictureHash = record.getPictureHash();
         if (pictureHash != null) {
             pictureElement = new NewsPictureElement(pictureHash, NewsPictureElement.FitMode.COVER);
+            pictureElement.setHideWhenAbsent(true);
             addChild(pictureElement);
         } else {
             pictureElement = null;
@@ -176,11 +196,50 @@ public class NewsEntryPanel extends StockMarketGuiElement {
         String headline = NewsTranslations.resolve(record.getHeadline(), language);
         String body = NewsTranslations.resolve(record.getText(), language);
 
-        // Reserve space on the headline's first line for the LIVE badge so the
-        // two never overlap while the event is running.
-        int liveBadgeWidth = getLiveBadgeWidth() + INNER_PAD;
-        List<String> headlineLines = wrapText(headline, wrapWidth - liveBadgeWidth, HEADLINE_SCALE);
-        List<String> bodyLines = wrapText(body, wrapWidth, BODY_SCALE);
+        // ── T-113: decide the top-right image slot ──
+        // Probe the picture cache at layout time (hasLoadedPicture also enqueues
+        // the fetch at HIGH priority, so a first-encounter record still starts
+        // loading and the change listener rebuilds the feed on arrival). Records
+        // without a hash (pictureElement == null) skip this entirely — the text
+        // wraps at full width just like it did before T-091.
+        int imageSide;
+        int reducedWidth;
+        boolean showImage = pictureElement != null && pictureElement.hasLoadedPicture();
+        if (showImage) {
+            imageSide = Math.min(wrapWidth, PICTURE_MAX_SIDE);
+            // Reduced width must leave at least half the card for text or the
+            // "wrap around" reads like a two-column table instead of a column
+            // with a photo — clamp the picture down before it dominates the card.
+            if (imageSide > wrapWidth - PICTURE_TEXT_GUTTER - 40) {
+                imageSide = Math.max(0, wrapWidth - PICTURE_TEXT_GUTTER - 40);
+                showImage = imageSide > 0;
+            }
+            reducedWidth = Math.max(20, wrapWidth - imageSide - PICTURE_TEXT_GUTTER);
+        } else {
+            imageSide = 0;
+            reducedWidth = wrapWidth;
+        }
+
+        int lineH_headline = scaledLineHeight(HEADLINE_SCALE);
+        int lineH_body = scaledLineHeight(BODY_SCALE);
+        int imageBottomY = INNER_PAD + imageSide;
+
+        // Headline: always sits at the top-left. The old top-right LIVE badge
+        // reservation is gone (T-113 moved the badge onto the meta row so it
+        // never fights the image slot). Wrap width = reducedWidth for the lines
+        // that fall inside the image's vertical extent, then full wrapWidth for
+        // any headline overflow (rare but respected — a very long multi-line
+        // headline still reads correctly under the image).
+        headlineY = INNER_PAD;
+        List<String> headlineLines = wrapAroundImage(headline, reducedWidth, wrapWidth,
+                headlineY, imageBottomY, lineH_headline, HEADLINE_SCALE);
+
+        // Body starts under the headline. Compute how many body lines still
+        // overlap the image vertically, then flow the rest at full width.
+        bodyY = headlineY + headlineLines.size() * lineH_headline + SECTION_SPACING;
+        List<String> bodyLines = wrapAroundImage(body, reducedWidth, wrapWidth,
+                bodyY, imageBottomY, lineH_body, BODY_SCALE);
+
         headlineText = String.join("\n", headlineLines);
         bodyText = String.join("\n", bodyLines);
 
@@ -188,22 +247,26 @@ public class NewsEntryPanel extends StockMarketGuiElement {
         metaText = TIME_FORMATTER.format(Instant.ofEpochMilli(record.getTimestampEpochMs()))
                 + "  " + Texts.gameDay(record.getGameDay()).getString();
 
-        // ── Vertical layout / height ──
-        int lineH_headline = scaledLineHeight(HEADLINE_SCALE);
-        int lineH_body = scaledLineHeight(BODY_SCALE);
-
-        headlineY = INNER_PAD;
-        bodyY = headlineY + headlineLines.size() * lineH_headline + SECTION_SPACING;
-        // T-091: square picture block between headline and body. The side is the
-        // wrap width capped at PICTURE_MAX_SIDE; a capped box is centered
-        // horizontally so it stays on the column's axis like a print illustration.
+        // ── T-113: position the top-right image ──
         if (pictureElement != null) {
-            int side = Math.min(wrapWidth, PICTURE_MAX_SIDE);
-            pictureElement.setBounds(INNER_PAD + (wrapWidth - side) / 2, bodyY, side, side);
-            bodyY += side + SECTION_SPACING;
+            if (showImage) {
+                pictureElement.setBounds(INNER_PAD + wrapWidth - imageSide, INNER_PAD,
+                        imageSide, imageSide);
+            } else {
+                // Zero bounds: render() skips (hideWhenAbsent) so no ghost box
+                // survives while the picture is loading or has given up.
+                pictureElement.setBounds(0, 0, 0, 0);
+            }
         }
-        metaRowY = bodyY + (bodyLines.isEmpty() ? 0 : bodyLines.size() * lineH_body + SECTION_SPACING);
-        contentHeight = metaRowY + scaledLineHeight(META_SCALE) + INNER_PAD;
+
+        // Meta row height matches META_SCALE + top/bottom padding so the LIVE
+        // badge (drawn on this row now) is fully contained in the card.
+        int metaRowHeight = scaledLineHeight(META_SCALE) + 2;
+        int textBottomY = bodyY + (bodyLines.isEmpty() ? 0 : bodyLines.size() * lineH_body);
+        // Make sure the meta row never overlaps the image OR the body text.
+        int naturalMetaRowY = textBottomY + (bodyLines.isEmpty() ? 0 : SECTION_SPACING);
+        metaRowY = Math.max(naturalMetaRowY, imageBottomY + SECTION_SPACING);
+        contentHeight = metaRowY + metaRowHeight + INNER_PAD;
         setHeight(contentHeight);
     }
 
@@ -240,20 +303,17 @@ public class NewsEntryPanel extends StockMarketGuiElement {
         if (!bodyText.isEmpty())
             drawText(Component.literal(bodyText), INNER_PAD, bodyY, COLOR_BODY_INK, false, BODY_SCALE);
 
-        // Meta row: right-aligned timestamp (intentionally no market-impact info —
-        // see class Javadoc).
-        int metaWidth = (int) (getTextWidth(metaText) * META_SCALE);
-        drawText(Component.literal(metaText), getWidth() - INNER_PAD - metaWidth, metaRowY, COLOR_META_INK, false, META_SCALE);
+        // Meta row (T-113): timestamp on the LEFT, LIVE badge on the RIGHT — the
+        // badge moved off the top-right corner so it never fights the image slot
+        // (see class Javadoc). Both drawn shadowless for a print-consistent look.
+        drawText(Component.literal(metaText), INNER_PAD, metaRowY, COLOR_META_INK, false, META_SCALE);
 
-        // LIVE badge (top-right) while the impact envelope is still running.
-        // Light text on the red badge is crisp without a shadow too — drawn
-        // shadowless for a consistent print look.
         if (isLive()) {
             int badgeWidth = getLiveBadgeWidth();
-            int badgeHeight = scaledLineHeight(META_SCALE) + 4;
+            int badgeHeight = scaledLineHeight(META_SCALE) + 2;
             int badgeX = getWidth() - INNER_PAD - badgeWidth;
-            drawRect(badgeX, INNER_PAD, badgeWidth, badgeHeight, COLOR_LIVE_BG);
-            drawText(Texts.LIVE, badgeX + 3, INNER_PAD + 2, COLOR_LIVE_TEXT, false, META_SCALE);
+            drawRect(badgeX, metaRowY - 1, badgeWidth, badgeHeight, COLOR_LIVE_BG);
+            drawText(Texts.LIVE, badgeX + 3, metaRowY, COLOR_LIVE_TEXT, false, META_SCALE);
         }
     }
 
@@ -277,6 +337,81 @@ public class NewsEntryPanel extends StockMarketGuiElement {
     /** @return the rendered width of the LIVE badge in GUI pixels */
     private int getLiveBadgeWidth() {
         return (int) (getTextWidth(Texts.LIVE.getString()) * META_SCALE) + 6;
+    }
+
+    /**
+     * T-113: greedy word-wrap that flows text around a top-right image slot.
+     * Lines whose baseline still overlaps the image vertically use
+     * {@code reducedWidth}; once the running y exceeds {@code imageBottomY}, the
+     * remaining text wraps at the full {@code fullWidth}. When there is no
+     * image slot ({@code imageBottomY <= startY}), the whole block wraps at
+     * {@code fullWidth} — no reduction.
+     *
+     * @param text          the text to wrap
+     * @param reducedWidth  wrap width for the lines beside the image
+     * @param fullWidth     wrap width once the image is cleared vertically
+     * @param startY        the y at which this block starts drawing
+     * @param imageBottomY  the y (exclusive) below which the image no longer
+     *                      constrains the wrap width
+     * @param lineHeight    the block's line advance in GUI pixels
+     * @param fontScale     the font scale the text will be drawn with
+     * @return the wrapped lines, never null
+     */
+    private List<String> wrapAroundImage(String text, int reducedWidth, int fullWidth,
+                                         int startY, int imageBottomY, int lineHeight,
+                                         float fontScale) {
+        List<String> lines = new ArrayList<>();
+        if (text == null || text.isBlank())
+            return lines;
+
+        // No image slot to wrap around → shortcut: single-width wrap.
+        if (reducedWidth == fullWidth || imageBottomY <= startY) {
+            return wrapText(text, fullWidth, fontScale);
+        }
+
+        for (String paragraph : text.split("\n", -1)) {
+            StringBuilder line = new StringBuilder();
+            for (String word : paragraph.split(" ")) {
+                if (word.isEmpty()) continue;
+                // Recompute current wrap width per candidate word: as lines are
+                // added, y advances and may cross imageBottomY, at which point the
+                // wrap width jumps from reducedWidth to fullWidth for the very
+                // next line (real newspaper reflow).
+                int currentY = startY + lines.size() * lineHeight;
+                int maxWidth = currentY + lineHeight <= imageBottomY ? reducedWidth : fullWidth;
+                maxWidth = Math.max(10, maxWidth);
+                String candidate = line.isEmpty() ? word : line + " " + word;
+                if (textWidth(candidate, fontScale) <= maxWidth) {
+                    line.setLength(0);
+                    line.append(candidate);
+                    continue;
+                }
+                if (!line.isEmpty()) {
+                    lines.add(line.toString());
+                    line.setLength(0);
+                    // The just-added line may have pushed us past imageBottomY —
+                    // recompute maxWidth for the next word.
+                    currentY = startY + lines.size() * lineHeight;
+                    maxWidth = currentY + lineHeight <= imageBottomY ? reducedWidth : fullWidth;
+                    maxWidth = Math.max(10, maxWidth);
+                }
+                // Hard-break a single word wider than the current line.
+                while (textWidth(word, fontScale) > maxWidth && word.length() > 1) {
+                    int cut = word.length() - 1;
+                    while (cut > 1 && textWidth(word.substring(0, cut), fontScale) > maxWidth)
+                        cut--;
+                    lines.add(word.substring(0, cut));
+                    word = word.substring(cut);
+                    currentY = startY + lines.size() * lineHeight;
+                    maxWidth = currentY + lineHeight <= imageBottomY ? reducedWidth : fullWidth;
+                    maxWidth = Math.max(10, maxWidth);
+                }
+                line.append(word);
+            }
+            if (!line.isEmpty() || paragraph.isEmpty())
+                lines.add(line.toString());
+        }
+        return lines;
     }
 
     /**

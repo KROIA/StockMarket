@@ -57,6 +57,16 @@ public class NewsPictureElement extends StockMarketGuiElement {
     private final byte @Nullable [] pictureHash;
     private final FitMode fitMode;
     /**
+     * T-113: when true, the element paints <b>nothing</b> while the picture is not
+     * (yet) available — no placeholder box, no ink outline. Combined with the
+     * parent's layout probe ({@link #hasLoadedPicture()}), this lets surfaces with a
+     * variable image slot (newspaper cards, event-details popup) truly hide the box
+     * so the surrounding text can flow at full width instead of framing an empty
+     * paper-gray rectangle. Default off (preserves the T-091 placeholder behavior
+     * used by the Active-tab thumbnails, whose slot is fixed-size anyway).
+     */
+    private boolean hideWhenAbsent = false;
+    /**
      * Diagnostic (T-106): logs the element's first paint once — hash prefix, box
      * dimensions, cache state — so a picture that never shows up in-game reveals
      * whether the widget is even being rendered (bounds/parent) or the fetch/decode
@@ -85,6 +95,40 @@ public class NewsPictureElement extends StockMarketGuiElement {
     /** @return the per-connection picture cache, or null while not connected */
     private static @Nullable ClientNewsPictureCache getPictureCache() {
         return BACKEND_INSTANCES != null ? BACKEND_INSTANCES.NEWS_PICTURE_CACHE : null;
+    }
+
+    /**
+     * T-113: toggles the "hide when absent" mode. When enabled, the element paints
+     * nothing while the picture is not (yet) available (no placeholder), so a
+     * parent that reserves a top-right image slot can drop the slot entirely and
+     * flow its text at full width. The polling side-effect of {@code render()}
+     * (self-enqueueing the fetch via {@link ClientNewsPictureCache#getTexture})
+     * still happens on frames where the element gets rendered with positive
+     * bounds — parents that hide the element by giving it zero bounds should use
+     * {@link #hasLoadedPicture()} at layout time instead.
+     *
+     * @param hide true to skip the placeholder rendering
+     */
+    public void setHideWhenAbsent(boolean hide) {
+        this.hideWhenAbsent = hide;
+    }
+
+    /**
+     * T-113: probes the picture cache for the current load state — used by parents
+     * to decide at layout time whether to reserve a top-right image slot for this
+     * record (a real newspaper column reflow) or to hide the slot and let the
+     * text use the full width. Calling this also enqueues the fetch at HIGH
+     * priority via {@link ClientNewsPictureCache#getTexture} (the parent laying
+     * out the picture is a widget that is now actively waiting for it), so the
+     * change listener will trigger the next rebuild once the texture lands.
+     *
+     * @return true when {@link ClientNewsPictureCache#getTexture} returns a
+     *         registered picture for this element's hash right now
+     */
+    public boolean hasLoadedPicture() {
+        if (pictureHash == null) return false;
+        ClientNewsPictureCache cache = getPictureCache();
+        return cache != null && cache.getTexture(pictureHash) != null;
     }
 
     @Override
@@ -124,6 +168,13 @@ public class NewsPictureElement extends StockMarketGuiElement {
                     picture != null ? "loaded" : "pending");
         }
         if (picture == null || picture.width() <= 0 || picture.height() <= 0) {
+            // T-113: hide-when-absent surfaces (newspaper cards, event details
+            // popup) skip the placeholder entirely so their text uses the full
+            // width — parents already gave us zero or minimal bounds via their
+            // hasLoadedPicture() layout probe, but even if bounds slipped through
+            // we still paint nothing here so the surrounding paper never carries a
+            // ghost outline while the fetch is in flight or has given up.
+            if (hideWhenAbsent) return;
             renderPlaceholder(boxW, boxH);
             return;
         }

@@ -8,6 +8,7 @@ import net.kroia.modutilities.gui.elements.VerticalListView;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.networking.request.NewsAdminRequest;
+import net.kroia.stockmarket.news.ClientNewsPictureCache;
 import net.kroia.stockmarket.news.NewsTranslations;
 import net.kroia.stockmarket.news.NewsUiFormatting;
 import net.kroia.stockmarket.pluginsystem.plugins.NewsPlugin;
@@ -53,8 +54,6 @@ public class NewsEventDetailsScreen extends StockMarketGuiScreen {
      */
     private static final class Texts {
         private static final String PREFIX = "gui." + StockMarketMod.MOD_ID + ".news_plugin.";
-        static final Component PHASE_REMAINING =
-                Component.translatable(PREFIX + "details_phase_remaining");
         static final Component EVENT_REMAINING =
                 Component.translatable(PREFIX + "details_event_remaining");
         /** Value shown for a timer whose event is PENDING (announced but not published yet). */
@@ -116,6 +115,11 @@ public class NewsEventDetailsScreen extends StockMarketGuiScreen {
 
     /**
      * Creates the details screen for one definition snapshot.
+     * <p>
+     * T-113: wires a change listener on the client news picture cache so a
+     * picture that arrives after this screen was first drawn triggers a content
+     * rebuild — the image slot flips from hidden to visible, the headline/body
+     * reflow around it. The listener is cleared in {@link #removed()}.
      *
      * @param parent  the screen to return to on close (the plugin window's screen)
      * @param owner   the news plugin GUI element (snapshot + live-data source)
@@ -132,6 +136,46 @@ public class NewsEventDetailsScreen extends StockMarketGuiScreen {
         contentList.setLayout(new LayoutVertical(0, 0, true, false));
         addElement(contentList);
         addElement(closeButton);
+
+        // T-113: rebuild the content when a picture texture lands (or is evicted),
+        // so the top-right image slot appears/disappears and the surrounding text
+        // reflows accordingly. Same composition pattern as NewsScreen (T-091).
+        ClientNewsPictureCache pictureCache = getPictureCache();
+        if (pictureCache != null) {
+            pictureCache.setChangeListener(this::onPictureCacheChanged);
+            // Prefetch the shown event's picture immediately so the fetch is on
+            // its way while the user reads the top-of-popup metadata.
+            pictureCache.prefetch(details.pictureHash());
+        }
+    }
+
+    /** @return the per-connection picture cache, or null while not connected (T-113) */
+    private @Nullable ClientNewsPictureCache getPictureCache() {
+        return BACKEND_INSTANCES != null ? BACKEND_INSTANCES.NEWS_PICTURE_CACHE : null;
+    }
+
+    /**
+     * T-113: picture cache change listener — a texture arrived (or was evicted),
+     * so the layout may need to reflow around a newly-available image (or drop
+     * the image slot entirely). Rebuilding the content preserves the scroll
+     * position and the collapsed-sequence state, so the user's context is kept.
+     */
+    private void onPictureCacheChanged() {
+        rebuildPreservingScroll();
+    }
+
+    /**
+     * {@inheritDoc}
+     * T-113: clears the picture cache change listener so a closed details screen
+     * no longer receives texture arrival notifications.
+     */
+    @Override
+    public void removed() {
+        ClientNewsPictureCache pictureCache = getPictureCache();
+        if (pictureCache != null) {
+            pictureCache.setChangeListener(null);
+        }
+        super.removed();
     }
 
     /** @return the shown definition id (used by the owner to route snapshot refreshes) */
@@ -193,20 +237,24 @@ public class NewsEventDetailsScreen extends StockMarketGuiScreen {
     }
 
     /**
-     * The scrollable body: locale-resolved headline, the event picture (T-091, a
-     * square centered {@link NewsPictureElement} in COVER mode when the snapshot
-     * carries a picture hash), the news text (word-wrapped), the definition
-     * parameters (enabled, adminOnly, weight, cooldown, announce-delay range), the
-     * per-sequence step breakdown as an aligned table (T-105 — replaces the free-
-     * form text rows of T-100; column x positions are shared across every
-     * sequence, the running step is live-highlighted, multi-sequence headers are
-     * collapsible; T-111 tightens the Name column and adds a per-row live
-     * countdown cell right after Duration), two split live timers — Phase
-     * remaining (current step) and
-     * Event remaining (best-effort sum of the remaining authored step durations)
-     * — drawn from the owner's runtime stream every frame, one row per impacted
-     * market, and — when non-empty — the trigger-requirements (met/unmet) and
-     * chained-events sections (T-100).
+     * The scrollable body: locale-resolved headline, the event picture (T-091,
+     * repositioned by T-113 to the <b>top-right</b> corner as a hide-when-absent
+     * {@link NewsPictureElement} in COVER mode — headline / news text / metadata
+     * flow around it on the left and continue full-width below its bottom edge,
+     * like a real newspaper column with a photo; when the picture is not yet
+     * loaded the slot is truly hidden — no placeholder), the news text (word-
+     * wrapped around the image), the definition parameters (enabled, adminOnly,
+     * weight, cooldown, announce-delay range), the per-sequence step breakdown
+     * as an aligned table (T-105 — replaces the free-form text rows of T-100;
+     * column x positions are shared across every sequence, the running step is
+     * live-highlighted, multi-sequence headers are collapsible; T-111 tightens
+     * the Name column and adds a per-row live countdown cell right after
+     * Duration), <b>one</b> live timer — Event remaining (best-effort sum of
+     * the remaining authored step durations, drawn from the owner's runtime
+     * stream every frame — T-113 dropped the redundant Phase-remaining label
+     * since the per-row Remaining column of T-111 covers the current phase),
+     * one row per impacted market, and — when non-empty — the trigger-
+     * requirements (met/unmet) and chained-events sections (T-100).
      * <p>
      * <b>Impact-row layout (T-085):</b> everything is left-clustered — item icon, then
      * the signed peak percentage and the matcher weight factor in aligned columns
@@ -225,6 +273,12 @@ public class NewsEventDetailsScreen extends StockMarketGuiScreen {
         private static final int MARKET_ROW_H = ICON_SIZE + 2;
         /** Cap of the square event picture's side length in GUI pixels (T-091, plan §6). */
         private static final int PICTURE_MAX_SIDE = 140;
+        /**
+         * Horizontal gutter between the top-right picture (T-113) and the text on
+         * its left. Kept modest so the reduced-width headline column above the
+         * picture still fits a couple of words per line on a narrow popup.
+         */
+        private static final int PICTURE_TEXT_GUTTER = 6;
         /** Indent of a step row under its sequence header (T-100). */
         private static final int STEP_INDENT = 6;
         /** Translucent backdrop behind the live-highlighted running step (T-100). */
@@ -320,12 +374,13 @@ public class NewsEventDetailsScreen extends StockMarketGuiScreen {
         private final NewsAdminRequest.EventDetails details;
         private final int builtWidth;
         /**
-         * T-105: y positions of the two split timers ({@code Phase remaining} and
-         * {@code Event remaining}). Both are drawn dynamically in {@code render()}
-         * from the runtime stream — phase from {@code stepRemainingMs}, event
-         * best-effort from the picked sequence's remaining authored durations.
+         * T-113: y position of the single live timer ({@code Event remaining} —
+         * whole-event countdown, best-effort sum of remaining authored step
+         * durations). Drawn dynamically in {@code render()}. The former
+         * {@code Phase remaining} label was dropped in T-113 because the per-row
+         * {@code Remaining} column added by T-111 already shows the current
+         * step's countdown.
          */
-        private final int phaseLineY;
         private final int eventLineY;
         private final int marketsY;
         // Column widths of the left-clustered impact rows (max over all rows).
@@ -371,36 +426,82 @@ public class NewsEventDetailsScreen extends StockMarketGuiScreen {
             int metaH = NewsUiText.lineHeight(this, META_SCALE);
             int y = INNER_PAD;
 
-            // Headline (title scale, wrapped).
-            for (String line : NewsUiText.wrapText(this,
-                    NewsPluginGuiElement.resolveHeadline(details), textW, TITLE_SCALE)) {
+            // ── T-113: top-right image slot ──
+            // Probe the picture cache at build time — hasLoadedPicture() also
+            // enqueues the fetch at HIGH priority so the screen's change listener
+            // (see NewsEventDetailsScreen) will rebuild the content once the
+            // texture arrives. When the hash is absent OR the picture has not
+            // loaded yet, no space is reserved and the text uses the full width;
+            // as a defence-in-depth the element is created with setHideWhenAbsent
+            // so a picture that gets evicted between builds still paints nothing.
+            int imageSide;
+            int reducedTextW;
+            int imageBottomY;
+            boolean showImage = false;
+            if (details.pictureHash() != null) {
+                NewsPictureElement picture = new NewsPictureElement(
+                        details.pictureHash(), NewsPictureElement.FitMode.COVER);
+                picture.setHideWhenAbsent(true);
+                showImage = picture.hasLoadedPicture();
+                if (showImage) {
+                    imageSide = Math.min(textW / 3, PICTURE_MAX_SIDE);
+                    if (imageSide < 20) {
+                        imageSide = 0;
+                        showImage = false;
+                    }
+                } else {
+                    imageSide = 0;
+                }
+                if (showImage) {
+                    picture.setBounds(INNER_PAD + textW - imageSide, y, imageSide, imageSide);
+                    addChild(picture);
+                    reducedTextW = Math.max(20, textW - imageSide - PICTURE_TEXT_GUTTER);
+                    imageBottomY = y + imageSide;
+                } else {
+                    reducedTextW = textW;
+                    imageBottomY = y;
+                }
+            } else {
+                imageSide = 0;
+                reducedTextW = textW;
+                imageBottomY = y;
+            }
+
+            // Headline (title scale) — flows around the image: reduced width for
+            // lines above imageBottomY, full width for any overflow below.
+            List<String> headlineLines = NewsUiText.wrapAroundImage(this,
+                    NewsPluginGuiElement.resolveHeadline(details), reducedTextW, textW,
+                    y, imageBottomY, titleH, TITLE_SCALE);
+            for (String line : headlineLines) {
                 lines.add(new Line(line, 0xFFFFFFFF, TITLE_SCALE, y));
                 y += titleH;
             }
             y += metaH / 2;
 
-            // Event picture between headline and body (T-091): square COVER box,
-            // side capped, centered on the content axis. A child element that polls
-            // the picture cache itself — no callback wiring needed here (the owner's
-            // snapshot refreshes rebuild this content anyway).
-            if (details.pictureHash() != null) {
-                int side = Math.min(textW, PICTURE_MAX_SIDE);
-                NewsPictureElement picture = new NewsPictureElement(
-                        details.pictureHash(), NewsPictureElement.FitMode.COVER);
-                picture.setBounds(INNER_PAD + (textW - side) / 2, y, side, side);
-                addChild(picture);
-                y += side + metaH / 2;
-            }
-
-            // News text (wrapped, secondary color).
+            // News text (wrapped, secondary color) — same two-region flow so the
+            // body continues to wrap around the picture on the right until it
+            // clears the image, then uses the full text width.
             String body = NewsTranslations.resolve(details.text(),
                     NewsPluginGuiElement.clientLanguage());
             if (!body.isEmpty()) {
-                for (String line : NewsUiText.wrapText(this, body, textW, META_SCALE)) {
+                List<String> bodyLines = NewsUiText.wrapAroundImage(this, body,
+                        reducedTextW, textW, y, imageBottomY, metaH, META_SCALE);
+                for (String line : bodyLines) {
                     lines.add(new Line(line, NewsPluginGuiElement.COLOR_TEXT_SECONDARY, META_SCALE, y));
                     y += metaH;
                 }
                 y += metaH / 2;
+            }
+
+            // T-113: the definition-parameter block below the news text is a
+            // stack of short single-line labels. If the running y still hasn't
+            // cleared the image's vertical extent, we could technically wrap
+            // them beside the image too — but the labels have literal text and
+            // no natural line breaks, so we just push y past imageBottomY once
+            // and continue full-width from there. This matches the "text flows
+            // around the image, then continues under it" contract.
+            if (showImage && y < imageBottomY + metaH / 2) {
+                y = imageBottomY + metaH / 2;
             }
 
             // Definition parameters.
@@ -458,13 +559,10 @@ public class NewsEventDetailsScreen extends StockMarketGuiScreen {
                 y = addSequenceBlock(textW, y, metaH);
             }
 
-            // T-105: two split timers (drawn dynamically in render()) — phase
-            // remaining (of the currently running step) and event remaining
-            // (best-effort sum of the picked sequence's remaining step
-            // durations). Stacked because the labels + mm:ss values would push
-            // side-by-side layout past the wrap width on narrow windows.
-            phaseLineY = y;
-            y += metaH;
+            // T-113: single live timer — event remaining (best-effort sum of
+            // the picked sequence's remaining step durations). The former Phase-
+            // remaining label was dropped because the per-row Remaining column
+            // added by T-111 already shows the current step's countdown.
             eventLineY = y;
             y += metaH;
             y += metaH / 2;
@@ -947,51 +1045,29 @@ public class NewsEventDetailsScreen extends StockMarketGuiScreen {
         }
 
         /**
-         * Draws the two split live timers (T-105) — the older single "Live: …"
-         * label lied by combining the streamed {@code stepRemainingMs} label
-         * with the sequence-total {@code remainingMs}, so operators couldn't
-         * tell how long the current step still had left. This split shows:
-         * <ul>
-         *   <li><b>Phase remaining</b> — driven purely by
-         *       {@code stepRemainingMs} (the −1 sentinel means the event is
-         *       either PENDING or terminal; both states render text values).</li>
-         *   <li><b>Event remaining</b> — best-effort sum of the remaining
-         *       authored step durations for the sequence identified by the
-         *       running step (see {@link #computeEventRemainingMs}); "—" when
-         *       the event is not currently running.</li>
-         * </ul>
+         * Draws the single live timer (T-113 — was two timers pre-T-113; the
+         * "Phase remaining" label was dropped because the per-row Remaining
+         * column added by T-111 already shows the current step's countdown).
+         * <p>
+         * <b>Event remaining</b> — best-effort sum of the remaining authored
+         * step durations for the sequence identified by the running step (see
+         * {@link #computeEventRemainingMs}); "—" when the event is not
+         * currently running. Value is drawn in the current phase's color so
+         * operators can spot at a glance which phase is active without needing
+         * a separate label.
          *
          * @param live the current runtime info of this event, or null while
          *             inactive
          */
         private void drawSplitTimers(NewsPlugin.RuntimeStreamData.@Nullable ActiveEventInfo live) {
-            String phaseRemainingText;
-            int phaseRemainingColor;
             String eventRemainingText;
             int eventRemainingColor;
-            if (live == null) {
-                // No running instance at all — both timers show the neutral
-                // dash placeholder.
-                phaseRemainingText = Texts.TIME_DASH.getString();
-                phaseRemainingColor = NewsPluginGuiElement.COLOR_NEUTRAL_GRAY;
-                eventRemainingText = Texts.TIME_DASH.getString();
-                eventRemainingColor = NewsPluginGuiElement.COLOR_NEUTRAL_GRAY;
-            } else if (live.stepRemainingMs() < 0) {
-                // Sentinel: PENDING (announced but not published yet) or
-                // terminal (PERMANENT/EXPIRED). The phase timer distinguishes
-                // the two states via text; the event timer stays "—" in both
-                // (the event either hasn't started or has already ended).
-                boolean pending = "PENDING".equals(live.phaseName());
-                phaseRemainingText = pending ? Texts.TIME_PENDING.getString()
-                        : Texts.TIME_TERMINAL.getString();
-                phaseRemainingColor = NewsPluginGuiElement.phaseColor(live.phaseName());
+            if (live == null || live.stepRemainingMs() < 0) {
+                // No running instance OR PENDING/terminal sentinel — event timer
+                // shows the neutral dash placeholder (nothing to count down).
                 eventRemainingText = Texts.TIME_DASH.getString();
                 eventRemainingColor = NewsPluginGuiElement.COLOR_NEUTRAL_GRAY;
             } else {
-                // Instance is running — real countdowns for both timers.
-                long phaseMs = Math.max(0, live.stepRemainingMs());
-                phaseRemainingText = NewsUiFormatting.formatRemainingTime(phaseMs);
-                phaseRemainingColor = NewsPluginGuiElement.phaseColor(live.phaseName());
                 long eventMs = computeEventRemainingMs(live);
                 if (eventMs < 0) {
                     // Sequence could not be resolved (structurally identical
@@ -1004,11 +1080,6 @@ public class NewsEventDetailsScreen extends StockMarketGuiScreen {
                     eventRemainingColor = NewsPluginGuiElement.phaseColor(live.phaseName());
                 }
             }
-            // Label + value on one line each. The labels share the neutral gray
-            // used by every other left-column meta label; the values take the
-            // phase color so users can spot at a glance which phase is running.
-            drawTimerLine(Texts.PHASE_REMAINING.getString(), phaseRemainingText,
-                    phaseRemainingColor, phaseLineY);
             drawTimerLine(Texts.EVENT_REMAINING.getString(), eventRemainingText,
                     eventRemainingColor, eventLineY);
         }
