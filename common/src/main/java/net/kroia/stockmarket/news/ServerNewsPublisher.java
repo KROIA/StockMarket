@@ -269,10 +269,11 @@ public class ServerNewsPublisher implements NewsPublisher {
             // store — a hash no client could ever fetch would be worse than no hash.
             if (pictureStore.put(entry.getSha1(), entry.getBytes())) {
                 record.setPictureHash(entry.getSha1());
-                // T-106 diagnostic: successful publish-time snapshot. WARN-level so
-                // the next in-game run makes the healthy path visible alongside the
-                // failure branches above. One log per publish (not deduped).
-                StockMarketMod.LOGGER.warn(
+                // T-106 diagnostic (downgraded T-112): successful publish-time
+                // snapshot. Now DEBUG-level — the picture pipeline is verified
+                // end-to-end with tests; the healthy-path log is only useful when
+                // troubleshooting a specific regression.
+                StockMarketMod.LOGGER.debug(
                         "[NewsPlugin] Published '{}' with picture '{}' ({} bytes, hash {})",
                         record.getEventId(), fileName, entry.getBytes().length,
                         NewsPictureLibrary.toHex(entry.getSha1()).substring(0, 12));

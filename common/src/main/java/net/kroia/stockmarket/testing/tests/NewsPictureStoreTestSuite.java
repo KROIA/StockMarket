@@ -13,6 +13,7 @@ import net.kroia.stockmarket.news.NewsPictureLibrary;
 import net.kroia.stockmarket.news.NewsPictureStore;
 import net.kroia.stockmarket.news.NewsRecord;
 import net.kroia.stockmarket.news.ServerNewsPublisher;
+import net.kroia.stockmarket.news.ValidationReport;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.nbt.CompoundTag;
@@ -71,6 +72,12 @@ public class NewsPictureStoreTestSuite extends TestSuite {
         addTest("publish_missing_picture_stays_textonly", this::test_publish_missingPictureStaysTextOnly);
         addTest("publish_config_swap_keeps_old_record_served", this::test_publish_configSwapKeepsOldRecordServed);
         addTest("publish_prune_gc_drops_unreferenced_picture", this::test_publish_pruneGc_dropsUnreferencedPicture);
+
+        // T-112 self-heal (recover orphan store bytes from the library on load)
+        addTest("selfheal_restores_missing_bytes_from_library", this::test_selfheal_restoresMissingBytesFromLibrary);
+        addTest("selfheal_negative_when_library_lacks_hash", this::test_selfheal_negativeWhenLibraryLacksHash);
+        addTest("selfheal_skips_hashes_already_present", this::test_selfheal_skipsHashesAlreadyPresent);
+        addTest("selfheal_unwired_is_safe_noop", this::test_selfheal_unwiredIsSafeNoop);
     }
 
     // ========================================================================
@@ -629,6 +636,148 @@ public class NewsPictureStoreTestSuite extends TestSuite {
             if (!r.passed()) return r;
             return assertEquals("store must hold exactly the surviving picture",
                     1, store.listHashes().size());
+        } catch (IOException e) {
+            return fail("temp dir setup failed: " + e);
+        } finally {
+            deleteRecursively(dir);
+        }
+    }
+
+    // ========================================================================
+    // T-112 self-heal (recover orphan store bytes from the library on load)
+    // ========================================================================
+
+    /**
+     * Populates a rescanned {@link NewsPictureLibrary} against the given
+     * fileName → bytes map. Uses a temp folder so the live config is untouched.
+     */
+    private static NewsPictureLibrary populatedLibrary(Path tempDir,
+                                                       Map<String, byte[]> pictures) throws IOException {
+        Path picturesDir = tempDir.resolve("library_pictures");
+        Files.createDirectories(picturesDir);
+        for (Map.Entry<String, byte[]> picture : pictures.entrySet()) {
+            Files.write(picturesDir.resolve(picture.getKey()), picture.getValue());
+        }
+        NewsPictureLibrary library = new NewsPictureLibrary();
+        library.rescan(picturesDir, new ValidationReport());
+        return library;
+    }
+
+    /**
+     * <b>T-112 positive:</b> history references a hash whose PNG lives in the
+     * library but is absent from the store — self-heal must restore the bytes
+     * into the store and return them from a subsequent {@link NewsPictureStore#get}.
+     */
+    private TestResult test_selfheal_restoresMissingBytesFromLibrary() {
+        Path dir = null;
+        try {
+            dir = createTempDir();
+            byte[] png = validPng(48, 48, 20);
+            byte[] hash = NewsPictureLibrary.sha1(png);
+
+            NewsPictureStore store = storeIn(dir);
+            // Store is empty; library has the referenced picture on disk.
+            NewsPictureLibrary library = populatedLibrary(dir, Map.of("pic.png", png));
+
+            int restored = store.selfHealFromLibrary(library, List.of(hash));
+            TestResult r = assertEquals("self-heal must report one restored picture",
+                    1, restored);
+            if (!r.passed()) return r;
+            r = assertTrue("bytes must now be served by the store",
+                    Arrays.equals(png, store.get(hash)));
+            if (!r.passed()) return r;
+            r = assertEquals("store must hold exactly the restored picture",
+                    1, store.listHashes().size());
+            if (!r.passed()) return r;
+            // Second run should heal nothing (idempotent).
+            return assertEquals("re-running self-heal on a healthy store must restore 0",
+                    0, store.selfHealFromLibrary(library, List.of(hash)));
+        } catch (IOException e) {
+            return fail("temp dir setup failed: " + e);
+        } finally {
+            deleteRecursively(dir);
+        }
+    }
+
+    /**
+     * <b>T-112 negative:</b> history references a hash the library does NOT
+     * contain — self-heal is a no-op, no crash, store stays empty (records will
+     * simply render the placeholder as before, same as pre-T-112 behaviour).
+     */
+    private TestResult test_selfheal_negativeWhenLibraryLacksHash() {
+        Path dir = null;
+        try {
+            dir = createTempDir();
+            byte[] referencedPng = validPng(48, 48, 21);
+            byte[] referencedHash = NewsPictureLibrary.sha1(referencedPng);
+            byte[] unrelatedPng = validPng(48, 48, 22);
+
+            NewsPictureStore store = storeIn(dir);
+            // Library has an UNRELATED picture — SHA-1 does not match the referenced hash.
+            NewsPictureLibrary library = populatedLibrary(dir, Map.of("other.png", unrelatedPng));
+
+            int restored = store.selfHealFromLibrary(library, List.of(referencedHash));
+            TestResult r = assertEquals("nothing must be restored when the library lacks the hash",
+                    0, restored);
+            if (!r.passed()) return r;
+            r = assertNull("orphan hash must stay unreadable from the store",
+                    store.get(referencedHash));
+            if (!r.passed()) return r;
+            return assertEquals("store must stay empty", 0, store.listHashes().size());
+        } catch (IOException e) {
+            return fail("temp dir setup failed: " + e);
+        } finally {
+            deleteRecursively(dir);
+        }
+    }
+
+    /**
+     * <b>T-112:</b> hashes already present in the store must be skipped and never
+     * counted — the library is only consulted for genuinely missing entries.
+     */
+    private TestResult test_selfheal_skipsHashesAlreadyPresent() {
+        Path dir = null;
+        try {
+            dir = createTempDir();
+            byte[] presentPng = validPng(48, 48, 23);
+            byte[] missingPng = validPng(48, 48, 24);
+            byte[] presentHash = NewsPictureLibrary.sha1(presentPng);
+            byte[] missingHash = NewsPictureLibrary.sha1(missingPng);
+
+            NewsPictureStore store = storeIn(dir);
+            store.put(presentHash, presentPng);
+            NewsPictureLibrary library = populatedLibrary(dir,
+                    Map.of("present.png", presentPng, "missing.png", missingPng));
+
+            int restored = store.selfHealFromLibrary(library, List.of(presentHash, missingHash));
+            TestResult r = assertEquals("only the missing hash must be restored",
+                    1, restored);
+            if (!r.passed()) return r;
+            r = assertTrue("previously-present picture must still be served (untouched)",
+                    Arrays.equals(presentPng, store.get(presentHash)));
+            if (!r.passed()) return r;
+            return assertTrue("previously-missing picture must now be served",
+                    Arrays.equals(missingPng, store.get(missingHash)));
+        } catch (IOException e) {
+            return fail("temp dir setup failed: " + e);
+        } finally {
+            deleteRecursively(dir);
+        }
+    }
+
+    /** Before {@link NewsPictureStore#setDirectory} self-heal is a safe no-op (never throws). */
+    private TestResult test_selfheal_unwiredIsSafeNoop() {
+        Path dir = null;
+        try {
+            dir = createTempDir();
+            NewsPictureStore unwired = new NewsPictureStore();
+            byte[] png = validPng(32, 32, 25);
+            byte[] hash = NewsPictureLibrary.sha1(png);
+            NewsPictureLibrary library = populatedLibrary(dir, Map.of("pic.png", png));
+
+            int restored = unwired.selfHealFromLibrary(library, List.of(hash));
+            return assertEquals("self-heal on an unwired store must restore 0",
+                    0, restored);
         } catch (IOException e) {
             return fail("temp dir setup failed: " + e);
         } finally {

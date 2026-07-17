@@ -11,8 +11,10 @@ import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
 import net.kroia.stockmarket.data.table.MarketPriceManager;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import net.kroia.stockmarket.news.NewsHistory;
+import net.kroia.stockmarket.news.NewsPictureLibrary;
 import net.kroia.stockmarket.news.NewsPictureStore;
 import net.kroia.stockmarket.news.NewsWorldRegistry;
+import net.kroia.stockmarket.news.ValidationReport;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.server.MinecraftServer;
@@ -428,10 +430,31 @@ public class DataManager extends DataPersistence {
         newsHistory.setDirectory(
                 newsFolder.resolve(NEWS_HISTORY_FOLDER),
                 newsFolder.resolve(NEWS_HISTORY_LEGACY_FILE));
+
+        // T-112 self-heal: before the load-time GC drops "orphan" store files,
+        // rebuild any hash the history references but the store no longer holds
+        // from the config-layer picture library. The library folder persists
+        // across sessions (config/StockMarket/news/pictures/) and is self-
+        // populating with procedural defaults on first-run, so it is the
+        // resilient source of truth for the derived store — this makes the
+        // pipeline self-healing against any prior loss of picture bytes
+        // (manual store cleanup, aborted write, a mis-driven GC before this
+        // safety net landed, corrupt sidecar under-reporting references).
+        // Records whose picture is not in the library keep rendering the
+        // placeholder — same behaviour as before this hook.
+        java.util.List<byte[]> referencedHashes = newsHistory.referencedPictureHashes();
+        try {
+            NewsPictureLibrary library = new NewsPictureLibrary();
+            library.rescan(NewsPictureLibrary.getPicturesPath(), new ValidationReport());
+            newsPictureStore.selfHealFromLibrary(library, referencedHashes);
+        } catch (Exception e) {
+            error("loadNews(): self-heal from picture library failed — continuing", e);
+        }
+
         // GC after the load: drop every stored picture no history record references
         // anymore (records pruned/removed while the store was offline). Sidecar-based
         // union — no chunk data loaded (T-110).
-        newsPictureStore.retainOnly(newsHistory.referencedPictureHashes());
+        newsPictureStore.retainOnly(referencedHashes);
         return true;
     }
 

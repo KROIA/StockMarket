@@ -106,18 +106,18 @@ public class NewsPictureElement extends StockMarketGuiElement {
         ClientNewsPictureCache cache = getPictureCache();
         ClientNewsPictureCache.LoadedPicture picture =
                 cache != null ? cache.getTexture(pictureHash) : null;
-        // T-106 diagnostic: one WARN per element on first paint. Reveals whether the
-        // widget is being rendered at all (bounds/parent), whether the picture cache
-        // is reachable at that point, and whether a texture landed before the first
-        // frame ever drew. A pipeline that never gets past this line indicates a
-        // layout/parent issue; a line with "cache=null" indicates the cache never
-        // got created; a line with a positive box + null texture means the fetch is
-        // still in-flight or failed downstream.
+        // T-106 diagnostic (downgraded T-112): one DEBUG per element on first
+        // paint. Reveals whether the widget is being rendered at all
+        // (bounds/parent), whether the picture cache is reachable at that
+        // point, and whether a texture landed before the first frame ever
+        // drew. Kept for future troubleshooting but now DEBUG-level: the
+        // pipeline root cause was fixed via the picture-store self-heal path
+        // (T-112), covered by tests.
         if (!loggedFirstRender) {
             loggedFirstRender = true;
             String hashHex = pictureHash != null ? NewsPictureLibrary.toHex(pictureHash) : "null";
             String hashShort = hashHex.length() > 12 ? hashHex.substring(0, 12) + "…" : hashHex;
-            StockMarketMod.LOGGER.warn(
+            StockMarketMod.LOGGER.debug(
                     "[NewsPictureElement] First render: hash={} box={}x{} fit={} cache={} texture={}",
                     hashShort, boxW, boxH, fitMode,
                     cache != null ? "wired" : "null",

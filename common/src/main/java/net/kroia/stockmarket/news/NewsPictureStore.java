@@ -9,9 +9,13 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -203,6 +207,90 @@ public final class NewsPictureStore {
         } catch (Exception e) {
             StockMarketMod.LOGGER.error("[NewsPictureStore] GC scan of {} failed", dir, e);
         }
+    }
+
+    // ── Self-heal (T-112) ────────────────────────────────────────────────
+
+    /**
+     * Restores every history-referenced hash whose PNG bytes are currently absent
+     * from the store, using the config-layer {@link NewsPictureLibrary} as the
+     * recoverable source of truth (T-112).
+     * <p>
+     * <b>Why this exists:</b> the store is derived data — {@link #put} on publish,
+     * {@link #retainOnly} on history-record loss. Any prior loss of bytes (manual
+     * store cleanup, aborted write, a mis-driven load-time GC before this
+     * safety net landed, a corrupted sidecar under-reporting references) leaves
+     * history records pointing at hashes the store can no longer serve, so
+     * every affected picture renders as the client's placeholder forever.
+     * The config-layer library survives all of these — it is rescanned from
+     * {@code config/StockMarket/news/pictures/} on every reload, and the built-in
+     * procedural defaults ({@code DefaultNewsPictures.extractDefaultsIfEmpty})
+     * re-populate it on a wiped install. As long as a referenced hash's PNG is
+     * still in the library, this method restores it.
+     * <p>
+     * The call sequence is meant to be:
+     * <pre>
+     *   Collection&lt;byte[]&gt; refs = history.referencedPictureHashes();
+     *   store.selfHealFromLibrary(library, refs);   // repair first
+     *   store.retainOnly(refs);                     // then GC what is truly orphaned
+     * </pre>
+     * <b>Idempotent + failure-tolerant:</b> hashes already present in the store are
+     * skipped; library entries are indexed by SHA-1 hex once (O(entries)); a hash
+     * with no matching library PNG stays missing (the record renders the
+     * placeholder as before, same as pre-T-112 behaviour); IO/put failures are
+     * logged inside {@link #put} and never propagate.
+     *
+     * @param library          the config-layer picture library, freshly
+     *                         {@link NewsPictureLibrary#rescan}'d by the caller
+     * @param referencedHashes hashes referenced by any history record — the set
+     *                         the store must be able to serve (20-byte SHA-1s;
+     *                         null / wrong-length entries are ignored)
+     * @return the number of pictures restored to the store (0 = nothing to heal
+     *         or nothing recoverable from the library)
+     */
+    public int selfHealFromLibrary(@NotNull NewsPictureLibrary library,
+                                   @NotNull Collection<byte[]> referencedHashes) {
+        Path dir = directory;
+        if (dir == null) return 0;
+
+        Set<String> present = listHashes();
+
+        // Collect orphan hashes: referenced by the history but not in the store.
+        // Deduplicate by hex; keep the original 20-byte hash for the put() call.
+        List<byte[]> orphanHashes = new ArrayList<>();
+        Set<String> orphanHex = new HashSet<>();
+        for (byte[] hash : referencedHashes) {
+            if (!isValidHash(hash)) continue;
+            String hex = NewsPictureLibrary.toHex(hash);
+            if (present.contains(hex)) continue;
+            if (orphanHex.add(hex)) orphanHashes.add(hash);
+        }
+        if (orphanHashes.isEmpty()) return 0;
+
+        // Index the library entries by lowercase-hex SHA-1 once — O(library entries).
+        Map<String, NewsPictureLibrary.Entry> librarySha1ToEntry =
+                new HashMap<>(library.getEntries().size());
+        for (NewsPictureLibrary.Entry entry : library.getEntries().values()) {
+            if (entry != null && entry.getSha1() != null
+                    && entry.getSha1().length == NewsPictureLibrary.SHA1_LENGTH) {
+                librarySha1ToEntry.put(NewsPictureLibrary.toHex(entry.getSha1()), entry);
+            }
+        }
+
+        int restored = 0;
+        for (byte[] hash : orphanHashes) {
+            NewsPictureLibrary.Entry entry = librarySha1ToEntry.get(NewsPictureLibrary.toHex(hash));
+            if (entry == null) continue; // library doesn't have this content — placeholder stays
+            if (put(entry.getSha1(), entry.getBytes())) {
+                restored++;
+            }
+        }
+        if (restored > 0) {
+            StockMarketMod.LOGGER.warn(
+                    "[NewsPictureStore] Self-heal: restored {} picture(s) from the library for orphan history record(s)",
+                    restored);
+        }
+        return restored;
     }
 
     // ── Introspection ────────────────────────────────────────────────────

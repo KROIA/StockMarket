@@ -539,13 +539,14 @@ public class ClientNewsPictureCache {
         }
         evictOverflow();
 
-        // T-106 diagnostic: one WARN per response batch. Reveals whether pictures
-        // are actually landing on the client — silent placeholder-only rendering is
-        // often a chain break (server didn't stamp, rate-limiter refused, decode
-        // failed) that never surfaced anywhere before. WARN-level so it also shows
-        // in default log configs.
+        // T-106 diagnostic (downgraded T-112): one DEBUG per response batch.
+        // Reveals whether pictures are actually landing on the client — silent
+        // placeholder-only rendering is often a chain break (server didn't stamp,
+        // rate-limiter refused, decode failed). Kept for future troubleshooting
+        // but now DEBUG-level: the pipeline root cause was fixed via the picture-
+        // store self-heal path (T-112), covered by tests.
         if (loaded > 0 || missed > 0) {
-            StockMarketMod.LOGGER.warn(
+            StockMarketMod.LOGGER.debug(
                     "[ClientNewsPictureCache] Response batch: {} loaded, {} missed (of {} requested)",
                     loaded, missed, batch.size());
         }
