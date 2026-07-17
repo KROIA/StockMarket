@@ -1808,14 +1808,20 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
      * it ({@code SKIP_PHASE}/{@code STOP_EVENT}, audited server-side). Gated like the
      * All-events rows' admin buttons: hidden until the admin snapshot is loaded.
      * <p>
-     * <b>Picture thumbnail (T-091):</b> events whose streamed snapshot carries a
-     * picture hash show a square {@link NewsPictureElement} thumbnail (FIT mode —
-     * the whole image aspect-fit scaled, never cropped; resolved decision §12.5) on
-     * the right side of the row, below the published/meta label and directly left
-     * of the T-093 button stack. The space is reserved only when a hash exists, so
-     * picture-less events keep today's layout; market-name truncation accounts for
-     * the thumbnail. The element polls the picture cache per frame and the panels
-     * are rebuilt by the 500 ms stream, so the thumbnail pops in naturally.
+     * <b>Picture thumbnail (T-091, resized T-118):</b> events whose streamed
+     * snapshot carries a picture hash show a square {@link NewsPictureElement}
+     * thumbnail (FIT mode — the whole image aspect-fit scaled, never cropped;
+     * resolved decision §12.5) on the right side of the row, directly left of
+     * the T-093 button stack. In the admin view (T-118) the thumbnail spans the
+     * full vertical from the top of the Skip-phase button to the bottom of the
+     * Stop button (width == height == that span) so the picture reads at a
+     * glance. In the non-admin view (no button stack laid out) it stays at the
+     * classic 32 px size at the row's right edge. The space is reserved only
+     * when a hash exists, so picture-less events keep today's layout;
+     * market-name and phase-line truncation both read the thumbnail's live
+     * bounds so long labels never overlap the enlarged picture. The element
+     * polls the picture cache per frame and the panels are rebuilt by the
+     * 500 ms stream, so the thumbnail pops in naturally.
      * <p>
      * The panel height is width-independent (long texts are truncated with an
      * ellipsis instead of wrapped), so it is fixed at construction time — the
@@ -2010,12 +2016,24 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
             // T-091: the picture thumbnail sits on the right side of the row, below
             // the published/meta label and directly LEFT of the T-093 button stack
             // (at the right panel edge when the buttons are hidden for non-admins).
+            // T-118: when the admin button stack is laid out, the thumbnail grows to
+            // a square that spans the full vertical from the top of Skip-phase to the
+            // bottom of Stop (side = stopButton.getBottom() - skipPhaseButton.getTop())
+            // so the picture reads at a glance instead of a tiny 32 px chip. Width
+            // equals height (square 1:1). For the non-admin path — no button stack —
+            // the original 32 px thumbnail is retained since there is no button span
+            // to align to.
             if (pictureThumbnail != null) {
-                int rightEdge = skipPhaseButton.isEnabled()
-                        ? skipPhaseButton.getLeft() - spacing
-                        : getWidth() - INNER_PAD;
-                pictureThumbnail.setBounds(rightEdge - THUMB_SIZE, metaRowY,
-                        THUMB_SIZE, THUMB_SIZE);
+                if (skipPhaseButton.isEnabled()) {
+                    int squareSide = stopButton.getBottom() - skipPhaseButton.getTop();
+                    int rightEdge = skipPhaseButton.getLeft() - spacing;
+                    pictureThumbnail.setBounds(rightEdge - squareSide,
+                            skipPhaseButton.getTop(), squareSide, squareSide);
+                } else {
+                    int rightEdge = getWidth() - INNER_PAD;
+                    pictureThumbnail.setBounds(rightEdge - THUMB_SIZE, metaRowY,
+                            THUMB_SIZE, THUMB_SIZE);
+                }
             }
         }
 
