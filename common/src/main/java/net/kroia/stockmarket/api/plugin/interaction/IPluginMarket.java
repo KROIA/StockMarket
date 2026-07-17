@@ -31,6 +31,24 @@ public interface IPluginMarket {
     double getDefaultRealPrice();
 
     /**
+     * Sets the market's default (base/anchor) price as a real price value.
+     * <p>
+     * The default price is the long-term anchor other plugins build on — e.g. the
+     * VolatilityPlugin oscillates its random walk around a flow-adjusted equilibrium
+     * derived from it. Unlike {@link #setTargetPrice}, this is <b>not</b> buffered in the
+     * per-tick market cache: the change is applied to the market immediately and is
+     * persisted with the market's settings.
+     * <p>
+     * Intended for rare, permanent level shifts only — e.g. the NewsPlugin baking a
+     * {@code reversal:none} news impact into the market once its hold phase ends
+     * (NewsEventSystem plan §2 item 4). Do NOT use this for continuous price steering;
+     * use {@link #setTargetPrice}/{@link #addToTargetPrice} for that.
+     *
+     * @param defaultRealPrice the new default price in real (scaled) units; must be &gt; 0
+     */
+    void setDefaultRealPrice(double defaultRealPrice);
+
+    /**
      * Gets the current price of the market as a real price value.
      * Already scaled using the internal scaling factor.
      * @return The current price of the market.

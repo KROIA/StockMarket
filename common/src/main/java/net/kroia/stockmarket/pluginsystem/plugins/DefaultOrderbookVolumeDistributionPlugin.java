@@ -141,6 +141,17 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
         public float decumulationRate = DEFAULT_DECUMULATION_RATE;
         public boolean pendingReset = false;
 
+        // ---- Target-distribution cache ----
+        // The expensive distribution targets (Math.pow/exp/sqrt per price level) are cached
+        // together with the inputs they were computed from. As long as those inputs are
+        // unchanged, the cheap convergence loop reuses the cached targets and the recompute
+        // is skipped entirely.
+        public float[] cachedTargets = null;            // raw target volume per editable price level
+        public long cachedRangeStart = Long.MIN_VALUE;  // first backend price of the cached range
+        public float cachedMarketPrice = Float.NaN;     // market price used for the computation (drives the buy/sell sign flip)
+        public float cachedVolumeScale = Float.NaN;     // effective calculator volume scale used (changes via settings/load)
+        public double cachedDefaultPrice = Double.NaN;  // calculator default/fair price used
+
         public RuntimeData()
         {
             lastMillis = System.currentTimeMillis();
@@ -164,17 +175,50 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
 
     }
 
+    // Maximum number of markets that may recompute their expensive target distribution
+    // per update cycle (round-robin). All other markets keep converging toward their
+    // cached targets until it is their turn again.
+    private static final int MAX_TARGET_REFRESHES_PER_UPDATE = 1;
+
+    // Rotating start index of the round-robin refresh window.
+    private int targetRefreshRotation = 0;
+
     @Override
     public void update(List<MarketInterface> markets)
     {
-        for(MarketInterface market : markets)
+        int marketCount = markets.size();
+        if(marketCount == 0)
+            return;
+
+        // Round-robin: markets at indices [rotationStart, rotationStart+K) (mod n) may
+        // refresh their target distribution this cycle. Advancing the rotation by K each
+        // update guarantees every market gets a turn, even when markets subscribe or
+        // unsubscribe in between (the modulo keeps the index valid for any list size).
+        int rotationStart = ((targetRefreshRotation % marketCount) + marketCount) % marketCount;
+        targetRefreshRotation = (rotationStart + MAX_TARGET_REFRESHES_PER_UPDATE) % marketCount;
+
+        for(int i = 0; i < marketCount; i++)
         {
+            MarketInterface market = markets.get(i);
             RuntimeData data = marketData.get(market.market.getMarketID());
+            if(data == null)
+                continue; // No runtime data for this market (interface without subscription) -> skip
             data.currentMarketPrice = (float) market.market.getPrice();
-            updateForMarket(market, data);
+            boolean mayRefreshTargets =
+                    ((i - rotationStart + marketCount) % marketCount) < MAX_TARGET_REFRESHES_PER_UPDATE;
+            updateForMarket(market, data, mayRefreshTargets);
         }
     }
-    private void updateForMarket(MarketInterface market, RuntimeData data)
+
+    /**
+     * Converges the virtual orderbook volume of one market toward its target distribution.
+     *
+     * @param market the market to update
+     * @param data the plugin's runtime data for that market
+     * @param mayRefreshTargets true if this market is inside the round-robin refresh window
+     *                          and may recompute its (expensive) target distribution this cycle
+     */
+    private void updateForMarket(MarketInterface market, RuntimeData data, boolean mayRefreshTargets)
     {
         long currentMillis = System.currentTimeMillis();
         Tuple<@NotNull Long,@NotNull  Long> editableRange = market.oderBook.getEditableBackendPriceRange();
@@ -182,26 +226,62 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
         data.lastMillis = currentMillis;
 
         IPluginOrderBook orderBook = market.oderBook;
-        float[] newVolume = new float[(int)(editableRange.getB() - editableRange.getA()+1)];
+        long rangeStart = editableRange.getA();
+        int rangeSize = (int)(editableRange.getB() - rangeStart + 1);
 
         boolean hardReset = data.pendingReset;
         if (hardReset)
             data.pendingReset = false;
 
-        for(long i=editableRange.getA(); i<=editableRange.getB(); i++)
+        // The cached target array is only usable at all if it still covers the current
+        // editable range. The range shifts when the dynamic array re-centers on large
+        // price moves (see VirtualOrderbook.setCurrentMarketPrice).
+        boolean rangeMatches = data.cachedTargets != null
+                && data.cachedTargets.length == rangeSize
+                && data.cachedRangeStart == rangeStart;
+        // The cache is fully valid only if none of the distribution inputs changed:
+        // market price (also drives the buy/sell sign flip), effective volume scale
+        // (settings change / load) and default price.
+        boolean cacheValid = rangeMatches
+                && data.cachedMarketPrice == data.currentMarketPrice
+                && data.cachedVolumeScale == data.calculator.volumeScale
+                && data.cachedDefaultPrice == data.calculator.defaultPrice;
+
+        // Recompute the expensive target distribution only when needed:
+        // - immediately if there is no usable cache (first update after subscribe,
+        //   editable-range shift) or on a hard reset (bypasses the rotation),
+        // - otherwise only when it is this market's round-robin turn. Until then the
+        //   market keeps converging toward its slightly stale cached targets, which is
+        //   an acceptable transient because the convergence itself is time-based.
+        if (!cacheValid && (mayRefreshTargets || !rangeMatches || hardReset))
         {
-            float targetAmount = orderBook.getDefaultRawVolume(market.market.convertBackendPriceToRealPrice(i));
+            // Batch computation: market price and item fraction scale factor are fetched
+            // once for the whole range instead of once per price level.
+            data.cachedTargets = orderBook.getDefaultRawVolume(rangeStart, rangeSize);
+            data.cachedRangeStart = rangeStart;
+            data.cachedMarketPrice = data.currentMarketPrice;
+            data.cachedVolumeScale = data.calculator.volumeScale;
+            data.cachedDefaultPrice = data.calculator.defaultPrice;
+        }
+        float[] targets = data.cachedTargets;
 
-            if (hardReset) {
-                newVolume[(int)(i - editableRange.getA())] = targetAmount;
-                continue;
-            }
+        if (hardReset) {
+            // Hard reset: write the target distribution directly, skipping convergence.
+            // Clone so the manipulation cache does not hold a reference to our cached array.
+            orderBook.setRawVolume(rangeStart, targets.clone());
+            return;
+        }
 
-            float currentVal = orderBook.getRawVirtualVolume(i);
+        // Cheap convergence loop: plain float arithmetic toward the cached targets.
+        float[] newVolume = new float[rangeSize];
+        for(int idx = 0; idx < rangeSize; idx++)
+        {
+            float targetAmount = targets[idx];
+            float currentVal = orderBook.getRawVirtualVolume(rangeStart + idx);
             if(currentVal < 0 && targetAmount > 0 || currentVal > 0 && targetAmount < 0)
             {
                 currentVal = 0;
-                newVolume[(int)(i - editableRange.getA())] = 0;
+                newVolume[idx] = 0;
             }
 
             float scale;
@@ -220,9 +300,9 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
             {
                 deltaAmount = -currentVal;
             }
-            newVolume[(int)(i - editableRange.getA())] = currentVal + (deltaAmount * data.speed);
+            newVolume[idx] = currentVal + (deltaAmount * data.speed);
         }
-        orderBook.setRawVolume(editableRange.getA(), newVolume);
+        orderBook.setRawVolume(rangeStart, newVolume);
     }
 
     @Override
@@ -333,6 +413,10 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
         MarketInterface interf = getMarketInterface(marketID);
         float abundance = (interf != null) ? interf.market.getNaturalAbundance() : 1.0f;
         data.calculator.volumeScale = settings.volumeScale() * abundance;
+
+        // Drop the cached target distribution so the new settings take effect on this
+        // market's next update instead of waiting for its round-robin refresh turn.
+        data.cachedTargets = null;
 
         if (settings.resetVolume()) {
             data.pendingReset = true;

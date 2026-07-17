@@ -5,6 +5,7 @@ import dev.architectury.registry.registries.Registrar;
 import dev.architectury.registry.registries.RegistrarManager;
 import dev.architectury.registry.registries.RegistrySupplier;
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.minecraft.item.custom.NewspaperItem;
 import net.kroia.stockmarket.minecraft.item.custom.software.TradingSoftware;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
@@ -32,6 +33,9 @@ public class StockMarketItems {
 
     // Software
     public static final RegistrySupplier<Item> TRADING_SOFTWARE = registerItem(TradingSoftware.NAME, TradingSoftware::new);
+
+    /** Newspaper (T-074): right-click opens the news screen. */
+    public static final RegistrySupplier<Item> NEWSPAPER = registerItem(NewspaperItem.NAME, NewspaperItem::new);
 
 
     public static <T extends Item> RegistrySupplier<T> registerItem(String name, Supplier<T> item)

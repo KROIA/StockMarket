@@ -9,6 +9,7 @@ import net.kroia.stockmarket.api.marketmanager.IClientMarketManager;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.stockmarket.market.CrossRateMarket;
 import net.kroia.stockmarket.networking.request.ActiveOrdersRequest;
+import net.kroia.stockmarket.util.StockMarketClientHooks;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.minecraft.client.player.LocalPlayer;
 import org.jetbrains.annotations.NotNull;
@@ -69,8 +70,13 @@ public class ClientMarketManager implements IClientMarketManager
             requestMarkets();
         });
 
-        // Fetch player preferences (favorites, last market) from server
-        StockMarketGuiElement.fetchPlayerPreferences();
+        // Fetch player preferences (favorites, last market) from server.
+        // The join-time news toast catch-up (T-077) is chained onto the fetch future
+        // so it only ever runs with the player's REAL newsToastEnabled flag — never
+        // against the pre-fetch default (which is off and would silently skip it,
+        // or worse, a default of on would toast for opted-out players).
+        StockMarketGuiElement.fetchPlayerPreferences()
+                .thenAccept(prefs -> StockMarketClientHooks.runNewsToastCatchUp(BACKEND_INSTANCES, prefs));
     }
 
     @Override
