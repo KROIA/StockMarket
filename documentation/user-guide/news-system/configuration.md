@@ -34,7 +34,7 @@ One file = an optional `scheduler` block + an `events` array:
     "maxSecondsBetweenEvents": 3600,
     "maxActiveEventsGlobal": 3,
     "maxActiveEventsPerMarket": 1,
-    "historyMaxEntries": 500
+    "historyMaxEntries": 1000
   },
   "events": [
     {
@@ -194,7 +194,7 @@ Global scheduler tuning. The block is optional and may appear in **any** file; e
 | `maxSecondsBetweenEvents` | `3600` | Maximum seconds between two random activations. Each interval is sampled uniformly from `[min, max]`. If an attempt fires nothing (caps reached, everything on cooldown), the scheduler waits a full new interval. |
 | `maxActiveEventsGlobal` | `3` | Cap of simultaneously active events across all markets. |
 | `maxActiveEventsPerMarket` | `1` | Cap of simultaneously active events per market. A market at its cap is skipped by new events. |
-| `historyMaxEntries` | `500` | How many published news records the server keeps (and serves to the newspaper). `0` disables history (warning). |
+| `historyMaxEntries` | `1000` | How many published news records the server keeps (and serves to the newspaper). `0` disables history (warning). See [History Persistence and Chunk Layout](#history-persistence-and-chunk-layout) for the retention semantics -- **a multiple of 100 gives exact retention**; other values fluctuate slightly. |
 
 All fields must be non-negative numbers. `min > max` resets both to their defaults with an error.
 
@@ -231,6 +231,48 @@ Notes:
 - **Audit trail:** every manual `trigger`, `stop` and `skipphase` (and every `reload`, and every `registry clear` that actually deletes something) is broadcast to the other online StockMarket admins (those connected to the master server) -- manual triggers are insider information, and the broadcast is the paper trail.
 - **Stop semantics:** `stop` means **cancel**. The event's price influence is removed immediately in whatever phase it was in, and the market returns to its pre-event level on its own (the price simulation re-derives its target every tick -- nothing is yanked). A `reversal: "none"` event whose shift has not baked yet is cancelled **without** baking -- to finalize the shift early on purpose, use `skipphase` instead. Stopping also discards the event's still-pending [chain](advanced-events.md#event-chains) firings and never fires its completion chains. If a stopped event had not published its headline yet (announce delay), the publication is suppressed: players never get news about an event an admin cancelled.
 - The same three operations are available as buttons in the NewsPlugin's [management window](overview.md#the-news-plugin-management-window).
+
+## History Persistence and Chunk Layout
+
+The server's news history -- the records the newspaper's *Load more* button walks back through -- is written under the world folder:
+
+```
+world/data/StockMarket/News/
+    history/
+        000.nbt              # oldest surviving chunk
+        000.hashes.nbt       # sidecar 0
+        001.nbt
+        001.hashes.nbt
+        ...
+        NNN.nbt              # newest (only mutable) chunk
+        NNN.hashes.nbt
+    pictures/                # snapshotted picture bytes (see pictures.md)
+    registry.nbt             # world-event registry (see advanced-events.md)
+```
+
+Each `NNN.nbt` chunk holds **exactly 100 records** (except the newest, which fills as records are published). The paired `NNN.hashes.nbt` sidecar lists the [picture](pictures.md) hashes referenced by that chunk plus its record count and uid bounds -- small enough that all sidecars stay resident, while older chunk data is lazy-loaded through a small LRU as the newspaper paginates backwards. Chunk indices are monotonic and are never reused after a chunk drop.
+
+### Retention Semantics
+
+The scheduler's `historyMaxEntries` (default **`1000`**, raised from `500` in v2.0.4) caps how many records the server keeps. After each publish, while the total record count is over the cap **and at least two chunks exist**, the entire oldest chunk file is dropped atomically -- there is no partial-chunk rewrite.
+
+**Cap caveat:** pick `historyMaxEntries` as a **multiple of 100** (`500`, `1000`, `2000`, ...) for exact retention. With a non-multiple cap the retained count fluctuates between `cap` and `cap - 100` between drops (the drop happens only when the excess reaches a full chunk). Non-multiples still work -- the retention window is simply slightly larger than the cap you set. A cap below `100` is legal but pinned to the newest chunk (the newest chunk is never dropped), so it effectively behaves as "up to 100 records".
+
+Cap changes from a `/stockmarket news reload` apply **lazily**: shrinking the cap does not immediately prune existing chunks -- the excess drops on the next publish. Loading the world never prunes either.
+
+### Migration From Pre-v2.0.4 (Single File)
+
+Servers upgrading from earlier versions have a single `world/data/StockMarket/News/history.nbt` file instead of the `history/` directory. On the **first server launch** after the upgrade the file is:
+
+1. Split into 100-record chunks in chronological order (oldest 100 records go into `history/000.nbt`, the next 100 into `001.nbt`, and so on).
+2. Verified on disk with rebuilt sidecars.
+3. **Deleted** -- only after every chunk exists on disk. A `WARN` line in the server log records the migration.
+
+If both the legacy single file **and** an already-populated `history/` directory exist (interrupted migration or manual tampering), the safe branch runs: the old file is left in place, an `ERROR` is logged, and the news system continues with the on-disk chunks. Investigate the folder before manually deleting the legacy file.
+
+### Picture Garbage Collection
+
+Each chunk's sidecar enumerates the picture hashes referenced by that chunk. On startup and after each history mutation, the [picture snapshot store](pictures.md#publishing-history-and-syncing) computes the **union** of every sidecar's hash list and retains only those pictures -- when a chunk is dropped, its pictures become unreferenced and are cleaned up on the next GC pass. The union is computed without loading any chunk record data; a missing or corrupt sidecar is auto-recovered by loading the chunk once and rebuilding the sidecar (`WARN` log line).
 
 ## Example: Adding Your Own News File
 

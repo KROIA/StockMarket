@@ -37,7 +37,7 @@ You want to support me?<br>
 - Adds new [blocks](#blocks) to interact with the market or bank account.
 - Implementation of a [matching engine](#matching-engine) inspired by the real market.
 - Configurable [plugins](#plugins) that provide the market with liquidity, volatility and price movements.
-- A JSON-configurable [news event system](documentation/user-guide/news-system/overview.md) that publishes headlines with [pictures](documentation/user-guide/news-system/pictures.md) and moves market prices — players follow the market through a craftable newspaper item.
+- A JSON-configurable [news event system](documentation/user-guide/news-system/overview.md) that publishes headlines with [pictures](documentation/user-guide/news-system/pictures.md) and moves market prices — players follow the market through a craftable newspaper item. Server admins and content creators can [author their own events](documentation/user-guide/news-system/authoring-tutorial.md) without touching code.
 
 ## Dependencies
 - [Bank System Mod](https://github.com/KROIA/BankSystem)
@@ -371,7 +371,7 @@ The distribution uses a power-law shape near the current price (tighter spreads 
 ### NewsPlugin
 Randomly publishes news events defined in JSON files (`config/StockMarket/news/`) and moves the prices of the affected markets — shocks, trends, crashes and even permanent shifts. Players read the headlines with a craftable **newspaper item**; an opt-in popup notifies interested players when news breaks. Admins control everything through the plugin's management window and the `/stockmarket news` commands.
 
-See the [News Event System overview](documentation/user-guide/news-system/overview.md) and the [JSON configuration reference](documentation/user-guide/news-system/configuration.md).
+See the [News Event System overview](documentation/user-guide/news-system/overview.md), the [JSON configuration reference](documentation/user-guide/news-system/configuration.md), and the step-by-step [event authoring tutorial](documentation/user-guide/news-system/authoring-tutorial.md).
 
 ### How the plugins work together
 The three plugins combine to create a functioning market:

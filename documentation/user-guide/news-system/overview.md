@@ -10,15 +10,38 @@ Players read the news in-game through a craftable **newspaper item**. Reacting t
 
 ## For Players
 
+### Getting the Newspaper
+
+The newspaper (`stockmarket:newspaper`) is a **shapeless** crafting recipe -- drop the two ingredients anywhere in the crafting grid, in any order or slot:
+
+| Slot | Item |
+|------|------|
+| any | `minecraft:paper` |
+| any | `minecraft:ink_sac` |
+
+```
++---+---+---+
+|   |   |   |
++---+---+---+       -->    1x newspaper
+| P | I |   |               (stockmarket:newspaper)
++---+---+---+
+|   |   |   |
++---+---+---+
+   P = paper,  I = ink sac  (positions don't matter -- shapeless)
+```
+
+Every crafting yields **one** newspaper. The item is reusable -- once you have it, you never need to craft another one.
+
+**Other ways to open the news screen:**
+
+- The **News** button on the [trading screen](#the-news-screen).
+- The **News** button on the [Management Screen](../../../README.md#opening-the-management-gui)'s overview tab (admins).
+- The command `/stockmarket news` -- available to every player, no admin permission needed.
+- For admins on creative servers: `/give @s stockmarket:newspaper`.
+
 ### The Newspaper Item
 
-The newspaper (`stockmarket:newspaper`) is crafted shapeless from **1 paper + 1 ink sac**. Right-click with it to open the news screen.
-
-You can also open the news screen with:
-
-- The **News** button on the trading screen.
-- The **News** button on the Management Screen's overview tab (admins).
-- The command `/stockmarket news` (available to every player).
+Right-click with the newspaper to open the news screen. It works from any hand, in any dimension, at any time -- no block or terminal is required.
 
 ### The News Screen
 
@@ -30,7 +53,7 @@ The news screen is styled like a printed newspaper: a masthead at the top and a 
 - The **timestamp** (your local date and time) plus the in-game "Day N" the news was published on.
 - A red **LIVE** badge while the event's price impact is still running. The badge compares the publish time against your local clock, so it is an approximation -- it tells you the story is still moving the market right now.
 
-The feed loads the most recent news immediately and fetches older entries in pages -- click **Load more** at the bottom to go further back. How far back the history reaches is capped by the server (500 entries by default).
+The feed loads the most recent news immediately and fetches older entries in pages -- click **Load more** at the bottom to go further back. How far back the history reaches is capped by the server (1000 entries by default).
 
 ### News Popups (Toast Opt-In)
 
@@ -124,7 +147,7 @@ Everything survives a server restart:
 
 - **Active events** resume exactly where they were -- including events waiting in an announce-delay window. Running events keep the impact values they started with, even if the definitions were edited or removed in the meantime.
 - **Cooldowns and the scheduler timer** continue from their remaining time.
-- The **news history** is saved with the world data (`world/data/StockMarket/News/history.nbt`), capped at `historyMaxEntries` (default 500).
+- The **news history** is saved with the world data under `world/data/StockMarket/News/history/` as 100-record chunk files (`NNN.nbt` + `NNN.hashes.nbt` sidecars), capped at `historyMaxEntries` (default 1000). Existing worlds are migrated from the pre-v2.0.4 single `history.nbt` file automatically on first launch. See [History Persistence and Chunk Layout](configuration.md#history-persistence-and-chunk-layout).
 - **Published newspaper [pictures](pictures.md)** are snapshotted into `world/data/StockMarket/News/pictures/` at publish time, so history entries keep their original picture even after the config picture is swapped or deleted; pictures of pruned history entries are cleaned up automatically.
 - The **world-event registry** (`world/data/StockMarket/News/registry.nbt`) remembers which events have fired (count, first/last real-world time, in-game day) plus custom key/value records written by events -- its timestamps use real wall-clock time, so they keep aging while the server is offline (unlike cooldowns). See [Advanced News Events](advanced-events.md#the-world-event-registry).
 - **Pending [chain](advanced-events.md#event-chains) firings** (scheduled follow-up events) survive restarts too; their delays tick on the same pause-safe time as cooldowns.
