@@ -8,8 +8,10 @@ import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.networking.entity.UpdateDisplayViewportPacket;
 import net.kroia.stockmarket.networking.entity.UpdateStockMarketDisplayConfigPacket;
 import net.kroia.stockmarket.networking.packet.MarketRemovedPacket;
+import net.kroia.stockmarket.networking.packet.NewsPublishedPacket;
 import net.kroia.stockmarket.networking.packet.OpenUIPacket;
 import net.kroia.stockmarket.networking.packet.PlayerJoinSyncPacket;
+import net.kroia.stockmarket.networking.packet.VillagerTradePriceTablePacket;
 import net.kroia.stockmarket.networking.request.*;
 import net.kroia.stockmarket.networking.stream.ActiveOrdersStream;
 import net.kroia.stockmarket.networking.stream.MarketPriceStream;
@@ -61,6 +63,14 @@ public class StockMarketNetworking extends NetworkPacketManager {
     public final PlaceInterMarketOrderRequest PLACE_INTER_MARKET_ORDER_REQUEST = (PlaceInterMarketOrderRequest) AsynchronousRequestResponseSystem.register(new PlaceInterMarketOrderRequest());
     public final CancelInterMarketOrderRequest CANCEL_INTER_MARKET_ORDER_REQUEST = (CancelInterMarketOrderRequest) AsynchronousRequestResponseSystem.register(new CancelInterMarketOrderRequest());
     public final GetAvailablePairsRequest GET_AVAILABLE_PAIRS_REQUEST = (GetAvailablePairsRequest) AsynchronousRequestResponseSystem.register(new GetAvailablePairsRequest());
+    /** GET/SET of the server's settings.json for the master-only "Mod Settings" admin screen. */
+    public final ModSettingsRequest MOD_SETTINGS_REQUEST = (ModSettingsRequest) AsynchronousRequestResponseSystem.register(new ModSettingsRequest());
+    /** Paginated newest-first news history pages for the newspaper screen (T-073, not admin-gated). */
+    public final NewsHistoryRequest NEWS_HISTORY_REQUEST = (NewsHistoryRequest) AsynchronousRequestResponseSystem.register(new NewsHistoryRequest());
+    /** Admin-gated news operations (RELOAD/TRIGGER/LIST/STOP) for commands + plugin GUI (T-076). */
+    public final NewsAdminRequest NEWS_ADMIN_REQUEST = (NewsAdminRequest) AsynchronousRequestResponseSystem.register(new NewsAdminRequest());
+    /** Hash-batched published news-picture fetch for the client picture cache (T-089, not admin-gated, rate-limited). */
+    public final NewsPictureRequest NEWS_PICTURE_REQUEST = (NewsPictureRequest) AsynchronousRequestResponseSystem.register(new NewsPictureRequest());
 
     //public final MarketSettingsGetRequest MARKET_SETTINGS_GET_REQUEST = (MarketSettingsGetRequest) AsynchronousRequestResponseSystem.register(new MarketSettingsGetRequest());
 
@@ -71,6 +81,7 @@ public class StockMarketNetworking extends NetworkPacketManager {
 
         setupClientReceiverPackets();
         setupServerReceiverPackets();
+        setupServerServerPackets();
 
         AsyncMarket.setupNetworkPacket();
         AsyncMarketManager.setupNetworkPacket();
@@ -89,6 +100,11 @@ public class StockMarketNetworking extends NetworkPacketManager {
         // the packet with the MultiServerPacketRegistry, enabling the master→slave
         // relay used to reach players connected to slave servers.
         registerS2C(MarketRemovedPacket.TYPE, MarketRemovedPacket.STREAM_CODEC);
+        // News-published broadcast (T-073). Same registration shape as
+        // MarketRemovedPacket: registerS2C also registers the packet with the
+        // MultiServerPacketRegistry, enabling the master→slave relay used to
+        // reach players connected to slave servers.
+        registerS2C(NewsPublishedPacket.TYPE, NewsPublishedPacket.STREAM_CODEC);
     }
 
     @Override
@@ -99,6 +115,9 @@ public class StockMarketNetworking extends NetworkPacketManager {
 
     @Override
     public void setupServerServerPackets() {
-
+        // Master→slave villager-trade price table broadcast (pure S2S packet:
+        // registered only with the MultiServerPacketRegistry, never with a
+        // client/server receiver).
+        registerS2S(VillagerTradePriceTablePacket.TYPE, VillagerTradePriceTablePacket.STREAM_CODEC);
     }
 }
