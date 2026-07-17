@@ -396,7 +396,13 @@ public class NewsPictureRequest extends StockMarketGenericRequest<NewsPictureReq
             }
             boolean denied = hashTotal + hashCount > MAX_HASHES_PER_WINDOW
                     || byteTotal >= MAX_BYTES_PER_WINDOW;
-            if (denied && nowMillis - window.lastWarnMillis >= RATE_WINDOW_MILLIS) {
+            // T-115 fix: the initial sentinel is Long.MIN_VALUE (never warned); the
+            // difference "nowMillis - Long.MIN_VALUE" overflows to a negative value
+            // in signed long arithmetic, so the first-time warn never fired. Check
+            // the sentinel explicitly instead of relying on the arithmetic.
+            boolean warnDue = window.lastWarnMillis == Long.MIN_VALUE
+                    || nowMillis - window.lastWarnMillis >= RATE_WINDOW_MILLIS;
+            if (denied && warnDue) {
                 // One warn per window, not per request — a catching-up client may
                 // legitimately bump into the limit and back off.
                 window.lastWarnMillis = nowMillis;
