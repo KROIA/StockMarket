@@ -132,12 +132,14 @@ public class NewsChainsTestSuite extends TestSuite {
      * Creates a sequence-authored event JSON with chains.
      * Uses a 2-step sequence: step1 (5s) and step2 (5s).
      */
+    // T-115 fix: sequences[0] needs a "name" and each step's target-factor field is
+    // "targetFactor" (schema), not "target" — the previous JSON was skipped on load.
     private static String sequenceEventWithChains(String id, String chainsJson, String extra) {
         return "{\"id\":\"" + id + "\","
                 + "\"headline\":\"Headline " + id + "\",\"text\":\"Text " + id + "\","
-                + "\"sequences\":[{\"steps\":["
-                + "{\"name\":\"step1\",\"target\":0.3,\"durationSeconds\":5},"
-                + "{\"name\":\"step2\",\"target\":0.6,\"durationSeconds\":5}"
+                + "\"sequences\":[{\"name\":\"sequence0\",\"steps\":["
+                + "{\"name\":\"step1\",\"targetFactor\":0.3,\"durationSeconds\":5},"
+                + "{\"name\":\"step2\",\"targetFactor\":0.6,\"durationSeconds\":5}"
                 + "]}],"
                 + "\"markets\":[{\"item\":\"minecraft:diamond\"}],"
                 + "\"chains\":[" + chainsJson + "]"
@@ -189,7 +191,7 @@ public class NewsChainsTestSuite extends TestSuite {
             // Event with requirement: "blocker" must have been fired before.
             String eventJson = "{\"id\":\"guarded_event\","
                     + "\"headline\":\"H\",\"text\":\"T\","
-                    + "\"impact\":{\"type\":\"spike\",\"peakFactor\":0.2,\"durationSeconds\":10},"
+                    + "\"impact\":{\"type\":\"shock\",\"peakFactor\":0.2,\"durationSeconds\":10},"
                     + "\"markets\":[{\"item\":\"minecraft:diamond\"}],"
                     + "\"requires\":[{\"type\":\"firedBefore\",\"eventId\":\"blocker\"}]}";
             String fileJson = "{\"events\":[" + eventJson + "]}";
@@ -223,7 +225,7 @@ public class NewsChainsTestSuite extends TestSuite {
             dir = createTempDir();
             String eventJson = "{\"id\":\"guarded_event\","
                     + "\"headline\":\"H\",\"text\":\"T\","
-                    + "\"impact\":{\"type\":\"spike\",\"peakFactor\":0.2,\"durationSeconds\":10},"
+                    + "\"impact\":{\"type\":\"shock\",\"peakFactor\":0.2,\"durationSeconds\":10},"
                     + "\"markets\":[{\"item\":\"minecraft:diamond\"}],"
                     + "\"requires\":[{\"type\":\"firedBefore\",\"eventId\":\"blocker\"}]}";
             String fileJson = "{\"events\":[" + eventJson + "]}";
@@ -260,7 +262,7 @@ public class NewsChainsTestSuite extends TestSuite {
             // Event with records{}.
             String eventJson = "{\"id\":\"rec_event\","
                     + "\"headline\":\"H\",\"text\":\"T\","
-                    + "\"impact\":{\"type\":\"spike\",\"peakFactor\":0.2,\"durationSeconds\":10},"
+                    + "\"impact\":{\"type\":\"shock\",\"peakFactor\":0.2,\"durationSeconds\":10},"
                     + "\"markets\":[{\"item\":\"minecraft:diamond\"}],"
                     + "\"records\":{\"economy_phase\":\"boom\"}}";
             String fileJson = "{\"events\":[" + eventJson + "]}";
@@ -277,7 +279,7 @@ public class NewsChainsTestSuite extends TestSuite {
             NewsRecord record = new NewsRecord(1L, "rec_event",
                     System.currentTimeMillis(), 42,
                     Map.of("en_us", "Headline"), Map.of("en_us", "Text"),
-                    new ArrayList<>(), "spike", 0.2f, "ramp", 10);
+                    new ArrayList<>(), "shock", 0.2f, "ramp", 10);
             publisher.publish(record);
 
             // Verify fire was recorded.
@@ -370,7 +372,7 @@ public class NewsChainsTestSuite extends TestSuite {
                     chainJson("admin_event", "publish", 1.0, 0, ""), "");
             String adminEvent = "{\"id\":\"admin_event\","
                     + "\"headline\":\"H\",\"text\":\"T\","
-                    + "\"impact\":{\"type\":\"spike\",\"peakFactor\":0.2,\"durationSeconds\":10},"
+                    + "\"impact\":{\"type\":\"shock\",\"peakFactor\":0.2,\"durationSeconds\":10},"
                     + "\"markets\":[{\"item\":\"minecraft:diamond\"}],"
                     + "\"adminOnly\":true}";
             String fileJson = "{\"events\":[" + eventA + "," + adminEvent + "]}";
@@ -958,9 +960,12 @@ public class NewsChainsTestSuite extends TestSuite {
         try {
             dir = createTempDir();
             // Sequence event with step1 (5s) and step2 (5s).
-            // Chain fires on step "step2" with chance 1.0, delay 0.
+            // Chain fires on step "step2" with chance 1.0, delay 30 s so the PCA
+            // stays pending across the 3 s advance below (tickPendingChains runs
+            // in the same call as the step-start trigger — a delay-0 PCA would
+            // be matured and consumed before we could observe it).
             String eventA = sequenceEventWithChains("event_a",
-                    chainJson("event_b", "step", 1.0, 0, "\"step\":\"step2\""), "");
+                    chainJson("event_b", "step", 1.0, 30, "\"step\":\"step2\""), "");
             String eventB = NewsPluginTestSuite.eventJson("event_b", "");
             String fileJson = NewsPluginTestSuite.fileJson("", eventA, eventB);
             var plugin = pluginWithFile(dir, fileJson);
@@ -1009,12 +1014,21 @@ public class NewsChainsTestSuite extends TestSuite {
         Path dir = null;
         try {
             dir = createTempDir();
-            // Short spike event (10s total), chain fires on completion.
+            // T-115 fix: short event that actually retires within the 11 s advance.
+            // The previous "spike" impact type was invalid (valid: shock|trend|crash)
+            // and skipped on load → NPE. Use an explicit-duration trend envelope
+            // (1 s ramp + 5 s hold + 3 s ramp reversal = 9 s total) so the event
+            // completes and the completion chain fires within the advance window.
+            // Use a 30 s chain delay so the PCA remains pending across the 11 s
+            // advance below — tickPendingChains runs in the same call as retirement,
+            // so a delay-0 completion chain would be consumed before we could
+            // observe it.
             String eventA = "{\"id\":\"event_a\","
                     + "\"headline\":\"H\",\"text\":\"T\","
-                    + "\"impact\":{\"type\":\"spike\",\"peakFactor\":0.2,\"durationSeconds\":10},"
+                    + "\"impact\":{\"type\":\"trend\",\"peakFactor\":0.2,\"rampUpSeconds\":1,"
+                    + "\"durationSeconds\":5,\"reversal\":\"ramp\",\"reversalSeconds\":3},"
                     + "\"markets\":[{\"item\":\"minecraft:diamond\"}],"
-                    + "\"chains\":[" + chainJson("event_b", "completion", 1.0, 0, "") + "]}";
+                    + "\"chains\":[" + chainJson("event_b", "completion", 1.0, 30, "") + "]}";
             String eventB = NewsPluginTestSuite.eventJson("event_b", "");
             String fileJson = NewsPluginTestSuite.fileJson("", eventA, eventB);
             var plugin = pluginWithFile(dir, fileJson);
@@ -1028,7 +1042,7 @@ public class NewsChainsTestSuite extends TestSuite {
                     NewsPluginTestSuite.weights(M1, 1.0f));
             plugin.test_clearPendingChainActivations();
 
-            // Advance past the entire event duration (10s for spike).
+            // Advance past the entire event duration (9 s for the trend envelope above).
             plugin.advanceTime(11000, mkts);
 
             // Event A should have retired. Completion chain should have fired.
