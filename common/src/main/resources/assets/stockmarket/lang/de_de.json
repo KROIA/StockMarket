@@ -333,5 +333,21 @@
   "gui.stockmarket.news_plugin.details_step_permanent": "[dauerhaft]",
   "gui.stockmarket.news_plugin.details_step_markets": "Märkte: %s",
   "gui.stockmarket.news_plugin.details_requirements_title": "Auslöse-Voraussetzungen:",
-  "gui.stockmarket.news_plugin.details_chains_title": "Verkettete Ereignisse:"
+  "gui.stockmarket.news_plugin.details_chains_title": "Verkettete Ereignisse:",
+  "gui.stockmarket.news_plugin.details_phase_remaining": "Phase verbleibend:",
+  "gui.stockmarket.news_plugin.details_event_remaining": "Ereignis verbleibend:",
+  "gui.stockmarket.news_plugin.details_time_pending": "ausstehend",
+  "gui.stockmarket.news_plugin.details_time_terminal": "beendet",
+  "gui.stockmarket.news_plugin.details_time_dash": "—",
+  "gui.stockmarket.news_plugin.details_table_step_no": "#",
+  "gui.stockmarket.news_plugin.details_table_name": "Name",
+  "gui.stockmarket.news_plugin.details_table_duration": "Dauer",
+  "gui.stockmarket.news_plugin.details_table_target": "Ziel",
+  "gui.stockmarket.news_plugin.details_table_curve": "Kurve",
+  "gui.stockmarket.news_plugin.details_table_permanent": "Perm.",
+  "gui.stockmarket.news_plugin.details_table_permanent_mark": "✓",
+  "gui.stockmarket.news_plugin.curve.linear": "linear",
+  "gui.stockmarket.news_plugin.curve.instant": "sofort",
+  "gui.stockmarket.news_plugin.curve.exponential": "exponentiell",
+  "gui.stockmarket.news_plugin.curve.hold": "halten"
 }
