@@ -56,7 +56,22 @@ public final class DefaultNewsEvents {
             "emerald_counterfeit_scandal",
             "netherite_insider_leak",
             "redstone_breakthrough",
-            "lumber_construction_boom");
+            "lumber_construction_boom",
+            // Broader-theme defaults: agriculture, mining, natural disasters, politics,
+            // cultural/seasonal, warfare. Adds two more chains, two more requires demos,
+            // one more adminOnly event, plus two additional sequences-authored events.
+            "wheat_harvest_festival",
+            "crop_pest_outbreak",
+            "honey_bumper_season",
+            "copper_seam_discovery",
+            "coal_miners_strike",
+            "volcanic_eruption",
+            "great_forest_fire",
+            "great_forest_fire_recovery",
+            "import_tariff_treaty",
+            "winter_solstice_gifting",
+            "post_solstice_slump",
+            "redstone_arms_race");
 
     private DefaultNewsEvents() {
     }
@@ -417,6 +432,367 @@ public final class DefaultNewsEvents {
                     { "item": "#minecraft:logs",     "weightFactor": 1.0 },
                     { "item": "minecraft:*_planks",  "weightFactor": 0.6 },
                     { "item": "minecraft:stone",     "weightFactor": -0.15 }
+                  ]
+                },
+                {
+                  "id": "wheat_harvest_festival",
+                  "picture": "wheat_harvest_festival.png",
+                  "headline": {
+                    "en_us": "Harvest festival drives up grain demand!",
+                    "de_de": "Erntefest treibt die Getreidenachfrage in die H\\u00f6he!"
+                  },
+                  "text": {
+                    "en_us": "Villages across the land are preparing for the annual harvest festival. Bakeries stockpile flour, brewers order barley in bulk, and prices for wheat and bread climb ahead of the celebrations.",
+                    "de_de": "\\u00dcberall bereiten sich die D\\u00f6rfer auf das j\\u00e4hrliche Erntefest vor. B\\u00e4ckereien horten Mehl, Brauer bestellen Gerste in gro\\u00dfen Mengen, und die Preise f\\u00fcr Weizen und Brot steigen vor den Feierlichkeiten."
+                  },
+                  "category": "commodities",
+                  "weight": 5,
+                  "cooldownSeconds": 5400,
+                  "impact": {
+                    "type": "trend",
+                    "peakFactor": 0.22,
+                    "rampUpSeconds": 180,
+                    "durationSeconds": 480,
+                    "reversal": "ramp",
+                    "reversalSeconds": 540,
+                    "noise": 0.04
+                  },
+                  "markets": [
+                    { "item": "minecraft:wheat", "weightFactor": 1.0 },
+                    { "item": "minecraft:bread", "weightFactor": 0.6 }
+                  ]
+                },
+                {
+                  "id": "crop_pest_outbreak",
+                  "picture": "crop_pest_outbreak.png",
+                  "headline": {
+                    "en_us": "Locust swarm ravages farmland - staple crops in short supply!",
+                    "de_de": "Heuschreckenschwarm verw\\u00fcstet Felder - Grundnahrungsmittel werden knapp!"
+                  },
+                  "text": {
+                    "en_us": "A massive locust swarm has descended on the central farmlands, devouring rows of wheat, potatoes, and carrots. With the fall harvest threatened, prices for staple crops are spiking as households and merchants scramble to secure supplies.",
+                    "de_de": "Ein gewaltiger Heuschreckenschwarm hat sich \\u00fcber die zentralen Felder hergemacht und Weizen, Kartoffeln und Karotten kahlgefressen. Die Herbsternte steht auf der Kippe, und die Preise f\\u00fcr Grundnahrungsmittel schie\\u00dfen nach oben, w\\u00e4hrend Haushalte und H\\u00e4ndler ihre Vorr\\u00e4te sichern."
+                  },
+                  "category": "disaster",
+                  "weight": 4,
+                  "cooldownSeconds": 7200,
+                  "impact": {
+                    "type": "shock",
+                    "peakFactor": 0.38,
+                    "durationSeconds": 300,
+                    "reversal": "exponential",
+                    "reversalSeconds": 900,
+                    "noise": 0.05
+                  },
+                  "markets": [
+                    { "item": "minecraft:wheat",  "weightFactor": 1.0 },
+                    { "item": "minecraft:potato", "weightFactor": 0.9 },
+                    { "item": "minecraft:carrot", "weightFactor": 0.9 },
+                    { "item": "minecraft:bread",  "weightFactor": 0.5 }
+                  ]
+                },
+                {
+                  "id": "honey_bumper_season",
+                  "picture": "honey_bumper_season.png",
+                  "headline": {
+                    "en_us": "Bee colonies boom - honey floods the market",
+                    "de_de": "Bienenv\\u00f6lker im H\\u00f6henflug - Honig \\u00fcberschwemmt den Markt"
+                  },
+                  "text": {
+                    "en_us": "Beekeepers report an extraordinary season - hives are overflowing and orchards buzzing with pollinators. With honey, honeycombs and sweet berries piling up in warehouses, prices are drifting down as sellers compete for buyers.",
+                    "de_de": "Imker melden eine au\\u00dfergew\\u00f6hnliche Saison - die St\\u00f6cke laufen \\u00fcber, die Obstg\\u00e4rten summen vor Best\\u00e4ubern. Da sich Honig, Waben und S\\u00fc\\u00dfbeeren in den Lagern stapeln, geben die Preise nach, w\\u00e4hrend Verk\\u00e4ufer um K\\u00e4ufer buhlen."
+                  },
+                  "category": "commodities",
+                  "weight": 6,
+                  "cooldownSeconds": 5400,
+                  "impact": {
+                    "type": "trend",
+                    "peakFactor": -0.22,
+                    "rampUpSeconds": 180,
+                    "durationSeconds": 540,
+                    "reversal": "ramp",
+                    "reversalSeconds": 480,
+                    "noise": 0.03
+                  },
+                  "markets": [
+                    { "item": "minecraft:honey_bottle",  "weightFactor": 1.0 },
+                    { "item": "minecraft:honeycomb",     "weightFactor": 0.8 },
+                    { "item": "minecraft:sweet_berries", "weightFactor": 0.5 }
+                  ]
+                },
+                {
+                  "id": "copper_seam_discovery",
+                  "picture": "copper_seam_discovery.png",
+                  "headline": {
+                    "en_us": "Massive copper seam opened in coastal cliffs!",
+                    "de_de": "Gewaltige Kupferader in den K\\u00fcstenklippen erschlossen!"
+                  },
+                  "text": {
+                    "en_us": "Surveyors have opened up a huge new copper seam running along the coastal cliffs. Foundries are queuing wagons for the fresh raw ore, and traders warn that ingots, blocks, and raw copper will all cheapen permanently as the new seam ramps up.",
+                    "de_de": "Vermesser haben eine gewaltige neue Kupferader entlang der K\\u00fcstenklippen erschlossen. Gie\\u00dfereien schicken Wagen um Wagen zu den frischen Rohvorkommen, und H\\u00e4ndler warnen, dass Barren, Bl\\u00f6cke und Rohkupfer dauerhaft billiger werden, sobald die Ader in Produktion geht."
+                  },
+                  "category": "commodities",
+                  "weight": 8,
+                  "cooldownSeconds": 5400,
+                  "impact": {
+                    "type": "trend",
+                    "peakFactor": -0.25,
+                    "rampUpSeconds": 240,
+                    "durationSeconds": 600,
+                    "reversal": "none"
+                  },
+                  "markets": [
+                    { "item": "minecraft:copper_ingot", "weightFactor": 1.0 },
+                    { "item": "minecraft:copper_block", "weightFactor": 1.0 },
+                    { "item": "minecraft:raw_copper",   "weightFactor": 0.8 }
+                  ]
+                },
+                {
+                  "id": "coal_miners_strike",
+                  "picture": "coal_miners_strike.png",
+                  "headline": {
+                    "en_us": "Coal miners walk out - furnaces run cold!",
+                    "de_de": "Kohlekumpel legen die Arbeit nieder - \\u00d6fen bleiben kalt!"
+                  },
+                  "text": {
+                    "en_us": "Coal miners across the region have walked off the job in protest over unsafe shafts. Furnaces are running cold, smiths are hoarding what fuel they have, and the price of coal and charcoal is climbing by the hour.",
+                    "de_de": "Kohlekumpel in der ganzen Region haben aus Protest gegen unsichere Sch\\u00e4chte die Arbeit niedergelegt. Die \\u00d6fen bleiben kalt, Schmiede horten ihren letzten Brennstoff, und die Preise f\\u00fcr Kohle und Holzkohle klettern st\\u00fcndlich."
+                  },
+                  "category": "labor",
+                  "weight": 6,
+                  "cooldownSeconds": 7200,
+                  "impact": {
+                    "type": "shock",
+                    "peakFactor": 0.36,
+                    "durationSeconds": 360,
+                    "reversal": "exponential",
+                    "reversalSeconds": 720,
+                    "noise": 0.04
+                  },
+                  "markets": [
+                    { "item": "#minecraft:coals", "weightFactor": 1.0 }
+                  ]
+                },
+                {
+                  "id": "volcanic_eruption",
+                  "picture": "volcanic_eruption.png",
+                  "headline": {
+                    "en_us": "Volcano erupts - villages fortify against ashfall!",
+                    "de_de": "Vulkan bricht aus - D\\u00f6rfer verschanzen sich gegen den Ascheregen!"
+                  },
+                  "text": {
+                    "en_us": "A dormant volcano roared back to life overnight, blanketing the eastern reaches in ash. Villages are ordering obsidian, basalt and blackstone in bulk to reinforce shelters and dampen embers - defensive-stone traders have never seen a rush like this.",
+                    "de_de": "Ein schlafender Vulkan ist \\u00fcber Nacht wieder erwacht und hat den Osten unter einer Ascheschicht begraben. D\\u00f6rfer bestellen Obsidian, Basalt und Blackstone in gro\\u00dfen Mengen, um Unterst\\u00e4nde zu verst\\u00e4rken und Glutnester zu ersticken - H\\u00e4ndler mit Verteidigungsgestein haben so einen Ansturm noch nie erlebt."
+                  },
+                  "category": "disaster",
+                  "weight": 2,
+                  "cooldownSeconds": 21600,
+                  "adminOnly": true,
+                  "impact": {
+                    "type": "shock",
+                    "peakFactor": 0.48,
+                    "durationSeconds": 420,
+                    "reversal": "exponential",
+                    "reversalSeconds": 1200,
+                    "noise": 0.06
+                  },
+                  "markets": [
+                    { "item": "minecraft:obsidian",   "weightFactor": 1.0 },
+                    { "item": "minecraft:basalt",     "weightFactor": 0.8 },
+                    { "item": "minecraft:blackstone", "weightFactor": 0.7 }
+                  ]
+                },
+                {
+                  "id": "great_forest_fire",
+                  "picture": "great_forest_fire.png",
+                  "headline": {
+                    "en_us": "Wildfires sweep the taiga - lumber prices spike!",
+                    "de_de": "Waldbr\\u00e4nde fegen durch die Taiga - Holzpreise schnellen hoch!"
+                  },
+                  "text": {
+                    "en_us": "Wildfires touched off by a dry lightning storm are racing through the northern taiga, consuming acres of timber a day. Sawmills warn of severe log shortages while the flames burn and orders are already being redirected to distant forests.",
+                    "de_de": "Waldbr\\u00e4nde, ausgel\\u00f6st durch ein trockenes Gewitter, rasen durch die n\\u00f6rdliche Taiga und fressen t\\u00e4glich hektarweise Bauholz. S\\u00e4gewerke warnen vor massiven Engp\\u00e4ssen bei Baumst\\u00e4mmen, w\\u00e4hrend die Flammen lodern, und Auftr\\u00e4ge werden bereits in entfernte W\\u00e4lder umgeleitet."
+                  },
+                  "category": "disaster",
+                  "weight": 3,
+                  "cooldownSeconds": 14400,
+                  "sequences": [
+                    {
+                      "name": "wildfire",
+                      "weight": 1,
+                      "steps": [
+                        { "name": "spark",     "durationSeconds": { "min": 60, "max": 120 },  "targetFactor": 0.15, "curve": "linear",      "noise": 0.03 },
+                        { "name": "spread",    "durationSeconds": { "min": 120, "max": 240 }, "targetFactor": 0.40, "curve": "linear",      "noise": 0.05 },
+                        { "name": "inferno",   "durationSeconds": { "min": 90,  "max": 180 },                       "curve": "hold",        "noise": 0.07 },
+                        { "name": "contained", "durationSeconds": { "min": 120, "max": 240 }, "targetFactor": 0.20, "curve": "exponential", "noise": 0.04 },
+                        { "name": "settle",    "durationSeconds": 300, "targetFactor": 0.0, "curve": "linear" }
+                      ]
+                    }
+                  ],
+                  "markets": [
+                    { "item": "#minecraft:logs",    "weightFactor": 1.0 },
+                    { "item": "minecraft:*_planks", "weightFactor": 0.6 }
+                  ],
+                  "chains": [
+                    { "eventId": "great_forest_fire_recovery", "on": "completion", "chance": 0.7, "delaySeconds": { "min": 600, "max": 1800 } }
+                  ]
+                },
+                {
+                  "id": "great_forest_fire_recovery",
+                  "picture": "great_forest_fire_recovery.png",
+                  "headline": {
+                    "en_us": "Disaster relief planks flood the lumber market",
+                    "de_de": "Katastrophenhilfe schwemmt den Holzmarkt"
+                  },
+                  "text": {
+                    "en_us": "Emergency shipments of planks and salvaged logs from unaffected regions are pouring into the burned lands. Sawmills are running around the clock and the shortage-driven premium on lumber is unwinding rapidly.",
+                    "de_de": "Notlieferungen von Brettern und geborgenen St\\u00e4mmen aus unversehrten Regionen str\\u00f6men in die Brandgebiete. S\\u00e4gewerke laufen rund um die Uhr, und der knappheitsbedingte Aufschlag auf Bauholz baut sich rasch ab."
+                  },
+                  "category": "recovery",
+                  "weight": 4,
+                  "cooldownSeconds": 21600,
+                  "impact": {
+                    "type": "trend",
+                    "peakFactor": -0.18,
+                    "rampUpSeconds": 240,
+                    "durationSeconds": 480,
+                    "reversal": "ramp",
+                    "reversalSeconds": 540,
+                    "noise": 0.03
+                  },
+                  "markets": [
+                    { "item": "#minecraft:logs",    "weightFactor": 1.0 },
+                    { "item": "minecraft:*_planks", "weightFactor": 0.6 }
+                  ],
+                  "requires": [
+                    { "type": "firedBefore", "eventId": "great_forest_fire", "minSecondsAgo": 60 }
+                  ]
+                },
+                {
+                  "id": "import_tariff_treaty",
+                  "picture": "import_tariff_treaty.png",
+                  "headline": {
+                    "en_us": "Trade council signs sweeping import tariff treaty",
+                    "de_de": "Handelsrat unterzeichnet umfassenden Einfuhrzoll-Vertrag"
+                  },
+                  "text": {
+                    "en_us": "After months of negotiation the trade council has signed a sweeping import tariff treaty on foreign metals. Cross-border shipments of iron and gold will carry a permanent surcharge - analysts expect the premium to become the new normal price.",
+                    "de_de": "Nach monatelangen Verhandlungen hat der Handelsrat einen umfassenden Einfuhrzoll-Vertrag auf ausl\\u00e4ndische Metalle unterzeichnet. Grenz\\u00fcberschreitende Lieferungen von Eisen und Gold tragen k\\u00fcnftig einen dauerhaften Aufschlag - Analysten erwarten, dass der Zuschlag zum neuen Normalpreis wird."
+                  },
+                  "category": "politics",
+                  "weight": 1,
+                  "cooldownSeconds": 86400,
+                  "impact": {
+                    "type": "trend",
+                    "peakFactor": 0.18,
+                    "rampUpSeconds": 240,
+                    "durationSeconds": 480,
+                    "reversal": "none"
+                  },
+                  "markets": [
+                    { "item": "minecraft:iron_ingot", "weightFactor": 1.0 },
+                    { "item": "minecraft:gold_ingot", "weightFactor": 0.8 }
+                  ],
+                  "requires": [
+                    { "type": "notFired", "eventId": "import_tariff_treaty" }
+                  ]
+                },
+                {
+                  "id": "winter_solstice_gifting",
+                  "picture": "winter_solstice_gifting.png",
+                  "headline": {
+                    "en_us": "Winter solstice gifting season lifts sweets and textiles",
+                    "de_de": "Wintersonnenwende-Schenkzeit befl\\u00fcgelt S\\u00fc\\u00dfwaren und Textilien"
+                  },
+                  "text": {
+                    "en_us": "The winter solstice gifting season is in full swing. Bakeries can barely keep cakes and cookies on the shelves, and dyed wool orders are stacking up in every village hall as households prepare gifts and decorations.",
+                    "de_de": "Die Schenkzeit zur Wintersonnenwende ist in vollem Gang. B\\u00e4ckereien bekommen kaum genug Kuchen und Kekse ins Regal, und Bestellungen f\\u00fcr gef\\u00e4rbte Wolle stapeln sich in jeder Dorfhalle, w\\u00e4hrend Haushalte Geschenke und Schmuck vorbereiten."
+                  },
+                  "category": "cultural",
+                  "weight": 4,
+                  "cooldownSeconds": 43200,
+                  "impact": {
+                    "type": "trend",
+                    "peakFactor": 0.28,
+                    "rampUpSeconds": 210,
+                    "durationSeconds": 540,
+                    "reversal": "ramp",
+                    "reversalSeconds": 480,
+                    "noise": 0.04
+                  },
+                  "markets": [
+                    { "item": "minecraft:cake",   "weightFactor": 1.0 },
+                    { "item": "minecraft:cookie", "weightFactor": 0.8 },
+                    { "item": "#minecraft:wool",  "weightFactor": 0.5 }
+                  ],
+                  "chains": [
+                    { "eventId": "post_solstice_slump", "on": "completion", "chance": 0.6, "delaySeconds": { "min": 600, "max": 1800 }, "sameMarkets": true }
+                  ]
+                },
+                {
+                  "id": "post_solstice_slump",
+                  "picture": "post_solstice_slump.png",
+                  "headline": {
+                    "en_us": "After the solstice: gift-market demand collapses",
+                    "de_de": "Nach der Sonnenwende: Nachfrage im Geschenkmarkt bricht ein"
+                  },
+                  "text": {
+                    "en_us": "With the gifting season over, households are done buying and warehouses are still stuffed. Cakes go stale on the shelves, cookie tins gather dust, and dyed wool is discounted aggressively as merchants offload year-end stock.",
+                    "de_de": "Mit dem Ende der Schenkzeit sind die Haushalte durch, und die Lager sind noch immer voll. Kuchen werden im Regal alt, Keksdosen setzen Staub an, und gef\\u00e4rbte Wolle wird aggressiv verramscht, w\\u00e4hrend die H\\u00e4ndler ihre Jahresendbest\\u00e4nde loswerden."
+                  },
+                  "category": "cultural",
+                  "weight": 3,
+                  "cooldownSeconds": 43200,
+                  "impact": {
+                    "type": "crash",
+                    "peakFactor": -0.28,
+                    "durationSeconds": 240,
+                    "reversal": "exponential",
+                    "reversalSeconds": 900,
+                    "noise": 0.04
+                  },
+                  "markets": [
+                    { "item": "minecraft:cake",   "weightFactor": 1.0 },
+                    { "item": "minecraft:cookie", "weightFactor": 0.8 },
+                    { "item": "#minecraft:wool",  "weightFactor": 0.5 }
+                  ]
+                },
+                {
+                  "id": "redstone_arms_race",
+                  "picture": "redstone_arms_race.png",
+                  "headline": {
+                    "en_us": "Kingdoms race to build redstone defenses",
+                    "de_de": "K\\u00f6nigreiche wetteifern um Redstone-Verteidigungsanlagen"
+                  },
+                  "text": {
+                    "en_us": "Rival kingdoms are pouring resources into automated defenses, and their engineers are buying up every scrap of redstone and iron they can find. Speculators are jumping in behind them - traders warn the rally can just as easily fizzle out if a ceasefire is announced.",
+                    "de_de": "Rivalisierende K\\u00f6nigreiche stecken massiv Mittel in automatisierte Verteidigungsanlagen, und ihre Ingenieure kaufen jeden erreichbaren Krumen Redstone und Eisen auf. Spekulanten springen hinterher - H\\u00e4ndler warnen, dass die Rally ebenso schnell verpuffen kann, sobald ein Waffenstillstand verk\\u00fcndet wird."
+                  },
+                  "category": "conflict",
+                  "weight": 3,
+                  "cooldownSeconds": 10800,
+                  "sequences": [
+                    {
+                      "name": "escalation",
+                      "weight": 2,
+                      "steps": [
+                        { "name": "arms_buildup", "durationSeconds": { "min": 180, "max": 360 }, "targetFactor": 0.30, "curve": "linear",      "noise": 0.04 },
+                        { "name": "peak_tension", "durationSeconds": { "min": 120, "max": 240 },                        "curve": "hold",        "noise": 0.05 },
+                        { "name": "ceasefire",    "durationSeconds": { "min": 180, "max": 300 }, "targetFactor": 0.0,  "curve": "exponential", "noise": 0.03 }
+                      ]
+                    },
+                    {
+                      "name": "brief_scare",
+                      "weight": 1,
+                      "steps": [
+                        { "name": "alarm",  "durationSeconds": { "min": 60, "max": 120 }, "targetFactor": 0.20, "curve": "linear", "noise": 0.04 },
+                        { "name": "denial", "durationSeconds": { "min": 60, "max": 120 }, "targetFactor": 0.0,  "curve": "exponential" }
+                      ]
+                    }
+                  ],
+                  "markets": [
+                    { "item": "minecraft:redstone",   "weightFactor": 1.0 },
+                    { "item": "minecraft:iron_ingot", "weightFactor": 0.5 }
                   ]
                 }
               ]
