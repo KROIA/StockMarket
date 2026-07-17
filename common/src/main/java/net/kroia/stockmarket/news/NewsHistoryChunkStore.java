@@ -413,8 +413,16 @@ public final class NewsHistoryChunkStore {
         } else {
             newestIdx = metadata.lastKey();
             if (newestChunk.size() >= CHUNK_SIZE) {
+                // T-115 fix: snapshot the completed chunk into the LRU cache BEFORE
+                // clearing it. Previously the just-completed chunk was only reachable
+                // via a disk read (through ensureOlderChunkLoaded); in-memory-only
+                // contexts (no setDirectory — unit tests) lost the data entirely, so
+                // getPage across chunk boundaries returned only the newest chunk.
+                // Disk-wired contexts also benefit by avoiding an immediate re-read.
+                int completedIdx = newestIdx;
+                olderLru.put(completedIdx, Collections.unmodifiableList(new ArrayList<>(newestChunk)));
                 // Move to a new higher index (monotonic — max + 1, never reused).
-                newestIdx = metadata.lastKey() + 1;
+                newestIdx = completedIdx + 1;
                 newestChunk.clear();
                 metadata.put(newestIdx, new ChunkMeta());
             }
