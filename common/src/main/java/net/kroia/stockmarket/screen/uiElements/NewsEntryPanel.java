@@ -32,14 +32,7 @@ import java.util.List;
  *   <li><b>newspaper text</b> — word-wrapped body below the headline, flowing
  *       around the picture as described above,</li>
  *   <li><b>timestamp line</b> — client-local formatted publish date/time plus the
- *       immersive "Day N" game day (bottom-left of the meta row),</li>
- *   <li><b>LIVE badge</b> — shown while
- *       {@code timestampEpochMs + totalDurationSeconds * 1000 > now}. Sits on the
- *       meta row (bottom-right of the card) instead of the historical top-right
- *       corner so it never fights the image slot (T-113). Approximation: compares
- *       the master's publish timestamp against the client clock and ignores server
- *       pauses (envelopes only advance while the server ticks), so the badge can
- *       linger slightly longer than the actual impact. Good enough for a newspaper.</li>
+ *       immersive "Day N" game day, spanning the full meta row width.</li>
  * </ul>
  * <p>
  * <b>No market-impact info (task T-084):</b> the panel deliberately shows neither a
@@ -58,7 +51,6 @@ public class NewsEntryPanel extends StockMarketGuiElement {
 
     private static class Texts {
         private static final String PREFIX = "gui." + StockMarketMod.MOD_ID + ".news_screen.";
-        public static final Component LIVE = Component.translatable(PREFIX + "live");
 
         public static Component gameDay(long day) {
             return Component.translatable(PREFIX + "game_day", String.valueOf(day));
@@ -76,8 +68,6 @@ public class NewsEntryPanel extends StockMarketGuiElement {
     private static final int COLOR_HEADLINE_INK = 0xFF1E1B16;
     private static final int COLOR_BODY_INK = 0xFF3A362E;
     private static final int COLOR_META_INK = 0xFF6E6754;
-    private static final int COLOR_LIVE_BG = 0xFFC03A2B;
-    private static final int COLOR_LIVE_TEXT = 0xFFFFF6EE;
 
     // ── Font scales / metrics ────────────────────────────────────────────
     private static final float HEADLINE_SCALE = 1.25f;
@@ -122,7 +112,7 @@ public class NewsEntryPanel extends StockMarketGuiElement {
     private String headlineText = "";
     /** Wrapped body text ("\n"-joined), re-resolved on every rebuild. */
     private String bodyText = "";
-    /** Right-aligned meta text: local publish time + game day. */
+    /** Meta row text: local publish time + game day, drawn full-width left-aligned. */
     private String metaText = "";
 
     /** Y offsets of the content sections, computed by {@link #rebuildForWidth(int)}. */
@@ -224,12 +214,10 @@ public class NewsEntryPanel extends StockMarketGuiElement {
         int lineH_body = scaledLineHeight(BODY_SCALE);
         int imageBottomY = INNER_PAD + imageSide;
 
-        // Headline: always sits at the top-left. The old top-right LIVE badge
-        // reservation is gone (T-113 moved the badge onto the meta row so it
-        // never fights the image slot). Wrap width = reducedWidth for the lines
-        // that fall inside the image's vertical extent, then full wrapWidth for
-        // any headline overflow (rare but respected — a very long multi-line
-        // headline still reads correctly under the image).
+        // Headline: always sits at the top-left. Wrap width = reducedWidth for
+        // the lines that fall inside the image's vertical extent, then full
+        // wrapWidth for any headline overflow (rare but respected — a very long
+        // multi-line headline still reads correctly under the image).
         headlineY = INNER_PAD;
         List<String> headlineLines = wrapAroundImage(headline, reducedWidth, wrapWidth,
                 headlineY, imageBottomY, lineH_headline, HEADLINE_SCALE);
@@ -259,8 +247,7 @@ public class NewsEntryPanel extends StockMarketGuiElement {
             }
         }
 
-        // Meta row height matches META_SCALE + top/bottom padding so the LIVE
-        // badge (drawn on this row now) is fully contained in the card.
+        // Meta row height = META_SCALE line height + top/bottom padding.
         int metaRowHeight = scaledLineHeight(META_SCALE) + 2;
         int textBottomY = bodyY + (bodyLines.isEmpty() ? 0 : bodyLines.size() * lineH_body);
         // Make sure the meta row never overlaps the image OR the body text.
@@ -303,40 +290,15 @@ public class NewsEntryPanel extends StockMarketGuiElement {
         if (!bodyText.isEmpty())
             drawText(Component.literal(bodyText), INNER_PAD, bodyY, COLOR_BODY_INK, false, BODY_SCALE);
 
-        // Meta row (T-113): timestamp on the LEFT, LIVE badge on the RIGHT — the
-        // badge moved off the top-right corner so it never fights the image slot
-        // (see class Javadoc). Both drawn shadowless for a print-consistent look.
+        // Meta row: timestamp spans the full row width. Drawn shadowless for a
+        // print-consistent look.
         drawText(Component.literal(metaText), INNER_PAD, metaRowY, COLOR_META_INK, false, META_SCALE);
-
-        if (isLive()) {
-            int badgeWidth = getLiveBadgeWidth();
-            int badgeHeight = scaledLineHeight(META_SCALE) + 2;
-            int badgeX = getWidth() - INNER_PAD - badgeWidth;
-            drawRect(badgeX, metaRowY - 1, badgeWidth, badgeHeight, COLOR_LIVE_BG);
-            drawText(Texts.LIVE, badgeX + 3, metaRowY, COLOR_LIVE_TEXT, false, META_SCALE);
-        }
     }
 
     @Override
     protected void layoutChanged() {
         // All geometry is computed in rebuildForWidth(); the feed rebuilds
         // (constructing fresh panels) whenever the available width changes.
-    }
-
-    /**
-     * Whether the record's impact window is still running, judged by client clock:
-     * {@code publishTime + totalDuration > now}. Approximation — see class Javadoc.
-     *
-     * @return true while the entry should carry the LIVE badge
-     */
-    private boolean isLive() {
-        long endMs = record.getTimestampEpochMs() + record.getTotalDurationSeconds() * 1000L;
-        return endMs > System.currentTimeMillis();
-    }
-
-    /** @return the rendered width of the LIVE badge in GUI pixels */
-    private int getLiveBadgeWidth() {
-        return (int) (getTextWidth(Texts.LIVE.getString()) * META_SCALE) + 6;
     }
 
     /**
