@@ -503,7 +503,8 @@ public class ClientNewsPictureCache {
         }
 
         long now = timeSource.getAsLong();
-        boolean anyLoaded = false;
+        int loaded = 0;
+        int missed = 0;
         for (HashEntry entry : batch) {
             if (entry.state != State.IN_FLIGHT) continue; // defensive
             String key = NewsPictureLibrary.toHex(entry.hash);
@@ -512,6 +513,7 @@ public class ClientNewsPictureCache {
                 // Unknown / over-budget / rate-limited (indistinguishable, see
                 // NewsPictureRequest Javadoc) → backoff re-enqueue or give up.
                 onFetchMiss(entry, key, now);
+                missed++;
                 continue;
             }
             // Defense in depth: the bytes must hash to exactly what we asked for.
@@ -519,6 +521,7 @@ public class ClientNewsPictureCache {
                 StockMarketMod.LOGGER.warn(
                         "[ClientNewsPictureCache] Served picture bytes do not match hash {} — marked unavailable", key);
                 parkLong(entry, now);
+                missed++;
                 continue;
             }
             LoadedPicture picture = sink.register(key, pngBytes);
@@ -526,16 +529,28 @@ public class ClientNewsPictureCache {
                 StockMarketMod.LOGGER.warn(
                         "[ClientNewsPictureCache] Picture {} could not be decoded — marked unavailable", key);
                 parkLong(entry, now);
+                missed++;
                 continue;
             }
             entry.state = State.LOADED;
             entry.picture = picture;
             loadedLru.put(key, entry);
-            anyLoaded = true;
+            loaded++;
         }
         evictOverflow();
 
-        if (anyLoaded && changeListener != null) {
+        // T-106 diagnostic: one WARN per response batch. Reveals whether pictures
+        // are actually landing on the client — silent placeholder-only rendering is
+        // often a chain break (server didn't stamp, rate-limiter refused, decode
+        // failed) that never surfaced anywhere before. WARN-level so it also shows
+        // in default log configs.
+        if (loaded > 0 || missed > 0) {
+            StockMarketMod.LOGGER.warn(
+                    "[ClientNewsPictureCache] Response batch: {} loaded, {} missed (of {} requested)",
+                    loaded, missed, batch.size());
+        }
+
+        if (loaded > 0 && changeListener != null) {
             changeListener.run(); // once per response batch, on the client main thread
         }
     }
