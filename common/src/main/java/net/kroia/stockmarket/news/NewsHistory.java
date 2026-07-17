@@ -7,34 +7,51 @@ import net.minecraft.nbt.Tag;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayDeque;
+import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 
 /**
  * Master-side capped chronological store of published {@link NewsRecord}s
- * (NewsEventSystem plan §3, task T-072).
+ * (NewsEventSystem plan §3, task T-072; chunked disk layout added by task T-110).
  * <p>
- * The history is an in-memory ring buffer: {@link #append} adds the newest record at the
- * end and prunes the oldest entries beyond {@link #getMaxEntries()}. Records are appended
- * by the production {@link NewsPublisher} ({@link ServerNewsPublisher}) in publish order;
- * the {@code newsUid}s are generated monotonically by the NewsPlugin, so the buffer is
- * ordered oldest-first / ascending uid — this class only stores what it is given and never
- * renumbers.
+ * The history's <b>public API is unchanged</b>: {@link #append} adds the newest record at
+ * the end and prunes the oldest entries beyond {@link #getMaxEntries()}. Records are
+ * appended by the production {@link NewsPublisher} ({@link ServerNewsPublisher}) in
+ * publish order; the {@code newsUid}s are generated monotonically by the NewsPlugin so
+ * the buffer is ordered oldest-first / ascending uid — this class only stores what it is
+ * given and never renumbers.
+ * <p>
+ * <b>Storage layout (T-110):</b> internally the history is split into fixed-size chunks
+ * of {@value NewsHistoryChunkStore#CHUNK_SIZE} records persisted under
+ * {@code world/data/StockMarket/News/history/}. Each chunk has a companion sidecar
+ * listing the picture hashes it references, so {@link #referencedPictureHashes()} can
+ * union across all chunks without loading their record data. Older (non-newest) chunks
+ * stay on disk after world load and are lazy-loaded through a small LRU when
+ * {@link #getPage} paginates across the boundary. See {@link NewsHistoryChunkStore} for
+ * the full disk-layout, migration and cap-enforcement contracts.
  * <p>
  * <b>Cap handling:</b> the cap originates from the news library's scheduler config
- * ({@code historyMaxEntries}, default {@value NewsEventLibrary.SchedulerConfig#DEFAULT_HISTORY_MAX_ENTRIES}).
- * To keep this class decoupled from the library, the cap is pushed in via
- * {@link #setMaxEntries(int)} — the {@link ServerNewsPublisher} reads it from the library
- * and sets it before every append. Cap changes (config reload) apply <b>lazily</b>: a
- * shrunken cap does NOT re-prune existing entries immediately, pruning happens on the next
- * {@link #append}. Loading never prunes either — the buffer was pruned when it was saved.
+ * ({@code historyMaxEntries}, default {@value NewsEventLibrary.SchedulerConfig#DEFAULT_HISTORY_MAX_ENTRIES}
+ * — raised from 500 to 1000 by T-110, ≈10 chunks). To keep this class decoupled from the
+ * library, the cap is pushed in via {@link #setMaxEntries(int)} — the
+ * {@link ServerNewsPublisher} reads it from the library and sets it before every append.
+ * Cap changes (config reload) apply <b>lazily</b>: a shrunken cap does NOT re-prune
+ * existing entries immediately, pruning happens on the next {@link #append}. Loading
+ * never prunes either — the buffer was pruned when it was saved.
  * <p>
  * <b>Pagination convention</b> (the {@code NewsHistoryRequest} of T-073 codes against
  * {@link #getPage(long, int)} exactly as documented there): pages are newest-first,
  * keyed by {@code newsUid} strictly less than the {@code beforeUid} cursor;
- * {@code beforeUid <= 0} and {@code Long.MAX_VALUE} both mean "start at the newest record".
+ * {@code beforeUid <= 0} and {@link Long#MAX_VALUE} both mean "start at the newest
+ * record". Pagination now spans chunk boundaries transparently — the {@code getPage}
+ * contract is preserved verbatim.
+ * <p>
+ * <b>Testing:</b> {@link #save(CompoundTag)} / {@link #load(CompoundTag)} continue to
+ * work as an in-memory flat snapshot for unit tests that never call
+ * {@link #setDirectory(Path)}. When a directory IS wired, they still round-trip via
+ * {@link NewsHistoryChunkStore#allRecordsOldestFirst}/{@link NewsHistoryChunkStore#restoreFromList}
+ * so live-world snapshots (e.g. the {@code NewsHistoryRequestTestSuite}) remain consistent.
  * <p>
  * Not thread-safe: like the rest of the market/plugin state, call it from the server
  * thread only (publishes come from the plugin update loop, request handlers run on the
@@ -49,18 +66,53 @@ public class NewsHistory implements ServerSaveable {
 
     // ── NBT keys ─────────────────────────────────────────────────────────
 
+    /** Root list of records in the in-memory {@link #save(CompoundTag)} snapshot. */
     private static final String KEY_RECORDS = "records";
 
     // ── State ────────────────────────────────────────────────────────────
 
-    /** The stored records, oldest first / ascending {@code newsUid} (append order). */
-    private final ArrayDeque<NewsRecord> records = new ArrayDeque<>();
+    /** Chunked disk-layout backend. Always non-null — a fresh instance is detached. */
+    private final NewsHistoryChunkStore chunkStore = new NewsHistoryChunkStore();
 
     /**
      * Current entry cap. Defaults to the scheduler-config default so a history that is
      * loaded before the news library exists is still bounded.
      */
     private int maxEntries = NewsEventLibrary.SchedulerConfig.DEFAULT_HISTORY_MAX_ENTRIES;
+
+    // ── Directory wiring (T-110) ─────────────────────────────────────────
+
+    /**
+     * Wires the chunk directory (typically {@code world/data/StockMarket/News/history})
+     * and triggers an initial load of the on-disk state — migrating the pre-T-110 single
+     * {@code history.nbt} file when applicable (see {@link NewsHistoryChunkStore} for
+     * the migration contract).
+     * <p>
+     * <b>Idempotent:</b> a subsequent call with the same directory is a no-op — the
+     * in-memory state is not reloaded (that would clobber records appended since the
+     * first call). This matches how {@code DataManager} re-invokes this method on
+     * autosave/server-stop after {@link #append} has been mutating the store.
+     *
+     * @param directory      the {@code history/} directory
+     * @param oldSingleFile  the pre-T-110 {@code history.nbt} path used for migration
+     *                       (may be null to disable migration in test contexts)
+     */
+    public void setDirectory(@NotNull Path directory, @Nullable Path oldSingleFile) {
+        Path existing = chunkStore.getDirectory();
+        if (existing != null && existing.equals(directory)) return;
+        chunkStore.setDirectory(directory);
+        chunkStore.loadFromDirectory(oldSingleFile);
+    }
+
+    /** @return the {@code history/} directory, or null when detached (test contexts) */
+    public @Nullable Path getDirectory() {
+        return chunkStore.getDirectory();
+    }
+
+    /** @return the chunk-store helper — for tests only (do not use in production paths) */
+    public NewsHistoryChunkStore getChunkStoreForTests() {
+        return chunkStore;
+    }
 
     // ── Cap ──────────────────────────────────────────────────────────────
 
@@ -85,65 +137,63 @@ public class NewsHistory implements ServerSaveable {
     // ── Mutation ─────────────────────────────────────────────────────────
 
     /**
-     * Appends one published record as the newest entry and prunes the oldest entries
-     * while the buffer exceeds {@link #getMaxEntries()}.
+     * Appends one published record as the newest entry and prunes the oldest chunk
+     * files while the total record count exceeds {@link #getMaxEntries()}.
      * <p>
      * The caller must append records in publish order (ascending {@code newsUid} — the
      * NewsPlugin's uid counter is monotonic and persisted), because {@link #getPage}
      * treats the buffer order as the chronological order.
+     * <p>
+     * <b>Cap-drop granularity (T-110):</b> when the total crosses the cap, the entire
+     * oldest chunk file (up to {@value NewsHistoryChunkStore#CHUNK_SIZE} records) is
+     * dropped atomically — no partial-chunk rewrite. When the cap is not a multiple
+     * of {@value NewsHistoryChunkStore#CHUNK_SIZE}, retained count fluctuates slightly
+     * (documented caveat in {@code configuration.md}).
      *
      * @param record the freshly published record; null is ignored
      */
     public void append(@Nullable NewsRecord record) {
-        if (record == null) return;
-        records.addLast(record);
-        while (records.size() > maxEntries) {
-            records.removeFirst();
-        }
+        chunkStore.append(record, maxEntries);
     }
 
-    /** Removes all stored records (the cap is kept). */
+    /** Removes all stored records (the cap is kept). Also deletes on-disk chunk files. */
     public void clear() {
-        records.clear();
+        chunkStore.clear();
     }
 
     // ── Queries ──────────────────────────────────────────────────────────
 
-    /** @return the number of stored records */
+    /** @return the number of stored records (sum across all chunks) */
     public int size() {
-        return records.size();
+        return chunkStore.size();
     }
 
     /** @return true if no records are stored */
     public boolean isEmpty() {
-        return records.isEmpty();
+        return chunkStore.isEmpty();
     }
 
     /** @return the {@code newsUid} of the newest stored record, or 0 if the history is empty */
     public long getNewestUid() {
-        NewsRecord newest = records.peekLast();
-        return newest != null ? newest.getNewsUid() : 0;
+        return chunkStore.getNewestUid();
     }
 
     /**
-     * Collects the picture hashes of all stored records (T-088) — the reference set
-     * that drives the {@link NewsPictureStore} garbage collection
+     * Collects the picture hashes of all stored records (T-088, T-110) — the reference
+     * set that drives the {@link NewsPictureStore} garbage collection
      * ({@code retainOnly}): a stored picture survives exactly as long as at least one
-     * history record still points at it. Text-only records (null hash) are skipped.
+     * history record still points at it.
      * <p>
-     * The list may contain duplicates when several records share one picture; the
-     * store deduplicates internally.
+     * <b>T-110 implementation:</b> the union is computed from per-chunk sidecar files
+     * (small: record-count + uid bounds + hash list) — no full chunk record data is
+     * loaded. Corrupt/missing sidecars are recovered by loading the chunk once during
+     * {@code loadFromDirectory} and rebuilding the sidecar (WARN log + skip).
      *
-     * @return the non-null 20-byte SHA-1 hashes of every record in the buffer
-     *         (possibly empty, never null)
+     * @return the non-null 20-byte SHA-1 hashes of every referenced picture
+     *         (deduplicated, possibly empty, never null)
      */
     public @NotNull List<byte[]> referencedPictureHashes() {
-        List<byte[]> hashes = new ArrayList<>();
-        for (NewsRecord record : records) {
-            byte[] hash = record.getPictureHash();
-            if (hash != null) hashes.add(hash);
-        }
-        return hashes;
+        return chunkStore.referencedPictureHashes();
     }
 
     /**
@@ -164,6 +214,8 @@ public class NewsHistory implements ServerSaveable {
      *       end was reached.</li>
      *   <li>Never returns null; an empty history or an exhausted cursor yields an
      *       empty list.</li>
+     *   <li><b>T-110:</b> pagination transparently spans chunk boundaries — older chunks
+     *       are lazy-loaded through a small LRU cache as the cursor walks backwards.</li>
      * </ul>
      *
      * @param beforeUid  exclusive upper uid cursor; {@code <= 0} or {@link Long#MAX_VALUE}
@@ -172,25 +224,21 @@ public class NewsHistory implements ServerSaveable {
      * @return the page, newest-first (possibly empty, never null)
      */
     public @NotNull List<NewsRecord> getPage(long beforeUid, int maxResults) {
-        long effectiveBefore = beforeUid <= 0 ? Long.MAX_VALUE : beforeUid;
         int limit = Math.min(Math.max(maxResults, MIN_PAGE_SIZE), MAX_PAGE_SIZE);
-
-        List<NewsRecord> page = new ArrayList<>(Math.min(limit, records.size()));
-        Iterator<NewsRecord> newestFirst = records.descendingIterator();
-        while (newestFirst.hasNext() && page.size() < limit) {
-            NewsRecord record = newestFirst.next();
-            if (record.getNewsUid() < effectiveBefore) {
-                page.add(record);
-            }
-        }
-        return page;
+        return chunkStore.getPage(beforeUid, limit);
     }
 
-    // ── NBT persistence (ServerSaveable) ─────────────────────────────────
+    // ── NBT persistence (ServerSaveable — retained for test snapshots) ───
 
     /**
-     * Writes the whole buffer (oldest-first) into the given tag. The cap itself is NOT
-     * persisted — it is configuration owned by the news library, not world state.
+     * Serializes the current in-memory history (all chunks, walked oldest-first)
+     * into the given tag. The cap itself is NOT persisted — it is configuration
+     * owned by the news library, not world state.
+     * <p>
+     * <b>Testing-oriented:</b> production save/load is directory-based via
+     * {@link #setDirectory(Path, Path)}. This CompoundTag form remains for the
+     * {@code NewsHistoryTestSuite} unit tests and the {@code NewsHistoryRequestTestSuite}
+     * snapshot/restore setup that predate T-110.
      *
      * @param tag the tag to populate
      * @return true (this save cannot fail)
@@ -198,7 +246,7 @@ public class NewsHistory implements ServerSaveable {
     @Override
     public boolean save(CompoundTag tag) {
         ListTag recordsTag = new ListTag();
-        for (NewsRecord record : records) {
+        for (NewsRecord record : chunkStore.allRecordsOldestFirst()) {
             CompoundTag recordTag = new CompoundTag();
             record.save(recordTag);
             recordsTag.add(recordTag);
@@ -209,23 +257,23 @@ public class NewsHistory implements ServerSaveable {
 
     /**
      * Restores the buffer saved by {@link #save(CompoundTag)}, replacing the current
-     * content. Malformed entries are skipped (skip-and-continue); no pruning happens
-     * here — the buffer was capped when it was saved, and a shrunken cap applies on
-     * the next {@link #append}.
+     * content. Malformed entries are skipped (skip-and-continue). When a directory is
+     * wired, the on-disk chunk layout is rewritten to match the restored records.
+     * <p>
+     * See {@link #save(CompoundTag)} for the testing-oriented nature of this API.
      *
      * @param tag the tag to read from
      * @return true (a partially readable history is better than none)
      */
     @Override
     public boolean load(CompoundTag tag) {
-        records.clear();
         ListTag recordsTag = tag.getList(KEY_RECORDS, Tag.TAG_COMPOUND);
+        List<NewsRecord> restored = new ArrayList<>(recordsTag.size());
         for (int i = 0; i < recordsTag.size(); i++) {
             NewsRecord record = NewsRecord.createFromTag(recordsTag.getCompound(i));
-            if (record != null) {
-                records.addLast(record);
-            }
+            if (record != null) restored.add(record);
         }
+        chunkStore.restoreFromList(restored);
         return true;
     }
 }

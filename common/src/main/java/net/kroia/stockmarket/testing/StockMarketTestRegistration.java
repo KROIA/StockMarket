@@ -21,6 +21,7 @@ import net.kroia.stockmarket.testing.tests.MatchingEngineTestSuite;
 import net.kroia.stockmarket.testing.tests.ModSettingsTestSuite;
 import net.kroia.stockmarket.testing.tests.NewsAdminTestSuite;
 import net.kroia.stockmarket.testing.tests.NewsHistoryRequestTestSuite;
+import net.kroia.stockmarket.testing.tests.NewsHistoryChunksTestSuite;
 import net.kroia.stockmarket.testing.tests.NewsHistoryTestSuite;
 import net.kroia.stockmarket.testing.tests.NewsPictureClientCacheTestSuite;
 import net.kroia.stockmarket.testing.tests.NewsPictureLibraryTestSuite;
@@ -84,6 +85,7 @@ public class StockMarketTestRegistration {
         TestRegistry.register(new NewsAdminTestSuite());
         TestRegistry.register(new NewsSchedulerTestSuite());
         TestRegistry.register(new NewsHistoryTestSuite());
+        TestRegistry.register(new NewsHistoryChunksTestSuite());
         TestRegistry.register(new ClientNewsCacheTestSuite());
         TestRegistry.register(new NewsPictureLibraryTestSuite());
         TestRegistry.register(new NewsPictureStoreTestSuite());

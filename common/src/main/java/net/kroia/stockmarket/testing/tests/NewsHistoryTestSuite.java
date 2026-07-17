@@ -5,6 +5,7 @@ import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
 import net.kroia.stockmarket.news.NewsHistory;
+import net.kroia.stockmarket.news.NewsHistoryChunkStore;
 import net.kroia.stockmarket.news.NewsRecord;
 import net.kroia.stockmarket.news.ServerNewsPublisher;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
@@ -106,34 +107,63 @@ public class NewsHistoryTestSuite extends TestSuite {
                 List.of(5L, 4L, 3L, 2L, 1L), uidsOf(history.getPage(0, 10)));
     }
 
-    /** Appending beyond the cap drops the oldest records. */
+    /**
+     * Appending past the cap drops the oldest CHUNK once ≥2 chunks exist (T-110:
+     * aligned drop, no partial rewrite). With cap = CHUNK_SIZE + 5 and 2×CHUNK_SIZE
+     * appended records, the first chunk drops and the second (100+5 records) survives.
+     */
     private TestResult test_append_prunesOldestBeyondCap() {
         NewsHistory history = new NewsHistory();
-        history.setMaxEntries(5);
-        for (long uid = 1; uid <= 10; uid++) {
+        int chunkSize = NewsHistoryChunkStore.CHUNK_SIZE;
+        history.setMaxEntries(chunkSize + 5);
+        for (long uid = 1; uid <= 2L * chunkSize; uid++) {
             history.append(record(uid));
         }
-        TestResult r = assertEquals("size stays at cap", 5, history.size());
+        // 200 records total, cap = 105. Chunk 0 (uid 1..100) full → chunk 1 (uid 101..200)
+        // full. Total 200 > 105 && 2 chunks → drop chunk 0. Result: chunk 1 only,
+        // 100 records. 100 < 105 → stop.
+        TestResult r = assertEquals("size is one chunk after aligned drop", chunkSize, history.size());
         if (!r.passed()) return r;
-        return assertEquals("only the 5 newest remain",
-                List.of(10L, 9L, 8L, 7L, 6L), uidsOf(history.getPage(0, 10)));
+        List<NewsRecord> page = history.getPage(0, chunkSize);
+        r = assertEquals("newest record survives", 2L * chunkSize, page.get(0).getNewsUid());
+        if (!r.passed()) return r;
+        return assertEquals("oldest surviving record is chunk-1 start",
+                chunkSize + 1L, page.get(page.size() - 1).getNewsUid());
     }
 
-    /** A cap shrink must NOT prune immediately — only the next append prunes. */
+    /**
+     * A cap shrink applies lazily on the next append (T-110): the shrink itself
+     * does nothing, and pruning is chunk-granular — the oldest whole chunk drops
+     * only when the total crosses the cap AND ≥2 chunks exist.
+     */
     private TestResult test_capShrink_prunesLazilyOnNextAppend() {
-        NewsHistory history = historyWith(10);
-        history.setMaxEntries(3);
-        TestResult r = assertEquals("cap shrink alone must not prune", 10, history.size());
+        NewsHistory history = new NewsHistory();
+        int chunkSize = NewsHistoryChunkStore.CHUNK_SIZE;
+        history.setMaxEntries(1000);
+        // Two full chunks — total 200 records, 2 chunks.
+        for (long uid = 1; uid <= 2L * chunkSize; uid++) {
+            history.append(record(uid));
+        }
+        history.setMaxEntries(50); // Shrink to 50 (far below chunk size).
+        TestResult r = assertEquals("cap shrink alone must not prune",
+                2 * chunkSize, history.size());
         if (!r.passed()) return r;
 
-        history.append(record(11));
-        r = assertEquals("next append prunes down to the cap", 3, history.size());
+        history.append(record(2L * chunkSize + 1L));
+        // Now 201 records in 3 chunks (100/100/1). Cap = 50 → drop chunk 0 (101),
+        // still 100 > 50 && 2 chunks → drop chunk 1 (1 remaining). Chunk 2 (1
+        // record) is the newest — the newest chunk is never dropped.
+        r = assertEquals("cap-granular drops leave the newest chunk", 1, history.size());
         if (!r.passed()) return r;
-        return assertEquals("the 3 newest survive the lazy prune",
-                List.of(11L, 10L, 9L), uidsOf(history.getPage(0, 10)));
+        return assertEquals("the newest record survives",
+                2L * chunkSize + 1L, history.getNewestUid());
     }
 
-    /** Cap values below 1 clamp to 1 (the newest record is always kept). */
+    /**
+     * Cap values below 1 clamp to 1 (T-072 behaviour retained). Pruning is chunk-
+     * granular (T-110) — the newest chunk is never dropped, so with a cap this
+     * small the effective retention is up to one full chunk.
+     */
     private TestResult test_cap_isClampedToAtLeastOne() {
         NewsHistory history = new NewsHistory();
         history.setMaxEntries(0);
@@ -141,9 +171,12 @@ public class NewsHistoryTestSuite extends TestSuite {
         if (!r.passed()) return r;
         history.append(record(1));
         history.append(record(2));
-        r = assertEquals("exactly one record kept", 1, history.size());
+        // Both records share the newest chunk (cap alignment caveat). The newest
+        // chunk is never dropped, so both survive despite exceeding cap.
+        r = assertEquals("both records fit in the (undroppable) newest chunk",
+                2, history.size());
         if (!r.passed()) return r;
-        return assertEquals("the kept record is the newest", 2L, history.getNewestUid());
+        return assertEquals("the newest record is still the newest", 2L, history.getNewestUid());
     }
 
     /** Null appends are ignored instead of corrupting the buffer. */
@@ -193,15 +226,22 @@ public class NewsHistoryTestSuite extends TestSuite {
         return assertTrue("page of empty history is empty", page.isEmpty());
     }
 
-    /** A cursor older than everything stored yields an empty page (end reached). */
+    /**
+     * A cursor older than everything stored yields an empty page (end reached).
+     * T-110: uses chunk-aligned pruning so uids 1..CHUNK_SIZE are dropped when
+     * chunk 0 is retired.
+     */
     private TestResult test_page_exhaustedCursor_returnsEmpty() {
         NewsHistory history = new NewsHistory();
-        history.setMaxEntries(3);
-        for (long uid = 1; uid <= 6; uid++) {
-            history.append(record(uid)); // uids 1..3 pruned away
+        int chunkSize = NewsHistoryChunkStore.CHUNK_SIZE;
+        history.setMaxEntries(chunkSize + 5);
+        for (long uid = 1; uid <= 2L * chunkSize; uid++) {
+            history.append(record(uid));
         }
-        return assertTrue("cursor below the oldest stored uid yields an empty page",
-                history.getPage(4, 10).isEmpty());
+        // Cap = 105, size = 200 → chunk 0 (uids 1..100) dropped. Chunk 1 keeps
+        // uids 101..200. A cursor at 50 (< oldest surviving 101) yields empty.
+        return assertTrue("cursor below the oldest surviving uid yields an empty page",
+                history.getPage(50, 10).isEmpty());
     }
 
     /** maxResults < 1 clamps to 1. */
@@ -323,33 +363,42 @@ public class NewsHistoryTestSuite extends TestSuite {
     // ========================================================================
 
     /**
-     * The ServerNewsPublisher appends published records to the history and applies the
-     * (lazily supplied) cap at publish time — a shrunken cap prunes on the next publish.
+     * The ServerNewsPublisher appends published records to the history and applies
+     * the (lazily supplied) cap at publish time — a shrunken cap prunes on the next
+     * publish. T-110: pruning is chunk-granular; the counts are chosen so a chunk
+     * rotation + drop is triggered and the assertions cover the aligned semantics.
      */
     private TestResult test_publisher_appendsAndAppliesCap() {
         NewsHistory history = new NewsHistory();
-        int[] cap = {3};
+        int chunkSize = NewsHistoryChunkStore.CHUNK_SIZE;
+        int[] cap = {chunkSize + 5}; // 105 — barely above one chunk
         ServerNewsPublisher publisher = new ServerNewsPublisher(history, () -> cap[0]);
 
-        for (long uid = 1; uid <= 5; uid++) {
+        long total = 2L * chunkSize; // fills chunk 0 + chunk 1, no drop yet (200 < 205 doesn't hold — 200 > 105)
+        for (long uid = 1; uid <= total; uid++) {
             publisher.publish(record(uid));
         }
-        TestResult r = assertEquals("publisher enforces the supplied cap", 3, history.size());
+        // 200 records vs cap 105 → drop chunk 0 (100). Now 100 records (uid 101..200)
+        // in a single chunk. 100 < 105 → stop.
+        TestResult r = assertEquals("publisher enforces the aligned cap", chunkSize, history.size());
         if (!r.passed()) return r;
-        r = assertEquals("newest records survive",
-                List.of(5L, 4L, 3L), uidsOf(history.getPage(0, 10)));
+        r = assertEquals("newest record survives", total, history.getNewestUid());
         if (!r.passed()) return r;
 
-        // Cap change (e.g. news-config reload) applies on the next publish.
-        cap[0] = 2;
-        publisher.publish(record(6));
-        r = assertEquals("cap change applies at the next publish", 2, history.size());
+        // Cap change (e.g. news-config reload) applies on the next publish. The
+        // next publish (record 201) fills chunk 1 to 100 and rotates to chunk 2
+        // with 1 record; cap=10 triggers dropping chunk 1 (100), leaving just the
+        // fresh newest chunk with the one just-published record.
+        cap[0] = 10;
+        publisher.publish(record(total + 1L));
+        r = assertEquals("chunk rotation + aligned drop leaves the fresh newest chunk",
+                1, history.size());
         if (!r.passed()) return r;
-        r = assertEquals("pruned to the 2 newest",
-                List.of(6L, 5L), uidsOf(history.getPage(0, 10)));
+        r = assertEquals("the freshly rotated record survives",
+                total + 1L, history.getNewestUid());
         if (!r.passed()) return r;
 
         publisher.publish(null);
-        return assertEquals("null publish is ignored", 2, history.size());
+        return assertEquals("null publish is ignored", 1, history.size());
     }
 }

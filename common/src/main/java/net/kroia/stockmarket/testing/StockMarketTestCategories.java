@@ -74,6 +74,13 @@ public class StockMarketTestCategories {
     public static final TestCategory NEWS_HISTORY = new TestCategory(
             "stockmarket", "sm_news_history", "NewsHistory capped buffer, pagination and NBT persistence tests", BOTH, false);
 
+    // Chunked history storage (T-110): chunk rotation at 100, cap-driven oldest-chunk
+    // drop, sidecar equivalence for picture GC, pre-T-110 single-file migration and
+    // lazy older-chunk loading across pagination boundaries. Pure filesystem + NBT
+    // logic — no MC context needed.
+    public static final TestCategory NEWS_HISTORY_CHUNKS = new TestCategory(
+            "stockmarket", "sm_news_history_chunks", "NewsHistoryChunkStore chunk rotation, cap-drop, sidecar equivalence, single-file migration and lazy-load pagination tests", BOTH, false);
+
     public static final TestCategory NEWS_CLIENT_CACHE = new TestCategory(
             "stockmarket", "sm_news_client_cache", "ClientNewsCache append/cap/newest-first/dedupe/clear/seed and join-time toast catch-up tests", BOTH, false);
 

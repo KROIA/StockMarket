@@ -87,8 +87,18 @@ public class NewsEventLibrary {
         public static final int DEFAULT_MAX_ACTIVE_EVENTS_GLOBAL = 3;
         /** Default cap of simultaneously active events per market. */
         public static final int DEFAULT_MAX_ACTIVE_EVENTS_PER_MARKET = 1;
-        /** Default cap of retained news history records. */
-        public static final int DEFAULT_HISTORY_MAX_ENTRIES = 500;
+        /**
+         * Default cap of retained news history records.
+         * <p>
+         * Raised from 500 → 1000 by T-110 (chunked disk layout, ≈10 chunks of
+         * {@value net.kroia.stockmarket.news.NewsHistoryChunkStore#CHUNK_SIZE}
+         * records each). The JSON-authored {@code historyMaxEntries} value is
+         * still respected on top — this default only kicks in when the field is
+         * missing from every scheduler block. See {@code configuration.md} for
+         * the cap-alignment caveat ("cap should be a multiple of the chunk size
+         * for exact retention").
+         */
+        public static final int DEFAULT_HISTORY_MAX_ENTRIES = 1000;
 
         private long minSecondsBetweenEvents = DEFAULT_MIN_SECONDS_BETWEEN_EVENTS;
         private long maxSecondsBetweenEvents = DEFAULT_MAX_SECONDS_BETWEEN_EVENTS;

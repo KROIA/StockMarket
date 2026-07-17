@@ -45,7 +45,14 @@ public class DataManager extends DataPersistence {
     private static final String MARKET_MANAGER_FOLDER = "MarketManager";
     private static final String PLUGIN_MANAGER_FOLDER = "PluginManager";
     private static final String NEWS_FOLDER = "News";
-    private static final String NEWS_HISTORY_FILE = "history.nbt";
+    /**
+     * Pre-T-110 single-file news history location (kept as a constant so the T-110
+     * migration in {@link net.kroia.stockmarket.news.NewsHistoryChunkStore} can find
+     * and consume it). New installs never (re-)create this file.
+     */
+    private static final String NEWS_HISTORY_LEGACY_FILE = "history.nbt";
+    /** T-110 chunked history subfolder ({@code News/history/NNN.nbt} + sidecars). */
+    private static final String NEWS_HISTORY_FOLDER = "history";
     private static final String NEWS_REGISTRY_FILE = "registry.nbt";
     private static final String NEWS_PICTURES_FOLDER = "pictures";
     private static final String SETTINGS_FILE = "settings.json";
@@ -348,15 +355,17 @@ public class DataManager extends DataPersistence {
     }
 
     /**
-     * News persistence (T-072/T-096, pattern: {@link #saveStarterKit}).
-     * Writes the whole capped history buffer to
-     * {@code world/data/StockMarket/News/history.nbt} and the world-event registry to
-     * {@code world/data/StockMarket/News/registry.nbt}.
+     * News persistence (T-072/T-096/T-110, pattern: {@link #saveStarterKit}).
+     * Writes the world-event registry to
+     * {@code world/data/StockMarket/News/registry.nbt}. Since T-110 the history is
+     * stored as append-persisted chunk files under
+     * {@code world/data/StockMarket/News/history/} (see
+     * {@link net.kroia.stockmarket.news.NewsHistoryChunkStore}), so no explicit
+     * "save history" step is needed here — each append already flushed the chunk +
+     * sidecar to disk.
      * Master-only by construction — the DataManager is only created on the master.
-     * Both files are always attempted — a failing history write does not skip the
-     * registry write (and vice versa).
      *
-     * @return true if both news files were written successfully
+     * @return true if the registry file was written successfully
      */
     public boolean saveNews()
     {
@@ -370,14 +379,13 @@ public class DataManager extends DataPersistence {
         // store persists its snapshots immediately on put, so saving the history is
         // all this method has left to do for pictures).
         newsPictureStore.setDirectory(folderPath.resolve(NEWS_PICTURES_FOLDER));
+        // History (T-110): chunks are persisted on every append; nothing to flush
+        // here. We still (re)wire the directory to keep the chunk store aligned
+        // with the current world save in case the save path shifted.
+        newsHistory.setDirectory(
+                folderPath.resolve(NEWS_HISTORY_FOLDER),
+                folderPath.resolve(NEWS_HISTORY_LEGACY_FILE));
         boolean success = true;
-        CompoundTag tag = new CompoundTag();
-        newsHistory.save(tag);
-        if(!saveDataCompound(folderPath.resolve(NEWS_HISTORY_FILE), tag))
-        {
-            error("saveNews(): Failed to save news history to NBT file");
-            success = false;
-        }
         CompoundTag registryTag = new CompoundTag();
         newsWorldRegistry.save(registryTag);
         if(!saveDataCompound(folderPath.resolve(NEWS_REGISTRY_FILE), registryTag))
@@ -389,12 +397,16 @@ public class DataManager extends DataPersistence {
     }
 
     /**
-     * Restores the news history from {@code world/data/StockMarket/News/history.nbt}.
-     * A missing file is not an error (first run / pre-news world) — the empty history
-     * is kept. The entry cap is applied lazily on the next append (see
+     * Restores the news history from {@code world/data/StockMarket/News/history/}
+     * (T-110). Migrates the pre-T-110 single-file {@code history.nbt} into chunks
+     * on first load — see {@link net.kroia.stockmarket.news.NewsHistoryChunkStore}
+     * for the migration contract (safe conservative branch when both layouts exist).
+     * An empty directory is not an error (first run / pre-news world) — the empty
+     * history is kept. The entry cap is applied lazily on the next append (see
      * {@link NewsHistory#setMaxEntries}).
      *
-     * @return true if the history was restored (or no file existed yet)
+     * @return true (loading is failure-tolerant by design — corrupt chunks are
+     *         logged and skipped, the world load continues either way)
      */
     private boolean loadNews()
     {
@@ -408,27 +420,19 @@ public class DataManager extends DataPersistence {
         // simply starts empty (requirements re-evaluate against a blank memory).
         loadNewsRegistry(newsFolder);
 
-        Path path = newsFolder.resolve(NEWS_HISTORY_FILE);
-        if(!Files.exists(path))
-        {
-            // First run — no news published yet, keep the empty history. Any leftover
-            // pictures (e.g. the history file was deleted by hand) are unreferenced.
-            newsPictureStore.retainOnly(newsHistory.referencedPictureHashes());
-            return true;
-        }
-        CompoundTag tag = readDataCompound(path);
-        if(tag == null)
-        {
-            // Do NOT GC the picture store here: the unreadable history may still
-            // reference stored pictures and might be recoverable.
-            error("loadNews(): Failed to load news history from NBT file");
-            return false;
-        }
-        boolean success = newsHistory.load(tag);
+        // Chunked history load (T-110). The chunk store handles: fresh worlds
+        // (empty history/), pre-T-110 migration (legacy history.nbt present, no
+        // history/ chunks), interrupted-migration recovery (both present → safe
+        // conservative branch, keep old file, use chunks), and per-chunk sidecar
+        // rebuild on corruption. See NewsHistoryChunkStore Javadoc for details.
+        newsHistory.setDirectory(
+                newsFolder.resolve(NEWS_HISTORY_FOLDER),
+                newsFolder.resolve(NEWS_HISTORY_LEGACY_FILE));
         // GC after the load: drop every stored picture no history record references
-        // anymore (records pruned/removed while the store was offline).
+        // anymore (records pruned/removed while the store was offline). Sidecar-based
+        // union — no chunk data loaded (T-110).
         newsPictureStore.retainOnly(newsHistory.referencedPictureHashes());
-        return success;
+        return true;
     }
 
     /**
