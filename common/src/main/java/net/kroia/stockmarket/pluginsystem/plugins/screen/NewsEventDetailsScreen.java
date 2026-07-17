@@ -271,8 +271,9 @@ public class NewsEventDetailsScreen extends StockMarketGuiScreen {
         private static final int INNER_PAD = 3;
         private static final int ICON_SIZE = 16;
         private static final int MARKET_ROW_H = ICON_SIZE + 2;
-        /** Cap of the square event picture's side length in GUI pixels (T-091, plan §6). */
-        private static final int PICTURE_MAX_SIDE = 140;
+        /** Cap of the square event picture's side length in GUI pixels (T-091, plan §6).
+         * Bumped 1.5x per user request 2026-07-17. */
+        private static final int PICTURE_MAX_SIDE = 210;
         /**
          * Horizontal gutter between the top-right picture (T-113) and the text on
          * its left. Kept modest so the reduced-width headline column above the

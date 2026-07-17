@@ -81,8 +81,9 @@ public class NewsEntryPanel extends StockMarketGuiElement {
      * the page and push the text below the fold — 100 px keeps the entry readable
      * while the picture stays clearly recognizable. Narrower columns simply use the
      * full wrap width as the side.
+     * Bumped 1.5x per user request 2026-07-17.
      */
-    private static final int PICTURE_MAX_SIDE = 100;
+    private static final int PICTURE_MAX_SIDE = 150;
     /**
      * Horizontal gutter between the picture (top-right, T-113) and the text on its
      * left. Kept intentionally slim so the reduced-width column above the picture

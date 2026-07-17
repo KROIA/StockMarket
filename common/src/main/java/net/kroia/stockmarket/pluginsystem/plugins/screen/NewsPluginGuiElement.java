@@ -1837,8 +1837,9 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
          * Side length of the square picture thumbnail (T-091): twice the market item
          * icon size — the row height available right of the market rows fits it
          * without growing picture-less rows.
+         * Bumped 1.5x per user request 2026-07-17.
          */
-        private static final int THUMB_SIZE = 2 * ICON_SIZE;
+        private static final int THUMB_SIZE = 48;
 
         /** One impacted market: resolved icon (child ItemView), name and factor text. */
         private record MarketRow(ItemView icon, String name, String factorText, int factorColor) {}
@@ -2016,24 +2017,17 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
             // T-091: the picture thumbnail sits on the right side of the row, below
             // the published/meta label and directly LEFT of the T-093 button stack
             // (at the right panel edge when the buttons are hidden for non-admins).
-            // T-118: when the admin button stack is laid out, the thumbnail grows to
-            // a square that spans the full vertical from the top of Skip-phase to the
-            // bottom of Stop (side = stopButton.getBottom() - skipPhaseButton.getTop())
-            // so the picture reads at a glance instead of a tiny 32 px chip. Width
-            // equals height (square 1:1). For the non-admin path — no button stack —
-            // the original 32 px thumbnail is retained since there is no button span
-            // to align to.
+            // T-118 sizing dropped per user request 2026-07-17: thumbnail is now a
+            // fixed THUMB_SIZE square (48 px, bumped 1.5x from the original 32 px),
+            // vertically centered within the news element's row instead of spanning
+            // the button stack.
             if (pictureThumbnail != null) {
-                if (skipPhaseButton.isEnabled()) {
-                    int squareSide = stopButton.getBottom() - skipPhaseButton.getTop();
-                    int rightEdge = skipPhaseButton.getLeft() - spacing;
-                    pictureThumbnail.setBounds(rightEdge - squareSide,
-                            skipPhaseButton.getTop(), squareSide, squareSide);
-                } else {
-                    int rightEdge = getWidth() - INNER_PAD;
-                    pictureThumbnail.setBounds(rightEdge - THUMB_SIZE, metaRowY,
-                            THUMB_SIZE, THUMB_SIZE);
-                }
+                int rightEdge = skipPhaseButton.isEnabled()
+                        ? skipPhaseButton.getLeft() - spacing : getWidth() - INNER_PAD;
+                int rowHeight = getHeight() - 2 * INNER_PAD;
+                int thumbY = INNER_PAD + (rowHeight - THUMB_SIZE) / 2;
+                pictureThumbnail.setBounds(rightEdge - THUMB_SIZE, thumbY,
+                        THUMB_SIZE, THUMB_SIZE);
             }
         }
 
