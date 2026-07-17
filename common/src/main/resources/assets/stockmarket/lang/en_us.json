@@ -420,5 +420,21 @@
   "gui.stockmarket.news_plugin.details_step_permanent": "[permanent]",
   "gui.stockmarket.news_plugin.details_step_markets": "markets: %s",
   "gui.stockmarket.news_plugin.details_requirements_title": "Trigger requirements:",
-  "gui.stockmarket.news_plugin.details_chains_title": "Chained events:"
+  "gui.stockmarket.news_plugin.details_chains_title": "Chained events:",
+  "gui.stockmarket.news_plugin.details_phase_remaining": "Phase remaining:",
+  "gui.stockmarket.news_plugin.details_event_remaining": "Event remaining:",
+  "gui.stockmarket.news_plugin.details_time_pending": "pending",
+  "gui.stockmarket.news_plugin.details_time_terminal": "ended",
+  "gui.stockmarket.news_plugin.details_time_dash": "—",
+  "gui.stockmarket.news_plugin.details_table_step_no": "#",
+  "gui.stockmarket.news_plugin.details_table_name": "Name",
+  "gui.stockmarket.news_plugin.details_table_duration": "Duration",
+  "gui.stockmarket.news_plugin.details_table_target": "Target",
+  "gui.stockmarket.news_plugin.details_table_curve": "Curve",
+  "gui.stockmarket.news_plugin.details_table_permanent": "Perm.",
+  "gui.stockmarket.news_plugin.details_table_permanent_mark": "✓",
+  "gui.stockmarket.news_plugin.curve.linear": "linear",
+  "gui.stockmarket.news_plugin.curve.instant": "instant",
+  "gui.stockmarket.news_plugin.curve.exponential": "exponential",
+  "gui.stockmarket.news_plugin.curve.hold": "hold"
 }

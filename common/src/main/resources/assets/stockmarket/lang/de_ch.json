@@ -333,5 +333,21 @@
   "gui.stockmarket.news_plugin.details_step_permanent": "[duurhaft]",
   "gui.stockmarket.news_plugin.details_step_markets": "Märt: %s",
   "gui.stockmarket.news_plugin.details_requirements_title": "Uslös-Vorussetzige:",
-  "gui.stockmarket.news_plugin.details_chains_title": "Verchetteti Ereignis:"
+  "gui.stockmarket.news_plugin.details_chains_title": "Verchetteti Ereignis:",
+  "gui.stockmarket.news_plugin.details_phase_remaining": "Phase übrig:",
+  "gui.stockmarket.news_plugin.details_event_remaining": "Ereignis übrig:",
+  "gui.stockmarket.news_plugin.details_time_pending": "ustehend",
+  "gui.stockmarket.news_plugin.details_time_terminal": "vorbii",
+  "gui.stockmarket.news_plugin.details_time_dash": "—",
+  "gui.stockmarket.news_plugin.details_table_step_no": "#",
+  "gui.stockmarket.news_plugin.details_table_name": "Name",
+  "gui.stockmarket.news_plugin.details_table_duration": "Duur",
+  "gui.stockmarket.news_plugin.details_table_target": "Ziil",
+  "gui.stockmarket.news_plugin.details_table_curve": "Chuurve",
+  "gui.stockmarket.news_plugin.details_table_permanent": "Perm.",
+  "gui.stockmarket.news_plugin.details_table_permanent_mark": "✓",
+  "gui.stockmarket.news_plugin.curve.linear": "linear",
+  "gui.stockmarket.news_plugin.curve.instant": "sofort",
+  "gui.stockmarket.news_plugin.curve.exponential": "exponenziell",
+  "gui.stockmarket.news_plugin.curve.hold": "halte"
 }
