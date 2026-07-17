@@ -73,6 +73,9 @@ public class NewsEventDetailsScreen extends StockMarketGuiScreen {
                 Component.translatable(PREFIX + "details_table_name");
         static final Component TABLE_DURATION =
                 Component.translatable(PREFIX + "details_table_duration");
+        /** Column header for the per-row live countdown cell (T-111). */
+        static final Component TABLE_COUNTDOWN =
+                Component.translatable(PREFIX + "details_table_countdown");
         static final Component TABLE_TARGET =
                 Component.translatable(PREFIX + "details_table_target");
         static final Component TABLE_CURVE =
@@ -197,7 +200,9 @@ public class NewsEventDetailsScreen extends StockMarketGuiScreen {
      * per-sequence step breakdown as an aligned table (T-105 — replaces the free-
      * form text rows of T-100; column x positions are shared across every
      * sequence, the running step is live-highlighted, multi-sequence headers are
-     * collapsible), two split live timers — Phase remaining (current step) and
+     * collapsible; T-111 tightens the Name column and adds a per-row live
+     * countdown cell right after Duration), two split live timers — Phase
+     * remaining (current step) and
      * Event remaining (best-effort sum of the remaining authored step durations)
      * — drawn from the owner's runtime stream every frame, one row per impacted
      * market, and — when non-empty — the trigger-requirements (met/unmet) and
@@ -234,6 +239,15 @@ public class NewsEventDetailsScreen extends StockMarketGuiScreen {
         private static final int TABLE_CELL_PADDING = 2;
         /** Font color of the step table's header row (T-105). */
         private static final int TABLE_HEADER_COLOR = 0xFFFFFFFF;
+        /**
+         * Compact fixed max width for the Name column in GUI pixels at the meta font
+         * scale (T-111). Long step names truncate via
+         * {@link NewsUiText#truncate}. The former flex-stretch behaviour (T-105) pushed
+         * every subsequent column to the popup's right edge — this cap keeps every
+         * column hugging the left edge so leftover row width sits as empty space on
+         * the right.
+         */
+        private static final int NAME_MAX_WIDTH = 120;
 
         /** One pre-computed static text line. */
         private record Line(String text, int color, float scale, int y) {}
@@ -324,6 +338,8 @@ public class NewsEventDetailsScreen extends StockMarketGuiScreen {
         private int tableStepNoX;
         private int tableNameX;
         private int tableDurationX;
+        /** T-111: x position of the live per-row countdown column. */
+        private int tableCountdownX;
         private int tableTargetX;
         private int tableCurveX;
         private int tablePermanentX;
@@ -332,6 +348,8 @@ public class NewsEventDetailsScreen extends StockMarketGuiScreen {
         private String tableHeaderStepNo = "";
         private String tableHeaderName = "";
         private String tableHeaderDuration = "";
+        /** T-111: countdown column header text. */
+        private String tableHeaderCountdown = "";
         private String tableHeaderTarget = "";
         private String tableHeaderCurve = "";
         private String tableHeaderPermanent = "";
@@ -553,16 +571,21 @@ public class NewsEventDetailsScreen extends StockMarketGuiScreen {
          * text row layout of T-100 with a proper aligned table): one clickable
          * header per sequence (with its weighted pick chance when the event has
          * several — a lone sequence always fires) and, unless collapsed, a
-         * single {@code # | Name | Duration | Target | Curve | Permanent} table
-         * whose column x positions are shared across every sequence's block so
-         * every step lines up. Per-step market overrides render as an indented
-         * text line right under the step row (empty per-step lists inherit the
-         * event-level markets and render nothing, matching the wire contract).
+         * single {@code # | Name | Duration | Countdown | Target | Curve |
+         * Permanent} table whose column x positions are shared across every
+         * sequence's block so every step lines up. Per-step market overrides
+         * render as an indented text line right under the step row (empty
+         * per-step lists inherit the event-level markets and render nothing,
+         * matching the wire contract).
          * <p>
          * Durations show the authored min–max range (a single value when fixed).
          * The activation-time rolled durations of a running instance are not part
          * of the wire snapshot, so they cannot be displayed here — this is
-         * documented in {@code NewsAdminRequest.EventDetails.StepInfo}.
+         * documented in {@code NewsAdminRequest.EventDetails.StepInfo}. The
+         * Countdown cell (T-111) shows a live per-step countdown for the row of
+         * the picked sequence's currently running step; every other row (past,
+         * future, unpicked candidate sequences, PENDING/terminal sentinel) shows
+         * the em-dash placeholder.
          *
          * @param textW the wrap/truncation width
          * @param y     the current y position
@@ -584,12 +607,19 @@ public class NewsEventDetailsScreen extends StockMarketGuiScreen {
             tableHeaderStepNo = Texts.TABLE_STEP_NO.getString();
             tableHeaderName = Texts.TABLE_NAME.getString();
             tableHeaderDuration = Texts.TABLE_DURATION.getString();
+            tableHeaderCountdown = Texts.TABLE_COUNTDOWN.getString();
             tableHeaderTarget = Texts.TABLE_TARGET.getString();
             tableHeaderCurve = Texts.TABLE_CURVE.getString();
             tableHeaderPermanent = Texts.TABLE_PERMANENT.getString();
             int stepNoW = measure(tableHeaderStepNo);
             int nameW = measure(tableHeaderName);
             int durationW = measure(tableHeaderDuration);
+            // T-111: countdown column width — pre-measure the widest value the cell
+            // will ever draw so the column doesn't jitter frame-to-frame as the
+            // runtime ticks down. Runtime countdown is bounded above by the step's
+            // rolled duration, itself bounded by durationMaxMs.
+            int countdownW = Math.max(measure(tableHeaderCountdown),
+                    measure(Texts.TIME_DASH.getString()));
             int targetW = measure(tableHeaderTarget);
             int curveW = measure(tableHeaderCurve);
             int permanentW = measure(tableHeaderPermanent);
@@ -621,6 +651,10 @@ public class NewsEventDetailsScreen extends StockMarketGuiScreen {
                     stepNoW = Math.max(stepNoW, measure(stepNo));
                     nameW = Math.max(nameW, measure(step.name()));
                     durationW = Math.max(durationW, measure(duration));
+                    // T-111: reserve enough space for the widest possible runtime
+                    // countdown for this step (bounded above by durationMaxMs).
+                    countdownW = Math.max(countdownW,
+                            measure(NewsUiFormatting.formatRemainingTime(step.durationMaxMs())));
                     targetW = Math.max(targetW, measure(target));
                     curveW = Math.max(curveW, measure(curve));
                     permanentW = Math.max(permanentW, measure(permanent));
@@ -630,24 +664,21 @@ public class NewsEventDetailsScreen extends StockMarketGuiScreen {
 
             // Column x positions (all content-relative — draw with the parent's
             // INNER_PAD + STEP_INDENT offset). Every column gets an extra
-            // TABLE_CELL_PADDING; the name column absorbs any leftover width
-            // (fills the row), so long step names truncate to the widest
-            // possible column before spilling into the duration column.
+            // TABLE_CELL_PADDING; T-111: the Name column is capped at a compact
+            // fixed max width so ALL columns hug the left edge — long step names
+            // truncate defensively (see below). Any leftover row width sits as
+            // empty space on the RIGHT of the last column. Column order:
+            // # | Name | Duration | Countdown | Target | Curve | Perm.
+            // Countdown is placed right of Duration so the authored range and the
+            // live runtime value sit side-by-side.
             int rowInnerX = STEP_INDENT;
-            int rowInnerRight = textW - STEP_INDENT;
-            int fixedColumnsWidth = stepNoW + TABLE_CELL_PADDING + TABLE_CELL_GAP
-                    + durationW + TABLE_CELL_PADDING + TABLE_CELL_GAP
-                    + targetW + TABLE_CELL_PADDING + TABLE_CELL_GAP
-                    + curveW + TABLE_CELL_PADDING + TABLE_CELL_GAP
-                    + permanentW + TABLE_CELL_PADDING;
-            int nameSlot = Math.max(nameW + TABLE_CELL_PADDING,
-                    rowInnerRight - rowInnerX - stepNoW - TABLE_CELL_PADDING
-                            - TABLE_CELL_GAP - fixedColumnsWidth);
+            int nameSlot = Math.min(NAME_MAX_WIDTH, nameW + TABLE_CELL_PADDING);
 
             tableStepNoX = rowInnerX;
             tableNameX = tableStepNoX + stepNoW + TABLE_CELL_PADDING + TABLE_CELL_GAP;
             tableDurationX = tableNameX + nameSlot + TABLE_CELL_GAP;
-            tableTargetX = tableDurationX + durationW + TABLE_CELL_PADDING + TABLE_CELL_GAP;
+            tableCountdownX = tableDurationX + durationW + TABLE_CELL_PADDING + TABLE_CELL_GAP;
+            tableTargetX = tableCountdownX + countdownW + TABLE_CELL_PADDING + TABLE_CELL_GAP;
             tableCurveX = tableTargetX + targetW + TABLE_CELL_PADDING + TABLE_CELL_GAP;
             tablePermanentX = tableCurveX + curveW + TABLE_CELL_PADDING + TABLE_CELL_GAP;
             tableRightEdgeX = tablePermanentX + permanentW + TABLE_CELL_PADDING;
@@ -842,12 +873,24 @@ public class NewsEventDetailsScreen extends StockMarketGuiScreen {
                         TABLE_HEADER_COLOR, META_SCALE);
                 drawText(tableHeaderDuration, tableBaseX + tableDurationX, th.y(),
                         TABLE_HEADER_COLOR, META_SCALE);
+                drawText(tableHeaderCountdown, tableBaseX + tableCountdownX, th.y(),
+                        TABLE_HEADER_COLOR, META_SCALE);
                 drawText(tableHeaderTarget, tableBaseX + tableTargetX, th.y(),
                         TABLE_HEADER_COLOR, META_SCALE);
                 drawText(tableHeaderCurve, tableBaseX + tableCurveX, th.y(),
                         TABLE_HEADER_COLOR, META_SCALE);
                 drawText(tableHeaderPermanent, tableBaseX + tablePermanentX, th.y(),
                         TABLE_HEADER_COLOR, META_SCALE);
+            }
+            // T-111: precompute the running-step's countdown text once — every row
+            // of every OTHER step (past/future/unpicked sequence) shows the em-dash
+            // placeholder. PENDING/terminal sentinel (stepRemainingMs < 0 or no
+            // live info) => all rows show the em-dash.
+            String dashText = Texts.TIME_DASH.getString();
+            String runningCountdownText = null;
+            if (live != null && live.stepRemainingMs() >= 0 && runningSeq >= 0) {
+                runningCountdownText = NewsUiFormatting.formatRemainingTime(
+                        Math.max(0, live.stepRemainingMs()));
             }
             for (StepRow step : stepRows) {
                 boolean highlighted = step.seqIndex() == runningSeq
@@ -864,6 +907,14 @@ public class NewsEventDetailsScreen extends StockMarketGuiScreen {
                 drawText(step.name(), tableBaseX + tableNameX, step.y(),
                         textColor, META_SCALE);
                 drawText(step.duration(), tableBaseX + tableDurationX, step.y(),
+                        textColor, META_SCALE);
+                // T-111: per-row live countdown cell. Only the row of the picked
+                // sequence's currently running step shows a live value; every other
+                // row (past, future, unpicked candidate sequences, PENDING/terminal
+                // sentinel) shows the em-dash placeholder.
+                String countdownCell = highlighted && runningCountdownText != null
+                        ? runningCountdownText : dashText;
+                drawText(countdownCell, tableBaseX + tableCountdownX, step.y(),
                         textColor, META_SCALE);
                 // Target column keeps its up/down/neutral color even when the row
                 // is highlighted — the sign is more important than uniform contrast.
