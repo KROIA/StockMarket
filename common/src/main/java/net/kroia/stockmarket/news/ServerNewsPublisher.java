@@ -215,7 +215,18 @@ public class ServerNewsPublisher implements NewsPublisher {
     }
 
     private void snapshotPicture(NewsRecord record) {
-        if (pictureStore == null || librarySupplier == null) return;
+        if (pictureStore == null || librarySupplier == null) {
+            // T-106 diagnostic: the picture snapshot layer is not wired — a publish
+            // that ships without a picture hash on the wire begins here. Once per
+            // event id so a repeating text-only event doesn't spam.
+            if (warnedPictureEventIds.add(record.getEventId())) {
+                StockMarketMod.LOGGER.warn(
+                        "[NewsPlugin] Publishing '{}' picture-less: publisher lacks a picture store/library seam "
+                                + "(this is only logged once per event)",
+                        record.getEventId());
+            }
+            return;
+        }
         try {
             NewsEventLibrary library = librarySupplier.get();
             if (library == null) return;
@@ -224,7 +235,20 @@ public class ServerNewsPublisher implements NewsPublisher {
             // silently: there is nothing to resolve a picture from anymore.
             if (definition == null) return;
             String fileName = definition.getPictureFileName();
-            if (fileName == null) return; // text-only event — today's default
+            if (fileName == null) {
+                // T-106 diagnostic: event definition has no `picture` field — the
+                // record legitimately publishes text-only. WARN once per event id so
+                // the next in-game run reveals whether ALL default events are hitting
+                // this branch (indicates the picture field never made it out of JSON
+                // parsing) versus just admin-authored events (which is the normal case).
+                if (warnedPictureEventIds.add(record.getEventId())) {
+                    StockMarketMod.LOGGER.warn(
+                            "[NewsPlugin] Publishing '{}' picture-less: definition has no 'picture' field "
+                                    + "(this is only logged once per event)",
+                            record.getEventId());
+                }
+                return;
+            }
 
             NewsPictureLibrary.Entry entry = library.getPictureLibrary().get(fileName);
             if (entry == null) {
@@ -245,6 +269,13 @@ public class ServerNewsPublisher implements NewsPublisher {
             // store — a hash no client could ever fetch would be worse than no hash.
             if (pictureStore.put(entry.getSha1(), entry.getBytes())) {
                 record.setPictureHash(entry.getSha1());
+                // T-106 diagnostic: successful publish-time snapshot. WARN-level so
+                // the next in-game run makes the healthy path visible alongside the
+                // failure branches above. One log per publish (not deduped).
+                StockMarketMod.LOGGER.warn(
+                        "[NewsPlugin] Published '{}' with picture '{}' ({} bytes, hash {})",
+                        record.getEventId(), fileName, entry.getBytes().length,
+                        NewsPictureLibrary.toHex(entry.getSha1()).substring(0, 12));
             }
         } catch (Exception e) {
             StockMarketMod.LOGGER.error(

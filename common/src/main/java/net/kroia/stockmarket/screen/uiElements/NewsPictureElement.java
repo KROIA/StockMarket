@@ -1,6 +1,8 @@
 package net.kroia.stockmarket.screen.uiElements;
 
+import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.news.ClientNewsPictureCache;
+import net.kroia.stockmarket.news.NewsPictureLibrary;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import org.jetbrains.annotations.Nullable;
 
@@ -54,6 +56,13 @@ public class NewsPictureElement extends StockMarketGuiElement {
     /** The record's 20-byte picture content hash, or null (permanent placeholder). */
     private final byte @Nullable [] pictureHash;
     private final FitMode fitMode;
+    /**
+     * Diagnostic (T-106): logs the element's first paint once — hash prefix, box
+     * dimensions, cache state — so a picture that never shows up in-game reveals
+     * whether the widget is even being rendered (bounds/parent) or the fetch/decode
+     * chain is silently dropping the bytes. WARN-level, one log per element instance.
+     */
+    private boolean loggedFirstRender = false;
 
     /**
      * Creates the picture box for one record picture.
@@ -97,6 +106,23 @@ public class NewsPictureElement extends StockMarketGuiElement {
         ClientNewsPictureCache cache = getPictureCache();
         ClientNewsPictureCache.LoadedPicture picture =
                 cache != null ? cache.getTexture(pictureHash) : null;
+        // T-106 diagnostic: one WARN per element on first paint. Reveals whether the
+        // widget is being rendered at all (bounds/parent), whether the picture cache
+        // is reachable at that point, and whether a texture landed before the first
+        // frame ever drew. A pipeline that never gets past this line indicates a
+        // layout/parent issue; a line with "cache=null" indicates the cache never
+        // got created; a line with a positive box + null texture means the fetch is
+        // still in-flight or failed downstream.
+        if (!loggedFirstRender) {
+            loggedFirstRender = true;
+            String hashHex = pictureHash != null ? NewsPictureLibrary.toHex(pictureHash) : "null";
+            String hashShort = hashHex.length() > 12 ? hashHex.substring(0, 12) + "…" : hashHex;
+            StockMarketMod.LOGGER.warn(
+                    "[NewsPictureElement] First render: hash={} box={}x{} fit={} cache={} texture={}",
+                    hashShort, boxW, boxH, fitMode,
+                    cache != null ? "wired" : "null",
+                    picture != null ? "loaded" : "pending");
+        }
         if (picture == null || picture.width() <= 0 || picture.height() <= 0) {
             renderPlaceholder(boxW, boxH);
             return;
