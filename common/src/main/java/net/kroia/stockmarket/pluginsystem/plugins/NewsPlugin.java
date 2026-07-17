@@ -2031,12 +2031,18 @@ public class NewsPlugin extends ServerPlugin<NewsPlugin.Settings, NewsPlugin.Run
      * and per-market activity caps — a chain is an explicit causal consequence, not a
      * random scheduler roll.
      * <p>
+     * <b>Cooldown bypass (plan §4, consistent with §10.2):</b> the target event's cooldown
+     * is deliberately NOT re-checked here — chains guarantee storyline continuity even if
+     * the target just completed. The target's own cooldown IS re-armed on activation as
+     * normal (via {@link #activate}), so subsequent scheduler picks still respect it.
+     * <p>
      * <b>AdminOnly block (plan §10.3 decision):</b> chain-fired events may NOT target
      * {@code adminOnly} definitions — those are reserved for manual admin triggers only.
      * <p>
      * Re-checks at fire time: target exists in library, enabled, not adminOnly, not
      * already active, requirements met (wall-clock now), depth &lt; MAX_CHAIN_DEPTH,
-     * target not in ancestry, resolved markets non-empty.
+     * target not in ancestry, resolved markets non-empty. Cooldown is intentionally
+     * absent from this list — see cooldown-bypass note above.
      *
      * @param pca     the matured pending chain activation
      * @param markets the subscribed markets of the current update cycle
