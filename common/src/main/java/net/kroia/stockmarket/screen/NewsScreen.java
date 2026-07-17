@@ -66,6 +66,8 @@ public class NewsScreen extends StockMarketGuiScreen {
         public static final Component MASTHEAD = Component.translatable(PREFIX + "masthead");
         public static final Component TOAST_CHECKBOX = Component.translatable(PREFIX + "toast_checkbox");
         public static final Component TOAST_CHECKBOX_TOOLTIP = Component.translatable(PREFIX + "toast_checkbox.tooltip");
+        public static final Component CLEAR_BUTTON = Component.translatable(PREFIX + "clear_button");
+        public static final Component CLEAR_BUTTON_TOOLTIP = Component.translatable(PREFIX + "clear_button.tooltip");
         public static final Component LOAD_MORE = Component.translatable(PREFIX + "load_more");
         public static final Component NO_MORE = Component.translatable(PREFIX + "no_more");
         public static final Component LOADING = Component.translatable(PREFIX + "loading");
@@ -87,6 +89,7 @@ public class NewsScreen extends StockMarketGuiScreen {
     private final Label mastheadLabel;
     private final Frame mastheadRule;
     private final CheckBox toastCheckBox;
+    private final Button clearButton;
     private final VerticalListView feedListView;
     private final Button loadMoreButton;
     private final Label emptyLabel;
@@ -152,6 +155,14 @@ public class NewsScreen extends StockMarketGuiScreen {
         toastCheckBox.setChecked(StockMarketGuiElement.getPlayerPreferences().isNewsToastEnabled());
         loadingCheckBox = false;
 
+        // T-109: per-player soft-clear button. Sits on the right side of the settings
+        // row opposite the toast checkbox; no admin gating — every player clears their
+        // own newspaper. Persisted server-side as PlayerPreferences.newsClearedBeforeMs
+        // (the underlying NewsRecords are never touched — admins still see everything).
+        clearButton = new Button(Texts.CLEAR_BUTTON.getString(), this::onClearClicked);
+        clearButton.setHoverTooltipSupplier(Texts.CLEAR_BUTTON_TOOLTIP::getString);
+        clearButton.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
+
         // The scrollbar handle (an EmptyButton) has no public accessor on ListView —
         // style it via an anonymous subclass (protected member access) so the whole
         // scrollbar matches the paper look instead of the default gray widget tones.
@@ -184,6 +195,7 @@ public class NewsScreen extends StockMarketGuiScreen {
         addElement(mastheadLabel);
         addElement(mastheadRule);
         addElement(toastCheckBox);
+        addElement(clearButton);
         addElement(feedListView);
         addElement(loadMoreButton);
         addElement(emptyLabel);
@@ -307,6 +319,29 @@ public class NewsScreen extends StockMarketGuiScreen {
         StockMarketGuiElement.updatePlayerPreferences(prefs);
     }
 
+    // ── Soft-clear button (T-109) ────────────────────────────────────────
+
+    /**
+     * Soft-clears the newspaper for this player (T-109): sets
+     * {@code newsClearedBeforeMs = System.currentTimeMillis()} in the player's
+     * preferences, both optimistically on the client (so the feed re-renders
+     * immediately without waiting for the round-trip) and via
+     * {@link StockMarketGuiElement#updatePlayerPreferences} on the master server
+     * (persisted, survives relogs). The underlying {@link NewsRecord}s are never
+     * modified — admins still see everything, and new events published after the
+     * clear appear in this player's feed as usual.
+     */
+    private void onClearClicked() {
+        long nowMs = System.currentTimeMillis();
+        PlayerPreferences prefs = StockMarketGuiElement.getPlayerPreferences();
+        prefs.setNewsClearedBeforeMs(nowMs);
+        StockMarketGuiElement.updatePlayerPreferences(prefs);
+        // Optimistic local re-render: the local mirror is mutated in-place above, so
+        // the next rebuildFeed already sees the new cutoff. Marking feedDirty defers
+        // the actual rebuild to the next tick (matches the rest of this screen).
+        feedDirty = true;
+    }
+
     // ── Lifecycle / rendering ────────────────────────────────────────────
 
     @Override
@@ -361,7 +396,15 @@ public class NewsScreen extends StockMarketGuiScreen {
         // that, but never below what box + label text actually need.
         int cbTextW = (int) (Minecraft.getInstance().font.width(Texts.TOAST_CHECKBOX.getString()) * 0.8f);
         int cbWidth = Math.min(innerW / 2, Math.max(innerW / 6, cbTextW + eh));
-        toastCheckBox.setBounds(innerX, mastheadRule.getBottom() + s, cbWidth, eh - 4);
+        int settingsRowY = mastheadRule.getBottom() + s;
+        toastCheckBox.setBounds(innerX, settingsRowY, cbWidth, eh - 4);
+
+        // T-109: Clear button on the right side of the settings row (opposite the
+        // toast checkbox) — sized to its label with a small padding, right-aligned
+        // to the paper's inner edge.
+        int clearTextW = Minecraft.getInstance().font.width(Texts.CLEAR_BUTTON.getString());
+        int clearWidth = Math.max(eh * 2, clearTextW + eh);
+        clearButton.setBounds(innerX + innerW - clearWidth, settingsRowY, clearWidth, eh - 4);
 
         // Footer: the load-more button.
         int footerY = height - p - eh - s;
@@ -395,6 +438,13 @@ public class NewsScreen extends StockMarketGuiScreen {
      * a real newspaper page). An odd trailing record simply fills the left column
      * of its row. All heights are final before the rows are added, so the list
      * layout stacks them correctly.
+     * <p>
+     * <b>T-109 soft-clear filter:</b> records with
+     * {@code timestampEpochMs <= newsClearedBeforeMs} are excluded from the visible
+     * feed. Filtered-out records remain in {@link #entries} (soft filter: the local
+     * cache is not modified), so the "load more" cursor still walks past them via
+     * the oldest-in-{@code entries} uid — a page that filters to zero visible rows
+     * still advances the pagination correctly.
      */
     private void rebuildFeed() {
         int feedWidth = feedListView.getContainerWidth();
@@ -407,9 +457,19 @@ public class NewsScreen extends StockMarketGuiScreen {
         int leftWidth = (rowWidth - gutter) / 2;
         int rightWidth = rowWidth - gutter - leftWidth;
 
+        // T-109: apply the per-player soft-clear filter. entries stays untouched so
+        // pagination cursor logic (oldest displayed uid) still advances correctly
+        // over pages whose records were all filtered out.
+        long clearedBeforeMs = StockMarketGuiElement.getPlayerPreferences().getNewsClearedBeforeMs();
+        List<NewsRecord> visible = new ArrayList<>(entries.size());
+        for (NewsRecord record : entries) {
+            if (record.getTimestampEpochMs() > clearedBeforeMs)
+                visible.add(record);
+        }
+
         feedListView.removeChilds();
-        for (int i = 0; i < entries.size(); i += 2) {
-            NewsEntryPanel left = new NewsEntryPanel(entries.get(i), leftWidth);
+        for (int i = 0; i < visible.size(); i += 2) {
+            NewsEntryPanel left = new NewsEntryPanel(visible.get(i), leftWidth);
             int rowHeight = left.getHeight();
 
             // Invisible grouping frame; the panels keep manual bounds inside it.
@@ -421,8 +481,8 @@ public class NewsScreen extends StockMarketGuiScreen {
             row.setEnableOutline(false);
             row.addChild(left);
 
-            if (i + 1 < entries.size()) {
-                NewsEntryPanel right = new NewsEntryPanel(entries.get(i + 1), rightWidth);
+            if (i + 1 < visible.size()) {
+                NewsEntryPanel right = new NewsEntryPanel(visible.get(i + 1), rightWidth);
                 right.setX(leftWidth + gutter);
                 // T-086 follow-up: both cards of a row share the height of the
                 // taller one (the shorter card stretches — content stays
@@ -438,18 +498,22 @@ public class NewsScreen extends StockMarketGuiScreen {
             feedListView.addChild(row);
         }
 
-        emptyLabel.setEnabled(entries.isEmpty() && endReached);
+        // T-109: "empty" label is a visible-empty check now — after Clear, entries
+        // may still hold records but nothing is visible; the placeholder should
+        // still show once the history is exhausted (endReached).
+        emptyLabel.setEnabled(visible.isEmpty() && endReached);
         updateLoadMoreButton();
 
         // T-091: background-prefetch every picture in the feed (plan §12.4). Visible
         // panels fetch first automatically — their per-frame getTexture polls enqueue
         // at HIGH priority, this batch fills the BACKGROUND queue so scrolling never
         // waits. prefetchAll dedups against every known state, so re-running it on
-        // every rebuild is cheap.
+        // every rebuild is cheap. Only pre-fetch pictures for records the player will
+        // actually see — filtered-out records don't need their pictures.
         ClientNewsPictureCache pictureCache = getPictureCache();
         if (pictureCache != null) {
-            List<byte[]> hashes = new ArrayList<>(entries.size());
-            for (NewsRecord record : entries) {
+            List<byte[]> hashes = new ArrayList<>(visible.size());
+            for (NewsRecord record : visible) {
                 if (record.getPictureHash() != null)
                     hashes.add(record.getPictureHash());
             }

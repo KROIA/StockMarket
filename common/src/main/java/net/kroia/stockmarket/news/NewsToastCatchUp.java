@@ -60,6 +60,11 @@ public final class NewsToastCatchUp {
      * <ul>
      *   <li>If the player did not opt in ({@code toastOptedIn == false}) the result is
      *       always empty — non-opted-in players get no notification of any kind.</li>
+     *   <li><b>T-109 soft-clear filter:</b> records with
+     *       {@code timestampEpochMs <= newsClearedBeforeMs} are excluded — the player
+     *       explicitly cleared their newspaper before those events, and toasts on
+     *       rejoin for pre-clear headlines would defeat the clear. Pass {@code 0} for
+     *       "never cleared" (the default; all records eligible).</li>
      *   <li>Only records <b>strictly younger</b> than {@code windowMs} are eligible,
      *       i.e. {@code nowEpochMs - timestampEpochMs < windowMs}. The age comparison
      *       uses the <b>client clock</b> against the master's publish epoch — an
@@ -69,17 +74,22 @@ public final class NewsToastCatchUp {
      *       <b>newest</b> eligible ones.</li>
      * </ul>
      *
-     * @param newestFirst  one history page as returned by {@code NewsHistoryRequest},
-     *                     sorted newest-first (descending {@code newsUid}); null/empty
-     *                     yields an empty result; null elements are skipped
-     * @param nowEpochMs   the client's current epoch milliseconds
-     *                     ({@code System.currentTimeMillis()})
-     * @param windowMs     the catch-up window (production: {@link #CATCH_UP_WINDOW_MS});
-     *                     values {@code <= 0} yield an empty result
-     * @param maxToasts    the toast cap (production: {@link #MAX_CATCH_UP_TOASTS});
-     *                     values {@code <= 0} yield an empty result
-     * @param toastOptedIn the player's <b>fetched</b> {@code newsToastEnabled} flag —
-     *                     never the pre-fetch default
+     * @param newestFirst         one history page as returned by
+     *                            {@code NewsHistoryRequest}, sorted newest-first
+     *                            (descending {@code newsUid}); null/empty yields an
+     *                            empty result; null elements are skipped
+     * @param nowEpochMs          the client's current epoch milliseconds
+     *                            ({@code System.currentTimeMillis()})
+     * @param windowMs            the catch-up window (production:
+     *                            {@link #CATCH_UP_WINDOW_MS}); values {@code <= 0} yield
+     *                            an empty result
+     * @param maxToasts           the toast cap (production: {@link #MAX_CATCH_UP_TOASTS});
+     *                            values {@code <= 0} yield an empty result
+     * @param toastOptedIn        the player's <b>fetched</b> {@code newsToastEnabled}
+     *                            flag — never the pre-fetch default
+     * @param newsClearedBeforeMs T-109 soft-clear cutoff: records with
+     *                            {@code timestampEpochMs <= newsClearedBeforeMs} are
+     *                            skipped; pass {@code 0} for "never cleared"
      * @return the records to toast, <b>oldest-first</b> (so the caller can add them to
      *         the toast rail in chronological order and the newest headline is queued
      *         last); empty, never null
@@ -88,7 +98,8 @@ public final class NewsToastCatchUp {
                                                                 long nowEpochMs,
                                                                 long windowMs,
                                                                 int maxToasts,
-                                                                boolean toastOptedIn) {
+                                                                boolean toastOptedIn,
+                                                                long newsClearedBeforeMs) {
         if (!toastOptedIn || newestFirst == null || newestFirst.isEmpty()
                 || maxToasts <= 0 || windowMs <= 0) {
             return List.of();
@@ -97,6 +108,8 @@ public final class NewsToastCatchUp {
         List<NewsRecord> selected = new ArrayList<>(Math.min(maxToasts, newestFirst.size()));
         for (NewsRecord record : newestFirst) {
             if (record == null) continue;
+            // T-109: strictly greater than the cutoff (0 = never cleared, matches all).
+            if (record.getTimestampEpochMs() <= newsClearedBeforeMs) continue;
             long age = nowEpochMs - record.getTimestampEpochMs();
             if (age < 0) age = 0; // clock skew: future-stamped records count as brand new
             if (age >= windowMs) continue; // "strictly younger than the window"

@@ -31,6 +31,9 @@ public class PlayerPreferences implements ServerSaveable {
             ExtraCodecUtils.listStreamCodec(ItemID.STREAM_CODEC).encode(buf, prefs.favoriteMarketIDs);
             buf.writeLong(prefs.orderHistoryClearedBeforeMs);
             buf.writeBoolean(prefs.newsToastEnabled);
+            // T-109: unconditional append (backward-compatible codec — mirrors T-074's
+            // toast-flag append; codec is used inside list codecs, no readable-guard).
+            buf.writeLong(prefs.newsClearedBeforeMs);
         }
 
         @Override
@@ -42,6 +45,7 @@ public class PlayerPreferences implements ServerSaveable {
             prefs.favoriteMarketIDs = new ArrayList<>(ExtraCodecUtils.listStreamCodec(ItemID.STREAM_CODEC).decode(buf));
             prefs.orderHistoryClearedBeforeMs = buf.readLong();
             prefs.newsToastEnabled = buf.readBoolean();
+            prefs.newsClearedBeforeMs = buf.readLong();
             return prefs;
         }
     };
@@ -74,8 +78,18 @@ public class PlayerPreferences implements ServerSaveable {
     private boolean newsToastEnabled = false;
 
     /**
+     * Timestamp (epoch ms) before which this player has soft-cleared the newspaper (T-109).
+     * Records with {@code timestampEpochMs > newsClearedBeforeMs} are visible; older
+     * records are filtered out of the newspaper UI and toast catch-up. Value {@code 0}
+     * = never cleared. Underlying {@link net.kroia.stockmarket.news.NewsRecord}s on the
+     * server are never touched — this is a purely client-visible per-player filter
+     * (admins see all records).
+     */
+    private long newsClearedBeforeMs = 0;
+
+    /**
      * Creates empty default preferences (no last market, no favorites, no clear timestamp,
-     * news toasts off).
+     * news toasts off, news never cleared).
      */
     public PlayerPreferences() {
         this.lastMarketID = null;
@@ -84,6 +98,7 @@ public class PlayerPreferences implements ServerSaveable {
         this.favoriteMarketIDs = new ArrayList<>();
         this.orderHistoryClearedBeforeMs = 0;
         this.newsToastEnabled = false;
+        this.newsClearedBeforeMs = 0;
     }
 
     // --- Getters / Setters ---
@@ -178,6 +193,25 @@ public class PlayerPreferences implements ServerSaveable {
         this.newsToastEnabled = newsToastEnabled;
     }
 
+    /**
+     * @return epoch-millis timestamp before which news records are filtered from this
+     *         player's view (newspaper feed + join-time toast catch-up), or {@code 0}
+     *         if the player has never cleared their newspaper (T-109)
+     */
+    public long getNewsClearedBeforeMs() {
+        return newsClearedBeforeMs;
+    }
+
+    /**
+     * Sets the soft-clear timestamp used by the newspaper filter (T-109).
+     * Server-side {@link net.kroia.stockmarket.news.NewsRecord}s are never modified;
+     * this only shifts the per-player visibility cutoff.
+     * @param timestamp epoch millis, or {@code 0} to un-clear (show everything again)
+     */
+    public void setNewsClearedBeforeMs(long timestamp) {
+        this.newsClearedBeforeMs = timestamp;
+    }
+
     // --- Favorite management ---
 
     /**
@@ -250,6 +284,9 @@ public class PlayerPreferences implements ServerSaveable {
 
         // Save news toast opt-in flag
         tag.putBoolean("newsToastEnabled", newsToastEnabled);
+
+        // T-109: save the newspaper soft-clear cutoff (0 = never cleared).
+        tag.putLong("newsClearedBeforeMs", newsClearedBeforeMs);
         return true;
     }
 
@@ -301,6 +338,10 @@ public class PlayerPreferences implements ServerSaveable {
         // Load news toast opt-in flag (getBoolean returns false if key missing —
         // backward compatible AND guarantees the default-off contract for old saves)
         newsToastEnabled = tag.getBoolean("newsToastEnabled");
+
+        // T-109: load the newspaper soft-clear cutoff (getLong returns 0 if key missing
+        // — backward compatible; 0 = never cleared, so old saves show everything).
+        newsClearedBeforeMs = tag.getLong("newsClearedBeforeMs");
         return true;
     }
 }

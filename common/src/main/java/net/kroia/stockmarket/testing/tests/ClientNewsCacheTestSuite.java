@@ -52,6 +52,7 @@ public class ClientNewsCacheTestSuite extends TestSuite {
         addTest("catchup_cap_keeps_newest_oldest_first", this::test_catchup_capKeepsNewestOldestFirst);
         addTest("catchup_opt_out_yields_nothing", this::test_catchup_optOut_yieldsNothing);
         addTest("catchup_empty_history_yields_nothing", this::test_catchup_emptyHistory_yieldsNothing);
+        addTest("catchup_soft_clear_cutoff", this::test_catchup_soft_clear_cutoff);
     }
 
     // ========================================================================
@@ -296,7 +297,7 @@ public class ClientNewsCacheTestSuite extends TestSuite {
                 recordAt(1, now - window));        // age == window → out (not strictly younger)
 
         List<NewsRecord> selected = NewsToastCatchUp.selectCatchUpToasts(
-                newestFirst, now, window, 10, true);
+                newestFirst, now, window, 10, true, 0L);
         return assertEquals("in-window records selected, oldest-first",
                 List.of(2L, 3L, 4L), uidsOf(selected));
     }
@@ -310,7 +311,7 @@ public class ClientNewsCacheTestSuite extends TestSuite {
 
         List<NewsRecord> selected = NewsToastCatchUp.selectCatchUpToasts(
                 newestFirst, now, NewsToastCatchUp.CATCH_UP_WINDOW_MS,
-                NewsToastCatchUp.MAX_CATCH_UP_TOASTS, true);
+                NewsToastCatchUp.MAX_CATCH_UP_TOASTS, true, 0L);
         TestResult r = assertEquals("cap limits the toast count",
                 NewsToastCatchUp.MAX_CATCH_UP_TOASTS, selected.size());
         if (!r.passed()) return r;
@@ -325,7 +326,7 @@ public class ClientNewsCacheTestSuite extends TestSuite {
         return assertTrue("opted-out player gets no catch-up toasts",
                 NewsToastCatchUp.selectCatchUpToasts(newestFirst, now,
                         NewsToastCatchUp.CATCH_UP_WINDOW_MS,
-                        NewsToastCatchUp.MAX_CATCH_UP_TOASTS, false).isEmpty());
+                        NewsToastCatchUp.MAX_CATCH_UP_TOASTS, false, 0L).isEmpty());
     }
 
     /** Empty/null history and degenerate window/cap parameters yield an empty result. */
@@ -333,15 +334,42 @@ public class ClientNewsCacheTestSuite extends TestSuite {
         long now = 1_720_000_000_000L;
         long window = NewsToastCatchUp.CATCH_UP_WINDOW_MS;
         TestResult r = assertTrue("empty history yields nothing",
-                NewsToastCatchUp.selectCatchUpToasts(List.of(), now, window, 3, true).isEmpty());
+                NewsToastCatchUp.selectCatchUpToasts(List.of(), now, window, 3, true, 0L).isEmpty());
         if (!r.passed()) return r;
         r = assertTrue("null history yields nothing",
-                NewsToastCatchUp.selectCatchUpToasts(null, now, window, 3, true).isEmpty());
+                NewsToastCatchUp.selectCatchUpToasts(null, now, window, 3, true, 0L).isEmpty());
         if (!r.passed()) return r;
         r = assertTrue("zero cap yields nothing",
-                NewsToastCatchUp.selectCatchUpToasts(List.of(recordAt(1, now)), now, window, 0, true).isEmpty());
+                NewsToastCatchUp.selectCatchUpToasts(List.of(recordAt(1, now)), now, window, 0, true, 0L).isEmpty());
         if (!r.passed()) return r;
         return assertTrue("non-positive window yields nothing",
-                NewsToastCatchUp.selectCatchUpToasts(List.of(recordAt(1, now)), now, 0, 3, true).isEmpty());
+                NewsToastCatchUp.selectCatchUpToasts(List.of(recordAt(1, now)), now, 0, 3, true, 0L).isEmpty());
+    }
+
+    /**
+     * T-109 soft-clear cutoff: records with {@code timestampEpochMs <= cutoff} are
+     * filtered out. Cutoff 0 (default = never cleared) matches all records; a cutoff
+     * strictly younger than a record's timestamp lets that record through; equal
+     * timestamps are excluded (strictly-greater semantics).
+     */
+    private TestResult test_catchup_soft_clear_cutoff() {
+        long now = 1_720_000_000_000L;
+        long window = NewsToastCatchUp.CATCH_UP_WINDOW_MS;
+        List<NewsRecord> newestFirst = List.of(
+                recordAt(3, now - 1_000),   // after cutoff → in
+                recordAt(2, now - 3_000),   // == cutoff    → out (strictly greater)
+                recordAt(1, now - 5_000));  // before cutoff → out
+
+        List<NewsRecord> selected = NewsToastCatchUp.selectCatchUpToasts(
+                newestFirst, now, window, 10, true, now - 3_000);
+        TestResult r = assertEquals("only records strictly newer than the cutoff pass",
+                List.of(3L), uidsOf(selected));
+        if (!r.passed()) return r;
+
+        // Sanity: cutoff 0 = "never cleared" lets every in-window record through.
+        List<NewsRecord> all = NewsToastCatchUp.selectCatchUpToasts(
+                newestFirst, now, window, 10, true, 0L);
+        return assertEquals("cutoff 0 means everything eligible",
+                List.of(1L, 2L, 3L), uidsOf(all));
     }
 }

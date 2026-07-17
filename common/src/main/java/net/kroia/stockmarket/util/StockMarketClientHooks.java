@@ -124,14 +124,18 @@ public class StockMarketClientHooks {
                     // Seed the cache first (uid-deduped merge) — live publishes that
                     // raced ahead of this response keep their newest-first position.
                     backend.NEWS_CACHE.seed(page);
+                    // Re-read the live prefs mirror: the player may have toggled the
+                    // opt-in checkbox or hit "Clear" (T-109) between the join fetch
+                    // and this response. T-109: honor newsClearedBeforeMs so no toast
+                    // fires on rejoin for pre-clear events.
+                    PlayerPreferences livePrefs = StockMarketGuiElement.getPlayerPreferences();
                     List<NewsRecord> toToast = NewsToastCatchUp.selectCatchUpToasts(
                             page,
                             System.currentTimeMillis(),
                             NewsToastCatchUp.CATCH_UP_WINDOW_MS,
                             NewsToastCatchUp.MAX_CATCH_UP_TOASTS,
-                            // Re-read the live flag: the player may have toggled the
-                            // checkbox between the join fetch and this response.
-                            StockMarketGuiElement.getPlayerPreferences().isNewsToastEnabled());
+                            livePrefs.isNewsToastEnabled(),
+                            livePrefs.getNewsClearedBeforeMs());
                     for (NewsRecord record : toToast)
                         showNewsToastIfEnabled(record); // re-checks the opt-in per toast
                 }));
