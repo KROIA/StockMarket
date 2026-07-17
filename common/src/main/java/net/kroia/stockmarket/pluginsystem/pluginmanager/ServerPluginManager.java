@@ -5,10 +5,12 @@ import net.kroia.modutilities.persistence.ServerSaveableChunked;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.api.pluginmanager.IServerPluginManager;
+import net.kroia.stockmarket.news.ServerNewsPublisher;
 import net.kroia.stockmarket.pluginsystem.Plugins;
 import net.kroia.stockmarket.pluginsystem.interaction.PluginOrderBook;
 import net.kroia.stockmarket.pluginsystem.plugin.ServerPlugin;
 import net.kroia.stockmarket.pluginsystem.plugin.core.GenericPluginData;
+import net.kroia.stockmarket.pluginsystem.plugins.NewsPlugin;
 import net.kroia.stockmarket.pluginsystem.plugin.core.cache.MarketCache;
 import net.kroia.stockmarket.pluginsystem.registry.PluginRegistry;
 import net.kroia.stockmarket.pluginsystem.registry.PluginRegistryObject;
@@ -185,6 +187,7 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
         plugin.setManager(this);
         plugins.put(plugin.getInstanceID(), plugin);
         plugin.init_internal();
+        installProductionSeams(plugin);
         return plugin;
     }
 
@@ -288,6 +291,17 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
             pluginsTag.add(pluginTag);
         }
         listTags.put("plugins", pluginsTag);
+
+        // Manager-level flags. "newsPluginAutoCreateDone" marks that this world has been
+        // through the one-time NewsPlugin auto-create migration (or was created with the
+        // plugin in loadDefaults). It is written unconditionally on every save, so once a
+        // world has been saved by this version, the migration can never run again — an
+        // admin who deliberately deletes the NewsPlugin will not get it re-created.
+        ListTag managerDataTag = new ListTag();
+        CompoundTag flagsTag = new CompoundTag();
+        flagsTag.putBoolean("newsPluginAutoCreateDone", true);
+        managerDataTag.add(flagsTag);
+        listTags.put("managerData", managerDataTag);
         return true;
     }
 
@@ -379,7 +393,51 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
                 plugin.setEnabled(pluginTag.getBoolean("enabled"));
             }
         }
+
+        // One-time NewsPlugin migration for worlds saved before the news system existed
+        // (T-071, user decision: auto-create enabled). Only runs when the save carries no
+        // "newsPluginAutoCreateDone" flag — i.e. the world was last saved by a pre-news
+        // version. Every save() of this version writes the flag, so a deliberate deletion
+        // of the plugin survives all future load cycles.
+        if (!readNewsAutoCreateFlag(listTags)) {
+            migrateCreateNewsPlugin();
+        }
         return success;
+    }
+
+    /** Reads the manager-level "newsPluginAutoCreateDone" flag from the save data. */
+    private static boolean readNewsAutoCreateFlag(Map<String, ListTag> listTags) {
+        ListTag managerDataTag = listTags.get("managerData");
+        if (managerDataTag == null || managerDataTag.isEmpty()) return false;
+        CompoundTag flagsTag = managerDataTag.getCompound(0);
+        return flagsTag.getBoolean("newsPluginAutoCreateDone");
+    }
+
+    /**
+     * Creates the NewsPlugin instance on an existing (pre-news) world: enabled by default
+     * and subscribed to all current markets, mirroring what auto-subscription would have
+     * done had the plugin existed when the markets were created. Skipped if an instance
+     * of the plugin type already exists (defensive — the flag should already prevent that).
+     */
+    private void migrateCreateNewsPlugin() {
+        for (ServerPlugin plugin : plugins.values()) {
+            if (plugin instanceof net.kroia.stockmarket.pluginsystem.plugins.NewsPlugin) {
+                return; // already present, nothing to migrate
+            }
+        }
+        ServerPlugin newsPlugin = addPlugin(Plugins.NEWS_PLUGIN);
+        if (newsPlugin == null) {
+            warn("migrateCreateNewsPlugin(): failed to instantiate the NewsPlugin");
+            return;
+        }
+        List<ItemID> marketIDs = BACKEND_INSTANCES.MARKET_MANAGER.getSync().getAvailableMarketIDs();
+        for (ItemID marketID : marketIDs) {
+            newsPlugin.subscribeToMarket(marketID);
+        }
+        newsPlugin.setEnabled(true);
+        info("Existing world without a NewsPlugin detected — created one (enabled, "
+                + marketIDs.size() + " market(s) subscribed). Delete it via the plugin"
+                + " management UI if unwanted; it will not be re-created.");
     }
 
     /**
@@ -394,7 +452,35 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
         plugin.setManager(this);
         plugins.put(plugin.getInstanceID(), plugin);
         plugin.init_internal();
+        installProductionSeams(plugin);
         return plugin;
+    }
+
+    /**
+     * Wires master-only production seams into a freshly instantiated plugin. Runs for
+     * every creation path (loadDefaults, save-load, NewsPlugin migration and runtime
+     * creation via the plugin management UI), so no instance is ever left with a stub.
+     * <p>
+     * Currently: installs the production {@link ServerNewsPublisher} on NewsPlugin
+     * instances (T-072 history append; T-073 adds the broadcast inside the publisher;
+     * T-088 adds the publish-time picture snapshot into the DataManager's
+     * published-picture store). The history and picture store live in the master's
+     * DataManager; the history cap and the news library (definition/picture lookup)
+     * are supplied lazily from the plugin. If the DataManager is not available
+     * (unit-test contexts), the plugin keeps its default logging publisher.
+     */
+    private void installProductionSeams(@Nullable ServerPlugin plugin) {
+        if (!(plugin instanceof NewsPlugin newsPlugin)) return;
+        if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.DATA_MANAGER == null) return;
+        // T-098: wire the registry supplier for requirement checks and chain logic.
+        newsPlugin.setRegistrySupplier(
+                () -> BACKEND_INSTANCES.DATA_MANAGER.getNewsWorldRegistry());
+        newsPlugin.setPublisher(new ServerNewsPublisher(
+                BACKEND_INSTANCES.DATA_MANAGER.getNewsHistory(),
+                () -> newsPlugin.getLibrary().getSchedulerConfig().getHistoryMaxEntries(),
+                BACKEND_INSTANCES.DATA_MANAGER.getNewsPictureStore(),
+                newsPlugin::getLibrary,
+                () -> BACKEND_INSTANCES.DATA_MANAGER.getNewsWorldRegistry()));
     }
 
     /**
@@ -406,17 +492,20 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
         ServerPlugin plugin1 = addPlugin(Plugins.VOLATILITY_PLUGIN);
         ServerPlugin plugin2 = addPlugin(Plugins.DEFAULT_ORDERBOOK_VOLUME_DISTRIBUTION_PLUGIN);
         ServerPlugin plugin3 = addPlugin(Plugins.TARGET_PRICE_BOT_PLUGIN);
+        ServerPlugin plugin4 = addPlugin(Plugins.NEWS_PLUGIN);
 
         if (!marketIDs.isEmpty()) {
             ItemID pair = marketIDs.getFirst();
             plugin1.subscribeToMarket(pair);
             plugin2.subscribeToMarket(pair);
             plugin3.subscribeToMarket(pair);
+            plugin4.subscribeToMarket(pair);
         }
 
         plugin1.setEnabled(true);
         plugin2.setEnabled(true);
         plugin3.setEnabled(true);
+        plugin4.setEnabled(true);
         return true;
     }
 

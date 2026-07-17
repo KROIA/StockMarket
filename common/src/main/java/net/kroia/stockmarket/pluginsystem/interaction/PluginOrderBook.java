@@ -36,6 +36,13 @@ public class PluginOrderBook implements IPluginOrderBook
     {
         this.serverMarket = serverMarket;
         this.orderbook = serverMarket.getOrderbook();
+        // Register the default-volume provider used to fill the VirtualOrderbook with virtual liquidity
+        // on re-center (large price moves) and reset.
+        // Contract of test_setDefaultVolumeProviderFunction: REAL price in -> REAL volume out.
+        // ServerMarket.defaultVolumeProvider(long) adapts this to the raw VirtualOrderbook contract
+        // (backend price in -> raw volume out) by converting the backend price to a real price before
+        // invoking this function and scaling the returned real volume up to raw volume.
+        // Therefore no raw/real conversion must be done here.
         serverMarket.test_setDefaultVolumeProviderFunction(this::getDefaultRealVolume);
         //serverMarket.test_resetVirtualOrderBookVolume();
         this.cache = cache;
@@ -139,14 +146,17 @@ public class PluginOrderBook implements IPluginOrderBook
     }
 
     /**
+     * Shared distribution evaluation used by the single-price and batch default-volume methods.
+     * Sums the absolute volumes of all registered distribution calculators and applies the
+     * buy/sell sign convention (positive below the market price, negative at or above it).
+     *
+     * @param currentMarketPrice the current real market price (loop-invariant, fetched by the caller)
      * @param pickPrice the real value price at which the volume gets measured
-     * @return the real volume at the given price
+     * @return the signed real volume at the given price
      */
-    @Override
-    public float getDefaultRealVolume(double pickPrice)
+    private float computeDefaultRealVolume(float currentMarketPrice, double pickPrice)
     {
         float volume = 0;
-        float currentMarketPrice = (float)MarketManager.convertToRealAmountStatic(serverMarket.getCurrentMarketPrice());
         for(IVolumeDistributionCalculator distributionCalculator : volumeDistributionCalculators)
         {
             volume += Math.abs(distributionCalculator.getVolume(currentMarketPrice, pickPrice));
@@ -155,10 +165,51 @@ public class PluginOrderBook implements IPluginOrderBook
             return volume;
         return -volume;
     }
+
+    /**
+     * @param pickPrice the real value price at which the volume gets measured
+     * @return the real volume at the given price
+     */
+    @Override
+    public float getDefaultRealVolume(double pickPrice)
+    {
+        float currentMarketPrice = (float)MarketManager.convertToRealAmountStatic(serverMarket.getCurrentMarketPrice());
+        return computeDefaultRealVolume(currentMarketPrice, pickPrice);
+    }
     @Override
     public float getDefaultRawVolume(double pickPrice)
     {
         return getDefaultRealVolume(pickPrice) * BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync().getItemFractionScaleFactor();
+    }
+
+    /**
+     * Batch variant of {@link #getDefaultRawVolume(double)} for a contiguous backend price range.
+     * The current market price and the item fraction scale factor are fetched once for the
+     * whole range instead of once per price level, avoiding the per-call overhead of the
+     * single-price method in hot loops.
+     *
+     * @param backendStartPrice the first backend (internal unscaled) price level to sample
+     * @param count the number of consecutive backend price levels to sample
+     * @return array of length {@code count}; index {@code i} holds the default raw volume
+     *         at backend price {@code backendStartPrice + i}
+     */
+    @Override
+    public float[] getDefaultRawVolume(long backendStartPrice, int count)
+    {
+        if(count <= 0)
+            return new float[0];
+
+        // Hoist all loop-invariant lookups out of the per-price-level loop.
+        float currentMarketPrice = (float)MarketManager.convertToRealAmountStatic(serverMarket.getCurrentMarketPrice());
+        int scaleFactor = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync().getItemFractionScaleFactor();
+
+        float[] volumes = new float[count];
+        for(int i = 0; i < count; i++)
+        {
+            double pickPrice = MarketManager.convertToRealAmountStatic(backendStartPrice + i);
+            volumes[i] = computeDefaultRealVolume(currentMarketPrice, pickPrice) * scaleFactor;
+        }
+        return volumes;
     }
 
     @Override

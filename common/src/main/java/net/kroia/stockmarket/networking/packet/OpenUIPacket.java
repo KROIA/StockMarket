@@ -29,6 +29,8 @@ public class OpenUIPacket extends StockMarketNetworkPacket {
         DEVELOPMENT,
         MANAGEMENT,
         EXPORT_RECIPES,
+        /** Newspaper screen — opened by the player-level {@code /stockmarket news} command (T-076). */
+        NEWS,
     }
 
 

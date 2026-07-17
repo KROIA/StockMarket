@@ -78,6 +78,25 @@ public abstract class StockMarketGuiScreen extends GuiScreen {
         return BACKEND_INSTANCES.MARKET_MANAGER.getMarket(itemID);
     }
 
+    /**
+     * Whether the server this client is connected to is the MASTER server
+     * (single servers count as their own master). The flag is synced once at
+     * player join via {@code PlayerJoinSyncPacket} → {@link ClientSettings}.
+     * <p>
+     * Used to gate master-only UI such as the "Mod Settings" button in the
+     * ManagementScreen. This is a UI convenience only — the server independently
+     * enforces master + permission checks in {@code ModSettingsRequest}.
+     *
+     * @return true if connected to the master server, false on slaves or when
+     *         the sync has not arrived yet
+     */
+    protected static boolean isMasterServer()
+    {
+        return BACKEND_INSTANCES != null
+                && BACKEND_INSTANCES.SETTINGS != null
+                && BACKEND_INSTANCES.SETTINGS.isMasterServer();
+    }
+
     protected LocalPlayer getThisPlayer()
     {
         return Minecraft.getInstance().player;

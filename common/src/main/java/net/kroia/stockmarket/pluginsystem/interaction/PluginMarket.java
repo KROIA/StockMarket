@@ -42,6 +42,17 @@ public class PluginMarket implements IPluginMarket
         return MarketManager.convertToRealAmountStatic(serverMarket.getDefaultPrice());
     }
 
+    /**
+     * Applies a permanent default-price change directly to the market settings
+     * (not cache-buffered — see the interface Javadoc). Non-positive or non-finite
+     * values are ignored defensively so a broken plugin can never zero a market.
+     */
+    @Override
+    public void setDefaultRealPrice(double defaultRealPrice) {
+        if (!(defaultRealPrice > 0) || Double.isInfinite(defaultRealPrice)) return;
+        serverMarket.getSettings().defaultPrice = MarketManager.convertToRawAmountStatic(defaultRealPrice);
+    }
+
     @Override
     public double getPrice() {
         return MarketManager.convertToRealAmountStatic(serverMarket.getCurrentMarketPrice());

@@ -18,6 +18,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 public abstract class StockMarketGuiElement extends GuiElement {
 
@@ -136,11 +137,18 @@ public abstract class StockMarketGuiElement extends GuiElement {
 
     /**
      * Fetches player preferences from the server. Call on player join.
+     *
+     * @return a future that completes with the fetched preferences <b>after</b> they
+     *         were stored client-side — so chained stages are guaranteed to see
+     *         {@link #getPlayerPreferences()} return the fetched values instead of the
+     *         pre-fetch defaults. Used by the join-time news toast catch-up (T-077),
+     *         which must never act on the default {@code newsToastEnabled = false}.
      */
-    public static void fetchPlayerPreferences() {
-        BACKEND_INSTANCES.NETWORKING.PLAYER_PREFERENCES_GET_REQUEST.sendRequestToServer((byte) 0)
-            .thenAccept(prefs -> {
+    public static CompletableFuture<PlayerPreferences> fetchPlayerPreferences() {
+        return BACKEND_INSTANCES.NETWORKING.PLAYER_PREFERENCES_GET_REQUEST.sendRequestToServer((byte) 0)
+            .thenApply(prefs -> {
                 playerPreferences = prefs;
+                return prefs;
             });
     }
 
