@@ -604,6 +604,15 @@ public class NewsPictureStoreTestSuite extends TestSuite {
     /**
      * When the history prunes a record (cap), the publisher's post-append GC must drop
      * the picture nothing references anymore — and keep the surviving one.
+     * <p>
+     * <b>T-115 fix:</b> post-T-110 the history is chunked (CHUNK_SIZE = 100) and the
+     * newest chunk is never dropped — cap enforcement only drops whole older chunks.
+     * The test now publishes CHUNK_SIZE records of {@code event_a} (all sharing
+     * {@code pngA} — idempotent puts leave one hash in the store) to fill chunk 0,
+     * then one record of {@code event_b} with {@code pngB} which opens chunk 1 and
+     * triggers the atomic drop of chunk 0 (all 100 {@code event_a} records — the
+     * picture hash for {@code event_a} is no longer referenced). The GC then
+     * removes {@code pngA}'s bytes and keeps {@code pngB}'s.
      */
     private TestResult test_publish_pruneGc_dropsUnreferencedPicture() {
         Path dir = null;
@@ -619,16 +628,25 @@ public class NewsPictureStoreTestSuite extends TestSuite {
 
             NewsHistory history = new NewsHistory();
             NewsPictureStore store = storeIn(dir);
-            // Cap 1: the second publish prunes the first record out of the history.
+            // Cap = CHUNK_SIZE (100): publishing one more record than the cap opens a
+            // second chunk and drops chunk 0 (which held the 100 event_a records).
+            final int cap = 100;
             ServerNewsPublisher publisher =
-                    new ServerNewsPublisher(history, () -> 1, store, () -> library, null);
+                    new ServerNewsPublisher(history, () -> cap, store, () -> library, null);
 
-            publisher.publish(record(1, "event_a"));
-            publisher.publish(record(2, "event_b"));
+            // Fill chunk 0 with 100 event_a records (all share pngA — the picture-store
+            // put() is idempotent, so the store carries a single hashA entry throughout).
+            for (long uid = 1; uid <= cap; uid++) {
+                publisher.publish(record(uid, "event_a"));
+            }
+            // 101st publish opens chunk 1 with event_b/pngB → chunk 0 gets dropped
+            // (totalRecords > cap AND metadata.size() ≥ 2 → oldest chunk deleted).
+            publisher.publish(record(cap + 1, "event_b"));
 
-            TestResult r = assertEquals("cap 1 must leave one record", 1, history.size());
+            TestResult r = assertEquals("cap must leave one chunk of one record",
+                    1, history.size());
             if (!r.passed()) return r;
-            r = assertNull("pruned record's picture must be garbage-collected",
+            r = assertNull("pruned records' picture must be garbage-collected",
                     store.get(NewsPictureLibrary.sha1(pngA)));
             if (!r.passed()) return r;
             r = assertTrue("surviving record's picture must remain served",
