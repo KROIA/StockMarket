@@ -444,6 +444,17 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
     private final List<NewsAdminRequest.EventDetails> allEventDetails = new ArrayList<>();
     /** {@link #allEventDetails} indexed by definition id (insertion = file order). */
     private final Map<String, NewsAdminRequest.EventDetails> detailsById = new LinkedHashMap<>();
+    /**
+     * Client-side cooldown end wall-clock for each definition id, in
+     * {@link System#currentTimeMillis()} space (T-107). Filled from every incoming
+     * {@link NewsAdminRequest.EventDetails} snapshot as
+     * {@code clientNow + details.cooldownRemainingMs()}, so the all-events tab can
+     * derive a live remaining value at render time without firing any extra admin
+     * ops per tick. Stale entries for events no longer in the snapshot are left
+     * alone — they simply tick to zero and get overwritten when the next snapshot
+     * mentions the id again.
+     */
+    private final Map<String, Long> cooldownEndByEventId = new HashMap<>();
 
     /**
      * Creates the news plugin GUI element. Market data and settings are populated
@@ -932,9 +943,19 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
                     // whole story. Chat-printed responses (Reload) already carry their
                     // lines to a persistent place, so only the message overflow counts.
                     // T-086: never for background operations (see method Javadoc).
+                    // T-108: per-event Skip-phase and Stop-event are silent on success —
+                    // the Active-row updates visibly (event advances or disappears), so
+                    // the popup was just noise. Failures still surface via the popup
+                    // (permission refused, AlreadyStopped, slave routing lag, …).
+                    // The top-level Stop-all (Op.STOP) status dialog is untouched — it
+                    // summarizes cross-event outcomes and is genuinely useful.
                     boolean multiLineStop = input.op() == NewsAdminRequest.Op.STOP
                             && response.lines().size() > 1;
+                    boolean silentPerEventOnSuccess = response.success()
+                            && (input.op() == NewsAdminRequest.Op.STOP_EVENT
+                                || input.op() == NewsAdminRequest.Op.SKIP_PHASE);
                     if (userInitiated && (truncated || multiLineStop)
+                            && !silentPerEventOnSuccess
                             && Minecraft.getInstance().screen == screenAtSend
                             && screenAtSend != null) {
                         List<String> dialogLines = new ArrayList<>();
@@ -966,6 +987,11 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
      * Stores the server-confirmed per-definition snapshot and refreshes every consumer:
      * the all-events tab rows (checkbox state comes exclusively from here) and — if
      * currently open — the details screen (T-085).
+     * <p>
+     * Also refreshes {@link #cooldownEndByEventId} (T-107) so the all-events tab
+     * can compute a live remaining cooldown between admin responses. Only ids
+     * present in the incoming snapshot are updated; stale entries for events that
+     * dropped out of the snapshot are harmless — they tick to zero.
      *
      * @param details the snapshot from a successful admin response, in file order
      */
@@ -973,8 +999,11 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
         allEventDetails.clear();
         allEventDetails.addAll(details);
         detailsById.clear();
+        long now = System.currentTimeMillis();
         for (NewsAdminRequest.EventDetails d : details) {
             detailsById.put(d.id(), d);
+            // T-107: cache the wall-clock deadline for the live per-row countdown.
+            cooldownEndByEventId.put(d.id(), now + d.cooldownRemainingMs());
         }
         allEventsTab.rebuildRows();
         if (Minecraft.getInstance().screen instanceof NewsEventDetailsScreen detailsScreen) {
@@ -1039,6 +1068,21 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
      */
     @Nullable NewsAdminRequest.EventDetails detailsFor(String eventId) {
         return detailsById.get(eventId);
+    }
+
+    /**
+     * Live remaining cooldown (T-107): derives {@code cooldownEnd - now} from the
+     * client-side {@link #cooldownEndByEventId} map that was cached at the last
+     * snapshot arrival. Returns 0 when the deadline has passed or when no snapshot
+     * has ever cached this id — callers should treat 0 as "off cooldown".
+     *
+     * @param eventId the definition id
+     * @return remaining milliseconds, clamped to a non-negative value
+     */
+    private long liveCooldownRemainingMs(String eventId) {
+        Long endMs = cooldownEndByEventId.get(eventId);
+        if (endMs == null) return 0L;
+        return Math.max(0L, endMs - System.currentTimeMillis());
     }
 
     /**
@@ -1358,9 +1402,13 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
             // State markers, drawn right-to-left starting left of the row buttons.
             int rightX = (resetCooldownButton.isEnabled()
                     ? resetCooldownButton.getLeft() : rowTriggerButton.getLeft()) - spacing;
-            if (details.cooldownRemainingMs() > 0) {
+            // T-107: live cooldown — derived from cooldownEndByEventId (cached at
+            // the last admin snapshot) so the label ticks between admin responses
+            // instead of freezing on the snapshot's captured value.
+            long liveCooldownMs = liveCooldownRemainingMs(details.id());
+            if (liveCooldownMs > 0) {
                 String marker = Texts.markerCooldown(NewsUiFormatting
-                        .formatRemainingTime(details.cooldownRemainingMs())).getString();
+                        .formatRemainingTime(liveCooldownMs)).getString();
                 rightX -= (int) (getTextWidth(marker) * META_SCALE);
                 drawText(marker, rightX, textY, COLOR_NEUTRAL_GRAY, META_SCALE);
                 rightX -= spacing;
