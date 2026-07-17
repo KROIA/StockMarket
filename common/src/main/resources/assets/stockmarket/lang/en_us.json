@@ -316,6 +316,8 @@
   "gui.stockmarket.news_screen.masthead": "The Market Times",
   "gui.stockmarket.news_screen.toast_checkbox": "Enable news popups",
   "gui.stockmarket.news_screen.toast_checkbox.tooltip": "Show a popup in the top-right corner whenever a news event is published.\nStored per player on this server. Default: off.",
+  "gui.stockmarket.news_screen.clear_button": "Clear",
+  "gui.stockmarket.news_screen.clear_button.tooltip": "Clear news from your own newspaper (soft filter).\nOther players and admins still see everything.\nNew events published after this still show up normally.",
   "gui.stockmarket.news_screen.load_more": "Load more",
   "gui.stockmarket.news_screen.no_more": "No more news",
   "gui.stockmarket.news_screen.loading": "Loading...",
