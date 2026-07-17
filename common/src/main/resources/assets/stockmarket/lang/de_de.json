@@ -324,6 +324,7 @@
   "gui.stockmarket.news_screen.empty": "Noch keine Nachrichten veröffentlicht.",
   "gui.stockmarket.news_screen.live": "LIVE",
   "gui.stockmarket.news_screen.game_day": "Tag %s",
+  "gui.stockmarket.news_screen.day_separator": "Tag %s",
   "gui.stockmarket.news_toast.title": "Marktnachrichten",
   "gui.stockmarket.news_plugin.active_events_title": "Aktive Nachrichtenereignisse",
   "gui.stockmarket.news_plugin.no_active_events": "Keine aktiven Nachrichtenereignisse",

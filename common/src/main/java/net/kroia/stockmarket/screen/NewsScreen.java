@@ -6,6 +6,7 @@ import net.kroia.modutilities.gui.elements.CheckBox;
 import net.kroia.modutilities.gui.elements.Frame;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.VerticalListView;
+import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.networking.request.NewsHistoryRequest;
@@ -162,6 +163,13 @@ public class NewsScreen extends StockMarketGuiScreen {
         clearButton = new Button(Texts.CLEAR_BUTTON.getString(), this::onClearClicked);
         clearButton.setHoverTooltipSupplier(Texts.CLEAR_BUTTON_TOOLTIP::getString);
         clearButton.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
+        // T-120: anchor the tooltip so it follows the mouse and renders in the
+        // bottom-left quadrant of the cursor (below-and-to-the-left). TOP_RIGHT
+        // means the mouse point maps to the tooltip's top-right corner, so the
+        // tooltip extends down-and-to-the-left from there — keeps the label from
+        // colliding with the Clear button itself, which sits at the top-right of
+        // the screen.
+        clearButton.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.TOP_RIGHT);
 
         // The scrollbar handle (an EmptyButton) has no public accessor on ListView —
         // style it via an anonymous subclass (protected member access) so the whole
@@ -439,6 +447,15 @@ public class NewsScreen extends StockMarketGuiScreen {
      * of its row. All heights are final before the rows are added, so the list
      * layout stacks them correctly.
      * <p>
+     * <b>T-119 day grouping:</b> a {@link DaySeparatorRow} ("Day N") is emitted
+     * above the first entry of every in-game day represented in the visible feed
+     * (day source: {@link NewsRecord#getGameDay()}, snapshotted at publish time).
+     * The two-column pairing intentionally <b>breaks at day boundaries</b> — a day
+     * with an odd number of visible entries ends with a single-column row (left
+     * column occupied, right column empty). Mixing two days in the same row would
+     * leave the separator above it visually ambiguous, so the occasional half-empty
+     * row is preferred.
+     * <p>
      * <b>T-109 soft-clear filter:</b> records with
      * {@code timestampEpochMs <= newsClearedBeforeMs} are excluded from the visible
      * feed. Filtered-out records remain in {@link #entries} (soft filter: the local
@@ -468,8 +485,24 @@ public class NewsScreen extends StockMarketGuiScreen {
         }
 
         feedListView.removeChilds();
-        for (int i = 0; i < visible.size(); i += 2) {
-            NewsEntryPanel left = new NewsEntryPanel(visible.get(i), leftWidth);
+        // T-119: walk the newest-first visible list day-by-day. Whenever the
+        // in-game day changes (including the very first entry) a DaySeparatorRow
+        // is emitted above it, and the two-column pairing intentionally BREAKS
+        // at that boundary — a day whose visible count is odd ends with a
+        // single-column row (left column occupied, right column empty). Mixing
+        // two days in the same row would leave the separator above it visually
+        // ambiguous, so we accept the occasional half-empty row instead.
+        long currentDay = Long.MIN_VALUE;
+        int i = 0;
+        while (i < visible.size()) {
+            NewsRecord leftRecord = visible.get(i);
+            long day = leftRecord.getGameDay();
+            if (day != currentDay) {
+                currentDay = day;
+                feedListView.addChild(new DaySeparatorRow(day, rowWidth));
+            }
+
+            NewsEntryPanel left = new NewsEntryPanel(leftRecord, leftWidth);
             int rowHeight = left.getHeight();
 
             // Invisible grouping frame; the panels keep manual bounds inside it.
@@ -481,7 +514,11 @@ public class NewsScreen extends StockMarketGuiScreen {
             row.setEnableOutline(false);
             row.addChild(left);
 
-            if (i + 1 < visible.size()) {
+            // Pair with the next entry ONLY when it belongs to the same in-game
+            // day (T-119). Otherwise leave the right column empty — the next
+            // iteration will emit a fresh separator for the new day and start
+            // its own row.
+            if (i + 1 < visible.size() && visible.get(i + 1).getGameDay() == day) {
                 NewsEntryPanel right = new NewsEntryPanel(visible.get(i + 1), rightWidth);
                 right.setX(leftWidth + gutter);
                 // T-086 follow-up: both cards of a row share the height of the
@@ -494,6 +531,9 @@ public class NewsScreen extends StockMarketGuiScreen {
                 right.stretchToHeight(rowHeight);
                 row.setHeight(rowHeight);
                 row.addChild(right);
+                i += 2;
+            } else {
+                i += 1;
             }
             feedListView.addChild(row);
         }
@@ -532,6 +572,90 @@ public class NewsScreen extends StockMarketGuiScreen {
         } else {
             loadMoreButton.setText(Texts.LOAD_MORE.getString());
             loadMoreButton.setClickable(true);
+        }
+    }
+
+    // ── Day-separator row (T-119) ────────────────────────────────────────
+
+    /**
+     * A day-header row (T-119) emitted above the first news entry of every
+     * in-game day represented in the feed. Composes a centered "Day N" label
+     * over a thin 1-px horizontal rule spanning the full feed inner width —
+     * same {@link #COLOR_RULE} ink tone as the masthead rule, sized down as a
+     * subheading rather than a shout so it groups entries visually without
+     * competing with the masthead.
+     * <p>
+     * <b>Sizing contract:</b> the row is constructed with the exact width the
+     * feed's {@link LayoutVertical} will grant it (feedContainerWidth minus the
+     * layout's 2-pixel horizontal padding on each side — the same
+     * {@code rowWidth} used by the two-column entry rows) and reports a fixed
+     * total height via the constant {@link #TOTAL_HEIGHT}. The height must be
+     * final before the row is added to the {@link VerticalListView}, otherwise
+     * the scroll extent would be miscounted.
+     * <p>
+     * <b>Day source:</b> the day number is read from
+     * {@link NewsRecord#getGameDay()}, which is snapshotted at publish time on
+     * the master server — the client does not re-derive it from world time.
+     */
+    private static final class DaySeparatorRow extends Frame {
+
+        /** Subheading scale — bigger than body ink (0.85×), smaller than the
+         *  masthead (2.0×), so the header reads as a section break. */
+        private static final float LABEL_SCALE = 1.0f;
+
+        // Vertical rhythm (GUI pixels). The row above the label and below the
+        // rule breathes so consecutive entry rows do not visually collide with
+        // the header.
+        private static final int TOP_PAD = 4;
+        private static final int LABEL_HEIGHT = 11;
+        private static final int LABEL_TO_RULE_GAP = 2;
+        private static final int RULE_HEIGHT = 1;
+        private static final int BOTTOM_PAD = 3;
+
+        /** Fixed total height (sum of the layout constants above); read by the
+         *  {@link VerticalListView} to compute the scroll extent. */
+        static final int TOTAL_HEIGHT =
+                TOP_PAD + LABEL_HEIGHT + LABEL_TO_RULE_GAP + RULE_HEIGHT + BOTTOM_PAD;
+
+        /**
+         * Builds a separator row for the given in-game day at the given width.
+         *
+         * @param gameDay the in-game day number (from
+         *                {@link NewsRecord#getGameDay()}, snapshotted at
+         *                publish time)
+         * @param width   the outer width to occupy — should equal the feed row
+         *                width so the rule spans the full feed inner width
+         */
+        DaySeparatorRow(long gameDay, int width) {
+            super(0, 0, width, TOTAL_HEIGHT);
+            // Match the invisible grouping frames used by rebuildFeed(): the
+            // default GuiElement background+outline would tile a gray box over
+            // the paper (same T-086 follow-up rationale as the two-column rows).
+            setEnableBackground(false);
+            setEnableOutline(false);
+
+            // "Day N" label — %s substitution matches the sibling `game_day`
+            // key used by NewsEntryPanel's meta line, so both places speak the
+            // same phrasing per locale.
+            String labelText = Component.translatable(
+                    "gui." + StockMarketMod.MOD_ID + ".news_screen.day_separator",
+                    String.valueOf(gameDay)).getString();
+            Label label = new Label(labelText);
+            label.setAlignment(Label.Alignment.CENTER);
+            label.setTextColor(COLOR_INK);
+            label.setTextFontScale(LABEL_SCALE);
+            label.setBounds(0, TOP_PAD, width, LABEL_HEIGHT);
+            addChild(label);
+
+            // Thin horizontal rule spanning the full width — same idiom as the
+            // masthead rule (Frame with background+outline in COLOR_RULE, 1-px
+            // tall), just placed as a section break under the label rather
+            // than under the masthead.
+            Frame rule = new Frame(0, TOP_PAD + LABEL_HEIGHT + LABEL_TO_RULE_GAP,
+                    width, RULE_HEIGHT);
+            rule.setBackgroundColor(COLOR_RULE);
+            rule.setOutlineColor(COLOR_RULE);
+            addChild(rule);
         }
     }
 }
