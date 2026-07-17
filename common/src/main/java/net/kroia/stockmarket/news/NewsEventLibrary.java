@@ -325,6 +325,11 @@ public class NewsEventLibrary {
      *       (plan §10.3 decision: chains may NOT fire adminOnly targets).</li>
      *   <li>Self-reference with chance 1.0 and no {@code notFired} requirement =
      *       <b>WARNING</b> "possible loop, bounded by depth" (advisory only).</li>
+     *   <li>T-104 (Issue #70): a {@code step}-moment chain whose referenced step name
+     *       appears in no sequence of the source event = <b>WARNING</b>. The chain
+     *       stays in the definition and simply remains inert at runtime — the
+     *       warning is an authoring aid that catches typos at load time instead of
+     *       leaving them silently dead.</li>
      * </ul>
      * Because the definition's chains list is unmodifiable, invalid chains cannot be
      * removed from it here. Instead the method returns (via the report's supplemental
@@ -366,6 +371,23 @@ public class NewsEventLibrary {
                     continue;
                 }
 
+                // T-104 (Issue #70): step-moment chain must reference a step name that
+                // exists in at least one sequence of the source event; otherwise the
+                // chain remains inert at runtime with no visible signal — WARN so authors
+                // catch typos at load time. Legacy `impact` events fall out of the same
+                // enumeration since `getSequences()` returns their normalized implicit
+                // sequence with the ramp/hold/reversal (or `permanent`) step names
+                // (see NewsSequence.fromLegacyEnvelope).
+                if (chain.on() == NewsEventDefinition.ChainTriggerMoment.STEP) {
+                    Set<String> stepNames = collectStepNames(definition);
+                    if (!stepNames.contains(chain.stepName())) {
+                        report.addWarning("", definition.getId(),
+                                "chains entry " + i + ": references step '" + chain.stepName()
+                                        + "' which exists in no sequence of this event"
+                                        + " — chain will never fire (available: " + stepNames + ")");
+                    }
+                }
+
                 // Self-reference loop advisory (plan §4).
                 if (chain.targetEventId().equals(definition.getId()) && chain.chance() >= 1.0) {
                     boolean hasNotFiredSelf = false;
@@ -384,6 +406,30 @@ public class NewsEventLibrary {
                 }
             }
         }
+    }
+
+    /**
+     * Collects the step-name universe of a source event across all its sequences —
+     * used by T-104 chain step-name validation (Issue #70) to detect step-moment
+     * chains whose {@code step} field matches nothing (typo → inert chain at runtime).
+     * <p>
+     * Legacy {@code impact} events do not need a special branch: their implicit
+     * ramp/hold/reversal (or {@code permanent} for {@code reversal: none}) step names
+     * are already exposed through {@link NewsEventDefinition#getSequences()} — the
+     * legacy envelope is normalized into one implicit {@code SequenceDefinition} at
+     * parse time (see {@link NewsSequence#fromLegacyEnvelope}).
+     *
+     * @param source the source event
+     * @return the set of step names across all sequences, in insertion order
+     */
+    private static Set<String> collectStepNames(NewsEventDefinition source) {
+        Set<String> names = new LinkedHashSet<>();
+        for (NewsEventDefinition.SequenceDefinition seq : source.getSequences()) {
+            for (NewsEventDefinition.StepDefinition step : seq.getSteps()) {
+                names.add(step.getName());
+            }
+        }
+        return names;
     }
 
     /**

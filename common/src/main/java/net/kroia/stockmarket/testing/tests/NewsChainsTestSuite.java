@@ -71,6 +71,9 @@ public class NewsChainsTestSuite extends TestSuite {
         addTest("chain_parse_valid_entries", this::test_chainParse_validEntries);
         addTest("chain_validate_unknown_target_warns", this::test_chainValidate_unknownTargetWarns);
         addTest("chain_validate_admin_only_target_errors", this::test_chainValidate_adminOnlyTargetErrors);
+        // T-104 (Issue #70): step-name typo produces a WARN, source event still loads.
+        addTest("chain_validate_step_typo_warns", this::test_chainValidate_stepTypoWarns);
+        addTest("chain_validate_legacy_impact_step_names", this::test_chainValidate_legacyImpactStepNames);
 
         // Chain trigger: publish moment
         addTest("chain_publish_trigger_enqueues_pca", this::test_chainPublishTrigger_enqueuesPca);
@@ -378,6 +381,135 @@ public class NewsChainsTestSuite extends TestSuite {
 
             return assertFalse("chain to adminOnly target must be invalid",
                     library.isChainValid("event_a", 0));
+        } catch (IOException e) {
+            return fail("setup failed: " + e);
+        } finally {
+            deleteRecursively(dir);
+        }
+    }
+
+    // ========================================================================
+    // Test: chain step-name typo warns (T-104, Issue #70)
+    // ========================================================================
+
+    /**
+     * A step-moment chain whose {@code step} name matches no step of any sequence
+     * on the SOURCE event must emit a load-time WARNING. A legitimate step name
+     * on the same event must NOT emit a step-name warning. The source event is
+     * still loaded either way (the chain simply remains inert at runtime for the
+     * typo case). Sequence-authored source event (steps: {@code step1}, {@code step2}).
+     */
+    private TestResult test_chainValidate_stepTypoWarns() {
+        Path dir = null;
+        try {
+            dir = createTempDir();
+            // Source event has TWO step-moment chains: one legit, one with a typo.
+            String chains = chainJson("event_b", "step", 1.0, 0, "\"step\":\"step1\"")
+                    + "," + chainJson("event_b", "step", 1.0, 0, "\"step\":\"stpe2\"");
+            String eventA = sequenceEventWithChains("event_a", chains, "");
+            String eventB = NewsPluginTestSuite.eventJson("event_b", "");
+            String fileJson = NewsPluginTestSuite.fileJson("", eventA, eventB);
+            Files.writeString(dir.resolve("events.json"), fileJson);
+
+            NewsEventLibrary library = new NewsEventLibrary();
+            ValidationReport report = library.reload(dir);
+
+            // Source event must still be loaded.
+            TestResult r = assertNotNull("source event must still load",
+                    library.getDefinition("event_a"));
+            if (!r.passed()) return r;
+
+            // Exactly one step-name warning: for the typo, referencing the typo string.
+            List<ValidationReport.Entry> stepWarns = new ArrayList<>();
+            for (ValidationReport.Entry entry : report.getWarnings()) {
+                if (entry.message().contains("references step '")) {
+                    stepWarns.add(entry);
+                }
+            }
+            r = assertEquals("exactly one step-name warning", 1, stepWarns.size());
+            if (!r.passed()) return r;
+
+            ValidationReport.Entry warn = stepWarns.get(0);
+            r = assertTrue("warning names the typo step 'stpe2'",
+                    warn.message().contains("'stpe2'"));
+            if (!r.passed()) return r;
+            r = assertTrue("warning lists available step 'step1'",
+                    warn.message().contains("step1"));
+            if (!r.passed()) return r;
+            r = assertTrue("warning lists available step 'step2'",
+                    warn.message().contains("step2"));
+            if (!r.passed()) return r;
+            r = assertEquals("warning is attached to the source event id",
+                    "event_a", warn.eventId());
+            if (!r.passed()) return r;
+
+            // Task guardrail: WARN only, chain-runtime behavior unchanged — both
+            // chains remain valid (isChainValid) so the runtime path is untouched.
+            r = assertTrue("legit-step chain must still be valid",
+                    library.isChainValid("event_a", 0));
+            if (!r.passed()) return r;
+            return assertTrue("typo-step chain must still be valid (WARN only, not marked invalid)",
+                    library.isChainValid("event_a", 1));
+        } catch (IOException e) {
+            return fail("setup failed: " + e);
+        } finally {
+            deleteRecursively(dir);
+        }
+    }
+
+    // ========================================================================
+    // Test: chain validate legacy impact step names (T-104, Issue #70)
+    // ========================================================================
+
+    /**
+     * Legacy {@code impact} events expose an implicit ramp/hold/reversal
+     * sequence — chain step-name validation must accept those names without
+     * warning. A typo on the same legacy event must still emit exactly one
+     * step-name WARN. Covers the {@code reversal: ramp} branch (which yields
+     * the {@code reversal} step name via {@link net.kroia.stockmarket.news.NewsSequence#fromLegacyEnvelope}).
+     */
+    private TestResult test_chainValidate_legacyImpactStepNames() {
+        Path dir = null;
+        try {
+            dir = createTempDir();
+            // Legacy trend event uses ramp/hold/reversal step names (reversal: ramp).
+            // Three legit chains (ramp/hold/reversal) + one typo → expect 1 step-name warning.
+            String chains = chainJson("event_b", "step", 1.0, 0, "\"step\":\"ramp\"")
+                    + "," + chainJson("event_b", "step", 1.0, 0, "\"step\":\"hold\"")
+                    + "," + chainJson("event_b", "step", 1.0, 0, "\"step\":\"reversal\"")
+                    + "," + chainJson("event_b", "step", 1.0, 0, "\"step\":\"typo\"");
+            String eventA = eventJsonWithChains("event_a", chains, "");
+            String eventB = NewsPluginTestSuite.eventJson("event_b", "");
+            String fileJson = NewsPluginTestSuite.fileJson("", eventA, eventB);
+            Files.writeString(dir.resolve("events.json"), fileJson);
+
+            NewsEventLibrary library = new NewsEventLibrary();
+            ValidationReport report = library.reload(dir);
+
+            TestResult r = assertNotNull("source event must still load",
+                    library.getDefinition("event_a"));
+            if (!r.passed()) return r;
+
+            List<ValidationReport.Entry> stepWarns = new ArrayList<>();
+            for (ValidationReport.Entry entry : report.getWarnings()) {
+                if (entry.message().contains("references step '")) {
+                    stepWarns.add(entry);
+                }
+            }
+            r = assertEquals("exactly one step-name warning (only the typo)",
+                    1, stepWarns.size());
+            if (!r.passed()) return r;
+            r = assertTrue("warning names the typo step",
+                    stepWarns.get(0).message().contains("'typo'"));
+            if (!r.passed()) return r;
+            r = assertTrue("available list includes legacy 'ramp'",
+                    stepWarns.get(0).message().contains("ramp"));
+            if (!r.passed()) return r;
+            r = assertTrue("available list includes legacy 'hold'",
+                    stepWarns.get(0).message().contains("hold"));
+            if (!r.passed()) return r;
+            return assertTrue("available list includes legacy 'reversal'",
+                    stepWarns.get(0).message().contains("reversal"));
         } catch (IOException e) {
             return fail("setup failed: " + e);
         } finally {
