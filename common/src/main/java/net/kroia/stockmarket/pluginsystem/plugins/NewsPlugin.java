@@ -610,6 +610,19 @@ public class NewsPlugin extends ServerPlugin<NewsPlugin.Settings, NewsPlugin.Run
      */
     private final Map<Long, Set<String>> eventChainAncestry = new HashMap<>();
 
+    /**
+     * T-115 fix: chain context to register on the NEXT successful activation. Set by
+     * {@link #activateChainTarget} right before its call to
+     * {@link #activate(NewsEventDefinition, Map)} and consumed inside
+     * {@code activate} right after the {@link ActiveNewsEvent} is created — so
+     * chain-fired events already have their depth + ancestry registered when their
+     * immediate delay-0 publish runs {@link #triggerChains}. Previously the
+     * registration happened AFTER {@code activate} returned, which meant the
+     * ancestry guard ran against an empty ancestry set and A→B→A cycles could slip
+     * through. Null outside {@code activateChainTarget}.
+     */
+    private @Nullable PendingChainActivation pendingChainContextForNextActivate;
+
     /** Measures the real elapsed time between update ticks (honors TimerMillis.TIMER_OFFSET_MS). */
     private final TimerMillis tickDeltaTimer = new TimerMillis(false);
 
@@ -1669,6 +1682,17 @@ public class NewsPlugin extends ServerPlugin<NewsPlugin.Settings, NewsPlugin.Run
                 sequenceDefinition.getName(), sequence, stepMarkets, delayMs);
         activeEvents.add(event);
 
+        // T-115 fix: register chain context (depth + ancestry) BEFORE the immediate
+        // publish. When a chain-fired event's delay-0 publish runs triggerChains,
+        // it reads eventChainDepth/eventChainAncestry — those must already be set
+        // so the ancestry guard sees the real lineage and A→B→A cycles are blocked.
+        if (pendingChainContextForNextActivate != null
+                && pendingChainContextForNextActivate.getTargetEventId().equals(definition.getId())) {
+            eventChainDepth.put(event.getNewsUid(), pendingChainContextForNextActivate.getDepth());
+            eventChainAncestry.put(event.getNewsUid(),
+                    new LinkedHashSet<>(pendingChainContextForNextActivate.getAncestry()));
+        }
+
         // Cooldown starts at activation ("after firing"), on the ticking time basis.
         if (definition.getCooldownSeconds() > 0) {
             cooldownRemainingMs.put(definition.getId(), definition.getCooldownSeconds() * 1000L);
@@ -2123,16 +2147,24 @@ public class NewsPlugin extends ServerPlugin<NewsPlugin.Settings, NewsPlugin.Run
         // Activate. The regular activate() handles sequence picking, delay sampling,
         // cooldown arming and immediate publishing. It does NOT check caps (that's the
         // scheduler's job in firePlannedSlot), so calling it here achieves caps bypass.
-        ActiveNewsEvent event = activate(definition, resolvedMarkets);
+        //
+        // T-115 fix: register the chain context BEFORE calling activate() so
+        // activate() can copy depth + ancestry to eventChainDepth/eventChainAncestry
+        // right after creating the ActiveNewsEvent — the delay-0 publish inside
+        // activate() then fires triggerChains against the real ancestry (A→B→A
+        // cycles blocked). Cleared in the finally block so the hook only affects
+        // this single activation call.
+        ActiveNewsEvent event;
+        pendingChainContextForNextActivate = pca;
+        try {
+            event = activate(definition, resolvedMarkets);
+        } finally {
+            pendingChainContextForNextActivate = null;
+        }
         if (event == null) {
             info("Chain target '" + pca.targetEventId + "' activation refused — skipping");
             return null;
         }
-
-        // Track chain context for the newly activated event so its own chains carry the
-        // correct depth and ancestry forward.
-        eventChainDepth.put(event.getNewsUid(), pca.depth);
-        eventChainAncestry.put(event.getNewsUid(), new LinkedHashSet<>(pca.ancestry));
 
         info("Chain activated '" + pca.targetEventId + "' (uid " + event.getNewsUid()
                 + ", depth " + pca.depth + ", source '" + pca.sourceEventId + "')");
