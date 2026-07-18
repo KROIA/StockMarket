@@ -12,6 +12,7 @@ import net.kroia.banksystem.banking.clientdata.UserData;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.stockmarket.api.market.IServerMarket;
+import net.kroia.stockmarket.networking.NetworkGate;
 import net.kroia.stockmarket.stockmarket.market.ServerMarket;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.util.MultiServerUtils;
@@ -90,6 +91,15 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
     @Override
     public CompletableFuture<OutputData> handleOnMasterServer(CreateOrderRequest.InputData input, String slaveID, @Nullable UUID playerSender) {
         if(playerSender == null || (needsRoutingToMaster() && !MultiServerUtils.canInteractWithStockMarket(playerSender)))
+            return CompletableFuture.completedFuture(new OutputData(Status.NO_PLAYER_SENDER, null));
+        // T-123 (untrusted slave gate): mutating call — reject if forwarded by
+        // an untrusted slave. Returns the mod's existing "no player sender"
+        // failure code (this Request type's Status enum was not extended for
+        // T-123 — the client already knows it's on an untrusted slave via
+        // ClientSettings.isSlaveTrusted() and disables the buy/sell buttons;
+        // the server-side rejection here only fires against a modded client
+        // that bypassed the button gate). The gate helper logs a WARN.
+        if (!NetworkGate.isMutatingCallAllowed(slaveID, "CreateOrderRequest"))
             return CompletableFuture.completedFuture(new OutputData(Status.NO_PLAYER_SENDER, null));
 
         CompletableFuture<OutputData> future = new CompletableFuture<>();

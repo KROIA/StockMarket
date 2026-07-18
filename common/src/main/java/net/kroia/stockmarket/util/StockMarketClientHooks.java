@@ -156,6 +156,10 @@ public class StockMarketClientHooks {
             }
             case MANAGEMENT:
             {
+                // ManagementScreen.openScreen() itself has the T-125 untrusted
+                // slave guard (sends a chat notice and returns). Calling
+                // through here so both /stockmarket manage command opens AND
+                // any future direct-open path go through the same gate.
                 ManagementScreen.openScreen();
                 break;
             }

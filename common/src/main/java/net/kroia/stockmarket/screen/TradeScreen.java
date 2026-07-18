@@ -47,6 +47,14 @@ public class TradeScreen extends StockMarketGuiScreen {
         private static final String PAIR_MODE = Component.translatable(PREFIX + "mode_pair").getString();
         private static final String NEWS = Component.translatable(PREFIX + "news").getString();
         private static final Component NEWS_TOOLTIP = Component.translatable(PREFIX + "news.tooltip");
+        // T-123 (untrusted slave gate) — shared with every other mutating screen.
+        // T-125: the banner text is split into three lang keys so ModUtilities'
+        // (single-line) Label widget can render the message across three stacked
+        // rows and fit narrow trading-panel widths without overflow.
+        static final Component UNTRUSTED_SLAVE_BANNER_LINE1 = Component.translatable("gui.stockmarket.untrusted_slave.banner_line1");
+        static final Component UNTRUSTED_SLAVE_BANNER_LINE2 = Component.translatable("gui.stockmarket.untrusted_slave.banner_line2");
+        static final Component UNTRUSTED_SLAVE_BANNER_LINE3 = Component.translatable("gui.stockmarket.untrusted_slave.banner_line3");
+        static final Component UNTRUSTED_SLAVE_TOOLTIP = Component.translatable("gui.stockmarket.untrusted_slave.tooltip");
     }
 
     // Color for the active mode toggle button
@@ -67,6 +75,23 @@ public class TradeScreen extends StockMarketGuiScreen {
     private final OrderHistoryPanel orderHistoryPanel;
     private final TransactionHistoryPanel transactionHistoryPanel;
     private final Label marketClosedLabel;
+    /**
+     * T-123 / T-125 (untrusted slave gate): banner shown across the top of the
+     * trading area when the client is connected to a slave that the master
+     * does NOT currently trust. The banner text explains the situation and
+     * points at {@code /banksystem trust <slaveID>}. Enabled iff
+     * {@link StockMarketGuiScreen#isUntrustedSlave()} is true at construction —
+     * the trust flag is only refreshed at player join, so no live update
+     * needed (see {@code ClientSettings.slaveTrusted} Javadoc).
+     * <p>
+     * T-125: ModUtilities' {@link Label} widget renders a single line only.
+     * The banner is therefore rendered as three stacked labels sharing the
+     * width of the (hidden) {@code tradingPanel} so the long text fits inside
+     * the narrow buy/sell button column without horizontal overflow.
+     */
+    private final Label untrustedSlaveBanner1;
+    private final Label untrustedSlaveBanner2;
+    private final Label untrustedSlaveBanner3;
     private @Nullable UUID activeOrdersStreamID = null;
     private @Nullable ItemID currentMarketID = null;
     private int selectedBankAccountNr = -1;
@@ -142,6 +167,30 @@ public class TradeScreen extends StockMarketGuiScreen {
         marketClosedLabel.setTextFontScale(1.5f);
         marketClosedLabel.setEnabled(false);
 
+        // T-123 / T-125 (untrusted slave gate): a red info banner shown across
+        // the top of the trading area when the master does NOT trust this
+        // slave. Renders in the same "market blocked" idiom as the market-closed
+        // label (red, centered). T-125 splits the message into three stacked
+        // labels because ModUtilities' Label is single-line only and the long
+        // trust-explanation would otherwise overflow the narrow trading panel.
+        untrustedSlaveBanner1 = new Label(Texts.UNTRUSTED_SLAVE_BANNER_LINE1.getString());
+        untrustedSlaveBanner1.setAlignment(Label.Alignment.CENTER);
+        untrustedSlaveBanner1.setTextColor(UI_Colors.sellColorRed);
+        untrustedSlaveBanner1.setTextFontScale(0.7f);
+        untrustedSlaveBanner1.setEnabled(isUntrustedSlave());
+
+        untrustedSlaveBanner2 = new Label(Texts.UNTRUSTED_SLAVE_BANNER_LINE2.getString());
+        untrustedSlaveBanner2.setAlignment(Label.Alignment.CENTER);
+        untrustedSlaveBanner2.setTextColor(UI_Colors.sellColorRed);
+        untrustedSlaveBanner2.setTextFontScale(0.7f);
+        untrustedSlaveBanner2.setEnabled(isUntrustedSlave());
+
+        untrustedSlaveBanner3 = new Label(Texts.UNTRUSTED_SLAVE_BANNER_LINE3.getString());
+        untrustedSlaveBanner3.setAlignment(Label.Alignment.CENTER);
+        untrustedSlaveBanner3.setTextColor(UI_Colors.sellColorRed);
+        untrustedSlaveBanner3.setTextFontScale(0.7f);
+        untrustedSlaveBanner3.setEnabled(isUntrustedSlave());
+
         // Orders tab element with pending orders, order history, and market trades
         pendingOrdersPanel = new PendingOrdersPanel();
         pendingOrdersPanel.setOnMarketSwitch(this::switchMarket);
@@ -162,7 +211,27 @@ public class TradeScreen extends StockMarketGuiScreen {
         addElement(tradingPanel);
         addElement(interMarketTradingPanel);
         addElement(marketClosedLabel);
+        addElement(untrustedSlaveBanner1);
+        addElement(untrustedSlaveBanner2);
+        addElement(untrustedSlaveBanner3);
         addElement(ordersTabElement);
+
+        // T-123 (untrusted slave gate): fully lock down every mutating input
+        // path on this screen. The server also refuses these operations via
+        // NetworkGate — this is the UX side of the same rule.
+        if (isUntrustedSlave()) {
+            // TradingPanel (money mode) and InterMarketTradingPanel (pair mode)
+            // both use setEnabled(false) — ModUtilities hides + skips input
+            // dispatch, so the buy/sell/limit buttons become inert.
+            tradingPanel.setEnabled(false);
+            interMarketTradingPanel.setEnabled(false);
+            // Drop the drag/cancel callbacks on the chart overlay so a dragged
+            // order line can't be moved and the on-chart cancel button no-ops.
+            orderMarkerOverlay.setOnCancelOrder(null);
+            orderMarkerOverlay.setOnMoveOrder(null);
+            orderMarkerOverlay.setOnCancelInterMarketOrder(null);
+            orderMarkerOverlay.setOnMoveInterMarketOrder(null);
+        }
 
         // Determine initial market from preferences, fall back to first available
         List<ItemID> markets = getAvailableMarkets();
@@ -537,6 +606,19 @@ public class TradeScreen extends StockMarketGuiScreen {
                 tradingPanel.getWidth(), tradingPanel.getHeight());
         // Market closed label overlays the trading panel area
         marketClosedLabel.setBounds(tradingPanel.getLeft(), tradingPanel.getTop(), tradingPanel.getWidth(), 20);
+        // T-123 / T-125 banner: three stacked labels centered horizontally
+        // across the (now-hidden) trading panel. Split into three rows because
+        // ModUtilities' Label is single-line only and the full trust-explanation
+        // text overflows the narrow trading-panel width otherwise. Only visible
+        // when isUntrustedSlave() was true at construction (enable flag is set
+        // once and never toggled at runtime).
+        int bannerLineHeight = 12; // matches textFontScale=0.7f visible height
+        int bannerX = tradingPanel.getLeft();
+        int bannerW = tradingPanel.getWidth();
+        int bannerY = tradingPanel.getTop() + spacing;
+        untrustedSlaveBanner1.setBounds(bannerX, bannerY, bannerW, bannerLineHeight);
+        untrustedSlaveBanner2.setBounds(bannerX, bannerY + bannerLineHeight, bannerW, bannerLineHeight);
+        untrustedSlaveBanner3.setBounds(bannerX, bannerY + 2 * bannerLineHeight, bannerW, bannerLineHeight);
         // Bottom-left: pending orders tab element (below chart + OB volume)
         ordersTabElement.setBounds(padding, candlestickChart.getBottom() + spacing,
                 tradingPanel.getLeft() - spacing - padding,
@@ -560,6 +642,13 @@ public class TradeScreen extends StockMarketGuiScreen {
         // CandlestickChart and orderbook histogram stay visible in both modes
         tradingPanel.setEnabled(!pairMode);
         interMarketTradingPanel.setEnabled(pairMode);
+        // T-123 (untrusted slave gate): override the enable — the user can
+        // still switch tabs to view the pair chart, but the mutating panels
+        // stay hidden behind the info banner.
+        if (isUntrustedSlave()) {
+            tradingPanel.setEnabled(false);
+            interMarketTradingPanel.setEnabled(false);
+        }
 
         if (pairMode) {
             // Clear the overlay's market association — regular money-market limit orders

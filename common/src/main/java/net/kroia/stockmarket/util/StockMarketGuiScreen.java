@@ -97,6 +97,40 @@ public abstract class StockMarketGuiScreen extends GuiScreen {
                 && BACKEND_INSTANCES.SETTINGS.isMasterServer();
     }
 
+    /**
+     * Whether the master server trusts the slave this client is connected to
+     * (T-123). Synced at join via {@code PlayerJoinSyncPacket} → {@link ClientSettings}.
+     * <p>
+     * A master server always reports {@code true} (implicit self-trust).
+     *
+     * @return true if the client is on a trusted slave or a master server;
+     *         false only on an <b>untrusted</b> slave (or when the sync has
+     *         not arrived yet — the safer default is "don't disable buttons",
+     *         so {@link #isUntrustedSlave()} — not this method — should be
+     *         used to drive gray-out logic)
+     */
+    protected static boolean isSlaveTrusted()
+    {
+        return BACKEND_INSTANCES != null
+                && BACKEND_INSTANCES.SETTINGS != null
+                && BACKEND_INSTANCES.SETTINGS.isSlaveTrusted();
+    }
+
+    /**
+     * Convenience for the T-123 client gate: true iff the client is on a
+     * slave server whose trust flag is currently {@code false}. Used to
+     * gray out mutating buttons and show the "untrusted slave" info banner.
+     * <p>
+     * Returns {@code false} on the master (implicit self-trust) and on any
+     * slave that IS trusted — those clients see the full UI.
+     *
+     * @return true when the mutating UI should be disabled
+     */
+    protected static boolean isUntrustedSlave()
+    {
+        return !isMasterServer() && !isSlaveTrusted();
+    }
+
     protected LocalPlayer getThisPlayer()
     {
         return Minecraft.getInstance().player;

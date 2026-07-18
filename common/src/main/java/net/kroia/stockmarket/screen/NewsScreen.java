@@ -171,17 +171,13 @@ public class NewsScreen extends StockMarketGuiScreen {
         // the screen.
         clearButton.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.TOP_RIGHT);
 
-        // The scrollbar handle (an EmptyButton) has no public accessor on ListView —
-        // style it via an anonymous subclass (protected member access) so the whole
-        // scrollbar matches the paper look instead of the default gray widget tones.
-        feedListView = new VerticalListView() {
-            {
-                scrollbarButton.setBackgroundColor(COLOR_PAPER_EDGE);
-                scrollbarButton.setHoverColor(COLOR_META_INK);
-                scrollbarButton.setPressedColor(COLOR_RULE);
-                scrollbarButton.setOutlineColor(COLOR_RULE);
-            }
-        };
+        // T-124: the scrollbar handle (an EmptyButton) has no public accessor on
+        // ListView, so recoloring it to match the paper look requires subclass access
+        // to VerticalListView's protected scrollbarButton field. The subclass is a
+        // named nested class (PaperFeedListView, defined below) rather than an
+        // anonymous inner class — see its Javadoc for the NeoForge classloader
+        // rationale.
+        feedListView = new PaperFeedListView();
         LayoutVertical feedLayout = new LayoutVertical(2, 3, true, false);
         feedListView.setLayout(feedLayout);
         // Paper-styled list container: paper background, no dark widget outline,
@@ -572,6 +568,44 @@ public class NewsScreen extends StockMarketGuiScreen {
         } else {
             loadMoreButton.setText(Texts.LOAD_MORE.getString());
             loadMoreButton.setClickable(true);
+        }
+    }
+
+    // ── Paper-styled scrollable feed list (T-124) ─────────────────────────
+
+    /**
+     * A {@link VerticalListView} whose scrollbar handle is recolored to match the
+     * newspaper's paper-and-ink palette instead of the default gray widget tones.
+     * <p>
+     * <b>Purpose:</b> the scrollbar handle is a {@code protected EmptyButton}
+     * (the {@code scrollbarButton} field on the parent {@link VerticalListView}),
+     * and the parent exposes no public setter for its idle / hover / pressed /
+     * outline colors. Subclass access to the protected field is the only way to
+     * recolor the handle to blend with the paper background. This class exists
+     * solely to invoke those four setters from its constructor — it adds no
+     * fields, no overridden methods, no behavior beyond the recolor.
+     * <p>
+     * <b>Why named, not anonymous (T-124):</b> the previous incarnation of this
+     * class was an anonymous inner class expression at the {@link NewsScreen}
+     * constructor site. In some sessions the first newspaper open on NeoForge
+     * 21.1.230 crashed with {@code NoClassDefFoundError:
+     * net/kroia/stockmarket/screen/NewsScreen$1} thrown from NeoForge's
+     * {@code SecureModuleClassLoader} — the synthetic {@code $1} suffix failed to
+     * resolve on the very first load even though the class file was shipped in
+     * the jar (a subsequent game restart with the same jar opened the newspaper
+     * fine). Naming the class removes that reliance on the compiler-generated
+     * {@code $N} suffix and eliminates the crash surface. The constants
+     * ({@code COLOR_PAPER_EDGE}, {@code COLOR_META_INK}, {@code COLOR_RULE}) are
+     * private to the enclosing {@link NewsScreen}; a {@code private static}
+     * nested class of the same enclosing type has access to them without exposing
+     * the palette on any public API.
+     */
+    private static final class PaperFeedListView extends VerticalListView {
+        PaperFeedListView() {
+            scrollbarButton.setBackgroundColor(COLOR_PAPER_EDGE);
+            scrollbarButton.setHoverColor(COLOR_META_INK);
+            scrollbarButton.setPressedColor(COLOR_RULE);
+            scrollbarButton.setOutlineColor(COLOR_RULE);
         }
     }
 

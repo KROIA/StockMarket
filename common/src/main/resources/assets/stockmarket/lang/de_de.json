@@ -440,5 +440,11 @@
   "gui.stockmarket.news_plugin.curve.linear": "linear",
   "gui.stockmarket.news_plugin.curve.instant": "sofort",
   "gui.stockmarket.news_plugin.curve.exponential": "exponentiell",
-  "gui.stockmarket.news_plugin.curve.hold": "halten"
+  "gui.stockmarket.news_plugin.curve.hold": "halten",
+
+  "gui.stockmarket.untrusted_slave.banner_line1": "Dieser Server ist vom Master nicht vertrauenswürdig eingestuft —",
+  "gui.stockmarket.untrusted_slave.banner_line2": "keine Transaktionen oder Verwaltungsaktionen möglich.",
+  "gui.stockmarket.untrusted_slave.banner_line3": "Ein Admin muss auf dem Master /banksystem trust <slaveID> ausführen.",
+  "gui.stockmarket.untrusted_slave.tooltip": "Nicht vertrauenswürdiger Slave — Aktion deaktiviert.\nNeu verbinden, nachdem ein Admin /banksystem trust <slaveID> ausgeführt hat.",
+  "gui.stockmarket.untrusted_slave.management_blocked": "Das Verwaltungsfenster ist auf einem nicht vertrauenswürdigen Slave-Server nicht verfügbar. Ein Admin muss /banksystem trust <slaveID> ausführen, um es freizugeben."
 }

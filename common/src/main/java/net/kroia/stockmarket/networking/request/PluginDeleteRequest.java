@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.networking.request;
 
 import net.kroia.modutilities.UtilitiesPlatform;
+import net.kroia.stockmarket.networking.NetworkGate;
 import net.kroia.stockmarket.pluginsystem.plugin.ServerPlugin;
 import net.kroia.stockmarket.pluginsystem.pluginmanager.ServerPluginManager;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
@@ -35,6 +36,10 @@ public class PluginDeleteRequest extends StockMarketGenericRequest<UUID, Boolean
     @Override
     public CompletableFuture<Boolean> handleOnMasterServer(UUID instanceID, String slaveID, @Nullable UUID playerSender) {
         if (playerSender == null || !hasPermission(playerSender)) {
+            return CompletableFuture.completedFuture(false);
+        }
+        // T-123 (untrusted slave gate): plugin deletion is mutating.
+        if (!NetworkGate.isMutatingCallAllowed(slaveID, "PluginDeleteRequest")) {
             return CompletableFuture.completedFuture(false);
         }
 

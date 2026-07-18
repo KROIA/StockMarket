@@ -119,6 +119,42 @@ public abstract class StockMarketGuiElement extends GuiElement {
         return getThisPlayer().getDisplayName().getString();
     }
 
+    /**
+     * @return true if the client is connected to the master server (single
+     *         servers count as their own master). Synced at join via
+     *         {@code PlayerJoinSyncPacket} → {@code ClientSettings}.
+     */
+    public static boolean isMasterServer()
+    {
+        return BACKEND_INSTANCES != null
+                && BACKEND_INSTANCES.SETTINGS != null
+                && BACKEND_INSTANCES.SETTINGS.isMasterServer();
+    }
+
+    /**
+     * @return true if the master trusts the slave this client is connected to;
+     *         a master server always reports true (T-123)
+     */
+    public static boolean isSlaveTrusted()
+    {
+        return BACKEND_INSTANCES != null
+                && BACKEND_INSTANCES.SETTINGS != null
+                && BACKEND_INSTANCES.SETTINGS.isSlaveTrusted();
+    }
+
+    /**
+     * Convenience for T-123's client gate: true iff the client is on a slave
+     * server whose trust flag is currently {@code false}. Used to gray out
+     * mutating buttons and show the "untrusted slave" info banner in every
+     * StockMarket screen that offers a mutating action.
+     *
+     * @return true when the mutating UI should be disabled
+     */
+    public static boolean isUntrustedSlave()
+    {
+        return !isMasterServer() && !isSlaveTrusted();
+    }
+
 
     protected @Nullable ClientMarket getMarket(ItemID marketID)
     {

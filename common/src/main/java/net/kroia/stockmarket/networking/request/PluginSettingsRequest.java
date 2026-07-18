@@ -2,6 +2,7 @@ package net.kroia.stockmarket.networking.request;
 
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
+import net.kroia.stockmarket.networking.NetworkGate;
 import net.kroia.stockmarket.pluginsystem.plugin.ServerPlugin;
 import net.kroia.stockmarket.pluginsystem.plugin.core.GenericPluginData;
 import net.kroia.stockmarket.pluginsystem.pluginmanager.ServerPluginManager;
@@ -69,6 +70,10 @@ public class PluginSettingsRequest extends StockMarketGenericRequest<PluginSetti
         // Check op level 2 instead of stockmarket admin — the management screen
         // already requires op level 2, so the permission model must match.
         if (playerSender == null || !hasPermission(playerSender)) {
+            return CompletableFuture.completedFuture(new OutputData(false, null));
+        }
+        // T-123 (untrusted slave gate): plugin settings are mutating.
+        if (!NetworkGate.isMutatingCallAllowed(slaveID, "PluginSettingsRequest")) {
             return CompletableFuture.completedFuture(new OutputData(false, null));
         }
 

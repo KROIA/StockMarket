@@ -5,6 +5,7 @@ import com.google.gson.JsonParser;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.setting.SettingsStore;
 import net.kroia.stockmarket.StockMarketModSettings;
+import net.kroia.stockmarket.networking.NetworkGate;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -160,8 +161,21 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
         SettingsStore store = new SettingsStore();
 
         if (input.action() == Action.GET) {
+            // GET is intentionally NOT gated by the untrusted-slave check.
+            // Read-only queries stay open on untrusted slaves so the admin UI
+            // can still be browsed / diagnosed — the mutation is the SET path.
             return CompletableFuture.completedFuture(
                     new OutputData(true, "", store.toJsonString(settings.getEditableGroups())));
+        }
+
+        // T-123 (untrusted slave gate): SET is mutating — a forwarded SET from
+        // an untrusted slave is refused before it touches settings.json.
+        // Master-local ModSettings edits (single-server, or admin on the master)
+        // pass with slaveID="" and always proceed here.
+        if (!NetworkGate.isMutatingCallAllowed(slaveID, "ModSettingsRequest")) {
+            return CompletableFuture.completedFuture(new OutputData(false,
+                    "Rejected: this slave server is not trusted by the master",
+                    store.toJsonString(settings.getEditableGroups())));
         }
 
         // ------------------------------ SET ------------------------------

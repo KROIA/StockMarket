@@ -133,6 +133,14 @@ public class CreateMarketTab extends StockMarketGuiElement {
         addChild(createButton);
         addChild(clearButton);
 
+        // T-123 (untrusted slave gate): the "Create All" button is the only
+        // mutating action on this tab. Users can still browse categories and
+        // build a selection; only the write to master is blocked. (The Clear
+        // button just resets the client-side selection, so it stays enabled.)
+        if (isUntrustedSlave()) {
+            createButton.setEnabled(false);
+        }
+
         // Fetch categories from server asynchronously
         loadCategoriesFromServer();
 

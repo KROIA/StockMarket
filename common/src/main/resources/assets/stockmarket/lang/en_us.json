@@ -440,5 +440,11 @@
   "gui.stockmarket.news_plugin.curve.linear": "linear",
   "gui.stockmarket.news_plugin.curve.instant": "instant",
   "gui.stockmarket.news_plugin.curve.exponential": "exponential",
-  "gui.stockmarket.news_plugin.curve.hold": "hold"
+  "gui.stockmarket.news_plugin.curve.hold": "hold",
+
+  "gui.stockmarket.untrusted_slave.banner_line1": "This server is not trusted by the master —",
+  "gui.stockmarket.untrusted_slave.banner_line2": "no transactions or management actions are allowed.",
+  "gui.stockmarket.untrusted_slave.banner_line3": "Ask an admin to run /banksystem trust <slaveID> on the master.",
+  "gui.stockmarket.untrusted_slave.tooltip": "Untrusted slave — action disabled.\nReconnect after an admin runs /banksystem trust <slaveID>.",
+  "gui.stockmarket.untrusted_slave.management_blocked": "The Management window is not available on an untrusted slave server. Ask an admin to run /banksystem trust <slaveID> to enable it."
 }

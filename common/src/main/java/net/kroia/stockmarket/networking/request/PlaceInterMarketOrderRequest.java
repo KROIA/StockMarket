@@ -7,6 +7,7 @@ import net.kroia.banksystem.api.bankmanager.IBankManager;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.stockmarket.api.market.IServerMarket;
+import net.kroia.stockmarket.networking.NetworkGate;
 import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
 import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
@@ -92,6 +93,12 @@ public class PlaceInterMarketOrderRequest extends StockMarketGenericRequest<Plac
         // 1. Check playerSender not null
         if (playerSender == null || (needsRoutingToMaster() && !MultiServerUtils.canInteractWithStockMarket(playerSender)))
             return CompletableFuture.completedFuture(new OutputData(false, "NO_PLAYER_SENDER"));
+        // T-123 (untrusted slave gate): mutating call — reject if forwarded by
+        // an untrusted slave. errorMessage tags the reason so admins reading
+        // server logs / debug UIs can see the cause; the client-side UX is
+        // driven independently from ClientSettings.isSlaveTrusted().
+        if (!NetworkGate.isMutatingCallAllowed(slaveID, "PlaceInterMarketOrderRequest"))
+            return CompletableFuture.completedFuture(new OutputData(false, "UNTRUSTED_SLAVE"));
 
         CompletableFuture<OutputData> future = new CompletableFuture<>();
 

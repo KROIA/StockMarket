@@ -158,6 +158,13 @@ public class ManagementScreen extends StockMarketGuiScreen {
             this.addChild(closeAllMarketsButton);
 
             this.setHeight(5*(elementHeight+spacing));
+
+            // T-125: per-element disable from T-123 is intentionally removed —
+            // an untrusted slave now cannot open the ManagementScreen at all
+            // (see the openScreen() entry guard), so the per-widget gate here
+            // would be dead code. If the screen ever becomes reachable on an
+            // untrusted slave via a new entry point, add the guard THERE, not
+            // back here.
         }
         @Override
         protected void render() {
@@ -534,6 +541,9 @@ public class ManagementScreen extends StockMarketGuiScreen {
     private final OverviewTab overviewTab;
     private final CreateMarketTab createMarketTab;
     private final PresetEditorTab presetEditorTab;
+    // T-125: the T-123 in-screen banner label has been removed. Untrusted
+    // slaves never reach this screen (openScreen()/openGUI() send a chat
+    // message and return early), so the banner would be unreachable UI.
 
     /**
      * The ItemID of the market currently selected in the overview tab.
@@ -569,11 +579,37 @@ public class ManagementScreen extends StockMarketGuiScreen {
         presetEditorTab = new PresetEditorTab();
         tabElement.addTab(TAB_PRESETS, presetEditorTab);
 
+        // T-125: the T-123 red info banner has been removed. See the
+        // openScreen() entry guard: untrusted slaves never reach construction.
+
         addElement(tabElement);
     }
 
+    /**
+     * Opens the Management screen. On an untrusted slave the screen is NOT
+     * opened at all (T-125 user request: "don't allow the opening of that
+     * screen when on an untrusted server"). Instead a chat message points the
+     * player at {@code /banksystem trust <slaveID>}.
+     * <p>
+     * The other T-123 screens (TradeScreen, PluginManagementScreen,
+     * CreateMarketScreen, PresetEditorTab, CreateMarketTab) keep their
+     * per-element disable + banner — only Management uses the "block entirely"
+     * pattern.
+     */
     public static void openScreen()
     {
+        if (StockMarketGuiElement.isUntrustedSlave()) {
+            // Chat notice via the local player. Same idiom as the other
+            // "action unavailable" chat notices in the mod (no toast API in
+            // ModUtilities for this).
+            net.minecraft.client.player.LocalPlayer player = Minecraft.getInstance().player;
+            if (player != null) {
+                player.displayClientMessage(
+                        Component.translatable("gui.stockmarket.untrusted_slave.management_blocked"),
+                        false);
+            }
+            return;
+        }
         ManagementScreen screen = new ManagementScreen();
         Minecraft.getInstance().setScreen(screen);
     }
@@ -597,7 +633,8 @@ public class ManagementScreen extends StockMarketGuiScreen {
         int w = getWidth() - 2 * p;
         int h = getHeight() - 2 * p;
 
-        // TabElement fills the entire screen area
+        // T-125: banner reserve removed alongside the banner Label itself.
+        // TabElement fills the full available area.
         tabElement.setBounds(p, p, w, h);
     }
 

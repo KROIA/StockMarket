@@ -11,6 +11,8 @@ import net.kroia.stockmarket.networking.packet.MarketRemovedPacket;
 import net.kroia.stockmarket.networking.packet.NewsPublishedPacket;
 import net.kroia.stockmarket.networking.packet.OpenUIPacket;
 import net.kroia.stockmarket.networking.packet.PlayerJoinSyncPacket;
+import net.kroia.stockmarket.networking.packet.SlaveTrustSyncPacket;
+import net.kroia.stockmarket.networking.packet.TrustFlagUpdatePacket;
 import net.kroia.stockmarket.networking.packet.VillagerTradePriceTablePacket;
 import net.kroia.stockmarket.networking.request.*;
 import net.kroia.stockmarket.networking.stream.ActiveOrdersStream;
@@ -105,6 +107,13 @@ public class StockMarketNetworking extends NetworkPacketManager {
         // MultiServerPacketRegistry, enabling the master→slave relay used to
         // reach players connected to slave servers.
         registerS2C(NewsPublishedPacket.TYPE, NewsPublishedPacket.STREAM_CODEC);
+        // Live slave-trust update (T-126). Broadcast from the slave to every
+        // connected client once the slave→master handshake completes and the
+        // trust cache is filled with the master's authoritative answer. Purely
+        // slave→client on this JVM — no master↔slave relay is required, but
+        // the standard 2-arg registerS2C still registers a no-op forward
+        // handler which is harmless.
+        registerS2C(SlaveTrustSyncPacket.TYPE, SlaveTrustSyncPacket.STREAM_CODEC);
     }
 
     @Override
@@ -119,5 +128,12 @@ public class StockMarketNetworking extends NetworkPacketManager {
         // registered only with the MultiServerPacketRegistry, never with a
         // client/server receiver).
         registerS2S(VillagerTradePriceTablePacket.TYPE, VillagerTradePriceTablePacket.STREAM_CODEC);
+        // Master→slave runtime trust-toggle push (T-128). Fired from the
+        // master's subscriber to BankSystem's TRUST_CHANGED event; the slave
+        // handler refreshes SlaveTrustCache and — if the value flipped —
+        // re-broadcasts SlaveTrustSyncPacket to every connected client so their
+        // gated UI transitions to the correct state within a tick, without a
+        // reconnect.
+        registerS2S(TrustFlagUpdatePacket.TYPE, TrustFlagUpdatePacket.STREAM_CODEC);
     }
 }

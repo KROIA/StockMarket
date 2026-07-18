@@ -5,7 +5,10 @@ import dev.architectury.event.events.client.ClientTickEvent;
 import dev.architectury.event.events.common.TickEvent;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.api.BankSystemAPI;
+import net.kroia.banksystem.api.IBankSystemEvents;
+import net.kroia.banksystem.api.event.TrustChangeInfo;
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.banksystem.util.MultiServerUtils;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.api.marketmanager.ISyncServerMarketManager;
 import net.kroia.modutilities.UtilitiesPlatform;
@@ -53,6 +56,8 @@ import net.kroia.modutilities.testing.TestRegistry;
 import net.kroia.stockmarket.minecraft.menu.StockMarketMenus;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.kroia.stockmarket.networking.packet.PlayerJoinSyncPacket;
+import net.kroia.stockmarket.networking.packet.SlaveTrustSyncPacket;
+import net.kroia.stockmarket.networking.packet.TrustFlagUpdatePacket;
 import net.kroia.stockmarket.news.ClientNewsCache;
 import net.kroia.stockmarket.news.ClientNewsPictureCache;
 import net.kroia.stockmarket.util.*;
@@ -302,6 +307,37 @@ public class StockMarketModBackend implements StockMarketAPI {
                 SERVER_INSTANCES.VILLAGER_TRADE_MANAGER.broadcastTable();
             });
 
+            // T-128 master-side runtime trust-toggle propagation.
+            //
+            // T-126/T-127 populate the slave-side SlaveTrustCache at handshake
+            // time (SLAVE_CONNECTION_ACCEPTED). That closes first-connect +
+            // reconnect, but leaves the case where an admin runs
+            // `/banksystem trust <slaveID>` or `/banksystem untrust <slaveID>`
+            // WHILE a slave is already connected: the slave's cache stays stale,
+            // its clients keep the old UI, orders get blocked/allowed by the
+            // server-side NetworkGate but the buy/sell buttons still say the
+            // wrong thing.
+            //
+            // Fix: subscribe to BankSystem's new TRUST_CHANGED event (fired
+            // from ServerBankManager.trustSlaveServer/untrustSlaveServer AFTER
+            // the trust set mutation). Push a TrustFlagUpdatePacket to the
+            // affected slave via the S2S packet layer. The slave's handler
+            // refreshes SlaveTrustCache and re-broadcasts SlaveTrustSyncPacket
+            // to every currently-connected client on that slave, reusing
+            // T-126's existing client-broadcast plumbing.
+            //
+            // Slaves that are not currently connected are silently skipped —
+            // MultiServerManager.sendToSlave logs and returns false, and the
+            // slave will pick up the fresh trust value at its next handshake
+            // via T-126's SLAVE_CONNECTION_ACCEPTED wiring anyway.
+            //
+            // Fires on the server main thread (BankSystem fires from the
+            // manager mutator, not from an async worker). Wrapped in try/catch
+            // so an exception from the send path never breaks event dispatch
+            // for other listeners.
+            BankSystemMod.getAPI().getEvents().getTrustChangedSignal().addListener(
+                    StockMarketModBackend::onTrustChangedNotifyAffectedSlave);
+
             autosaveTimer_lastMs = System.currentTimeMillis();
             TickEvent.SERVER_POST.register(StockMarketModBackend::onServerTick);
 
@@ -327,6 +363,161 @@ public class StockMarketModBackend implements StockMarketAPI {
             // Slave: only receives price tables from the master (applyTable);
             // recompute/tick are inert without sync market access.
             SERVER_INSTANCES.VILLAGER_TRADE_MANAGER = new VillagerTradeManager(SERVER_INSTANCES);
+
+            // T-126 slave-trust cache wiring.
+            //
+            // The trust flag "does the master trust me?" comes from
+            // BankSystem's AsyncBankManager.isSlaveServerTrustedAsync(slaveID),
+            // but that accessor short-circuits synchronously to `false`
+            // whenever MultiServerUtils.canInteractWithBankSystem() is not yet
+            // true — i.e. before the slave→master handshake completes. That
+            // window covers the entire PlayerJoinSyncPacket call at server
+            // startup, which is why the previous T-125 attempt observed
+            // trusted=false on a genuinely trusted slave.
+            //
+            // Fix: subscribe to BankSystem's new SLAVE_CONNECTION_ACCEPTED
+            // signal (fired inside BankSystemModBackend.onSlaveConnectionAccepted
+            // AFTER the handshake completes). At that point the async forwarder
+            // is usable, so we can issue a proper thenAccept round-trip, cache
+            // the master's answer in SlaveTrustCache, and — if the value
+            // actually changed — broadcast a SlaveTrustSyncPacket to every
+            // currently-connected player so any client that received the
+            // fail-closed default at join time transitions to the correct state.
+            //
+            // The paired SLAVE_CONNECTION_LOST signal invalidates the cache so
+            // the fail-closed default applies again until the next handshake.
+            // Reconnects re-fire SLAVE_CONNECTION_ACCEPTED naturally, refreshing
+            // the cache with no extra plumbing.
+            //
+            // Signals are fired on Netty event-loop threads; the callbacks
+            // below don't touch any Minecraft main-thread-only state (BankSystem
+            // request-forwarding + NetworkManager.sendToPlayers are both safe
+            // from arbitrary threads).
+            IBankSystemEvents events = BankSystemMod.getAPI().getEvents();
+            events.getSlaveConnectionAcceptedSignal().addListener(
+                    StockMarketModBackend::onSlaveConnectedRefreshTrustCache);
+            events.getSlaveConnectionLostSignal().addListener(
+                    StockMarketModBackend::onSlaveDisconnectedInvalidateTrustCache);
+
+            // T-127: close the race where the SLAVE_CONNECTION_ACCEPTED signal already
+            // fired before we subscribed (BankSystem inits first, TCP handshake to master
+            // completes in sub-millisecond on localhost, signal fires with zero listeners).
+            // Signal has no sticky/replay semantics, so we probe MultiServerUtils here —
+            // same synchronous state the TerminalBlock use-handler consults — and if the
+            // handshake has already completed, manually invoke the refresh to backfill the
+            // cache. If the handshake has NOT completed yet, this is a no-op and the
+            // natural signal fire will do the work.
+            if (MultiServerUtils.canInteractWithBankSystem()) {
+                onSlaveConnectedRefreshTrustCache();
+            }
+        }
+    }
+
+    /**
+     * Fetches the master-authoritative "is this slave trusted?" flag via
+     * BankSystem's async forwarder and populates {@link SlaveTrustCache}. If the
+     * value changed vs. what was previously cached, broadcasts a
+     * {@link SlaveTrustSyncPacket} to every currently-connected client so any
+     * client that received the fail-closed default in its
+     * {@code PlayerJoinSyncPacket} transitions to the correct state within a tick.
+     * <p>
+     * Wired to BankSystem's {@code SLAVE_CONNECTION_ACCEPTED} signal — see the
+     * slave branch of {@link #onServerStart(MinecraftServer)}. Fired on a Netty
+     * event-loop thread. Non-blocking: uses {@code thenAccept} on the future.
+     */
+    private static void onSlaveConnectedRefreshTrustCache() {
+        // Guard against the reconnect race that also protects BankSystem's own
+        // onSlaveConnectionAccepted: if this JVM is mid-teardown, SERVER_INSTANCES
+        // may already be null.
+        if (SERVER_INSTANCES == null)
+            return;
+        String slaveID = MultiServerManager.getSlaveID();
+        if (slaveID == null || slaveID.isEmpty())
+            return;
+        try {
+            BankSystemMod.getAPI().getServerBankManager().getAsync()
+                    .isSlaveServerTrustedAsync(slaveID)
+                    .thenAccept(trusted -> {
+                        if (trusted == null) return; // shouldn't happen — BankSystem uses BOOL codec
+                        boolean changed = SlaveTrustCache.set(trusted);
+                        if (changed) {
+                            SlaveTrustSyncPacket.broadcast(trusted);
+                        }
+                    });
+        } catch (Exception e) {
+            // BankSystem torn down mid-flight — leave the cache alone. The next
+            // handshake (or the paired _LOST signal) will resolve it.
+            if (SERVER_INSTANCES != null && SERVER_INSTANCES.LOGGER != null) {
+                SERVER_INSTANCES.LOGGER.warn(
+                        "[StockMarketModBackend] Failed to refresh slave trust cache: " + e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Invalidates {@link SlaveTrustCache} so a subsequent join-sync falls back
+     * to the fail-closed default until the next handshake refreshes it.
+     * <p>
+     * Wired to BankSystem's {@code SLAVE_CONNECTION_LOST} signal — see the slave
+     * branch of {@link #onServerStart(MinecraftServer)}. Fired on a Netty
+     * event-loop thread; safe to run there ({@link SlaveTrustCache#clear()} is
+     * a single volatile write).
+     * <p>
+     * Deliberately does NOT broadcast a "trust flipped to false" packet: the
+     * disconnected slave cannot reach any client through the ARRS anyway, and
+     * a client that stays connected across the master outage keeps its existing
+     * UI state until the master comes back and the ACCEPTED signal broadcasts
+     * the fresh value. This mirrors the original T-123 tradeoff of not shipping
+     * a live master-side toggle.
+     */
+    private static void onSlaveDisconnectedInvalidateTrustCache() {
+        SlaveTrustCache.clear();
+    }
+
+    /**
+     * (Master only) Handles BankSystem's runtime trust-toggle event (T-128).
+     * Fired on the master's server thread whenever
+     * {@code ServerBankManager.trustSlaveServer(String)} or
+     * {@code .untrustSlaveServer(String)} mutates the trust set — typically as a
+     * result of {@code /banksystem trust}/{@code /banksystem untrust} while
+     * slaves are connected.
+     * <p>
+     * If the affected slave is currently connected, dispatches a
+     * {@link TrustFlagUpdatePacket} to it via
+     * {@link MultiServerManager#sendToSlave(String, net.minecraft.network.protocol.common.custom.CustomPacketPayload)}
+     * so the slave refreshes its {@link SlaveTrustCache} and re-broadcasts
+     * {@link SlaveTrustSyncPacket} to every currently-connected client. If the
+     * slave is not connected, no-op — the next
+     * {@code SLAVE_CONNECTION_ACCEPTED} handshake will populate the cache with
+     * the current authoritative value anyway (T-126 wiring).
+     * <p>
+     * Exceptions from the send path are logged at WARN and swallowed so a
+     * transient network failure never blocks other listeners from receiving
+     * the event.
+     *
+     * @param info the payload delivered by BankSystem's TRUST_CHANGED event
+     */
+    private static void onTrustChangedNotifyAffectedSlave(TrustChangeInfo info) {
+        if (SERVER_INSTANCES == null || info == null || info.slaveID() == null)
+            return;
+        String targetSlaveID = info.slaveID();
+        if (targetSlaveID.isEmpty())
+            return;
+        try {
+            // Skip the send when the affected slave isn't among the currently
+            // connected slaves — MultiServerManager.sendToSlave would log an
+            // error and return false anyway, but avoiding the noisy log for a
+            // routine "admin toggled trust for a slave that is offline" case
+            // keeps the master's console clean.
+            if (!MultiServerManager.getConnectedSlaveIDs().contains(targetSlaveID))
+                return;
+            TrustFlagUpdatePacket.sendTo(targetSlaveID, info.trusted());
+        } catch (Exception e) {
+            if (SERVER_INSTANCES != null && SERVER_INSTANCES.LOGGER != null) {
+                SERVER_INSTANCES.LOGGER.warn(
+                        "[StockMarketModBackend] Failed to push trust update to slave '"
+                                + targetSlaveID + "': " + e.getMessage());
+            }
         }
     }
 

@@ -52,6 +52,17 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
     private final StockMarketGuiScreen parent;
     private final Label titleLabel;
     private final Button addPluginButton;
+    /**
+     * T-123 / T-125 (untrusted slave gate): red info banner shown across the
+     * top of the plugin management screen on an untrusted slave. Every
+     * mutating plugin button (add/delete/enable/subscribe/reorder/logger/
+     * auto-subscribe) is also disabled — see {@link #applyUntrustedSlaveGate}.
+     * T-125: rendered as three stacked labels because ModUtilities' Label
+     * widget is single-line only and the full trust-explanation would overflow.
+     */
+    private final Label untrustedSlaveBanner1;
+    private final Label untrustedSlaveBanner2;
+    private final Label untrustedSlaveBanner3;
     final CandlestickChart candlestickChart;
     final OrderbookVolumeHistogram orderbookVolumeHistogram;
     private @Nullable ItemID selectedChartMarket = null;
@@ -73,6 +84,33 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         titleLabel.setAlignment(Label.Alignment.CENTER);
 
         addPluginButton = new Button(Texts.ADD_PLUGIN.getString(), this::onAddPluginClicked);
+        // T-123: hide the "Add plugin" entry point on an untrusted slave.
+        if (isUntrustedSlave()) {
+            addPluginButton.setEnabled(false);
+        }
+
+        // T-123 / T-125: red info banner across the top of the screen when the
+        // master does NOT trust this slave; every per-entry mutating widget is
+        // also disabled inside PluginEntryWidget itself. Split into three
+        // stacked labels so the long message fits on any screen width without
+        // overflow (ModUtilities' Label widget renders a single line only).
+        untrustedSlaveBanner1 = new Label(Component.translatable("gui.stockmarket.untrusted_slave.banner_line1").getString());
+        untrustedSlaveBanner1.setAlignment(Label.Alignment.CENTER);
+        untrustedSlaveBanner1.setTextColor(0xFFe8711c);
+        untrustedSlaveBanner1.setTextFontScale(0.7f);
+        untrustedSlaveBanner1.setEnabled(isUntrustedSlave());
+
+        untrustedSlaveBanner2 = new Label(Component.translatable("gui.stockmarket.untrusted_slave.banner_line2").getString());
+        untrustedSlaveBanner2.setAlignment(Label.Alignment.CENTER);
+        untrustedSlaveBanner2.setTextColor(0xFFe8711c);
+        untrustedSlaveBanner2.setTextFontScale(0.7f);
+        untrustedSlaveBanner2.setEnabled(isUntrustedSlave());
+
+        untrustedSlaveBanner3 = new Label(Component.translatable("gui.stockmarket.untrusted_slave.banner_line3").getString());
+        untrustedSlaveBanner3.setAlignment(Label.Alignment.CENTER);
+        untrustedSlaveBanner3.setTextColor(0xFFe8711c);
+        untrustedSlaveBanner3.setTextFontScale(0.7f);
+        untrustedSlaveBanner3.setEnabled(isUntrustedSlave());
 
         candlestickChart = new CandlestickChart();
         orderbookVolumeHistogram = new OrderbookVolumeHistogram(candlestickChart);
@@ -85,6 +123,9 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
 
         addElement(titleLabel);
         addElement(addPluginButton);
+        addElement(untrustedSlaveBanner1);
+        addElement(untrustedSlaveBanner2);
+        addElement(untrustedSlaveBanner3);
         addElement(candlestickChart);
         addElement(orderbookVolumeHistogram);
         addElement(listView);
@@ -121,8 +162,19 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         titleLabel.setBounds(padding, padding, width - addBtnWidth - spacing, eh);
         addPluginButton.setBounds(titleLabel.getRight() + spacing, padding, addBtnWidth, eh);
 
-        int contentTop = titleLabel.getBottom() + spacing;
-        int contentHeight = height - (titleLabel.getBottom() + spacing) + padding;
+        // T-123 / T-125 banner: three stacked lines sitting under the title
+        // bar, above the chart+list area. Each line is a single Label because
+        // ModUtilities' Label widget renders one line only.
+        int bannerLineH = 12; // matches textFontScale=0.7f visible height
+        int bannerHeight = untrustedSlaveBanner1.isEnabled() ? 3 * bannerLineH : 0;
+        int bannerReserve = bannerHeight == 0 ? 0 : bannerHeight + spacing;
+        int bannerTop = titleLabel.getBottom() + spacing;
+        untrustedSlaveBanner1.setBounds(padding, bannerTop, width, bannerLineH);
+        untrustedSlaveBanner2.setBounds(padding, bannerTop + bannerLineH, width, bannerLineH);
+        untrustedSlaveBanner3.setBounds(padding, bannerTop + 2 * bannerLineH, width, bannerLineH);
+
+        int contentTop = titleLabel.getBottom() + spacing + bannerReserve;
+        int contentHeight = height - (titleLabel.getBottom() + spacing + bannerReserve) + padding;
         int histogramWidth = width / 20;
         int chartWidth = width / 2 - histogramWidth;
         int listWidth = width - chartWidth - histogramWidth - spacing;
@@ -359,6 +411,23 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             this.addChild(loggerCheckBox);
             this.addChild(subscriptionOrderLabel);
             this.addChild(subscriptionOrderTextBox);
+
+            // T-123 (untrusted slave gate): every per-entry mutating input is
+            // disabled on an untrusted slave. Also grays out the per-market
+            // MarketItemButton instances that let admins unsubscribe.
+            if (isUntrustedSlave()) {
+                subscribeButton.setEnabled(false);
+                enabledCheckBox.setEnabled(false);
+                deleteButton.setEnabled(false);
+                moveUpButton.setEnabled(false);
+                moveDownButton.setEnabled(false);
+                autoSubscribeCheckBox.setEnabled(false);
+                loggerCheckBox.setEnabled(false);
+                subscriptionOrderTextBox.setEnabled(false);
+                for (MarketItemButton iv : marketItemViews) {
+                    iv.setEnabled(false);
+                }
+            }
 
             // Create the plugin GUI element from the registry (no ClientPlugin intermediary needed)
             this.pluginGuiElement = PluginRegistry.createGuiElement(data.getPluginTypeID());

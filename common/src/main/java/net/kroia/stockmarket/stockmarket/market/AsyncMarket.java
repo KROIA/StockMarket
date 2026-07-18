@@ -301,6 +301,36 @@ public class AsyncMarket implements IAsyncMarket{
                 default -> false;
             };
         }
+
+        /**
+         * T-123 (untrusted slave gate): tighten the base class default (which
+         * would allow every function this class permits from clients) so that
+         * mutating function types are refused when forwarded from an untrusted
+         * slave. Read-only queries stay wide open — the news feed, price
+         * requests and market listings must keep working on an untrusted
+         * slave; the untrusted flag only blocks writes.
+         *
+         * @param input the forwarded function call
+         * @return true only for read-only functions
+         */
+        @Override
+        protected boolean isAllowedToCallByUntrustedSlaveServer(InputData input)
+        {
+            return switch (input.function) {
+                case FunctionType.GetCurrentMarketPrice,
+                     FunctionType.GetCurrentTime,
+                     FunctionType.GetRawVolume_1,
+                     FunctionType.GetRawVolume_2,
+                     FunctionType.GetRealVolume_1,
+                     FunctionType.GetRealVolume_2,
+                     FunctionType.IsMarketOpen,
+                     FunctionType.GetCurrentMarketPriceStruct,
+                     FunctionType.GetSettings -> true;
+                // SetMarketOpen, SetSettings, ResetNetPlayerItemFlow, PutOrder,
+                // GetCurrentMarketPriceStructAndReset are mutating — refused.
+                default -> false;
+            };
+        }
     }
 
     /**

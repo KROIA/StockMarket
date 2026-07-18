@@ -2,6 +2,7 @@ package net.kroia.stockmarket.networking.request;
 
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
+import net.kroia.stockmarket.networking.NetworkGate;
 import net.kroia.stockmarket.pluginsystem.plugin.ServerPlugin;
 import net.kroia.stockmarket.pluginsystem.plugin.core.PluginSyncData;
 import net.kroia.stockmarket.pluginsystem.pluginmanager.ServerPluginManager;
@@ -58,6 +59,12 @@ public class PluginReorderRequest extends StockMarketGenericRequest<PluginReorde
         // Check op level 2 instead of stockmarket admin — the management screen
         // already requires op level 2, so the permission model must match.
         if (playerSender == null || !hasPermission(playerSender)) {
+            return CompletableFuture.completedFuture(buildCurrentPluginList(pluginManager));
+        }
+        // T-123 (untrusted slave gate): plugin reordering is mutating.
+        // Returns the current list (default response) so the client's UI still
+        // gets a snapshot to render even when the reorder is refused.
+        if (!NetworkGate.isMutatingCallAllowed(slaveID, "PluginReorderRequest")) {
             return CompletableFuture.completedFuture(buildCurrentPluginList(pluginManager));
         }
 

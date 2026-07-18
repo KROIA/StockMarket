@@ -4,6 +4,7 @@ import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.networking.NetworkGate;
 import net.kroia.stockmarket.pluginsystem.plugin.ServerPlugin;
 import net.kroia.stockmarket.pluginsystem.pluginmanager.ServerPluginManager;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
@@ -64,6 +65,10 @@ public class PluginCustomSettingsRequest extends StockMarketGenericRequest<Plugi
     @Override
     public CompletableFuture<OutputData> handleOnMasterServer(InputData input, String slaveID, @Nullable UUID playerSender) {
         if (playerSender == null || !hasPermission(playerSender)) {
+            return CompletableFuture.completedFuture(new OutputData(false, null, null));
+        }
+        // T-123 (untrusted slave gate): plugin custom-settings write is mutating.
+        if (!NetworkGate.isMutatingCallAllowed(slaveID, "PluginCustomSettingsRequest")) {
             return CompletableFuture.completedFuture(new OutputData(false, null, null));
         }
 

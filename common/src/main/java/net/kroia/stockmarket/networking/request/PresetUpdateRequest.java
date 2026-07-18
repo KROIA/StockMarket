@@ -3,6 +3,7 @@ package net.kroia.stockmarket.networking.request;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.stockmarket.data.DataManager;
+import net.kroia.stockmarket.networking.NetworkGate;
 import net.kroia.stockmarket.stockmarket.market.preset.MarketPreset;
 import net.kroia.stockmarket.stockmarket.market.preset.MarketPresetCategory;
 import net.kroia.stockmarket.stockmarket.market.preset.MarketPresetManager;
@@ -67,6 +68,10 @@ public class PresetUpdateRequest extends StockMarketGenericRequest<PresetUpdateR
     public CompletableFuture<Boolean> handleOnMasterServer(InputData input, String slaveID, @Nullable UUID playerSender) {
         // Only allow players with op level 2 (same permission as management screen)
         if (playerSender == null || !hasPermission(playerSender)) {
+            return CompletableFuture.completedFuture(false);
+        }
+        // T-123 (untrusted slave gate): preset edits are mutating.
+        if (!NetworkGate.isMutatingCallAllowed(slaveID, "PresetUpdateRequest")) {
             return CompletableFuture.completedFuture(false);
         }
 

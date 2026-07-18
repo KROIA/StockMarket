@@ -3,6 +3,7 @@ package net.kroia.stockmarket.networking.request;
 import io.netty.buffer.ByteBuf;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
+import net.kroia.stockmarket.networking.NetworkGate;
 import net.kroia.stockmarket.news.ActiveNewsEvent;
 import net.kroia.stockmarket.news.NewsEventDefinition;
 import net.kroia.stockmarket.news.NewsImpactEnvelope;
@@ -822,6 +823,17 @@ public class NewsAdminRequest extends StockMarketGenericRequest<NewsAdminRequest
         if (getServerMarketManager() == null) {
             return CompletableFuture.completedFuture(
                     failure("News admin operations are only available on the master server"));
+        }
+
+        // T-123 (untrusted slave gate): every news admin op mutates state (reload,
+        // trigger, stop, enable/disable, scheduler, cooldown, registry clear) OR
+        // reads state that an untrusted slave has no business seeing (list, info,
+        // registry list — these are admin-only diagnostics). Refusing every news
+        // admin op on an untrusted slave is the safer choice; a real query needs
+        // a trusted connection. Master-local calls (slaveID == "") always pass.
+        if (!NetworkGate.isMutatingCallAllowed(slaveID, "NewsAdminRequest")) {
+            return CompletableFuture.completedFuture(
+                    failure("Rejected: this slave server is not trusted by the master"));
         }
 
         // Actor resolution — see the class Javadoc security note: the payload identity is

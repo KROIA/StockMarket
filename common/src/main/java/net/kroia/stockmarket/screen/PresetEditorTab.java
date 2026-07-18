@@ -166,6 +166,18 @@ public class PresetEditorTab extends StockMarketGuiElement {
         addChild(addItemButton);
         addChild(cancelAddItemButton);
 
+        // T-123 (untrusted slave gate): every editing input on this tab writes
+        // to the master via PresetUpdateRequest / preset category mutations.
+        // Disable them all so a user on an untrusted slave sees the presets
+        // read-only (they can still browse categories and see current values).
+        if (isUntrustedSlave()) {
+            saveButton.setEnabled(false);
+            newCategoryButton.setEnabled(false);
+            renameCategoryButton.setEnabled(false);
+            deleteCategoryButton.setEnabled(false);
+            addItemButton.setEnabled(false);
+        }
+
         // Fetch categories from server asynchronously
         loadCategoriesFromServer();
     }

@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.networking.request;
 
 import net.kroia.modutilities.UtilitiesPlatform;
+import net.kroia.stockmarket.networking.NetworkGate;
 import net.kroia.stockmarket.pluginsystem.plugin.ServerPlugin;
 import net.kroia.stockmarket.pluginsystem.pluginmanager.ServerPluginManager;
 import net.kroia.stockmarket.pluginsystem.registry.PluginRegistry;
@@ -36,6 +37,10 @@ public class PluginCreateRequest extends StockMarketGenericRequest<String, Boole
     @Override
     public CompletableFuture<Boolean> handleOnMasterServer(String pluginTypeID, String slaveID, @Nullable UUID playerSender) {
         if (playerSender == null || !hasPermission(playerSender)) {
+            return CompletableFuture.completedFuture(false);
+        }
+        // T-123 (untrusted slave gate): plugin management is mutating.
+        if (!NetworkGate.isMutatingCallAllowed(slaveID, "PluginCreateRequest")) {
             return CompletableFuture.completedFuture(false);
         }
 

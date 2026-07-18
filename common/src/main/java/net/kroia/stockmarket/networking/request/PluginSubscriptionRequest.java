@@ -3,6 +3,7 @@ package net.kroia.stockmarket.networking.request;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
+import net.kroia.stockmarket.networking.NetworkGate;
 import net.kroia.stockmarket.pluginsystem.plugin.ServerPlugin;
 import net.kroia.stockmarket.pluginsystem.plugin.core.PluginSyncData;
 import net.kroia.stockmarket.pluginsystem.pluginmanager.ServerPluginManager;
@@ -64,6 +65,10 @@ public class PluginSubscriptionRequest extends StockMarketGenericRequest<PluginS
     @Override
     public CompletableFuture<OutputData> handleOnMasterServer(InputData input, String slaveID, @Nullable UUID playerSender) {
         if (playerSender == null || !hasPermission(playerSender)) {
+            return CompletableFuture.completedFuture(new OutputData(false, null));
+        }
+        // T-123 (untrusted slave gate): subscribe/unsubscribe changes plugin state.
+        if (!NetworkGate.isMutatingCallAllowed(slaveID, "PluginSubscriptionRequest")) {
             return CompletableFuture.completedFuture(new OutputData(false, null));
         }
 

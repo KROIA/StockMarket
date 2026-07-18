@@ -8,6 +8,7 @@ import net.kroia.modutilities.setting.Setting;
 import net.kroia.modutilities.setting.SettingsGroup;
 import net.kroia.modutilities.setting.parser.ItemStackJsonParser;
 import net.kroia.stockmarket.util.ClientSettings;
+import net.kroia.stockmarket.util.SlaveTrustCache;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
@@ -178,9 +179,59 @@ public class StockMarketModSettings extends ModSettings {
         // master-only UI (the "Mod Settings" button in the ManagementScreen).
         // Server-side enforcement happens separately in ModSettingsRequest.
         try {
-            settings.setMasterServer(BankSystemMod.getAPI().getServerBankManager().isMaster());
+            boolean isMaster = BankSystemMod.getAPI().getServerBankManager().isMaster();
+            settings.setMasterServer(isMaster);
+
+            // T-123 / T-125 / T-126 (untrusted slave gate): tell the client
+            // whether the master trusts this slave.
+            //
+            // Trust storage lives ONLY on the master (BankSystem's
+            // {@code ServerBankManager.trustedSlaveServers}); the slave-local
+            // {@code ISyncServerBankManager} instance is null on a slave — see
+            // {@code IBankManager.getSync()} contract "returns null on a slave".
+            //
+            // T-125 tried to forward the question inline via
+            // {@code AsyncBankManager.isSlaveServerTrustedAsync(slaveID).get(2s)}.
+            // That accessor short-circuits synchronously to {@code false} when
+            // {@code MultiServerUtils.canInteractWithBankSystem()} is not yet
+            // true — which is the normal state at server-startup / early player
+            // join time (the slave→master TCP handshake has not yet completed).
+            // So the future is already completed with {@code false}; the
+            // {@code .get(2s)} never actually waits, and the trusted-slave case
+            // silently reads inverted.
+            //
+            // T-126 fix: read from a slave-side cache instead. The cache is
+            // populated by a listener on BankSystem's SLAVE_CONNECTION_ACCEPTED
+            // signal (registered in {@code StockMarketModBackend.onServerStart}'s
+            // slave branch), which fires AFTER the handshake completes — i.e.
+            // AFTER the async forwarder becomes usable. The listener issues a
+            // non-blocking {@code isSlaveServerTrustedAsync(...).thenAccept(...)},
+            // stores the master's answer in {@link SlaveTrustCache}, and
+            // broadcasts a {@code SlaveTrustSyncPacket} to every already-connected
+            // client so any client that got the fail-closed default here
+            // transitions to the correct state within a tick.
+            //
+            // Master case: unconditionally {@code true} — a master implicitly
+            // trusts itself and never consults the cache.
+            //
+            // Client-joined-before-cache-fills case: this method returns
+            // {@code false} (fail-closed via {@link SlaveTrustCache#getOrFalse()}),
+            // the client renders the gated UI, and the {@code SlaveTrustSyncPacket}
+            // that fires as soon as the handshake completes corrects them.
+            //
+            // Live master-side trust toggle ({@code /banksystem trust <slaveID>}
+            // mid-session): still DEFERRED — BankSystem does not expose a
+            // trust-changed event and the reconnect path picks it up.
+            if (isMaster) {
+                settings.setSlaveTrusted(true);
+            } else {
+                settings.setSlaveTrusted(SlaveTrustCache.getOrFalse());
+            }
         } catch (Exception e) {
-            // BankSystem not ready — leave the flag at its safe default (false).
+            // BankSystem not ready — leave the flags at their safe defaults
+            // (isMasterServer=false, slaveTrusted=true so single-player is not
+            // accidentally locked out; the fallthrough only happens if BankSystem
+            // failed to initialize, which is a bigger problem than a UI gray-out).
         }
 
         return settings;
