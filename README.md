@@ -26,6 +26,7 @@ You want to support me?<br>
     * [For Players](#for-players)
     * [For Admins / Single Player](#for-admins--single-player)
 * [Commands](#commands)
+* [Access Control & Trust Model](#access-control--trust-model)
 * [Plugins](#plugins)
 * [Villager Trading](#villager-trading)
 * [Changelog](#changelog)
@@ -329,6 +330,53 @@ Open the **Plugin Management** screen from the Management GUI overview tab:
 
 
 
+
+## Access Control & Trust Model
+
+StockMarket separates **public data** — available to every player — from **management data** — reserved for admins. Access is enforced **server-side on the master**, not by hiding the client UI, so a modified or self-compiled client cannot unlock management features it is not entitled to.
+
+Two independent checks must **both** pass before the master serves management data or accepts a management operation.
+
+### 1. Server trust (multi-server setups)
+
+In a master + slave setup, every slave server is either **trusted** or **untrusted**. Trust is stored in BankSystem and toggled from the master with:
+
+<code>/banksystem trust &lt;slaveID&gt;</code> — mark a slave as trusted<br>
+<code>/banksystem untrust &lt;slaveID&gt;</code> — mark a slave as untrusted
+
+Both require operator level 2 and only run on the master. The master itself (and single player) always counts as trusted.
+
+From an **untrusted** slave the master refuses **all** of:
+- mutating operations — placing/cancelling orders, and every plugin, preset, market and settings write;
+- management-data reads — the plugin list & settings, the preset catalog and the mod settings;
+- the live plugin runtime data feed.
+
+A **trusted** slave behaves normally. Trust changes take effect live — untrusting a slave mid-session tears down its live plugin feed within about one stream interval. Public market data (prices, market list, a player's own orders/history, news) stays available even from an untrusted slave.
+
+### 2. StockMarket admin (per-player)
+
+Management data and operations additionally require the requesting player to be a **StockMarket admin** — a persistent per-player flag, granted and revoked with:
+
+<code>/stockmarket op [username]</code> — grant admin (yourself if no username is given)<br>
+<code>/stockmarket deop [username]</code> — revoke admin
+
+This flag is **distinct from the vanilla operator level.** Being operator level 2 lets you *run* `/stockmarket op`, but you are not a StockMarket admin until it is granted to you. A non-admin player — even opped, even on a trusted slave, even with a client modified to force-open the management menu — is served no plugin settings or target prices, no presets, no mod settings and no live plugin feed.
+
+### Both checks are ANDed
+
+For any management data or operation, an **untrusted slave OR a non-admin player** is refused. Because the check runs on the master, un-hiding the client UI cannot bypass it.
+
+The table below summarizes which access each data class needs:
+
+| Data class | Access required |
+|------------|-----------------|
+| Market list & prices, public orderbook volume | Public — any player |
+| A player's own active orders / order history / transaction history / preferences | Public — any player |
+| News feed & pictures, server time | Public — any player |
+| Placing / cancelling orders | Trusted slave |
+| Plugin list & settings, target prices, live plugin feed | Trusted slave **and** admin |
+| Preset catalog, market / plugin / preset writes | Trusted slave **and** admin |
+| Mod settings (read & write) | Trusted slave **and** admin |
 
 ## Plugins
 Since v2.0, the old monolithic StockMarketBot has been replaced by a modular **plugin system**. Each plugin handles one aspect of market simulation and can be independently configured, enabled, or subscribed to specific markets through the [Plugin Management](#plugin-system) screen.

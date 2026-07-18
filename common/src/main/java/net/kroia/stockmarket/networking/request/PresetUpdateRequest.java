@@ -1,6 +1,5 @@
 package net.kroia.stockmarket.networking.request;
 
-import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.stockmarket.data.DataManager;
 import net.kroia.stockmarket.networking.NetworkGate;
@@ -11,8 +10,6 @@ import net.kroia.stockmarket.util.StockMarketGenericRequest;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -66,8 +63,10 @@ public class PresetUpdateRequest extends StockMarketGenericRequest<PresetUpdateR
 
     @Override
     public CompletableFuture<Boolean> handleOnMasterServer(InputData input, String slaveID, @Nullable UUID playerSender) {
-        // Only allow players with op level 2 (same permission as management screen)
-        if (playerSender == null || !hasPermission(playerSender)) {
+        // Require the StockMarket-admin flag (the same flag /stockmarket manage
+        // requires), resolved from the master's user map so it also works for
+        // players connected through a slave. Fail closed on a missing sender.
+        if (playerSender == null || !playerIsAdmin(playerSender)) {
             return CompletableFuture.completedFuture(false);
         }
         // T-123 (untrusted slave gate): preset edits are mutating.
@@ -97,16 +96,6 @@ public class PresetUpdateRequest extends StockMarketGenericRequest<PresetUpdateR
         presetManager.saveAll(DataManager.getPresetPath());
         info("Updated " + input.presets().size() + " preset(s)");
         return CompletableFuture.completedFuture(true);
-    }
-
-    /**
-     * Checks whether the player has op level 2 (required by /stockmarket manage).
-     */
-    private boolean hasPermission(UUID playerUUID) {
-        MinecraftServer server = UtilitiesPlatform.getServer();
-        if (server == null) return false;
-        ServerPlayer player = server.getPlayerList().getPlayer(playerUUID);
-        return player != null && player.hasPermissions(2);
     }
 
     @Override

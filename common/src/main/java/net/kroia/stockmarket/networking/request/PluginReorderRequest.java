@@ -1,6 +1,5 @@
 package net.kroia.stockmarket.networking.request;
 
-import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.stockmarket.networking.NetworkGate;
 import net.kroia.stockmarket.pluginsystem.plugin.ServerPlugin;
@@ -11,8 +10,6 @@ import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -56,9 +53,11 @@ public class PluginReorderRequest extends StockMarketGenericRequest<PluginReorde
     public CompletableFuture<List<PluginSyncData>> handleOnMasterServer(InputData input, String slaveID, @Nullable UUID playerSender) {
         ServerPluginManager pluginManager = (ServerPluginManager) getPluginManager();
 
-        // Check op level 2 instead of stockmarket admin — the management screen
-        // already requires op level 2, so the permission model must match.
-        if (playerSender == null || !hasPermission(playerSender)) {
+        // Require the StockMarket-admin flag (the same flag /stockmarket manage
+        // requires), resolved from the master's user map so it also works for
+        // players connected through a slave. Returns the current list so the
+        // client still gets a snapshot to render even when the reorder is refused.
+        if (playerSender == null || !playerIsAdmin(playerSender)) {
             return CompletableFuture.completedFuture(buildCurrentPluginList(pluginManager));
         }
         // T-123 (untrusted slave gate): plugin reordering is mutating.
@@ -79,16 +78,6 @@ public class PluginReorderRequest extends StockMarketGenericRequest<PluginReorde
                 getPlayerName(playerSender) + " reordered plugins");
 
         return CompletableFuture.completedFuture(buildCurrentPluginList(pluginManager));
-    }
-
-    /**
-     * Checks whether the player has op level 2 (required by /stockmarket manage).
-     */
-    private boolean hasPermission(UUID playerUUID) {
-        MinecraftServer server = UtilitiesPlatform.getServer();
-        if (server == null) return false;
-        ServerPlayer player = server.getPlayerList().getPlayer(playerUUID);
-        return player != null && player.hasPermissions(2);
     }
 
     /**

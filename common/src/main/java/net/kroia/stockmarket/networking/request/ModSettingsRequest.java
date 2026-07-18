@@ -10,8 +10,6 @@ import net.kroia.stockmarket.util.StockMarketGenericRequest;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
@@ -40,8 +38,8 @@ import java.util.concurrent.CompletableFuture;
  * <b>Security:</b> the handler enforces BOTH conditions server-side, regardless of
  * any client-side UI gating:
  * <ul>
- *   <li>the sending player must have op permission level 2 (same level required by
- *       {@code /stockmarket manage}), and</li>
+ *   <li>the sending player must have the StockMarket-admin flag (the same flag
+ *       {@code /stockmarket manage} requires), and</li>
  *   <li>this server must be the MASTER server — only the master loads and owns
  *       settings.json; slaves keep compile-time defaults by design.</li>
  * </ul>
@@ -137,12 +135,14 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
 
     @Override
     public CompletableFuture<OutputData> handleOnMasterServer(InputData input, String slaveID, @Nullable UUID playerSender) {
-        // --- Permission check: op level 2, matching /stockmarket manage and the
-        // other management requests (PluginSettingsRequest etc.). Enforced here
-        // regardless of the client-side button gating.
-        if (playerSender == null || !hasPermission(playerSender)) {
+        // --- Permission check: require the StockMarket-admin flag (the same flag
+        // /stockmarket manage requires), resolved from the master's user map so it
+        // also works for players connected through a slave. Enforced here
+        // regardless of the client-side button gating. Both GET and SET share this
+        // gate (the branches below only add the T-129 slave-trust checks).
+        if (playerSender == null || !playerIsAdmin(playerSender)) {
             warn("Rejected mod settings " + input.action() + " from " + getPlayerName(playerSender) + ": no permission");
-            return CompletableFuture.completedFuture(new OutputData(false, "No permission (op level 2 required)", ""));
+            return CompletableFuture.completedFuture(new OutputData(false, "No permission (StockMarket admin required)", ""));
         }
 
         // --- Master check: only the master server loads/owns settings.json.
@@ -161,9 +161,14 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
         SettingsStore store = new SettingsStore();
 
         if (input.action() == Action.GET) {
-            // GET is intentionally NOT gated by the untrusted-slave check.
-            // Read-only queries stay open on untrusted slaves so the admin UI
-            // can still be browsed / diagnosed — the mutation is the SET path.
+            // T-129: GET returns the server's full mod-settings JSON — management
+            // data that must not reach a client behind an untrusted slave. Gate it
+            // as a management read (master-local + trusted slaves pass; untrusted /
+            // exception fail closed with an empty settings payload).
+            if (!NetworkGate.isManagementReadAllowed(slaveID, "ModSettingsRequest#GET")) {
+                return CompletableFuture.completedFuture(new OutputData(false,
+                        "Rejected: this slave server is not trusted by the master", ""));
+            }
             return CompletableFuture.completedFuture(
                     new OutputData(true, "", store.toJsonString(settings.getEditableGroups())));
         }
@@ -302,20 +307,6 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
     private static float clampMargin(@Nullable Float value, float defaultValue) {
         if (value == null || value.isNaN() || value.isInfinite()) return defaultValue;
         return Math.max(MIN_VILLAGER_MARGIN, Math.min(MAX_VILLAGER_MARGIN, value));
-    }
-
-    /**
-     * Checks whether the player has op permission level 2 (required by
-     * {@code /stockmarket manage} — the management screen's permission model).
-     *
-     * @param playerUUID the sending player's UUID
-     * @return true if the player is online and has op level 2
-     */
-    private boolean hasPermission(UUID playerUUID) {
-        MinecraftServer server = UtilitiesPlatform.getServer();
-        if (server == null) return false;
-        ServerPlayer player = server.getPlayerList().getPlayer(playerUUID);
-        return player != null && player.hasPermissions(2);
     }
 
     @Override

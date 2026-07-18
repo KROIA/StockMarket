@@ -3,6 +3,7 @@ package net.kroia.stockmarket.networking.request;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.data.filter.EqualityFilter;
 import net.kroia.stockmarket.data.filter.UUIDFilter;
+import net.kroia.stockmarket.networking.NetworkGate;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -33,6 +34,12 @@ public class ClearOrderHistoryRequest extends StockMarketGenericRequest<ItemID, 
     @Override
     public CompletableFuture<Boolean> handleOnMasterServer(ItemID input, String slaveID, @Nullable UUID playerSender) {
         if (playerSender == null) return CompletableFuture.completedFuture(false);
+        // T-129 (untrusted slave gate): clearing order history mutates stored data.
+        // Master-local (slaveID="") and trusted slaves pass; untrusted/exception
+        // fail closed with the no-op false response.
+        if (!NetworkGate.isMutatingCallAllowed(slaveID, "ClearOrderHistoryRequest")) {
+            return CompletableFuture.completedFuture(false);
+        }
 
         UUIDFilter userFilter = new UUIDFilter(playerSender);
         EqualityFilter marketFilter = new EqualityFilter(input.getShort());

@@ -4,7 +4,6 @@ import net.kroia.banksystem.util.async_function_forwarding.AsyncForwardingReques
 import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionDataCodecs;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionInputData;
 import net.kroia.banksystem.util.async_function_forwarding.AsyncFunctionOutputData;
-import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.modutilities.networking.client_server.arrs.AsynchronousRequestResponseSystem;
 import net.kroia.stockmarket.StockMarketModBackend;
@@ -15,8 +14,6 @@ import net.kroia.stockmarket.util.StockMarketLogger;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
@@ -154,10 +151,19 @@ public class AsyncPresetManager implements IAsyncPresetManager {
             }
 
             return CompletableFuture.completedFuture(switch (input.function) {
-                case FunctionType.GetCategories -> OutputData.of(input.function, presetManager.getCategories());
+                case FunctionType.GetCategories -> {
+                    // T-130: the preset catalog is management data. Require the
+                    // StockMarket-admin flag (resolved from the master's user map so
+                    // it also works for players connected through a slave). A request
+                    // with no sender or from a non-admin gets an empty catalog.
+                    if (playerSender == null || !isStockmarketAdmin(playerSender)) {
+                        yield OutputData.of(input.function, List.<MarketPresetCategory>of());
+                    }
+                    yield OutputData.of(input.function, presetManager.getCategories());
+                }
                 case FunctionType.UpdatePresets -> {
-                    // Permission check: only op level 2 players can update presets
-                    if (playerSender == null || !hasPermission(playerSender)) {
+                    // Permission check: only StockMarket admins can update presets
+                    if (playerSender == null || !isStockmarketAdmin(playerSender)) {
                         yield OutputData.of(input.function, false);
                     }
                     List<MarketPreset> updates = input.decodeParams();
@@ -177,7 +183,7 @@ public class AsyncPresetManager implements IAsyncPresetManager {
                     yield OutputData.of(input.function, true);
                 }
                 case FunctionType.SaveCategory -> {
-                    if (playerSender == null || !hasPermission(playerSender)) {
+                    if (playerSender == null || !isStockmarketAdmin(playerSender)) {
                         yield OutputData.of(input.function, false);
                     }
                     MarketPresetCategory category = input.decodeParams();
@@ -186,7 +192,7 @@ public class AsyncPresetManager implements IAsyncPresetManager {
                     yield OutputData.of(input.function, true);
                 }
                 case FunctionType.DeleteCategory -> {
-                    if (playerSender == null || !hasPermission(playerSender)) {
+                    if (playerSender == null || !isStockmarketAdmin(playerSender)) {
                         yield OutputData.of(input.function, false);
                     }
                     String catName = input.decodeParams();
@@ -195,7 +201,7 @@ public class AsyncPresetManager implements IAsyncPresetManager {
                     yield OutputData.of(input.function, deleted);
                 }
                 case FunctionType.RenameCategory -> {
-                    if (playerSender == null || !hasPermission(playerSender)) {
+                    if (playerSender == null || !isStockmarketAdmin(playerSender)) {
                         yield OutputData.of(input.function, false);
                     }
                     ParamGroup_String_String names = input.decodeParams();
@@ -206,11 +212,22 @@ public class AsyncPresetManager implements IAsyncPresetManager {
             });
         }
 
-        private boolean hasPermission(UUID playerUUID) {
-            MinecraftServer server = UtilitiesPlatform.getServer();
-            if (server == null) return false;
-            ServerPlayer player = server.getPlayerList().getPlayer(playerUUID);
-            return player != null && player.hasPermissions(2);
+        /**
+         * Checks whether a player holds the StockMarket-admin flag (the same flag
+         * {@code /stockmarket manage} requires). Resolved from the master's user map
+         * via the market manager, so it also succeeds for players connected through
+         * a slave (unlike a local {@code getPlayerList()} lookup, which fails for
+         * slave players). Fails closed if the backend/market manager is unavailable.
+         *
+         * @param playerUUID the sending player's UUID
+         * @return true only if that user is a StockMarket admin on the master
+         */
+        private boolean isStockmarketAdmin(UUID playerUUID) {
+            if (playerUUID == null || SERVER_BACKEND_INSTANCES == null
+                    || SERVER_BACKEND_INSTANCES.MARKET_MANAGER == null) {
+                return false;
+            }
+            return SERVER_BACKEND_INSTANCES.MARKET_MANAGER.getSync().isStockmarketAdmin(playerUUID);
         }
 
         @Override
@@ -224,12 +241,18 @@ public class AsyncPresetManager implements IAsyncPresetManager {
             };
         }
 
+        /**
+         * T-129: no preset function is served to untrusted slave servers. Preset
+         * data (categories + their configs) is management data, so an untrusted
+         * slave is denied ALL functions here — including the read-only
+         * {@code GetCategories}, which previously leaked the whole preset catalog.
+         * Untrusted slaves fall through to BankSystem's
+         * {@code AsyncForwardingRequest.isRequestAllowed} trust check and are
+         * rejected; trusted slaves and master-local calls still pass.
+         */
         @Override
         protected boolean isAllowedToCallByUntrustedSlaveServer(InputData input) {
-            return switch (input.function) {
-                case FunctionType.GetCategories -> true;
-                default -> false;
-            };
+            return false;
         }
     }
 

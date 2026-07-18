@@ -1,6 +1,5 @@
 package net.kroia.stockmarket.networking.request;
 
-import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.stockmarket.StockMarketMod;
@@ -12,8 +11,6 @@ import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
@@ -64,7 +61,10 @@ public class PluginCustomSettingsRequest extends StockMarketGenericRequest<Plugi
 
     @Override
     public CompletableFuture<OutputData> handleOnMasterServer(InputData input, String slaveID, @Nullable UUID playerSender) {
-        if (playerSender == null || !hasPermission(playerSender)) {
+        // Require the StockMarket-admin flag (the same flag /stockmarket manage
+        // requires), resolved from the master's user map so it also works for
+        // players connected through a slave. Fail closed on a missing sender.
+        if (playerSender == null || !playerIsAdmin(playerSender)) {
             return CompletableFuture.completedFuture(new OutputData(false, null, null));
         }
         // T-123 (untrusted slave gate): plugin custom-settings write is mutating.
@@ -97,16 +97,6 @@ public class PluginCustomSettingsRequest extends StockMarketGenericRequest<Plugi
         }
 
         return CompletableFuture.completedFuture(new OutputData(applied, input.marketID(), confirmed));
-    }
-
-    /**
-     * Checks whether the player has op level 2 (required by /stockmarket manage).
-     */
-    private boolean hasPermission(UUID playerUUID) {
-        MinecraftServer server = UtilitiesPlatform.getServer();
-        if (server == null) return false;
-        ServerPlayer player = server.getPlayerList().getPlayer(playerUUID);
-        return player != null && player.hasPermissions(2);
     }
 
     @Override
