@@ -863,10 +863,11 @@ public final class NewsEventDefinition {
                 report.addError(file, id, "'weight' must not be negative — event skipped");
             } else {
                 weight = w.floatValue();
-                if (weight == 0 && !adminOnly) {
-                    report.addWarning(file, id,
-                            "'weight' is 0 and the event is not adminOnly — it can never fire");
-                }
+                // NOTE: the "weight 0 → can never fire" warning is intentionally NOT
+                // emitted here. A weight-0 event can still be reachable as another
+                // event's chain target, which is only knowable once the whole pool is
+                // merged. The chain-aware version of this warning lives in the post-merge
+                // pass NewsEventLibrary#validateMergedPool.
             }
         }
 

@@ -266,9 +266,9 @@ A malformed chain entry (missing `eventId`/`on`, unknown `on` value, bad `chance
 
 ## Getting the New Default Events
 
-The example file `default_events.json` is only generated when `config/StockMarket/news/` contains **no `.json` file at all** -- existing servers keep their old file and do **not** get the three showcase events (`gold_rush_rumor`, `end_of_gold_standard`, and the upgraded `gold_reserve_standard`) automatically. To get them:
+The shipped default events **self-heal additively**: on every reload (including `/stockmarket news reload`), any shipped default whose id is present in none of your `.json` files is added to the pool and appended to `default_events.json`. Existing servers that already have a `default_events.json` therefore receive newly shipped events -- such as the showcase events `gold_rush_rumor`, `end_of_gold_standard` and the upgraded `gold_reserve_standard` -- automatically on the next reload, **without** overwriting any file, existing entry, or default you customized.
 
-- **If the defaults file is your only news file:** delete `default_events.json` and run `/stockmarket news reload` -- the current version is regenerated.
-- **If you have your own files in the folder:** copy the events from this page (or from a freshly generated file) into any of your files. Note that the upgraded `gold_reserve_standard` adds `requires`/`records`/`chains` to the event you may already have.
+- **If you kept the shipped `default_events.json`:** just run `/stockmarket news reload` (or restart) -- the missing defaults are appended in place.
+- **If you redefined a default under its original id in your own files:** your version wins and is left untouched -- the heal will not duplicate or overwrite it. To adopt an upgraded default (e.g. the `requires`/`records`/`chains` added to `gold_reserve_standard`), edit your copy using this page as a reference.
 
-The default **pictures** follow the same hands-off rule: they are only extracted while the `pictures/` folder contains no `.png` (see [Default Pictures](pictures.md#default-pictures)). On an existing server the new events publish picture-less until you add `gold_rush_rumor.png` / `end_of_gold_standard.png` yourself -- or empty the pictures folder and reload to regenerate all defaults.
+The default **pictures** heal the same way, per id: on every reload any shipped default picture missing from `pictures/` is written as `<eventId>.png` (see [Default Pictures](pictures.md#default-pictures)), while your own art and any default you modified are never overwritten. So the new events get their pictures automatically -- no need to empty the folder.

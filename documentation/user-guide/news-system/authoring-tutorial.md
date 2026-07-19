@@ -66,7 +66,7 @@ Rules of the folder:
 - **Any `*.json` file** in this folder is loaded. Filenames are irrelevant.
 - **All files merge** into one event pool -- you can split your work across as many files as you like.
 - Files are processed in **alphabetical order** (case-insensitive). Duplicate event ids are an error, later definition wins.
-- The `default_events.json` is only regenerated when the folder contains **no** `.json` file at all -- it will not overwrite your own files.
+- The full `default_events.json` is written from scratch only on the first run (empty folder). After that the shipped defaults **self-heal additively**: on every reload, any shipped default event whose id is present in none of your files is added back to the pool and appended to `default_events.json` -- your own files, your existing entries and any default you customized are **never** overwritten. (A folder with no `default_events.json` is left alone; delete the file only if you want the full current version rewritten.)
 
 To iterate on your file, edit it and run:
 

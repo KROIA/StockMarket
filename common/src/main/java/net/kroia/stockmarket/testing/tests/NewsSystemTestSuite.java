@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.testing.tests;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import io.netty.buffer.Unpooled;
 import net.kroia.banksystem.util.ItemID;
@@ -96,6 +98,7 @@ public class NewsSystemTestSuite extends TestSuite {
         addTest("library_malformed_file_never_throws", this::test_library_malformedFile_neverThrows);
         addTest("library_failed_reload_keeps_previous", this::test_library_failedReload_keepsPrevious);
         addTest("library_scheduler_last_loaded_wins", this::test_library_scheduler_lastLoadedWins);
+        addTest("library_heals_missing_default_events", this::test_library_healsMissingDefaultEvents);
 
         // NewsRecord round-trips
         addTest("record_nbt_round_trip", this::test_record_nbtRoundTrip);
@@ -820,6 +823,91 @@ public class NewsSystemTestSuite extends TestSuite {
                             + config.getMaxActiveEventsGlobal(),
                     config.getMaxActiveEventsGlobal()
                             == NewsEventLibrary.SchedulerConfig.DEFAULT_MAX_ACTIVE_EVENTS_GLOBAL);
+        } catch (IOException e) {
+            return fail("temp dir setup failed: " + e);
+        } finally {
+            deleteRecursively(dir);
+        }
+    }
+
+    /**
+     * Additive self-heal: an existing {@code default_events.json} holding only a SUBSET of
+     * the shipped defaults — one of them admin-modified — plus a separate custom file must,
+     * after reload, gain every shipped default while the admin-modified default keeps its
+     * change and the custom event survives, with no duplicate-id errors. Also verifies the
+     * heal is persisted back into {@code default_events.json}.
+     */
+    private TestResult test_library_healsMissingDefaultEvents() {
+        Path dir = null;
+        try {
+            dir = createTempDir();
+
+            Map<String, JsonObject> shipped = DefaultNewsEvents.getDefaultEventObjectsById();
+            String firstId = DefaultNewsEvents.DEFAULT_EVENT_IDS.get(0);
+            String secondId = DefaultNewsEvents.DEFAULT_EVENT_IDS.get(1);
+
+            // default_events.json: scheduler + 2 shipped defaults; the first has a MODIFIED
+            // weight (admin edit) that the heal must never overwrite.
+            JsonObject modified = shipped.get(firstId).deepCopy();
+            modified.addProperty("weight", 999);
+            JsonObject secondCopy = shipped.get(secondId).deepCopy();
+            JsonObject root = new JsonObject();
+            JsonObject scheduler = new JsonObject();
+            scheduler.addProperty("minSecondsBetweenEvents", 900);
+            root.add("scheduler", scheduler);
+            JsonArray events = new JsonArray();
+            events.add(modified);
+            events.add(secondCopy);
+            root.add("events", events);
+            Files.writeString(dir.resolve(DefaultNewsEvents.DEFAULT_FILE_NAME),
+                    JsonUtilities.toPrettyString(root));
+
+            // A separate custom file with a NON-default event id.
+            Files.writeString(dir.resolve("custom.json"), fileWithEvent("my_custom_event", 3f));
+
+            NewsEventLibrary library = new NewsEventLibrary();
+            ValidationReport report = library.reload(dir);
+
+            // No heal-induced errors (in particular: no duplicate-id error).
+            TestResult r = assertFalse("heal must not produce errors: " + report, report.hasErrors());
+            if (!r.passed()) return r;
+
+            // Every shipped default is now present in the live pool.
+            for (String id : DefaultNewsEvents.DEFAULT_EVENT_IDS) {
+                if (library.getDefinition(id) == null) {
+                    return fail("shipped default not healed into the pool: " + id);
+                }
+            }
+            // The custom event survives the heal.
+            r = assertNotNull("custom event must still be loaded", library.getDefinition("my_custom_event"));
+            if (!r.passed()) return r;
+            // All 72 defaults + the one custom event.
+            r = assertEquals("pool = all defaults + the custom event",
+                    DefaultNewsEvents.DEFAULT_EVENT_IDS.size() + 1, library.getDefinitionCount());
+            if (!r.passed()) return r;
+            // The admin-modified default keeps its changed weight (not overwritten).
+            r = assertTrue("admin-modified default must keep its weight (999), got: "
+                            + library.getDefinition(firstId).getWeight(),
+                    library.getDefinition(firstId).getWeight() == 999f);
+            if (!r.passed()) return r;
+
+            // Persistence: default_events.json now holds all 72 defaults, and the modified
+            // entry is preserved on disk (existing entries never rewritten).
+            JsonObject reloadedRoot = JsonUtilities.fromString(Files.readString(
+                    dir.resolve(DefaultNewsEvents.DEFAULT_FILE_NAME))).getAsJsonObject();
+            JsonArray persistedEvents = reloadedRoot.getAsJsonArray("events");
+            r = assertEquals("default_events.json must now contain every shipped default",
+                    DefaultNewsEvents.DEFAULT_EVENT_IDS.size(), persistedEvents.size());
+            if (!r.passed()) return r;
+            int persistedWeight = -1;
+            for (JsonElement el : persistedEvents) {
+                JsonObject obj = el.getAsJsonObject();
+                if (firstId.equals(obj.get("id").getAsString())) {
+                    persistedWeight = obj.get("weight").getAsInt();
+                    break;
+                }
+            }
+            return assertEquals("modified default's weight must survive on disk", 999, persistedWeight);
         } catch (IOException e) {
             return fail("temp dir setup failed: " + e);
         } finally {

@@ -11,6 +11,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -112,6 +113,16 @@ public final class NewsPictureLibrary {
     /** Scanned entries (fileName → entry, alphabetical file order); replaced on each rescan. */
     private Map<String, Entry> entries = new LinkedHashMap<>();
 
+    /**
+     * Content index (lowercase-hex SHA-1 → entry) of the last scan, replaced on each
+     * rescan alongside {@link #entries}. Enables O(1) content-addressed lookups
+     * ({@link #getBytesByHash}) — mirrors how {@code NewsPictureStore.selfHealFromLibrary}
+     * indexes the library by SHA-1 hex. Two files with identical bytes share one hash;
+     * whichever comes last in the scan wins the index slot (their bytes are equal, so the
+     * choice is irrelevant to callers).
+     */
+    private Map<String, Entry> hashIndex = new HashMap<>();
+
     // ── Accessors ────────────────────────────────────────────────────────
 
     /** @return the absolute pictures directory ({@code config/StockMarket/news/pictures}) */
@@ -128,6 +139,40 @@ public final class NewsPictureLibrary {
     public @Nullable Entry get(@Nullable String fileName) {
         if (fileName == null) return null;
         return entries.get(fileName);
+    }
+
+    /**
+     * Looks up a validated picture by its 20-byte SHA-1 <b>content</b> hash (the same
+     * identity the published store and client caches use), from the O(1) index built on
+     * the last {@link #rescan}.
+     * <p>
+     * This is the content-addressed counterpart to {@link #get(String)}: it lets callers
+     * serve a picture's bytes when they know only the hash (e.g. the picture network
+     * handler falling back to the config library for a never-published event). Because
+     * lookup is by content hash — never a caller-supplied file name or path — it carries
+     * <b>no path-traversal surface</b>: only bytes whose SHA-1 equals the request are
+     * returned, exactly like {@code NewsPictureStore.selfHealFromLibrary}.
+     *
+     * @param hash the 20-byte SHA-1 to look up (null / wrong length yields null)
+     * @return the matching entry, or null if no scanned picture has that content hash
+     */
+    public @Nullable Entry getEntryByHash(byte @Nullable [] hash) {
+        if (hash == null || hash.length != SHA1_LENGTH) return null;
+        return hashIndex.get(toHex(hash));
+    }
+
+    /**
+     * Looks up a validated picture's raw PNG bytes by its 20-byte SHA-1 content hash.
+     * Convenience wrapper over {@link #getEntryByHash} for callers (e.g. the picture
+     * network fallback) that only need the bytes.
+     *
+     * @param hash the 20-byte SHA-1 to look up (null / wrong length yields null)
+     * @return the raw PNG bytes of the matching entry (do not mutate), or null if no
+     *         scanned picture has that content hash
+     */
+    public byte @Nullable [] getBytesByHash(byte @Nullable [] hash) {
+        Entry entry = getEntryByHash(hash);
+        return entry == null ? null : entry.getBytes();
     }
 
     /** @return all validated pictures of the last scan as an unmodifiable fileName → entry map */
@@ -171,6 +216,24 @@ public final class NewsPictureLibrary {
             StockMarketMod.LOGGER.error("[NewsPictureLibrary] Failed to scan {}", picturesDir, e);
         }
         entries = newEntries;
+        hashIndex = buildHashIndex(newEntries);
+    }
+
+    /**
+     * Builds the lowercase-hex SHA-1 → entry index for O(1) content-addressed lookups.
+     * Mirrors the indexing in {@code NewsPictureStore.selfHealFromLibrary}: entries with
+     * a null / wrong-length hash are skipped; on a hash collision the last entry wins
+     * (both entries hold identical bytes, so the choice does not matter to callers).
+     */
+    private static Map<String, Entry> buildHashIndex(Map<String, Entry> entries) {
+        Map<String, Entry> index = new HashMap<>(entries.size());
+        for (Entry entry : entries.values()) {
+            if (entry != null && entry.getSha1() != null
+                    && entry.getSha1().length == SHA1_LENGTH) {
+                index.put(toHex(entry.getSha1()), entry);
+            }
+        }
+        return index;
     }
 
     /**

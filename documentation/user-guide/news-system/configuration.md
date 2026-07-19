@@ -15,7 +15,7 @@ The folder uses **drop-in loading**:
 - Every `*.json` file in the folder is loaded. Filenames do not matter.
 - Each file may contain any number of events. All files merge into one event pool.
 - To add news to a server, simply drop a file into the folder and run `/stockmarket news reload` (or restart).
-- On first run (folder missing or empty) the mod generates `default_events.json` with a set of example events that demonstrate every schema feature -- use it as a template.
+- On first run (folder missing or empty) the mod generates `default_events.json` with a set of example events that demonstrate every schema feature -- use it as a template. On later reloads the shipped defaults **self-heal additively**: any shipped default event missing from all your files is appended back into `default_events.json` (and any missing default picture is written into `pictures/`), without overwriting your files, existing entries, or customized defaults. See [Getting the New Default Events](advanced-events.md#getting-the-new-default-events).
 - Event pictures live in the `pictures/` subfolder -- see [News Event Pictures](pictures.md).
 
 Files are processed in **alphabetical filename order** (case-insensitive), so conflicts resolve deterministically:

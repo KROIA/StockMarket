@@ -22,8 +22,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import java.util.stream.Stream;
 
 /**
@@ -69,6 +73,12 @@ public class NewsPictureRequestTestSuite extends TestSuite {
         addTest("limiter_window_expiry_serves_again", this::test_limiter_windowExpiryServesAgain);
         addTest("limiter_per_player_isolation", this::test_limiter_perPlayerIsolation);
         addTest("limiter_warns_once_per_window", this::test_limiter_warnsOncePerWindow);
+
+        // Config-library fallback (store-first, fallback on store miss)
+        addTest("fallback_serves_hash_absent_from_store", this::test_fallbackServesHashAbsentFromStore);
+        addTest("neither_store_nor_fallback_omitted", this::test_neitherStoreNorFallbackOmitted);
+        addTest("store_precedence_fallback_not_consulted", this::test_storePrecedenceFallbackNotConsulted);
+        addTest("fallback_bytes_count_toward_budget_and_limiter", this::test_fallbackBytesCountTowardBudgetAndLimiter);
 
         // Handler guard & wire format
         addTest("null_sender_gets_default_response", this::test_nullSenderGetsDefaultResponse);
@@ -138,10 +148,44 @@ public class NewsPictureRequestTestSuite extends TestSuite {
         return hash;
     }
 
-    /** Shortcut to the testable static core. */
+    /** Shortcut to the testable static core (store-only, no fallback). */
     private static OutputData serve(NewsPictureStore store, RateLimiter limiter,
                                     UUID player, List<byte[]> hashes, long now) {
         return NewsPictureRequest.servePictures(store, limiter, player, hashes, now);
+    }
+
+    /** Shortcut to the testable static core with a config-library fallback seam. */
+    private static OutputData serve(NewsPictureStore store, Function<byte[], byte[]> fallback,
+                                    RateLimiter limiter, UUID player, List<byte[]> hashes, long now) {
+        return NewsPictureRequest.servePictures(store, fallback, limiter, player, hashes, now);
+    }
+
+    /**
+     * A fake config-library fallback backed by a hex(hash) → bytes map that counts how
+     * many times it was consulted — stands in for {@code NewsPictureLibrary::getBytesByHash}
+     * and lets a test assert the store took precedence (fallback never called for a hit).
+     */
+    private static final class CountingFallback implements Function<byte[], byte[]> {
+        private final Map<String, byte[]> byHex = new HashMap<>();
+        private final AtomicInteger calls = new AtomicInteger();
+
+        /** Registers bytes under their content hash and returns that hash. */
+        byte[] put(byte[] bytes) {
+            byte[] hash = NewsPictureLibrary.sha1(bytes);
+            byHex.put(NewsPictureLibrary.toHex(hash), bytes);
+            return hash;
+        }
+
+        /** @return how many times the fallback was invoked */
+        int calls() {
+            return calls.get();
+        }
+
+        @Override
+        public byte[] apply(byte[] hash) {
+            calls.incrementAndGet();
+            return hash == null ? null : byHex.get(NewsPictureLibrary.toHex(hash));
+        }
     }
 
     /** The served hashes as lowercase hex, in response order. */
@@ -524,6 +568,147 @@ public class NewsPictureRequestTestSuite extends TestSuite {
             serve(store, limiter, player, batch, t1 + 100L);
             return assertEquals("a denial in the next window must warn a second time",
                     2, limiter.warningCount(player));
+        } catch (IOException e) {
+            return fail("temp dir setup failed: " + e);
+        } finally {
+            deleteRecursively(dir);
+        }
+    }
+
+    // ========================================================================
+    // Config-library fallback
+    // ========================================================================
+
+    /**
+     * A hash present ONLY in the fallback library (absent from the store) is now served —
+     * exactly what a never-published event with configured artwork needs.
+     */
+    private TestResult test_fallbackServesHashAbsentFromStore() {
+        Path dir = null;
+        try {
+            dir = createTempDir();
+            NewsPictureStore store = storeIn(dir);
+            CountingFallback fallback = new CountingFallback();
+            byte[] png = validPng(32, 60);
+            byte[] hash = fallback.put(png); // in the library only, NOT in the store
+
+            OutputData output = serve(store, fallback, new RateLimiter(), UUID.randomUUID(),
+                    List.of(hash), NOW);
+            TestResult r = assertEquals("the fallback-only hash must be served",
+                    1, output.pictures().size());
+            if (!r.passed()) return r;
+            r = assertTrue("the requested hash must be echoed back",
+                    Arrays.equals(hash, output.pictures().get(0).hash()));
+            if (!r.passed()) return r;
+            return assertTrue("the exact fallback PNG bytes must be served",
+                    Arrays.equals(png, output.pictures().get(0).pngBytes()));
+        } catch (IOException e) {
+            return fail("temp dir setup failed: " + e);
+        } finally {
+            deleteRecursively(dir);
+        }
+    }
+
+    /** A hash in NEITHER the store nor the fallback is still omitted (client backs off). */
+    private TestResult test_neitherStoreNorFallbackOmitted() {
+        Path dir = null;
+        try {
+            dir = createTempDir();
+            NewsPictureStore store = storeIn(dir);
+            CountingFallback fallback = new CountingFallback();
+            byte[] unknown = NewsPictureLibrary.sha1(new byte[]{42});
+
+            OutputData output = serve(store, fallback, new RateLimiter(), UUID.randomUUID(),
+                    List.of(unknown), NOW);
+            TestResult r = assertEquals("a hash in neither layer must be omitted",
+                    0, output.pictures().size());
+            if (!r.passed()) return r;
+            return assertEquals("the fallback must have been consulted once for the store miss",
+                    1, fallback.calls());
+        } catch (IOException e) {
+            return fail("temp dir setup failed: " + e);
+        } finally {
+            deleteRecursively(dir);
+        }
+    }
+
+    /**
+     * Store precedence: when a hash is in the store, the store bytes are served and the
+     * fallback is NOT consulted at all (immutable published-history guarantee preserved).
+     */
+    private TestResult test_storePrecedenceFallbackNotConsulted() {
+        Path dir = null;
+        try {
+            dir = createTempDir();
+            NewsPictureStore store = storeIn(dir);
+            byte[] storeBytes = blob(2048, 61);
+            byte[] hash = put(store, storeBytes);
+
+            // Register DIFFERENT bytes in the fallback under the SAME hash slot so that,
+            // if the fallback were (wrongly) consulted, the served bytes would differ.
+            CountingFallback fallback = new CountingFallback();
+            fallback.byHex.put(NewsPictureLibrary.toHex(hash), blob(4096, 62));
+
+            OutputData output = serve(store, fallback, new RateLimiter(), UUID.randomUUID(),
+                    List.of(hash), NOW);
+            TestResult r = assertEquals("the store hit must be served",
+                    1, output.pictures().size());
+            if (!r.passed()) return r;
+            r = assertTrue("the STORE bytes (not the fallback bytes) must be served",
+                    Arrays.equals(storeBytes, output.pictures().get(0).pngBytes()));
+            if (!r.passed()) return r;
+            return assertEquals("the fallback must never be consulted for a store hit",
+                    0, fallback.calls());
+        } catch (IOException e) {
+            return fail("temp dir setup failed: " + e);
+        } finally {
+            deleteRecursively(dir);
+        }
+    }
+
+    /**
+     * Fallback bytes are accounted exactly like store bytes: they count toward the
+     * response byte budget (a later over-budget fallback entry is omitted) and toward the
+     * per-player rate-limiter byte cap.
+     */
+    private TestResult test_fallbackBytesCountTowardBudgetAndLimiter() {
+        Path dir = null;
+        try {
+            dir = createTempDir();
+            NewsPictureStore store = storeIn(dir);
+            CountingFallback fallback = new CountingFallback();
+
+            // Six 120 KiB fallback-only pictures: 5 fit the 640 KiB budget, the 6th is
+            // omitted — proving fallback bytes are budgeted just like store bytes.
+            int bigSize = 120 * 1024;
+            List<byte[]> request = new ArrayList<>();
+            for (int i = 0; i < 6; i++) {
+                request.add(fallback.put(blob(bigSize, 70 + i)));
+            }
+
+            RateLimiter limiter = new RateLimiter();
+            UUID player = UUID.randomUUID();
+            OutputData output = serve(store, fallback, limiter, player, request, NOW);
+
+            TestResult r = assertEquals("only 5 × 120 KiB fallback pictures fit the budget",
+                    5, output.pictures().size());
+            if (!r.passed()) return r;
+            r = assertTrue("total served fallback bytes must respect the budget",
+                    bytesOf(output) <= NewsPictureRequest.RESPONSE_BYTE_BUDGET);
+            if (!r.passed()) return r;
+
+            // The served fallback bytes must count against the window: ~600 KiB served
+            // per request means after 7 requests the 4 MiB byte cap denies the 8th.
+            OutputData last = output;
+            for (int i = 1; i < 7; i++) {
+                last = serve(store, fallback, limiter, player, request, NOW + i * 1000L);
+            }
+            r = assertEquals("the 7th request must still serve fallback bytes",
+                    5, last.pictures().size());
+            if (!r.passed()) return r;
+            OutputData denied = serve(store, fallback, limiter, player, request, NOW + 7000L);
+            return assertEquals("fallback bytes must push the window over the byte cap (8th denied)",
+                    0, denied.pictures().size());
         } catch (IOException e) {
             return fail("temp dir setup failed: " + e);
         } finally {

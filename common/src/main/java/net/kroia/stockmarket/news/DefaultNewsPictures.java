@@ -20,11 +20,13 @@ import java.util.zip.Deflater;
  * {@code config/StockMarket/news/pictures/} on first run — the picture-side twin of
  * {@link DefaultNewsEvents#writeDefaultFile} (picture plan §7).
  * <p>
- * Extraction runs during every reload, right after the defaults-json step: if the
- * pictures folder does not exist or contains no {@code .png}, one picture per shipped
- * default event is written ({@code <eventId>.png}, matching the {@code picture} fields
- * in {@link DefaultNewsEvents}). A folder that already contains any {@code .png} is
- * never touched. Source priority per picture:
+ * <b>Additive self-healing:</b> {@link #extractMissingDefaults} runs during every reload,
+ * right after the defaults-json step. It creates the folder if absent and, for each shipped
+ * default event, writes {@code <eventId>.png} <b>only when that file does not already
+ * exist</b> — so newly shipped default pictures reach existing installs while admin art and
+ * admin-modified defaults are never overwritten. (The legacy {@link #extractDefaultsIfEmpty}
+ * all-or-nothing variant is retained for callers/tests that want the empty-only semantics.)
+ * Source priority per picture:
  * <ol>
  *   <li><b>Baked jar resource</b> {@code news_pictures/<eventId>.png} (classloader,
  *       same mechanism as the shipped {@code sql/} resources) — drop real art into
@@ -70,6 +72,44 @@ public final class DefaultNewsPictures {
     }
 
     // ── Extraction ───────────────────────────────────────────────────────
+
+    /**
+     * Additively self-heals the default pictures: for every shipped default event id,
+     * writes {@code <eventId>.png} if (and only if) it does not already exist. The
+     * directory is created when absent. An existing {@code .png} — admin art or an
+     * admin-modified default — is <b>never overwritten</b>, so newly shipped defaults
+     * reach existing installs without clobbering customizations. Per id the baked woodcut
+     * jar resource is preferred and the procedural placeholder is the fallback (see
+     * {@link #loadBakedOrGenerate}). Never throws — failures are logged and skipped.
+     *
+     * @param picturesDir the pictures directory ({@code config/StockMarket/news/pictures})
+     * @return the number of missing default pictures written in this call
+     */
+    public static int extractMissingDefaults(Path picturesDir) {
+        int written = 0;
+        try {
+            if (!Files.exists(picturesDir)) {
+                Files.createDirectories(picturesDir);
+            }
+            for (String eventId : DefaultNewsEvents.DEFAULT_EVENT_IDS) {
+                Path target = picturesDir.resolve(eventId + ".png");
+                if (Files.exists(target)) continue; // admin art / modified default — hands off
+                byte[] png = loadBakedOrGenerate(eventId);
+                if (png == null) continue; // problem already logged
+                Files.write(target, png);
+                written++;
+            }
+            if (written > 0) {
+                StockMarketMod.LOGGER.info(
+                        "[NewsPictureLibrary] Self-healed {} missing default news picture(s) in {}",
+                        written, picturesDir);
+            }
+        } catch (Exception e) {
+            StockMarketMod.LOGGER.error(
+                    "[NewsPictureLibrary] Failed to write missing default news pictures", e);
+        }
+        return written;
+    }
 
     /**
      * Writes the default pictures into the given pictures directory if it is empty.

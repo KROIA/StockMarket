@@ -2,6 +2,7 @@ package net.kroia.stockmarket.pluginsystem.plugins.screen;
 
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.elements.CloseButton;
+import net.kroia.modutilities.gui.elements.ExpandablePanel;
 import net.kroia.modutilities.gui.elements.ItemView;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.VerticalListView;
@@ -304,31 +305,33 @@ public class NewsEventDetailsScreen extends StockMarketGuiScreen {
          */
         private static final int NAME_MAX_WIDTH = 120;
 
+        // ── Phase 2 GUI refactor: per-sequence ExpandablePanel styling ──
+        /**
+         * Header row height (px) of each sequence's {@link ExpandablePanel}.
+         * Slightly taller than a single meta line so the panel's own arrow
+         * indicator and the default-scale title render legibly (the old custom
+         * header was one {@code metaH} text line with a ▼/▶ text marker).
+         */
+        private static final int SEQ_HEADER_HEIGHT = 14;
+        /** Idle header bar color (translucent dark strip) of a sequence panel. */
+        private static final int SEQ_HEADER_COLOR = 0x40000000;
+        /** Header bar color while the mouse hovers the sequence panel header. */
+        private static final int SEQ_HEADER_HOVER_COLOR = 0x60000000;
+        /** Header bar color while the sequence panel header is pressed. */
+        private static final int SEQ_HEADER_PRESSED_COLOR = 0x70000000;
+
         /** One pre-computed static text line. */
         private record Line(String text, int color, float scale, int y) {}
 
         /**
-         * One sequence header of the step breakdown (T-100). Clickable headers
-         * (multi-sequence events only) toggle their sequence's collapse state.
+         * Pairs a sequence index with its {@link ExpandablePanel} so
+         * {@link #render()} can tint the running sequence's header green even
+         * while that sequence is collapsed (Phase 2 GUI refactor).
          *
-         * @param seqIndex  index into {@code details.sequences()}
-         * @param text      the pre-truncated header text (incl. ▼/▶ marker when clickable)
-         * @param y         the line's y position
-         * @param h         the click hit-box height (one meta line)
-         * @param clickable true when clicking toggles collapse (>1 sequences)
+         * @param seqIndex index into {@code details.sequences()}
+         * @param panel    the panel hosting that sequence's header + table
          */
-        private record SeqHeader(int seqIndex, String text, int y, int h, boolean clickable) {}
-
-        /**
-         * One table header row of the step breakdown (T-105). Emitted once per
-         * expanded sequence (right below the sequence header, above the first
-         * step row) so users can identify the columns of every sequence's block
-         * independently — collapsing a sequence hides its header row along with
-         * the step rows.
-         *
-         * @param y the row's y position
-         */
-        private record TableHeader(int y) {
+        private record SequencePanel(int seqIndex, ExpandablePanel panel) {
         }
 
         /**
@@ -348,7 +351,8 @@ public class NewsEventDetailsScreen extends StockMarketGuiScreen {
          * @param targetColor color used for the target cell (up/down/neutral)
          * @param curve     the (translated when possible) curve cell text
          * @param permanent the permanent-flag cell text ("✓" or empty)
-         * @param y         the row's y position
+         * @param y         the row's y position, local to its sequence's
+         *                  {@link SequenceTableContent} panel content
          */
         private record StepRow(int seqIndex, int stepIndex, String stepNo, String name,
                                String duration, String target, int targetColor,
@@ -365,12 +369,15 @@ public class NewsEventDetailsScreen extends StockMarketGuiScreen {
 
         private final List<Line> lines = new ArrayList<>();
         private final List<MarketRow> marketRows = new ArrayList<>();
-        // T-100/T-105: sequence step breakdown (headers/tables drawn segment-wise
-        // in render(); the indented per-step market-override lines are static).
-        private final List<SeqHeader> seqHeaders = new ArrayList<>();
-        private final List<TableHeader> tableHeaders = new ArrayList<>();
-        private final List<StepRow> stepRows = new ArrayList<>();
-        private final List<Line> stepMarketLines = new ArrayList<>();
+        /**
+         * T-100/T-105 (Phase 2 GUI refactor): the per-sequence step breakdown is
+         * now one {@link ExpandablePanel} per sequence (headers/arrows/collapse
+         * handled by the panel; each panel's aligned table + live cells live in a
+         * {@link SequenceTableContent} child). This list keeps a handle on each
+         * panel with its sequence index so {@link #render()} can tint the running
+         * sequence's header even while it is collapsed.
+         */
+        private final List<SequencePanel> sequencePanels = new ArrayList<>();
         /** The snapshot this content renders (live-highlight sequence resolution). */
         private final NewsAdminRequest.EventDetails details;
         private final int builtWidth;
@@ -782,11 +789,23 @@ public class NewsEventDetailsScreen extends StockMarketGuiScreen {
             tablePermanentX = tableCurveX + curveW + TABLE_CELL_PADDING + TABLE_CELL_GAP;
             tableRightEdgeX = tablePermanentX + permanentW + TABLE_CELL_PADDING;
 
-            // Second pass: emit the sequence headers, table header rows and
-            // step rows at concrete y positions.
+            // Second pass: one ExpandablePanel per sequence. The header is the
+            // sequence header text (name + step count, plus the weighted pick
+            // chance when the event has several sequences); the content is that
+            // sequence's aligned table, built as a SequenceTableContent using the
+            // shared column x positions computed above — so every panel's rows
+            // line up down the whole breakdown even though each sequence is now
+            // its own panel. Collapse state is persisted at screen level
+            // (collapsedSequences) and survives the rebuilds triggered by snapshot
+            // / picture refreshes: it is applied here as the panel's initial
+            // expansion state and written back by the toggle listener, which
+            // re-runs rebuildPreservingScroll() exactly like the old custom header
+            // click handler did.
             for (int si = 0; si < sequences.size(); si++) {
+                final int seqIndex = si;
                 NewsAdminRequest.EventDetails.SequenceInfo sequence = sequences.get(si);
                 boolean collapsed = multiple && collapsedSequences.contains(si);
+                boolean expanded = !collapsed; // a lone sequence is always expanded
 
                 String header;
                 if (multiple) {
@@ -794,40 +813,147 @@ public class NewsEventDetailsScreen extends StockMarketGuiScreen {
                             ? String.format(Locale.ROOT, "%.0f%%",
                                     100f * Math.max(0, sequence.weight()) / totalWeight)
                             : NewsUiFormatting.INVALID_FACTOR_TEXT;
-                    header = (collapsed ? "▶ " : "▼ ")
-                            + NewsPluginGuiElement.Texts.detailsSequenceHeaderChance(
-                                    sequence.name(), sequence.steps().size(), chance).getString();
+                    header = NewsPluginGuiElement.Texts.detailsSequenceHeaderChance(
+                            sequence.name(), sequence.steps().size(), chance).getString();
                 } else {
                     header = NewsPluginGuiElement.Texts.detailsSequenceHeader(
                             sequence.name(), sequence.steps().size()).getString();
                 }
-                seqHeaders.add(new SeqHeader(si,
-                        NewsUiText.truncate(this, header, textW, META_SCALE), y, metaH, multiple));
-                y += metaH;
-                if (collapsed) {
-                    continue;
+
+                // The sequence's table body (header row + step rows + per-step
+                // market lines), positioned to the shared column x offsets.
+                SequenceTableContent tableContent = new SequenceTableContent(
+                        si, sequence, perSequenceCells.get(si), nameSlot, textW, metaH);
+
+                // The panel draws its own expand/collapse arrow, so the title
+                // carries no ▼/▶ marker (unlike the old text header). Pre-truncate
+                // it to the header's text column (full width minus the arrow
+                // column and the header text padding); title is at Label default
+                // scale, hence the 1.0f measurement scale.
+                int titleMax = Math.max(0, textW - SEQ_HEADER_HEIGHT
+                        - ExpandablePanel.DEFAULT_HEADER_TEXT_PADDING);
+                ExpandablePanel panel = new ExpandablePanel(
+                        NewsUiText.truncate(this, header, titleMax, 1.0f), expanded);
+                panel.setHeaderHeight(SEQ_HEADER_HEIGHT);
+                panel.setContentPadding(0);
+                panel.setContentSpacing(0);
+                panel.setEnableOutline(false);
+                panel.setHeaderColor(SEQ_HEADER_COLOR);
+                panel.setHeaderHoverColor(SEQ_HEADER_HOVER_COLOR);
+                panel.setHeaderPressedColor(SEQ_HEADER_PRESSED_COLOR);
+                panel.setHeaderTextColor(0xFFFFFFFF);
+                if (tableContent.getContentHeightPx() > 0) {
+                    panel.addChild(tableContent);
                 }
 
-                // Table header row (only when this sequence actually has steps).
-                if (!sequence.steps().isEmpty()) {
-                    tableHeaders.add(new TableHeader(y));
-                    y += metaH;
+                if (multiple) {
+                    // Multi-sequence: clickable/collapsible. The toggle listener
+                    // persists the new state and rebuilds (scroll preserved), so
+                    // the collapse survives later snapshot/picture rebuilds.
+                    panel.setOnToggle(nowExpanded -> {
+                        if (nowExpanded) {
+                            collapsedSequences.remove(seqIndex);
+                        } else {
+                            collapsedSequences.add(seqIndex);
+                        }
+                        rebuildPreservingScroll();
+                    });
+                } else {
+                    // Single-sequence events always fire — the header is shown but
+                    // must not collapse. The panel header is inherently clickable
+                    // (there is no API to disable it without touching
+                    // ModUtilities), so snap it back open if it ever gets toggled.
+                    final ExpandablePanel single = panel;
+                    panel.setOnToggle(nowExpanded -> {
+                        if (!nowExpanded) {
+                            single.setExpanded(true);
+                        }
+                    });
                 }
 
-                List<StepCells> cells = perSequenceCells.get(si);
+                // Effective panel height: header + (content when expanded and
+                // non-empty). Matches ExpandablePanel's own height computation
+                // (contentPadding/Spacing are 0), so subsequent elements are
+                // placed correctly below the panel.
+                int panelHeight = SEQ_HEADER_HEIGHT
+                        + (expanded && !panel.getChilds().isEmpty()
+                                ? tableContent.getContentHeightPx() : 0);
+                panel.setBounds(INNER_PAD, y, textW, panelHeight);
+                addChild(panel);
+                sequencePanels.add(new SequencePanel(si, panel));
+                y += panelHeight;
+            }
+            return y;
+        }
+
+        /**
+         * The scrollable table body of ONE sequence, hosted inside that
+         * sequence's {@link ExpandablePanel} content area (Phase 2 GUI refactor).
+         * <p>
+         * Draws the shared-column table header row (when the sequence has steps),
+         * one row per step, and the indented per-step market-override lines. It is
+         * kept as a custom-drawn element — rather than a stack of {@link Label}s —
+         * so it can paint the <b>live running-step highlight</b> (backdrop + white
+         * text) and the <b>per-row live countdown</b> cell every frame from the
+         * owner's runtime stream, exactly like the old monolithic render did. The
+         * panel only renders this content while expanded, so a collapsed sequence
+         * neither draws nor ticks (its content container is disabled) — matching
+         * the previous collapse behavior.
+         * <p>
+         * Column x positions are the {@code table*X} offsets computed once on the
+         * enclosing {@link DetailsContent} (shared across every sequence), so every
+         * panel's rows line up down the whole breakdown. All cell x values are
+         * element-local: local x {@code 0} maps to the enclosing content's
+         * {@code INNER_PAD}, so a column drawn at {@code STEP_INDENT + table*X}
+         * lands at the same absolute position the old layout used
+         * ({@code INNER_PAD + STEP_INDENT + table*X}) after subtracting that
+         * padding.
+         */
+        private class SequenceTableContent extends StockMarketGuiElement {
+            /** Index of this sequence in {@code details.sequences()} (highlight key). */
+            private final int seqIndex;
+            /** Whether a table header row is drawn (only when the sequence has steps). */
+            private final boolean hasHeaderRow;
+            /** The step rows with element-local y positions. */
+            private final List<StepRow> rows;
+            /** The indented per-step market-override lines with element-local y. */
+            private final List<Line> marketLines;
+            /** Total content height in px (header row + step rows + market lines). */
+            private final int contentHeightPx;
+
+            /**
+             * Builds one sequence's table content.
+             *
+             * @param seqIndex the sequence's index (running-step highlight key)
+             * @param sequence the sequence definition (steps + per-step markets)
+             * @param cells    the pre-computed per-step cell texts (first pass)
+             * @param nameSlot the shared Name-column slot width for truncation
+             * @param textW    the content wrap width (also the market-line width)
+             * @param metaH    the meta line advance
+             */
+            SequenceTableContent(int seqIndex,
+                                 NewsAdminRequest.EventDetails.SequenceInfo sequence,
+                                 List<StepCells> cells, int nameSlot, int textW, int metaH) {
+                setEnableBackground(false);
+                setEnableOutline(false);
+                this.seqIndex = seqIndex;
+                this.rows = new ArrayList<>(cells.size());
+                this.marketLines = new ArrayList<>();
+                this.hasHeaderRow = !sequence.steps().isEmpty();
+
+                int yy = hasHeaderRow ? metaH : 0; // header row (if any) sits at local y 0
                 for (int sti = 0; sti < cells.size(); sti++) {
                     NewsAdminRequest.EventDetails.StepInfo step = sequence.steps().get(sti);
                     StepCells c = cells.get(sti);
-                    // Defensive truncation for the name column — every other
-                    // column is measured to fit its widest natural value, so
-                    // only the flexible name column can overflow on narrow
-                    // windows.
+                    // Defensive truncation for the name column — every other column
+                    // is measured to fit its widest natural value, so only the
+                    // flexible name column can overflow on narrow windows.
                     String truncatedName = NewsUiText.truncate(this, c.name(), nameSlot,
                             META_SCALE);
-                    stepRows.add(new StepRow(si, sti, c.stepNo(), truncatedName,
+                    rows.add(new StepRow(seqIndex, sti, c.stepNo(), truncatedName,
                             c.duration(), c.target(), c.targetColor(), c.curve(),
-                            c.permanent(), y));
-                    y += metaH;
+                            c.permanent(), yy));
+                    yy += metaH;
 
                     // Per-step market override (an empty list = inherits the event
                     // markets and shows nothing, matching the wire contract).
@@ -847,13 +973,101 @@ public class NewsEventDetailsScreen extends StockMarketGuiScreen {
                                 NewsPluginGuiElement.Texts.detailsStepMarkets(
                                         joined.toString()).getString(),
                                 textW - 2 * STEP_INDENT, META_SCALE);
-                        stepMarketLines.add(new Line(subLine,
-                                NewsPluginGuiElement.COLOR_NEUTRAL_GRAY, META_SCALE, y));
-                        y += metaH;
+                        marketLines.add(new Line(subLine,
+                                NewsPluginGuiElement.COLOR_NEUTRAL_GRAY, META_SCALE, yy));
+                        yy += metaH;
                     }
                 }
+                this.contentHeightPx = yy;
+                setSize(textW, yy);
             }
-            return y;
+
+            /** @return this sequence's table content height in px (0 when empty) */
+            int getContentHeightPx() {
+                return contentHeightPx;
+            }
+
+            @Override
+            protected void layoutChanged() {
+                // Nothing to lay out: all cells are drawn at fixed local offsets in
+                // render(); the vertical content layout of the parent panel keeps
+                // this element stretched to the panel width.
+            }
+
+            @Override
+            protected void render() {
+                // Live status (stream data), fetched once per frame — drives the
+                // running-step highlight and the live per-row countdown. Only the
+                // picked, currently-running step of THIS sequence highlights; every
+                // other row shows the em-dash placeholder. See resolveRunningSequence
+                // for the resolution and its limitations.
+                NewsPlugin.RuntimeStreamData.ActiveEventInfo live = owner.liveInfoFor(eventId);
+                int runningSeq = resolveRunningSequence(live);
+                int runningStep = runningSeq >= 0 && live != null ? live.stepIndex() : -1;
+                int metaH = NewsUiText.lineHeight(this, META_SCALE);
+
+                if (hasHeaderRow) {
+                    drawText(tableHeaderStepNo, STEP_INDENT + tableStepNoX, 0,
+                            TABLE_HEADER_COLOR, META_SCALE);
+                    drawText(tableHeaderName, STEP_INDENT + tableNameX, 0,
+                            TABLE_HEADER_COLOR, META_SCALE);
+                    drawText(tableHeaderDuration, STEP_INDENT + tableDurationX, 0,
+                            TABLE_HEADER_COLOR, META_SCALE);
+                    drawText(tableHeaderCountdown, STEP_INDENT + tableCountdownX, 0,
+                            TABLE_HEADER_COLOR, META_SCALE);
+                    drawText(tableHeaderTarget, STEP_INDENT + tableTargetX, 0,
+                            TABLE_HEADER_COLOR, META_SCALE);
+                    drawText(tableHeaderCurve, STEP_INDENT + tableCurveX, 0,
+                            TABLE_HEADER_COLOR, META_SCALE);
+                    drawText(tableHeaderPermanent, STEP_INDENT + tablePermanentX, 0,
+                            TABLE_HEADER_COLOR, META_SCALE);
+                }
+
+                String dashText = Texts.TIME_DASH.getString();
+                String runningCountdownText = null;
+                if (live != null && live.stepRemainingMs() >= 0 && runningSeq >= 0) {
+                    runningCountdownText = NewsUiFormatting.formatRemainingTime(
+                            Math.max(0, live.stepRemainingMs()));
+                }
+                for (StepRow step : rows) {
+                    boolean highlighted = step.seqIndex() == runningSeq
+                            && step.stepIndex() == runningStep;
+                    if (highlighted) {
+                        // Backdrop spans the full content row (matches T-100).
+                        drawRect(0, step.y() - 1, getWidth(), metaH, STEP_HIGHLIGHT_BG);
+                    }
+                    int textColor = highlighted
+                            ? 0xFFFFFFFF : NewsPluginGuiElement.COLOR_TEXT_SECONDARY;
+                    drawText(step.stepNo(), STEP_INDENT + tableStepNoX, step.y(),
+                            textColor, META_SCALE);
+                    drawText(step.name(), STEP_INDENT + tableNameX, step.y(),
+                            textColor, META_SCALE);
+                    drawText(step.duration(), STEP_INDENT + tableDurationX, step.y(),
+                            textColor, META_SCALE);
+                    // T-111: per-row live countdown cell. Only the row of the picked
+                    // sequence's currently running step shows a live value; every
+                    // other row (past, future, unpicked candidate sequences,
+                    // PENDING/terminal sentinel) shows the em-dash placeholder.
+                    String countdownCell = highlighted && runningCountdownText != null
+                            ? runningCountdownText : dashText;
+                    drawText(countdownCell, STEP_INDENT + tableCountdownX, step.y(),
+                            textColor, META_SCALE);
+                    // Target column keeps its up/down/neutral color even when the
+                    // row is highlighted — the sign matters more than uniform
+                    // contrast.
+                    drawText(step.target(), STEP_INDENT + tableTargetX, step.y(),
+                            step.targetColor(), META_SCALE);
+                    drawText(step.curve(), STEP_INDENT + tableCurveX, step.y(),
+                            textColor, META_SCALE);
+                    drawText(step.permanent(), STEP_INDENT + tablePermanentX, step.y(),
+                            textColor, META_SCALE);
+                }
+                // Indented per-step market-override lines (T-100, static).
+                for (Line line : marketLines) {
+                    drawText(line.text(), 2 * STEP_INDENT, line.y(),
+                            line.color(), line.scale());
+                }
+            }
         }
 
         /** Measures a string at the meta font scale (T-105 — column widening). */
@@ -896,30 +1110,6 @@ public class NewsEventDetailsScreen extends StockMarketGuiScreen {
             return -1;
         }
 
-        /**
-         * Collapses/expands a sequence when its header line is clicked (T-100 —
-         * headers are only clickable for multi-sequence events). Child elements
-         * (market icons, weight labels) consume their clicks first, so they never
-         * reach this handler.
-         */
-        @Override
-        protected boolean mouseClickedOverElement(int button) {
-            if (button != 0) {
-                return false;
-            }
-            int mouseY = getMouseY();
-            for (SeqHeader header : seqHeaders) {
-                if (header.clickable() && mouseY >= header.y() && mouseY < header.y() + header.h()) {
-                    if (!collapsedSequences.remove(header.seqIndex())) {
-                        collapsedSequences.add(header.seqIndex());
-                    }
-                    rebuildPreservingScroll();
-                    return true;
-                }
-            }
-            return false;
-        }
-
         @Override
         protected void layoutChanged() {
             // Only the market icons and the weight labels (T-086: real child
@@ -941,93 +1131,29 @@ public class NewsEventDetailsScreen extends StockMarketGuiScreen {
             for (Line line : lines) {
                 drawText(line.text(), INNER_PAD, line.y(), line.color(), line.scale());
             }
-            // Indented per-step market-override lines (T-100, static).
-            for (Line line : stepMarketLines) {
-                drawText(line.text(), INNER_PAD + 2 * STEP_INDENT, line.y(),
-                        line.color(), line.scale());
-            }
 
-            // Live status: phase + remaining while an instance runs (stream data).
-            // Fetched once per frame — also drives the running-step highlight below.
+            // Live status (stream data), fetched once per frame. The per-row
+            // running-step highlight and the live countdown cell are now drawn by
+            // each sequence's SequenceTableContent (only while its panel is
+            // expanded); here we only use the live info to tint the running
+            // sequence's panel header and to drive the split timers.
             NewsPlugin.RuntimeStreamData.ActiveEventInfo live = owner.liveInfoFor(eventId);
 
-            // Sequence breakdown (T-105 table): sequence header, table header row,
-            // step rows. The running step of an active instance is live-highlighted
-            // (backdrop + white text); its sequence's header is tinted green.
-            // Resolution/limitations: see resolveRunningSequence.
+            // Tint the running sequence's panel header green (matches the old green
+            // sequence-header coloring); every other header stays white. Done here
+            // — not inside the panel content — so the tint keeps updating even
+            // while a sequence is collapsed (collapsed content is disabled and
+            // never renders). Resolution/limitations: see resolveRunningSequence.
             int runningSeq = resolveRunningSequence(live);
-            int runningStep = runningSeq >= 0 && live != null ? live.stepIndex() : -1;
-            int metaH = NewsUiText.lineHeight(this, META_SCALE);
-            for (SeqHeader header : seqHeaders) {
-                drawText(header.text(), INNER_PAD, header.y(),
-                        header.seqIndex() == runningSeq
-                                ? NewsPluginGuiElement.COLOR_UP_GREEN : 0xFFFFFFFF,
-                        META_SCALE);
+            for (SequencePanel sp : sequencePanels) {
+                sp.panel().setHeaderTextColor(sp.seqIndex() == runningSeq
+                        ? NewsPluginGuiElement.COLOR_UP_GREEN : 0xFFFFFFFF);
             }
-            int tableBaseX = INNER_PAD + STEP_INDENT;
-            for (TableHeader th : tableHeaders) {
-                drawText(tableHeaderStepNo, tableBaseX + tableStepNoX, th.y(),
-                        TABLE_HEADER_COLOR, META_SCALE);
-                drawText(tableHeaderName, tableBaseX + tableNameX, th.y(),
-                        TABLE_HEADER_COLOR, META_SCALE);
-                drawText(tableHeaderDuration, tableBaseX + tableDurationX, th.y(),
-                        TABLE_HEADER_COLOR, META_SCALE);
-                drawText(tableHeaderCountdown, tableBaseX + tableCountdownX, th.y(),
-                        TABLE_HEADER_COLOR, META_SCALE);
-                drawText(tableHeaderTarget, tableBaseX + tableTargetX, th.y(),
-                        TABLE_HEADER_COLOR, META_SCALE);
-                drawText(tableHeaderCurve, tableBaseX + tableCurveX, th.y(),
-                        TABLE_HEADER_COLOR, META_SCALE);
-                drawText(tableHeaderPermanent, tableBaseX + tablePermanentX, th.y(),
-                        TABLE_HEADER_COLOR, META_SCALE);
-            }
-            // T-111: precompute the running-step's countdown text once — every row
-            // of every OTHER step (past/future/unpicked sequence) shows the em-dash
-            // placeholder. PENDING/terminal sentinel (stepRemainingMs < 0 or no
-            // live info) => all rows show the em-dash.
-            String dashText = Texts.TIME_DASH.getString();
-            String runningCountdownText = null;
-            if (live != null && live.stepRemainingMs() >= 0 && runningSeq >= 0) {
-                runningCountdownText = NewsUiFormatting.formatRemainingTime(
-                        Math.max(0, live.stepRemainingMs()));
-            }
-            for (StepRow step : stepRows) {
-                boolean highlighted = step.seqIndex() == runningSeq
-                        && step.stepIndex() == runningStep;
-                if (highlighted) {
-                    // Backdrop spans the full content row (matches T-100).
-                    drawRect(INNER_PAD, step.y() - 1,
-                            builtWidth - 2 * INNER_PAD, metaH, STEP_HIGHLIGHT_BG);
-                }
-                int textColor = highlighted
-                        ? 0xFFFFFFFF : NewsPluginGuiElement.COLOR_TEXT_SECONDARY;
-                drawText(step.stepNo(), tableBaseX + tableStepNoX, step.y(),
-                        textColor, META_SCALE);
-                drawText(step.name(), tableBaseX + tableNameX, step.y(),
-                        textColor, META_SCALE);
-                drawText(step.duration(), tableBaseX + tableDurationX, step.y(),
-                        textColor, META_SCALE);
-                // T-111: per-row live countdown cell. Only the row of the picked
-                // sequence's currently running step shows a live value; every other
-                // row (past, future, unpicked candidate sequences, PENDING/terminal
-                // sentinel) shows the em-dash placeholder.
-                String countdownCell = highlighted && runningCountdownText != null
-                        ? runningCountdownText : dashText;
-                drawText(countdownCell, tableBaseX + tableCountdownX, step.y(),
-                        textColor, META_SCALE);
-                // Target column keeps its up/down/neutral color even when the row
-                // is highlighted — the sign is more important than uniform contrast.
-                drawText(step.target(), tableBaseX + tableTargetX, step.y(),
-                        step.targetColor(), META_SCALE);
-                drawText(step.curve(), tableBaseX + tableCurveX, step.y(),
-                        textColor, META_SCALE);
-                drawText(step.permanent(), tableBaseX + tablePermanentX, step.y(),
-                        textColor, META_SCALE);
-            }
-            // T-105: split timers — Phase remaining (current step) and Event
-            // remaining (best-effort sum of remaining authored step durations
-            // for the picked sequence). See computeEventRemainingMs for the
-            // authored-min conservative estimate rationale.
+
+            // T-105/T-113: split timers — Event remaining (best-effort sum of
+            // remaining authored step durations for the picked sequence). See
+            // computeEventRemainingMs for the authored-min conservative estimate
+            // rationale.
             drawSplitTimers(live);
 
             // Impact rows, left-clustered: icon | ±peak % | ×weight | name (T-085).

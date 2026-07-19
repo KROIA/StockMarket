@@ -1,8 +1,13 @@
 package net.kroia.stockmarket.networking.request;
 
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.api.pluginmanager.IServerPluginManager;
+import net.kroia.stockmarket.news.NewsEventLibrary;
 import net.kroia.stockmarket.news.NewsPictureLibrary;
 import net.kroia.stockmarket.news.NewsPictureStore;
+import net.kroia.stockmarket.pluginsystem.plugin.ServerPlugin;
+import net.kroia.stockmarket.pluginsystem.pluginmanager.ServerPluginManager;
+import net.kroia.stockmarket.pluginsystem.plugins.NewsPlugin;
 import net.kroia.stockmarket.util.MultiServerUtils;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -18,16 +23,30 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 
 /**
  * Hash-batched fetch of published news pictures for the client picture cache
  * (news picture plan §4.2, task T-089).
  * <p>
  * The client sends up to {@value #MAX_HASHES_PER_REQUEST} 20-byte SHA-1 content hashes
- * (taken from {@code NewsRecord.getPictureHash()}); the master answers with the raw PNG
- * bytes of every hash it knows, straight from the {@link NewsPictureStore} (the
- * publish-time snapshot layer — never the admin's config folder, so there is no
- * path-traversal surface and history entries keep their original picture forever).
+ * (taken from {@code NewsRecord.getPictureHash()} for published news, or from an "All
+ * events" admin snapshot for events that never fired); the master answers with the raw
+ * PNG bytes of every hash it knows.
+ * <p>
+ * <b>Store-first, config-library fallback (by content hash):</b> each hash is looked up
+ * in the {@link NewsPictureStore} (the publish-time snapshot layer) <b>first</b>. Only on
+ * a store <b>miss</b> does the master fall back to the <b>current</b> config-layer
+ * {@link NewsPictureLibrary} — resolved <b>by SHA-1 content hash</b>, never by file name
+ * or path, so there is still <b>no path-traversal surface</b> (only bytes whose SHA-1
+ * equals the requested hash are ever served, exactly like
+ * {@code NewsPictureStore.selfHealFromLibrary}). The store keeps precedence, so a
+ * published history entry keeps rendering its <b>original</b> immutable snapshot forever
+ * even after the admin swaps or deletes the config file; the fallback exists only so an
+ * event with configured artwork that has <b>never been published</b> (its bytes are not
+ * yet in the store) still shows its picture in the admin details screen. Both store bytes
+ * and fallback bytes are subject to the identical file-size cap, response byte budget and
+ * rate-limit accounting.
  * <p>
  * <b>Not admin-gated:</b> any player may fetch pictures of published news — same policy
  * as {@link NewsHistoryRequest}. Slaves hold no news state and act as <b>pure
@@ -196,10 +215,10 @@ public class NewsPictureRequest extends StockMarketGenericRequest<NewsPictureReq
     }
 
     /**
-     * The served batch: only hashes that are known to the store <b>and</b> fit the
-     * {@value #RESPONSE_BYTE_BUDGET}-byte budget appear; everything else is omitted
-     * (empty on rate-limit denial or error). Order follows the request order of the
-     * included hashes.
+     * The served batch: only hashes that are resolvable (from the store, or the
+     * config-library fallback) <b>and</b> fit the {@value #RESPONSE_BYTE_BUDGET}-byte
+     * budget appear; everything else is omitted (empty on rate-limit denial or error).
+     * Order follows the request order of the included hashes.
      */
     public record OutputData(List<Picture> pictures) {
         /** Hand-written for the same decode-side count cap as {@link InputData}. */
@@ -236,10 +255,13 @@ public class NewsPictureRequest extends StockMarketGenericRequest<NewsPictureReq
 
     /**
      * Serves the batch from the master's {@link NewsPictureStore}
-     * ({@code DataManager.getNewsPictureStore()}). Runs on the master server main
-     * thread; the store lookup is a small file read per hash, so it completes
-     * synchronously. All budget/limiter logic lives in the static, in-game-testable
-     * core {@link #servePictures}.
+     * ({@code DataManager.getNewsPictureStore()}), falling back to the config-layer
+     * {@link NewsPictureLibrary} of the master's {@link NewsPlugin} on a store miss (so
+     * an event with configured artwork that has never been published still resolves —
+     * by content hash, never by file name). Runs on the master server main thread; the
+     * store lookup is a small file read per hash, so it completes synchronously. All
+     * budget/limiter logic lives in the static, in-game-testable core
+     * {@link #servePictures}.
      */
     @Override
     public CompletableFuture<OutputData> handleOnMasterServer(InputData input, String slaveID, @Nullable UUID playerSender) {
@@ -250,10 +272,47 @@ public class NewsPictureRequest extends StockMarketGenericRequest<NewsPictureReq
         if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.DATA_MANAGER == null)
             return CompletableFuture.completedFuture(getDefaultResponse());
 
+        // Config-library fallback: resolve the master NewsPlugin's picture library (the
+        // same way NewsAdminRequest does) and expose its by-hash lookup as the seam.
+        // Absent plugin/library → null fallback → behaviour unchanged (store-only).
+        Function<byte[], byte[]> libraryFallback = null;
+        NewsPictureLibrary pictureLibrary = findMasterPictureLibrary();
+        if (pictureLibrary != null) {
+            libraryFallback = pictureLibrary::getBytesByHash;
+        }
+
         OutputData output = servePictures(
                 BACKEND_INSTANCES.DATA_MANAGER.getNewsPictureStore(),
+                libraryFallback,
                 RATE_LIMITER, playerSender, input.hashes(), System.currentTimeMillis());
         return CompletableFuture.completedFuture(output);
+    }
+
+    /**
+     * Locates the config-layer {@link NewsPictureLibrary} of the master's
+     * {@link NewsPlugin}, iterating the plugin manager exactly like
+     * {@code NewsAdminRequest.findNewsPlugin()}. Every step is null-guarded and this
+     * never throws — a missing plugin manager, plugin or nested library simply yields
+     * null (the handler then serves store-only, unchanged behaviour).
+     *
+     * @return the master's picture library, or null if it cannot be resolved
+     */
+    private @Nullable NewsPictureLibrary findMasterPictureLibrary() {
+        try {
+            IServerPluginManager manager = getPluginManager();
+            if (!(manager instanceof ServerPluginManager pluginManager)) return null;
+            for (ServerPlugin<?, ?> plugin : pluginManager.getPlugins().values()) {
+                if (plugin instanceof NewsPlugin newsPlugin) {
+                    NewsEventLibrary library = newsPlugin.getLibrary();
+                    return library == null ? null : library.getPictureLibrary();
+                }
+            }
+        } catch (Exception e) {
+            // Never let fallback resolution break picture serving.
+            StockMarketMod.LOGGER.warn(
+                    "[NewsPictureRequest] Could not resolve the config picture library for fallback", e);
+        }
+        return null;
     }
 
     // ── Testable core ────────────────────────────────────────────────────
@@ -292,6 +351,37 @@ public class NewsPictureRequest extends StockMarketGenericRequest<NewsPictureReq
                                                     @NotNull UUID player,
                                                     @NotNull List<byte[]> requestedHashes,
                                                     long nowMillis) {
+        // Backwards-compatible overload: no config-library fallback (store-only).
+        return servePictures(store, null, limiter, player, requestedHashes, nowMillis);
+    }
+
+    /**
+     * Store-first, fallback-second variant of {@link #servePictures(NewsPictureStore,
+     * RateLimiter, UUID, List, long)}. Behaves identically, except that on a store
+     * <b>miss</b> for a hash it consults the optional {@code libraryFallback}
+     * (hash → PNG bytes, or null when unknown) — the seam through which the live handler
+     * wires the config-layer {@link NewsPictureLibrary} by content hash, and which tests
+     * drive with a fake function. The store is always checked first, so its immutable
+     * published snapshot wins whenever it has the hash and the fallback is never consulted
+     * for it. Fallback bytes are subject to the <b>identical</b>
+     * {@value NewsPictureLibrary#MAX_FILE_BYTES}-byte file cap, {@value #RESPONSE_BYTE_BUDGET}
+     * response budget and rate-limit accounting as store bytes.
+     *
+     * @param store           the published-picture store to serve from (checked first)
+     * @param libraryFallback optional hash → PNG bytes fallback consulted only on a store
+     *                        miss; null disables the fallback (store-only, unchanged)
+     * @param limiter         the per-player rate-limiter state to consult and update
+     * @param player          the requesting player's UUID (the rate-limit key)
+     * @param requestedHashes the raw requested hashes (may contain malformed lengths)
+     * @param nowMillis       the current wall-clock time (injectable for tests)
+     * @return the response batch (never null; empty when denied or nothing was found)
+     */
+    public static @NotNull OutputData servePictures(@NotNull NewsPictureStore store,
+                                                    @Nullable Function<byte[], byte[]> libraryFallback,
+                                                    @NotNull RateLimiter limiter,
+                                                    @NotNull UUID player,
+                                                    @NotNull List<byte[]> requestedHashes,
+                                                    long nowMillis) {
         // 1. Malformed-length hashes are skipped, the batch cap is re-enforced here
         //    (the core is also reachable without the decode-side cap, e.g. from tests).
         List<byte[]> validHashes = new ArrayList<>(Math.min(requestedHashes.size(), MAX_HASHES_PER_REQUEST));
@@ -314,7 +404,13 @@ public class NewsPictureRequest extends StockMarketGenericRequest<NewsPictureReq
         List<Picture> pictures = new ArrayList<>(validHashes.size());
         long servedBytes = 0;
         for (byte[] hash : validHashes) {
+            // Store wins: only a store MISS falls back to the current config library
+            // (by content hash — no filename/path surface). Published history therefore
+            // keeps its original immutable snapshot; unfired events resolve via fallback.
             byte[] pngBytes = store.get(hash);
+            if (pngBytes == null && libraryFallback != null) {
+                pngBytes = libraryFallback.apply(hash);
+            }
             if (pngBytes == null) continue; // unknown → omitted, client backs off
             if (pngBytes.length > NewsPictureLibrary.MAX_FILE_BYTES) {
                 // Defensive: someone replaced a store file on disk with an oversized

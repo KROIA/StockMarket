@@ -69,12 +69,12 @@ While a picture is still downloading, a flat paper-tone placeholder box of the f
 
 ## Default Pictures
 
-The shipped example events each reference a picture named after their event id (`diamond_rush.png`, `ore_market_crash.png`, ...). When the pictures folder contains no `.png` at load time, these defaults are written into it -- currently as **procedurally generated placeholders**: deterministic 384x384 grayscale newsprint motifs (skylines, mountains, bar charts), seeded by the event id so every server generates the same images. They are meant to be replaced: overwrite them with your own art (keeping the file names) or edit the `picture` fields to point at your own files.
+The shipped example events each reference a picture named after their event id (`diamond_rush.png`, `ore_market_crash.png`, ...). These defaults **self-heal per id**: on every reload, any shipped default picture missing from `pictures/` is written as `<eventId>.png` -- currently as **procedurally generated placeholders**: deterministic 384x384 grayscale newsprint motifs (skylines, mountains, bar charts), seeded by the event id so every server generates the same images. An existing `<eventId>.png` is **never** overwritten, so your own art and any default you modified are always preserved. They are meant to be replaced: overwrite them with your own art (keeping the file names) or edit the `picture` fields to point at your own files.
 
 Two notes for existing servers:
 
-- **Servers that predate the picture system keep their old `default_events.json`** -- the example file is only generated when the news folder has no `.json` files, so it will not contain `picture` fields. The default pictures are still extracted into `pictures/` independently. To get the picture references: delete `default_events.json` and run `/stockmarket news reload` to regenerate the current version, or add the `"picture": "<eventId>.png"` lines to your existing files manually.
-- Emptying the pictures folder and reloading regenerates the defaults. To run entirely without default pictures, remove the `picture` fields from the events instead.
+- **New default pictures arrive automatically.** Because the heal adds only the missing files, a server updating to a version with new default events receives their pictures on the next reload without touching your existing images. (The matching `picture` references heal into `default_events.json` the same way -- see [Getting the New Default Events](advanced-events.md#getting-the-new-default-events).)
+- To restore a single default you changed, delete that one `<eventId>.png` and reload; it is regenerated. To run entirely without default pictures, remove the `picture` fields from the events instead.
 
 (For mod/modpack developers: a real PNG placed in the jar under `news_pictures/<eventId>.png` automatically takes precedence over the procedural generator -- no code change needed.)
 

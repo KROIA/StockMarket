@@ -4,7 +4,7 @@
 
 News events are headlines that move market prices. The server periodically publishes an event -- "Diamond rush in the northern mountains!", "Mine collapse halts iron production!" -- and the prices of the affected markets react: they ramp up or crash, hold for a while, and then return to normal (or, for some events, stay shifted permanently).
 
-Every event is defined in a JSON file on the server, so admins control exactly which headlines exist, how strong their price impact is, and which markets they hit. The mod ships with a set of example events that is generated on first run. See [Configuring News Events](configuration.md) for the full JSON schema and the admin commands.
+Every event is defined in a JSON file on the server, so admins control exactly which headlines exist, how strong their price impact is, and which markets they hit. The mod ships with a set of example events that is generated on first run. Browse every shipped default event -- with its picture, impact and affected markets -- in the [Default Events Catalog](default-events-catalog.md). See [Configuring News Events](configuration.md) for the full JSON schema and the admin commands.
 
 Players read the news in-game through a craftable **newspaper item**. Reacting to headlines before the market fully prices them in -- or getting caught by news that insiders already traded on -- is the gameplay loop this feature adds.
 

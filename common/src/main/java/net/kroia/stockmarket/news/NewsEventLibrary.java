@@ -43,8 +43,16 @@ import java.util.Set;
  * <p>
  * <b>First run:</b> if the folder is missing or contains no {@code .json} files,
  * {@link DefaultNewsEvents} writes a self-documenting {@code default_events.json} which is
- * then loaded normally. Analogously, {@link DefaultNewsPictures} populates the
- * {@code pictures/} subfolder when it contains no {@code .png} files.
+ * then loaded normally.
+ * <p>
+ * <b>Additive self-healing:</b> on every reload the shipped defaults are topped up without
+ * overwriting anything. Any shipped default event id present in no loaded file is parsed
+ * into the pool and appended to an existing {@code default_events.json}
+ * ({@link DefaultNewsEvents#appendMissingToFile}); any shipped default picture missing from
+ * {@code pictures/} is written per id ({@link DefaultNewsPictures#extractMissingDefaults}).
+ * Admin-customized events, admin art and admin-modified defaults are always preserved — the
+ * heal only adds what is missing, so existing installs receive newly shipped content while
+ * keeping their edits.
  * <p>
  * <b>Pictures:</b> the library also owns the {@link NewsPictureLibrary} for the
  * {@code pictures/} subfolder; it is rescanned on every reload and its validation
@@ -276,12 +284,13 @@ public class NewsEventLibrary {
             return;
         }
 
-        // 1b. Pictures (picture plan §2/§7): extract the default pictures when the
-        //     pictures/ subfolder is empty (mirrors the defaults-json step above),
-        //     then rescan the folder into the picture library. Picture problems merge
-        //     into the same report so `/stockmarket news reload` shows them too.
+        // 1b. Pictures (picture plan §2/§7): additively self-heal the default pictures —
+        //     each shipped default <eventId>.png is written only if it is missing, so new
+        //     defaults reach existing installs while admin art is never overwritten — then
+        //     rescan the folder into the picture library. Picture problems merge into the
+        //     same report so `/stockmarket news reload` shows them too.
         Path picturesDir = newsDir.resolve(NewsPictureLibrary.PICTURES_DIR_NAME);
-        DefaultNewsPictures.extractDefaultsIfEmpty(picturesDir);
+        DefaultNewsPictures.extractMissingDefaults(picturesDir);
         pictureLibrary.rescan(picturesDir, report);
 
         // 2. Parse all files into a fresh pool (alphabetical order → deterministic
@@ -290,6 +299,20 @@ public class NewsEventLibrary {
         SchedulerConfig newScheduler = new SchedulerConfig();
         for (Path file : files) {
             parseFile(file, newDefinitions, newScheduler, report);
+        }
+
+        // 2a. Additive self-heal of the shipped default EVENTS. Only tops up an existing
+        //     default_events.json — the file every install already has: any shipped default
+        //     whose id is present in NO loaded file is parsed into the pool here (active this
+        //     reload) and appended to the file (see DefaultNewsEvents#appendMissingToFile).
+        //     A folder without default_events.json is left alone — it is either brand-new
+        //     (the empty-folder path above just wrote the full file) or an admin who manages
+        //     news without the shipped defaults. Skipped when this pass is a hard failure
+        //     that will keep the previous pool (guard in step 3), so a broken folder can
+        //     never smuggle defaults in over a good pool.
+        boolean keepPrevious = newDefinitions.isEmpty() && !definitions.isEmpty() && report.hasErrors();
+        if (!keepPrevious && Files.exists(newsDir.resolve(DefaultNewsEvents.DEFAULT_FILE_NAME))) {
+            healMissingDefaultEvents(newsDir, newDefinitions, report);
         }
 
         // 2b. Referenced-but-missing pictures: WARNING only — the event keeps loading
@@ -307,8 +330,9 @@ public class NewsEventLibrary {
         validateMergedPool(newDefinitions, report);
 
         // 3. Keep the previous pool if this pass produced nothing but had errors —
-        //    a typo must never leave the plugin empty (plan §5).
-        if (newDefinitions.isEmpty() && !definitions.isEmpty() && report.hasErrors()) {
+        //    a typo must never leave the plugin empty (plan §5). Computed before the
+        //    event self-heal (step 2a) so healing can never defeat this safety net.
+        if (keepPrevious) {
             report.addError("", null, "reload produced no valid events — keeping "
                     + definitions.size() + " previously loaded definition(s)");
             return;
@@ -318,6 +342,60 @@ public class NewsEventLibrary {
         schedulerConfig = newScheduler;
         StockMarketMod.LOGGER.info("[NewsEventLibrary] Loaded {} news event definition(s) from {} file(s) in {}",
                 newDefinitions.size(), files.size(), newsDir);
+    }
+
+    /**
+     * Additive self-heal of the shipped default events (bug fix: existing installs with an
+     * older {@code default_events.json} never received newly shipped events). For every id
+     * in {@link DefaultNewsEvents#DEFAULT_EVENT_IDS} that is present in <b>no</b> loaded
+     * file (so an admin who redefined a default id in their own file is respected and not
+     * duplicated), the shipped event object is:
+     * <ol>
+     *   <li>parsed through the normal {@link NewsEventDefinition#parse} path and added to
+     *       the in-memory pool of this reload — the event is active immediately, without a
+     *       second full reload;</li>
+     *   <li>persisted by {@link DefaultNewsEvents#appendMissingToFile}, which appends only
+     *       the missing objects to {@code default_events.json} and never rewrites an
+     *       existing entry or the {@code scheduler} block.</li>
+     * </ol>
+     * Existing entries are never overwritten (admin edits are respected) and the heal can
+     * never introduce a duplicate-id error. Added ids are logged at INFO — when nothing is
+     * missing (e.g. the pristine shipped defaults) the method is a no-op and stays silent,
+     * preserving the zero-warning defaults contract. Never throws: on a persist failure the
+     * in-memory additions are still kept.
+     *
+     * @param newsDir the news config directory (must already exist)
+     * @param pool    the freshly parsed event pool of this reload, extended in place
+     * @param report  collector passed to the per-event parse (shipped defaults parse clean)
+     */
+    private static void healMissingDefaultEvents(Path newsDir,
+                                                 Map<String, NewsEventDefinition> pool,
+                                                 ValidationReport report) {
+        List<String> missing = new ArrayList<>();
+        for (String id : DefaultNewsEvents.DEFAULT_EVENT_IDS) {
+            if (!pool.containsKey(id)) missing.add(id);
+        }
+        if (missing.isEmpty()) return;
+
+        Map<String, JsonObject> shipped = DefaultNewsEvents.getDefaultEventObjectsById();
+        List<String> added = new ArrayList<>(missing.size());
+        for (String id : missing) {
+            JsonObject obj = shipped.get(id);
+            if (obj == null) continue; // unreachable: DEFAULT_EVENT_IDS mirror the shipped JSON
+            NewsEventDefinition def = NewsEventDefinition.parse(
+                    obj, DefaultNewsEvents.DEFAULT_FILE_NAME, report);
+            if (def == null) continue; // shipped defaults parse clean; guard defensively anyway
+            pool.put(def.getId(), def);
+            added.add(def.getId());
+        }
+        if (added.isEmpty()) return;
+
+        // Persist the additions (best-effort). On failure the in-memory heal is kept.
+        DefaultNewsEvents.appendMissingToFile(newsDir, added);
+
+        StockMarketMod.LOGGER.info(
+                "[NewsEventLibrary] Self-healed {} shipped default news event(s) missing from {}: {}",
+                added.size(), DefaultNewsEvents.DEFAULT_FILE_NAME, added);
     }
 
     /**
@@ -353,6 +431,29 @@ public class NewsEventLibrary {
                                     ValidationReport report) {
         // Reset the invalid-chain index set for this reload pass.
         invalidChains.clear();
+
+        // Collect every event id that is referenced as a chain target anywhere in the
+        // merged pool. A weight-0 event named here is legitimately reachable via a chain
+        // (fired on another event's completion/step), so it is exempt from the
+        // "can never fire" warning below — analogous to the adminOnly exemption.
+        Set<String> chainTargets = new LinkedHashSet<>();
+        for (NewsEventDefinition definition : mergedDefinitions.values()) {
+            for (NewsEventDefinition.ChainDefinition chain : definition.getChains()) {
+                chainTargets.add(chain.targetEventId());
+            }
+        }
+
+        // Chain-aware "weight 0 → can never fire" warning (moved out of
+        // NewsEventDefinition#parse, which lacked cross-event context). Only a weight-0
+        // event that is neither adminOnly (manually fired) nor a chain target (fired via
+        // another event) is genuinely orphaned and unreachable.
+        for (NewsEventDefinition definition : mergedDefinitions.values()) {
+            if (definition.getWeight() == 0 && !definition.isAdminOnly()
+                    && !chainTargets.contains(definition.getId())) {
+                report.addWarning("", definition.getId(),
+                        "'weight' is 0 and the event is not adminOnly — it can never fire");
+            }
+        }
 
         for (Map.Entry<String, NewsEventDefinition> defEntry : mergedDefinitions.entrySet()) {
             NewsEventDefinition definition = defEntry.getValue();
