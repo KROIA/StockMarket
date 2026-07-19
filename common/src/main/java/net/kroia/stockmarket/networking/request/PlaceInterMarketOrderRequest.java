@@ -4,6 +4,10 @@ import net.kroia.banksystem.api.bank.BankStatus;
 import net.kroia.banksystem.api.bank.IServerBank;
 import net.kroia.banksystem.api.bankaccount.ISyncServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IBankManager;
+import net.kroia.banksystem.banking.BankPermission;
+import net.kroia.banksystem.banking.User;
+import net.kroia.banksystem.banking.clientdata.BankUserData;
+import net.kroia.banksystem.banking.clientdata.UserData;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.stockmarket.api.market.IServerMarket;
@@ -142,6 +146,52 @@ public class PlaceInterMarketOrderRequest extends StockMarketGenericRequest<Plac
             warn("No BankAccount found with BankAccountNr " + input.bankAccountNr);
             future.complete(new OutputData(false, "NO_BANK_ACCOUNT"));
             return future;
+        }
+
+        // 4b. T-131 (security): verify the requesting player is actually a
+        // member/owner of the target account AND holds the required permissions
+        // BEFORE locking any funds. This mirrors CreateOrderRequest's
+        // membership+permission gate (which only checked account existence here).
+        // Without it a crafted client could pass an arbitrary bankAccountNr and
+        // lock/trade an account it does not own or lacks permission on.
+        //
+        // An inter-market order withdraws the "have" items (to sell) and deposits
+        // the acquired "want" items, so BOTH WITHDRAW and DEPOSIT are required.
+        //
+        // This is orthogonal to the T-123 NetworkGate above (slave trust) and the
+        // T-130 admin gates — those govern who may forward/manage; this governs
+        // whether the sender may act on the ORDER's target account.
+        // NOTE: getUserData(...) deliberately excludes the personal bank owner
+        // (see ISyncServerBankAccount#getUserData Javadoc). Members are checked via
+        // their BankUserData permissions; the personal owner is checked via
+        // getPersonalBankOwnerData() and implicitly holds all permissions.
+        BankUserData bankUserData = bankAccount.getUserData(playerSender);
+        if (bankUserData == null) {
+            UserData ownerData = bankAccount.getPersonalBankOwnerData();
+            // Only the actual personal owner may use the account without an explicit
+            // member entry. Unlike CreateOrderRequest we also verify the owner UUID
+            // matches the sender: getUserData() excludes the owner, so a non-member
+            // targeting someone else's personal account would otherwise slip through.
+            if (ownerData == null || !ownerData.userUUID().equals(playerSender)) {
+                User us = serverBankManager.getSync().getUserByUUID(playerSender);
+                String userName = (us != null) ? us.getName() : playerSender.toString();
+                warn("No BankUserData found with BankAccountNr " + input.bankAccountNr + " for user: " + userName +
+                        "\nThis player seems not to be a member of the BankAccount.");
+                future.complete(new OutputData(false, "NO_BANK_USER"));
+                return future;
+            }
+            // Personal owner — implicitly holds all permissions, allow.
+        } else {
+            // Member: require WITHDRAW (to sell the "have" items) and DEPOSIT
+            // (to receive the acquired "want" items).
+            if (!BankPermission.hasPermission(bankUserData.permissions, BankPermission.WITHDRAW)) {
+                future.complete(new OutputData(false, "NO_PERMISSION_TO_WITHDRAW"));
+                return future;
+            }
+            if (!BankPermission.hasPermission(bankUserData.permissions, BankPermission.DEPOSIT)) {
+                future.complete(new OutputData(false, "NO_PERMISSION_TO_DEPOSIT"));
+                return future;
+            }
         }
 
         // 5. Validate player has the "have" items in their item bank

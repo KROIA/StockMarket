@@ -194,6 +194,7 @@
   "gui.stockmarket.trade_screen.mode_pair": "Item / Item",
   "gui.stockmarket.trade_screen.news": "News",
   "gui.stockmarket.trade_screen.news.tooltip": "Open the newspaper with the latest market news.",
+  "gui.stockmarket.trade_screen.select_account.tooltip": "Select the bank account used for trading (only accounts you can deposit to and withdraw from).",
   "gui.stockmarket.inter_market_panel.market_exchange": "Exchange",
   "gui.stockmarket.inter_market_panel.limit_exchange": "Limit",
   "gui.stockmarket.inter_market_panel.quantity": "Quantity",

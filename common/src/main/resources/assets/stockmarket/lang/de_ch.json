@@ -194,6 +194,7 @@
   "gui.stockmarket.trade_screen.mode_pair": "Item / Item",
   "gui.stockmarket.trade_screen.news": "News",
   "gui.stockmarket.trade_screen.news.tooltip": "Macht d Ziitig mit de nöiste Marktnachrichte uf.",
+  "gui.stockmarket.trade_screen.select_account.tooltip": "Wähl s Bankkonto für de Handel (nur Konte, wo du iizahle und uszahle chasch).",
   "gui.stockmarket.inter_market_panel.market_exchange": "Tuusch",
   "gui.stockmarket.inter_market_panel.limit_exchange": "Limit",
   "gui.stockmarket.inter_market_panel.quantity": "Mängi",

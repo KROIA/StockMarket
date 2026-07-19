@@ -1,11 +1,15 @@
 package net.kroia.stockmarket.screen;
 
+import net.kroia.banksystem.banking.BankPermission;
+import net.kroia.banksystem.banking.clientdata.BankAccountData;
 import net.kroia.banksystem.banking.clientdata.BankData;
+import net.kroia.banksystem.screen.custom.BankAccountSelectionScreen;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.gui.Gui;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.TabElement;
+import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.networking.client_server.streaming.StreamSystem;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.screen.uiElements.FavoritesBar;
@@ -35,6 +39,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 
 public class TradeScreen extends StockMarketGuiScreen {
@@ -47,6 +52,8 @@ public class TradeScreen extends StockMarketGuiScreen {
         private static final String PAIR_MODE = Component.translatable(PREFIX + "mode_pair").getString();
         private static final String NEWS = Component.translatable(PREFIX + "news").getString();
         private static final Component NEWS_TOOLTIP = Component.translatable(PREFIX + "news.tooltip");
+        // T-131: tooltip for the bank-account selector button in the top row.
+        private static final Component SELECT_ACCOUNT_TOOLTIP = Component.translatable(PREFIX + "select_account.tooltip");
         // T-123 (untrusted slave gate) — shared with every other mutating screen.
         // T-125: the banner text is split into three lang keys so ModUtilities'
         // (single-line) Label widget can render the message across three stacked
@@ -96,11 +103,36 @@ public class TradeScreen extends StockMarketGuiScreen {
     private @Nullable ItemID currentMarketID = null;
     private int selectedBankAccountNr = -1;
 
+    /**
+     * T-131 (Bug B fix): cache of the most recent order lists pushed by the
+     * {@code ActiveOrdersStream}. That stream is scoped server-side ONLY by the
+     * executor player's UUID, so it delivers every pending order the player owns
+     * across ALL of their bank accounts. This screen must show only the orders that
+     * belong to the currently selected trading account ({@link #selectedBankAccountNr}).
+     * Caching the raw lists lets us re-apply the per-account filter immediately when
+     * the selected account changes (see {@link #applySelectedBankAccount}) instead of
+     * waiting for the next stream push (which only fires when the order set changes).
+     */
+    private List<Order> lastStreamedOrders = new java.util.ArrayList<>();
+    private List<InterMarketOrder> lastStreamedInterMarketOrders = new java.util.ArrayList<>();
+
     // Mode toggle: Item/Money vs Item/Item
     private final Button moneyModeButton;
     private final Button pairModeButton;
     // Opens the newspaper screen (T-074)
     private final Button newsButton;
+    /**
+     * T-131: bank-account selector button on its own dedicated full-width row at
+     * the top of the right panel. Reuses
+     * BankSystem's {@link BankAccountSelectionScreen.AccountButton} widget (shows
+     * the selected account's icon + name). Clicking opens the shared
+     * {@link BankAccountSelectionScreen} popup so the player can choose which bank
+     * account funds their orders (money spent on buys, items received/sold). The
+     * chosen account drives both the order pipeline ({@link #selectedBankAccountNr})
+     * and the balances shown in the trading panel. Disabled on untrusted slaves
+     * (T-123) — no order can be placed there anyway.
+     */
+    private final BankAccountSelectionScreen.AccountButton selectAccountButton;
     private final PairSelectorWidget pairSelectorWidget;
     private boolean isPairMode = false;
 
@@ -135,6 +167,68 @@ public class TradeScreen extends StockMarketGuiScreen {
         newsButton.setTextFontScale(0.8f);
         newsButton.setHoverTooltipSupplier(Texts.NEWS_TOOLTIP::getString);
         newsButton.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
+        // Fix 2 (T-120 idiom): anchor the tooltip at the cursor's TOP_RIGHT corner so
+        // the tooltip body extends down-and-to-the-LEFT of the mouse (mouse cursor =
+        // tooltip's top-right corner). Matches NewsScreen / PluginManagementScreen.
+        newsButton.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.TOP_RIGHT);
+
+        // T-131: bank-account selector. Reuses BankSystem's AccountButton (icon +
+        // account name). Clicking opens the shared BankAccountSelectionScreen popup.
+        // FR-002 (wired 2026-07-19): the popup now uses BankSystem's 6-arg
+        // "gray-out locked accounts" constructor. It lists EVERY account the player
+        // owns, but accounts where the player lacks BOTH DEPOSIT and WITHDRAW are
+        // rendered grayed-out and non-clickable with an "insufficient rights" tooltip
+        // (BankSystem-side lang key), instead of the previous WITHDRAW-only list +
+        // selection-time rejection. The DEPOSIT|WITHDRAW AND-filter is expressed with
+        // requireAllPermissions=true, showLockedAccounts=true (see the setOnFallingEdge
+        // call below). This depends on BankSystem's FR-002 API at the unchanged runtime
+        // version 1.21.1-2.0.4; the Loom remap cache was cleared so the fresh jar
+        // carrying that constructor is picked up at runtime.
+        selectAccountButton = new BankAccountSelectionScreen.AccountButton();
+        // Fix 1 (T-131 follow-up): the reused BankSystem AccountButton renders the
+        // account name in an internal (private) Label child at the default 1.0 font
+        // scale. ModUtilities exposes no auto-fit / truncate API, and
+        // AccountButton.setTextFontScale() only retargets the button's own (empty,
+        // orphaned) label — NOT the account-name label — so it has no visible effect.
+        // Reach the account-name Label through the public getChilds() API and scale
+        // its text. The selector now occupies its own dedicated full-width top row
+        // (see updateLayout), so a modest 0.9 scale leaves plenty of room for typical
+        // account names while keeping a small safety margin for longer ones. The icon
+        // child is an ItemView (not a Label), so it is left untouched and stays
+        // visible. The Label instance is stable across setAccountData() calls (which
+        // only call setText), so scaling it once here is sufficient.
+        for (GuiElement child : selectAccountButton.getChilds()) {
+            if (child instanceof Label) {
+                child.setTextFontScale(0.9f);
+            }
+        }
+        selectAccountButton.setHoverTooltipSupplier(Texts.SELECT_ACCOUNT_TOOLTIP::getString);
+        selectAccountButton.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
+        // Fix 2 (T-120 idiom): anchor the tooltip at the cursor's TOP_RIGHT corner so
+        // the tooltip body extends down-and-to-the-LEFT of the mouse (mouse cursor =
+        // tooltip's top-right corner). Matches NewsScreen / PluginManagementScreen.
+        selectAccountButton.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.TOP_RIGHT);
+        // FR-002 6-arg overload: gray-out mode with a DEPOSIT|WITHDRAW AND-filter.
+        //  - permissionFilter      = DEPOSIT | WITHDRAW bit mask. Combining the two
+        //                            enum bit values with OR is the idiomatic way to
+        //                            build a multi-bit mask in BankSystem (mirrors how
+        //                            the old call passed BankPermission.WITHDRAW.getValue()
+        //                            and how BankPermission itself ORs bits, e.g.
+        //                            getSelfOwnerPermissions()). No magic numbers.
+        //  - requireAllPermissions = true  → AND semantics: an account is "tradeable"
+        //                            only if the player holds BOTH bits.
+        //  - showLockedAccounts    = true  → list every account, but grays out + makes
+        //                            non-clickable the ones failing the AND-filter, with
+        //                            an "insufficient rights" hover tooltip.
+        // Because locked accounts are non-clickable, onBankAccountSelected now only ever
+        // fires for tradeable accounts; its playerCanTrade re-check is retained as
+        // defense-in-depth (see that method's Javadoc).
+        selectAccountButton.setOnFallingEdge(() ->
+                setScreen(new BankAccountSelectionScreen(this, getThisPlayerUUID(),
+                        this::onBankAccountSelected,
+                        BankPermission.DEPOSIT.getValue() | BankPermission.WITHDRAW.getValue(),
+                        true,   // requireAllPermissions: AND (needs BOTH deposit+withdraw)
+                        true))); // showLockedAccounts: gray out non-tradeable accounts
 
         // Pair selector widget (hidden by default in money mode)
         pairSelectorWidget = new PairSelectorWidget(this::onPairSelected);
@@ -204,6 +298,7 @@ public class TradeScreen extends StockMarketGuiScreen {
         addElement(moneyModeButton);
         addElement(pairModeButton);
         addElement(newsButton);
+        addElement(selectAccountButton);
         addElement(favoritesBar);
         addElement(pairSelectorWidget);
         addElement(candlestickChart);
@@ -231,6 +326,9 @@ public class TradeScreen extends StockMarketGuiScreen {
             orderMarkerOverlay.setOnMoveOrder(null);
             orderMarkerOverlay.setOnCancelInterMarketOrder(null);
             orderMarkerOverlay.setOnMoveInterMarketOrder(null);
+            // T-131: no orders can be placed on an untrusted slave, so lock the
+            // account selector too (same UX-side gate as the mutating panels).
+            selectAccountButton.setEnabled(false);
         }
 
         // Determine initial market from preferences, fall back to first available
@@ -293,21 +391,23 @@ public class TradeScreen extends StockMarketGuiScreen {
             }
         }
 
-        getBankManager().getPersonalBankAccountDataAsync(getThisPlayerUUID()).thenAccept(bankAccountData -> {
-            if(bankAccountData != null) {
-                selectedBankAccountNr = bankAccountData.accountNumber;
-            }
-        });
+        // T-131: initialize the selected trading account. Prefer the persisted
+        // preference (if it still exists and the player can use it), otherwise fall
+        // back to the personal account.
+        initializeSelectedBankAccount();
 
         // Subscribe to active orders stream for real-time updates of pending orders
         activeOrdersStreamID = StreamSystem.startServerToClientStream(
                 BACKEND_INSTANCES.NETWORKING.ACTIVE_ORDERS_STREAM,
                 (byte) 0,
                 data -> {
-                    pendingOrdersPanel.updateOrders(data.orders);
-                    pendingOrdersPanel.updateInterMarketOrders(data.interMarketOrders);
-                    orderMarkerOverlay.updateOrders(data.orders);
-                    orderMarkerOverlay.updateInterMarketOrders(data.interMarketOrders);
+                    // T-131 (Bug B fix): the stream is scoped only by player UUID, so it
+                    // carries orders from EVERY account the player owns. Cache the raw
+                    // lists and push them through the per-account filter so the panel /
+                    // chart markers only show the currently selected account's orders.
+                    lastStreamedOrders = (data.orders != null) ? data.orders : new java.util.ArrayList<>();
+                    lastStreamedInterMarketOrders = (data.interMarketOrders != null) ? data.interMarketOrders : new java.util.ArrayList<>();
+                    applyOrdersToPanels();
                     orderHistoryPanel.refresh();
                     if (currentMarketID != null)
                         transactionHistoryPanel.refresh(currentMarketID);
@@ -382,7 +482,13 @@ public class TradeScreen extends StockMarketGuiScreen {
         UUID playerUUID = getThisPlayerUUID();
         if (playerUUID == null) return;
 
-        getBankManager().getPersonalBankAccountDataAsync(playerUUID).thenAccept(bankAccountData -> {
+        // T-131: show the balances of the SELECTED account (not always the personal
+        // one). Fall back to the personal account only while no account has been
+        // resolved yet (selectedBankAccountNr == -1).
+        CompletableFuture<BankAccountData> accountFuture = (selectedBankAccountNr == -1)
+                ? getBankManager().getPersonalBankAccountDataAsync(playerUUID)
+                : getBankManager().getBankAccountDataAsync(selectedBankAccountNr);
+        accountFuture.thenAccept(bankAccountData -> {
             if (bankAccountData == null) return;
 
             // Money balance (trading currency)
@@ -406,6 +512,205 @@ public class TradeScreen extends StockMarketGuiScreen {
                 interMarketTradingPanel.setHaveBalance(haveBal);
             }
         });
+    }
+
+    /**
+     * Determines the initially selected trading bank account (T-131).
+     * <p>
+     * First tries the persisted {@link PlayerPreferences#getLastTradingBankAccountNr()}
+     * preference: if that account still exists and the player holds both the
+     * {@link BankPermission#DEPOSIT} and {@link BankPermission#WITHDRAW} permissions
+     * on it (validated via {@link #playerCanTrade(BankAccountData, UUID)}, which uses
+     * only pre-existing runtime API), it is used. Otherwise (never set, deleted, or
+     * permissions revoked) the player's personal account is used as a fallback.
+     * Results are applied on the main render thread via
+     * {@link #applySelectedBankAccount(BankAccountData)}, which sets both
+     * {@link #selectedBankAccountNr} and the selector button's account data — so the
+     * button reflects the resolved default account immediately on screen open, not
+     * only after a manual selection.
+     */
+    private void initializeSelectedBankAccount() {
+        UUID playerUUID = getThisPlayerUUID();
+        if (playerUUID == null) return;
+        int preferred = StockMarketGuiElement.getPlayerPreferences().getLastTradingBankAccountNr();
+        if (preferred == -1) {
+            fallBackToPersonalBankAccount(playerUUID);
+            return;
+        }
+        getBankManager().getBankAccountDataAsync(preferred).thenAccept(accountData -> {
+            // Validate the persisted account still exists and is still usable
+            // (owned / permitted). Permissions may have changed since the choice was
+            // saved last session, so re-check that the player still holds BOTH
+            // DEPOSIT and WITHDRAW via playerCanTrade. This validation is independent
+            // of the FR-002 gray-out popup (which only gates interactive selection),
+            // so it must stay here to keep a stale/revoked persisted preference from
+            // silently loading a non-tradeable account on open.
+            // Fall back to the personal account when the preference is no longer valid.
+            if (accountData != null && playerCanTrade(accountData, playerUUID)) {
+                Minecraft.getInstance().execute(() -> applySelectedBankAccount(accountData));
+            } else {
+                fallBackToPersonalBankAccount(playerUUID);
+            }
+        });
+    }
+
+    /**
+     * Resolves the player's personal bank account and applies it as the active
+     * trading account (T-131). Used when no valid preference is available.
+     * @param playerUUID the local player's UUID
+     */
+    private void fallBackToPersonalBankAccount(UUID playerUUID) {
+        getBankManager().getPersonalBankAccountDataAsync(playerUUID).thenAccept(accountData -> {
+            if (accountData != null) {
+                Minecraft.getInstance().execute(() -> applySelectedBankAccount(accountData));
+            }
+        });
+    }
+
+    /**
+     * Applies a resolved bank account as the active trading account (T-131):
+     * updates {@link #selectedBankAccountNr}, reflects the account icon/name on the
+     * {@link #selectAccountButton}, and refreshes the displayed balances so money /
+     * item balances match the newly selected account. Must run on the main thread.
+     * @param accountData the account to activate (non-null)
+     */
+    private void applySelectedBankAccount(BankAccountData accountData) {
+        selectedBankAccountNr = accountData.accountNumber;
+        selectAccountButton.setAccountData(accountData);
+        refreshTradingPanelBalances();
+        // T-131 (balance-display fix): the FavoritesBar "Bank Balance" frame (money
+        // mode) and the PairSelectorWidget "Bal:" labels (pair mode) have their OWN
+        // balance-fetch paths that previously always read the personal account. Mirror
+        // the selected account into them so EVERY balance shown in the trade screen
+        // follows the chosen account, then their labels refresh immediately.
+        favoritesBar.setSelectedBankAccountNr(selectedBankAccountNr);
+        pairSelectorWidget.setSelectedBankAccountNr(selectedBankAccountNr);
+        // T-131 (Bug B fix): re-filter the cached pending orders / chart markers for the
+        // newly selected account so the list reflects the switch immediately, without
+        // waiting for the next ActiveOrdersStream push (which only fires when the order
+        // set actually changes).
+        applyOrdersToPanels();
+    }
+
+    /**
+     * T-131 (Bug B fix): pushes the cached pending orders to the orders panel and the
+     * chart overlay, filtered to the currently selected trading account
+     * ({@link #selectedBankAccountNr}).
+     * <p>
+     * The {@code ActiveOrdersStream} is scoped only by the player's UUID server-side, so
+     * it delivers orders from every account the player owns. Without this filter the
+     * panel would keep displaying the previously active account's orders after the
+     * player switches accounts. Called both when fresh stream data arrives and when the
+     * selected account changes.
+     */
+    private void applyOrdersToPanels() {
+        List<Order> orders = filterOrdersBySelectedAccount(lastStreamedOrders);
+        List<InterMarketOrder> interMarketOrders =
+                filterInterMarketOrdersBySelectedAccount(lastStreamedInterMarketOrders);
+        pendingOrdersPanel.updateOrders(orders);
+        pendingOrdersPanel.updateInterMarketOrders(interMarketOrders);
+        orderMarkerOverlay.updateOrders(orders);
+        orderMarkerOverlay.updateInterMarketOrders(interMarketOrders);
+    }
+
+    /**
+     * Filters the given orders down to those placed on the currently selected trading
+     * account. While no account has been resolved yet ({@link #selectedBankAccountNr}
+     * == -1, a transient startup window) the full list is returned unchanged, matching
+     * the personal-account fallback semantics used by the balance paths.
+     * @param source the unfiltered order list from the stream
+     * @return a new list containing only the selected account's orders
+     */
+    private List<Order> filterOrdersBySelectedAccount(List<Order> source) {
+        if (selectedBankAccountNr == -1) return new java.util.ArrayList<>(source);
+        List<Order> filtered = new java.util.ArrayList<>();
+        for (Order order : source) {
+            if (order.getBankAccountNr() == selectedBankAccountNr) {
+                filtered.add(order);
+            }
+        }
+        return filtered;
+    }
+
+    /**
+     * Inter-market variant of {@link #filterOrdersBySelectedAccount(List)}. An
+     * inter-market order's account is taken from its buy leg
+     * ({@link InterMarketOrder#getBankAccountNr()}), which equals the account the whole
+     * order was placed on.
+     * @param source the unfiltered inter-market order list from the stream
+     * @return a new list containing only the selected account's inter-market orders
+     */
+    private List<InterMarketOrder> filterInterMarketOrdersBySelectedAccount(List<InterMarketOrder> source) {
+        if (selectedBankAccountNr == -1) return new java.util.ArrayList<>(source);
+        List<InterMarketOrder> filtered = new java.util.ArrayList<>();
+        for (InterMarketOrder order : source) {
+            if (order.getBankAccountNr() == selectedBankAccountNr) {
+                filtered.add(order);
+            }
+        }
+        return filtered;
+    }
+
+    /**
+     * Callback fired when the player picks an account in the
+     * {@link BankAccountSelectionScreen} popup (T-131).
+     * <p>
+     * FR-002: the popup now opens in gray-out mode with a DEPOSIT|WITHDRAW AND-filter
+     * (requireAllPermissions=true, showLockedAccounts=true), so non-tradeable accounts
+     * are rendered grayed-out and non-clickable — this callback can therefore only fire
+     * for accounts the player is allowed to trade on. The
+     * {@link #playerCanTrade(BankAccountData, UUID)} re-check below is kept as
+     * defense-in-depth (belt-and-suspenders): a rejected account is neither applied nor
+     * persisted. A valid account is applied, persisted to the player's preferences, and
+     * mirrored on the selector button.
+     * @param accountNr the account number selected in the popup
+     */
+    private void onBankAccountSelected(int accountNr) {
+        UUID playerUUID = getThisPlayerUUID();
+        if (playerUUID == null) return;
+        getBankManager().getBankAccountDataAsync(accountNr).thenAccept(accountData -> {
+            if (accountData == null) return;
+            Minecraft.getInstance().execute(() -> {
+                // Defense-in-depth (FR-002): the popup already grays out and blocks
+                // clicks on accounts missing DEPOSIT or WITHDRAW, so this should always
+                // pass. Kept as a belt-and-suspenders guard so the trading account is
+                // guaranteed to support both buying (WITHDRAW) and selling (DEPOSIT).
+                // Do not apply or persist a rejected choice.
+                if (!playerCanTrade(accountData, playerUUID)) {
+                    warn("Selected account lacks the required deposit/withdraw permissions for trading");
+                    return;
+                }
+                applySelectedBankAccount(accountData);
+                // Persist so the choice is restored the next time the screen opens.
+                PlayerPreferences prefs = StockMarketGuiElement.getPlayerPreferences();
+                prefs.setLastTradingBankAccountNr(accountNr);
+                StockMarketGuiElement.updatePlayerPreferences(prefs);
+            });
+        });
+    }
+
+    /**
+     * Permission guard for a trading account: returns true only when
+     * {@code playerUUID} holds BOTH {@link BankPermission#DEPOSIT} and
+     * {@link BankPermission#WITHDRAW} on {@code accountData}, so the account can fund
+     * buys (WITHDRAW currency) and receive sells (DEPOSIT items).
+     * <p>
+     * Two use sites: (1) {@link #initializeSelectedBankAccount()} validates the
+     * persisted {@code lastTradingBankAccountNr} on screen open (permissions may have
+     * changed since it was saved), falling back to the personal account when it is no
+     * longer tradeable; (2) {@link #onBankAccountSelected(int)} re-checks the picked
+     * account as FR-002 defense-in-depth (the gray-out popup already blocks
+     * non-tradeable picks). Implemented with two single-bit
+     * {@link BankAccountData#hasAnyPermission(UUID, int)} checks (for a single bit,
+     * "any" equals "has that bit").
+     *
+     * @param accountData the account to validate (non-null)
+     * @param playerUUID  the local player's UUID
+     * @return true iff the player holds both DEPOSIT and WITHDRAW on the account
+     */
+    private boolean playerCanTrade(BankAccountData accountData, UUID playerUUID) {
+        return accountData.hasAnyPermission(playerUUID, BankPermission.DEPOSIT.getValue())
+                && accountData.hasAnyPermission(playerUUID, BankPermission.WITHDRAW.getValue());
     }
 
     /**
@@ -576,14 +881,24 @@ public class TradeScreen extends StockMarketGuiScreen {
         int rightPanelX = padding + (width * 3) / 4 + spacing;
         int rightPanelWidth = width - ((width * 3) / 4 + spacing);
 
-        // Mode toggle buttons at the top of the right panel
-        moneyModeButton.setBounds(rightPanelX, padding, modeButtonWidth, modeButtonHeight);
-        pairModeButton.setBounds(rightPanelX + modeButtonWidth + spacing, padding, modeButtonWidth, modeButtonHeight);
-        // News button right-aligned in the same row
-        int newsButtonWidth = 40;
-        newsButton.setBounds(rightPanelX + rightPanelWidth - newsButtonWidth, padding, newsButtonWidth, modeButtonHeight);
+        // T-131 (follow-up): the bank-account selector gets its own dedicated,
+        // full-width row at the very top of the right panel. The account name is
+        // variable-length and needs the maximum available width, so it no longer
+        // shares the crowded mode-button row. Everything below is shifted down by
+        // one button row to make room.
+        int accountRowY = padding;
+        selectAccountButton.setBounds(rightPanelX, accountRowY, rightPanelWidth, modeButtonHeight);
 
-        int selectorTop = padding + modeButtonHeight + spacing;
+        // Mode toggle buttons in the SECOND row of the right panel (shifted down
+        // by one row to sit below the full-width account selector).
+        int modeRowY = accountRowY + modeButtonHeight + spacing;
+        moneyModeButton.setBounds(rightPanelX, modeRowY, modeButtonWidth, modeButtonHeight);
+        pairModeButton.setBounds(rightPanelX + modeButtonWidth + spacing, modeRowY, modeButtonWidth, modeButtonHeight);
+        // News button right-aligned in the same (mode-button) row
+        int newsButtonWidth = 40;
+        newsButton.setBounds(rightPanelX + rightPanelWidth - newsButtonWidth, modeRowY, newsButtonWidth, modeButtonHeight);
+
+        int selectorTop = modeRowY + modeButtonHeight + spacing;
 
         // Top-left: candlestick chart (orderbook histogram always visible next to it)
         int chartWidth = (width * 3) / 4 - orderbookVolumeWidth;
@@ -591,14 +906,19 @@ public class TradeScreen extends StockMarketGuiScreen {
         // Right of chart: orderbook volume histogram (shows have-market depth in pair mode)
         orderbookVolumeHistogram.setBounds(candlestickChart.getRight(), candlestickChart.getTop(), orderbookVolumeWidth, candlestickChart.getHeight());
 
-        // Market selector area height (favorites bar or pair selector)
-        int selectorHeight = (height - spacing) / 2 - (modeButtonHeight + spacing);
+        // Market selector area height (favorites bar or pair selector). Two button
+        // rows now sit above it (the account selector row + the mode-button row), so
+        // reserve vertical space for both; this keeps the trading panel top at the
+        // same position it had with a single top row.
+        int selectorHeight = (height - spacing) / 2 - 2 * (modeButtonHeight + spacing);
 
         // Top-right: favorites bar or pair selector (below mode buttons)
         favoritesBar.setBounds(rightPanelX, selectorTop, rightPanelWidth, selectorHeight);
         pairSelectorWidget.setBounds(rightPanelX, selectorTop, rightPanelWidth, selectorHeight);
 
-        // Bottom-right: trading panel (below the selector area)
+        // Bottom-right: trading panel (below the selector area). The account
+        // selector now lives in its own dedicated full-width top row (placed above),
+        // so no extra vertical reservation is needed here.
         int tradingPanelTop = selectorTop + selectorHeight + spacing;
         tradingPanel.setBounds(rightPanelX, tradingPanelTop, rightPanelWidth, height - (tradingPanelTop - padding));
         // Inter-market trading panel same bounds as regular trading panel
@@ -817,37 +1137,46 @@ public class TradeScreen extends StockMarketGuiScreen {
         }
         return market;
     }
+    /**
+     * T-131 (Bug A diagnostics): reports the outcome of a create-order request.
+     * Previously the buy/sell/limit callbacks logged the status at INFO regardless of
+     * outcome, so a server rejection (e.g. NOT_ENOUGH_MONEY, or NO_BANK_USER on the
+     * selected account) produced no signal at the default log level and the order
+     * simply never appeared. A non-CREATED status is now logged at WARN so the actual
+     * rejection reason is visible when diagnosing "the order was not placed".
+     * @param result the server response for the create-order request
+     */
+    private void logOrderResult(CreateOrderRequest.OutputData result) {
+        if (result.status == CreateOrderRequest.Status.CREATED) {
+            info("Order created");
+        } else {
+            warn("Order rejected: " + result.status);
+        }
+    }
+
     private void onBuyMarket(double quantity)
     {
         ClientMarket market = getValidMarketForOrder();
         if(market == null) return;
-        market.createMarketOrder(selectedBankAccountNr, quantity).thenAccept(result->{
-            info("Order creation response: "+result.status);
-        });
+        market.createMarketOrder(selectedBankAccountNr, quantity).thenAccept(this::logOrderResult);
     }
     private void onSellMarket(double quantity)
     {
         ClientMarket market = getValidMarketForOrder();
         if(market == null) return;
-        market.createMarketOrder(selectedBankAccountNr, -quantity).thenAccept(result->{
-            info("Order creation response: "+result.status);
-        });
+        market.createMarketOrder(selectedBankAccountNr, -quantity).thenAccept(this::logOrderResult);
     }
     private void onBuyLimit(double quantity, double price)
     {
         ClientMarket market = getValidMarketForOrder();
         if(market == null) return;
-        market.createLimitOrder(selectedBankAccountNr, quantity, price).thenAccept(result->{
-            info("Order creation response: "+result.status);
-        });
+        market.createLimitOrder(selectedBankAccountNr, quantity, price).thenAccept(this::logOrderResult);
     }
     private void onSellLimit(double quantity, double price)
     {
         ClientMarket market = getValidMarketForOrder();
         if(market == null) return;
-        market.createLimitOrder(selectedBankAccountNr, -quantity, price).thenAccept(result->{
-            info("Order creation response: "+result.status);
-        });
+        market.createLimitOrder(selectedBankAccountNr, -quantity, price).thenAccept(this::logOrderResult);
     }
 
     /**

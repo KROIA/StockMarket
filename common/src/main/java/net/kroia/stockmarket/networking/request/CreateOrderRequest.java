@@ -133,10 +133,25 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
             return future;
         }
 
+        // T-131 (security): verify the requesting player is actually a
+        // member/owner of the target account AND holds the required permissions
+        // BEFORE locking any funds. Without it a crafted client could pass an
+        // arbitrary bankAccountNr and lock/trade an account it does not own or
+        // lacks permission on.
+        //
+        // NOTE: getUserData(...) deliberately excludes the personal bank owner
+        // (see ISyncServerBankAccount#getUserData Javadoc). Members are checked via
+        // their BankUserData permissions; the personal owner is checked via
+        // getPersonalBankOwnerData() and implicitly holds all permissions.
         BankUserData bankUserData = bankAccount.getUserData(playerSender);
         if(bankUserData == null) {
             UserData userData = bankAccount.getPersonalBankOwnerData();
-            if(userData == null) {
+            // Only the actual personal owner may use the account without an explicit
+            // member entry. We also verify the owner UUID matches the sender:
+            // getUserData() excludes the owner, so a non-member targeting someone
+            // else's personal account would otherwise slip through and let a crafted
+            // client trade on an account it does not own.
+            if(userData == null || !userData.userUUID().equals(playerSender)) {
                 User us = getServerBankManager().getSync().getUserByUUID(playerSender);
                 String userName;
                 if(us != null)
@@ -149,20 +164,24 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
                 future.complete(response);
                 return future;
             }
+            // Personal owner — implicitly holds all permissions, allow.
         }
         else {
-            if (input.volume > 0) {
-                if (!BankPermission.hasPermission(bankUserData.permissions, BankPermission.DEPOSIT)) {
-                    response.status = Status.NO_PERMISSION_TO_DEPOSIT;
-                    future.complete(response);
-                    return future; // User is not allowed to deposit items by buying
-                }
-            } else {
-                if (!BankPermission.hasPermission(bankUserData.permissions, BankPermission.WITHDRAW)) {
-                    response.status = Status.NO_PERMISSION_TO_WITHDRAW;
-                    future.complete(response);
-                    return future; // User is not allowed to withdraw items by selling
-                }
+            // Member: require BOTH WITHDRAW and DEPOSIT regardless of order
+            // direction. A buy withdraws money and deposits items; a sell
+            // withdraws items and deposits money — both directions touch both
+            // operations, so both permissions are required. This also makes an
+            // account "tradeable iff the player holds both perms", consistent with
+            // the TradeScreen account-selector filter.
+            if (!BankPermission.hasPermission(bankUserData.permissions, BankPermission.WITHDRAW)) {
+                response.status = Status.NO_PERMISSION_TO_WITHDRAW;
+                future.complete(response);
+                return future; // User is not allowed to withdraw
+            }
+            if (!BankPermission.hasPermission(bankUserData.permissions, BankPermission.DEPOSIT)) {
+                response.status = Status.NO_PERMISSION_TO_DEPOSIT;
+                future.complete(response);
+                return future; // User is not allowed to deposit
             }
         }
 
@@ -190,9 +209,26 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
         IServerBank moneyBank = bankAccount.getBank(moneyItemID);
         if(moneyBank == null)
         {
-            response.status = Status.NO_MONEY_BANK;
-            future.complete(response);
-            return future;
+            // T-131 (Bug A fix): a non-personal trading account (e.g. a shared company
+            // account created to hold a single item) may never have held the trading
+            // currency, so it has no money bank yet. The personal account always has
+            // one — which is why previously ONLY the personal account could place
+            // orders and non-personal accounts silently failed with NO_MONEY_BANK.
+            // Mirror the item-bank auto-creation above and create an empty money bank
+            // so the order can proceed: a SELL deposits its proceeds here, while a BUY
+            // still (correctly) hits the NOT_ENOUGH_MONEY balance check below because
+            // the freshly created bank has a zero balance. The MatchingEngine also
+            // requires this bank to exist (it cancels any order whose money bank is
+            // missing), so creating it here upholds that invariant.
+            // NOTE: this does NOT bypass any permission gate — the membership +
+            // DEPOSIT/WITHDRAW checks above already ran and rejected unauthorized users.
+            moneyBank = bankAccount.createBank(moneyItemID, 0);
+            if(moneyBank == null)
+            {
+                response.status = Status.NO_MONEY_BANK;
+                future.complete(response);
+                return future;
+            }
         }
 
         long currentMarketPrice = serverMarket.getCurrentMarketPrice();
