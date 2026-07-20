@@ -267,6 +267,8 @@
   "gui.stockmarket.create_market_tab.abundance": "Hüfigkeit",
   "gui.stockmarket.create_market_tab.already_exists": "Märt gits scho",
   "gui.stockmarket.create_market_tab.clear_selection": "Uuswahl leere",
+  "gui.stockmarket.create_market_tab.select_all": "Alli uuswähle",
+  "gui.stockmarket.create_market_tab.deselect_all": "Uuswahl ufhebe",
   "gui.stockmarket.preset_editor_tab.search": "Suechi",
   "gui.stockmarket.preset_editor_tab.save": "Änderige speichere",
   "gui.stockmarket.preset_editor_tab.price": "Priis",

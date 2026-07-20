@@ -267,6 +267,8 @@
   "gui.stockmarket.create_market_tab.abundance": "Häufigkeit",
   "gui.stockmarket.create_market_tab.already_exists": "Markt existiert bereits",
   "gui.stockmarket.create_market_tab.clear_selection": "Auswahl leeren",
+  "gui.stockmarket.create_market_tab.select_all": "Alle auswählen",
+  "gui.stockmarket.create_market_tab.deselect_all": "Auswahl aufheben",
   "gui.stockmarket.preset_editor_tab.search": "Suche",
   "gui.stockmarket.preset_editor_tab.save": "Änderungen speichern",
   "gui.stockmarket.preset_editor_tab.price": "Preis",

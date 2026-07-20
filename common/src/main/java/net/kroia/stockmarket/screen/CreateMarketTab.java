@@ -50,6 +50,8 @@ public class CreateMarketTab extends StockMarketGuiElement {
         public static final Component ABUNDANCE_LABEL = Component.translatable(PREFIX + "abundance");
         public static final Component ALREADY_EXISTS = Component.translatable(PREFIX + "already_exists");
         public static final Component CLEAR_SELECTION = Component.translatable(PREFIX + "clear_selection");
+        public static final Component SELECT_ALL = Component.translatable(PREFIX + "select_all");
+        public static final Component DESELECT_ALL = Component.translatable(PREFIX + "deselect_all");
     }
 
     // Scrollable vertical list of category buttons (left panel)
@@ -61,6 +63,9 @@ public class CreateMarketTab extends StockMarketGuiElement {
     // Grid of item icons from the selected category
     private final ListView itemGridView;
     private final LayoutGrid itemGridLayout;
+    // Bulk selection buttons above the item grid — apply to the whole current category
+    private final Button selectAllButton;
+    private final Button deselectAllButton;
     // Right panel: list of selected items
     private final Label selectedLabel;
     private final ListView selectedItemsView;
@@ -106,6 +111,19 @@ public class CreateMarketTab extends StockMarketGuiElement {
         itemGridLayout = new LayoutGrid(0, 0, false, false, 0, 1, Alignment.TOP);
         itemGridView.setLayout(itemGridLayout);
 
+        // Bulk selection buttons: they operate on the whole current category
+        // regardless of the search filter. "Select all" adds every not-yet-
+        // existing preset in the category to the selection; "Deselect all"
+        // removes every preset in the category from the selection.
+        // Disabled by default — enabled state is recomputed inside
+        // rebuildItemGrid() once categories are loaded and a category is
+        // selected. Guards against the brief window between construction and
+        // the async category load returning.
+        selectAllButton = new Button(Texts.SELECT_ALL.getString(), this::onSelectAllClicked);
+        selectAllButton.setEnabled(false);
+        deselectAllButton = new Button(Texts.DESELECT_ALL.getString(), this::onDeselectAllClicked);
+        deselectAllButton.setEnabled(false);
+
         // Right panel
         selectedLabel = new Label(Texts.SELECTED_ITEMS.getString());
         selectedLabel.setAlignment(Label.Alignment.CENTER);
@@ -127,6 +145,8 @@ public class CreateMarketTab extends StockMarketGuiElement {
         addChild(categoryListView);
         addChild(searchLabel);
         addChild(searchField);
+        addChild(selectAllButton);
+        addChild(deselectAllButton);
         addChild(itemGridView);
         addChild(selectedLabel);
         addChild(selectedItemsView);
@@ -213,23 +233,52 @@ public class CreateMarketTab extends StockMarketGuiElement {
 
     /**
      * Rebuilds the item grid for the currently selected category, applying search filter.
+     * Also refreshes the enabled state of the Select-all / Deselect-all buttons based
+     * on how many presets in the category are selectable and how many are in the
+     * current selection set.
      */
     private void rebuildItemGrid() {
         itemGridView.removeChilds();
 
-        if (selectedCategory == null) return;
+        if (selectedCategory == null) {
+            selectAllButton.setEnabled(false);
+            deselectAllButton.setEnabled(false);
+            return;
+        }
 
         MarketPresetCategory category = findCategory(selectedCategory);
-        if (category == null) return;
+        if (category == null) {
+            selectAllButton.setEnabled(false);
+            deselectAllButton.setEnabled(false);
+            return;
+        }
 
         String searchText = searchField.getText().toLowerCase().trim();
 
         // Refresh existing markets cache
         refreshExistingMarkets();
 
+        // Track category-scoped selectable/selected counts so we can enable
+        // or disable the bulk buttons at the end of the loop. This piggybacks
+        // on the existing iteration to avoid a second pass over the presets.
+        int selectableInCategory = 0;
+        int selectedInCategory = 0;
+
         for (MarketPreset preset : category.getPresets()) {
             ItemStack stack = preset.toItemStack();
             if (stack.isEmpty()) continue;
+
+            String key = preset.getUniqueKey();
+            // Component-aware comparison: matches item type AND components (e.g. enchantments)
+            boolean alreadyExists = existingMarketStacks.stream()
+                    .anyMatch(existing -> ItemStack.isSameItemSameComponents(existing, stack));
+            boolean isSelected = selectedPresets.containsKey(key);
+
+            // Count against the WHOLE category (before the search filter drops
+            // rows) so the bulk-selection buttons reflect the true state of
+            // the category, not just what the current search shows.
+            if (!alreadyExists) selectableInCategory++;
+            if (isSelected) selectedInCategory++;
 
             // Apply search filter on display name, registry ID, and component text (enchantments, potions, etc.)
             String displayName = stack.getHoverName().getString().toLowerCase();
@@ -240,15 +289,17 @@ public class CreateMarketTab extends StockMarketGuiElement {
                 continue;
             }
 
-            String key = preset.getUniqueKey();
-            // Component-aware comparison: matches item type AND components (e.g. enchantments)
-            boolean alreadyExists = existingMarketStacks.stream()
-                    .anyMatch(existing -> ItemStack.isSameItemSameComponents(existing, stack));
-            boolean isSelected = selectedPresets.containsKey(key);
-
             SelectableItemView itemView = new SelectableItemView(stack, key, isSelected, alreadyExists, preset);
             itemGridView.addChild(itemView);
         }
+
+        // Bulk-selection button state:
+        //  - Select-all is only meaningful when the category contains at least
+        //    one item whose market does not yet exist.
+        //  - Deselect-all is only meaningful when at least one preset in the
+        //    category is currently in the selection set.
+        selectAllButton.setEnabled(selectableInCategory > 0);
+        deselectAllButton.setEnabled(selectedInCategory > 0);
     }
 
     /**
@@ -333,6 +384,67 @@ public class CreateMarketTab extends StockMarketGuiElement {
     }
 
     /**
+     * Handler for the "Select all" button above the item grid.
+     * <p>
+     * Iterates every preset in the currently selected category and adds those
+     * whose market does <em>not</em> yet exist to the selection set. Presets
+     * are filtered using exactly the same component-aware
+     * {@link ItemStack#isSameItemSameComponents} comparison used by
+     * {@link #rebuildItemGrid()} so the exclusion pattern matches the
+     * per-item click behaviour (already-existing markets are click-locked).
+     * <p>
+     * The search field is intentionally ignored: the button label reads
+     * "Select all", so users expect every not-yet-existing item in the
+     * category to end up selected, not only what the current filter shows.
+     * Ignores the call when no category is selected.
+     */
+    private void onSelectAllClicked() {
+        if (selectedCategory == null) return;
+        MarketPresetCategory category = findCategory(selectedCategory);
+        if (category == null) return;
+
+        // Refresh so we filter against the latest set of existing markets
+        // (an admin could have created some in another screen since load).
+        refreshExistingMarkets();
+
+        for (MarketPreset preset : category.getPresets()) {
+            ItemStack stack = preset.toItemStack();
+            if (stack.isEmpty()) continue;
+            // Same "already exists" filter as SelectableItemView — keep the two in sync.
+            boolean alreadyExists = existingMarketStacks.stream()
+                    .anyMatch(existing -> ItemStack.isSameItemSameComponents(existing, stack));
+            if (alreadyExists) continue;
+            selectedPresets.put(preset.getUniqueKey(), preset);
+        }
+        // Defer UI rebuild to render() so we do not mutate child lists mid-event.
+        itemGridDirty = true;
+        selectedListDirty = true;
+    }
+
+    /**
+     * Handler for the "Deselect all" button above the item grid.
+     * <p>
+     * Removes every preset that belongs to the currently selected category
+     * from the selection set. Presets in other categories stay selected —
+     * this is scoped to the category the user is looking at. Already-created
+     * markets are never in the selection set to begin with, so no separate
+     * exclusion is needed here. Ignores the call when no category is
+     * selected.
+     */
+    private void onDeselectAllClicked() {
+        if (selectedCategory == null) return;
+        MarketPresetCategory category = findCategory(selectedCategory);
+        if (category == null) return;
+
+        for (MarketPreset preset : category.getPresets()) {
+            selectedPresets.remove(preset.getUniqueKey());
+        }
+        // Defer UI rebuild to render() so we do not mutate child lists mid-event.
+        itemGridDirty = true;
+        selectedListDirty = true;
+    }
+
+    /**
      * Toggles selection state of an item in the grid.
      */
     private void toggleItemSelection(String key, MarketPreset preset, SelectableItemView view) {
@@ -392,12 +504,23 @@ public class CreateMarketTab extends StockMarketGuiElement {
         // Left column: category list (full height)
         categoryListView.setBounds(padding, padding, catWidth, height);
 
-        // Middle column: search bar on top, item grid below
+        // Middle column: search bar on top, Select-all/Deselect-all row
+        // beneath it, then the item grid filling the rest.
         int searchLabelWidth = 50;
         searchLabel.setBounds(midX, padding, searchLabelWidth, 15);
         searchField.setBounds(searchLabel.getRight() + spacing, padding, midWidth - searchLabelWidth - spacing, 15);
 
-        int gridTop = searchLabel.getBottom() + spacing;
+        // Row with the two bulk-selection buttons, split 50/50 across the
+        // middle column width. The remainder of `midWidth` after the spacing
+        // is distributed to the right button so the row lines up exactly with
+        // the item grid on either side.
+        int bulkRowY = searchLabel.getBottom() + spacing;
+        int bulkLeftW = (midWidth - spacing) / 2;
+        int bulkRightW = midWidth - bulkLeftW - spacing;
+        selectAllButton.setBounds(midX, bulkRowY, bulkLeftW, eh);
+        deselectAllButton.setBounds(selectAllButton.getRight() + spacing, bulkRowY, bulkRightW, eh);
+
+        int gridTop = selectAllButton.getBottom() + spacing;
         int gridHeight = height - (gridTop - padding);
         itemGridView.setBounds(midX, gridTop, midWidth, gridHeight);
         int containerWidth = itemGridView.getContainerWidth();
