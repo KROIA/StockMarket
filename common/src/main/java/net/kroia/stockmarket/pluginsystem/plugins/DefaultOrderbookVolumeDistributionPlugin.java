@@ -178,7 +178,7 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
     // Maximum number of markets that may recompute their expensive target distribution
     // per update cycle (round-robin). All other markets keep converging toward their
     // cached targets until it is their turn again.
-    private static final int MAX_TARGET_REFRESHES_PER_UPDATE = 1;
+    private static final int MAX_TARGET_REFRESHES_PER_UPDATE = 20;
 
     // Rotating start index of the round-robin refresh window.
     private int targetRefreshRotation = 0;
