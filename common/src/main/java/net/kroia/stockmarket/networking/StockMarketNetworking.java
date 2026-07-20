@@ -17,6 +17,7 @@ import net.kroia.stockmarket.networking.packet.VillagerTradePriceTablePacket;
 import net.kroia.stockmarket.networking.request.*;
 import net.kroia.stockmarket.networking.stream.ActiveOrdersStream;
 import net.kroia.stockmarket.networking.stream.MarketPriceStream;
+import net.kroia.stockmarket.networking.stream.PluginPerformanceStream;
 import net.kroia.stockmarket.networking.stream.PluginRuntimeDataStream;
 import net.kroia.stockmarket.minecraft.command.AsyncStockMarketCommandHandler;
 import net.kroia.stockmarket.stockmarket.market.AsyncMarket;
@@ -41,6 +42,13 @@ public class StockMarketNetworking extends NetworkPacketManager {
 
     public final MarketPriceStream MARKET_PRICE_STREAM = (MarketPriceStream) StreamSystem.register(new MarketPriceStream());
     public final PluginRuntimeDataStream PLUGIN_RUNTIME_DATA_STREAM = (PluginRuntimeDataStream) StreamSystem.register(new PluginRuntimeDataStream());
+    /**
+     * Master-wide plugin timing feed for the Plugin Management screen's
+     * profiler bar (T-137). Trust- and admin-gated in the same manner as
+     * {@link #PLUGIN_RUNTIME_DATA_STREAM}; broadcasts one full snapshot every
+     * 500&nbsp;ms.
+     */
+    public final PluginPerformanceStream PLUGIN_PERFORMANCE_STREAM = (PluginPerformanceStream) StreamSystem.register(new PluginPerformanceStream());
     public final ActiveOrdersStream ACTIVE_ORDERS_STREAM = (ActiveOrdersStream) StreamSystem.register(new ActiveOrdersStream());
 
     public final MarketPriceHistoryRequest MARKET_PRICE_HISTORY_REQUEST = (MarketPriceHistoryRequest) AsynchronousRequestResponseSystem.register(new MarketPriceHistoryRequest());

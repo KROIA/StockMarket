@@ -35,6 +35,7 @@ import net.kroia.stockmarket.stockmarket.market.preset.MarketPresetManager;
 import net.kroia.stockmarket.pluginsystem.Plugins;
 import net.kroia.stockmarket.pluginsystem.pluginmanager.ClientPluginManager;
 import net.kroia.stockmarket.pluginsystem.pluginmanager.PluginManager;
+import net.kroia.stockmarket.pluginsystem.pluginmanager.ServerPluginManager;
 import net.kroia.stockmarket.stockmarket.marketmanager.ClientMarketManager;
 import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
 
@@ -339,6 +340,16 @@ public class StockMarketModBackend implements StockMarketAPI {
                     StockMarketModBackend::onTrustChangedNotifyAffectedSlave);
 
             autosaveTimer_lastMs = System.currentTimeMillis();
+            // T-137: pair SERVER_PRE (stamp start) with SERVER_POST (measure work).
+            // SERVER_PRE runs before any vanilla tick work and stamps the tick
+            // start time into a static; onServerTick (SERVER_POST) later
+            // computes (now - lastTickStartNs) = actual CPU work per tick and
+            // feeds it to the plugin manager's non-plugin rolling average.
+            // We deliberately DO NOT use POST-to-POST as the interval — that
+            // would include the vanilla server's inter-tick sleep and always
+            // report ~50 ms regardless of real load, which would render the
+            // effective-budget calculation meaningless.
+            TickEvent.SERVER_PRE.register(StockMarketModBackend::onServerTickPre);
             TickEvent.SERVER_POST.register(StockMarketModBackend::onServerTick);
 
             if (TestRegistry.ENABLE_TESTS && StockMarketMod.ENABLE_DEV_FEATURES) {
@@ -554,6 +565,7 @@ public class StockMarketModBackend implements StockMarketAPI {
         if (SERVER_INSTANCES != null && SERVER_INSTANCES.BANK_SYSTEM_API != null) {
             SERVER_INSTANCES.BANK_SYSTEM_API.setItemPriceProvider(null);
         }
+        TickEvent.SERVER_PRE.unregister(StockMarketModBackend::onServerTickPre);
         TickEvent.SERVER_POST.unregister(StockMarketModBackend::onServerTick);
         saveDataToFiles(server);
 
@@ -665,6 +677,32 @@ public class StockMarketModBackend implements StockMarketAPI {
 
     private static long autosaveTimer_lastMs = 0;
 
+    /**
+     * Nanosecond timestamp captured at the start of the current server tick
+     * (T-137). Written by {@link #onServerTickPre(MinecraftServer)} on every
+     * {@code TickEvent.SERVER_PRE}, read by {@link #onServerTick(MinecraftServer)}
+     * at the end of {@code TickEvent.SERVER_POST}. The difference is the actual
+     * CPU work performed for one server tick (world tick, entities, networking,
+     * plugin loop, ...) — deliberately measured pre-to-post so the vanilla
+     * inter-tick sleep is excluded. Master-only; single thread.
+     * <p>
+     * Zero-sentinel: if a POST fires without a preceding PRE (extraordinary,
+     * e.g. immediately after a hot-swap during dev), the tick sample is
+     * skipped rather than reporting a bogus 50 ms average.
+     */
+    private static long lastTickStartNs = 0L;
+
+    /**
+     * Master-only {@code TickEvent.SERVER_PRE} handler — stamps
+     * {@link #lastTickStartNs} so the paired {@link #onServerTick} can measure
+     * total tick CPU work. See {@link #lastTickStartNs} for the reasoning
+     * behind pre-to-post rather than post-to-post.
+     */
+    private static void onServerTickPre(MinecraftServer server)
+    {
+        lastTickStartNs = System.nanoTime();
+    }
+
     // Called from the master side
     private static void onServerTick(MinecraftServer server)
     {
@@ -682,6 +720,19 @@ public class StockMarketModBackend implements StockMarketAPI {
         if (intervalMs > 0 && now - autosaveTimer_lastMs >= intervalMs) {
             autosaveTimer_lastMs = now;
             saveDataToFiles(server);
+        }
+
+        // T-137: total tick CPU work (SERVER_PRE → end of SERVER_POST). This
+        // must be the LAST statement in the tick handler so the sample
+        // encompasses every other tick action above. The plugin manager
+        // subtracts its own recorded plugin time to get the non-plugin sample
+        // that feeds the rolling average consumed by the effective budget.
+        if (lastTickStartNs != 0L
+                && SERVER_INSTANCES != null
+                && SERVER_INSTANCES.PLUGIN_MANAGER != null
+                && SERVER_INSTANCES.PLUGIN_MANAGER.getSync() instanceof ServerPluginManager mgr) {
+            long totalTickWorkNs = System.nanoTime() - lastTickStartNs;
+            mgr.recordNonPluginTickNs(totalTickWorkNs);
         }
     }
 

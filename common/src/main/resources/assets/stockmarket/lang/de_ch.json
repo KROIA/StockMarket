@@ -447,5 +447,15 @@
   "gui.stockmarket.untrusted_slave.banner_line2": "kei Transaktione oder Verwaltigsaktione möglich.",
   "gui.stockmarket.untrusted_slave.banner_line3": "En Admin muess uf em Master /banksystem trust <slaveID> ussfüehre.",
   "gui.stockmarket.untrusted_slave.tooltip": "Nöd vertroischwirdige Slave — Aktion deaktiviert.\nNoch em Aktivierä /banksystem trust <slaveID> vom Admin neu verbindä.",
-  "gui.stockmarket.untrusted_slave.management_blocked": "S Verwaltigsfenster ischt uf ämä nöd vertroischwirdigä Slave nöd verfüegbar. En Admin muess /banksystem trust <slaveID> ussfüehre, damit s freygeh wird."
+  "gui.stockmarket.untrusted_slave.management_blocked": "S Verwaltigsfenster ischt uf ämä nöd vertroischwirdigä Slave nöd verfüegbar. En Admin muess /banksystem trust <slaveID> ussfüehre, damit s freygeh wird.",
+
+  "gui.stockmarket.plugin_performance_bar.overload": "Plugins überschryte s 50-ms-Tick-Budget — Serverlascht z höch",
+  "gui.stockmarket.plugin_performance_bar.label_dynamic": "Plugin-Budget: %s / %s ms",
+  "gui.stockmarket.plugin_performance_bar.pass_update": "Update",
+  "gui.stockmarket.plugin_performance_bar.pass_finalize": "Finalisiere",
+  "gui.stockmarket.plugin_performance_bar.tooltip_time": "Zyt: %s",
+  "gui.stockmarket.plugin_performance_bar.tooltip_avg": "Durchschnitt: %s",
+  "gui.stockmarket.plugin_performance_bar.tooltip_peak": "Spitzäwärt: %s",
+  "gui.stockmarket.plugin_performance_bar.tooltip_budget": "Tick-Budget: %s",
+  "gui.stockmarket.plugin_performance_bar.tooltip_markets": "Märkt: %s"
 }

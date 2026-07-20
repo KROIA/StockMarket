@@ -447,5 +447,15 @@
   "gui.stockmarket.untrusted_slave.banner_line2": "keine Transaktionen oder Verwaltungsaktionen möglich.",
   "gui.stockmarket.untrusted_slave.banner_line3": "Ein Admin muss auf dem Master /banksystem trust <slaveID> ausführen.",
   "gui.stockmarket.untrusted_slave.tooltip": "Nicht vertrauenswürdiger Slave — Aktion deaktiviert.\nNeu verbinden, nachdem ein Admin /banksystem trust <slaveID> ausgeführt hat.",
-  "gui.stockmarket.untrusted_slave.management_blocked": "Das Verwaltungsfenster ist auf einem nicht vertrauenswürdigen Slave-Server nicht verfügbar. Ein Admin muss /banksystem trust <slaveID> ausführen, um es freizugeben."
+  "gui.stockmarket.untrusted_slave.management_blocked": "Das Verwaltungsfenster ist auf einem nicht vertrauenswürdigen Slave-Server nicht verfügbar. Ein Admin muss /banksystem trust <slaveID> ausführen, um es freizugeben.",
+
+  "gui.stockmarket.plugin_performance_bar.overload": "Plugins überschreiten das 50-ms-Tick-Budget — Serverlast zu hoch",
+  "gui.stockmarket.plugin_performance_bar.label_dynamic": "Plugin-Budget: %s / %s ms",
+  "gui.stockmarket.plugin_performance_bar.pass_update": "Update",
+  "gui.stockmarket.plugin_performance_bar.pass_finalize": "Finalisieren",
+  "gui.stockmarket.plugin_performance_bar.tooltip_time": "Zeit: %s",
+  "gui.stockmarket.plugin_performance_bar.tooltip_avg": "Durchschnitt: %s",
+  "gui.stockmarket.plugin_performance_bar.tooltip_peak": "Spitzenwert: %s",
+  "gui.stockmarket.plugin_performance_bar.tooltip_budget": "Tick-Budget: %s",
+  "gui.stockmarket.plugin_performance_bar.tooltip_markets": "Märkte: %s"
 }

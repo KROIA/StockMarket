@@ -447,5 +447,15 @@
   "gui.stockmarket.untrusted_slave.banner_line2": "no transactions or management actions are allowed.",
   "gui.stockmarket.untrusted_slave.banner_line3": "Ask an admin to run /banksystem trust <slaveID> on the master.",
   "gui.stockmarket.untrusted_slave.tooltip": "Untrusted slave — action disabled.\nReconnect after an admin runs /banksystem trust <slaveID>.",
-  "gui.stockmarket.untrusted_slave.management_blocked": "The Management window is not available on an untrusted slave server. Ask an admin to run /banksystem trust <slaveID> to enable it."
+  "gui.stockmarket.untrusted_slave.management_blocked": "The Management window is not available on an untrusted slave server. Ask an admin to run /banksystem trust <slaveID> to enable it.",
+
+  "gui.stockmarket.plugin_performance_bar.overload": "Plugins exceed the 50 ms tick budget — server load too high",
+  "gui.stockmarket.plugin_performance_bar.label_dynamic": "Plugin budget: %s / %s ms",
+  "gui.stockmarket.plugin_performance_bar.pass_update": "Update",
+  "gui.stockmarket.plugin_performance_bar.pass_finalize": "Finalize",
+  "gui.stockmarket.plugin_performance_bar.tooltip_time": "Time: %s",
+  "gui.stockmarket.plugin_performance_bar.tooltip_avg": "Average: %s",
+  "gui.stockmarket.plugin_performance_bar.tooltip_peak": "Peak: %s",
+  "gui.stockmarket.plugin_performance_bar.tooltip_budget": "Tick budget: %s",
+  "gui.stockmarket.plugin_performance_bar.tooltip_markets": "Markets: %s"
 }

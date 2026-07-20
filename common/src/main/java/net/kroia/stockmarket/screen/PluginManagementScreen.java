@@ -13,9 +13,11 @@ import net.kroia.stockmarket.pluginsystem.plugin.core.PluginSyncData;
 import net.kroia.stockmarket.pluginsystem.registry.PluginRegistry;
 import net.kroia.stockmarket.pluginsystem.registry.PluginRegistryObject;
 import net.kroia.stockmarket.pluginsystem.screen.PluginGuiElement;
+import net.kroia.stockmarket.pluginsystem.pluginmanager.ClientPluginManager;
 import net.kroia.stockmarket.screen.uiElements.MarketItemButton;
 import net.kroia.stockmarket.screen.widgets.CandlestickChart;
 import net.kroia.stockmarket.screen.widgets.OrderbookVolumeHistogram;
+import net.kroia.stockmarket.screen.widgets.PluginPerformanceBar;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.kroia.stockmarket.util.StockMarketGuiScreen;
@@ -65,6 +67,14 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
     private final Label untrustedSlaveBanner3;
     final CandlestickChart candlestickChart;
     final OrderbookVolumeHistogram orderbookVolumeHistogram;
+    /**
+     * T-137: horizontal per-plugin performance bar shown across the top of the
+     * screen, below the title and any warning banners. Its full width represents
+     * one server tick (50&nbsp;ms). The widget subscribes to
+     * {@link ClientPluginManager#getLatestTimingSnapshot()} — the stream itself
+     * is started/stopped by this screen's lifecycle hooks.
+     */
+    private final PluginPerformanceBar performanceBar;
     private @Nullable ItemID selectedChartMarket = null;
     private @Nullable ClientMarket currentChartMarket = null;
     private final ListView listView;
@@ -114,6 +124,7 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
 
         candlestickChart = new CandlestickChart();
         orderbookVolumeHistogram = new OrderbookVolumeHistogram(candlestickChart);
+        performanceBar = new PluginPerformanceBar();
 
         listView = new VerticalListView();
         LayoutVertical layout = new LayoutVertical();
@@ -126,12 +137,40 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         addElement(untrustedSlaveBanner1);
         addElement(untrustedSlaveBanner2);
         addElement(untrustedSlaveBanner3);
+        addElement(performanceBar);
         addElement(candlestickChart);
         addElement(orderbookVolumeHistogram);
         addElement(listView);
 
         // Request the plugin list from the server and rebuild the UI
         getPluginManager().requestPluginList().thenAccept(this::rebuildPluginList);
+
+        // T-137: open the master-wide plugin timing stream so the performance
+        // bar has live data to render. Idempotent — safe to call again during
+        // updateLayout() when the screen is re-initialised after returning
+        // from a child (PluginDetailScreen etc.).
+        startTimingStream();
+    }
+
+    /**
+     * T-137: opens the plugin performance timing stream on the client-side
+     * plugin manager. Idempotent — a second call while already subscribed is
+     * a no-op inside {@link ClientPluginManager#startTimingStream()}.
+     */
+    private void startTimingStream() {
+        if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.PLUGIN_MANAGER instanceof ClientPluginManager clientMgr) {
+            clientMgr.startTimingStream();
+        }
+    }
+
+    /**
+     * T-137: closes the plugin performance timing stream. Called from
+     * {@link #onClose()}; idempotent.
+     */
+    private void stopTimingStream() {
+        if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.PLUGIN_MANAGER instanceof ClientPluginManager clientMgr) {
+            clientMgr.stopTimingStream();
+        }
     }
 
     @Override
@@ -143,6 +182,9 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             currentChartMarket.unsubscribeFromMarketPriceUpdate();
             currentChartMarket = null;
         }
+        // T-137: tear down the timing stream so the server stops broadcasting
+        // to this client once the management window is gone.
+        stopTimingStream();
         super.onClose();
         if (parent != null) {
             setScreen(parent);
@@ -173,8 +215,17 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         untrustedSlaveBanner2.setBounds(padding, bannerTop + bannerLineH, width, bannerLineH);
         untrustedSlaveBanner3.setBounds(padding, bannerTop + 2 * bannerLineH, width, bannerLineH);
 
-        int contentTop = titleLabel.getBottom() + spacing + bannerReserve;
-        int contentHeight = height - (titleLabel.getBottom() + spacing + bannerReserve) + padding;
+        // T-137: performance bar sits directly below the untrusted-slave
+        // banner (if any) and above the chart/list area. Reserves its own
+        // vertical strip via the same bannerReserve-style pattern so the
+        // chart, histogram and list still get all remaining space.
+        int perfBarTop = bannerTop + bannerHeight + (bannerHeight == 0 ? 0 : spacing);
+        int perfBarHeight = PluginPerformanceBar.TOTAL_HEIGHT;
+        int perfBarReserve = perfBarHeight + spacing;
+        performanceBar.setBounds(padding, perfBarTop, width, perfBarHeight);
+
+        int contentTop = titleLabel.getBottom() + spacing + bannerReserve + perfBarReserve;
+        int contentHeight = height - (titleLabel.getBottom() + spacing + bannerReserve + perfBarReserve) + padding;
         int histogramWidth = width / 20;
         int chartWidth = width / 2 - histogramWidth;
         int listWidth = width - chartWidth - histogramWidth - spacing;
@@ -187,6 +238,9 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         for (PluginEntryWidget entry : entryWidgets) {
             entry.startPluginDataStream();
         }
+        // T-137: also restart the timing stream after a subscreen returns —
+        // matches the runtime-data stream restart pattern above. Idempotent.
+        startTimingStream();
     }
 
     /**
