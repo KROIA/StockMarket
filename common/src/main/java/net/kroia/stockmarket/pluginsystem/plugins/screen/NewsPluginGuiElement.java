@@ -1127,6 +1127,11 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
     /**
      * Rebuilds the active-event panels from {@link #lastRuntimeData}, preserving the
      * scroll position, and toggles the empty-state label.
+     * <p>
+     * Ordering: newest event first. The server appends newly started events to the
+     * tail of its {@code activeEvents} list (see {@link NewsPlugin#provideRuntimeData}),
+     * so the stream delivers them oldest-first; iterating in reverse here puts the
+     * most recently started event at the top of the Active tab.
      */
     private void rebuildEventList() {
         int savedScroll = eventListView.getScrollOffset();
@@ -1135,8 +1140,10 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
         }
         eventPanels.clear();
 
-        for (NewsPlugin.RuntimeStreamData.ActiveEventInfo event : lastRuntimeData.events()) {
-            ActiveEventPanel panel = new ActiveEventPanel(event);
+        // Reverse the streamed order so the newest active event appears at the top.
+        List<NewsPlugin.RuntimeStreamData.ActiveEventInfo> events = lastRuntimeData.events();
+        for (int i = events.size() - 1; i >= 0; i--) {
+            ActiveEventPanel panel = new ActiveEventPanel(events.get(i));
             eventPanels.add(panel);
             eventListView.addChild(panel);
         }
