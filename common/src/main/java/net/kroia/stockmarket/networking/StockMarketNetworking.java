@@ -8,11 +8,16 @@ import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.networking.entity.UpdateDisplayViewportPacket;
 import net.kroia.stockmarket.networking.entity.UpdateStockMarketDisplayConfigPacket;
 import net.kroia.stockmarket.networking.packet.MarketRemovedPacket;
+import net.kroia.stockmarket.networking.packet.NewsPublishedPacket;
 import net.kroia.stockmarket.networking.packet.OpenUIPacket;
 import net.kroia.stockmarket.networking.packet.PlayerJoinSyncPacket;
+import net.kroia.stockmarket.networking.packet.SlaveTrustSyncPacket;
+import net.kroia.stockmarket.networking.packet.TrustFlagUpdatePacket;
+import net.kroia.stockmarket.networking.packet.VillagerTradePriceTablePacket;
 import net.kroia.stockmarket.networking.request.*;
 import net.kroia.stockmarket.networking.stream.ActiveOrdersStream;
 import net.kroia.stockmarket.networking.stream.MarketPriceStream;
+import net.kroia.stockmarket.networking.stream.PluginPerformanceStream;
 import net.kroia.stockmarket.networking.stream.PluginRuntimeDataStream;
 import net.kroia.stockmarket.minecraft.command.AsyncStockMarketCommandHandler;
 import net.kroia.stockmarket.stockmarket.market.AsyncMarket;
@@ -37,6 +42,13 @@ public class StockMarketNetworking extends NetworkPacketManager {
 
     public final MarketPriceStream MARKET_PRICE_STREAM = (MarketPriceStream) StreamSystem.register(new MarketPriceStream());
     public final PluginRuntimeDataStream PLUGIN_RUNTIME_DATA_STREAM = (PluginRuntimeDataStream) StreamSystem.register(new PluginRuntimeDataStream());
+    /**
+     * Master-wide plugin timing feed for the Plugin Management screen's
+     * profiler bar (T-137). Trust- and admin-gated in the same manner as
+     * {@link #PLUGIN_RUNTIME_DATA_STREAM}; broadcasts one full snapshot every
+     * 500&nbsp;ms.
+     */
+    public final PluginPerformanceStream PLUGIN_PERFORMANCE_STREAM = (PluginPerformanceStream) StreamSystem.register(new PluginPerformanceStream());
     public final ActiveOrdersStream ACTIVE_ORDERS_STREAM = (ActiveOrdersStream) StreamSystem.register(new ActiveOrdersStream());
 
     public final MarketPriceHistoryRequest MARKET_PRICE_HISTORY_REQUEST = (MarketPriceHistoryRequest) AsynchronousRequestResponseSystem.register(new MarketPriceHistoryRequest());
@@ -61,6 +73,14 @@ public class StockMarketNetworking extends NetworkPacketManager {
     public final PlaceInterMarketOrderRequest PLACE_INTER_MARKET_ORDER_REQUEST = (PlaceInterMarketOrderRequest) AsynchronousRequestResponseSystem.register(new PlaceInterMarketOrderRequest());
     public final CancelInterMarketOrderRequest CANCEL_INTER_MARKET_ORDER_REQUEST = (CancelInterMarketOrderRequest) AsynchronousRequestResponseSystem.register(new CancelInterMarketOrderRequest());
     public final GetAvailablePairsRequest GET_AVAILABLE_PAIRS_REQUEST = (GetAvailablePairsRequest) AsynchronousRequestResponseSystem.register(new GetAvailablePairsRequest());
+    /** GET/SET of the server's settings.json for the master-only "Mod Settings" admin screen. */
+    public final ModSettingsRequest MOD_SETTINGS_REQUEST = (ModSettingsRequest) AsynchronousRequestResponseSystem.register(new ModSettingsRequest());
+    /** Paginated newest-first news history pages for the newspaper screen (T-073, not admin-gated). */
+    public final NewsHistoryRequest NEWS_HISTORY_REQUEST = (NewsHistoryRequest) AsynchronousRequestResponseSystem.register(new NewsHistoryRequest());
+    /** Admin-gated news operations (RELOAD/TRIGGER/LIST/STOP) for commands + plugin GUI (T-076). */
+    public final NewsAdminRequest NEWS_ADMIN_REQUEST = (NewsAdminRequest) AsynchronousRequestResponseSystem.register(new NewsAdminRequest());
+    /** Hash-batched published news-picture fetch for the client picture cache (T-089, not admin-gated, rate-limited). */
+    public final NewsPictureRequest NEWS_PICTURE_REQUEST = (NewsPictureRequest) AsynchronousRequestResponseSystem.register(new NewsPictureRequest());
 
     //public final MarketSettingsGetRequest MARKET_SETTINGS_GET_REQUEST = (MarketSettingsGetRequest) AsynchronousRequestResponseSystem.register(new MarketSettingsGetRequest());
 
@@ -71,6 +91,7 @@ public class StockMarketNetworking extends NetworkPacketManager {
 
         setupClientReceiverPackets();
         setupServerReceiverPackets();
+        setupServerServerPackets();
 
         AsyncMarket.setupNetworkPacket();
         AsyncMarketManager.setupNetworkPacket();
@@ -89,6 +110,18 @@ public class StockMarketNetworking extends NetworkPacketManager {
         // the packet with the MultiServerPacketRegistry, enabling the master→slave
         // relay used to reach players connected to slave servers.
         registerS2C(MarketRemovedPacket.TYPE, MarketRemovedPacket.STREAM_CODEC);
+        // News-published broadcast (T-073). Same registration shape as
+        // MarketRemovedPacket: registerS2C also registers the packet with the
+        // MultiServerPacketRegistry, enabling the master→slave relay used to
+        // reach players connected to slave servers.
+        registerS2C(NewsPublishedPacket.TYPE, NewsPublishedPacket.STREAM_CODEC);
+        // Live slave-trust update (T-126). Broadcast from the slave to every
+        // connected client once the slave→master handshake completes and the
+        // trust cache is filled with the master's authoritative answer. Purely
+        // slave→client on this JVM — no master↔slave relay is required, but
+        // the standard 2-arg registerS2C still registers a no-op forward
+        // handler which is harmless.
+        registerS2C(SlaveTrustSyncPacket.TYPE, SlaveTrustSyncPacket.STREAM_CODEC);
     }
 
     @Override
@@ -99,6 +132,16 @@ public class StockMarketNetworking extends NetworkPacketManager {
 
     @Override
     public void setupServerServerPackets() {
-
+        // Master→slave villager-trade price table broadcast (pure S2S packet:
+        // registered only with the MultiServerPacketRegistry, never with a
+        // client/server receiver).
+        registerS2S(VillagerTradePriceTablePacket.TYPE, VillagerTradePriceTablePacket.STREAM_CODEC);
+        // Master→slave runtime trust-toggle push (T-128). Fired from the
+        // master's subscriber to BankSystem's TRUST_CHANGED event; the slave
+        // handler refreshes SlaveTrustCache and — if the value flipped —
+        // re-broadcasts SlaveTrustSyncPacket to every connected client so their
+        // gated UI transitions to the correct state within a tick, without a
+        // reconnect.
+        registerS2S(TrustFlagUpdatePacket.TYPE, TrustFlagUpdatePacket.STREAM_CODEC);
     }
 }

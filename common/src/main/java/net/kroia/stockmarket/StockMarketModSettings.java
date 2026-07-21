@@ -1,14 +1,42 @@
 package net.kroia.stockmarket;
 
 
+import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.modutilities.setting.ModSettings;
 import net.kroia.modutilities.setting.Setting;
 import net.kroia.modutilities.setting.SettingsGroup;
 import net.kroia.modutilities.setting.parser.ItemStackJsonParser;
 import net.kroia.stockmarket.util.ClientSettings;
+import net.kroia.stockmarket.util.SlaveTrustCache;
 import net.minecraft.world.item.ItemStack;
 
+import java.util.List;
+
+/**
+ * All server-side settings of the StockMarket mod, persisted to
+ * {@code world/data/StockMarket/settings.json}. The file is loaded once at startup
+ * on the MASTER server only; slave servers keep the compile-time defaults.
+ * <p>
+ * Admins can edit these settings in-game via the "Mod Settings" screen
+ * ({@code net.kroia.stockmarket.screen.ModSettingsScreen}, reachable from the
+ * ManagementScreen on the master server).
+ * <p>
+ * <b>DEVELOPER NOTE — when adding a new setting:</b>
+ * <ol>
+ *   <li>You MUST also add a matching editing field to the Mod Settings screen
+ *       ({@code ModSettingsScreen}). The screen builds its fields generically from
+ *       {@link #getEditableGroups()}, so a setting in a registered group with a
+ *       supported type (Boolean/Integer/Long/Float/ItemStack) appears automatically —
+ *       but you still must add its label/tooltip lang keys and verify the field works.</li>
+ *   <li>If the new setting is only read ONCE at startup (cached for the server
+ *       lifetime), mark the field as restart-required in
+ *       {@code ModSettingsScreen.RESTART_REQUIRED_SETTINGS}.</li>
+ *   <li>Consider whether the value must be propagated to slave servers after a
+ *       change (see the per-group propagation decision in
+ *       {@code ModSettingsRequest.handleOnMasterServer}).</li>
+ * </ol>
+ */
 public class StockMarketModSettings extends ModSettings {
 
     private static StockMarketModBackend.ServerInstances BACKEND_INSTANCES;
@@ -18,6 +46,7 @@ public class StockMarketModSettings extends ModSettings {
 
     public final Utilities UTILITIES = createGroup(new Utilities());
     public final Market MARKET = createGroup(new Market());
+    public final VillagerTrading VILLAGER_TRADING = createGroup(new VillagerTrading());
     //public final Networking NETWORKING = createGroup(new Networking());
 
     public StockMarketModSettings() {
@@ -63,6 +92,48 @@ public class StockMarketModSettings extends ModSettings {
     }
 
 
+    /**
+     * Settings for the stock-market-driven villager trade repricing feature.
+     * <p>
+     * When {@code ENABLED}, villager (and wandering trader) offers whose traded
+     * item is listed on the stock market no longer use emeralds: both directions
+     * of such a trade are converted to the configured trading currency
+     * ({@link Market#CURRENCY}) and priced from the market. Offers for items
+     * <b>without</b> a market keep their vanilla emerald form.
+     * <p>
+     * These settings are only read on the <b>master</b> server (slave servers never
+     * load {@code settings.json}); the master broadcasts the resulting price table
+     * to all slaves, so enabling the feature here also enables it on slaves.
+     */
+    public static final class VillagerTrading extends SettingsGroup
+    {
+        /** Master switch for villager trade repricing. Enabled by default. */
+        public final Setting<Boolean> ENABLED = registerSetting("ENABLED", true, Boolean.class);
+
+        /**
+         * Wall-clock interval (in minutes) between price-table refreshes/broadcasts.
+         * Default 20 minutes = one Minecraft day.
+         */
+        public final Setting<Long> PRICE_REFRESH_INTERVAL_MINUTES = registerSetting("PRICE_REFRESH_INTERVAL_MINUTES", 20L, Long.class);
+
+        /**
+         * Margin applied when the villager BUYS items from the player (player sells):
+         * the villager pays {@code market price × margin}. Below 1.0 means the
+         * villager pays less than market value.
+         */
+        public final Setting<Float> VILLAGER_BUY_MARGIN = registerSetting("VILLAGER_BUY_MARGIN", 0.8f, Float.class);
+
+        /**
+         * Margin applied when the villager SELLS items to the player (player buys):
+         * the villager charges {@code market price × margin}. Above 1.0 means the
+         * villager charges more than market value.
+         */
+        public final Setting<Float> VILLAGER_SELL_MARGIN = registerSetting("VILLAGER_SELL_MARGIN", 1.2f, Float.class);
+
+        public VillagerTrading() { super("VillagerTrading"); }
+    }
+
+
     /*public static final class Networking extends SettingsGroup
     {
         public final Setting<Boolean> ENABLE_SERVER_SERVER_COMMUNICATION = registerSetting("ENABLE_SERVER_SERVER_COMMUNICATION", false, Boolean.class);
@@ -77,10 +148,91 @@ public class StockMarketModSettings extends ModSettings {
     }*/
 
 
+    /**
+     * Returns the list of settings groups that are editable through the in-game
+     * "Mod Settings" screen and the {@code ModSettingsRequest} GET/SET payloads.
+     * <p>
+     * This is exactly the set of groups registered via {@code createGroup(...)}
+     * (Utilities, ServerMarket, VillagerTrading). The {@link Player} group is
+     * intentionally EXCLUDED: it is never registered, never serialized to
+     * settings.json and therefore dead — do not expose it in the UI.
+     *
+     * @return the registered, editable settings groups in display order
+     */
+    public List<SettingsGroup> getEditableGroups()
+    {
+        return List.of(UTILITIES, MARKET, VILLAGER_TRADING);
+    }
+
+    /**
+     * Builds the {@link ClientSettings} snapshot that is synced to a client at
+     * player join (via {@code PlayerJoinSyncPacket}). Server-side only.
+     *
+     * @return the settings snapshot to send to the joining client
+     */
     public ClientSettings getClientSettings()
     {
         ClientSettings settings = new ClientSettings();
         //settings.setCandleTimeMs(MARKET.CANDLE_TIME.get());
+
+        // Tell the client whether this server is the master server. Used to gate
+        // master-only UI (the "Mod Settings" button in the ManagementScreen).
+        // Server-side enforcement happens separately in ModSettingsRequest.
+        try {
+            boolean isMaster = BankSystemMod.getAPI().getServerBankManager().isMaster();
+            settings.setMasterServer(isMaster);
+
+            // T-123 / T-125 / T-126 (untrusted slave gate): tell the client
+            // whether the master trusts this slave.
+            //
+            // Trust storage lives ONLY on the master (BankSystem's
+            // {@code ServerBankManager.trustedSlaveServers}); the slave-local
+            // {@code ISyncServerBankManager} instance is null on a slave — see
+            // {@code IBankManager.getSync()} contract "returns null on a slave".
+            //
+            // T-125 tried to forward the question inline via
+            // {@code AsyncBankManager.isSlaveServerTrustedAsync(slaveID).get(2s)}.
+            // That accessor short-circuits synchronously to {@code false} when
+            // {@code MultiServerUtils.canInteractWithBankSystem()} is not yet
+            // true — which is the normal state at server-startup / early player
+            // join time (the slave→master TCP handshake has not yet completed).
+            // So the future is already completed with {@code false}; the
+            // {@code .get(2s)} never actually waits, and the trusted-slave case
+            // silently reads inverted.
+            //
+            // T-126 fix: read from a slave-side cache instead. The cache is
+            // populated by a listener on BankSystem's SLAVE_CONNECTION_ACCEPTED
+            // signal (registered in {@code StockMarketModBackend.onServerStart}'s
+            // slave branch), which fires AFTER the handshake completes — i.e.
+            // AFTER the async forwarder becomes usable. The listener issues a
+            // non-blocking {@code isSlaveServerTrustedAsync(...).thenAccept(...)},
+            // stores the master's answer in {@link SlaveTrustCache}, and
+            // broadcasts a {@code SlaveTrustSyncPacket} to every already-connected
+            // client so any client that got the fail-closed default here
+            // transitions to the correct state within a tick.
+            //
+            // Master case: unconditionally {@code true} — a master implicitly
+            // trusts itself and never consults the cache.
+            //
+            // Client-joined-before-cache-fills case: this method returns
+            // {@code false} (fail-closed via {@link SlaveTrustCache#getOrFalse()}),
+            // the client renders the gated UI, and the {@code SlaveTrustSyncPacket}
+            // that fires as soon as the handshake completes corrects them.
+            //
+            // Live master-side trust toggle ({@code /banksystem trust <slaveID>}
+            // mid-session): still DEFERRED — BankSystem does not expose a
+            // trust-changed event and the reconnect path picks it up.
+            if (isMaster) {
+                settings.setSlaveTrusted(true);
+            } else {
+                settings.setSlaveTrusted(SlaveTrustCache.getOrFalse());
+            }
+        } catch (Exception e) {
+            // BankSystem not ready — leave the flags at their safe defaults
+            // (isMasterServer=false, slaveTrusted=true so single-player is not
+            // accidentally locked out; the fallthrough only happens if BankSystem
+            // failed to initialize, which is a bigger problem than a UI gray-out).
+        }
 
         return settings;
     }

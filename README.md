@@ -26,7 +26,9 @@ You want to support me?<br>
     * [For Players](#for-players)
     * [For Admins / Single Player](#for-admins--single-player)
 * [Commands](#commands)
+* [Access Control & Trust Model](#access-control--trust-model)
 * [Plugins](#plugins)
+* [Villager Trading](#villager-trading)
 * [Changelog](#changelog)
 * [Discord to help me improve the mod](https://discord.gg/qHNVaDGAyB)
 
@@ -36,6 +38,7 @@ You want to support me?<br>
 - Adds new [blocks](#blocks) to interact with the market or bank account.
 - Implementation of a [matching engine](#matching-engine) inspired by the real market.
 - Configurable [plugins](#plugins) that provide the market with liquidity, volatility and price movements.
+- A JSON-configurable [news event system](documentation/user-guide/news-system/overview.md) that publishes headlines with [pictures](documentation/user-guide/news-system/pictures.md) and moves market prices — players follow the market through a craftable newspaper item. Server admins and content creators can [author their own events](documentation/user-guide/news-system/authoring-tutorial.md) without touching code.
 
 ## Dependencies
 - [Bank System Mod](https://github.com/KROIA/BankSystem)
@@ -135,6 +138,14 @@ Right click on a <b>Terminal Block</b> using a <b>Trading Software</b> to create
 <tr>
 <td><img src="documentation/images/recipe_trading_software.png" width="350"></td>
 <td><img src="documentation/images/recipe_stockmarket_display_block.png" width="350"></td>
+</tr>
+<tr>
+<td><b>Newspaper</b></td>
+<td></td>
+</tr>
+<tr>
+<td><img src="documentation/images/recepe_newspaper.png" width="350" alt="Newspaper crafting recipe -- paper and ink sac shapeless in a 3x3 grid yielding one newspaper"></td>
+<td></td>
 </tr>
 </table>
 
@@ -274,6 +285,13 @@ Run <code>/stockmarket manage</code> to open the management interface. It has th
     - Click <b>Save</b> to persist your changes.<br>
 </details>
 
+#### Mod Settings (master server only)
+The **Mod Settings** button on the Management GUI's overview tab opens an editor for the server's `settings.json` (`world/data/StockMarket/settings.json`), so autosave interval, logging, market and villager-trading settings can be changed without touching the file:
+* The button is only shown when connected to the **master server** — slave servers never load `settings.json`; the master pushes derived data (e.g. villager prices) to them automatically. The server additionally enforces op level 2 and master status for every request.
+* **Apply** validates and clamps the values server-side, saves them to `settings.json` and re-displays the confirmed state. **Reload** re-fetches the current server values, **Defaults** resets the fields to the compile-time defaults (nothing is saved until Apply).
+* Most settings take effect immediately. Fields marked with an orange **⟳ Restart required** label (orderbook array size, trading currency) are only read once at startup — the new value is saved but only applies after a server restart.
+* Changes to the **Villager Trading** group are propagated to all connected slave servers right away (the villager price table is recomputed and re-broadcast).
+
 #### Plugin System
 Plugins replace the old bot system. They are modular components that can be added to markets to provide liquidity, simulate price movements, and more.
 
@@ -303,6 +321,7 @@ Open the **Plugin Management** screen from the Management GUI overview tab:
 | /stockmarket deop [username]       | Revoke StockMarket admin privileges (from yourself if no username given) | :heavy_check_mark: |
 | /stockmarket \<market\> remove     | Delete a market without the GUI. `<market>` is the item's registry name in quotes (e.g. `"minecraft:iron_ingot"`) or the numeric market ID shown when a name is ambiguous. Also works for broken markets whose item can no longer be resolved | :heavy_check_mark: |
 | /stockmarket preset add \<category\> [name] | Capture the item in your main hand (including data components like enchantments or custom names) as a market preset in `<category>` (created if it doesn't exist yet; quote names containing spaces). The optional `[name]` gives the captured item a custom name; otherwise the preset uses the item's normal display name | :heavy_check_mark: |
+| /stockmarket news                  | Open the in-game newspaper with the latest market news. Admin subcommands manage the news event system — see the [full command reference](documentation/user-guide/news-system/configuration.md#admin-commands) | Subcommands only |
 
 
 
@@ -311,19 +330,72 @@ Open the **Plugin Management** screen from the Management GUI overview tab:
 
 
 
+
+## Access Control & Trust Model
+
+StockMarket separates **public data** — available to every player — from **management data** — reserved for admins. Access is enforced **server-side on the master**, not by hiding the client UI, so a modified or self-compiled client cannot unlock management features it is not entitled to.
+
+Two independent checks must **both** pass before the master serves management data or accepts a management operation.
+
+### 1. Server trust (multi-server setups)
+
+In a master + slave setup, every slave server is either **trusted** or **untrusted**. Trust is stored in BankSystem and toggled from the master with:
+
+<code>/banksystem trust &lt;slaveID&gt;</code> — mark a slave as trusted<br>
+<code>/banksystem untrust &lt;slaveID&gt;</code> — mark a slave as untrusted
+
+Both require operator level 2 and only run on the master. The master itself (and single player) always counts as trusted.
+
+From an **untrusted** slave the master refuses **all** of:
+- mutating operations — placing/cancelling orders, and every plugin, preset, market and settings write;
+- management-data reads — the plugin list & settings, the preset catalog and the mod settings;
+- the live plugin runtime data feed.
+
+A **trusted** slave behaves normally. Trust changes take effect live — untrusting a slave mid-session tears down its live plugin feed within about one stream interval. Public market data (prices, market list, a player's own orders/history, news) stays available even from an untrusted slave.
+
+### 2. StockMarket admin (per-player)
+
+Management data and operations additionally require the requesting player to be a **StockMarket admin** — a persistent per-player flag, granted and revoked with:
+
+<code>/stockmarket op [username]</code> — grant admin (yourself if no username is given)<br>
+<code>/stockmarket deop [username]</code> — revoke admin
+
+This flag is **distinct from the vanilla operator level.** Being operator level 2 lets you *run* `/stockmarket op`, but you are not a StockMarket admin until it is granted to you. A non-admin player — even opped, even on a trusted slave, even with a client modified to force-open the management menu — is served no plugin settings or target prices, no presets, no mod settings and no live plugin feed.
+
+### Both checks are ANDed
+
+For any management data or operation, an **untrusted slave OR a non-admin player** is refused. Because the check runs on the master, un-hiding the client UI cannot bypass it.
+
+The table below summarizes which access each data class needs:
+
+| Data class | Access required |
+|------------|-----------------|
+| Market list & prices, public orderbook volume | Public — any player |
+| A player's own active orders / order history / transaction history / preferences | Public — any player |
+| News feed & pictures, server time | Public — any player |
+| Placing / cancelling orders | Trusted slave |
+| Plugin list & settings, target prices, live plugin feed | Trusted slave **and** admin |
+| Preset catalog, market / plugin / preset writes | Trusted slave **and** admin |
+| Mod settings (read & write) | Trusted slave **and** admin |
 
 ## Plugins
 Since v2.0, the old monolithic StockMarketBot has been replaced by a modular **plugin system**. Each plugin handles one aspect of market simulation and can be independently configured, enabled, or subscribed to specific markets through the [Plugin Management](#plugin-system) screen.
 
-The mod ships with three built-in plugins:
+The mod ships with four built-in plugins:
 
 ### VolatilityPlugin
 Simulates realistic price movements using a [random walk](#random-walk) algorithm. Each market gets independent price fluctuations around its default price, creating the organic-looking charts you see in-game.
 
+The random walk is anchored on a flow-driven [price equilibrium](#price-equilibrium) instead of the static default price: sustained net selling by players permanently lowers a market's price range, sustained net buying permanently raises it — so the server economy balances itself (heavily farmed items get cheap, sought-after items get expensive). The equilibrium shifts exponentially with the net item flow, so the price can approach but never reach 0, and it is clamped between the Min/Max Price Multipliers. Items with a higher Abundance absorb more trading before their price moves. To re-anchor a market at its default price, reset its **Net Flow** in the market settings.
+
 **Settings:**
 | Parameter | Description |
 |-----------|-------------|
-| Volatility Scale | Multiplier for how far the price deviates from the default price. Higher values produce larger swings. |
+| Volatility Scale | Multiplier for how far the price deviates from the equilibrium price. Higher values produce larger swings. |
+| Player Flow Influence | Enables the flow-driven equilibrium. When off, the price wanders around the static default price. Enabled by default. |
+| Flow Sensitivity | How many items (per unit of the market's Abundance) players must net-sell to lower the equilibrium price to ~37% of its default. Higher values make the market more inert. Default: 500. |
+| Min Price Multiplier | Lower clamp for the equilibrium as a fraction of the default price. Default: 0.05 (never below 5% of the default price). |
+| Max Price Multiplier | Upper clamp for the equilibrium as a multiple of the default price. Default: 20 (never above 20x the default price). |
 
 ### TargetPriceBot
 The market-making bot that drives prices toward a target value. It places [market orders](#market-order) to push the price in the desired direction. A [PID controller](#pid-controller) determines the size and direction of each order to smoothly converge on the target price without overshooting.
@@ -352,12 +424,49 @@ The distribution uses a power-law shape near the current price (tighter spreads 
 | Decumulation Rate | How fast excess volume decreases (slower for stability). |
 | Reset Volume | Force an immediate reset of the order book to the target distribution. |
 
+### NewsPlugin
+Randomly publishes news events defined in JSON files (`config/StockMarket/news/`) and moves the prices of the affected markets — shocks, trends, crashes and even permanent shifts. Players read the headlines with a craftable **newspaper item**; an opt-in popup notifies interested players when news breaks. Admins control everything through the plugin's management window and the `/stockmarket news` commands.
+
+See the [News Event System overview](documentation/user-guide/news-system/overview.md), the [JSON configuration reference](documentation/user-guide/news-system/configuration.md), and the step-by-step [event authoring tutorial](documentation/user-guide/news-system/authoring-tutorial.md).
+
 ### How the plugins work together
 The three plugins combine to create a functioning market:
-1. The **VolatilityPlugin** generates a wandering target price using random walk noise.
+1. The **VolatilityPlugin** generates a wandering target price using random walk noise, centered on the flow-adjusted [price equilibrium](#price-equilibrium).
 2. The **TargetPriceBot** places market orders to push the actual price toward the target, using a PID controller for smooth convergence.
 3. The **DefaultOrderbookVolumeDistributionPlugin** keeps the order book filled with liquidity so that both bot orders and player orders can be executed.
 
+While a news event is active, the **NewsPlugin** multiplies the target price from step 1 before the bot acts on it — turning headlines into real price movement.
+
+
+---
+## Villager Trading
+Villager (and wandering trader) trade offers for **market-listed items** no longer use emeralds — both trade directions are converted to the configured trading-currency item (`ServerMarket.CURRENCY` in `world/data/StockMarket/settings.json`) and priced from the stock market:
+* Only offers whose traded item exists on the stock market are repriced (component-aware, so e.g. specific enchanted books can have their own markets). A trade where the villager sells requires a market for the sold item; a trade where the villager buys requires a market for every item it asks for.
+* Items **without** a market keep their normal vanilla emerald trades. If a market is created for such an item later, the offer converts to currency pricing on the next price refresh; if a market is deleted, affected offers return to their original emerald form.
+* Prices refresh automatically on the configured interval (default 20 real minutes ≈ one Minecraft day).
+* Original emerald offers are stored in world data; disabling the feature restores every villager's original offers the next time it is interacted with. Partially used offers stay partially used.
+
+### Settings (`VillagerTrading` group in `settings.json`)
+| Setting | Default | Description |
+|-----------|---------|-------------|
+| `ENABLED` | `true` | Master switch for villager trade repricing. Enabled by default; set to `false` in `settings.json` to disable the feature. |
+| `PRICE_REFRESH_INTERVAL_MINUTES` | `20` | Real-time minutes between price refreshes/broadcasts. |
+| `VILLAGER_BUY_MARGIN` | `0.8` | Multiplier on the market price when the villager **buys** from the player (villager pays below market). |
+| `VILLAGER_SELL_MARGIN` | `1.2` | Multiplier on the market price when the villager **sells** to the player (villager charges above market). |
+
+### Paying with money
+When an offer's price is BankSystem money, the trade accepts **any combination of denominations** — the price is matched by value, not by exact note type. A 20.00 cost can be paid with 1×20, 2×10, 4×5, 20×1, or even a single 50 note:
+* Overpayment returns **exact change** (fewest notes), placed back into the payment slots when possible, otherwise into your inventory (or dropped at your feet if that is full too). No value is ever lost — shift-clicking through a whole stack of large notes settles every trade to the cent.
+* Clicking an offer row **auto-fills** the payment slots with money from your inventory, even when you don't own the exact denomination shown on the offer.
+* Only genuine BankSystem money is matched by value — renamed/modified notes and other mods' currencies are treated as regular items. Non-money offers (emerald trades, generic currency items) keep exact vanilla matching.
+
+### Behavior notes
+* **Master-authoritative:** in a multi-server setup only the master server's `settings.json` matters. The master broadcasts a price table to all slave servers, so enabling it on the master enables it everywhere.
+* **Any currency item works:** BankSystem money prices are expressed in a single denomination per slot — the note/coin type that best matches the price (e.g. 1×20$ instead of 1×10$ + 2×5$), lightly rounding when no denomination fits exactly; any other item is valued at 1 item = 1.00 currency units and respects its own max stack size (including 16 or 1).
+* **Low-capacity currencies:** if a price cannot fit into the offer's currency slots (e.g. an unstackable currency), the price is capped at the maximum representable amount — in the player's favor — and a one-time warning is logged. Use a finer-grained currency to avoid this.
+* **Reputation & demand:** offers where the player pays currency ignore demand scaling and gossip/Hero-of-the-Village discounts (the price stays at the configured margin). Offers where the player hands over items keep vanilla discount behavior on the item amount.
+* **Item cost slots are preserved:** trades like enchanted books (book + emeralds) or treasure maps (compass + emeralds) keep their item ingredient; only the emerald part becomes currency.
+* Known limitation: rewritten offers always grant trade XP (all vanilla offers do anyway).
 
 ---
 
@@ -439,6 +548,11 @@ A random walk is a way to generate pseudorandom values ​​that depend on the 
 This value is a great source to create random market prive movements.
 
 
+### Price Equilibrium
+The base price a market's random walk oscillates around.
+With player flow influence enabled, it shifts permanently with the cumulative net amount of items players traded on that market: net selling lowers it, net buying raises it.
+
+
 
 ### PID-Controller
 Since this is a complex field from control theory, I will not cover this here.
@@ -453,7 +567,8 @@ Since this is a complex field from control theory, I will not cover this here.
 
 | Version | Status | Highlights |
 |---|---|---|
-| [v2.0.3](changelog/v2.0.3.md) | In Development | |
+| [v2.0.4](changelog/v2.0.4.md) | In Development | Stock-market-driven villager trading, value-based money payment |
+| [v2.0.3](changelog/v2.0.3.md) | Released | Market lifecycle fixes — deletion sync, broken-market recovery, ItemID-merge consolidation |
 | [v2.0.2](changelog/v2.0.2.md) | Released | Crash hotfix and UI locale hardening |
 | [v2.0.1](changelog/v2.0.1.md) | Released | Plugin system frontend, inter-market trading, TradingView, preset editor, 30+ features |
 | [v2.0.0_ALPHA_1](changelog/v2.0.0_ALPHA_1.md) | Released | Plugin system, management UI, security hardening, 45 bug fixes |

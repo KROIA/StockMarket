@@ -90,6 +90,28 @@ public class PluginRuntimeDataStream extends StockMarketGenericStream<UUID, Plug
 
     @Override
     protected void updateOnServer() {
+        // T-129: withhold the live plugin runtime feed from untrusted slaves.
+        // Placed before any payload work (and before the interval check) so an
+        // untrusted subscriber never receives a single payload. Trust is
+        // re-queried live every tick, so a mid-session
+        // "/banksystem untrust <slaveID>" tears this feed down within one tick.
+        // Master-local and trusted-slave streams pass through untouched.
+        if (!isStreamTrustAllowed("PluginRuntimeDataStream")) {
+            stopStream();
+            return;
+        }
+
+        // T-130: the plugin runtime feed is management data. Beyond the slave-trust
+        // gate above, the subscribing player must hold the StockMarket-admin flag
+        // (resolved from the master's user map, so it also works for players
+        // connected through a slave). Fail closed on a missing/unresolvable
+        // requestor and tear the feed down for a non-admin subscriber.
+        java.util.UUID req = getRequestorPlayerUUID();
+        if (req == null || !playerIsAdmin(req)) {
+            stopStream();
+            return;
+        }
+
         long now = System.currentTimeMillis();
         if (now - lastTimeMs < updateInterval) return;
         lastTimeMs = now;

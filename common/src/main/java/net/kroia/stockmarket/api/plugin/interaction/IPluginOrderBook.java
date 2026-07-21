@@ -140,6 +140,23 @@ public interface IPluginOrderBook {
     float getDefaultRawVolume(double pickPrice);
 
     /**
+     * Batch variant of {@link #getDefaultRawVolume(double)}.
+     * Computes the default raw volume for {@code count} consecutive backend price levels,
+     * starting at {@code backendStartPrice}.
+     * Loop-invariant values (current market price, item fraction scale factor) are fetched
+     * only once for the whole range, which makes this considerably cheaper than calling
+     * {@link #getDefaultRawVolume(double)} once per price level.
+     *
+     * @param backendStartPrice the first backend (internal unscaled) price level to sample
+     * @param count the number of consecutive backend price levels to sample
+     * @return an array of length {@code count} where index {@code i} holds the default raw
+     *         volume at backend price {@code backendStartPrice + i}.
+     *         Positive volume for buy orders (below the current market price),
+     *         negative volume for sell orders (at or above the current market price).
+     */
+    float[] getDefaultRawVolume(long backendStartPrice, int count);
+
+    /**
      * Gets the total capital (volume × price) in the given backend price range.
      * Useful for measuring monetary depth in a price region.
      * @param startPrice the start of the price range (backend/unscaled price)

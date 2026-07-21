@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.networking.request;
 
 import net.kroia.modutilities.networking.ExtraCodecUtils;
+import net.kroia.stockmarket.networking.NetworkGate;
 import net.kroia.stockmarket.pluginsystem.plugin.ServerPlugin;
 import net.kroia.stockmarket.pluginsystem.plugin.core.PluginSyncData;
 import net.kroia.stockmarket.pluginsystem.pluginmanager.ServerPluginManager;
@@ -32,6 +33,21 @@ public class PluginListRequest extends StockMarketGenericRequest<Integer, List<P
 
     @Override
     public CompletableFuture<List<PluginSyncData>> handleOnMasterServer(Integer input, String slaveID, UUID playerSender) {
+        // Permission check: the plugin list is management data. Require the
+        // StockMarket-admin flag (the same flag /stockmarket manage requires),
+        // resolved from the master's user map so it also works for players
+        // connected through a slave. A request with no sender fails closed.
+        if (playerSender == null || !playerIsAdmin(playerSender)) {
+            return CompletableFuture.completedFuture(List.of());
+        }
+        // T-129 (untrusted slave read gate): the full plugin list exposes every
+        // plugin's metadata, subscribed markets and per-market custom settings —
+        // it must not reach a client behind an untrusted slave. Master-local
+        // (slaveID="") and trusted slaves pass; untrusted/exception fail closed.
+        if (!NetworkGate.isManagementReadAllowed(slaveID, "PluginListRequest")) {
+            return CompletableFuture.completedFuture(List.of());
+        }
+
         ServerPluginManager pluginManager = (ServerPluginManager) getPluginManager();
         List<PluginSyncData> list = new ArrayList<>();
         if(pluginManager != null) {

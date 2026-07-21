@@ -59,6 +59,15 @@ public class FavoritesBar extends StockMarketGuiElement {
     private long lastBalanceRefreshMs = 0;
     private static final long BALANCE_REFRESH_INTERVAL_MS = 2000;
 
+    /**
+     * T-131 (balance-display fix): the bank account whose balances are shown in the
+     * "Bank Balance" frame. Mirrors {@code TradeScreen.selectedBankAccountNr} so this
+     * panel displays the SELECTED account's holdings (not always the personal one).
+     * {@code -1} means "not resolved yet" and falls back to the player's personal
+     * account, preserving behaviour for single-account players.
+     */
+    private int selectedBankAccountNr = -1;
+
     /** The market currently displayed in the trade screen. */
     @Nullable
     private ItemID currentMarketID;
@@ -272,10 +281,29 @@ public class FavoritesBar extends StockMarketGuiElement {
     }
 
     /**
+     * Sets the bank account whose balances are shown in the "Bank Balance" frame
+     * (T-131 balance-display fix) and immediately refreshes the labels so the
+     * displayed holdings follow the account selected in the trade screen. Passing
+     * {@code -1} restores the personal-account fallback.
+     * @param accountNr the selected account number, or {@code -1} for personal
+     */
+    public void setSelectedBankAccountNr(int accountNr) {
+        this.selectedBankAccountNr = accountNr;
+        // Reflect the new account immediately instead of waiting for the 2s timer.
+        refreshBalances();
+    }
+
+    /**
      * Fetches bank account data and updates the currency and market item balance labels.
+     * Uses the SELECTED account ({@link #selectedBankAccountNr}) when one has been
+     * resolved, otherwise falls back to the player's personal account.
      */
     private void fetchBalances(UUID playerUUID) {
-        getBankManager().getPersonalBankAccountDataAsync(playerUUID).thenAccept(bankAccountData -> {
+        java.util.concurrent.CompletableFuture<BankAccountData> accountFuture =
+                (selectedBankAccountNr == -1)
+                        ? getBankManager().getPersonalBankAccountDataAsync(playerUUID)
+                        : getBankManager().getBankAccountDataAsync(selectedBankAccountNr);
+        accountFuture.thenAccept(bankAccountData -> {
             if (bankAccountData == null) return;
 
             // Currency balance

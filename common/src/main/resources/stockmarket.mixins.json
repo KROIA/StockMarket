@@ -1,11 +1,14 @@
 {
   "required": true,
-  "package": "net.kroia.mixin",
+  "package": "net.kroia.stockmarket.mixin",
   "compatibilityLevel": "JAVA_21",
   "minVersion": "0.8",
   "client": [
   ],
   "mixins": [
+    "MerchantMenuMixin",
+    "MerchantOfferMixin",
+    "MerchantResultSlotMixin"
   ],
   "injectors": {
     "defaultRequire": 1

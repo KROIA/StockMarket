@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.networking.request;
 
+import net.kroia.stockmarket.networking.NetworkGate;
 import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.kroia.stockmarket.util.MultiServerUtils;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
@@ -30,6 +31,10 @@ public class CancelInterMarketOrderRequest extends StockMarketGenericRequest<UUI
     @Override
     public CompletableFuture<Boolean> handleOnMasterServer(UUID interMarketGroupID, String slaveID, @Nullable UUID playerSender) {
         if (playerSender == null || (needsRoutingToMaster() && !MultiServerUtils.canInteractWithStockMarket(playerSender)))
+            return CompletableFuture.completedFuture(false);
+        // T-123 (untrusted slave gate): refuse inter-market cancellations
+        // forwarded by an untrusted slave.
+        if (!NetworkGate.isMutatingCallAllowed(slaveID, "CancelInterMarketOrderRequest"))
             return CompletableFuture.completedFuture(false);
 
         ServerMarketManager marketManager = (ServerMarketManager) getServerMarketManager();

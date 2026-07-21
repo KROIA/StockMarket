@@ -13,9 +13,11 @@ import net.kroia.stockmarket.pluginsystem.plugin.core.PluginSyncData;
 import net.kroia.stockmarket.pluginsystem.registry.PluginRegistry;
 import net.kroia.stockmarket.pluginsystem.registry.PluginRegistryObject;
 import net.kroia.stockmarket.pluginsystem.screen.PluginGuiElement;
+import net.kroia.stockmarket.pluginsystem.pluginmanager.ClientPluginManager;
 import net.kroia.stockmarket.screen.uiElements.MarketItemButton;
 import net.kroia.stockmarket.screen.widgets.CandlestickChart;
 import net.kroia.stockmarket.screen.widgets.OrderbookVolumeHistogram;
+import net.kroia.stockmarket.screen.widgets.PluginPerformanceBar;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.kroia.stockmarket.util.StockMarketGuiScreen;
@@ -52,8 +54,27 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
     private final StockMarketGuiScreen parent;
     private final Label titleLabel;
     private final Button addPluginButton;
+    /**
+     * T-123 / T-125 (untrusted slave gate): red info banner shown across the
+     * top of the plugin management screen on an untrusted slave. Every
+     * mutating plugin button (add/delete/enable/subscribe/reorder/logger/
+     * auto-subscribe) is also disabled — see {@link #applyUntrustedSlaveGate}.
+     * T-125: rendered as three stacked labels because ModUtilities' Label
+     * widget is single-line only and the full trust-explanation would overflow.
+     */
+    private final Label untrustedSlaveBanner1;
+    private final Label untrustedSlaveBanner2;
+    private final Label untrustedSlaveBanner3;
     final CandlestickChart candlestickChart;
     final OrderbookVolumeHistogram orderbookVolumeHistogram;
+    /**
+     * T-137: horizontal per-plugin performance bar shown across the top of the
+     * screen, below the title and any warning banners. Its full width represents
+     * one server tick (50&nbsp;ms). The widget subscribes to
+     * {@link ClientPluginManager#getLatestTimingSnapshot()} — the stream itself
+     * is started/stopped by this screen's lifecycle hooks.
+     */
+    private final PluginPerformanceBar performanceBar;
     private @Nullable ItemID selectedChartMarket = null;
     private @Nullable ClientMarket currentChartMarket = null;
     private final ListView listView;
@@ -73,9 +94,37 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         titleLabel.setAlignment(Label.Alignment.CENTER);
 
         addPluginButton = new Button(Texts.ADD_PLUGIN.getString(), this::onAddPluginClicked);
+        // T-123: hide the "Add plugin" entry point on an untrusted slave.
+        if (isUntrustedSlave()) {
+            addPluginButton.setEnabled(false);
+        }
+
+        // T-123 / T-125: red info banner across the top of the screen when the
+        // master does NOT trust this slave; every per-entry mutating widget is
+        // also disabled inside PluginEntryWidget itself. Split into three
+        // stacked labels so the long message fits on any screen width without
+        // overflow (ModUtilities' Label widget renders a single line only).
+        untrustedSlaveBanner1 = new Label(Component.translatable("gui.stockmarket.untrusted_slave.banner_line1").getString());
+        untrustedSlaveBanner1.setAlignment(Label.Alignment.CENTER);
+        untrustedSlaveBanner1.setTextColor(0xFFe8711c);
+        untrustedSlaveBanner1.setTextFontScale(0.7f);
+        untrustedSlaveBanner1.setEnabled(isUntrustedSlave());
+
+        untrustedSlaveBanner2 = new Label(Component.translatable("gui.stockmarket.untrusted_slave.banner_line2").getString());
+        untrustedSlaveBanner2.setAlignment(Label.Alignment.CENTER);
+        untrustedSlaveBanner2.setTextColor(0xFFe8711c);
+        untrustedSlaveBanner2.setTextFontScale(0.7f);
+        untrustedSlaveBanner2.setEnabled(isUntrustedSlave());
+
+        untrustedSlaveBanner3 = new Label(Component.translatable("gui.stockmarket.untrusted_slave.banner_line3").getString());
+        untrustedSlaveBanner3.setAlignment(Label.Alignment.CENTER);
+        untrustedSlaveBanner3.setTextColor(0xFFe8711c);
+        untrustedSlaveBanner3.setTextFontScale(0.7f);
+        untrustedSlaveBanner3.setEnabled(isUntrustedSlave());
 
         candlestickChart = new CandlestickChart();
         orderbookVolumeHistogram = new OrderbookVolumeHistogram(candlestickChart);
+        performanceBar = new PluginPerformanceBar();
 
         listView = new VerticalListView();
         LayoutVertical layout = new LayoutVertical();
@@ -85,12 +134,43 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
 
         addElement(titleLabel);
         addElement(addPluginButton);
+        addElement(untrustedSlaveBanner1);
+        addElement(untrustedSlaveBanner2);
+        addElement(untrustedSlaveBanner3);
+        addElement(performanceBar);
         addElement(candlestickChart);
         addElement(orderbookVolumeHistogram);
         addElement(listView);
 
         // Request the plugin list from the server and rebuild the UI
         getPluginManager().requestPluginList().thenAccept(this::rebuildPluginList);
+
+        // T-137: open the master-wide plugin timing stream so the performance
+        // bar has live data to render. Idempotent — safe to call again during
+        // updateLayout() when the screen is re-initialised after returning
+        // from a child (PluginDetailScreen etc.).
+        startTimingStream();
+    }
+
+    /**
+     * T-137: opens the plugin performance timing stream on the client-side
+     * plugin manager. Idempotent — a second call while already subscribed is
+     * a no-op inside {@link ClientPluginManager#startTimingStream()}.
+     */
+    private void startTimingStream() {
+        if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.PLUGIN_MANAGER instanceof ClientPluginManager clientMgr) {
+            clientMgr.startTimingStream();
+        }
+    }
+
+    /**
+     * T-137: closes the plugin performance timing stream. Called from
+     * {@link #onClose()}; idempotent.
+     */
+    private void stopTimingStream() {
+        if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.PLUGIN_MANAGER instanceof ClientPluginManager clientMgr) {
+            clientMgr.stopTimingStream();
+        }
     }
 
     @Override
@@ -102,6 +182,9 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             currentChartMarket.unsubscribeFromMarketPriceUpdate();
             currentChartMarket = null;
         }
+        // T-137: tear down the timing stream so the server stops broadcasting
+        // to this client once the management window is gone.
+        stopTimingStream();
         super.onClose();
         if (parent != null) {
             setScreen(parent);
@@ -121,8 +204,28 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         titleLabel.setBounds(padding, padding, width - addBtnWidth - spacing, eh);
         addPluginButton.setBounds(titleLabel.getRight() + spacing, padding, addBtnWidth, eh);
 
-        int contentTop = titleLabel.getBottom() + spacing;
-        int contentHeight = height - (titleLabel.getBottom() + spacing) + padding;
+        // T-123 / T-125 banner: three stacked lines sitting under the title
+        // bar, above the chart+list area. Each line is a single Label because
+        // ModUtilities' Label widget renders one line only.
+        int bannerLineH = 12; // matches textFontScale=0.7f visible height
+        int bannerHeight = untrustedSlaveBanner1.isEnabled() ? 3 * bannerLineH : 0;
+        int bannerReserve = bannerHeight == 0 ? 0 : bannerHeight + spacing;
+        int bannerTop = titleLabel.getBottom() + spacing;
+        untrustedSlaveBanner1.setBounds(padding, bannerTop, width, bannerLineH);
+        untrustedSlaveBanner2.setBounds(padding, bannerTop + bannerLineH, width, bannerLineH);
+        untrustedSlaveBanner3.setBounds(padding, bannerTop + 2 * bannerLineH, width, bannerLineH);
+
+        // T-137: performance bar sits directly below the untrusted-slave
+        // banner (if any) and above the chart/list area. Reserves its own
+        // vertical strip via the same bannerReserve-style pattern so the
+        // chart, histogram and list still get all remaining space.
+        int perfBarTop = bannerTop + bannerHeight + (bannerHeight == 0 ? 0 : spacing);
+        int perfBarHeight = PluginPerformanceBar.TOTAL_HEIGHT;
+        int perfBarReserve = perfBarHeight + spacing;
+        performanceBar.setBounds(padding, perfBarTop, width, perfBarHeight);
+
+        int contentTop = titleLabel.getBottom() + spacing + bannerReserve + perfBarReserve;
+        int contentHeight = height - (titleLabel.getBottom() + spacing + bannerReserve + perfBarReserve) + padding;
         int histogramWidth = width / 20;
         int chartWidth = width / 2 - histogramWidth;
         int listWidth = width - chartWidth - histogramWidth - spacing;
@@ -135,6 +238,9 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         for (PluginEntryWidget entry : entryWidgets) {
             entry.startPluginDataStream();
         }
+        // T-137: also restart the timing stream after a subscreen returns —
+        // matches the runtime-data stream restart pattern above. Idempotent.
+        startTimingStream();
     }
 
     /**
@@ -359,6 +465,23 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             this.addChild(loggerCheckBox);
             this.addChild(subscriptionOrderLabel);
             this.addChild(subscriptionOrderTextBox);
+
+            // T-123 (untrusted slave gate): every per-entry mutating input is
+            // disabled on an untrusted slave. Also grays out the per-market
+            // MarketItemButton instances that let admins unsubscribe.
+            if (isUntrustedSlave()) {
+                subscribeButton.setEnabled(false);
+                enabledCheckBox.setEnabled(false);
+                deleteButton.setEnabled(false);
+                moveUpButton.setEnabled(false);
+                moveDownButton.setEnabled(false);
+                autoSubscribeCheckBox.setEnabled(false);
+                loggerCheckBox.setEnabled(false);
+                subscriptionOrderTextBox.setEnabled(false);
+                for (MarketItemButton iv : marketItemViews) {
+                    iv.setEnabled(false);
+                }
+            }
 
             // Create the plugin GUI element from the registry (no ClientPlugin intermediary needed)
             this.pluginGuiElement = PluginRegistry.createGuiElement(data.getPluginTypeID());

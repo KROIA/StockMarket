@@ -2,6 +2,7 @@ package net.kroia.stockmarket.networking.request;
 
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.api.market.IServerMarket;
+import net.kroia.stockmarket.networking.NetworkGate;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.util.MultiServerUtils;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
@@ -53,6 +54,10 @@ public class CancelOrderRequest extends StockMarketGenericRequest<CancelOrderReq
     @Override
     public CompletableFuture<Boolean> handleOnMasterServer(InputData input, String slaveID, @Nullable UUID playerSender) {
         if (playerSender == null || (needsRoutingToMaster() && !MultiServerUtils.canInteractWithStockMarket(playerSender)))
+            return CompletableFuture.completedFuture(false);
+        // T-123 (untrusted slave gate): refuse cancellations forwarded by an
+        // untrusted slave. Returns the type's default failure (false).
+        if (!NetworkGate.isMutatingCallAllowed(slaveID, "CancelOrderRequest"))
             return CompletableFuture.completedFuture(false);
 
         IServerMarket market = getServerMarketManager().getMarket(input.itemID);

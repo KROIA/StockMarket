@@ -85,6 +85,14 @@ public class PairSelectorWidget extends StockMarketGuiElement {
     @Nullable
     private ItemID wantMarketID = null;
 
+    /**
+     * T-131 (balance-display fix): the bank account whose balances are shown next to
+     * the "have"/"want" items. Mirrors {@code TradeScreen.selectedBankAccountNr} so
+     * the "Bal:" labels reflect the SELECTED account (not always the personal one).
+     * {@code -1} falls back to the player's personal account.
+     */
+    private int selectedBankAccountNr = -1;
+
     /** Cached trading currency ID for display. */
     @Nullable
     private ItemID tradingCurrencyID = null;
@@ -236,6 +244,19 @@ public class PairSelectorWidget extends StockMarketGuiElement {
         wantMarketID = marketID;
         updateWantDisplay();
         updateRate();
+    }
+
+    /**
+     * Sets the bank account whose balances are shown next to the "have"/"want" items
+     * (T-131 balance-display fix) and refreshes the "Bal:" labels immediately so they
+     * follow the account selected in the trade screen. Passing {@code -1} restores the
+     * personal-account fallback.
+     * @param accountNr the selected account number, or {@code -1} for personal
+     */
+    public void setSelectedBankAccountNr(int accountNr) {
+        this.selectedBankAccountNr = accountNr;
+        // Reflect the new account immediately instead of waiting for the next refresh.
+        refreshBalances();
     }
 
     // ── Click handling ──
@@ -475,7 +496,13 @@ public class PairSelectorWidget extends StockMarketGuiElement {
                 ? Minecraft.getInstance().player.getUUID() : null;
         if (playerUUID == null) return;
 
-        getBankManager().getPersonalBankAccountDataAsync(playerUUID).thenAccept(bankAccountData -> {
+        // T-131 balance-display fix: show the SELECTED account's balances; only fall
+        // back to the personal account while none has been resolved (nr == -1).
+        java.util.concurrent.CompletableFuture<net.kroia.banksystem.banking.clientdata.BankAccountData> accountFuture =
+                (selectedBankAccountNr == -1)
+                        ? getBankManager().getPersonalBankAccountDataAsync(playerUUID)
+                        : getBankManager().getBankAccountDataAsync(selectedBankAccountNr);
+        accountFuture.thenAccept(bankAccountData -> {
             if (bankAccountData == null) return;
 
             // "Have" item balance

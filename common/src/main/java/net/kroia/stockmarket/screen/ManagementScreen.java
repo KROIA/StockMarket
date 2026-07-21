@@ -81,6 +81,12 @@ public class ManagementScreen extends StockMarketGuiScreen {
         public static final Component PLUGINS_ENABLED = Component.translatable(PREFIX + "plugins.enabled");
         public static final Component PLUGINS_MANAGE = Component.translatable(PREFIX + "plugins.manage");
 
+        public static final Component MOD_SETTINGS = Component.translatable(PREFIX + "mod_settings");
+        public static final Component MOD_SETTINGS_TOOLTIP = Component.translatable(PREFIX + "mod_settings.tooltip");
+
+        public static final Component NEWS = Component.translatable(PREFIX + "news");
+        public static final Component NEWS_TOOLTIP = Component.translatable(PREFIX + "news.tooltip");
+
     }
     public static final int elementHeight = 20;
 
@@ -152,6 +158,13 @@ public class ManagementScreen extends StockMarketGuiScreen {
             this.addChild(closeAllMarketsButton);
 
             this.setHeight(5*(elementHeight+spacing));
+
+            // T-125: per-element disable from T-123 is intentionally removed —
+            // an untrusted slave now cannot open the ManagementScreen at all
+            // (see the openScreen() entry guard), so the per-widget gate here
+            // would be dead code. If the screen ever becomes reachable on an
+            // untrusted slave via a new entry point, add the guard THERE, not
+            // back here.
         }
         @Override
         protected void render() {
@@ -355,6 +368,31 @@ public class ManagementScreen extends StockMarketGuiScreen {
             pluginOverviewWidget = new PluginOverviewWidget(parent);
             listView.addChild(pluginOverviewWidget);
 
+            // News button: opens the newspaper screen (T-074) — available to
+            // everyone, the news feed is not admin-gated.
+            Button newsButton = new Button(Texts.NEWS.getString(),
+                    () -> setScreen(new NewsScreen(parent)));
+            newsButton.setHeight(elementHeight);
+            newsButton.setHoverTooltipSupplier(Texts.NEWS_TOOLTIP::getString);
+            newsButton.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
+            newsButton.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.TOP_RIGHT);
+            listView.addChild(newsButton);
+
+            // Master-only: button that opens the Mod Settings screen (edits the
+            // server's settings.json in-game). Only the master server loads/owns
+            // settings.json, so the button is hidden on slave servers — the flag
+            // is synced at join via PlayerJoinSyncPacket/ClientSettings. The server
+            // additionally enforces op level 2 + master status in ModSettingsRequest.
+            if (isMasterServer()) {
+                Button modSettingsButton = new Button(Texts.MOD_SETTINGS.getString(),
+                        () -> setScreen(new ModSettingsScreen(parent)));
+                modSettingsButton.setHeight(elementHeight);
+                modSettingsButton.setHoverTooltipSupplier(Texts.MOD_SETTINGS_TOOLTIP::getString);
+                modSettingsButton.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
+                modSettingsButton.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.TOP_RIGHT);
+                listView.addChild(modSettingsButton);
+            }
+
             addChild(candlestickChart);
             addChild(searchLabel);
             addChild(searchField);
@@ -503,6 +541,9 @@ public class ManagementScreen extends StockMarketGuiScreen {
     private final OverviewTab overviewTab;
     private final CreateMarketTab createMarketTab;
     private final PresetEditorTab presetEditorTab;
+    // T-125: the T-123 in-screen banner label has been removed. Untrusted
+    // slaves never reach this screen (openScreen()/openGUI() send a chat
+    // message and return early), so the banner would be unreachable UI.
 
     /**
      * The ItemID of the market currently selected in the overview tab.
@@ -538,11 +579,37 @@ public class ManagementScreen extends StockMarketGuiScreen {
         presetEditorTab = new PresetEditorTab();
         tabElement.addTab(TAB_PRESETS, presetEditorTab);
 
+        // T-125: the T-123 red info banner has been removed. See the
+        // openScreen() entry guard: untrusted slaves never reach construction.
+
         addElement(tabElement);
     }
 
+    /**
+     * Opens the Management screen. On an untrusted slave the screen is NOT
+     * opened at all (T-125 user request: "don't allow the opening of that
+     * screen when on an untrusted server"). Instead a chat message points the
+     * player at {@code /banksystem trust <slaveID>}.
+     * <p>
+     * The other T-123 screens (TradeScreen, PluginManagementScreen,
+     * CreateMarketScreen, PresetEditorTab, CreateMarketTab) keep their
+     * per-element disable + banner — only Management uses the "block entirely"
+     * pattern.
+     */
     public static void openScreen()
     {
+        if (StockMarketGuiElement.isUntrustedSlave()) {
+            // Chat notice via the local player. Same idiom as the other
+            // "action unavailable" chat notices in the mod (no toast API in
+            // ModUtilities for this).
+            net.minecraft.client.player.LocalPlayer player = Minecraft.getInstance().player;
+            if (player != null) {
+                player.displayClientMessage(
+                        Component.translatable("gui.stockmarket.untrusted_slave.management_blocked"),
+                        false);
+            }
+            return;
+        }
         ManagementScreen screen = new ManagementScreen();
         Minecraft.getInstance().setScreen(screen);
     }
@@ -566,7 +633,8 @@ public class ManagementScreen extends StockMarketGuiScreen {
         int w = getWidth() - 2 * p;
         int h = getHeight() - 2 * p;
 
-        // TabElement fills the entire screen area
+        // T-125: banner reserve removed alongside the banner Label itself.
+        // TabElement fills the full available area.
         tabElement.setBounds(p, p, w, h);
     }
 
