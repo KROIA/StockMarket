@@ -257,7 +257,7 @@ world/data/StockMarket/News/
     registry.nbt             # world-event registry (see advanced-events.md)
 ```
 
-Each `NNN.nbt` chunk holds **exactly 100 records** (except the newest, which fills as records are published). The paired `NNN.hashes.nbt` sidecar lists the [picture](pictures.md) hashes referenced by that chunk plus its record count and uid bounds -- small enough that all sidecars stay resident, while older chunk data is lazy-loaded through a small LRU as the newspaper paginates backwards. Chunk indices are monotonic and are never reused after a chunk drop.
+Each `NNN.nbt` chunk holds **exactly 100 records** (except the newest, which fills as records are published). The paired `NNN.hashes.nbt` sidecar lists the [picture](pictures.md) hashes referenced by that chunk plus its record count and uid bounds -- small enough that all sidecars stay resident. The **newest (write) chunk is kept in memory**; older chunks live on disk and are lazy-loaded through a small LRU only when the newspaper paginates back into them, so a *Load more* click reads just the one or two chunk files it needs to serve the requested page. Chunk indices are monotonic and are never reused after a chunk drop.
 
 ### Retention Semantics
 

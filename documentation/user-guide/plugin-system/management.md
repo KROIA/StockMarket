@@ -30,6 +30,51 @@ A scrollable list of all plugin instances. Each entry shows:
 - **Market icons** -- Item icons showing which markets this plugin is subscribed to. Click any icon to select that market for the chart display — all icons for the same market across all plugins highlight with a green overlay. Each icon has a small close button in the top-right corner for unsubscribing (press and release on the button to confirm). A "+" button at the end lets you subscribe to additional markets.
 - **Settings area** -- Either inline settings fields or an "Open Plugin" button, depending on the plugin type.
 
+## Performance Bar
+
+A horizontal stacked timing bar spans the top of the Plugin Management Screen. It shows how much of the server's per-tick CPU budget the plugin loop is currently consuming, broken down by plugin and by pass.
+
+**Reading the bar:**
+
+- The full width of the bar represents the **effective plugin budget** for one server tick.
+- The left-hand label reads `Plugin budget: X / 50 ms`, where `X` is the current effective budget and `50` is the vanilla server tick hard cap.
+- Each plugin contributes up to two stacked segments in execution order: one for its **Update** pass and one for its **Finalize** pass. Segment width is proportional to that pass's rolling-average execution time relative to the effective budget.
+- Every plugin gets a stable colour derived from its instance UUID (saturation 0.65, brightness 0.85 in HSV), so the same plugin always paints the same hue across sessions and clients. The Finalize segment uses a darker shade of the same hue (brightness 0.55), keeping the two passes visually paired with their plugin.
+- Disabled plugins are blended toward mid-grey so they stay identifiable without drawing attention.
+
+**Effective budget:**
+
+The effective budget is calculated as `50 ms - rolling-average non-plugin tick work`. The server measures the wall-clock time between the pre- and post-tick hooks each tick, subtracts the plugin passes it ran inside that tick, and averages the remainder over a rolling window. If other mods or vanilla systems (world tick, entities, networking) eat more per-tick CPU, the effective budget shrinks and the bar's headroom shrinks with it.
+
+**Overload warning:**
+
+When the summed rolling average of the **enabled** plugins exceeds the effective budget, two things happen:
+
+- A red overflow marker appears at the right edge of the bar.
+- A red warning line ("Plugins exceed the 50 ms tick budget -- server load too high") is drawn below the bar.
+
+Disabled plugins are excluded from the overload sum, so temporarily disabling a plugin will clear the warning if that plugin was the cause.
+
+**Segment tooltip:**
+
+Hovering a segment shows a tooltip with:
+
+- **Plugin name**
+- **Pass label** (Update or Finalize)
+- **Time** -- the latest single-tick sample for that pass
+- **Average** -- the rolling-window average
+- **Peak** -- the highest sample currently in the window
+- **Tick budget** -- the pass average as a percentage of the effective budget
+- **Markets** -- the number of markets the plugin is subscribed to
+
+All timings are displayed in milliseconds to two decimal places.
+
+**Sampling and stream cadence:**
+
+- The server records one sample per pass per tick and keeps a rolling window of 20 samples (about one second at 20 ticks per second), which drives the average and peak values.
+- The client receives snapshots via a server-to-client stream at a 500 ms cadence.
+- The stream is admin- and trust-gated: only trusted slaves and admin clients receive it, and both checks are re-evaluated on every tick, so revoking trust or admin permission tears the feed down within one interval.
+
 ## Enabling and Disabling Plugins
 
 To enable or disable a plugin:

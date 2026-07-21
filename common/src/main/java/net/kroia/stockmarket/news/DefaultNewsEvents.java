@@ -325,7 +325,7 @@ public final class DefaultNewsEvents {
                 "maxSecondsBetweenEvents": 3600,
                 "maxActiveEventsGlobal": 3,
                 "maxActiveEventsPerMarket": 1,
-                "historyMaxEntries": 500
+                "historyMaxEntries": 1000
               },
               "events": [
                 {
