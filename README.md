@@ -292,6 +292,8 @@ The **Mod Settings** button on the Management GUI's overview tab opens an editor
 * Most settings take effect immediately. Fields marked with an orange **⟳ Restart required** label (orderbook array size, trading currency) are only read once at startup — the new value is saved but only applies after a server restart.
 * Changes to the **Villager Trading** group are propagated to all connected slave servers right away (the villager price table is recomputed and re-broadcast).
 
+This screen is the recommended way to change any persisted mod setting — admins do not need to edit `settings.json` by hand.
+
 #### Plugin System
 Plugins replace the old bot system. They are modular components that can be added to markets to provide liquidity, simulate price movements, and more.
 
@@ -440,16 +442,18 @@ While a news event is active, the **NewsPlugin** multiplies the target price fro
 
 ---
 ## Villager Trading
-Villager (and wandering trader) trade offers for **market-listed items** no longer use emeralds — both trade directions are converted to the configured trading-currency item (`ServerMarket.CURRENCY` in `world/data/StockMarket/settings.json`) and priced from the stock market:
+Villager (and wandering trader) trade offers for **market-listed items** no longer use emeralds — both trade directions are converted to the configured trading-currency item (`ServerMarket.CURRENCY`, editable in-game via the Mod Settings screen's Market group / ServerMarket section, or directly in `world/data/StockMarket/settings.json`) and priced from the stock market:
 * Only offers whose traded item exists on the stock market are repriced (component-aware, so e.g. specific enchanted books can have their own markets). A trade where the villager sells requires a market for the sold item; a trade where the villager buys requires a market for every item it asks for.
 * Items **without** a market keep their normal vanilla emerald trades. If a market is created for such an item later, the offer converts to currency pricing on the next price refresh; if a market is deleted, affected offers return to their original emerald form.
 * Prices refresh automatically on the configured interval (default 20 real minutes ≈ one Minecraft day).
 * Original emerald offers are stored in world data; disabling the feature restores every villager's original offers the next time it is interacted with. Partially used offers stay partially used.
 
 ### Settings (`VillagerTrading` group in `settings.json`)
+Edit these in-game via `/stockmarket manage` → **Mod Settings** → **VillagerTrading** group (requires op level 2 and the StockMarket-admin flag; the button only appears when connected to the master server). You can also edit the JSON directly at `world/data/StockMarket/settings.json` if the server isn't running.
+
 | Setting | Default | Description |
 |-----------|---------|-------------|
-| `ENABLED` | `true` | Master switch for villager trade repricing. Enabled by default; set to `false` in `settings.json` to disable the feature. |
+| `ENABLED` | `true` | Master switch for villager trade repricing. Enabled by default; toggle it off in the Mod Settings screen (or set `ENABLED` to `false` in `settings.json`) to disable the feature. |
 | `PRICE_REFRESH_INTERVAL_MINUTES` | `20` | Real-time minutes between price refreshes/broadcasts. |
 | `VILLAGER_BUY_MARGIN` | `0.8` | Multiplier on the market price when the villager **buys** from the player (villager pays below market). |
 | `VILLAGER_SELL_MARGIN` | `1.2` | Multiplier on the market price when the villager **sells** to the player (villager charges above market). |
