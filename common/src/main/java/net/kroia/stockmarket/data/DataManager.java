@@ -493,19 +493,43 @@ public class DataManager extends DataPersistence {
             return CompletableFuture.completedFuture(false);
         }
 
-        if(!candleDataSQL_saveLock.compareAndSet(false, true))
-        {
-            warn("savePriceCandlesToSQL(): currently locked!");
-            return CompletableFuture.completedFuture(false);
-        }
         IServerMarketManager marketManager = BACKEND_INSTANCES.MARKET_MANAGER.getSync();
         if(marketManager == null) {
             error("savePriceCandlesToSQL(): No marketmanager found!");
-            candleDataSQL_saveLock.set(false);
+            return CompletableFuture.completedFuture(false);
+        }
+        MarketPriceManager priceHistoryManager = BACKEND_INSTANCES.MARKET_PRICE_HISTORY_MANAGER;
+
+        // T-141 pause interaction: candleDataSQL_saveLock stays held for the
+        // whole duration of the pending save. During a backup pause, that
+        // pending save is parked in the db-worker executor's FIFO queue
+        // behind the pause latch — so every subsequent periodic tick used to
+        // hit this guard, bail without calling getCurrentMarketPricesAndStartNewCandle(),
+        // and thereby fail to rotate the in-memory candle buffers. Result:
+        // all price ticks during the pause smeared into a single candle
+        // instead of one candle per interval, and individual candle records
+        // that should have existed at their expected timestamps were lost.
+        //
+        // Fix: when the lock is held we still MUST rotate the buffers each
+        // tick. Gather the candles and submit them directly to the
+        // MarketPriceManager — the db-worker's single-thread executor uses
+        // an unbounded LinkedBlockingQueue (see DatabaseManager.executor),
+        // so the extra save simply queues FIFO behind the pending one and
+        // both drain in order after resume. We deliberately do NOT try to
+        // acquire the lock here (the pending primary save owns it), and we
+        // skip the SQL round-trip only when there's genuinely nothing to
+        // save.
+        if(!candleDataSQL_saveLock.compareAndSet(false, true))
+        {
+            List<MarketPriceStruct> extraCandles = marketManager.getCurrentMarketPricesAndStartNewCandle();
+            if(extraCandles != null && !extraCandles.isEmpty()) {
+                warn("savePriceCandlesToSQL(): prior save still pending — queueing "
+                        + extraCandles.size() + " additional candles behind it");
+                priceHistoryManager.save(extraCandles);
+            }
             return CompletableFuture.completedFuture(false);
         }
 
-        MarketPriceManager priceHistoryManager = BACKEND_INSTANCES.MARKET_PRICE_HISTORY_MANAGER;
         long saveStartTime = System.nanoTime();
         List<MarketPriceStruct> candles = marketManager.getCurrentMarketPricesAndStartNewCandle();
         long gatheringCandlesTime = System.nanoTime() - saveStartTime;

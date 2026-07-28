@@ -10,14 +10,28 @@ import java.nio.charset.StandardCharsets;
 import java.sql.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 
 public class DatabaseManager {
     private Connection connection;
 
+    /**
+     * Single-thread executor that owns every SQL write on the SQLite connection.
+     * <p>
+     * MUST remain backed by an <i>unbounded</i> queue (the default
+     * {@link java.util.concurrent.LinkedBlockingQueue} inside
+     * {@link Executors#newSingleThreadExecutor(java.util.concurrent.ThreadFactory)}):
+     * {@link #pauseForBackup(long)} relies on the FIFO queue holding every write
+     * submitted during the pause window so they replay in order after
+     * {@link #resumeFromBackup()}. Switching to a bounded queue or a rejecting
+     * {@link java.util.concurrent.RejectedExecutionHandler} would silently
+     * drop writes submitted while the worker is parked on the pause latch.
+     */
     private final ExecutorService executor = Executors.newSingleThreadExecutor( r -> {
         Thread t = new Thread(r, "db-worker");
         t.setDaemon(true);
@@ -26,6 +40,40 @@ public class DatabaseManager {
 
 
     public static final Path DATABASE_PATH = DataManager.SQL_DATABASE;
+
+    /**
+     * Default safety timeout for {@link #pauseForBackup(long)} — 120 seconds.
+     * If a pause has been active longer than this, the parked db-worker job
+     * auto-resumes with a WARN log so that a forgotten
+     * {@code /stockmarket backup resume} does not softlock every future
+     * price-history / order-record write.
+     * <p>
+     * Public so command handlers and tests can reference the exact timeout
+     * without duplicating the magic number.
+     */
+    public static final long PAUSE_TIMEOUT_MS = 120_000L;
+
+    /**
+     * True while a backup pause job is queued or actively parked on the db-worker.
+     * Flipped false in the worker's {@code finally} block (either after
+     * {@link #resumeFromBackup()} or after the safety-timeout auto-resume).
+     */
+    private final AtomicBoolean paused = new AtomicBoolean(false);
+
+    /**
+     * Latch the parked db-worker job blocks on while paused for backup.
+     * Recreated on every {@link #pauseForBackup(long)} call and cleared in the
+     * worker's {@code finally} block. Volatile because the command handler
+     * threads and the worker thread both touch it.
+     */
+    private volatile CountDownLatch resumeLatch = null;
+
+    /**
+     * Wall-clock time (ms since epoch) when the current pause was requested,
+     * or 0 while not paused. Read by {@link #getPauseElapsedMs()} for the
+     * {@code /stockmarket backup status} feedback message.
+     */
+    private volatile long pauseStartedAtMs = 0L;
 
 
     /**
@@ -181,6 +229,112 @@ public class DatabaseManager {
 
     public Connection getConnection(){
         return connection;
+    }
+
+    /**
+     * Submits a "commit + park" job to the single-thread {@code db-worker} executor so an
+     * external filesystem backup (e.g. {@code tar} of the world directory) can capture a
+     * consistent snapshot of the SQLite files without racing an in-flight commit.
+     * <p>
+     * Because the worker is single-threaded, any writes queued before this call complete
+     * first — the worker drains them. Only once the pause job becomes the currently-running
+     * task does it emit the distinctive
+     * {@code [StockMarket] db-worker paused for backup} log line — that log line is the ack
+     * a backup script waits for (e.g. via {@code tail -F ... | grep -q ...}); the command
+     * handler itself must not block on the worker.
+     * <p>
+     * After parking, the job blocks on a {@link CountDownLatch} for at most {@code timeoutMs}
+     * milliseconds. If {@link #resumeFromBackup()} is called before then, the worker resumes
+     * cleanly. If the timeout expires, the worker WARN-logs an auto-resume message and
+     * continues on its own — this safety timeout prevents softlock when the operator forgets
+     * the paired {@code resume} call.
+     * <p>
+     * Not stackable: calling {@code pauseForBackup} while already paused returns {@code false}
+     * and does not queue a second latch.
+     *
+     * @param timeoutMs safety timeout in milliseconds; the parked worker auto-resumes after
+     *                  this many ms if no {@link #resumeFromBackup()} call arrives. Typically
+     *                  {@link #PAUSE_TIMEOUT_MS}.
+     * @return {@code true} if the pause job was submitted; {@code false} if already paused
+     */
+    public boolean pauseForBackup(long timeoutMs) {
+        if (!paused.compareAndSet(false, true)) {
+            return false;
+        }
+        pauseStartedAtMs = System.currentTimeMillis();
+        final CountDownLatch latch = new CountDownLatch(1);
+        resumeLatch = latch;
+        final long safetyTimeoutMs = timeoutMs;
+        executor.submit(() -> {
+            try {
+                // Defensive commit — the write path uses setAutoCommit(false), so an open
+                // transaction from the last queued write may still be pending.
+                try {
+                    if (connection != null && !connection.isClosed() && !connection.getAutoCommit()) {
+                        connection.commit();
+                    }
+                } catch (SQLException e) {
+                    StockMarketMod.LOGGER.error("[StockMarket] db-worker pause commit failed: {}", e.getMessage());
+                }
+                // Distinctive ack line — backup scripts grep for this exact string.
+                StockMarketMod.LOGGER.info("[StockMarket] db-worker paused for backup");
+                boolean released;
+                try {
+                    released = latch.await(safetyTimeoutMs, TimeUnit.MILLISECONDS);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    released = false;
+                }
+                if (!released) {
+                    StockMarketMod.LOGGER.warn(
+                            "[StockMarket] db-worker auto-resumed after {}ms safety timeout — operator forgot 'resume'?",
+                            safetyTimeoutMs);
+                }
+                StockMarketMod.LOGGER.info("[StockMarket] db-worker resumed");
+            } finally {
+                paused.set(false);
+                resumeLatch = null;
+                pauseStartedAtMs = 0L;
+            }
+        });
+        return true;
+    }
+
+    /**
+     * Releases the currently parked db-worker backup job, if any.
+     * <p>
+     * The paired {@code [StockMarket] db-worker resumed} log line is emitted from the
+     * worker itself (not from this method) so the console transcript reflects the actual
+     * state transition on the worker thread.
+     *
+     * @return {@code true} if a pause was active and has been signalled to resume;
+     *         {@code false} if the worker was not paused
+     */
+    public boolean resumeFromBackup() {
+        final CountDownLatch latch = resumeLatch;
+        if (!paused.get() || latch == null) {
+            return false;
+        }
+        latch.countDown();
+        return true;
+    }
+
+    /**
+     * @return {@code true} while a {@link #pauseForBackup(long)} job is queued or actively
+     *         parked on the db-worker; {@code false} otherwise
+     */
+    public boolean isPausedForBackup() {
+        return paused.get();
+    }
+
+    /**
+     * @return elapsed milliseconds since the current pause was requested, or 0 if not paused
+     */
+    public long getPauseElapsedMs() {
+        if (!paused.get()) return 0L;
+        long started = pauseStartedAtMs;
+        if (started == 0L) return 0L;
+        return System.currentTimeMillis() - started;
     }
 
     public boolean commitTransaction() {
