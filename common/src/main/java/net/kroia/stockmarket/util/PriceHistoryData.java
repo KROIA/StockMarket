@@ -92,11 +92,20 @@ public class PriceHistoryData
         }
     }
 
+    /**
+     * Sentinel value for {@link #oldestAvailableTimestamp} meaning "server has no
+     * data older than the returned candles" (i.e. the client already holds
+     * everything back to server-start for this market).
+     */
+    public static final long NO_OLDER_DATA = Long.MAX_VALUE;
+
     public static final StreamCodec<RegistryFriendlyByteBuf, PriceHistoryData> STREAM_CODEC = StreamCodec.composite(
             ItemID.STREAM_CODEC, p -> p.itemID,
             ByteBufCodecs.INT, p -> p.itemScaleFactor,
             ExtraCodecUtils.listStreamCodec(Candle.STREAM_CODEC), p -> p.candles,
             ByteBufCodecs.VAR_LONG, p -> p.currentMarketPrice,
+            ByteBufCodecs.VAR_LONG, p -> p.oldestAvailableTimestamp,
+            ByteBufCodecs.BOOL, p -> p.truncated,
             PriceHistoryData::new
     );
 
@@ -104,6 +113,19 @@ public class PriceHistoryData
     private final int itemScaleFactor;
     private final List<Candle> candles;
     private long currentMarketPrice;
+    /**
+     * Oldest timestamp the server has on disk for this market. Used by the client
+     * pagination cache (T-135) to know when it has walked back to the beginning
+     * of the server's recorded history. {@link #NO_OLDER_DATA} means "nothing
+     * older exists".
+     */
+    private long oldestAvailableTimestamp;
+    /**
+     * {@code true} when the server truncated the response to fit its per-response
+     * candle cap (see {@code MarketPriceHistoryRequest.MAX_CANDLES_PER_RESPONSE_DEFAULT}).
+     * The returned list is the newest-N candles; older ones were dropped.
+     */
+    private boolean truncated;
 
 
     public PriceHistoryData(long currentServerTime, ItemID itemID, int itemScaleFactor)
@@ -112,14 +134,42 @@ public class PriceHistoryData
         this.itemScaleFactor = itemScaleFactor;
         candles = new ArrayList<>();
         currentMarketPrice = 0;
+        this.oldestAvailableTimestamp = NO_OLDER_DATA;
+        this.truncated = false;
         startNewCandle(currentServerTime);
     }
+    /**
+     * Legacy 4-arg constructor. Kept for backward compatibility with existing
+     * callers (tests, {@code CrossRateMarket}, {@code ClientMarket}) that don't
+     * need the pagination metadata. Defaults {@code oldestAvailableTimestamp} to
+     * {@link #NO_OLDER_DATA} and {@code truncated} to {@code false}.
+     */
     public PriceHistoryData(ItemID itemID, int itemScaleFactor, List<Candle> candles, long currentMarketPrice)
+    {
+        this(itemID, itemScaleFactor, candles, currentMarketPrice, NO_OLDER_DATA, false);
+    }
+    /**
+     * Full constructor including pagination scalars.
+     *
+     * @param itemID                    the market this history belongs to
+     * @param itemScaleFactor           price fraction scaling factor
+     * @param candles                   candle list (chronological, oldest first)
+     * @param currentMarketPrice        current market price in raw units
+     * @param oldestAvailableTimestamp  oldest timestamp available on the server
+     *                                  for this market, or {@link #NO_OLDER_DATA}
+     *                                  when no earlier data exists
+     * @param truncated                 {@code true} if the server dropped older
+     *                                  candles to fit its per-response cap
+     */
+    public PriceHistoryData(ItemID itemID, int itemScaleFactor, List<Candle> candles, long currentMarketPrice,
+                            long oldestAvailableTimestamp, boolean truncated)
     {
         this.itemID = itemID;
         this.itemScaleFactor = itemScaleFactor;
         this.candles = candles;
         this.currentMarketPrice = currentMarketPrice;
+        this.oldestAvailableTimestamp = oldestAvailableTimestamp;
+        this.truncated = truncated;
     }
     public PriceHistoryData createFromDifferentCandleDeltaTime(long currentServerTime, long candleDeltaTimeMs, long currentMarketPrice, boolean createEmptyCandleForTimeGaps)
     {
@@ -324,6 +374,44 @@ public class PriceHistoryData
     public int getItemScaleFactor()
     {
         return itemScaleFactor;
+    }
+
+    /**
+     * @return the oldest timestamp the server has recorded for this market, or
+     *         {@link #NO_OLDER_DATA} when there is no data older than the
+     *         returned candles.
+     */
+    public long getOldestAvailableTimestamp()
+    {
+        return oldestAvailableTimestamp;
+    }
+
+    /**
+     * @return {@code true} if the server truncated the response (dropped older
+     *         candles) to fit its per-response cap. The returned candle list is
+     *         the newest-N; caller may need to page further back.
+     */
+    public boolean isTruncated()
+    {
+        return truncated;
+    }
+
+    /**
+     * Set the oldest-available-timestamp scalar. Called by the server-side
+     * request handler after querying the database.
+     */
+    public void setOldestAvailableTimestamp(long oldestAvailableTimestamp)
+    {
+        this.oldestAvailableTimestamp = oldestAvailableTimestamp;
+    }
+
+    /**
+     * Set the truncated flag. Called by the server-side request handler when it
+     * drops older candles to fit the per-response cap.
+     */
+    public void setTruncated(boolean truncated)
+    {
+        this.truncated = truncated;
     }
     public double toRealPrice(long rawPrice)
     {

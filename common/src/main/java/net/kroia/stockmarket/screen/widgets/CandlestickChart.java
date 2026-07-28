@@ -10,6 +10,7 @@ import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.util.PriceHistoryData;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
 import net.kroia.modutilities.gui.InputConstants;
 
@@ -20,9 +21,12 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class CandlestickChart extends StockMarketGuiElement {
 
@@ -96,6 +100,55 @@ public class CandlestickChart extends StockMarketGuiElement {
     private final List<Button> candleTimeSelectButtons = new ArrayList<>();
     private final int defaultButtonBackgroundColor = ColorUtilities.setAlpha(DEFAULT_BACKGROUND_COLOR, 1.0f);
 
+    // Lang key for the "loading older data" indicator shown at the left edge
+    // of the chart while a paginated fetch of older candles is in flight.
+    private static final String KEY_LOADING_OLDER = "stockmarket.candlestick.loadingOlder";
+
+    // True while a paginated "older data" fetch is in flight for the current
+    // candle-delta. Toggled true when we fire the request and reset via
+    // whenComplete on the returned future — see maybeRequestOlderData.
+    private final AtomicBoolean loadingOlder = new AtomicBoolean(false);
+
+    // Candle-time deltas (in ms) for which a one-time auto-fit is pending.
+    // Populated in selectCandleTimeDeltaByIndex when we fire an initial
+    // paginated fetch for an empty delta (i.e. the user switched to a delta
+    // that has no cached candles yet). Consumed in renderBackground once
+    // the response has landed and PriceHistoryData is populated: at that
+    // point we set firstDraw=true so the existing "fit DEFAULT_VISIBLE_CANDLES
+    // + autoCenterView" code path in renderCandles runs exactly like it does
+    // on initial chart open. Cleared on market switch (see setPriceDataProvider)
+    // so pending flags never leak across (market, delta) boundaries.
+    // Explicitly does NOT get populated by T-135 older-chunk pagination —
+    // that path never enters selectCandleTimeDeltaByIndex, so the view is
+    // preserved during pan-left.
+    private final Set<Long> pendingAutoFitDeltas = new HashSet<>();
+
+    /**
+     * Candle-time deltas (in ms) that have already had a first-time vertical
+     * fit applied for the CURRENT market. Once a delta lands here it is never
+     * auto-fitted again for this market — subsequent user selections of the
+     * same delta (cache-hit switch or reclick of the currently active delta)
+     * leave the viewport untouched.
+     *
+     * <p>Populated at every point where the viewport is made valid for a delta:
+     * <ul>
+     *   <li>{@link #renderBackground()} when it consumes a
+     *       {@link #pendingAutoFitDeltas} entry (data-arrival path).</li>
+     *   <li>{@link #setPriceDataProvider(IPriceDataProvider)} inside the
+     *       cache-warm restore-failed branch after the manual firstDraw
+     *       setup, and via {@link #restoreViewportState(String)} on the
+     *       viewport-restore path.</li>
+     *   <li>{@link #deserializeViewport(CompoundTag)} when a persisted
+     *       viewport is applied.</li>
+     * </ul>
+     *
+     * <p>Cleared alongside {@link #pendingAutoFitDeltas} in
+     * {@link #setPriceDataProvider(IPriceDataProvider)} so per-market
+     * isolation is preserved. The spacebar handler does NOT touch this set —
+     * spacebar is an explicit manual override that always fits regardless.
+     */
+    private final Set<Long> deltasEverFitted = new HashSet<>();
+
     // ── Constructor ──
 
     public CandlestickChart() {
@@ -146,6 +199,13 @@ public class CandlestickChart extends StockMarketGuiElement {
         this.priceDataProvider = provider;
         this.clientMarket = (provider instanceof ClientMarket cm) ? cm : null;
         this.data = null;
+        // Drop any pending auto-fit flags from the previous market so they
+        // don't spuriously refit the view when the new market happens to have
+        // matching cached deltas. Per-(market, delta) tracking is enforced by
+        // clearing on every switch. deltasEverFitted is cleared too so that
+        // first-time auto-fit gating is fresh per market.
+        pendingAutoFitDeltas.clear();
+        deltasEverFitted.clear();
 
         if (provider != null) {
             if (!restoreViewportState(provider.getViewportKey())) {
@@ -156,6 +216,10 @@ public class CandlestickChart extends StockMarketGuiElement {
                     chartviewRect.width = Math.max(targetCandles, 1);
                     zoomLevel = chartviewRect.width;
                     chartviewRect.x = chartviewRect.width;
+                    // Viewport is now valid for this delta — record so future
+                    // reselects of the same delta don't refit.
+                    long initialDelta = ClientMarket.getAvailableCandleTimeDeltas()[currentCandleTimeIdx];
+                    deltasEverFitted.add(initialDelta);
                 }
                 firstDraw = true;
             }
@@ -226,14 +290,61 @@ public class CandlestickChart extends StockMarketGuiElement {
      * @param index the index into {@link ClientMarket#getAvailableCandleTimeDeltas()}
      */
     public void selectCandleTimeDeltaByIndex(int index) {
+        // Same-delta reclick guard: when the user clicks the button for the
+        // already-active delta AND its data is already loaded, do NOTHING —
+        // no data refetch, no autoCenterView, no button-color repaint (colors
+        // are already correct by definition). Skipping the whole method here
+        // prevents the spurious vertical recenter the user was seeing on
+        // reclicks. We deliberately still fall through when data is null or
+        // empty so the initial "fire the fetch" path (below) can run on the
+        // constructor's bootstrap call and on any post-market-swap situation
+        // where the same index needs re-initialising.
+        if (index == currentCandleTimeIdx
+                && priceDataProvider != null
+                && data != null && !data.getCandles().isEmpty()) {
+            return;
+        }
+
         currentCandleTimeIdx = index;
         if (priceDataProvider != null) {
             long deltaTime = ClientMarket.getAvailableCandleTimeDeltas()[index];
             this.data = priceDataProvider.getPriceHistoryData(deltaTime);
+
+            // Has this delta ever had its viewport fitted for the current
+            // market? If yes, the user has seen a valid view of it before
+            // and we must NOT auto-refit on subsequent selections.
+            boolean everFitted = deltasEverFitted.contains(deltaTime);
+
+            // If the newly-selected delta has no cached candles yet, fire an
+            // initial paginated fetch so the chart populates on first view.
+            // We use requestOlderData(delta, Long.MAX_VALUE) rather than the
+            // ClientMarket-specific requestInitialWindow so the widget stays
+            // provider-agnostic (works for any IPriceDataProvider — the
+            // interface default is a no-op for providers without pagination).
+            if ((data == null || data.getCandles().isEmpty())
+                    && priceDataProvider.hasMoreOlderData(deltaTime)) {
+                // Only queue the one-shot auto-fit for deltas that have NEVER
+                // been fitted for the current market. If the user has already
+                // seen this delta once, we intentionally leave the viewport
+                // alone even after a fresh async fetch — matches spec: fit
+                // fires only "for the very first time per market".
+                if (!everFitted) {
+                    pendingAutoFitDeltas.add(deltaTime);
+                }
+                loadingOlder.set(true);
+                priceDataProvider.requestOlderData(deltaTime, Long.MAX_VALUE)
+                        .whenComplete((r, e) -> loadingOlder.set(false));
+            }
+
             if (skipAutoCenterOnce) {
                 skipAutoCenterOnce = false;
-            } else {
+            } else if (!everFitted && data != null && !data.getCandles().isEmpty()) {
+                // First-ever selection of this delta with data already cached:
+                // fit the viewport once and remember that we did. Cache-hit
+                // switches on subsequent selections skip this branch and leave
+                // the viewport exactly as the user last configured it.
                 autoCenterView();
+                deltasEverFitted.add(deltaTime);
             }
         }
         for (int i = 0; i < candleTimeSelectButtons.size(); i++) {
@@ -271,6 +382,25 @@ public class CandlestickChart extends StockMarketGuiElement {
             PriceHistoryData freshData = priceDataProvider.getPriceHistoryData(deltaTime);
             if (freshData != null)
                 this.data = freshData;
+
+            // First-time delta-switch auto-fit: when the initial paginated fetch
+            // triggered by selectCandleTimeDeltaByIndex lands and populates the
+            // cache, refit the view exactly once. Set-based check-and-remove
+            // guarantees a single fit per (market, delta) — subsequent T-135
+            // older-chunk loads never re-enter this branch because that path
+            // does not populate pendingAutoFitDeltas. Setting firstDraw=true
+            // reuses the same "fit DEFAULT_VISIBLE_CANDLES + autoCenterView"
+            // code path in renderCandles that initial chart open uses.
+            //
+            // Recording the delta in deltasEverFitted at consumption time is
+            // what closes the loop: any later reselection of this same delta
+            // (cache-hit switch, or reclick of the currently active button)
+            // will observe everFitted==true and skip the auto-fit entirely.
+            if (data != null && !data.getCandles().isEmpty()
+                    && pendingAutoFitDeltas.remove(deltaTime)) {
+                firstDraw = true;
+                deltasEverFitted.add(deltaTime);
+            }
         }
 
         if (data == null || data.getCandles().isEmpty())
@@ -298,6 +428,21 @@ public class CandlestickChart extends StockMarketGuiElement {
             overlay.render(this);
         }
         disableScissor();
+
+        renderLoadingOlderIndicator();
+    }
+
+    /**
+     * Renders a small text label at the left edge of the plot area (inside
+     * the chart's border) while a paginated fetch of older candle data is
+     * in flight. Text-only — no textures.
+     */
+    private void renderLoadingOlderIndicator() {
+        if (!loadingOlder.get()) return;
+        String label = Component.translatable(KEY_LOADING_OLDER).getString();
+        int textX = canvasRect.x + 4;
+        int textY = canvasRect.y + 4;
+        drawText(label, textX, textY);
     }
 
     @Override
@@ -343,10 +488,21 @@ public class CandlestickChart extends StockMarketGuiElement {
         disableScissor();
         if (firstDraw) {
             firstDraw = false;
-            int targetCandles = Math.min(DEFAULT_VISIBLE_CANDLES, data.getCandles().size());
+            int candleCount = data.getCandles().size();
+            int targetCandles = Math.min(DEFAULT_VISIBLE_CANDLES, candleCount);
             chartviewRect.width = Math.max(targetCandles, 1);
             zoomLevel = chartviewRect.width;
-            autoCenterView();
+            chartviewRect.x = chartviewRect.width; // Snap the view to the newest candle
+            // Vertical fit: replicate the spacebar reset action so the chart
+            // ends up in the same state as if the user pressed spacebar right
+            // after the data arrived. We can't rely on firstVisibleCandleIndex /
+            // lastVisibleCandleIndex here because the loop above computed them
+            // using the OLD chartviewRect.width (from the previous delta), so
+            // their span does not match the new DEFAULT_VISIBLE_CANDLES window.
+            // Compute the will-be-visible index range explicitly instead.
+            int lastIdx = candleCount - 1;
+            int firstIdx = Math.max(0, candleCount - targetCandles);
+            applyVerticalFitToRange(firstIdx, lastIdx);
         }
     }
 
@@ -631,6 +787,7 @@ public class CandlestickChart extends StockMarketGuiElement {
             }
 
             clampViewToOldestCandle();
+            maybeRequestOlderData();
             consumed = true;
         }
 
@@ -719,6 +876,7 @@ public class CandlestickChart extends StockMarketGuiElement {
 
             clampViewToNewestCandle();
             clampViewToOldestCandle();
+            maybeRequestOlderData();
 
             return true;
         }
@@ -730,13 +888,8 @@ public class CandlestickChart extends StockMarketGuiElement {
         boolean ctrlKeyDown = isKeyPressed(InputConstants.KEY_LEFT_CONTROL);
         if (keyCode == 32 && !ctrlKeyDown) {
             if (data != null) {
-                // Recenter view based on the horizontal time
-                double maxPrice = data.toRealPrice(data.getMaxPrice(firstVisibleCandleIndex, lastVisibleCandleIndex));
-                double minPrice = data.toRealPrice(data.getMinPrice(firstVisibleCandleIndex, lastVisibleCandleIndex));
-
-                double priceDifference = maxPrice - minPrice;
-                chartviewRect.y = Math.max(0, minPrice - priceDifference * 0.1);
-                chartviewRect.height = (maxPrice + priceDifference * 0.1) - chartviewRect.y;
+                // Recenter vertical range over currently visible candles
+                applyVerticalFitToRange(firstVisibleCandleIndex, lastVisibleCandleIndex);
                 return true;
             }
         } else if (keyCode == 32) {
@@ -777,6 +930,10 @@ public class CandlestickChart extends StockMarketGuiElement {
         zoomLevel = tag.getDouble("zoom");
         skipAutoCenterOnce = true;
         selectCandleTimeDeltaByIndex(tag.getInt("candleTimeIdx"));
+        // The deserialised viewport is an authoritative placement — mark this
+        // delta as fitted so future reselects don't clobber it with a fresh
+        // auto-fit.
+        deltasEverFitted.add(ClientMarket.getAvailableCandleTimeDeltas()[currentCandleTimeIdx]);
         firstDraw = false;
     }
 
@@ -831,11 +988,42 @@ public class CandlestickChart extends StockMarketGuiElement {
         // Load the correct candle data and update button colors without auto-centering
         skipAutoCenterOnce = true;
         selectCandleTimeDeltaByIndex(currentCandleTimeIdx);
+        // The restored viewport is a user-authored placement — mark this delta
+        // as fitted so any future reselection leaves it alone rather than
+        // re-fitting on top of the user's carefully saved view.
+        deltasEverFitted.add(ClientMarket.getAvailableCandleTimeDeltas()[currentCandleTimeIdx]);
         firstDraw = false;
         return true;
     }
 
     // ── View management ──
+
+    /**
+     * Fits the vertical viewport range to the price min/max of the given
+     * candle index range, adding 10% padding on both sides. This is the
+     * same computation the spacebar reset action performs; it is extracted
+     * so the initial "firstDraw" auto-fit (after a delta switch's data lands)
+     * can reuse it with an explicit index range — the
+     * {@code firstVisibleCandleIndex} / {@code lastVisibleCandleIndex} fields
+     * are only valid for the previous frame's viewport width and so cannot
+     * be used at the moment we resize the window.
+     *
+     * <p>The passed indices are clamped internally by
+     * {@link PriceHistoryData#getMinPrice(int, int)} and
+     * {@link PriceHistoryData#getMaxPrice(int, int)}, so out-of-range or
+     * inverted arguments are safe.
+     *
+     * @param firstIndexInclusive index of the first candle to include (0-based)
+     * @param lastIndexInclusive  index of the last candle to include (0-based)
+     */
+    private void applyVerticalFitToRange(int firstIndexInclusive, int lastIndexInclusive) {
+        if (data == null) return;
+        double maxPrice = data.toRealPrice(data.getMaxPrice(firstIndexInclusive, lastIndexInclusive));
+        double minPrice = data.toRealPrice(data.getMinPrice(firstIndexInclusive, lastIndexInclusive));
+        double priceDifference = maxPrice - minPrice;
+        chartviewRect.y = Math.max(0, minPrice - priceDifference * 0.1);
+        chartviewRect.height = (maxPrice + priceDifference * 0.1) - chartviewRect.y;
+    }
 
     public void autoCenterView() {
         if (data != null) {
@@ -869,10 +1057,80 @@ public class CandlestickChart extends StockMarketGuiElement {
 
     /**
      * Prevents the view from scrolling past the oldest candle (upper X bound).
+     * <p>
+     * When the current provider still has older data available on the server
+     * (per {@link IPriceDataProvider#hasMoreOlderData(long)}), this method
+     * intentionally does NOT clamp — instead, the panning/scroll input path
+     * calls {@link #maybeRequestOlderData()} to page in older candles, and
+     * the view is allowed to sit at the edge until the response arrives and
+     * the loaded range naturally expands.
+     * <p>
+     * Only when the provider reports no more older data (server-start floor
+     * reached, or no provider) does this method clamp exactly as before.
      */
     private void clampViewToOldestCandle() {
-        if (data != null && chartviewRect.x > data.getCandles().size() + chartviewRect.width - 1) {
-            chartviewRect.x = data.getCandles().size() + chartviewRect.width - 1;
+        if (data == null) return;
+        int candleCount = data.getCandles().size();
+        long deltaMs = ClientMarket.getAvailableCandleTimeDeltas()[currentCandleTimeIdx];
+        boolean canPaginate = priceDataProvider != null
+                && priceDataProvider.hasMoreOlderData(deltaMs);
+        if (canPaginate) {
+            return;
+        }
+        if (chartviewRect.x > candleCount + chartviewRect.width - 1) {
+            chartviewRect.x = candleCount + chartviewRect.width - 1;
+        }
+    }
+
+    /**
+     * Trigger a paginated fetch of older candles if the visible left edge has
+     * approached the oldest loaded candle and the provider still has older
+     * data available.
+     * <p>
+     * Fire-and-forget: {@link ClientMarket} debounces and coalesces concurrent
+     * calls per candle delta, so the widget can safely invoke this on every
+     * drag/scroll event without extra guarding. The returned future is
+     * observed only to reset the {@link #loadingOlder} indicator flag.
+     * <p>
+     * The safety margin (in candle units) means we start fetching a few
+     * candles BEFORE the user actually hits the oldest-visible edge, so the
+     * response typically arrives before the user drags past it.
+     */
+    private void maybeRequestOlderData() {
+        if (priceDataProvider == null || data == null) return;
+
+        long deltaMs = ClientMarket.getAvailableCandleTimeDeltas()[currentCandleTimeIdx];
+        if (!priceDataProvider.hasMoreOlderData(deltaMs)) return;
+
+        List<PriceHistoryData.Candle> candles = data.getCandles();
+
+        if (candles.isEmpty()) {
+            // No candles rendered — the initial window came back empty even
+            // though the server does have older data (world loaded days after
+            // last save, initial 8.5 h window missed the actual data range).
+            // Without a loaded candle to anchor on, the "am I near the left
+            // edge" check below can never trigger, so pan-left alone would
+            // stay stuck forever. Use the Long.MAX_VALUE bootstrap sentinel
+            // — ClientMarket.requestOlderWindow interprets it as "fetch the
+            // server's newest N candles regardless of time range" and jumps
+            // straight to where the data lives.
+            loadingOlder.set(true);
+            priceDataProvider.requestOlderData(deltaMs, Long.MAX_VALUE)
+                    .whenComplete((r, e) -> loadingOlder.set(false));
+            return;
+        }
+
+        int candleCount = candles.size();
+        // Safety margin: whichever is larger — 5 candles or 10% of the
+        // visible view width. Small enough not to spam the server on every
+        // wiggle, large enough to hide most round-trip latency.
+        double safetyMarginCandles = Math.max(5.0, chartviewRect.width * 0.1);
+        double leftEdgeCandleIndex = chartviewRect.x - chartviewRect.width;
+        if (leftEdgeCandleIndex >= (candleCount - 1) - safetyMarginCandles) {
+            long oldestTimestamp = candles.get(0).openTimestamp;
+            loadingOlder.set(true);
+            priceDataProvider.requestOlderData(deltaMs, oldestTimestamp)
+                    .whenComplete((r, e) -> loadingOlder.set(false));
         }
     }
 

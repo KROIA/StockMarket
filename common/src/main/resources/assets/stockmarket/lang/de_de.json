@@ -307,6 +307,10 @@
   "gui.stockmarket.mod_settings_screen.setting.ServerMarket.CURRENCY.tooltip": "Der Gegenstand, in dem alle Markttrades abgerechnet werden.\nWird beim Start gecacht - eine Änderung erfordert einen Server-Neustart.",
   "gui.stockmarket.mod_settings_screen.setting.ServerMarket.CANDLE_TIME": "Kerzenzeit (ms)",
   "gui.stockmarket.mod_settings_screen.setting.ServerMarket.CANDLE_TIME.tooltip": "Zeitspanne einer Preiskerze in Millisekunden.\nBereich: 1000 - 86400000 ms.",
+  "gui.stockmarket.mod_settings_screen.setting.ServerMarket.PRICE_HISTORY_MAX_CANDLES_PER_RESPONSE": "Preisverlauf: max. Kerzen pro Antwort",
+  "gui.stockmarket.mod_settings_screen.setting.ServerMarket.PRICE_HISTORY_MAX_CANDLES_PER_RESPONSE.tooltip": "Serverseitige Obergrenze für die Anzahl Kerzen pro\nPreisverlauf-Antwort. Bei Überschreitung werden die\nältesten Kerzen verworfen; der Client lädt bei Bedarf nach.\nBereich: 16 - 65536.",
+  "gui.stockmarket.mod_settings_screen.setting.ServerMarket.PRICE_HISTORY_INITIAL_LOAD_CANDLES": "Preisverlauf: initiale Kerzenzahl",
+  "gui.stockmarket.mod_settings_screen.setting.ServerMarket.PRICE_HISTORY_INITIAL_LOAD_CANDLES.tooltip": "Anzahl der Kerzen, die der Client beim ersten Öffnen\neines Charts anfordert. Höhere Werte zeigen mehr\nHistorie sofort, verlangsamen aber das erste Laden.\nBereich: 16 - 8192.",
   "gui.stockmarket.mod_settings_screen.setting.VillagerTrading.ENABLED": "Dorfbewohner-Handel aktiviert",
   "gui.stockmarket.mod_settings_screen.setting.VillagerTrading.ENABLED.tooltip": "Hauptschalter für die marktbasierte Neubepreisung von Dorfbewohner-Angeboten.",
   "gui.stockmarket.mod_settings_screen.setting.VillagerTrading.PRICE_REFRESH_INTERVAL_MINUTES": "Preisaktualisierung (Minuten)",
@@ -459,5 +463,6 @@
   "gui.stockmarket.plugin_performance_bar.tooltip_avg": "Durchschnitt: %s",
   "gui.stockmarket.plugin_performance_bar.tooltip_peak": "Spitzenwert: %s",
   "gui.stockmarket.plugin_performance_bar.tooltip_budget": "Tick-Budget: %s",
-  "gui.stockmarket.plugin_performance_bar.tooltip_markets": "Märkte: %s"
+  "gui.stockmarket.plugin_performance_bar.tooltip_markets": "Märkte: %s",
+  "stockmarket.candlestick.loadingOlder": "Lade ältere Daten..."
 }

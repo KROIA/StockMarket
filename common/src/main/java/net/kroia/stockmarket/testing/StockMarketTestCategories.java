@@ -41,6 +41,12 @@ public class StockMarketTestCategories {
     public static final TestCategory PRICE_HISTORY = new TestCategory(
             "stockmarket", "sm_price_history", "Price history data tests", BOTH, false);
 
+    // Client pagination cache (T-135): pure per-market/per-delta merge, backward
+    // extension dedupe, live-candle race guard, promotion-on-tick, and server-start
+    // floor logic. No MC context needed.
+    public static final TestCategory PRICE_HISTORY_CACHE = new TestCategory(
+            "stockmarket", "sm_price_history_cache", "PriceHistoryCache client pagination cache: initial load, backward-extension dedupe, live-candle drop, promoteOnTick and server-start floor tests", BOTH, false);
+
     public static final TestCategory USER = new TestCategory(
             "stockmarket", "sm_user", "User class tests", BOTH, false);
 

@@ -1,15 +1,18 @@
 package net.kroia.stockmarket.stockmarket.market;
 
+import com.mojang.logging.LogUtils;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.api.market.IPriceDataProvider;
 import net.kroia.stockmarket.util.PriceHistoryData;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Synthetic price data provider for cross-rate (item/item) pairs.
@@ -24,6 +27,8 @@ import java.util.Map;
  * through the IPriceDataProvider interface without knowing it is synthetic.
  */
 public class CrossRateMarket implements IPriceDataProvider {
+
+    private static final Logger LOGGER = LogUtils.getLogger();
 
     /** Scale factor applied to the cross-rate ratio to store it as a long. */
     private static final int CROSS_RATE_SCALE = 1_000_000;
@@ -116,6 +121,85 @@ public class CrossRateMarket implements IPriceDataProvider {
     @Override
     public @NotNull String getViewportKey() {
         return "pair:" + haveMarket.getItemID().getName() + "/" + wantMarket.getItemID().getName();
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Cross-rate history is a synthetic function of the two underlying markets'
+     * cached histories, so pagination fans out: this method fires
+     * {@code requestOlderData} on both {@link #haveMarket} and {@link #wantMarket}
+     * in parallel, then — once both futures resolve — re-runs
+     * {@link #recomputeCrossRateData(long, CachedCrossRateData)} on the cache
+     * entry for the given delta (if one exists) so the synthetic candles are
+     * extended to cover whatever new range the underlyings just gained.
+     * <p>
+     * The returned future resolves to {@code true} if either underlying
+     * reported that it gained new data, and {@code false} only when both
+     * underlyings returned {@code false} (both hit their server-start floor).
+     * If either underlying future completes exceptionally the error is logged
+     * and the outer future resolves to {@code false}; the cross-rate cache is
+     * left untouched in that case (whatever data it already has stays valid).
+     *
+     * @param candleDeltaMs   candle period in milliseconds
+     * @param beforeTimestamp exclusive upper bound — request candles strictly older than this
+     * @return future resolving to {@code true} if either underlying gained new data
+     */
+    @Override
+    public @NotNull CompletableFuture<Boolean> requestOlderData(long candleDeltaMs, long beforeTimestamp) {
+        final CompletableFuture<Boolean> fHave = haveMarket.requestOlderData(candleDeltaMs, beforeTimestamp);
+        final CompletableFuture<Boolean> fWant = wantMarket.requestOlderData(candleDeltaMs, beforeTimestamp);
+
+        return CompletableFuture.allOf(fHave, fWant).handle((ignored, throwable) -> {
+            if (throwable != null) {
+                LOGGER.error("[CrossRateMarket:"
+                                + haveMarket.getItemID().getName() + "/"
+                                + wantMarket.getItemID().getName()
+                                + "]: requestOlderData underlying future failed",
+                        throwable);
+                return false;
+            }
+
+            // Both futures are guaranteed complete without exception here.
+            boolean haveGained = fHave.join();
+            boolean wantGained = fWant.join();
+
+            // Re-run the synthetic OHLC merge so the chart sees the extended history.
+            // recomputeCrossRateData handles the case where one underlying has gaps
+            // (two-pointer merge with half-period tolerance).
+            CachedCrossRateData cache = cacheByTimeDelta.get(candleDeltaMs);
+            if (cache != null) {
+                // Invalidate size counters so update()'s stale check would also refresh,
+                // and force a full recompute now while we already know new data landed.
+                cache.cachedHaveSize = -1;
+                cache.cachedWantSize = -1;
+                recomputeCrossRateData(candleDeltaMs, cache);
+                if (cache.syntheticCandles != null && !cache.syntheticCandles.isEmpty()) {
+                    cache.cachedNewestTs = cache.syntheticCandles.getLast().openTimestamp;
+                }
+            }
+
+            return haveGained || wantGained;
+        });
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * The cross-rate can extend as far back as at least one underlying can:
+     * {@code haveMarket.hasMoreOlderData(delta) || wantMarket.hasMoreOlderData(delta)}.
+     * If either underlying reports more data available, another
+     * {@link #requestOlderData(long, long)} call is worth making — the
+     * synthetic merge tolerates gaps in whichever underlying has already hit
+     * its server-start floor.
+     *
+     * @param candleDeltaMs candle period in milliseconds
+     * @return {@code true} if either underlying market has more older data available
+     */
+    @Override
+    public boolean hasMoreOlderData(long candleDeltaMs) {
+        return haveMarket.hasMoreOlderData(candleDeltaMs)
+                || wantMarket.hasMoreOlderData(candleDeltaMs);
     }
 
     // --- Accessors for the underlying markets (used by TradeScreen for display/trading) ---

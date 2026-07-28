@@ -307,6 +307,10 @@
   "gui.stockmarket.mod_settings_screen.setting.ServerMarket.CURRENCY.tooltip": "The item all market trades settle in.\nCached at startup - changing it requires a server restart.",
   "gui.stockmarket.mod_settings_screen.setting.ServerMarket.CANDLE_TIME": "Candle time (ms)",
   "gui.stockmarket.mod_settings_screen.setting.ServerMarket.CANDLE_TIME.tooltip": "Time span of one price candlestick in milliseconds.\nRange: 1000 - 86400000 ms.",
+  "gui.stockmarket.mod_settings_screen.setting.ServerMarket.PRICE_HISTORY_MAX_CANDLES_PER_RESPONSE": "Price history: max candles / response",
+  "gui.stockmarket.mod_settings_screen.setting.ServerMarket.PRICE_HISTORY_MAX_CANDLES_PER_RESPONSE.tooltip": "Server-side hard cap on the number of candles returned\nby one price-history response. When exceeded, the oldest\ncandles are dropped and the client pages for more.\nRange: 16 - 65536.",
+  "gui.stockmarket.mod_settings_screen.setting.ServerMarket.PRICE_HISTORY_INITIAL_LOAD_CANDLES": "Price history: initial load candles",
+  "gui.stockmarket.mod_settings_screen.setting.ServerMarket.PRICE_HISTORY_INITIAL_LOAD_CANDLES.tooltip": "Number of candles the client requests when a chart first\nopens. Larger values show more history immediately but\nmake the initial load slower.\nRange: 16 - 8192.",
   "gui.stockmarket.mod_settings_screen.setting.VillagerTrading.ENABLED": "Villager trading enabled",
   "gui.stockmarket.mod_settings_screen.setting.VillagerTrading.ENABLED.tooltip": "Master switch for stock-market-driven villager trade repricing.",
   "gui.stockmarket.mod_settings_screen.setting.VillagerTrading.PRICE_REFRESH_INTERVAL_MINUTES": "Price refresh interval (minutes)",
@@ -459,5 +463,6 @@
   "gui.stockmarket.plugin_performance_bar.tooltip_avg": "Average: %s",
   "gui.stockmarket.plugin_performance_bar.tooltip_peak": "Peak: %s",
   "gui.stockmarket.plugin_performance_bar.tooltip_budget": "Tick budget: %s",
-  "gui.stockmarket.plugin_performance_bar.tooltip_markets": "Markets: %s"
+  "gui.stockmarket.plugin_performance_bar.tooltip_markets": "Markets: %s",
+  "stockmarket.candlestick.loadingOlder": "Loading older data..."
 }
