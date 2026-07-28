@@ -96,6 +96,14 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
         private final ItemID itemID;
         /** Price fraction scaling factor mirrored from the container's {@link #history}. */
         private final int itemScaleFactor;
+        /**
+         * Guards {@link #update(long)} against opening a phantom zero-price
+         * candle before the first {@link #loadFromCache} runs. See fix for
+         * ISSUES.md #80 / T-141: the timer would otherwise fire on the first
+         * tick after subscription and call {@code startNewCandle} while
+         * {@code currentMarketPrice == 0}, locking the chart onto a zero spike.
+         */
+        private boolean initialHistoryLoaded = false;
 
         public PriceHistoryContainer(ItemID itemID, int itemScaleFactor, long deltaT)
         {
@@ -195,9 +203,19 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
             PriceHistoryData source = new PriceHistoryData(
                     itemID, itemScaleFactor, synthesizedCandles, currentMarketPrice);
             loadFrom(source, currentServerTime, createEmptyCandleForTimeGaps);
+            // Rebuild complete — release the update() gate so the boundary
+            // timer can start opening new candles from a real seed price.
+            initialHistoryLoaded = true;
         }
         public void update(long serverTime)
         {
+            // Gate: don't tick the boundary timer or open new candles until the
+            // initial paginated history has been merged. Otherwise the very
+            // first tick after subscription can append a zero-price candle
+            // (currentMarketPrice hasn't been streamed yet) and the chart
+            // widget's one-shot auto-fit locks onto that zero spike.
+            if (!initialHistoryLoaded)
+                return;
             if(timer.check())
             {
                 // Boundary crossed: promote the previous live candle into the
