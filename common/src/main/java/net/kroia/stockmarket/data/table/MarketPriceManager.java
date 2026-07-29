@@ -22,6 +22,7 @@ public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
     public static final String SELECT = "SELECT marketid, open, low, high, time, traded_volume FROM MarketPrice";
     public static final String DELETE = "DELETE FROM MarketPrice";
     public static final String COUNT =  "SELECT COUNT(*) FROM MarketPrice";
+    public static final String MIN_TIME = "SELECT MIN(time) FROM MarketPrice";
 
     public MarketPriceManager(DatabaseManager databaseManager) {
         this.databaseManager = databaseManager;
@@ -130,7 +131,12 @@ public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
                         preparedStatement.setInt(idx, limit);
                     }
                     try (ResultSet resultSet = preparedStatement.executeQuery()) {
-                        databaseManager.commitTransaction();
+                        // Read-only SELECT — no commit needed. On SQLite with
+                        // autoCommit=false a read-only statement doesn't open a
+                        // transaction, so calling commit() here would log a
+                        // spurious "cannot commit - no transaction is active"
+                        // error (thousands per world join once T-135 fanned out
+                        // history requests).
                         while (resultSet.next()) {
                             MarketPriceStruct row = mapRow(resultSet);
                             if (row != null)
@@ -165,6 +171,51 @@ public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
         }
     }
 
+    /**
+     * Returns the oldest recorded timestamp (the minimum {@code time} column
+     * value) for the given market filter. Used by
+     * {@code MarketPriceHistoryRequest} to tell the client how far back the
+     * server's on-disk history extends.
+     *
+     * @param marketFilter equality filter binding {@code marketid} to the target
+     *                     market's short ID. May be {@link Optional#empty()} to
+     *                     query across all markets.
+     * @return a future completing with the oldest millisecond timestamp on disk,
+     *         or {@link Long#MAX_VALUE} when the query matched no rows (i.e.
+     *         no data exists yet for this market).
+     */
+    public CompletableFuture<Long> getOldestTimestamp(Optional<EqualityFilter> marketFilter){
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                String statement = MIN_TIME;
+                if (marketFilter.isPresent()) {
+                    statement += " WHERE " + marketFilter.get().getClause("marketid");
+                }
+                try (PreparedStatement preparedStatement = databaseManager.getConnection().prepareStatement(statement)) {
+                    if (marketFilter.isPresent()) {
+                        marketFilter.get().bindParameters(preparedStatement, 1);
+                    }
+                    try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                        // Read-only SELECT — no commit needed (see rationale in query()).
+                        if (resultSet.next()) {
+                            long min = resultSet.getLong(1);
+                            // MIN() over an empty set yields SQL NULL, which maps to 0 via getLong.
+                            // Detect that with wasNull() and return the "no data" sentinel.
+                            if (resultSet.wasNull()) {
+                                return Long.MAX_VALUE;
+                            }
+                            return min;
+                        }
+                    }
+                }
+                return Long.MAX_VALUE;
+            } catch (SQLException e) {
+                StockMarketMod.LOGGER.warn("Failed to query MarketPrice oldest timestamp: {}", e.getMessage());
+                return Long.MAX_VALUE;
+            }
+        }, databaseManager.getDatabaseThread());
+    }
+
     public CompletableFuture<Integer> getRecordCount(Optional<DateFilter> dateFilter, Optional<EqualityFilter> marketFilter){
         return CompletableFuture.supplyAsync(() -> {
             try {
@@ -186,7 +237,7 @@ public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
                         idx = marketFilter.get().bindParameters(preparedStatement, idx);
                     }
                     try (ResultSet resultSet = preparedStatement.executeQuery()) {
-                        databaseManager.commitTransaction();
+                        // Read-only SELECT — no commit needed (see rationale in query()).
                         if (resultSet.next()) {
                             return resultSet.getInt(1);
                         }

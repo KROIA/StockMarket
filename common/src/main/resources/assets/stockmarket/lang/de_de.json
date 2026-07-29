@@ -97,6 +97,13 @@
   "message.stockmarket.command_preset_added": "Added preset '%s' to category '%s'",
   "message.stockmarket.command_news_not_player": "Only a player can use this command",
   "message.stockmarket.command_news_request_failed": "News admin request failed - is the master server reachable?",
+  "commands.stockmarket.backup.pause_submitted": "Backup-Pause angefordert - warte auf '[StockMarket] db-worker paused for backup' in der Konsole, bevor du dein Archiv startest.",
+  "commands.stockmarket.backup.already_paused": "db-worker ist bereits für ein Backup pausiert.",
+  "commands.stockmarket.backup.resumed": "Fortsetzen des db-worker angefordert.",
+  "commands.stockmarket.backup.not_paused": "db-worker ist nicht pausiert.",
+  "commands.stockmarket.backup.status_paused": "db-worker für Backup pausiert (%s Sekunden).",
+  "commands.stockmarket.backup.status_running": "db-worker läuft (nicht pausiert).",
+  "commands.stockmarket.backup.master_only": "Backup-Befehle müssen auf dem Master-Server ausgeführt werden.",
   "gui.stockmarket.bot_settings_screen.change_item": "Item ändern",
   "gui.stockmarket.bot_settings_screen.save_settings": "Einstellungen speichern",
   "gui.stockmarket.bot_settings_screen.bot_create": "Bot erstellen",
@@ -307,6 +314,10 @@
   "gui.stockmarket.mod_settings_screen.setting.ServerMarket.CURRENCY.tooltip": "Der Gegenstand, in dem alle Markttrades abgerechnet werden.\nWird beim Start gecacht - eine Änderung erfordert einen Server-Neustart.",
   "gui.stockmarket.mod_settings_screen.setting.ServerMarket.CANDLE_TIME": "Kerzenzeit (ms)",
   "gui.stockmarket.mod_settings_screen.setting.ServerMarket.CANDLE_TIME.tooltip": "Zeitspanne einer Preiskerze in Millisekunden.\nBereich: 1000 - 86400000 ms.",
+  "gui.stockmarket.mod_settings_screen.setting.ServerMarket.PRICE_HISTORY_MAX_CANDLES_PER_RESPONSE": "Preisverlauf: max. Kerzen pro Antwort",
+  "gui.stockmarket.mod_settings_screen.setting.ServerMarket.PRICE_HISTORY_MAX_CANDLES_PER_RESPONSE.tooltip": "Serverseitige Obergrenze für die Anzahl Kerzen pro\nPreisverlauf-Antwort. Bei Überschreitung werden die\nältesten Kerzen verworfen; der Client lädt bei Bedarf nach.\nBereich: 16 - 65536.",
+  "gui.stockmarket.mod_settings_screen.setting.ServerMarket.PRICE_HISTORY_INITIAL_LOAD_CANDLES": "Preisverlauf: initiale Kerzenzahl",
+  "gui.stockmarket.mod_settings_screen.setting.ServerMarket.PRICE_HISTORY_INITIAL_LOAD_CANDLES.tooltip": "Anzahl der Kerzen, die der Client beim ersten Öffnen\neines Charts anfordert. Höhere Werte zeigen mehr\nHistorie sofort, verlangsamen aber das erste Laden.\nBereich: 16 - 8192.",
   "gui.stockmarket.mod_settings_screen.setting.VillagerTrading.ENABLED": "Dorfbewohner-Handel aktiviert",
   "gui.stockmarket.mod_settings_screen.setting.VillagerTrading.ENABLED.tooltip": "Hauptschalter für die marktbasierte Neubepreisung von Dorfbewohner-Angeboten.",
   "gui.stockmarket.mod_settings_screen.setting.VillagerTrading.PRICE_REFRESH_INTERVAL_MINUTES": "Preisaktualisierung (Minuten)",
@@ -459,5 +470,6 @@
   "gui.stockmarket.plugin_performance_bar.tooltip_avg": "Durchschnitt: %s",
   "gui.stockmarket.plugin_performance_bar.tooltip_peak": "Spitzenwert: %s",
   "gui.stockmarket.plugin_performance_bar.tooltip_budget": "Tick-Budget: %s",
-  "gui.stockmarket.plugin_performance_bar.tooltip_markets": "Märkte: %s"
+  "gui.stockmarket.plugin_performance_bar.tooltip_markets": "Märkte: %s",
+  "stockmarket.candlestick.loadingOlder": "Lade ältere Daten..."
 }

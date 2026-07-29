@@ -97,6 +97,13 @@
   "message.stockmarket.command_preset_added": "Added preset '%s' to category '%s'",
   "message.stockmarket.command_news_not_player": "Only a player can use this command",
   "message.stockmarket.command_news_request_failed": "News admin request failed - is the master server reachable?",
+  "commands.stockmarket.backup.pause_submitted": "Backup pause requested - wait for '[StockMarket] db-worker paused for backup' in the console before starting your archive.",
+  "commands.stockmarket.backup.already_paused": "db-worker is already paused for backup.",
+  "commands.stockmarket.backup.resumed": "db-worker resume requested.",
+  "commands.stockmarket.backup.not_paused": "db-worker is not paused.",
+  "commands.stockmarket.backup.status_paused": "db-worker paused for backup (%s seconds).",
+  "commands.stockmarket.backup.status_running": "db-worker is running (not paused).",
+  "commands.stockmarket.backup.master_only": "backup commands must be run on the master server.",
   "gui.stockmarket.bot_settings_screen.change_item": "Change Item",
   "gui.stockmarket.bot_settings_screen.save_settings": "Save Settings",
   "gui.stockmarket.bot_settings_screen.bot_create": "Create Bot",
@@ -307,6 +314,10 @@
   "gui.stockmarket.mod_settings_screen.setting.ServerMarket.CURRENCY.tooltip": "The item all market trades settle in.\nCached at startup - changing it requires a server restart.",
   "gui.stockmarket.mod_settings_screen.setting.ServerMarket.CANDLE_TIME": "Candle time (ms)",
   "gui.stockmarket.mod_settings_screen.setting.ServerMarket.CANDLE_TIME.tooltip": "Time span of one price candlestick in milliseconds.\nRange: 1000 - 86400000 ms.",
+  "gui.stockmarket.mod_settings_screen.setting.ServerMarket.PRICE_HISTORY_MAX_CANDLES_PER_RESPONSE": "Price history: max candles / response",
+  "gui.stockmarket.mod_settings_screen.setting.ServerMarket.PRICE_HISTORY_MAX_CANDLES_PER_RESPONSE.tooltip": "Server-side hard cap on the number of candles returned\nby one price-history response. When exceeded, the oldest\ncandles are dropped and the client pages for more.\nRange: 16 - 65536.",
+  "gui.stockmarket.mod_settings_screen.setting.ServerMarket.PRICE_HISTORY_INITIAL_LOAD_CANDLES": "Price history: initial load candles",
+  "gui.stockmarket.mod_settings_screen.setting.ServerMarket.PRICE_HISTORY_INITIAL_LOAD_CANDLES.tooltip": "Number of candles the client requests when a chart first\nopens. Larger values show more history immediately but\nmake the initial load slower.\nRange: 16 - 8192.",
   "gui.stockmarket.mod_settings_screen.setting.VillagerTrading.ENABLED": "Villager trading enabled",
   "gui.stockmarket.mod_settings_screen.setting.VillagerTrading.ENABLED.tooltip": "Master switch for stock-market-driven villager trade repricing.",
   "gui.stockmarket.mod_settings_screen.setting.VillagerTrading.PRICE_REFRESH_INTERVAL_MINUTES": "Price refresh interval (minutes)",
@@ -459,5 +470,6 @@
   "gui.stockmarket.plugin_performance_bar.tooltip_avg": "Average: %s",
   "gui.stockmarket.plugin_performance_bar.tooltip_peak": "Peak: %s",
   "gui.stockmarket.plugin_performance_bar.tooltip_budget": "Tick budget: %s",
-  "gui.stockmarket.plugin_performance_bar.tooltip_markets": "Markets: %s"
+  "gui.stockmarket.plugin_performance_bar.tooltip_markets": "Markets: %s",
+  "stockmarket.candlestick.loadingOlder": "Loading older data..."
 }

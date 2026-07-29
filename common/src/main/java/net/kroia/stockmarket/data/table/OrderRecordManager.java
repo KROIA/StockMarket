@@ -166,7 +166,11 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
                         idx = marketFilter.get().bindParameters(preparedStatement, idx);
                     }
                     try (ResultSet resultSet = preparedStatement.executeQuery()) {
-                        databaseManager.commitTransaction();
+                        // Read-only SELECT — no commit needed. On SQLite with
+                        // autoCommit=false a read-only statement doesn't open a
+                        // transaction, so calling commit() here would log a
+                        // spurious "cannot commit - no transaction is active"
+                        // error.
                         while (resultSet.next()) {
                             OrderRecordStruct row = mapRow(resultSet);
                             if (row != null)
@@ -206,7 +210,7 @@ public class OrderRecordManager implements ITableManager<OrderRecordStruct>{
                         idx = marketFilter.get().bindParameters(preparedStatement, idx);
                     }
                     try (ResultSet resultSet = preparedStatement.executeQuery()) {
-                        databaseManager.commitTransaction();
+                        // Read-only SELECT — no commit needed (see rationale in query()).
                         if (resultSet.next()) {
                             return resultSet.getInt(1);
                         }

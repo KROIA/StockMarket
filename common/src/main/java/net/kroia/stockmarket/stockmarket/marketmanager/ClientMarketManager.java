@@ -244,7 +244,13 @@ public class ClientMarketManager implements IClientMarketManager
             if(itemID.isValid()) {
                 clientMarket = new ClientMarket(itemID, itemFractionScaleFactor);
                 clientMarkets.put(itemID, clientMarket);
-                clientMarket.requestFullPriceHistoryUpdate();
+                // Do NOT pre-fetch any candle history here. With N markets and
+                // 6 candle deltas this would fire 6*N history requests during
+                // world join (T-135 regression), spamming the DB thread and
+                // slowing world load noticeably. History is now loaded lazily
+                // — the CandlestickChart's selectCandleTimeDeltaByIndex fires
+                // a single-delta request on first view / delta switch when its
+                // cache is empty (see T-136).
                 info("Created ClientMarket with ID: " + itemID);
             }
             else

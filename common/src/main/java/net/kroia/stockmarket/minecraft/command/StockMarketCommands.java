@@ -16,6 +16,7 @@ import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.pluginmanager.IServerPluginManager;
 import net.kroia.stockmarket.data.DataManager;
+import net.kroia.stockmarket.data.DatabaseManager;
 import net.kroia.stockmarket.networking.packet.OpenUIPacket;
 import net.kroia.stockmarket.networking.request.NewsAdminRequest;
 import net.kroia.stockmarket.pluginsystem.plugin.ServerPlugin;
@@ -455,6 +456,83 @@ public class StockMarketCommands {
                                                 })
                                         )
                                 )
+                        )
+                )
+                // /stockmarket backup pause|resume|status  (T-141, issue #79)
+                // Op-only quiescence controls for external filesystem backup scripts.
+                // The db-worker pause path avoids torn SQLite snapshots by committing
+                // the current transaction and parking on a CountDownLatch inside the
+                // single-thread db-worker executor. Because the executor is single-
+                // threaded, no further writes execute until 'resume'. A 120s safety
+                // timeout auto-resumes to prevent softlock if the operator forgets.
+                // Master-only: all DB writes happen on the master server.
+                .then(Commands.literal("backup")
+                        .requires(source -> source.hasPermission(2)) // Op, level 2
+                        .then(Commands.literal("pause")
+                                .executes(context -> {
+                                    CommandSourceStack source = context.getSource();
+                                    if (!isMaster()) {
+                                        source.sendFailure(Component.translatable(
+                                                "commands.stockmarket.backup.master_only"));
+                                        return Command.SINGLE_SUCCESS;
+                                    }
+                                    DatabaseManager db = BACKEND_INSTANCES.DATABASE_MANAGER;
+                                    boolean submitted = db.pauseForBackup(DatabaseManager.PAUSE_TIMEOUT_MS);
+                                    if (submitted) {
+                                        // The actual "paused for backup" log line is emitted by
+                                        // the db-worker when the pause job starts running (i.e.
+                                        // queued writes have drained). Feedback here is only the
+                                        // "submitted" ack — backup scripts wait for the log line.
+                                        source.sendSuccess(() -> Component.translatable(
+                                                "commands.stockmarket.backup.pause_submitted"), true);
+                                    } else {
+                                        source.sendFailure(Component.translatable(
+                                                "commands.stockmarket.backup.already_paused"));
+                                    }
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                        )
+                        .then(Commands.literal("resume")
+                                .executes(context -> {
+                                    CommandSourceStack source = context.getSource();
+                                    if (!isMaster()) {
+                                        source.sendFailure(Component.translatable(
+                                                "commands.stockmarket.backup.master_only"));
+                                        return Command.SINGLE_SUCCESS;
+                                    }
+                                    DatabaseManager db = BACKEND_INSTANCES.DATABASE_MANAGER;
+                                    boolean released = db.resumeFromBackup();
+                                    if (released) {
+                                        // "resumed" log line comes from the worker itself.
+                                        source.sendSuccess(() -> Component.translatable(
+                                                "commands.stockmarket.backup.resumed"), true);
+                                    } else {
+                                        source.sendFailure(Component.translatable(
+                                                "commands.stockmarket.backup.not_paused"));
+                                    }
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                        )
+                        .then(Commands.literal("status")
+                                .executes(context -> {
+                                    CommandSourceStack source = context.getSource();
+                                    if (!isMaster()) {
+                                        source.sendFailure(Component.translatable(
+                                                "commands.stockmarket.backup.master_only"));
+                                        return Command.SINGLE_SUCCESS;
+                                    }
+                                    DatabaseManager db = BACKEND_INSTANCES.DATABASE_MANAGER;
+                                    if (db.isPausedForBackup()) {
+                                        final String elapsedSecString = String.valueOf(db.getPauseElapsedMs() / 1000L);
+                                        source.sendSuccess(() -> Component.translatable(
+                                                "commands.stockmarket.backup.status_paused",
+                                                elapsedSecString), false);
+                                    } else {
+                                        source.sendSuccess(() -> Component.translatable(
+                                                "commands.stockmarket.backup.status_running"), false);
+                                    }
+                                    return Command.SINGLE_SUCCESS;
+                                })
                         )
                 )
                 // /stockmarket <market> remove

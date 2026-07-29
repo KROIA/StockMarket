@@ -76,6 +76,16 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
     /** Maximum villager buy/sell margin. */
     public static final float MAX_VILLAGER_MARGIN = 100.f;
 
+    /** Minimum price-history response cap (must leave room for a useful window). */
+    public static final int MIN_PRICE_HISTORY_MAX_CANDLES = 16;
+    /** Maximum price-history response cap (memory / bandwidth guard). */
+    public static final int MAX_PRICE_HISTORY_MAX_CANDLES = 65_536;
+
+    /** Minimum client-side initial chart window size. */
+    public static final int MIN_PRICE_HISTORY_INITIAL_LOAD = 16;
+    /** Maximum client-side initial chart window size. */
+    public static final int MAX_PRICE_HISTORY_INITIAL_LOAD = 8_192;
+
     /**
      * The two request actions.
      */
@@ -229,6 +239,16 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
         //   candle time) are consumed ONLY on the master (slaves have no DataManager,
         //   no ServerMarketManager and no master-side logger settings) — no
         //   propagation needed.
+        // * ServerMarket.PRICE_HISTORY_MAX_CANDLES_PER_RESPONSE (T-137):
+        //   server-authoritative response cap. Consumed only inside
+        //   MarketPriceHistoryRequest.handleOnMasterServer, which always runs on
+        //   the master (slave requests are auto-routed). No slave-broadcast is
+        //   required — the value is authoritative simply because only the master
+        //   reads it. No client-side value is ever trusted.
+        // * ServerMarket.PRICE_HISTORY_INITIAL_LOAD_CANDLES (T-137):
+        //   client-only preference (initial chart window size). Clients fetch the
+        //   current value via the normal GET path when opening the Mod Settings
+        //   screen, so no push-broadcast is needed.
         String villagerAfter = store.toJsonString(settings.VILLAGER_TRADING);
         if (!villagerAfter.equals(villagerBefore) && BACKEND_INSTANCES.VILLAGER_TRADE_MANAGER != null) {
             BACKEND_INSTANCES.VILLAGER_TRADE_MANAGER.recomputeTable();
@@ -256,6 +276,8 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
      *   <li>{@code ServerMarket.VIRTUAL_ORDERBOOK_DEFAULT_ARRAY_SIZE} ∈ [100, 1,000,000]</li>
      *   <li>{@code ServerMarket.CANDLE_TIME} ∈ [1,000 ms, 86,400,000 ms]</li>
      *   <li>{@code ServerMarket.CURRENCY}: must be a non-empty ItemStack, else previous value</li>
+     *   <li>{@code ServerMarket.PRICE_HISTORY_MAX_CANDLES_PER_RESPONSE} ∈ [16, 65,536]</li>
+     *   <li>{@code ServerMarket.PRICE_HISTORY_INITIAL_LOAD_CANDLES} ∈ [16, 8,192]</li>
      *   <li>{@code VillagerTrading.PRICE_REFRESH_INTERVAL_MINUTES} ∈ [1, 10,080]</li>
      *   <li>{@code VillagerTrading.VILLAGER_BUY_MARGIN / VILLAGER_SELL_MARGIN} ∈ [0.01, 100];
      *       NaN/Infinite values fall back to the setting's default</li>
@@ -278,6 +300,16 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
                         settings.MARKET.VIRTUAL_ORDERBOOK_DEFAULT_ARRAY_SIZE.get())));
         settings.MARKET.CANDLE_TIME.set(
                 clamp(settings.MARKET.CANDLE_TIME.get(), MIN_CANDLE_TIME_MS, MAX_CANDLE_TIME_MS));
+        // Price-history caps: server-authoritative response cap + client-side
+        // initial window size. See MarketPriceHistoryRequest for the consumer.
+        settings.MARKET.PRICE_HISTORY_MAX_CANDLES_PER_RESPONSE.set(
+                clampInt(settings.MARKET.PRICE_HISTORY_MAX_CANDLES_PER_RESPONSE.get(),
+                        MIN_PRICE_HISTORY_MAX_CANDLES, MAX_PRICE_HISTORY_MAX_CANDLES,
+                        settings.MARKET.PRICE_HISTORY_MAX_CANDLES_PER_RESPONSE.getDefaultValue()));
+        settings.MARKET.PRICE_HISTORY_INITIAL_LOAD_CANDLES.set(
+                clampInt(settings.MARKET.PRICE_HISTORY_INITIAL_LOAD_CANDLES.get(),
+                        MIN_PRICE_HISTORY_INITIAL_LOAD, MAX_PRICE_HISTORY_INITIAL_LOAD,
+                        settings.MARKET.PRICE_HISTORY_INITIAL_LOAD_CANDLES.getDefaultValue()));
         ItemStack currency = settings.MARKET.CURRENCY.get();
         if (currency == null || currency.isEmpty()) {
             // Never allow an empty trading currency — keep the previous one.
@@ -301,6 +333,21 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
     private static long clamp(@Nullable Long value, long min, long max) {
         if (value == null) return min;
         return Math.max(min, Math.min(max, value));
+    }
+
+    /**
+     * Clamps an Integer setting value into {@code [min, max]}; {@code null} falls
+     * back to the provided default value (which itself is clamped for safety).
+     *
+     * @param value        the value to clamp
+     * @param min          lower bound inclusive
+     * @param max          upper bound inclusive
+     * @param defaultValue fallback when {@code value} is {@code null}
+     * @return the clamped value
+     */
+    private static int clampInt(@Nullable Integer value, int min, int max, int defaultValue) {
+        int base = (value != null) ? value : defaultValue;
+        return Math.max(min, Math.min(max, base));
     }
 
     /** Clamps a margin into [{@link #MIN_VILLAGER_MARGIN}, {@link #MAX_VILLAGER_MARGIN}]; NaN/Infinite/null → default. */

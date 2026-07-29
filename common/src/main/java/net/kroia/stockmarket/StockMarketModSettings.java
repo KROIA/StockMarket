@@ -88,7 +88,65 @@ public class StockMarketModSettings extends ModSettings {
         public final Setting<ItemStack> CURRENCY = registerSetting("CURRENCY", BankSystemItems.MONEY.get().getDefaultInstance(), ItemStack.class, new ItemStackJsonParser()); // Starting balance for new players
         public final Setting<Long> CANDLE_TIME = registerSetting("CANDLE_TIME", 60000L, Long.class); // Time interval of candle sticks in ms
 
+        /**
+         * Server-side hard cap on the number of candles returned by a single
+         * {@code MarketPriceHistoryRequest} response when the client sends
+         * {@code maxCandles = 0}. The master truncates the OLDEST side of the
+         * aggregated result to this cap so the client can page for more.
+         * <p>
+         * Default matches {@code MarketPriceHistoryRequest.MAX_CANDLES_PER_RESPONSE_DEFAULT}.
+         * The constant is kept as a fallback for the (early startup / test) case
+         * where {@code BACKEND_INSTANCES.SERVER_SETTINGS} is not yet available.
+         * <p>
+         * Read live on every request — no restart required.
+         * <p>
+         * Server-authoritative: the value is only consumed inside
+         * {@code MarketPriceHistoryRequest.handleOnMasterServer}, which always
+         * runs on the master. Slaves never read it, so no explicit slave-broadcast
+         * is required after a SET.
+         */
+        public final Setting<Integer> PRICE_HISTORY_MAX_CANDLES_PER_RESPONSE = registerSetting("PRICE_HISTORY_MAX_CANDLES_PER_RESPONSE", 4096, Integer.class);
+
+        /**
+         * Client-side initial window size (in candles) used when a chart first
+         * opens for a market. Consumed by the client's chart / cache code
+         * (see T-135). Not consulted server-side.
+         * <p>
+         * Read live on every chart open — no restart required.
+         * <p>
+         * Slave-propagation: NOT propagated. This is a client-only preference;
+         * it lives in the master's settings.json so admins can tune the default,
+         * but slaves never consume it (they don't render charts) and the client
+         * receives its value via the normal GET path when opening the Mod
+         * Settings screen. No push-broadcast is needed.
+         */
+        public final Setting<Integer> PRICE_HISTORY_INITIAL_LOAD_CANDLES = registerSetting("PRICE_HISTORY_INITIAL_LOAD_CANDLES", 512, Integer.class);
+
         public Market() { super("ServerMarket"); }
+
+        /**
+         * Convenience accessor for the server-side price-history response cap.
+         * Falls back to {@code MarketPriceHistoryRequest.MAX_CANDLES_PER_RESPONSE_DEFAULT}
+         * (via the field's own default) when the value is null.
+         *
+         * @return the maximum number of candles the server will return in one response
+         */
+        public int getPriceHistoryMaxCandlesPerResponse()
+        {
+            Integer v = PRICE_HISTORY_MAX_CANDLES_PER_RESPONSE.get();
+            return v != null ? v : PRICE_HISTORY_MAX_CANDLES_PER_RESPONSE.getDefaultValue();
+        }
+
+        /**
+         * Convenience accessor for the client-side initial chart window size.
+         *
+         * @return the number of candles to request when a chart first opens
+         */
+        public int getPriceHistoryInitialLoadCandles()
+        {
+            Integer v = PRICE_HISTORY_INITIAL_LOAD_CANDLES.get();
+            return v != null ? v : PRICE_HISTORY_INITIAL_LOAD_CANDLES.getDefaultValue();
+        }
     }
 
 

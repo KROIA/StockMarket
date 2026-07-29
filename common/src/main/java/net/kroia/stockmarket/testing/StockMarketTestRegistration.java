@@ -37,6 +37,7 @@ import net.kroia.stockmarket.testing.tests.OrderTestSuite;
 import net.kroia.stockmarket.testing.tests.OrderbookTestSuite;
 import net.kroia.stockmarket.testing.tests.PIDTestSuite;
 import net.kroia.stockmarket.testing.tests.PluginTestSuite;
+import net.kroia.stockmarket.testing.tests.PriceHistoryCacheTestSuite;
 import net.kroia.stockmarket.testing.tests.PriceHistoryTestSuite;
 import net.kroia.stockmarket.testing.tests.NormalizedRandomPriceGeneratorTestSuite;
 import net.kroia.stockmarket.testing.tests.RandomWalkTestSuite;
@@ -70,6 +71,7 @@ public class StockMarketTestRegistration {
         TestRegistry.register(new VirtualOrderbookTestSuite());
         TestRegistry.register(new DataFilterTestSuite());
         TestRegistry.register(new PriceHistoryTestSuite());
+        TestRegistry.register(new PriceHistoryCacheTestSuite());
         TestRegistry.register(new UserTestSuite());
         TestRegistry.register(new PlayerPreferencesTestSuite());
         TestRegistry.register(new MarketSettingsTestSuite());
