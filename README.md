@@ -61,7 +61,7 @@ You want to support me?<br>
 [CurseForge](https://www.curseforge.com/minecraft/mc-mods/stockmarket)
 | Minecraft | Fabric | Forge | Quilt | Neoforge |
 |-----------|--------|-------|-------|----------|
-| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21.1-green)    | [![Version](https://img.shields.io/badge/v2.0.6--alpha-orange)][2.0.6-fabric-1.21.1] |                                                                                  |                                                                                   | [![Version](https://img.shields.io/badge/v2.0.6--alpha-orange)][2.0.6-neoforge-1.21.1]  |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21.1-green)    | [![Version](https://img.shields.io/badge/v2.0.7--alpha-orange)][2.0.7-fabric-1.21.1] |                                                                                  |                                                                                   | [![Version](https://img.shields.io/badge/v2.0.7--alpha-orange)][2.0.7-neoforge-1.21.1]  |
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21.1-green)    | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-fabric-1.21.1] <br> |                                                                                  |                                                                                   | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-neoforge-1.21.1]  |
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21-green)      | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-fabric-1.21]   <br> |                                                                                  |                                                                                   | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-neoforge-1.21]    |
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.6-green)    | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-fabric-1.20.6] <br> |                                                                                  |                                                                                   | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-neoforge-1.20.6]  |
@@ -77,8 +77,8 @@ You want to support me?<br>
 
 
 <!--	Links to curseforge:	-->
-[2.0.6-neoforge-1.21.1]:https://cdn.modrinth.com/data/Au7CJrhF/versions/FaumZlVO/stockmarket-neoforge-1.21.1-2.0.6.jar?mr_download_reason=standalone
-[2.0.6-fabric-1.21.1]:https://cdn.modrinth.com/data/Au7CJrhF/versions/DYYQcGtZ/stockmarket-fabric-1.21.1-2.0.6.jar?mr_download_reason=standalone
+[2.0.7-neoforge-1.21.1]:https://edge.forgecdn.net/files/8531/863/stockmarket-neoforge-1.21.1-2.0.7.jar
+[2.0.7-fabric-1.21.1]:https://edge.forgecdn.net/files/8531/865/stockmarket-fabric-1.21.1-2.0.7.jar
 
 [1.3.1-fabric-1.21.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200719
 [1.3.1-fabric-1.21]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200713
@@ -578,7 +578,10 @@ Since this is a complex field from control theory, I will not cover this here.
 
 | Version | Status | Highlights |
 |---|---|---|
-| [v2.0.4](changelog/v2.0.4.md) | In Development | Stock-market-driven villager trading, value-based money payment |
+| [v2.0.7](changelog/v2.0.7.md) | Released | Paginated candlestick chart history, `/stockmarket backup` DB-quiesce commands, chart control docs |
+| [v2.0.6](changelog/v2.0.6.md) | Released | Version marker release |
+| [v2.0.5](changelog/v2.0.5.md) | Released | Build fix — restore BankSystem dependency on the fabric build |
+| [v2.0.4](changelog/v2.0.4.md) | Released | Stock-market-driven villager trading, news event system, value-based money payment |
 | [v2.0.3](changelog/v2.0.3.md) | Released | Market lifecycle fixes — deletion sync, broken-market recovery, ItemID-merge consolidation |
 | [v2.0.2](changelog/v2.0.2.md) | Released | Crash hotfix and UI locale hardening |
 | [v2.0.1](changelog/v2.0.1.md) | Released | Plugin system frontend, inter-market trading, TradingView, preset editor, 30+ features |
