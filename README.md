@@ -202,7 +202,13 @@ Right-click on a **Stock Market Terminal Block** to open the trading interface.
 
 #### Trading Interface Overview
 The trading screen has two main areas:
-- **Left side** — A real-time [candlestick chart](#candle-stick-chart) showing price history, with the [order book](#order-book) volume displayed along the right edge of the chart.
+- **Left side** — A real-time [candlestick chart](#candle-stick-chart) showing price history, with the [order book](#order-book) volume displayed along the right edge of the chart. You can drag and zoom the chart.<br>Controlls inside the chart:
+  - **Click SPACEBAR**: Centers the view to fit the chart in the vertical axis.
+  - **Click  CTRL+SPACEBAR**: Moves the viewport to the newest candle and recenters it vertically for best fit.
+  - **MouseWheel-Scroll**: Vertical+Horizontal-zoom (centered at the mouse position. Mouse must be inside the chartview).
+  - **Holding SHIFT + MouseWheel-Scroll**: Horizontal-zoom (centered at the mouse position. Mouse must be inside the chartview).
+  - **Holding CTRL + MouseWheel-Scroll**: Vertical-zoom (centered at the mouse position. Mouse must be inside the chartview).
+  
 - **Right side** — The trading panel with tabs for placing orders, viewing pending orders, order history, and recent market trades.
 
 At the top of the screen is a **favorites bar** for quickly switching between markets. Click any market button, or use the market selector popup to browse all available items.
