@@ -748,6 +748,21 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
     {
         return asyncMarket.resetNetPlayerItemFlowAsync();
     }
+    /**
+     * Requests a virtual-orderbook reset (refill from default distribution + drop sticky-clear).
+     */
+    public CompletableFuture<Boolean> resetVirtualOrderbook()
+    {
+        return asyncMarket.resetVirtualOrderbookAsync();
+    }
+
+    /**
+     * Requests a virtual-orderbook clear (zero everything + set sticky-clear so shift-fill stays 0).
+     */
+    public CompletableFuture<Boolean> clearVirtualOrderbook()
+    {
+        return asyncMarket.clearVirtualOrderbookAsync();
+    }
 
 
     /**

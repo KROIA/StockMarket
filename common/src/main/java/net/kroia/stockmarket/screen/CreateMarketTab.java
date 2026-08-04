@@ -48,6 +48,8 @@ public class CreateMarketTab extends StockMarketGuiElement {
         public static final Component NO_PRESETS = Component.translatable(PREFIX + "no_presets");
         public static final Component PRICE_LABEL = Component.translatable(PREFIX + "price");
         public static final Component ABUNDANCE_LABEL = Component.translatable(PREFIX + "abundance");
+        public static final Component ORDERBOOK_ENABLED_LABEL = Component.translatable(PREFIX + "orderbook_enabled");
+        public static final Component IGNORE_PLUGIN_AUTOSUBSCRIBE_LABEL = Component.translatable(PREFIX + "ignore_plugin_autosubscribe");
         public static final Component ALREADY_EXISTS = Component.translatable(PREFIX + "already_exists");
         public static final Component CLEAR_SELECTION = Component.translatable(PREFIX + "clear_selection");
         public static final Component SELECT_ALL = Component.translatable(PREFIX + "select_all");
@@ -121,8 +123,9 @@ public class CreateMarketTab extends StockMarketGuiElement {
         // the async category load returning.
         selectAllButton = new Button(Texts.SELECT_ALL.getString(), this::onSelectAllClicked);
         selectAllButton.setEnabled(false);
+        // Deselect-all is always enabled per admin request — clearing an already-empty
+        // selection is a harmless no-op, so gating the button just gets in the way.
         deselectAllButton = new Button(Texts.DESELECT_ALL.getString(), this::onDeselectAllClicked);
-        deselectAllButton.setEnabled(false);
 
         // Right panel
         selectedLabel = new Label(Texts.SELECTED_ITEMS.getString());
@@ -242,14 +245,13 @@ public class CreateMarketTab extends StockMarketGuiElement {
 
         if (selectedCategory == null) {
             selectAllButton.setEnabled(false);
-            deselectAllButton.setEnabled(false);
+            // Deselect-all stays enabled unconditionally — see button construction.
             return;
         }
 
         MarketPresetCategory category = findCategory(selectedCategory);
         if (category == null) {
             selectAllButton.setEnabled(false);
-            deselectAllButton.setEnabled(false);
             return;
         }
 
@@ -293,13 +295,9 @@ public class CreateMarketTab extends StockMarketGuiElement {
             itemGridView.addChild(itemView);
         }
 
-        // Bulk-selection button state:
-        //  - Select-all is only meaningful when the category contains at least
-        //    one item whose market does not yet exist.
-        //  - Deselect-all is only meaningful when at least one preset in the
-        //    category is currently in the selection set.
+        // Select-all only enables when there's something in the category to add.
+        // Deselect-all stays enabled unconditionally (harmless no-op on empty).
         selectAllButton.setEnabled(selectableInCategory > 0);
-        deselectAllButton.setEnabled(selectedInCategory > 0);
     }
 
     /**
@@ -601,9 +599,22 @@ public class CreateMarketTab extends StockMarketGuiElement {
      * Entry in the selected items list showing the item icon, name, price, and abundance.
      */
     private class SelectedItemEntry extends StockMarketGuiElement {
+        // One line per preset setting: bullet + name at full font, value at reduced font
+        // (matches StockMarketGuiElement.hoverToolTipFontSize, the codebase's standard for
+        // subordinate text). Four settings → four rows + the top name/remove row.
+        private static final int BULLET_ROW_HEIGHT = 10;
+        private static final float VALUE_FONT_SCALE = StockMarketGuiElement.hoverToolTipFontSize;
+
         private final ItemView itemView;
         private final Label nameLabel;
-        private final Label infoLabel;
+        private final Label priceNameLabel;
+        private final Label priceValueLabel;
+        private final Label abundanceNameLabel;
+        private final Label abundanceValueLabel;
+        private final Label orderbookNameLabel;
+        private final Label orderbookValueLabel;
+        private final Label autosubNameLabel;
+        private final Label autosubValueLabel;
         private final Button removeButton;
 
         SelectedItemEntry(ItemStack stack, MarketPreset preset, String presetKey) {
@@ -612,9 +623,28 @@ public class CreateMarketTab extends StockMarketGuiElement {
 
             itemView = new ItemView(stack);
             nameLabel = new Label(stack.getHoverName().getString());
-            infoLabel = new Label(
-                    Texts.PRICE_LABEL.getString() + ": " + String.format(Locale.ROOT, "%.1f", preset.getDefaultPrice())
-                    + "  " + Texts.ABUNDANCE_LABEL.getString() + ": " + String.format(Locale.ROOT, "%.1f", preset.getNaturalAbundance()));
+
+            // Fix 1: name labels also use the reduced scale so the whole bullet list
+            // reads as a compact block of secondary text under the item name.
+            priceNameLabel = new Label("- " + Texts.PRICE_LABEL.getString() + ":");
+            priceNameLabel.setTextFontScale(VALUE_FONT_SCALE);
+            priceValueLabel = new Label(String.format(Locale.ROOT, "%.2f", preset.getDefaultPrice()));
+            priceValueLabel.setTextFontScale(VALUE_FONT_SCALE);
+
+            abundanceNameLabel = new Label("- " + Texts.ABUNDANCE_LABEL.getString() + ":");
+            abundanceNameLabel.setTextFontScale(VALUE_FONT_SCALE);
+            abundanceValueLabel = new Label(String.format(Locale.ROOT, "%.2f", preset.getNaturalAbundance()));
+            abundanceValueLabel.setTextFontScale(VALUE_FONT_SCALE);
+
+            orderbookNameLabel = new Label("- " + Texts.ORDERBOOK_ENABLED_LABEL.getString() + ":");
+            orderbookNameLabel.setTextFontScale(VALUE_FONT_SCALE);
+            orderbookValueLabel = new Label(String.valueOf(preset.isOrderbookEnabled()));
+            orderbookValueLabel.setTextFontScale(VALUE_FONT_SCALE);
+
+            autosubNameLabel = new Label("- " + Texts.IGNORE_PLUGIN_AUTOSUBSCRIBE_LABEL.getString() + ":");
+            autosubNameLabel.setTextFontScale(VALUE_FONT_SCALE);
+            autosubValueLabel = new Label(String.valueOf(preset.isIgnorePluginAutosubscribe()));
+            autosubValueLabel.setTextFontScale(VALUE_FONT_SCALE);
 
             removeButton = new Button("x", () -> {
                 selectedPresets.remove(presetKey);
@@ -626,10 +656,18 @@ public class CreateMarketTab extends StockMarketGuiElement {
 
             addChild(itemView);
             addChild(nameLabel);
-            addChild(infoLabel);
+            addChild(priceNameLabel);
+            addChild(priceValueLabel);
+            addChild(abundanceNameLabel);
+            addChild(abundanceValueLabel);
+            addChild(orderbookNameLabel);
+            addChild(orderbookValueLabel);
+            addChild(autosubNameLabel);
+            addChild(autosubValueLabel);
             addChild(removeButton);
 
-            setHeight(2 * (defaultElementHeight + spacing));
+            // Title row + 4 bullet rows + padding.
+            setHeight(defaultElementHeight + 4 * (BULLET_ROW_HEIGHT + spacing) + 2 * spacing);
         }
 
         @Override
@@ -645,7 +683,33 @@ public class CreateMarketTab extends StockMarketGuiElement {
             itemView.setBounds(padding, padding, 16, 16);
             nameLabel.setBounds(itemView.getRight() + spacing, padding, w - 16 - btnSize - 2 * spacing, defaultElementHeight);
             removeButton.setBounds(nameLabel.getRight() + spacing, padding, btnSize, btnSize);
-            infoLabel.setBounds(padding, nameLabel.getBottom() + spacing, w, defaultElementHeight);
+
+            // Bullet rows underneath. The value column starts at ~55% of the row width so
+            // the eye can scan the names first; both columns start left-aligned so any
+            // shorter name still lines up with its sibling.
+            int rowY = nameLabel.getBottom() + spacing;
+            int nameCol = padding;
+            // Fix 1: split shifted from 55% → 70% to give long setting names (e.g.
+            // "Ignore Plugin Autosubscribe:") room to render without overlapping the
+            // value column.
+            int valueCol = padding + (int) (w * 0.70f);
+            int nameW = valueCol - nameCol - spacing;
+            int valueW = w - (valueCol - padding);
+
+            priceNameLabel.setBounds(nameCol, rowY, nameW, BULLET_ROW_HEIGHT);
+            priceValueLabel.setBounds(valueCol, rowY, valueW, BULLET_ROW_HEIGHT);
+            rowY += BULLET_ROW_HEIGHT + spacing;
+
+            abundanceNameLabel.setBounds(nameCol, rowY, nameW, BULLET_ROW_HEIGHT);
+            abundanceValueLabel.setBounds(valueCol, rowY, valueW, BULLET_ROW_HEIGHT);
+            rowY += BULLET_ROW_HEIGHT + spacing;
+
+            orderbookNameLabel.setBounds(nameCol, rowY, nameW, BULLET_ROW_HEIGHT);
+            orderbookValueLabel.setBounds(valueCol, rowY, valueW, BULLET_ROW_HEIGHT);
+            rowY += BULLET_ROW_HEIGHT + spacing;
+
+            autosubNameLabel.setBounds(nameCol, rowY, nameW, BULLET_ROW_HEIGHT);
+            autosubValueLabel.setBounds(valueCol, rowY, valueW, BULLET_ROW_HEIGHT);
         }
     }
 }

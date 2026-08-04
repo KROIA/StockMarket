@@ -32,4 +32,18 @@ public interface IAsyncMarket {
 
     CompletableFuture<Boolean> resetNetPlayerItemFlowAsync();
 
+    /**
+     * Async counterpart of {@link net.kroia.stockmarket.api.market.ISyncServerMarket#resetVirtualOrderbook()}.
+     * Refills the virtual orderbook from the default distribution and drops the sticky-clear
+     * flag. Admin-gated server-side; the future resolves to false when denied.
+     */
+    CompletableFuture<Boolean> resetVirtualOrderbookAsync();
+
+    /**
+     * Async counterpart of {@link net.kroia.stockmarket.api.market.ISyncServerMarket#clearVirtualOrderbook()}.
+     * Zeroes the virtual orderbook and sets the sticky-clear flag so shift-fill stays at 0.
+     * Admin-gated server-side; the future resolves to false when denied.
+     */
+    CompletableFuture<Boolean> clearVirtualOrderbookAsync();
+
 }

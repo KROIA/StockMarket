@@ -9,6 +9,7 @@ import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.villagertrading.CurrencyFitter;
+import net.kroia.stockmarket.villagertrading.MoneyPayment;
 import net.kroia.stockmarket.villagertrading.VillagerTradePriceTable;
 import net.kroia.stockmarket.villagertrading.VillagerTradeRewriter;
 import net.minecraft.core.RegistryAccess;
@@ -251,23 +252,38 @@ public class VillagerTradePricingTestSuite extends TestSuite {
     }
 
     /**
-     * Values beyond one full stack of the largest note (64 × 100000 raw) spill
-     * into the second slot — and each slot stays a single denomination type.
+     * Values beyond one full stack of the largest note spill into the second slot
+     * — and each slot stays a single denomination type.
+     * <p>
+     * The test value is parameterized on the largest currently-registered
+     * denomination's stack value so the test stays valid when BankSystem adds new
+     * denominations (previously hardcoded 6.5M assumed the largest was 100k;
+     * larger denominations added upstream caused the best-fit branch to satisfy
+     * the value in a single slot).
      */
     private TestResult test_money_fit_spills_single_type_per_slot() {
-        long value = 6_500_000L; // 64 × money1000 (6.4M) + 1 × money1000 (100k)
+        List<ItemStack> denoms = MoneyPayment.moneyDenominationsDesc();
+        if (denoms.isEmpty()) return pass("Skipped — no money denominations registered");
+        ItemStack largest = denoms.get(0);
+        long largestWorth = ((MoneyItem) largest.getItem()).worth();
+        int largestMaxStack = Math.max(1, largest.getMaxStackSize());
+        long largestStackValue = (long) largestMaxStack * largestWorth;
+        // One full stack of the largest + one additional unit → must spill into slot 2.
+        long value = largestStackValue + largestWorth;
+
         CurrencyFitter.FitResult fit = CurrencyFitter.fit(value, 2, moneyCurrency());
 
         TestResult r = assertEquals("Two slots expected for a value beyond one full stack",
                 2, fit.stacks().size());
         if (!r.passed()) return r;
-        r = assertEquals("Slot 1 is a full stack of the largest note", 64, fit.stacks().get(0).getCount());
+        r = assertEquals("Slot 1 is a full stack of the largest note",
+                largestMaxStack, fit.stacks().get(0).getCount());
         if (!r.passed()) return r;
         r = assertEquals("Slot 1 uses the largest denomination",
-                100000L, ((MoneyItem) fit.stacks().get(0).getItem()).worth());
+                largestWorth, ((MoneyItem) fit.stacks().get(0).getItem()).worth());
         if (!r.passed()) return r;
-        r = assertEquals("Slot 2 is single-type as well",
-                100000L, ((MoneyItem) fit.stacks().get(1).getItem()).worth());
+        r = assertEquals("Slot 2 is single-type as well (same largest denomination)",
+                largestWorth, ((MoneyItem) fit.stacks().get(1).getItem()).worth());
         if (!r.passed()) return r;
         r = assertEquals("Exact total expected", value, totalRawValue(fit.stacks()));
         if (!r.passed()) return r;
@@ -292,16 +308,30 @@ public class VillagerTradePricingTestSuite extends TestSuite {
         return pass("Money fit never emits a free trade — minimum one 1-cent coin");
     }
 
-    /** Values beyond 2 full stacks of the largest denomination are capped and flagged. */
+    /**
+     * Values beyond 2 full stacks of the largest denomination are capped and flagged.
+     * Parameterized on the runtime denomination set (see spill test for rationale).
+     */
     private TestResult test_money_fit_capacity_clamp() {
-        long huge = 100000L * 200; // 200 × money1000 — capacity is 2 × 64
+        List<ItemStack> denoms = MoneyPayment.moneyDenominationsDesc();
+        if (denoms.isEmpty()) return pass("Skipped — no money denominations registered");
+        ItemStack largest = denoms.get(0);
+        long largestWorth = ((MoneyItem) largest.getItem()).worth();
+        int largestMaxStack = Math.max(1, largest.getMaxStackSize());
+        long largestStackValue = (long) largestMaxStack * largestWorth;
+        // 3× the largest-stack value — capacity is 2 slots × largestStackValue, so this
+        // exceeds the two-slot ceiling and must clamp with both slots at maxStack.
+        long huge = largestStackValue * 3L;
+
         CurrencyFitter.FitResult fit = CurrencyFitter.fit(huge, 2, moneyCurrency());
 
         TestResult r = assertEquals("Both slots used at capacity", 2, fit.stacks().size());
         if (!r.passed()) return r;
-        r = assertEquals("Slot 1 full stack of largest denomination", 64, fit.stacks().get(0).getCount());
+        r = assertEquals("Slot 1 full stack of largest denomination",
+                largestMaxStack, fit.stacks().get(0).getCount());
         if (!r.passed()) return r;
-        r = assertEquals("Slot 2 full stack of largest denomination", 64, fit.stacks().get(1).getCount());
+        r = assertEquals("Slot 2 full stack of largest denomination",
+                largestMaxStack, fit.stacks().get(1).getCount());
         if (!r.passed()) return r;
         r = assertTrue("Unrepresentable value must be flagged as clamped", fit.clamped());
         if (!r.passed()) return r;

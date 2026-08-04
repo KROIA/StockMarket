@@ -64,6 +64,63 @@ public class CreateOrderRequestTestSuite extends TestSuite {
         addTest("buyMarket_locksAtMarketPrice", this::test_buyMarket_locksAtMarketPrice);
         addTest("sell_locksItemVolume", this::test_sell_locksItemVolume);
         addTest("putOrderFails_unlocksMoneyBuy", this::test_putOrderFails_unlocksMoneyBuy);
+
+        // Fix 3 — market orders that cannot match must cancel the remainder + refund.
+        addTest("marketSell_noLiquidity_unlocksItems", this::test_marketSell_noLiquidity_unlocksItems);
+        addTest("marketBuy_noLiquidity_unlocksMoney", this::test_marketBuy_noLiquidity_unlocksMoney);
+        addTest("marketSell_partialFill_unlocksRemainderItems", this::test_marketSell_partialFill_unlocksRemainderItems);
+        addTest("marketBuy_partialFill_unlocksRemainderMoney", this::test_marketBuy_partialFill_unlocksRemainderMoney);
+    }
+
+    /**
+     * Configures the shared serverMarket into a "no liquidity" state. Gates the VO
+     * DIRECTLY on the orderbook (bypassing setSettings, whose getSettings-by-reference
+     * pattern was tripping the transition detection), then clears real orders and
+     * incoming buffers. Restore via {@link #restoreVirtualOrderbookEnabled()}.
+     */
+    private void putMarketInNoLiquidityState() {
+        // Direct source-gate: setVirtualDisabled(true) makes every VO read return 0
+        // regardless of what the plugin's calculator populated. This is more robust
+        // than the setSettings path because it doesn't depend on the wasEnabled/
+        // willBeEnabled transition detection (which fails when getSettings returns a
+        // reference to the internal settings — mutating it pre-updates wasEnabled).
+        serverMarket.getOrderbook().setVirtualDisabled(true);
+        // Also update settings for consistency (the source-gate is what makes the tests
+        // deterministic, but keeping settings in sync avoids surprising other code).
+        serverMarket.getSettings().virtualOrderbookEnabled = false;
+        serverMarket.getSettings().marketOpen = true;
+        serverMarket.test_setCurrentMarketPrice(100);
+        serverMarket.test_clearOrderbook();
+        serverMarket.test_clearIncomingOrderBuffers();
+    }
+
+    /**
+     * Restores the shared serverMarket to VO-enabled so subsequent tests in the
+     * suite that expect a working orderbook aren't affected by our test state.
+     */
+    private void restoreVirtualOrderbookEnabled() {
+        serverMarket.getOrderbook().setVirtualDisabled(false);
+        serverMarket.getSettings().virtualOrderbookEnabled = true;
+        serverMarket.test_clearOrderbook();
+        serverMarket.test_clearIncomingOrderBuffers();
+    }
+
+    /**
+     * Creates a fresh bank account with a unique name (append test-suffix + timestamp)
+     * so state doesn't leak between tests via the shared account. Returns the account
+     * pre-configured with the given money balance and item balance. The account has a
+     * fresh user with all permissions.
+     */
+    private IServerBankAccount freshAccount(String label, long moneyBalance, long itemBalance, UUID player) {
+        String accountName = label + "_" + System.nanoTime();
+        IServerBankAccount acc = backend.BANK_SYSTEM_API.getServerBankManager().getSync().createBankAccount(accountName);
+        backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(player, accountName + "_user");
+        acc.addUser(new User(player, accountName + "_user", false), BankPermission.getAllPermissions());
+        acc.createBank(itemID, 0);
+        acc.createBank(moneyID, 0);
+        acc.getBank(itemID).setBalance(itemBalance);
+        acc.getBank(moneyID).setBalance(moneyBalance);
+        return acc;
     }
 
     @Override
@@ -430,6 +487,204 @@ public class CreateOrderRequestTestSuite extends TestSuite {
             if (!r.passed()) return r;
             return pass("Sell order locks correct item volume");
         } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    // ── Fix 3: market-order cancel-and-refund on empty liquidity ─────────────
+
+    /**
+     * Regression test for Fix 3: a market sell placed against a market with no
+     * buy-side liquidity (empty real orderbook + zero virtual liquidity) must
+     * cancel the unfilled remainder and unlock the seller's reserved items.
+     */
+    private TestResult test_marketSell_noLiquidity_unlocksItems() {
+        try {
+            putMarketInNoLiquidityState();
+
+            UUID player = UUID.randomUUID();
+            IServerBankAccount acc = freshAccount("MarketSellNoLiq", 100000, 1000, player);
+
+            CreateOrderRequest.InputData input = new CreateOrderRequest.InputData(
+                    itemID, acc.getAccountNumber(), Order.Type.MARKET, -5.0, 0.0);
+            CreateOrderRequest.OutputData result = executeRequest(input, player);
+            if (result.status != CreateOrderRequest.Status.CREATED) {
+                restoreVirtualOrderbookEnabled();
+                return fail("Expected CREATED, got: " + result.status);
+            }
+
+            long availableAfterLock = acc.getBank(itemID).getBalance();
+            long totalAfterLock = acc.getBank(itemID).getTotalBalance();
+            TestResult rLock = assertTrue("Items should be locked after CreateOrderRequest",
+                    availableAfterLock < totalAfterLock);
+            if (!rLock.passed()) { restoreVirtualOrderbookEnabled(); return rLock; }
+
+            serverMarket.update();
+
+            long availableAfterUpdate = acc.getBank(itemID).getBalance();
+            long totalAfterUpdate = acc.getBank(itemID).getTotalBalance();
+
+            restoreVirtualOrderbookEnabled();
+
+            // Core invariant: after the cancel-remainder refund runs, NO items remain
+            // locked in the bank. We deliberately don't assert the exact total balance
+            // since the shared serverMarket may carry unpredictable state from prior
+            // tests (e.g. VO population from plugin subscription pre-disable).
+            TestResult r = assertEquals("All locked items should be unlocked after cancel-remainder",
+                    totalAfterUpdate, availableAfterUpdate);
+            if (!r.passed()) return r;
+            return pass("Market sell with no liquidity cancels remainder and unlocks items");
+        } catch (Exception e) {
+            restoreVirtualOrderbookEnabled();
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Symmetric regression for the buy side: a market buy against a market with
+     * no sell-side liquidity must cancel the remainder and unlock the reserved money.
+     */
+    private TestResult test_marketBuy_noLiquidity_unlocksMoney() {
+        try {
+            putMarketInNoLiquidityState();
+
+            UUID player = UUID.randomUUID();
+            IServerBankAccount acc = freshAccount("MarketBuyNoLiq", 10000000, 0, player);
+
+            CreateOrderRequest.InputData input = new CreateOrderRequest.InputData(
+                    itemID, acc.getAccountNumber(), Order.Type.MARKET, 5.0, 0.0);
+            CreateOrderRequest.OutputData result = executeRequest(input, player);
+            if (result.status != CreateOrderRequest.Status.CREATED) {
+                restoreVirtualOrderbookEnabled();
+                return fail("Expected CREATED, got: " + result.status);
+            }
+
+            long availableAfterLock = acc.getBank(moneyID).getBalance();
+            long totalAfterLock = acc.getBank(moneyID).getTotalBalance();
+            TestResult rLock = assertTrue("Money should be locked after CreateOrderRequest",
+                    availableAfterLock < totalAfterLock);
+            if (!rLock.passed()) { restoreVirtualOrderbookEnabled(); return rLock; }
+
+            serverMarket.update();
+
+            long availableAfterUpdate = acc.getBank(moneyID).getBalance();
+            long totalAfterUpdate = acc.getBank(moneyID).getTotalBalance();
+
+            restoreVirtualOrderbookEnabled();
+
+            TestResult r = assertEquals("All locked money should be unlocked after cancel-remainder",
+                    totalAfterUpdate, availableAfterUpdate);
+            if (!r.passed()) return r;
+            return pass("Market buy with no liquidity cancels remainder and unlocks money");
+        } catch (Exception e) {
+            restoreVirtualOrderbookEnabled();
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Partial-fill regression for the sell side. Places one small resting BUY limit
+     * order (from a counterparty account) that covers only part of the market sell
+     * volume; the remainder must cancel and unlock the leftover items.
+     */
+    private TestResult test_marketSell_partialFill_unlocksRemainderItems() {
+        try {
+            putMarketInNoLiquidityState();
+
+            // Buyer: fresh account + resting LIMIT BUY vol=1 @ market price.
+            UUID buyerPlayer = UUID.randomUUID();
+            IServerBankAccount buyerAcc = freshAccount("PartialSellBuyer", 10000000, 0, buyerPlayer);
+            CreateOrderRequest.InputData buyInput = new CreateOrderRequest.InputData(
+                    itemID, buyerAcc.getAccountNumber(), Order.Type.LIMIT, 1.0, 100.0);
+            CreateOrderRequest.OutputData buyResult = executeRequest(buyInput, buyerPlayer);
+            if (buyResult.status != CreateOrderRequest.Status.CREATED) {
+                restoreVirtualOrderbookEnabled();
+                return fail("Setup: buy LIMIT expected CREATED, got: " + buyResult.status);
+            }
+
+            // Seller: fresh account + MARKET SELL vol=3 (source-gate ensures VO can't
+            // fill; only the buyer's LIMIT BUY can, capping the fill at vol=1).
+            UUID sellerPlayer = UUID.randomUUID();
+            IServerBankAccount sellerAcc = freshAccount("PartialSellSeller", 100000, 1000, sellerPlayer);
+            CreateOrderRequest.InputData sellInput = new CreateOrderRequest.InputData(
+                    itemID, sellerAcc.getAccountNumber(), Order.Type.MARKET, -3.0, 0.0);
+            CreateOrderRequest.OutputData sellResult = executeRequest(sellInput, sellerPlayer);
+            if (sellResult.status != CreateOrderRequest.Status.CREATED) {
+                restoreVirtualOrderbookEnabled();
+                return fail("Expected CREATED, got: " + sellResult.status);
+            }
+
+            serverMarket.update();
+
+            long totalAfterUpdate = sellerAcc.getBank(itemID).getTotalBalance();
+            long availableAfterUpdate = sellerAcc.getBank(itemID).getBalance();
+
+            restoreVirtualOrderbookEnabled();
+
+            // Invariant: after cancel-remainder, no items remain locked on the seller.
+            // We deliberately don't assert an exact item count — the shared market's
+            // state (VO population from plugin subscribe pre-disable) can produce a
+            // variable fill count depending on test execution order.
+            TestResult r = assertEquals("No items should remain locked for the cancelled remainder",
+                    totalAfterUpdate, availableAfterUpdate);
+            if (!r.passed()) return r;
+            return pass("Market sell partial fill cancels remainder and unlocks leftover items");
+        } catch (Exception e) {
+            restoreVirtualOrderbookEnabled();
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Partial-fill regression for the buy side — the exact bug reported by the user:
+     * VO-disabled market with one small resting sell; market buy fills 1 unit then
+     * hits empty book, remainder cancels and the reserved money for the unfilled
+     * portion must be unlocked. Pre-fix, {@code unlockRemainingFunds} used
+     * {@code startPrice=0} for market buys and computed {@code totalLocked=0}, so
+     * the money leak stayed permanent.
+     */
+    private TestResult test_marketBuy_partialFill_unlocksRemainderMoney() {
+        try {
+            putMarketInNoLiquidityState();
+
+            // Seller: fresh account + resting LIMIT SELL vol=-1 @ market price. Only
+            // sell-side liquidity available for the buyer to match against.
+            UUID sellerPlayer = UUID.randomUUID();
+            IServerBankAccount sellerAcc = freshAccount("PartialBuySeller", 0, 1000, sellerPlayer);
+            CreateOrderRequest.InputData sellInput = new CreateOrderRequest.InputData(
+                    itemID, sellerAcc.getAccountNumber(), Order.Type.LIMIT, -1.0, 100.0);
+            CreateOrderRequest.OutputData sellResult = executeRequest(sellInput, sellerPlayer);
+            if (sellResult.status != CreateOrderRequest.Status.CREATED) {
+                restoreVirtualOrderbookEnabled();
+                return fail("Setup: sell LIMIT expected CREATED, got: " + sellResult.status);
+            }
+
+            // Buyer: fresh account + MARKET BUY vol=3 → 1 unit fills, 2 must cancel + refund.
+            // Pre-fix this left the 2-unit reservation locked (startPrice=0 for market buys).
+            UUID buyerPlayer = UUID.randomUUID();
+            IServerBankAccount buyerAcc = freshAccount("PartialBuyBuyer", 10000000, 0, buyerPlayer);
+            CreateOrderRequest.InputData buyInput = new CreateOrderRequest.InputData(
+                    itemID, buyerAcc.getAccountNumber(), Order.Type.MARKET, 3.0, 0.0);
+            CreateOrderRequest.OutputData buyResult = executeRequest(buyInput, buyerPlayer);
+            if (buyResult.status != CreateOrderRequest.Status.CREATED) {
+                restoreVirtualOrderbookEnabled();
+                return fail("Expected CREATED, got: " + buyResult.status);
+            }
+
+            serverMarket.update();
+
+            long totalAfterUpdate = buyerAcc.getBank(moneyID).getTotalBalance();
+            long availableAfterUpdate = buyerAcc.getBank(moneyID).getBalance();
+
+            restoreVirtualOrderbookEnabled();
+
+            // Core Fix 3 invariant: after cancel-remainder, no money remains locked.
+            TestResult r = assertEquals("No money should remain locked for the cancelled remainder",
+                    totalAfterUpdate, availableAfterUpdate);
+            if (!r.passed()) return r;
+            return pass("Market buy partial fill cancels remainder and unlocks leftover money");
+        } catch (Exception e) {
+            restoreVirtualOrderbookEnabled();
             return fail("Exception: " + e.getMessage());
         }
     }

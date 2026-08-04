@@ -34,7 +34,6 @@ You want to support me?<br>
 
 ---
 ## Features
-- Adds a banking system to the game for money and items.
 - Adds new [blocks](#blocks) to interact with the market or bank account.
 - Implementation of a [matching engine](#matching-engine) inspired by the real market.
 - Configurable [plugins](#plugins) that provide the market with liquidity, volatility and price movements.
@@ -61,7 +60,7 @@ You want to support me?<br>
 [CurseForge](https://www.curseforge.com/minecraft/mc-mods/stockmarket)
 | Minecraft | Fabric | Forge | Quilt | Neoforge |
 |-----------|--------|-------|-------|----------|
-| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21.1-green)    |  |                                                                                  |                                                                                   | [![Version](https://img.shields.io/badge/v2.0.1--alpha-orange)][2.0.1-neoforge-1.21.1]  |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21.1-green)    | [![Version](https://img.shields.io/badge/v2.0.7--alpha-orange)][2.0.7-fabric-1.21.1] |                                                                                  |                                                                                   | [![Version](https://img.shields.io/badge/v2.0.7--alpha-orange)][2.0.7-neoforge-1.21.1]  |
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21.1-green)    | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-fabric-1.21.1] <br> |                                                                                  |                                                                                   | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-neoforge-1.21.1]  |
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21-green)      | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-fabric-1.21]   <br> |                                                                                  |                                                                                   | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-neoforge-1.21]    |
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.6-green)    | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-fabric-1.20.6] <br> |                                                                                  |                                                                                   | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-neoforge-1.20.6]  |
@@ -77,7 +76,8 @@ You want to support me?<br>
 
 
 <!--	Links to curseforge:	-->
-[2.0.1-neoforge-1.21.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/files/8122945
+[2.0.7-neoforge-1.21.1]:https://edge.forgecdn.net/files/8531/863/stockmarket-neoforge-1.21.1-2.0.7.jar
+[2.0.7-fabric-1.21.1]:https://edge.forgecdn.net/files/8531/865/stockmarket-fabric-1.21.1-2.0.7.jar
 
 [1.3.1-fabric-1.21.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200719
 [1.3.1-fabric-1.21]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200713
@@ -244,6 +244,8 @@ Once your buy orders are filled, withdraw the purchased items from your bank acc
 ### For Admins / Single Player
 
 All market management in v2.0 is done through graphical interfaces. The old command-based bot setup has been replaced by the **Management GUI** and the **Plugin System**.
+
+For a walkthrough of common server setups — the default bot-driven market vs. a fully player-driven market — see the [Admin Setup Use Cases](documentation/user-guide/admin-setup.md) guide.
 
 #### Getting Admin Access
 A server operator needs to grant StockMarket admin privileges:<br>
@@ -563,21 +565,16 @@ The base price a market's random walk oscillates around.
 With player flow influence enabled, it shifts permanently with the cumulative net amount of items players traded on that market: net selling lowers it, net buying raises it.
 
 
-
-### PID-Controller
-Since this is a complex field from control theory, I will not cover this here.
-[PID Controller Wikipedia](https://en.wikipedia.org/wiki/Proportional%E2%80%93integral%E2%80%93derivative_controller)
-<div align="center">
-    <img src="https://upload.wikimedia.org/wikipedia/commons/4/43/PID_en.svg" width=500> 
-</div>
-
 ---
 
 ## Changelog
 
 | Version | Status | Highlights |
 |---|---|---|
-| [v2.0.4](changelog/v2.0.4.md) | In Development | Stock-market-driven villager trading, value-based money payment |
+| [v2.0.7](changelog/v2.0.7.md) | Released | Paginated candlestick chart history, `/stockmarket backup` DB-quiesce commands, chart control docs |
+| [v2.0.6](changelog/v2.0.6.md) | Released | Version marker release |
+| [v2.0.5](changelog/v2.0.5.md) | Released | Build fix — restore BankSystem dependency on the fabric build |
+| [v2.0.4](changelog/v2.0.4.md) | Released | Stock-market-driven villager trading, news event system, value-based money payment |
 | [v2.0.3](changelog/v2.0.3.md) | Released | Market lifecycle fixes — deletion sync, broken-market recovery, ItemID-merge consolidation |
 | [v2.0.2](changelog/v2.0.2.md) | Released | Crash hotfix and UI locale hardening |
 | [v2.0.1](changelog/v2.0.1.md) | Released | Plugin system frontend, inter-market trading, TradingView, preset editor, 30+ features |

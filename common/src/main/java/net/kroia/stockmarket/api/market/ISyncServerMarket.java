@@ -90,6 +90,19 @@ public interface ISyncServerMarket {
 
     long getNetPlayerItemFlow();
     void resetNetPlayerItemFlow();
+    /**
+     * Refills the virtual orderbook from the plugin-provided default volume distribution
+     * function and drops the sticky-clear flag. Use this after a {@link #clearVirtualOrderbook()}
+     * to bring the market back to a fully-populated depth profile.
+     */
+    void resetVirtualOrderbook();
+
+    /**
+     * Zeros the virtual orderbook AND sets the sticky-clear flag so any future array
+     * shift also fills with 0. Distinct from {@link #resetVirtualOrderbook()} — clearing
+     * is persistent through price moves until an explicit reset undoes it.
+     */
+    void clearVirtualOrderbook();
 
     Orderbook getOrderbook();
 

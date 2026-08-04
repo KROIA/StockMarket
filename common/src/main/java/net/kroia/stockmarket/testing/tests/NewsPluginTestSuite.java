@@ -151,6 +151,9 @@ public class NewsPluginTestSuite extends TestSuite {
         @Override public double getNetPlayerItemFlow() { return 0; }
         @Override public boolean isMarketOpen() { return true; }
         @Override public float getCurrentCandleTradedVolume() { return 0; }
+        @Override public boolean isVirtualOrderbookEnabled() { return true; }
+        @Override public void clearVirtualOrderbook() { }
+        @Override public void resetVirtualOrderbook() { }
     }
 
     /**

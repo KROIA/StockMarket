@@ -70,11 +70,15 @@ public class MarketManagementScreen extends StockMarketGuiScreen {
         int width = getWidth() - 2 * padding;
         int height = getHeight() - 2 * padding;
 
+        // Right section (listView) halved from ~w/2 → w/4, matching the analogous
+        // shrink on the Overview tab. Chart + histogram expand into the freed pixels
+        // on the left so they read easier on smaller screens.
+        int rightWidth = width / 4;
         int orderbookVolumeWidth = width / 10;
-        int chartWidth = width / 2 - orderbookVolumeWidth;
+        int chartWidth = width - rightWidth - orderbookVolumeWidth - spacing;
 
         candlestickChart.setBounds(padding, padding, chartWidth, height / 2);
         orderbookVolumeHistogram.setBounds(candlestickChart.getRight(), candlestickChart.getTop(), orderbookVolumeWidth, candlestickChart.getHeight());
-        listView.setBounds(orderbookVolumeHistogram.getRight() + spacing, padding, width - (orderbookVolumeHistogram.getRight() - padding + spacing), height);
+        listView.setBounds(orderbookVolumeHistogram.getRight() + spacing, padding, rightWidth, height);
     }
 }

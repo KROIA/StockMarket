@@ -349,6 +349,16 @@ public class TradeScreen extends StockMarketGuiScreen {
                 orderMarkerOverlay.setCurrentMarket(currentMarketID);
                 tradingPanel.setItemName(currentMarketID.getStack().getHoverName().getString());
                 tradingPanel.setLimitPrice(market.getCurrentMarketRealPrice());
+                // Mirror switchMarket's isMarketOpenAsync sync so the "Market Closed"
+                // banner appears immediately when the screen opens onto a closed market
+                // (previously the label only updated when the user switched markets,
+                // leaving the first view of a closed market unlabeled).
+                market.isMarketOpenAsync().thenAccept(isOpen -> {
+                    Minecraft.getInstance().execute(() -> {
+                        tradingPanel.setMarketOpen(isOpen);
+                        marketClosedLabel.setEnabled(!isOpen);
+                    });
+                });
             }
             // Update last market in preferences
             prefs.setLastMarketID(currentMarketID);

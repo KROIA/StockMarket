@@ -103,6 +103,9 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
         {
             RuntimeData data = marketData.get(market.market.getMarketID());
             if(data == null) continue;
+            // The bot steers price by placing orders against the virtual orderbook.
+            // With the orderbook disabled it has nothing to trade against, so skip.
+            if(!market.market.isVirtualOrderbookEnabled()) continue;
             updateForMarket(market, data);
         }
     }

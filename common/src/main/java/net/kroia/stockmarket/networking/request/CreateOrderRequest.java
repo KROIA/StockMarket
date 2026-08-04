@@ -288,6 +288,10 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
                 future.complete(response);
                 return future;
             }
+            // Stash the actual reservation on the Order — market buys have startPrice=0
+            // so the "targetVolume * startPrice / SF" formula in unlockRemainingFunds
+            // cannot back-compute this. Set BEFORE Order is created below via a two-step
+            // pattern (create then set), since the Order construction happens later.
         }
         else
         {
@@ -305,6 +309,13 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
         long time = System.currentTimeMillis();
         Order order = new Order(input.itemID, input.type, toRawAmount(input.volume), toRawAmount(input.price), time,
                 playerSender, bankAccount.getAccountNumber());
+        // Buy orders: record the actual money reservation on the Order so the
+        // cancel-remainder refund path can back-compute the unlock amount for market
+        // buys (whose startPrice is 0). Sell orders don't need this — unlock uses
+        // -remainingVolume directly.
+        if (input.volume > 0) {
+            order.setOriginalLockedMoney(toLockAmount);
+        }
 
         if(!serverMarket.putOrder(order))
         {

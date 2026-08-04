@@ -203,6 +203,10 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
             RuntimeData data = marketData.get(market.market.getMarketID());
             if(data == null)
                 continue; // No runtime data for this market (interface without subscription) -> skip
+            // Markets with the virtual orderbook disabled are outside this plugin's scope:
+            // there is no virtual depth to converge toward a target distribution on.
+            if(!market.market.isVirtualOrderbookEnabled())
+                continue;
             data.currentMarketPrice = (float) market.market.getPrice();
             boolean mayRefreshTargets =
                     ((i - rotationStart + marketCount) % marketCount) < MAX_TARGET_REFRESHES_PER_UPDATE;

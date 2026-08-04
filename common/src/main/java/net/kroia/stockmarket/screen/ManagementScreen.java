@@ -112,6 +112,10 @@ public class ManagementScreen extends StockMarketGuiScreen {
         private final Button closeAllMarketsButton;
         private final ManagementScreen parentScreen;
         private boolean loadingCheckBox = false;
+        // Tracks whether a market is currently selected. Drives the visibility of
+        // marketOpenCheckBox and marketSettingsButton — both are meaningless without
+        // a target market, and now hide instead of showing a dead-looking control.
+        private boolean hasSelection = false;
 
         public CurrentMarketManagerWidget(ManagementScreen parent)
         {
@@ -177,20 +181,44 @@ public class ManagementScreen extends StockMarketGuiScreen {
 
             selectedMarketLabel.setBounds(padding, padding, width, elementHeight-spacing);
 
-            currentItemView.setBounds(padding, selectedMarketLabel.getBottom()+spacing, width/2, elementHeight);
-            removeTradingPairButton.setBounds(currentItemView.getRight()+spacing, currentItemView.getTop(), width/2-spacing, elementHeight);
+            // Task 3: when no market is selected, hide the orange Delete button too
+            // (same off-screen-bounds pattern used for marketOpenCheckBox / marketSettingsButton).
+            // The item view stays full-width in that state so the "no selection" placeholder
+            // reads cleanly without a floating Delete button to its right.
+            if (hasSelection) {
+                currentItemView.setBounds(padding, selectedMarketLabel.getBottom()+spacing, width/2, elementHeight);
+                removeTradingPairButton.setBounds(currentItemView.getRight()+spacing, currentItemView.getTop(), width/2-spacing, elementHeight);
+            } else {
+                currentItemView.setBounds(padding, selectedMarketLabel.getBottom()+spacing, width, elementHeight);
+                removeTradingPairButton.setBounds(-1000, -1000, 0, 0);
+            }
 
-            marketOpenCheckBox.setBounds(currentItemView.getLeft(), currentItemView.getBottom()+spacing, width, elementHeight);
-            marketSettingsButton.setBounds(marketOpenCheckBox.getLeft(), marketOpenCheckBox.getBottom()+spacing, width, elementHeight);
+            // Task 3: hide marketOpenCheckBox + marketSettingsButton when no market
+            // is selected. Collapse their rows to zero-height so the open/close-all
+            // buttons slide up and no dead space remains. Visibility is derived from
+            // hasSelection (set by setCurrentMarket).
+            if (hasSelection) {
+                marketOpenCheckBox.setBounds(currentItemView.getLeft(), currentItemView.getBottom()+spacing, width, elementHeight);
+                marketSettingsButton.setBounds(marketOpenCheckBox.getLeft(), marketOpenCheckBox.getBottom()+spacing, width, elementHeight);
+            } else {
+                // Zero-size + off-screen so hit-testing can't trigger these controls.
+                marketOpenCheckBox.setBounds(-1000, -1000, 0, 0);
+                marketSettingsButton.setBounds(-1000, -1000, 0, 0);
+            }
 
             int btnW = (width - spacing) / 2;
-            int btnY = marketSettingsButton.getBottom() + spacing;
+            int btnY = hasSelection
+                    ? marketSettingsButton.getBottom() + spacing
+                    : currentItemView.getBottom() + spacing;
             openAllMarketsButton.setBounds(padding, btnY, btnW, elementHeight);
             closeAllMarketsButton.setBounds(openAllMarketsButton.getRight() + spacing, btnY, btnW, elementHeight);
         }
         public void setCurrentMarket(ItemID marketID) {
             if(marketID == null) {
                 currentItemView.setItemStack(ItemStack.EMPTY);
+                hasSelection = false;
+                // Re-layout so marketOpenCheckBox / marketSettingsButton hide.
+                setBounds(getLeft(), getTop(), getWidth(), getHeight());
                 return;
             }
             ItemStack stack = marketID.getStack();
@@ -200,6 +228,8 @@ public class ManagementScreen extends StockMarketGuiScreen {
                 stack = createBrokenMarketPlaceholder(marketID);
             }
             currentItemView.setItemStack(stack);
+            hasSelection = true;
+            setBounds(getLeft(), getTop(), getWidth(), getHeight());
         }
         public void setMarketOpenCheckBoxChecked(boolean isOpen) {
             loadingCheckBox = true;
@@ -468,21 +498,26 @@ public class ManagementScreen extends StockMarketGuiScreen {
             int w = getWidth() - 2 * padding;
             int h = getHeight() - 2 * padding;
 
-            candlestickChart.setBounds(padding, padding, w / 2, h / 2);
+            // Task 2: right-panel width halved (was ~w/2, now ~w/4). The chart and
+            // market grid expand into the freed space on the left (~3w/4 minus
+            // spacing) so they're easier to scan.
+            int rightWidth = w / 4;
+            int leftWidth = w - rightWidth - spacing;
+
+            candlestickChart.setBounds(padding, padding, leftWidth, h / 2);
 
             int searchY = candlestickChart.getBottom() + spacing;
             int searchLabelW = w / 8;
             searchLabel.setBounds(padding, searchY, searchLabelW, elementHeight);
-            searchField.setBounds(searchLabel.getRight() + spacing, searchY, w / 2 - searchLabelW - spacing, elementHeight);
+            searchField.setBounds(searchLabel.getRight() + spacing, searchY, leftWidth - searchLabelW - spacing, elementHeight);
 
             int gridY = searchField.getBottom() + spacing;
-            marketGridView.setBounds(padding, gridY, w / 2, h - (gridY - padding));
+            marketGridView.setBounds(padding, gridY, leftWidth, h - (gridY - padding));
 
             int containerWidth = marketGridView.getContainerWidth();
             marketGridLayout.columns = Math.max(1, containerWidth / ItemView.DEFAULT_WIDTH);
 
-            listView.setBounds(candlestickChart.getRight() + spacing, padding,
-                    w - (candlestickChart.getRight() + spacing) + padding, h);
+            listView.setBounds(candlestickChart.getRight() + spacing, padding, rightWidth, h);
         }
 
         public CurrentMarketManagerWidget getCurrentMarketManagerWidget() {
