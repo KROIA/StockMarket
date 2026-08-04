@@ -34,7 +34,6 @@ You want to support me?<br>
 
 ---
 ## Features
-- Adds a banking system to the game for money and items.
 - Adds new [blocks](#blocks) to interact with the market or bank account.
 - Implementation of a [matching engine](#matching-engine) inspired by the real market.
 - Configurable [plugins](#plugins) that provide the market with liquidity, volatility and price movements.
@@ -245,6 +244,8 @@ Once your buy orders are filled, withdraw the purchased items from your bank acc
 ### For Admins / Single Player
 
 All market management in v2.0 is done through graphical interfaces. The old command-based bot setup has been replaced by the **Management GUI** and the **Plugin System**.
+
+For a walkthrough of common server setups — the default bot-driven market vs. a fully player-driven market — see the [Admin Setup Use Cases](documentation/user-guide/admin-setup.md) guide.
 
 #### Getting Admin Access
 A server operator needs to grant StockMarket admin privileges:<br>
