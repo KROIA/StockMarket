@@ -67,6 +67,35 @@ public class Orderbook implements ServerSaveable
         virtualOrderbook.resetVolumeDistribution();
     }
 
+    /**
+     * Zeroes the virtual orderbook AND enables sticky-clear so any future array shift
+     * also fills with zero. See {@link VirtualOrderbook#clearVolume()}.
+     */
+    public void clearVirtualVolume()
+    {
+        virtualOrderbook.clearVolume();
+    }
+
+    /**
+     * Direct setter for the sticky-clear flag on the underlying {@link VirtualOrderbook}.
+     * Used by ServerMarket to re-sync the flag after loading persisted settings.
+     */
+    public void setVirtualCleared(boolean cleared)
+    {
+        virtualOrderbook.setCleared(cleared);
+    }
+
+    /**
+     * Direct setter for the runtime "disabled" flag on the underlying {@link VirtualOrderbook}.
+     * Used by ServerMarket to keep the source-gated flag in sync with
+     * {@link net.kroia.stockmarket.stockmarket.market.MarketSettings#virtualOrderbookEnabled}.
+     * When disabled, every VO read returns 0 and every write is dropped.
+     */
+    public void setVirtualDisabled(boolean disabled)
+    {
+        virtualOrderbook.setDisabled(disabled);
+    }
+
     public void setCurrentMarketPrice(long currentMarketPrice)
     {
         this.currentMarketPrice = currentMarketPrice;

@@ -66,6 +66,15 @@ public class MarketPreset {
     private JsonObject components;
     private float defaultPrice;
     private float naturalAbundance;
+    // When false, markets created from this preset are constructed with a disabled
+    // virtual orderbook (see {@link net.kroia.stockmarket.stockmarket.market.MarketSettings#virtualOrderbookEnabled}).
+    // Defaults to true so presets serialized before this field existed continue to
+    // create fully-featured markets.
+    private boolean orderbookEnabled = true;
+    // When true, markets created from this preset are excluded from the plugin
+    // autosubscribe pass — admins can still subscribe them manually later. Defaults
+    // to false so legacy presets keep the old "autosubscribe all" behaviour.
+    private boolean ignorePluginAutosubscribe = false;
 
     // Cached ItemStack, rebuilt on first access — not serialized by Gson
     private transient ItemStack cachedItemStack;
@@ -85,22 +94,33 @@ public class MarketPreset {
         this.components = null;
         this.defaultPrice = 0;
         this.naturalAbundance = 0;
+        this.orderbookEnabled = true;
     }
 
     // Constructor for simple items (no components) — backward compatible
     public MarketPreset(String itemId, float defaultPrice, float naturalAbundance) {
-        this.itemId = itemId;
-        this.components = null;
-        this.defaultPrice = defaultPrice;
-        this.naturalAbundance = naturalAbundance;
+        this(itemId, null, defaultPrice, naturalAbundance, true);
     }
 
-    // Full constructor with optional component data
+    // Overload with optional component data — backward compatible (orderbookEnabled defaults to true)
     public MarketPreset(String itemId, @Nullable JsonObject components, float defaultPrice, float naturalAbundance) {
+        this(itemId, components, defaultPrice, naturalAbundance, true, false);
+    }
+
+    // Overload including the orderbookEnabled flag (ignorePluginAutosubscribe defaults to false)
+    public MarketPreset(String itemId, @Nullable JsonObject components, float defaultPrice, float naturalAbundance, boolean orderbookEnabled) {
+        this(itemId, components, defaultPrice, naturalAbundance, orderbookEnabled, false);
+    }
+
+    // Full constructor including both flag fields
+    public MarketPreset(String itemId, @Nullable JsonObject components, float defaultPrice, float naturalAbundance,
+                        boolean orderbookEnabled, boolean ignorePluginAutosubscribe) {
         this.itemId = itemId;
         this.components = components;
         this.defaultPrice = defaultPrice;
         this.naturalAbundance = naturalAbundance;
+        this.orderbookEnabled = orderbookEnabled;
+        this.ignorePluginAutosubscribe = ignorePluginAutosubscribe;
     }
 
     // ===== Accessors (named to match the old record accessor style) =====
@@ -108,6 +128,19 @@ public class MarketPreset {
     public String getItemId()            { return itemId; }
     public float getDefaultPrice()       { return defaultPrice; }
     public float getNaturalAbundance()   { return naturalAbundance; }
+    /**
+     * Whether markets created from this preset should have their virtual orderbook
+     * enabled. Defaults to true when absent from persisted JSON (see field Javadoc).
+     */
+    public boolean isOrderbookEnabled()  { return orderbookEnabled; }
+    public void setOrderbookEnabled(boolean value) { this.orderbookEnabled = value; }
+
+    /**
+     * Whether markets created from this preset should be skipped by the plugin
+     * autosubscribe pass. Defaults to false when absent from persisted JSON.
+     */
+    public boolean isIgnorePluginAutosubscribe() { return ignorePluginAutosubscribe; }
+    public void setIgnorePluginAutosubscribe(boolean value) { this.ignorePluginAutosubscribe = value; }
     @Nullable
     public JsonObject components()    { return components; }
     public boolean hasComponents()    { return components != null && components.size() > 0; }
@@ -340,6 +373,10 @@ public class MarketPreset {
             ByteBufCodecs.FLOAT.encode(buf, preset.defaultPrice);
             ByteBufCodecs.FLOAT.encode(buf, preset.naturalAbundance);
             ByteBufCodecs.SHORT.encode(buf, preset.registeredItemIDShort);
+            // Appended at the end of the composite so old clients decoding a new-format
+            // buffer would fail cleanly rather than mis-decoding earlier fields.
+            ByteBufCodecs.BOOL.encode(buf, preset.orderbookEnabled);
+            ByteBufCodecs.BOOL.encode(buf, preset.ignorePluginAutosubscribe);
         }
 
         @Override
@@ -355,6 +392,8 @@ public class MarketPreset {
             float abundance = ByteBufCodecs.FLOAT.decode(buf);
             MarketPreset preset = new MarketPreset(id, comps, price, abundance);
             preset.registeredItemIDShort = ByteBufCodecs.SHORT.decode(buf);
+            preset.orderbookEnabled = ByteBufCodecs.BOOL.decode(buf);
+            preset.ignorePluginAutosubscribe = ByteBufCodecs.BOOL.decode(buf);
             return preset;
         }
     };

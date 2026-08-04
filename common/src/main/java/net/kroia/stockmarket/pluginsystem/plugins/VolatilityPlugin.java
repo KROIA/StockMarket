@@ -144,6 +144,11 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
         for (MarketInterface market : markets) {
             MarketData data = marketData.get(market.market.getMarketID());
             if (data == null) continue;
+            // The random-walk target price is only meaningful for markets whose
+            // virtual orderbook is enabled — the downstream consumers (e.g.
+            // TargetPriceBot) also skip disabled markets, so producing a target
+            // here would be dead work.
+            if (!market.market.isVirtualOrderbookEnabled()) continue;
 
             // Each market advances its own random walk timer independently
             if (data.timer.check()) {

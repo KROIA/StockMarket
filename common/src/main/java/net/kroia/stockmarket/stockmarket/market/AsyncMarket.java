@@ -82,6 +82,8 @@ public class AsyncMarket implements IAsyncMarket{
         GetSettings,
         SetSettings,
         ResetNetPlayerItemFlow,
+        ResetVirtualOrderbook,
+        ClearVirtualOrderbook,
     }
 
 
@@ -113,6 +115,8 @@ public class AsyncMarket implements IAsyncMarket{
         put(FunctionType.GetSettings,                           codecPacket(null, MarketSettings.STREAM_CODEC));
         put(FunctionType.SetSettings,                           codecPacket(MarketSettings.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
         put(FunctionType.ResetNetPlayerItemFlow,               codecPacket(null, ByteBufCodecs.BOOL.cast()));
+        put(FunctionType.ResetVirtualOrderbook,                codecPacket(null, ByteBufCodecs.BOOL.cast()));
+        put(FunctionType.ClearVirtualOrderbook,                codecPacket(null, ByteBufCodecs.BOOL.cast()));
 
     }};
     /**
@@ -274,6 +278,24 @@ public class AsyncMarket implements IAsyncMarket{
                     market.resetNetPlayerItemFlow();
                     yield OutputData.of(input.function, true);
                 }
+                case FunctionType.ResetVirtualOrderbook -> {
+                    if(playerSender != null)
+                    {
+                        if(!isPlayerAdmin(playerSender))
+                            yield OutputData.of(input.function, false);
+                    }
+                    market.resetVirtualOrderbook();
+                    yield OutputData.of(input.function, true);
+                }
+                case FunctionType.ClearVirtualOrderbook -> {
+                    if(playerSender != null)
+                    {
+                        if(!isPlayerAdmin(playerSender))
+                            yield OutputData.of(input.function, false);
+                    }
+                    market.clearVirtualOrderbook();
+                    yield OutputData.of(input.function, true);
+                }
             });
         }
         @Override
@@ -295,7 +317,9 @@ public class AsyncMarket implements IAsyncMarket{
                      //FunctionType.GetCurrentMarketPriceStructAndReset,
                      FunctionType.GetSettings,
                      FunctionType.SetSettings,
-                     FunctionType.ResetNetPlayerItemFlow
+                     FunctionType.ResetNetPlayerItemFlow,
+                     FunctionType.ResetVirtualOrderbook,
+                     FunctionType.ClearVirtualOrderbook
                      -> true;
 
                 default -> false;
@@ -630,6 +654,41 @@ public class AsyncMarket implements IAsyncMarket{
             return CompletableFuture.completedFuture(false);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         InputData inputData = InputData.of(FunctionType.ResetNetPlayerItemFlow, itemID);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
+    }
+
+    /**
+     * Client / slave entry point for clearing the virtual orderbook of this market.
+     * Mirrors {@link #resetNetPlayerItemFlowAsync()}: the request is dispatched
+     * through the same admin-gated {@link Request}/{@link FunctionType} channel and
+     * resolves once the master has applied the change (or denied the call).
+     */
+    @Override
+    public CompletableFuture<Boolean> resetVirtualOrderbookAsync()
+    {
+        if(!MultiServerUtils.canInteractWithStockMarket())
+            return CompletableFuture.completedFuture(false);
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.ResetVirtualOrderbook, itemID);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
+    }
+
+    /**
+     * Client / slave entry point for the sticky-clear operation. Mirrors
+     * {@link #resetVirtualOrderbookAsync()} end-to-end but routes through the
+     * distinct {@link FunctionType#ClearVirtualOrderbook} channel.
+     */
+    @Override
+    public CompletableFuture<Boolean> clearVirtualOrderbookAsync()
+    {
+        if(!MultiServerUtils.canInteractWithStockMarket())
+            return CompletableFuture.completedFuture(false);
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.ClearVirtualOrderbook, itemID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;

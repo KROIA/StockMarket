@@ -328,7 +328,8 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
                     && order.getStartPrice() == startPrice
                     && order.getTargetVolume() == targetVolume) {
                 orderbook.removeOrder(order);
-                unlockRemainingFunds(order);
+                // unlockRemainingFunds is now called inside onOrderCanceled (Fix 3),
+                // so we no longer invoke it here — that would double-unlock.
                 onOrderCanceled(order);
                 return true;
             }
@@ -411,7 +412,8 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         for (Order order : limitOrders) {
             if (order.isBotOrder()) continue;
             orderbook.removeOrder(order);
-            unlockRemainingFunds(order);
+            // unlockRemainingFunds is now called inside onOrderCanceled (Fix 3),
+            // so we no longer invoke it here — that would double-unlock.
             onOrderCanceled(order);
             cancelledCount++;
         }
@@ -477,6 +479,61 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         resetNetPlayerItemFlow();
         return CompletableFuture.completedFuture(true);
     }
+
+    /**
+     * @return whether the virtual orderbook is enabled for this market
+     * (mirrors {@link MarketSettings#virtualOrderbookEnabled}).
+     */
+    public boolean isVirtualOrderbookEnabled()
+    {
+        return settings.virtualOrderbookEnabled;
+    }
+
+    /**
+     * Refills the virtual orderbook from the plugin-provided default volume distribution
+     * function AND clears the sticky-clear flag on the settings, so subsequent shift-fills
+     * repopulate normally again. Distinct from {@link #clearVirtualOrderbook()}, which
+     * zeroes everything and makes the shift-fill sticky at 0.
+     * <p>
+     * No-op when the VO subsystem is disabled — there is nothing to refill, and Clear/Reset
+     * from the client are already gated on the same flag (see MarketSettingsWidget).
+     */
+    @Override
+    public void resetVirtualOrderbook()
+    {
+        if (!settings.virtualOrderbookEnabled) return;
+        settings.virtualOrderbookCleared = false;
+        orderbook.setVirtualCleared(false);
+        orderbook.resetVirtualVolumeDistribution();
+    }
+    @Override
+    public CompletableFuture<Boolean> resetVirtualOrderbookAsync()
+    {
+        resetVirtualOrderbook();
+        return CompletableFuture.completedFuture(true);
+    }
+
+    /**
+     * Zeros every price level in the virtual orderbook AND sets the sticky-clear flag so
+     * any newly-visible slot introduced by a later array shift also lands at 0. Persisted
+     * via {@link MarketSettings#virtualOrderbookCleared} so the state survives restarts.
+     */
+    @Override
+    public void clearVirtualOrderbook()
+    {
+        // No-op when the VO subsystem is disabled — the array is already zero and the
+        // sticky-clear flag is a semantically-separate admin decision that should only
+        // apply while the subsystem is active.
+        if (!settings.virtualOrderbookEnabled) return;
+        settings.virtualOrderbookCleared = true;
+        orderbook.clearVirtualVolume();
+    }
+    @Override
+    public CompletableFuture<Boolean> clearVirtualOrderbookAsync()
+    {
+        clearVirtualOrderbook();
+        return CompletableFuture.completedFuture(true);
+    }
     @Override
     public CompletableFuture<MarketSettings> getSettingsAsync()
     {
@@ -490,10 +547,35 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     @Override
     public void setSettings(MarketSettings settings)
     {
+        // Detect the enabled→disabled transition BEFORE we overwrite the field so we
+        // can zero the array on the way in. When the subsystem is re-enabled later,
+        // plugins re-populate on their next tick (they gate on isVirtualOrderbookEnabled).
+        boolean wasEnabled = this.settings.virtualOrderbookEnabled;
+        boolean willBeEnabled = settings.virtualOrderbookEnabled;
+
         this.settings.marketOpen = settings.marketOpen;
         this.settings.defaultPrice = settings.defaultPrice;
         this.settings.naturalAbundance = settings.naturalAbundance;
+        this.settings.virtualOrderbookEnabled = settings.virtualOrderbookEnabled;
+        // Sticky-clear is persisted; propagate the incoming value and keep the
+        // VirtualOrderbook runtime flag in sync so shift-fill immediately observes it.
+        this.settings.virtualOrderbookCleared = settings.virtualOrderbookCleared;
+        orderbook.setVirtualCleared(settings.virtualOrderbookCleared);
+        // Keep the runtime "disabled" flag on the VirtualOrderbook in sync with the
+        // enabled setting (inverted). Source-gate approach: this single flag makes all
+        // VO reads return 0 and drops all writes.
+        orderbook.setVirtualDisabled(!willBeEnabled);
+        this.settings.ignorePluginAutosubscribe = settings.ignorePluginAutosubscribe;
         // netPlayerItemFlow is intentionally not copied from client settings
+
+        // Transition-zero on enable→disable: task 4 requires that the VO stays empty
+        // while disabled so persisted state is consistent. Zero the array (WITHOUT
+        // touching the sticky-clear flag — that's a separate admin decision) by
+        // triggering the default-value refill, which now yields 0 for every slot
+        // because the disabled flag routes getDefaultVolume through the zero path.
+        if (wasEnabled && !willBeEnabled) {
+            orderbook.resetVirtualVolumeDistribution();
+        }
     }
     @Override
     public CompletableFuture<Boolean> setSettingsAsync(MarketSettings settings)
@@ -548,12 +630,27 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     }
 
     /**
-     * Gets called when the provided order has been canceled
-     * It may be partially filled
+     * Gets called when the provided order has been canceled.
+     * It may be partially filled.
+     * <p>
+     * Fix 3: previously this path skipped {@link #unlockRemainingFunds(Order)}, which
+     * silently leaked the buyer's reserved money or seller's reserved items back into
+     * BankSystem's locked pool when a market order could not be fully filled (empty
+     * opposing side + no virtual liquidity). The matching engine already routes
+     * unfilled market orders through {@code orderCanceled} in {@code commitSell} /
+     * {@code commitBuy}, so the fix is to actually release the reservation here — the
+     * same path a user-initiated cancel takes for a resting limit order.
+     * <p>
+     * {@code unlockRemainingFunds} is safe to call for market orders: for sells it
+     * unlocks {@code -remainingVolume} items (0 when fully filled → no-op); for buys
+     * it unlocks {@code targetLocked - alreadySpent} money (0 when fully filled → no-op).
+     * So a partial fill followed by cancel-remainder releases exactly the unfilled
+     * remainder's reservation.
      * @param order the canceled order
      */
     private void onOrderCanceled(Order order)
     {
+        unlockRemainingFunds(order);
         trackPlayerNetFlow(order);
         saveOrderRecord(order);
     }
@@ -613,8 +710,16 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
                 warn("Cannot unlock money for cancelled buy order: money bank not found for account " + order.getBankAccountNr());
                 return;
             }
-            // Total originally locked = ceil(targetVolume * startPrice / SF), matching CreateOrderRequest lock formula
-            long totalLocked = (long)Math.ceil((double)order.getTargetVolume() * order.getStartPrice() / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
+            // Prefer the stashed CreateOrderRequest reservation. For MARKET buy orders
+            // the "targetVolume * startPrice / SF" formula yields 0 (startPrice is 0),
+            // which caused the pre-fix partial-fill money leak. The stash is populated
+            // in CreateOrderRequest after the successful lockAmount call; falls back to
+            // the price formula for legacy orders (e.g. deserialized from NBT) that
+            // pre-date this field or bot-placed orders where the stash isn't set.
+            long stashed = order.getOriginalLockedMoney();
+            long totalLocked = stashed > 0
+                    ? stashed
+                    : (long)Math.ceil((double)order.getTargetVolume() * order.getStartPrice() / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
             // transferredMoney is negative for buy orders (money spent); absolute value = already withdrawn from locked
             long alreadySpent = -order.getTransferredMoney();
             long toUnlock = totalLocked - alreadySpent;
@@ -675,6 +780,12 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         tag.putLong("defaultPrice", settings.defaultPrice);
         tag.putFloat("naturalAbundance", settings.naturalAbundance);
         tag.putLong("netPlayerItemFlow", netPlayerItemFlow);
+        // Persist the new preset-derived flags so restarts keep the admin's intent.
+        // Reads on the load side are guarded with contains() so old NBT still loads
+        // with the field defaults (true / false / false respectively).
+        tag.putBoolean("virtualOrderbookEnabled", settings.virtualOrderbookEnabled);
+        tag.putBoolean("virtualOrderbookCleared", settings.virtualOrderbookCleared);
+        tag.putBoolean("ignorePluginAutosubscribe", settings.ignorePluginAutosubscribe);
 
         return success;
     }
@@ -710,6 +821,23 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         {
             netPlayerItemFlow = tag.getLong("netPlayerItemFlow");
         }
+        if(tag.contains("virtualOrderbookEnabled"))
+        {
+            settings.virtualOrderbookEnabled = tag.getBoolean("virtualOrderbookEnabled");
+        }
+        if(tag.contains("virtualOrderbookCleared"))
+        {
+            settings.virtualOrderbookCleared = tag.getBoolean("virtualOrderbookCleared");
+        }
+        if(tag.contains("ignorePluginAutosubscribe"))
+        {
+            settings.ignorePluginAutosubscribe = tag.getBoolean("ignorePluginAutosubscribe");
+        }
+        // Sync the runtime flags on the VirtualOrderbook with the loaded persisted state.
+        // These flags live in memory only on VirtualOrderbook — the settings are the
+        // source of truth across restarts.
+        orderbook.setVirtualCleared(settings.virtualOrderbookCleared);
+        orderbook.setVirtualDisabled(!settings.virtualOrderbookEnabled);
 
         // Initialize candle state from loaded price to prevent false spike on first candle
         candleOpenPrice = currentMarketPrice;

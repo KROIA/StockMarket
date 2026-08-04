@@ -562,6 +562,12 @@ public class PresetEditorTab extends StockMarketGuiElement {
         private final TextBox priceTextBox;
         private final Label abundanceLabel;
         private final TextBox abundanceTextBox;
+        // Toggles MarketPreset.orderbookEnabled — propagates into MarketSettings.virtualOrderbookEnabled
+        // when a market is created from this preset.
+        private final CheckBox orderbookEnabledCheckBox;
+        // Toggles MarketPreset.ignorePluginAutosubscribe — propagates into MarketSettings so the
+        // ServerPluginManager skips this market in autoSubscribeNewMarket.
+        private final CheckBox ignoreAutosubscribeCheckBox;
         private final Button removeButton;
         private final MarketPreset originalPreset;
         private final String presetKey;
@@ -601,9 +607,38 @@ public class PresetEditorTab extends StockMarketGuiElement {
             abundanceTextBox.setText(formatFloat(currentAbundance));
             abundanceTextBox.setOnTextChanged(this::onAbundanceChanged);
 
+            orderbookEnabledCheckBox = new CheckBox(Component.translatable(
+                    "gui." + StockMarketMod.MOD_ID + ".preset_editor_tab.orderbook_enabled").getString(),
+                    this::onOrderbookEnabledChanged);
+            orderbookEnabledCheckBox.setHoverTooltipSupplier(() ->
+                    Component.translatable("gui." + StockMarketMod.MOD_ID + ".preset_editor_tab.orderbook_enabled.tooltip").getString());
+            orderbookEnabledCheckBox.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
+            // Anchor the tooltip's TOP-RIGHT corner at the mouse so it renders to the LEFT
+            // of the cursor — the checkboxes sit near the right edge of the row and a
+            // default (top-left) anchor would push the tooltip off the visible area.
+            orderbookEnabledCheckBox.setHoverTooltipMousePositionAlignment(Alignment.TOP_RIGHT);
+
+            ignoreAutosubscribeCheckBox = new CheckBox(Component.translatable(
+                    "gui." + StockMarketMod.MOD_ID + ".preset_editor_tab.ignore_plugin_autosubscribe").getString(),
+                    this::onIgnoreAutosubscribeChanged);
+            // Initialize both checked states only after both fields are non-null:
+            // setChecked fires the change listener → writeBack() reads both boxes.
+            orderbookEnabledCheckBox.setChecked(preset.isOrderbookEnabled());
+            ignoreAutosubscribeCheckBox.setChecked(preset.isIgnorePluginAutosubscribe());
+            ignoreAutosubscribeCheckBox.setHoverTooltipSupplier(() ->
+                    Component.translatable("gui." + StockMarketMod.MOD_ID + ".preset_editor_tab.ignore_plugin_autosubscribe.tooltip").getString());
+            ignoreAutosubscribeCheckBox.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
+            ignoreAutosubscribeCheckBox.setHoverTooltipMousePositionAlignment(Alignment.TOP_RIGHT);
+
             removeButton = new Button("x", () -> removePresetFromCategory(originalPreset));
             removeButton.setBackgroundColor(0xFFe8711c);
             removeButton.setHoverColor(0xFFe04c12);
+            // Tooltip clarifies the destructive action — anchor at TOP_RIGHT so it
+            // renders to the LEFT of the cursor (the button sits at the row's far right).
+            removeButton.setHoverTooltipSupplier(() ->
+                    Component.translatable("gui." + StockMarketMod.MOD_ID + ".preset_editor_tab.remove_preset.tooltip").getString());
+            removeButton.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
+            removeButton.setHoverTooltipMousePositionAlignment(Alignment.TOP_RIGHT);
 
             addChild(itemView);
             addChild(nameLabel);
@@ -611,25 +646,44 @@ public class PresetEditorTab extends StockMarketGuiElement {
             addChild(priceTextBox);
             addChild(abundanceLabel);
             addChild(abundanceTextBox);
+            addChild(orderbookEnabledCheckBox);
+            addChild(ignoreAutosubscribeCheckBox);
             addChild(removeButton);
 
             setHeight(24);
+        }
+
+        private void writeBack(float price, float abundance) {
+            editedPresets.put(presetKey, new MarketPreset(
+                    originalPreset.getItemId(), originalPreset.components(), price, abundance,
+                    orderbookEnabledCheckBox.isChecked(),
+                    ignoreAutosubscribeCheckBox.isChecked()));
         }
 
         private void onPriceChanged(String text) {
             float price = parseFloat(text, -1f);
             if (price < 0) return;
             float abundance = parseFloat(abundanceTextBox.getText(), originalPreset.getNaturalAbundance());
-            editedPresets.put(presetKey, new MarketPreset(
-                    originalPreset.getItemId(), originalPreset.components(), price, abundance));
+            writeBack(price, abundance);
         }
 
         private void onAbundanceChanged(String text) {
             float abundance = parseFloat(text, -1f);
             if (abundance < 0) return;
             float price = parseFloat(priceTextBox.getText(), originalPreset.getDefaultPrice());
-            editedPresets.put(presetKey, new MarketPreset(
-                    originalPreset.getItemId(), originalPreset.components(), price, abundance));
+            writeBack(price, abundance);
+        }
+
+        private void onOrderbookEnabledChanged(Boolean enabled) {
+            float price = parseFloat(priceTextBox.getText(), originalPreset.getDefaultPrice());
+            float abundance = parseFloat(abundanceTextBox.getText(), originalPreset.getNaturalAbundance());
+            writeBack(price, abundance);
+        }
+
+        private void onIgnoreAutosubscribeChanged(Boolean ignored) {
+            float price = parseFloat(priceTextBox.getText(), originalPreset.getDefaultPrice());
+            float abundance = parseFloat(abundanceTextBox.getText(), originalPreset.getNaturalAbundance());
+            writeBack(price, abundance);
         }
 
         @Override
@@ -643,22 +697,58 @@ public class PresetEditorTab extends StockMarketGuiElement {
             int iconSize = 16;
             int fieldHeight = h - 2;
             int removeBtnSize = 16;
+            int baseCheckboxWidth = 20;
 
-            int nameLabelWidth = w / 4;
+            // Task 1 shrink pass: item name / price / abundance were dominating the row,
+            // leaving the two flag checkboxes squashed against each other. Halve the name
+            // label and cut the price / abundance text boxes to 1/3 and 1/4 of their
+            // previous share, then hand the freed pixels to the checkbox slots so their
+            // hit targets grow proportionally.
+            //
+            // "Previous share" for the text boxes is what the old formula would have
+            // produced (see the pre-shrink baseline in fieldWidthOld below); computing it
+            // explicitly avoids drift if the surrounding widths change again later.
+            // Bumped from w/8 → w/5: gives the item name a bit more breathing room
+            // now that the two checkbox labels are longer ("Virtual Orderbook" /
+            // "No Plugin Autosubscribe") and the checkbox widths shrunk accordingly.
+            int nameLabelWidth = w / 5;
             int priceLabelWidth = 50;
             int abundanceLabelWidth = 65;
-            int fieldWidth = (w - iconSize - nameLabelWidth - priceLabelWidth - abundanceLabelWidth - removeBtnSize - 6 * spacing) / 2;
+
+            int fieldWidthOld = (w - iconSize - (w / 4) - priceLabelWidth - abundanceLabelWidth
+                    - 2 * baseCheckboxWidth - removeBtnSize - 8 * spacing) / 2;
+            int priceFieldWidth = Math.max(20, fieldWidthOld / 3);         // 1/3 of previous
+            int abundanceFieldWidth = Math.max(20, fieldWidthOld / 4);     // 1/4 of previous
+
+            int reservedFixed = iconSize + nameLabelWidth + priceLabelWidth + priceFieldWidth
+                    + abundanceLabelWidth + abundanceFieldWidth + removeBtnSize + 8 * spacing;
+            int checkboxTotal = Math.max(2 * baseCheckboxWidth, w - reservedFixed);
+            // 40/60 split: "Virtual Orderbook" is shorter than "No Plugin Autosubscribe",
+            // so give the ignore-autosubscribe box the larger slot.
+            int orderbookCheckboxWidth = Math.max(baseCheckboxWidth, Math.round(checkboxTotal * 0.4f));
+            int autosubCheckboxWidth = Math.max(baseCheckboxWidth, checkboxTotal - orderbookCheckboxWidth);
 
             itemView.setBounds(padding, (h - iconSize) / 2, iconSize, iconSize);
             nameLabel.setBounds(itemView.getRight() + spacing, 1, nameLabelWidth, fieldHeight);
 
             priceLabel.setBounds(nameLabel.getRight() + spacing, 1, priceLabelWidth, fieldHeight);
-            priceTextBox.setBounds(priceLabel.getRight() + spacing, 1, fieldWidth, fieldHeight);
+            priceTextBox.setBounds(priceLabel.getRight() + spacing, 1, priceFieldWidth, fieldHeight);
 
             abundanceLabel.setBounds(priceTextBox.getRight() + spacing, 1, abundanceLabelWidth, fieldHeight);
-            abundanceTextBox.setBounds(abundanceLabel.getRight() + spacing, 1, fieldWidth, fieldHeight);
+            abundanceTextBox.setBounds(abundanceLabel.getRight() + spacing, 1, abundanceFieldWidth, fieldHeight);
 
-            removeButton.setBounds(abundanceTextBox.getRight() + spacing, (h - removeBtnSize) / 2, removeBtnSize, removeBtnSize);
+            // Fix 2: checkbox HEIGHT must match the row's fieldHeight (same as price /
+            // abundance textboxes). Passing checkboxWidth for both dimensions made the
+            // widget interpret the box height as proportional to its width, which blew
+            // up the whole row when the freed pixels went to the width. Only the WIDTH
+            // is the variable dimension here — height stays fixed to the row.
+            orderbookEnabledCheckBox.setBounds(abundanceTextBox.getRight() + spacing, 1,
+                    orderbookCheckboxWidth, fieldHeight);
+
+            ignoreAutosubscribeCheckBox.setBounds(orderbookEnabledCheckBox.getRight() + spacing, 1,
+                    autosubCheckboxWidth, fieldHeight);
+
+            removeButton.setBounds(ignoreAutosubscribeCheckBox.getRight() + spacing, (h - removeBtnSize) / 2, removeBtnSize, removeBtnSize);
         }
     }
 

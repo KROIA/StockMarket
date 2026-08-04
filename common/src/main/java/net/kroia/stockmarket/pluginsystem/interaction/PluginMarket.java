@@ -124,6 +124,24 @@ public class PluginMarket implements IPluginMarket
         return serverMarket.isMarketOpen();
     }
 
+    /** {@inheritDoc} Delegates to the underlying {@link net.kroia.stockmarket.stockmarket.market.MarketSettings#virtualOrderbookEnabled} flag. */
+    @Override
+    public boolean isVirtualOrderbookEnabled() {
+        return serverMarket.getSettings().virtualOrderbookEnabled;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void clearVirtualOrderbook() {
+        serverMarket.clearVirtualOrderbook();
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void resetVirtualOrderbook() {
+        serverMarket.resetVirtualOrderbook();
+    }
+
     @Override
     public float getCurrentCandleTradedVolume() {
         return serverMarket.getCurrentCandleTradedVolume();

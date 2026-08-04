@@ -128,6 +128,18 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
             long defaultPrice = (preset != null) ? MarketManager.convertToRawAmountStatic(preset.getDefaultPrice()) : 1000;
             float abundance = (preset != null) ? preset.getNaturalAbundance() : 10f;
             m = new ServerMarket(marketID, null, defaultPrice, abundance);
+            // Propagate the preset's orderbookEnabled flag into the market's live settings.
+            // Presets without the flag (legacy JSON) default to true via MarketPreset's field
+            // default, matching the pre-existing behaviour for old markets.
+            if (preset != null) {
+                m.getSettings().virtualOrderbookEnabled = preset.isOrderbookEnabled();
+                m.getSettings().ignorePluginAutosubscribe = preset.isIgnorePluginAutosubscribe();
+                // Sync the runtime "disabled" flag on the underlying VirtualOrderbook so
+                // a preset-disabled market immediately behaves as empty in the matching
+                // engine — otherwise the flag would only take effect after the next
+                // setSettings() call.
+                m.getOrderbook().setVirtualDisabled(!preset.isOrderbookEnabled());
+            }
             m.setMarketClosedCallback(this::cancelInterMarketOrdersForMarket);
             markets.put(marketID, m);
 

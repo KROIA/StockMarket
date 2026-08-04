@@ -305,6 +305,23 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
     @Override
     public void autoSubscribeNewMarket(ItemID marketID)
     {
+        // Respect the per-market "ignore autosubscribe" opt-out: presets can flag markets
+        // that should never be automatically added to plugins on creation. Admins can
+        // still manually subscribe them later via the plugin management screen.
+        if (BACKEND_INSTANCES != null && BACKEND_INSTANCES.MARKET_MANAGER != null)
+        {
+            var marketManager = BACKEND_INSTANCES.MARKET_MANAGER.getSync();
+            if (marketManager != null)
+            {
+                var market = marketManager.getMarket(marketID);
+                if (market != null && market.getSettings() != null
+                        && market.getSettings().ignorePluginAutosubscribe)
+                {
+                    return;
+                }
+            }
+        }
+
         List<ServerPlugin> sorted = new ArrayList<>(plugins.values());
         sorted.sort(Comparator.comparingInt(ServerPlugin::getSubscriptionOrder));
         for (ServerPlugin plugin : sorted)

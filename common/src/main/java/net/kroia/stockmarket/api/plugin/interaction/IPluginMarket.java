@@ -162,6 +162,26 @@ public interface IPluginMarket {
     boolean isMarketOpen();
 
     /**
+     * Whether the virtual orderbook is enabled for this market. When false, plugins that
+     * write to or read from the virtual orderbook should skip this market entirely.
+     */
+    boolean isVirtualOrderbookEnabled();
+
+    /**
+     * Zeros the virtual orderbook AND makes the shift-fill provider return 0 for every
+     * price level (sticky through subsequent price moves). Distinct from
+     * {@link #resetVirtualOrderbook()} — clearing survives array shifts until an explicit
+     * reset undoes it.
+     */
+    void clearVirtualOrderbook();
+
+    /**
+     * Refills the virtual orderbook from the default volume distribution function AND
+     * drops the sticky-clear flag so subsequent shift-fills repopulate normally again.
+     */
+    void resetVirtualOrderbook();
+
+    /**
      * Gets the accumulated traded volume for the current price candle.
      * Resets when a new candle starts.
      * @return the traded volume for the current candle

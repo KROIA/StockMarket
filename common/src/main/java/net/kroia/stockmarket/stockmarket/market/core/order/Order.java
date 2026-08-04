@@ -53,6 +53,16 @@ public class Order implements ServerSaveable
                                 //   Negative value -> buy order.
                                 //   Positive value -> sell order.
 
+    // The raw money amount CreateOrderRequest locked in the buyer's money bank at
+    // placement time. For MARKET buy orders the reservation is computed from the
+    // CURRENT market price (which we don't preserve on the Order itself), so the
+    // "targetVolume * startPrice / SF" formula in ServerMarket.unlockRemainingFunds
+    // yields 0 (startPrice is 0 for market orders) and the refund path early-returns.
+    // Populated by CreateOrderRequest after a successful lockAmount call; consumed by
+    // ServerMarket.unlockRemainingFunds. Non-persistent: market orders never outlive
+    // the tick they're placed in; limit orders can recompute from startPrice.
+    transient long originalLockedMoney = 0L;
+
 
     /**
      * ----------------------------------------------
@@ -212,6 +222,30 @@ public class Order implements ServerSaveable
     public long getTransferredMoney()
     {
         return transferredMoney;
+    }
+
+    /**
+     * @return the money amount CreateOrderRequest locked in the buyer's money bank at
+     *         placement time, or 0 if never set (e.g. bot orders, sell orders, orders
+     *         constructed outside CreateOrderRequest). Callers should treat 0 as
+     *         "unknown — fall back to the price×volume formula" (see
+     *         {@code ServerMarket.unlockRemainingFunds}).
+     */
+    public long getOriginalLockedMoney()
+    {
+        return originalLockedMoney;
+    }
+
+    /**
+     * Records the raw money amount locked at placement time. Called by
+     * CreateOrderRequest after a successful {@code moneyBank.lockAmount(...)} so the
+     * cancel-remainder refund path can compute the correct unlock amount for MARKET
+     * buy orders (whose {@code startPrice} is 0 and cannot be used to back-compute
+     * the reservation).
+     */
+    public void setOriginalLockedMoney(long value)
+    {
+        this.originalLockedMoney = value;
     }
 
     public long getAverageExecutionPrice()
