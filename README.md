@@ -565,14 +565,6 @@ The base price a market's random walk oscillates around.
 With player flow influence enabled, it shifts permanently with the cumulative net amount of items players traded on that market: net selling lowers it, net buying raises it.
 
 
-
-### PID-Controller
-Since this is a complex field from control theory, I will not cover this here.
-[PID Controller Wikipedia](https://en.wikipedia.org/wiki/Proportional%E2%80%93integral%E2%80%93derivative_controller)
-<div align="center">
-    <img src="https://upload.wikimedia.org/wikipedia/commons/4/43/PID_en.svg" width=500> 
-</div>
-
 ---
 
 ## Changelog
