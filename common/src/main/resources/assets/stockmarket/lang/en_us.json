@@ -303,6 +303,8 @@
   "gui.stockmarket.preset_editor_tab.abundance_tooltip": "How common the item is in nature.\nHigher values = more common (e.g. dirt: 200)\nLower values = more rare (e.g. diamond: 5)\nAffects trading volume and liquidity.\nMust be greater than 0. Typical range: 0.5 - 200",
   "gui.stockmarket.preset_editor_tab.saved_ok": "Presets saved successfully",
   "gui.stockmarket.preset_editor_tab.save_failed": "Failed to save presets",
+  "gui.stockmarket.preset_editor.add_from_inventory": "+ From Inventory",
+  "gui.stockmarket.preset_editor.close_picker": "Close picker",
   "gui.stockmarket.mod_settings_screen.title": "Mod Settings",
   "gui.stockmarket.mod_settings_screen.apply": "Apply",
   "gui.stockmarket.mod_settings_screen.reload": "Reload",

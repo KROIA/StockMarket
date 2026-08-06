@@ -303,6 +303,8 @@
   "gui.stockmarket.preset_editor_tab.abundance_tooltip": "Wie hüfig s Item i de Natur isch.\nHöcheri Wärt = hüfiger (z. B. Ärde: 200)\nTüferi Wärt = sältener (z. B. Diamant: 5)\nBeiiflusst Handelsvolume und Liquidität.\nMuess grösser als 0 sii. Typische Bereich: 0.5 - 200",
   "gui.stockmarket.preset_editor_tab.saved_ok": "Voriistellige erfolgriich gspeicheret",
   "gui.stockmarket.preset_editor_tab.save_failed": "Speichere vo de Voriistellige fählgschlage",
+  "gui.stockmarket.preset_editor.add_from_inventory": "+ Us em Inventar",
+  "gui.stockmarket.preset_editor.close_picker": "Uswahl zuemache",
   "gui.stockmarket.mod_settings_screen.title": "Mod-Iistellige",
   "gui.stockmarket.mod_settings_screen.apply": "Aawende",
   "gui.stockmarket.mod_settings_screen.reload": "Neu lade",

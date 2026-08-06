@@ -303,6 +303,8 @@
   "gui.stockmarket.preset_editor_tab.abundance_tooltip": "Wie häufig das Item in der Natur ist.\nHöhere Werte = häufiger (z. B. Erde: 200)\nNiedrigere Werte = seltener (z. B. Diamant: 5)\nBeeinflusst Handelsvolumen und Liquidität.\nMuss größer als 0 sein. Typischer Bereich: 0.5 - 200",
   "gui.stockmarket.preset_editor_tab.saved_ok": "Voreinstellungen erfolgreich gespeichert",
   "gui.stockmarket.preset_editor_tab.save_failed": "Speichern der Voreinstellungen fehlgeschlagen",
+  "gui.stockmarket.preset_editor.add_from_inventory": "+ Aus Inventar",
+  "gui.stockmarket.preset_editor.close_picker": "Auswahl schließen",
   "gui.stockmarket.mod_settings_screen.title": "Mod-Einstellungen",
   "gui.stockmarket.mod_settings_screen.apply": "Anwenden",
   "gui.stockmarket.mod_settings_screen.reload": "Neu laden",
