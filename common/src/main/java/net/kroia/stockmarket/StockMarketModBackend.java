@@ -134,6 +134,16 @@ public class StockMarketModBackend implements StockMarketAPI {
     private static ServerInstances SERVER_INSTANCES = null;
     private static ClientInstances CLIENT_INSTANCES = null;
 
+    /**
+     * @return the current client-side instances holder, or {@code null} if the
+     * client has not joined a world yet (or has already disconnected). Read-only
+     * accessor for static helpers that need to reach the cached BankSystem API
+     * or the client managers without a per-caller setBackend() dance.
+     */
+    public static @Nullable ClientInstances getClientInstances() {
+        return CLIENT_INSTANCES;
+    }
+
     StockMarketModBackend()
     {
         COMMON_INSTANCES.LOGGER = new StockMarketLogger();

@@ -10,6 +10,7 @@ import net.kroia.modutilities.gui.elements.Label;
 import net.kroia.modutilities.gui.elements.TextBox;
 import net.kroia.modutilities.gui.elements.VerticalListView;
 import net.kroia.modutilities.gui.layout.LayoutGrid;
+import net.kroia.stockmarket.client.company.ShareVisualHelpers;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.minecraft.client.Minecraft;
@@ -247,7 +248,12 @@ public class FavoritesBar extends StockMarketGuiElement {
         marketGrid.removeChilds();
         String filter = searchField.getText().toLowerCase().trim();
         for (MarketFavoriteButton btn : allMarketButtons) {
+            // prefer company displayName if this ItemID is a stamped share (T-147)
+            String displayName = ShareVisualHelpers
+                    .getDisplayName(btn.getMarketID(), btn.getItemStack().getHoverName())
+                    .getString().toLowerCase();
             if (filter.isEmpty()
+                    || displayName.contains(filter)
                     || btn.getItemStack().getHoverName().getString().toLowerCase().contains(filter)
                     || ClientPlayerUtilities.getItemDisplayText(btn.getItemStack()).toLowerCase().contains(filter)) {
                 marketGrid.addChild(btn);

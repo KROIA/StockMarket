@@ -12,6 +12,7 @@ import net.kroia.modutilities.gui.elements.TabElement;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.networking.client_server.streaming.StreamSystem;
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.client.company.ShareVisualHelpers;
 import net.kroia.stockmarket.screen.uiElements.FavoritesBar;
 import net.kroia.stockmarket.screen.uiElements.OrderHistoryPanel;
 import net.kroia.stockmarket.screen.uiElements.PairSelectorWidget;
@@ -347,7 +348,8 @@ public class TradeScreen extends StockMarketGuiScreen {
                 market.subscribeToMarketPriceUpdate();
                 candlestickChart.setMarket(market);
                 orderMarkerOverlay.setCurrentMarket(currentMarketID);
-                tradingPanel.setItemName(currentMarketID.getStack().getHoverName().getString());
+                // prefer company displayName if this ItemID is a stamped share (T-147)
+                tradingPanel.setItemName(ShareVisualHelpers.getDisplayName(currentMarketID, currentMarketID.getStack().getHoverName()).getString());
                 tradingPanel.setLimitPrice(market.getCurrentMarketRealPrice());
                 // Mirror switchMarket's isMarketOpenAsync sync so the "Market Closed"
                 // banner appears immediately when the screen opens onto a closed market
@@ -741,7 +743,8 @@ public class TradeScreen extends StockMarketGuiScreen {
             market.subscribeToMarketPriceUpdate();
             candlestickChart.setMarket(market);
             orderMarkerOverlay.setCurrentMarket(newMarketID);
-            tradingPanel.setItemName(newMarketID.getStack().getHoverName().getString());
+            // prefer company displayName if this ItemID is a stamped share (T-147)
+            tradingPanel.setItemName(ShareVisualHelpers.getDisplayName(newMarketID, newMarketID.getStack().getHoverName()).getString());
             tradingPanel.setLimitPrice(market.getCurrentMarketRealPrice());
             tradingPanel.setCurrentMarketPrice(market.getCurrentMarketRealPrice());
 
@@ -1079,10 +1082,12 @@ public class TradeScreen extends StockMarketGuiScreen {
 
         // Update inter-market trading panel item names
         if (pairHaveMarketID != null) {
-            interMarketTradingPanel.setHaveItemName(pairHaveMarketID.getStack().getHoverName().getString());
+            // prefer company displayName if this ItemID is a stamped share (T-147)
+            interMarketTradingPanel.setHaveItemName(ShareVisualHelpers.getDisplayName(pairHaveMarketID, pairHaveMarketID.getStack().getHoverName()).getString());
         }
         if (pairWantMarketID != null) {
-            interMarketTradingPanel.setWantItemName(pairWantMarketID.getStack().getHoverName().getString());
+            // prefer company displayName if this ItemID is a stamped share (T-147)
+            interMarketTradingPanel.setWantItemName(ShareVisualHelpers.getDisplayName(pairWantMarketID, pairWantMarketID.getStack().getHoverName()).getString());
         }
     }
 
@@ -1110,7 +1115,8 @@ public class TradeScreen extends StockMarketGuiScreen {
             if (!isPairMode) {
                 orderMarkerOverlay.setCurrentMarket(newMarketID);
             }
-            tradingPanel.setItemName(newMarketID.getStack().getHoverName().getString());
+            // prefer company displayName if this ItemID is a stamped share (T-147)
+            tradingPanel.setItemName(ShareVisualHelpers.getDisplayName(newMarketID, newMarketID.getStack().getHoverName()).getString());
             tradingPanel.setLimitPrice(market.getCurrentMarketRealPrice());
             tradingPanel.setCurrentMarketPrice(market.getCurrentMarketRealPrice());
 
