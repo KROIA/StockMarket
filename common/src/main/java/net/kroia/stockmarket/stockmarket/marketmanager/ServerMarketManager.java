@@ -8,6 +8,7 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.modutilities.persistence.ServerSaveableChunked;
 import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.api.integration.MarketConfig;
 import net.kroia.stockmarket.api.market.IAsyncMarket;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
@@ -161,6 +162,55 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
     @Override
     public CompletableFuture<@Nullable IAsyncMarket> createMarketAsync(@NotNull ItemID marketID) {
         return CompletableFuture.completedFuture(createMarket(marketID));
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Preset-free counterpart to {@link #createMarket(ItemID)}: mirrors the same
+     * blacklist check, plugin auto-subscribe, {@code allowItemID} call, and
+     * settings plumbing, but reads price, abundance, and market flags from the
+     * supplied {@link MarketConfig} instead of any matching preset.
+     */
+    @Override
+    public @Nullable IServerMarket createMarketWithConfig(@NotNull ItemID marketID, @NotNull MarketConfig cfg)
+    {
+        if (markets.containsKey(marketID)) {
+            return null;
+        }
+
+        // Reject blacklisted items — same guard as createMarket(ItemID).
+        IServerBankManager bankManager = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync();
+        if (bankManager != null && bankManager.isItemIDBlacklisted(marketID)) {
+            warn("Cannot create market for blacklisted item: " + marketID);
+            return null;
+        }
+
+        long defaultPrice = MarketManager.convertToRawAmountStatic(cfg.defaultPrice());
+        float abundance = cfg.naturalAbundance();
+        ServerMarket m = new ServerMarket(marketID, null, defaultPrice, abundance);
+        m.getSettings().virtualOrderbookEnabled = cfg.virtualOrderbookEnabled();
+        m.getSettings().ignorePluginAutosubscribe = cfg.ignorePluginAutosubscribe();
+        // Sync the runtime "disabled" flag on the underlying VirtualOrderbook so
+        // a disabled market immediately behaves as empty in the matching engine.
+        m.getOrderbook().setVirtualDisabled(!cfg.virtualOrderbookEnabled());
+        m.setMarketClosedCallback(this::cancelInterMarketOrdersForMarket);
+        markets.put(marketID, m);
+
+        if (bankManager != null) {
+            bankManager.allowItemID(marketID);
+        }
+
+        // Auto-subscribe new market to plugins that opt in. The market's
+        // ignorePluginAutosubscribe flag (set above) is consulted inside
+        // autoSubscribeNewMarket, matching the preset-driven path exactly.
+        if (BACKEND_INSTANCES.PLUGIN_MANAGER != null) {
+            var pluginManager = BACKEND_INSTANCES.PLUGIN_MANAGER.getSync();
+            if (pluginManager != null) {
+                pluginManager.autoSubscribeNewMarket(marketID);
+            }
+        }
+        return m;
     }
 
 
