@@ -130,7 +130,16 @@ public class PairSelectorWidget extends StockMarketGuiElement {
      */
     public enum Sort { NAME, PRICE, SUPPLY_RATIO, VOLUME }
 
-    /** Session-static: which tab is currently active. Defaults to Commodities on first open. */
+    /**
+     * Session-static: which market group (Commodities vs Companies) is currently active.
+     * <p>
+     * T-155: this is now the SHARED filter state driven by the top-level
+     * Commodities/Companies segmented control owned by {@code TradeScreen}. Both the
+     * pair-mode dropdown (this widget) and money-mode {@link FavoritesBar} read it so
+     * the selected group persists across a mode switch. Defaults to Commodities on
+     * first open. Mutated via {@link #setActiveTab(Tab)} (from the shared control) and
+     * read via {@link #getActiveTab()}.
+     */
     private static Tab activeTab = Tab.COMMODITIES;
 
     /** Session-static: last sort choice per tab (so switching tabs restores its sort). */
@@ -232,17 +241,27 @@ public class PairSelectorWidget extends StockMarketGuiElement {
         dropdownFrame.setBackgroundColor(0xFF2a2a2a);  // dark opaque background for clear overlay
         dropdownFrame.setEnabled(false);
 
-        // T-146: category tab toggles at the top of the dropdown
+        // T-146: category tab toggles at the top of the dropdown.
+        // T-155: the Commodities/Companies split is now driven by a SHARED,
+        // top-level segmented control owned by TradeScreen (visible in both money
+        // and pair modes). These in-dropdown toggle buttons are therefore redundant
+        // and are disabled so they neither render nor consume input — otherwise two
+        // competing tab controls would exist. They are kept as fields (rather than
+        // removed) so the existing updateTabButtonLabels() bookkeeping stays valid;
+        // the shared control now owns the group selection. Only the Sort control
+        // below remains active inside the dropdown.
         commoditiesTabButton = new Button(
                 Component.translatable("gui.stockmarket.pair_selector.tab.commodities").getString(),
                 () -> setActiveTab(Tab.COMMODITIES));
         commoditiesTabButton.setTextFontScale(0.7f);
+        commoditiesTabButton.setEnabled(false);
         dropdownFrame.addChild(commoditiesTabButton);
 
         companiesTabButton = new Button(
                 Component.translatable("gui.stockmarket.pair_selector.tab.companies").getString(),
                 () -> setActiveTab(Tab.COMPANIES));
         companiesTabButton.setTextFontScale(0.7f);
+        companiesTabButton.setEnabled(false);
         dropdownFrame.addChild(companiesTabButton);
 
         // T-146: sort cycle button — label is refreshed by updateSortButtonLabel()
@@ -514,10 +533,26 @@ public class PairSelectorWidget extends StockMarketGuiElement {
     }
 
     /**
-     * Switches the active tab, persists the choice for the rest of the session,
-     * and repopulates the dropdown. No-op if the dropdown is closed.
+     * @return the shared active market group (Commodities vs Companies).
+     *         T-155: read by the top-level segmented control (TradeScreen) to
+     *         initialize its highlighted state, and by {@link FavoritesBar}.
      */
-    private void setActiveTab(Tab tab) {
+    public static Tab getActiveTab() {
+        return activeTab;
+    }
+
+    /**
+     * Switches the active market group and persists the choice for the rest of the
+     * session, then repopulates the open dropdown so the pair-mode list reflects the
+     * new group. When the dropdown is closed the static state is still updated (so the
+     * next open shows the right group).
+     * <p>
+     * T-155: made public so the shared top-level Commodities/Companies control on
+     * {@code TradeScreen} can drive this widget's split instead of the (now hidden)
+     * in-dropdown toggle. Safe to call in either mode.
+     * @param tab the market group to activate
+     */
+    public void setActiveTab(Tab tab) {
         if (activeTab == tab) return;
         activeTab = tab;
         if (dropdownTarget != null) {
@@ -838,21 +873,19 @@ public class PairSelectorWidget extends StockMarketGuiElement {
 
             dropdownFrame.setBounds(leftX, dropdownY, w - 2 * p, Math.max(0, dropdownH));
 
-            // T-146 layout inside the dropdown:
-            //   Row A: [Commodities tab] [Companies tab]
+            // T-146 / T-155 layout inside the dropdown:
             //   Row B: [Search: field]                        [Sort]
             //   Row C: market list (fills remaining)
+            // T-155: the Commodities/Companies tab row was removed — the shared
+            // top-level segmented control (TradeScreen) now owns the group split, so
+            // the search row starts at the top of the dropdown and the reclaimed
+            // vertical space goes to the market list.
             int innerP = 2;
-            int tabH = 14;
             int searchH = 14;
             int sortW = 70;
             int dw = dropdownFrame.getWidth() - 2 * innerP;
 
-            int tabW = (dw - innerP) / 2;
-            commoditiesTabButton.setBounds(innerP, innerP, tabW, tabH);
-            companiesTabButton.setBounds(innerP + tabW + innerP, innerP, dw - tabW - innerP, tabH);
-
-            int searchY = commoditiesTabButton.getBottom() + innerP;
+            int searchY = innerP;
             int searchLabelW = Math.max(24, (dw - sortW - innerP) / 4);
             int searchFieldW = dw - searchLabelW - innerP - sortW - innerP;
             dropdownSearchLabel.setBounds(innerP, searchY, searchLabelW, searchH);

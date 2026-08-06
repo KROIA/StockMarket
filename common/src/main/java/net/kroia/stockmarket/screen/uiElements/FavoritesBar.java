@@ -73,6 +73,17 @@ public class FavoritesBar extends StockMarketGuiElement {
     @Nullable
     private ItemID currentMarketID;
 
+    /**
+     * T-155: the active market group (Commodities vs Companies) this bar filters by.
+     * Driven by the shared, top-level segmented control owned by {@code TradeScreen}
+     * (see {@link #setActiveGroup(PairSelectorWidget.Tab)}). Only markets whose group
+     * matches this value are shown in the grid — commodities are ItemIDs for which
+     * {@link ShareVisualHelpers#isCompanyShare(ItemID)} is false, companies are those
+     * for which it is true. Initialized from the shared session state so the group
+     * chosen in pair mode carries over when opening in money mode.
+     */
+    private PairSelectorWidget.Tab activeGroup = PairSelectorWidget.getActiveTab();
+
     // Dirty-flag for deferred rebuild (avoids ConcurrentModificationException
     // when rebuild is triggered from inside a click handler while the GUI
     // framework is still iterating the children list).
@@ -240,6 +251,18 @@ public class FavoritesBar extends StockMarketGuiElement {
     }
 
     /**
+     * T-155: sets the active market group (Commodities vs Companies) this bar filters
+     * by and re-applies the grid filter immediately so money mode reflects the shared
+     * top-level control's selection. No-op-safe to call even when the group is
+     * unchanged.
+     * @param group the market group to display
+     */
+    public void setActiveGroup(PairSelectorWidget.Tab group) {
+        this.activeGroup = group;
+        applySearchFilter();
+    }
+
+    /**
      * Filters the market grid based on the current search field text.
      * Matches against the item display name first, then falls back to the full
      * tooltip text (includes enchantment names, potion effects, etc.).
@@ -248,6 +271,11 @@ public class FavoritesBar extends StockMarketGuiElement {
         marketGrid.removeChilds();
         String filter = searchField.getText().toLowerCase().trim();
         for (MarketFavoriteButton btn : allMarketButtons) {
+            // T-155: first apply the shared Commodities/Companies group filter — a
+            // market is only eligible when its group matches the active group.
+            boolean isCompany = ShareVisualHelpers.isCompanyShare(btn.getMarketID());
+            boolean groupMatches = (activeGroup == PairSelectorWidget.Tab.COMPANIES) == isCompany;
+            if (!groupMatches) continue;
             // prefer company displayName if this ItemID is a stamped share (T-147)
             String displayName = ShareVisualHelpers
                     .getDisplayName(btn.getMarketID(), btn.getItemStack().getHoverName())

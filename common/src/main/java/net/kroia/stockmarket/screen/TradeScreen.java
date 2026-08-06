@@ -52,6 +52,10 @@ public class TradeScreen extends StockMarketGuiScreen {
         private static final String MONEY_MODE = Component.translatable(PREFIX + "mode_money").getString();
         private static final String PAIR_MODE = Component.translatable(PREFIX + "mode_pair").getString();
         private static final String NEWS = Component.translatable(PREFIX + "news").getString();
+        // T-155: labels for the shared Commodities/Companies market-group segmented
+        // control. Reuse the existing pair_selector tab lang keys (same wording).
+        static final String GROUP_COMMODITIES = Component.translatable("gui.stockmarket.pair_selector.tab.commodities").getString();
+        static final String GROUP_COMPANIES = Component.translatable("gui.stockmarket.pair_selector.tab.companies").getString();
         private static final Component NEWS_TOOLTIP = Component.translatable(PREFIX + "news.tooltip");
         // T-131: tooltip for the bank-account selector button in the top row.
         private static final Component SELECT_ACCOUNT_TOOLTIP = Component.translatable(PREFIX + "select_account.tooltip");
@@ -136,6 +140,24 @@ public class TradeScreen extends StockMarketGuiScreen {
     private final BankAccountSelectionScreen.AccountButton selectAccountButton;
     private final PairSelectorWidget pairSelectorWidget;
     private boolean isPairMode = false;
+
+    /**
+     * T-155: shared Commodities/Companies market-group filter, rendered as a two-button
+     * segmented control placed directly below the mode buttons and visible in BOTH
+     * money and pair modes. Selecting a group filters the item list in both paths: the
+     * {@link FavoritesBar} (money mode) and the {@link PairSelectorWidget} dropdown
+     * (pair mode) both read the shared group state. A lightweight pair of
+     * {@link Button}s is used rather than {@link TabElement} because this is a
+     * filter-only control with no per-tab content panel — TabElement always renders a
+     * content area, which would waste the selector's vertical space. The active group
+     * is highlighted with {@link #MODE_BUTTON_SELECTED_COLOR}. Group state itself lives
+     * in the session-static {@link PairSelectorWidget.Tab} so the choice persists across
+     * mode switches and dropdown opens.
+     */
+    private final Button groupCommoditiesButton;
+    private final Button groupCompaniesButton;
+    /** T-155: the currently active shared market group. */
+    private PairSelectorWidget.Tab activeMarketGroup = PairSelectorWidget.getActiveTab();
 
     // Pair mode state: tracks the "have" and "want" markets for cross-rate calculation
     private @Nullable ItemID pairHaveMarketID = null;
@@ -235,6 +257,18 @@ public class TradeScreen extends StockMarketGuiScreen {
         pairSelectorWidget = new PairSelectorWidget(this::onPairSelected);
         pairSelectorWidget.setEnabled(false);
 
+        // T-155: shared Commodities/Companies group filter (segmented control).
+        // Shown in both modes just below the mode buttons. Clicking a group updates
+        // the shared session state and re-filters both the FavoritesBar (money mode)
+        // and the PairSelectorWidget dropdown (pair mode). Labels are set (with counts)
+        // by refreshMarketGroupButtons().
+        groupCommoditiesButton = new Button(Texts.GROUP_COMMODITIES,
+                () -> setMarketGroup(PairSelectorWidget.Tab.COMMODITIES));
+        groupCommoditiesButton.setTextFontScale(0.8f);
+        groupCompaniesButton = new Button(Texts.GROUP_COMPANIES,
+                () -> setMarketGroup(PairSelectorWidget.Tab.COMPANIES));
+        groupCompaniesButton.setTextFontScale(0.8f);
+
         favoritesBar = new FavoritesBar(this::switchMarket);
         candlestickChart = new CandlestickChart();
         candlestickChart.setMarket(null);
@@ -300,6 +334,8 @@ public class TradeScreen extends StockMarketGuiScreen {
         addElement(pairModeButton);
         addElement(newsButton);
         addElement(selectAccountButton);
+        addElement(groupCommoditiesButton);
+        addElement(groupCompaniesButton);
         addElement(favoritesBar);
         addElement(pairSelectorWidget);
         addElement(candlestickChart);
@@ -379,6 +415,12 @@ public class TradeScreen extends StockMarketGuiScreen {
 
         // Build favorites bar with all markets and current selection
         favoritesBar.rebuild(markets, prefs.getFavoriteMarketIDs(), currentMarketID);
+
+        // T-155: apply the shared market group to both selectors and highlight the
+        // active segmented-control button (with per-group counts).
+        favoritesBar.setActiveGroup(activeMarketGroup);
+        pairSelectorWidget.setActiveTab(activeMarketGroup);
+        refreshMarketGroupButtons();
 
         // Load initial history data
         orderHistoryPanel.setCurrentMarketID(currentMarketID);
@@ -911,7 +953,17 @@ public class TradeScreen extends StockMarketGuiScreen {
         int newsButtonWidth = 40;
         newsButton.setBounds(rightPanelX + rightPanelWidth - newsButtonWidth, modeRowY, newsButtonWidth, modeButtonHeight);
 
-        int selectorTop = modeRowY + modeButtonHeight + spacing;
+        // T-155: shared Commodities/Companies group row, directly below the mode
+        // buttons and above the selector (favorites bar / pair selector). Visible in
+        // both modes. Split the right panel width evenly between the two group buttons.
+        int groupRowY = modeRowY + modeButtonHeight + spacing;
+        int groupButtonWidth = (rightPanelWidth - spacing) / 2;
+        groupCommoditiesButton.setBounds(rightPanelX, groupRowY, groupButtonWidth, modeButtonHeight);
+        groupCompaniesButton.setBounds(rightPanelX + groupButtonWidth + spacing, groupRowY,
+                rightPanelWidth - groupButtonWidth - spacing, modeButtonHeight);
+
+        // Selector region now sits one row lower to make room for the group row.
+        int selectorTop = groupRowY + modeButtonHeight + spacing;
 
         // Top-left: candlestick chart (orderbook histogram always visible next to it)
         int chartWidth = (width * 3) / 4 - orderbookVolumeWidth;
@@ -919,11 +971,10 @@ public class TradeScreen extends StockMarketGuiScreen {
         // Right of chart: orderbook volume histogram (shows have-market depth in pair mode)
         orderbookVolumeHistogram.setBounds(candlestickChart.getRight(), candlestickChart.getTop(), orderbookVolumeWidth, candlestickChart.getHeight());
 
-        // Market selector area height (favorites bar or pair selector). Two button
-        // rows now sit above it (the account selector row + the mode-button row), so
-        // reserve vertical space for both; this keeps the trading panel top at the
-        // same position it had with a single top row.
-        int selectorHeight = (height - spacing) / 2 - 2 * (modeButtonHeight + spacing);
+        // Market selector area height (favorites bar or pair selector). Three button
+        // rows now sit above it (the account selector row + the mode-button row +
+        // T-155 the shared group row), so reserve vertical space for all three.
+        int selectorHeight = (height - spacing) / 2 - 3 * (modeButtonHeight + spacing);
 
         // Top-right: favorites bar or pair selector (below mode buttons)
         favoritesBar.setBounds(rightPanelX, selectorTop, rightPanelWidth, selectorHeight);
@@ -956,6 +1007,42 @@ public class TradeScreen extends StockMarketGuiScreen {
         ordersTabElement.setBounds(padding, candlestickChart.getBottom() + spacing,
                 tradingPanel.getLeft() - spacing - padding,
                 height - (candlestickChart.getBottom() - padding + spacing));
+    }
+
+    /**
+     * T-155: switches the shared Commodities/Companies market group and propagates it
+     * to both selectors so the item list is filtered consistently in whichever mode is
+     * active. Persists the choice in the session-static {@link PairSelectorWidget.Tab}
+     * (via {@link PairSelectorWidget#setActiveTab}) so it survives a mode switch.
+     * @param group the market group to activate
+     */
+    private void setMarketGroup(PairSelectorWidget.Tab group) {
+        if (activeMarketGroup == group) return;
+        activeMarketGroup = group;
+        // Money mode: re-filter the favorites/market grid.
+        favoritesBar.setActiveGroup(group);
+        // Pair mode: drive the (now-shared) dropdown split; also updates the static.
+        pairSelectorWidget.setActiveTab(group);
+        refreshMarketGroupButtons();
+    }
+
+    /**
+     * T-155: refreshes the segmented-control button labels (with per-group market
+     * counts) and highlights the active group. Counts are cheap — a single pass over
+     * {@link #getAvailableMarkets()} using {@link ShareVisualHelpers#isCompanyShare}.
+     */
+    private void refreshMarketGroupButtons() {
+        int commodityCount = 0;
+        int companyCount = 0;
+        for (ItemID id : getAvailableMarkets()) {
+            if (ShareVisualHelpers.isCompanyShare(id)) companyCount++;
+            else commodityCount++;
+        }
+        groupCommoditiesButton.setText(Texts.GROUP_COMMODITIES + " (" + commodityCount + ")");
+        groupCompaniesButton.setText(Texts.GROUP_COMPANIES + " (" + companyCount + ")");
+        boolean companies = activeMarketGroup == PairSelectorWidget.Tab.COMPANIES;
+        groupCommoditiesButton.setBackgroundColor(companies ? MODE_BUTTON_DEFAULT_COLOR : MODE_BUTTON_SELECTED_COLOR);
+        groupCompaniesButton.setBackgroundColor(companies ? MODE_BUTTON_SELECTED_COLOR : MODE_BUTTON_DEFAULT_COLOR);
     }
 
     /**
