@@ -14,7 +14,9 @@ import net.kroia.stockmarket.api.marketmanager.ISyncServerMarketManager;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.networking.multi_server.MultiServerManager;
 import net.kroia.stockmarket.api.StockMarketAPI;
+import net.kroia.stockmarket.api.integration.IStockMarketIntegration;
 import net.kroia.stockmarket.api.marketmanager.IClientMarketManager;
+import net.kroia.stockmarket.stockmarket.marketmanager.StockMarketIntegrationImpl;
 import net.kroia.stockmarket.api.pluginmanager.IClientPluginManager;
 import net.kroia.stockmarket.minecraft.block.StockMarketBlocks;
 import net.kroia.stockmarket.minecraft.command.StockMarketCommandHandler;
@@ -131,6 +133,16 @@ public class StockMarketModBackend implements StockMarketAPI {
     private static final CommonInstances COMMON_INSTANCES = new CommonInstances();
     private static ServerInstances SERVER_INSTANCES = null;
     private static ClientInstances CLIENT_INSTANCES = null;
+
+    /**
+     * @return the current client-side instances holder, or {@code null} if the
+     * client has not joined a world yet (or has already disconnected). Read-only
+     * accessor for static helpers that need to reach the cached BankSystem API
+     * or the client managers without a per-caller setBackend() dance.
+     */
+    public static @Nullable ClientInstances getClientInstances() {
+        return CLIENT_INSTANCES;
+    }
 
     StockMarketModBackend()
     {
@@ -782,5 +794,32 @@ public class StockMarketModBackend implements StockMarketAPI {
     @Override
     public String getModVersion() {
         return StockMarketMod.VERSION;
+    }
+
+    /**
+     * Lazily-cached singleton integration SPI. The impl reads the CURRENT
+     * {@link #SERVER_INSTANCES} on every call via a supplier, so it stays valid
+     * across server stop/start cycles within a single JVM lifetime (a new
+     * server binds to the same lambda). Null on a pure-client JVM where no
+     * server has ever started.
+     */
+    private static volatile IStockMarketIntegration INTEGRATION_INSTANCE = null;
+
+    @Override
+    public @Nullable IStockMarketIntegration getIntegration() {
+        if (SERVER_INSTANCES == null) {
+            return null;
+        }
+        IStockMarketIntegration cached = INTEGRATION_INSTANCE;
+        if (cached == null) {
+            synchronized (StockMarketModBackend.class) {
+                cached = INTEGRATION_INSTANCE;
+                if (cached == null) {
+                    cached = new StockMarketIntegrationImpl(() -> SERVER_INSTANCES);
+                    INTEGRATION_INSTANCE = cached;
+                }
+            }
+        }
+        return cached;
     }
 }

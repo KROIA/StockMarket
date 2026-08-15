@@ -34,7 +34,7 @@ You want to support me?<br>
 
 ---
 ## Features
-- Adds new [blocks](#blocks) to interact with the market or bank account.
+- Adds new [blocks](#blocks) to interact with the market.
 - Implementation of a [matching engine](#matching-engine) inspired by the real market.
 - Configurable [plugins](#plugins) that provide the market with liquidity, volatility and price movements.
 - A JSON-configurable [news event system](documentation/user-guide/news-system/overview.md) that publishes headlines with [pictures](documentation/user-guide/news-system/pictures.md) and moves market prices — players follow the market through a craftable newspaper item. Server admins and content creators can [author their own events](documentation/user-guide/news-system/authoring-tutorial.md) without touching code.
@@ -60,8 +60,7 @@ You want to support me?<br>
 [CurseForge](https://www.curseforge.com/minecraft/mc-mods/stockmarket)
 | Minecraft | Fabric | Forge | Quilt | Neoforge |
 |-----------|--------|-------|-------|----------|
-| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21.1-green)    | [![Version](https://img.shields.io/badge/v2.0.7--alpha-orange)][2.0.7-fabric-1.21.1] |                                                                                  |                                                                                   | [![Version](https://img.shields.io/badge/v2.0.7--alpha-orange)][2.0.7-neoforge-1.21.1]  |
-| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21.1-green)    | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-fabric-1.21.1] <br> |                                                                                  |                                                                                   | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-neoforge-1.21.1]  |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21.1-green)    | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-fabric-1.21.1] [![Version](https://img.shields.io/badge/v2.0.7--alpha-orange)][2.0.7-fabric-1.21.1] <br> |                                                                                  |                                                                                   | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-neoforge-1.21.1] [![Version](https://img.shields.io/badge/v2.0.7--alpha-orange)][2.0.7-neoforge-1.21.1]  |
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21-green)      | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-fabric-1.21]   <br> |                                                                                  |                                                                                   | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-neoforge-1.21]    |
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.6-green)    | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-fabric-1.20.6] <br> |                                                                                  |                                                                                   | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-neoforge-1.20.6]  |
 | ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.4-green)    | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-fabric-1.20.4] <br> | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-forge-1.20.4] <br> | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-quilt-1.20.4] <br>  |                                                                                 |
@@ -571,6 +570,7 @@ With player flow influence enabled, it shifts permanently with the cumulative ne
 
 | Version | Status | Highlights |
 |---|---|---|
+| [v2.1.0](changelog/v2.1.0.md) | In Development | Company share support, public market-creation/pause API, virtual orderbook toggle, preset inventory picker |
 | [v2.0.7](changelog/v2.0.7.md) | Released | Paginated candlestick chart history, `/stockmarket backup` DB-quiesce commands, chart control docs |
 | [v2.0.6](changelog/v2.0.6.md) | Released | Version marker release |
 | [v2.0.5](changelog/v2.0.5.md) | Released | Build fix — restore BankSystem dependency on the fabric build |

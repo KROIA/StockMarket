@@ -1,6 +1,7 @@
 package net.kroia.stockmarket.api.marketmanager;
 
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.stockmarket.api.integration.MarketConfig;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import net.kroia.stockmarket.stockmarket.marketmanager.PlayerPreferences;
@@ -17,6 +18,27 @@ public interface ISyncServerMarketManager {
     boolean marketExists(@NotNull ItemID marketID);
 
     @Nullable IServerMarket createMarket(@NotNull ItemID marketID);
+
+    /**
+     * Creates a market from an explicit {@link MarketConfig}, bypassing the
+     * preset system. Mirrors {@link #createMarket(ItemID)} but sources initial
+     * price, natural abundance, and market flags from the passed config
+     * instead of any matching preset. Blacklist check, plugin auto-subscribe
+     * (unless the config opts out), and BankSystem {@code allowItemID} run the
+     * same way.
+     * <p>
+     * Returns {@code null} when a market for {@code marketID} already exists;
+     * callers must distinguish this from other failures with a
+     * {@link #marketExists(ItemID)} pre-check if the distinction matters.
+     * Server-thread only.
+     *
+     * @param marketID the ItemID to create a market for (never null)
+     * @param cfg      the configuration to apply to the new market (never null)
+     * @return the newly created market, or {@code null} if one already existed
+     *         or creation was rejected (e.g. blacklisted item)
+     */
+    @Nullable IServerMarket createMarketWithConfig(@NotNull ItemID marketID, @NotNull MarketConfig cfg);
+
     boolean deleteMarket(@NotNull ItemID marketID);
     @Nullable IServerMarket getMarket(@NotNull ItemID marketID);
 

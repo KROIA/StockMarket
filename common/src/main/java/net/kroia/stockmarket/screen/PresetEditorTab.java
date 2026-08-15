@@ -5,10 +5,11 @@ import net.kroia.modutilities.ClientPlayerUtilities;
 import net.kroia.modutilities.gui.elements.*;
 import net.kroia.modutilities.gui.elements.ItemSelectionView;
 import net.kroia.modutilities.gui.elements.base.ListView;
-import net.kroia.modutilities.gui.layout.LayoutGrid;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.api.preset.IAsyncPresetManager;
+import net.kroia.modutilities.gui.layout.LayoutGrid;
+import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.stockmarket.stockmarket.market.preset.MarketPreset;
 import net.kroia.stockmarket.stockmarket.market.preset.MarketPresetCategory;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
@@ -54,6 +55,14 @@ public class PresetEditorTab extends StockMarketGuiElement {
         public static final String ADD_ITEM = "+ Add Item";
         public static final String CANCEL = "Cancel";
         public static final String CONFIRM = "OK";
+
+        // T-152: label for the "+ From Inventory" button — opens the inventory picker mode.
+        public static final Component ADD_FROM_INVENTORY = Component.translatable(
+                "gui." + StockMarketMod.MOD_ID + ".preset_editor.add_from_inventory");
+
+        // T-154: tooltip for the small X close button on picker headers.
+        public static final Component CLOSE_PICKER = Component.translatable(
+                "gui." + StockMarketMod.MOD_ID + ".preset_editor.close_picker");
     }
 
     // Scrollable vertical list of category buttons (left panel)
@@ -93,6 +102,14 @@ public class PresetEditorTab extends StockMarketGuiElement {
     private final Button addItemButton;
     private final Button cancelAddItemButton;
     private boolean addItemMode = false;
+
+    // T-152: "Add from inventory" mode — picks any ItemStack the player is currently
+    // holding (with real components) and adds it to the selected category. Mirrors
+    // addItemMode's enter/exit contract.
+    private final VerticalListView inventoryPickerView;
+    private final Button addFromInventoryButton;
+    private final Button cancelAddFromInventoryButton;
+    private boolean addFromInventoryMode = false;
 
     // Track whether the current category has been modified (items added/removed)
     private boolean categoryModified = false;
@@ -148,8 +165,34 @@ public class PresetEditorTab extends StockMarketGuiElement {
         addItemButton = new Button(Texts.ADD_ITEM, this::onAddItemClicked);
         addItemButton.setBackgroundColor(0xFF2980b9);
         addItemButton.setHoverColor(0xFF3498db);
-        cancelAddItemButton = new Button(Texts.CANCEL, this::onCancelAddItemClicked);
+        // T-154: Cancel became a small square "X" button in the picker header row.
+        cancelAddItemButton = new Button("X", this::onCancelAddItemClicked);
+        cancelAddItemButton.setHoverTooltipSupplier(Texts.CLOSE_PICKER::getString);
         cancelAddItemButton.setEnabled(false);
+
+        // T-152: inventory picker. Container stacks two sub-grids vertically:
+        // 3x9 main inventory on top, 1x9 hotbar below, with a small vanilla-style
+        // vertical gap between them. Each sub-grid is built with its own LayoutGrid
+        // in rebuildInventoryPicker().
+        inventoryPickerView = new VerticalListView();
+        inventoryPickerView.setEnableBackground(true);
+        inventoryPickerView.setLayout(new LayoutVertical(0, 4, false, false));
+        inventoryPickerView.setEnabled(false);
+
+        addFromInventoryButton = new Button(Texts.ADD_FROM_INVENTORY.getString(), this::onAddFromInventoryClicked);
+        addFromInventoryButton.setBackgroundColor(0xFF2980b9);
+        addFromInventoryButton.setHoverColor(0xFF3498db);
+        // T-154: Cancel became a small square "X" button in the picker header row.
+        cancelAddFromInventoryButton = new Button("X", this::onCancelAddFromInventoryClicked);
+        cancelAddFromInventoryButton.setHoverTooltipSupplier(Texts.CLOSE_PICKER::getString);
+        cancelAddFromInventoryButton.setEnabled(false);
+
+        // T-155 fix B: red background on the close "X" buttons so the destructive
+        // close action stands out. Matches deleteCategoryButton's red palette.
+        cancelAddItemButton.setBackgroundColor(0xFFc0392b);
+        cancelAddItemButton.setHoverColor(0xFFe74c3c);
+        cancelAddFromInventoryButton.setBackgroundColor(0xFFc0392b);
+        cancelAddFromInventoryButton.setHoverColor(0xFFe74c3c);
 
         // Add children
         addChild(categoryListView);
@@ -165,6 +208,9 @@ public class PresetEditorTab extends StockMarketGuiElement {
         addChild(itemSelectionView);
         addChild(addItemButton);
         addChild(cancelAddItemButton);
+        addChild(inventoryPickerView);
+        addChild(addFromInventoryButton);
+        addChild(cancelAddFromInventoryButton);
 
         // T-123 (untrusted slave gate): every editing input on this tab writes
         // to the master via PresetUpdateRequest / preset category mutations.
@@ -176,6 +222,7 @@ public class PresetEditorTab extends StockMarketGuiElement {
             renameCategoryButton.setEnabled(false);
             deleteCategoryButton.setEnabled(false);
             addItemButton.setEnabled(false);
+            addFromInventoryButton.setEnabled(false);
         }
 
         // Fetch categories from server asynchronously
@@ -189,7 +236,7 @@ public class PresetEditorTab extends StockMarketGuiElement {
         IAsyncPresetManager pm = getPresetManager();
         if (pm == null) return;
         pm.getCategoriesAsync().thenAccept(categories -> {
-            Minecraft.getInstance().execute(() -> {
+            Minecraft.getInstance().tell(() -> {
                 cachedCategories.clear();
                 cachedCategories.addAll(categories);
                 buildCategoryButtons();
@@ -290,7 +337,7 @@ public class PresetEditorTab extends StockMarketGuiElement {
 
         String toDelete = selectedCategory;
         pm.deleteCategoryAsync(toDelete).thenAccept(success -> {
-            Minecraft.getInstance().execute(() -> {
+            Minecraft.getInstance().tell(() -> {
                 if (success) {
                     cachedCategories.removeIf(c -> c.getCategory().equals(toDelete));
                     if (selectedCategory != null && selectedCategory.equals(toDelete)) {
@@ -319,7 +366,7 @@ public class PresetEditorTab extends StockMarketGuiElement {
             if (selectedCategory == null) return;
             String oldName = selectedCategory;
             pm.renameCategoryAsync(oldName, name).thenAccept(success -> {
-                Minecraft.getInstance().execute(() -> {
+                Minecraft.getInstance().tell(() -> {
                     if (success) {
                         MarketPresetCategory cat = findCategory(oldName);
                         if (cat != null) cat.setCategory(name);
@@ -335,7 +382,7 @@ public class PresetEditorTab extends StockMarketGuiElement {
         } else {
             MarketPresetCategory newCat = new MarketPresetCategory(name, new ArrayList<>());
             pm.saveCategoryAsync(newCat).thenAccept(success -> {
-                Minecraft.getInstance().execute(() -> {
+                Minecraft.getInstance().tell(() -> {
                     if (success) {
                         cachedCategories.add(newCat);
                         selectedCategory = name;
@@ -366,18 +413,27 @@ public class PresetEditorTab extends StockMarketGuiElement {
     // ---- Item add/remove ----
 
     private void onAddItemClicked() {
+        // T-154 mutual exclusion: never allow both pickers open at once.
+        if (addFromInventoryMode) exitAddFromInventoryMode();
         addItemMode = true;
         itemSelectionView.setEnabled(true);
         cancelAddItemButton.setEnabled(true);
         itemGridView.setEnabled(false);
         addItemButton.setEnabled(false);
+        addFromInventoryButton.setEnabled(false);
         searchLabel.setEnabled(false);
         searchField.setEnabled(false);
+        saveButton.setEnabled(false);
         layoutChanged();
     }
 
     private void onCancelAddItemClicked() {
-        exitAddItemMode();
+        // T-154 fix #1: defer mutation. Clicking Cancel dispatches through
+        // GuiElement.mouseClickedInternal which is iterating child list; exiting
+        // the mode calls removeChilds() on the picker which would CME.
+        // tell() unconditionally enqueues for the next tick — execute() would
+        // run inline on the render thread and still CME.
+        Minecraft.getInstance().tell(this::exitAddItemMode);
     }
 
     private void exitAddItemMode() {
@@ -386,12 +442,20 @@ public class PresetEditorTab extends StockMarketGuiElement {
         cancelAddItemButton.setEnabled(false);
         itemGridView.setEnabled(true);
         addItemButton.setEnabled(true);
+        addFromInventoryButton.setEnabled(true);
         searchLabel.setEnabled(true);
         searchField.setEnabled(true);
+        saveButton.setEnabled(true);
         layoutChanged();
     }
 
-    private void onItemSelectedFromPicker(ItemStack stack) {
+    /**
+     * Shared logic for adding a stack to the selected category — used by both
+     * the registry picker and the inventory picker. Callers are responsible for
+     * deferring via {@code Minecraft.getInstance().tell(...)} so that they
+     * don't mutate widget trees while a click iterator is still active.
+     */
+    private void addStackToSelectedCategory(ItemStack stack) {
         if (selectedCategory == null || stack == null || stack.isEmpty()) return;
 
         MarketPresetCategory category = findCategory(selectedCategory);
@@ -407,12 +471,207 @@ public class PresetEditorTab extends StockMarketGuiElement {
         JsonObject components = serialized.has("components") ? serialized.getAsJsonObject("components") : null;
         MarketPreset newPreset = new MarketPreset(itemId, components, 10.0f, 10.0f);
 
-        // Add to the category's preset list
         category.getPresets().add(newPreset);
         categoryModified = true;
+    }
 
-        exitAddItemMode();
-        rebuildItemGrid();
+    private void onItemSelectedFromPicker(ItemStack stack) {
+        // T-154 fix #1: defer — ItemSelectionView dispatches this from inside
+        // its child-list mouse iteration; exitAddItemMode() clears children →
+        // ConcurrentModificationException without this deferral. tell() enqueues
+        // for the next tick (execute() would run inline on the render thread).
+        Minecraft.getInstance().tell(() -> {
+            addStackToSelectedCategory(stack);
+            exitAddItemMode();
+            rebuildItemGrid();
+        });
+    }
+
+    // ---- T-152: Add from inventory mode ----
+
+    /**
+     * Enters the "add from inventory" mode: the right panel switches from the
+     * preset list to a grid of the player's current inventory items. The Save
+     * button and other normal-mode controls are disabled while the picker is open.
+     */
+    private void onAddFromInventoryClicked() {
+        // T-154 mutual exclusion: close the registry picker if it was open.
+        if (addItemMode) exitAddItemMode();
+        addFromInventoryMode = true;
+        inventoryPickerView.setEnabled(true);
+        cancelAddFromInventoryButton.setEnabled(true);
+        itemGridView.setEnabled(false);
+        addItemButton.setEnabled(false);
+        addFromInventoryButton.setEnabled(false);
+        searchLabel.setEnabled(false);
+        searchField.setEnabled(false);
+        saveButton.setEnabled(false);
+        // layoutChanged() will size the picker view; rebuildInventoryPicker()
+        // needs those bounds to compute cell sizes so we call it after.
+        layoutChanged();
+        rebuildInventoryPicker();
+    }
+
+    /**
+     * Cancel button handler for the inventory picker — just exits the mode.
+     */
+    private void onCancelAddFromInventoryClicked() {
+        // T-154 fix #1: defer — same CME reason as onCancelAddItemClicked.
+        // tell() enqueues for next tick; execute() would run inline.
+        Minecraft.getInstance().tell(this::exitAddFromInventoryMode);
+    }
+
+    /**
+     * Restores the normal preset-list view after the inventory picker was open.
+     * Re-enables Save and the other normal-mode controls, and clears the picker
+     * grid so a subsequent open rebuilds it from the current inventory.
+     */
+    private void exitAddFromInventoryMode() {
+        addFromInventoryMode = false;
+        inventoryPickerView.setEnabled(false);
+        cancelAddFromInventoryButton.setEnabled(false);
+        itemGridView.setEnabled(true);
+        addItemButton.setEnabled(true);
+        addFromInventoryButton.setEnabled(true);
+        searchLabel.setEnabled(true);
+        searchField.setEnabled(true);
+        saveButton.setEnabled(true);
+        inventoryPickerView.removeChilds();
+        layoutChanged();
+    }
+
+    /**
+     * Populates the picker from the local player's inventory in a vanilla-style
+     * layout: a 3x9 main-inventory grid on top and a 1x9 hotbar grid below,
+     * separated by a small vertical gap. Each cell is a plain {@link ItemView}
+     * (no chrome, no close button) that fires {@link #onInventoryItemSelected}
+     * on left-click. Empty slots are rendered as invisible spacer elements so
+     * grid positions still mirror the real inventory. Duplicates are
+     * intentionally NOT collapsed — one cell per slot.
+     */
+    private void rebuildInventoryPicker() {
+        inventoryPickerView.removeChilds();
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) return;
+
+        int pickerW = inventoryPickerView.getWidth();
+        int pickerH = inventoryPickerView.getHeight();
+        if (pickerW <= 0 || pickerH <= 0) return;
+
+        // Task 1 (slot-size fix): vanilla inventory slots are 18px for a 16px
+        // item — a 1px border on each side. Previously the cell was clamped to
+        // 16..32 and ballooned to ~24px (≈1.5x the icon). Pin the cell to a
+        // vanilla-like 18px so the slot hugs the item with just a thin frame.
+        final int cellSize = 18;
+
+        List<ItemStack> items = mc.player.getInventory().items;
+
+        // Main inventory: 3 rows x 9 cols, slots 9..35 in row-major order.
+        inventoryPickerView.addChild(buildSlotGrid(items, 9, 36, 3, cellSize));
+        // Hotbar: 1 row x 9 cols, slots 0..8.
+        inventoryPickerView.addChild(buildSlotGrid(items, 0, 9, 1, cellSize));
+    }
+
+    /**
+     * Builds one inventory sub-grid (either the 3x9 main area or the 1x9
+     * hotbar). Cells are stretched to {@code cellSize} by the grid layout.
+     *
+     * @param items     player's inventory backing list
+     * @param startSlot inclusive start index into {@code items}
+     * @param endSlot   exclusive end index into {@code items}
+     * @param rows      number of rows in this sub-grid (always 9 columns)
+     * @param cellSize  desired cell size in pixels
+     */
+    private GuiElement buildSlotGrid(List<ItemStack> items, int startSlot, int endSlot,
+                                     int rows, int cellSize) {
+        final int spacing = 1;
+        final int columns = 9;
+        GuiElement grid = new StockMarketGuiElement() {
+            @Override protected void render() { }
+            @Override protected void layoutChanged() { }
+        };
+        grid.setEnableBackground(false);
+        // LayoutGrid signature: (padding, spacing, stretchX, stretchY, rows, columns, alignment).
+        // stretchX/Y=true so LayoutGrid sizes each child to exactly one cell.
+        grid.setLayout(new LayoutGrid(0, spacing, true, true, rows, columns, Alignment.TOP));
+        grid.setSize(columns * cellSize + (columns - 1) * spacing,
+                     rows * cellSize + (rows - 1) * spacing);
+
+        for (int slot = startSlot; slot < endSlot; slot++) {
+            ItemStack raw = slot < items.size() ? items.get(slot) : ItemStack.EMPTY;
+            if (raw == null || raw.isEmpty()) {
+                // Invisible spacer: keeps the grid cell reserved so non-empty
+                // slots stay in their vanilla positions. Renders nothing.
+                GuiElement spacer = new StockMarketGuiElement() {
+                    @Override protected void render() { }
+                    @Override protected void layoutChanged() { }
+                };
+                // Task 2: draw empty slots with the same background + frame as
+                // occupied ones so the picker reads as a full vanilla-style grid
+                // (empty cells are just an empty slot, not a hole).
+                spacer.setEnableBackground(true);
+                spacer.setEnableOutline(true);
+                spacer.setSize(cellSize, cellSize);
+                grid.addChild(spacer);
+            } else {
+                final ItemStack captured = raw.copy();
+                // Plain ItemView cell with click-to-pick behavior. No close
+                // button, no selection overlay — just the icon and a click
+                // that forwards to the picker's selection handler.
+                ItemView cell = new ItemView(captured) {
+                    @Override
+                    protected boolean mouseClickedOverElement(int button) {
+                        if (button == 0) {
+                            // T-154 fix (resurfaced after inventory-picker rewrite):
+                            // defer the selection callback so that no ancestor's
+                            // child list is mutated while GuiElement.mouseClickedInternal
+                            // is still iterating it (CME at GuiElement.java:1114).
+                            // onInventoryItemSelected itself also defers, but wrapping
+                            // here as well ensures the click dispatch returns cleanly
+                            // before any mode/exit/rebuild logic runs. tell() enqueues
+                            // for the next tick — execute() short-circuits and runs
+                            // inline on the render thread, so it would still CME.
+                            Minecraft.getInstance().tell(() -> onInventoryItemSelected(captured));
+                            return true;
+                        }
+                        return false;
+                    }
+                };
+                cell.setSize(cellSize, cellSize);
+                // Task 2 (slot-border fix): ItemView disables its background and
+                // outline in its constructor, so a filled slot showed only the
+                // bare icon with no frame. Re-enable both here. The framework
+                // draws the whole tree's backgrounds/outlines in a separate pass
+                // (renderBackgroundInternal) BEFORE the foreground/item pass
+                // (renderInternal), so the slot fill + frame always render behind
+                // the item — even for occupied slots. ItemView centers the 16px
+                // icon within the 18px cell (1px inset), leaving the outline
+                // visible around the item rather than covered by it.
+                cell.setEnableBackground(true);
+                cell.setEnableOutline(true);
+                grid.addChild(cell);
+            }
+        }
+        return grid;
+    }
+
+    /**
+     * Click handler for a MarketItemButton in the inventory picker grid.
+     * Adds the picked stack to the currently selected category via the same
+     * code path used by the registry picker, then exits the picker mode.
+     */
+    private void onInventoryItemSelected(ItemStack stack) {
+        // T-154 fix #1: defer mutation — MarketItemButton dispatches this from
+        // inside GuiElement.mouseClickedInternal's child iteration.
+        // exitAddFromInventoryMode() clears the picker's children (36 buttons)
+        // and CMEs the iterator without this deferral. tell() enqueues for the
+        // next tick (execute() would run inline on the render thread).
+        Minecraft.getInstance().tell(() -> {
+            if (stack == null || stack.isEmpty()) return;
+            addStackToSelectedCategory(stack);
+            exitAddFromInventoryMode();
+            rebuildItemGrid();
+        });
     }
 
     private void removePresetFromCategory(MarketPreset preset) {
@@ -456,7 +715,7 @@ public class PresetEditorTab extends StockMarketGuiElement {
         if (pm == null) return;
 
         pm.saveCategoryAsync(category).thenAccept(success -> {
-            Minecraft.getInstance().execute(() -> {
+            Minecraft.getInstance().tell(() -> {
                 if (success) {
                     editedPresets.clear();
                     categoryModified = false;
@@ -528,23 +787,58 @@ public class PresetEditorTab extends StockMarketGuiElement {
 
         // Right column
         if (addItemMode) {
-            // Item picker mode: full area for ItemSelectionView + cancel button
-            int cancelHeight = eh;
-            cancelAddItemButton.setBounds(rightX, padding, rightWidth, cancelHeight);
-            itemSelectionView.setBounds(rightX, cancelAddItemButton.getBottom() + spacing, rightWidth, height - cancelHeight - spacing);
+            // T-154: Cancel is now a small square "X" button in the top-right of
+            // the picker header. The picker list starts BELOW the header (same
+            // row as X) and only reserves one button row at the bottom for Save.
+            int btnHeight = eh;
+            int xSize = 16;
+            cancelAddItemButton.setBounds(rightX + rightWidth - xSize, padding, xSize, xSize);
+            int listTop = padding + xSize + spacing;
+            int bottomReserved = btnHeight + spacing;
+            int listHeight = Math.max(eh, padding + height - bottomReserved - listTop);
+            itemSelectionView.setBounds(rightX, listTop, rightWidth, listHeight);
+            // T-154: hide the bottom-row Add buttons while picking (setBounds off-panel).
+            addItemButton.setBounds(0, 0, 0, 0);
+            addFromInventoryButton.setBounds(0, 0, 0, 0);
+        } else if (addFromInventoryMode) {
+            int btnHeight = eh;
+            int xSize = 16;
+            cancelAddFromInventoryButton.setBounds(rightX + rightWidth - xSize, padding, xSize, xSize);
+            int listTop = padding + xSize + spacing;
+            int bottomReserved = btnHeight + spacing;
+            int listHeight = Math.max(eh, padding + height - bottomReserved - listTop);
+            inventoryPickerView.setBounds(rightX, listTop, rightWidth, listHeight);
+            addItemButton.setBounds(0, 0, 0, 0);
+            addFromInventoryButton.setBounds(0, 0, 0, 0);
+            // T-154 CME fix (option c): do NOT rebuild the inventory picker from
+            // layoutChanged(). This method can be re-entered during a click's
+            // mouseClickedInternal dispatch (any callback that triggers a layout
+            // pass on the tab tree cascades here), and rebuildInventoryPicker()
+            // calls inventoryPickerView.removeChilds() which mutates
+            // ScrollContainer.childs while GuiElement.mouseClickedInternal is
+            // still iterating that same list at GuiElement.java:1114 →
+            // ConcurrentModificationException. The picker is built exactly once
+            // per mode entry in onAddFromInventoryClicked(). Cost: cell size
+            // does not reflow if the parent tab resizes while the picker is
+            // open — an acceptable trade for guaranteed no-CME.
         } else {
-            // Normal mode: search bar + item grid + add item + save
+            // Normal mode: search bar + item grid + [add item | + from inventory] + save
             int searchLabelWidth = 50;
             searchLabel.setBounds(rightX, padding, searchLabelWidth, 15);
             searchField.setBounds(searchLabel.getRight() + spacing, padding, rightWidth - searchLabelWidth - spacing, 15);
 
             int btnHeight = eh;
-            int bottomBtnsHeight = btnHeight * 2 + spacing; // add item + save
             saveButton.setBounds(rightX, padding + height - btnHeight, rightWidth, btnHeight);
-            addItemButton.setBounds(rightX, saveButton.getTop() - spacing - btnHeight, rightWidth, btnHeight);
+            // T-152: split the add-item row into two side-by-side buttons — registry
+            // picker on the left, inventory picker on the right.
+            int addRowY = saveButton.getTop() - spacing - btnHeight;
+            int halfWidth = (rightWidth - spacing) / 2;
+            addItemButton.setBounds(rightX, addRowY, halfWidth, btnHeight);
+            addFromInventoryButton.setBounds(rightX + halfWidth + spacing, addRowY,
+                    rightWidth - halfWidth - spacing, btnHeight);
 
             int gridTop = searchLabel.getBottom() + spacing;
-            int gridHeight = addItemButton.getTop() - spacing - gridTop;
+            int gridHeight = addRowY - spacing - gridTop;
             itemGridView.setBounds(rightX, gridTop, rightWidth, gridHeight);
         }
     }
