@@ -6,7 +6,7 @@ the first consumer, but this API is fully mod-agnostic — nothing here is
 BankSystem-specific.
 
 - **Package:** `net.kroia.stockmarket.api`
-- **StockMarket version:** 2.0.8+
+- **StockMarket version:** 2.1.0+
 - **Minecraft:** 1.21.1 · **Java:** 21
 
 ---

@@ -571,6 +571,7 @@ With player flow influence enabled, it shifts permanently with the cumulative ne
 
 | Version | Status | Highlights |
 |---|---|---|
+| [v2.1.0](changelog/v2.1.0.md) | In Development | Company share support, public market-creation/pause API, virtual orderbook toggle, preset inventory picker |
 | [v2.0.7](changelog/v2.0.7.md) | Released | Paginated candlestick chart history, `/stockmarket backup` DB-quiesce commands, chart control docs |
 | [v2.0.6](changelog/v2.0.6.md) | Released | Version marker release |
 | [v2.0.5](changelog/v2.0.5.md) | Released | Build fix — restore BankSystem dependency on the fabric build |
