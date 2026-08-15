@@ -81,4 +81,25 @@ public final class StockMarketIntegrationImpl implements IStockMarketIntegration
         // deleteMarket returns false when the market didn't exist — treat as no-op.
         mgr.deleteMarket(subject);
     }
+
+    @Override
+    public void setMarketOpen(@NotNull ItemID subject, boolean open) {
+        ISyncServerMarketManager mgr = sync();
+        if (mgr == null) return;
+        IServerMarket market = mgr.getMarket(subject);
+        // No market for this subject → nothing to open/close.
+        if (market == null) return;
+        // Sync accessor: the SPI is documented server-thread-only, so the
+        // synchronous variant is correct here (no async marshalling needed).
+        market.setMarketOpen(open);
+    }
+
+    @Override
+    public boolean isMarketOpen(@NotNull ItemID subject) {
+        ISyncServerMarketManager mgr = sync();
+        if (mgr == null) return false;
+        IServerMarket market = mgr.getMarket(subject);
+        // Closed OR no market → not open.
+        return market != null && market.isMarketOpen();
+    }
 }

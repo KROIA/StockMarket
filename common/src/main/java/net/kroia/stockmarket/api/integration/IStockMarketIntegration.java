@@ -65,4 +65,43 @@ public interface IStockMarketIntegration {
      * @param subject the ItemID whose market should be closed (never null)
      */
     void closeMarket(@NotNull ItemID subject);
+
+    /**
+     * Opens or closes the market for the given subject for trading by toggling
+     * the existing {@code marketOpen} flag. This does <b>not</b> create or delete
+     * the market — see {@link #openMarket(ItemID, MarketConfig)} and
+     * {@link #closeMarket(ItemID)} for lifecycle management.
+     * <p>
+     * <b>WARNING — {@code open=false} is DESTRUCTIVE.</b> Closing a market:
+     * <ul>
+     *   <li>cancels every open <i>player</i> order, refunding any locked balances
+     *       via the banking system (bot orders are left intact);</li>
+     *   <li>hides the market from the client trade screen — it is filtered out of
+     *       {@code GetAvailablePairsRequest} while closed.</li>
+     * </ul>
+     * Price history is preserved and the order book is emptied of player orders.
+     * Reopening the market ({@code open=true}) makes it reappear on the trade
+     * screen with an empty book. If no market exists for {@code subject}, this is
+     * a no-op.
+     * <p>
+     * Server-thread only.
+     *
+     * @param subject the ItemID whose market should be opened/closed (never null)
+     * @param open    {@code true} to open the market for trading, {@code false} to
+     *                close it (destructive — see above)
+     */
+    void setMarketOpen(@NotNull ItemID subject, boolean open);
+
+    /**
+     * Returns whether the market for the given subject is currently open for
+     * trading (i.e. the {@code marketOpen} flag is set). Returns {@code false} if
+     * the market is closed <b>or</b> if no market exists for {@code subject}.
+     * <p>
+     * Server-thread only.
+     *
+     * @param subject the ItemID whose market state to query (never null)
+     * @return {@code true} iff a market exists for {@code subject} and it is open
+     *         for trading
+     */
+    boolean isMarketOpen(@NotNull ItemID subject);
 }

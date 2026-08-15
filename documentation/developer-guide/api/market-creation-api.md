@@ -22,7 +22,7 @@ does **not** depend on you. Because of this, StockMarket should be treated as an
 **optional / soft dependency**: the game must still run if StockMarket is not
 installed. Never hard-reference StockMarket classes on a code path that runs
 before you have confirmed the mod is present, and isolate all StockMarket calls
-behind a presence check (see the guard pattern in §7).
+behind a presence check (see the guard pattern in §8).
 
 Everything in this API is **in-process**: no packets, no networking, no thread
 primitives. Slave servers may call the same API — StockMarket internally
@@ -76,7 +76,7 @@ deterministic behaviour regardless of any preset that happens to match the
 subject. All price/abundance/flag values come from `cfg`.
 
 - `subject` — the `net.kroia.banksystem.util.ItemID` the market is for. (The
-  subject type is BankSystem's `ItemID`; see §7 for construction.)
+  subject type is BankSystem's `ItemID`; see §8 for construction.)
 - `cfg` — a `MarketConfig` describing the market's initial state.
 
 ### `MarketConfig` fields
@@ -209,9 +209,66 @@ void    closeMarket(@NotNull ItemID subject);
 
 ---
 
-## 7. Threading & safety notes · FAQ / gotchas
+## 7. Pausing / resuming a market
 
-- **Server-thread only.** All three `IStockMarketIntegration` methods must run on
+Distinct from creating/deleting a market, you can **pause** (close) and **resume**
+(open) trading on an existing market by toggling its `marketOpen` flag:
+
+```java
+void    setMarketOpen(@NotNull ItemID subject, boolean open);
+boolean isMarketOpen(@NotNull ItemID subject);
+```
+
+- `setMarketOpen(subject, true)` — reopens the market for trading. It reappears on
+  the client trade screen with an empty order book.
+- `setMarketOpen(subject, false)` — closes (pauses) the market for trading.
+- `isMarketOpen(subject)` — `true` iff a market exists for `subject` **and** it is
+  currently open. Returns `false` if the market is closed **or** if no market
+  exists for `subject`.
+
+If no market exists for `subject`, `setMarketOpen` is a **no-op**. All methods are
+**server-thread only**.
+
+> **⚠️ WARNING — closing is DESTRUCTIVE.** `setMarketOpen(subject, false)`:
+> - **cancels every open _player_ order**, refunding any locked balances via the
+>   banking system (bot orders are left intact);
+> - **hides the market from the client trade screen** — it is filtered out of the
+>   available trading pairs (`GetAvailablePairsRequest`) while closed.
+>
+> Price history is **preserved** and the order book is emptied of player orders.
+> Reopening with `setMarketOpen(subject, true)` makes the market reappear with an
+> **empty** order book — cancelled orders are **not** restored.
+
+```java
+IStockMarketIntegration integration = StockMarketMod.getAPI().getIntegration();
+if (integration == null) return;
+
+// Pause trading (cancels + refunds all open player orders, hides from trade screen).
+integration.setMarketOpen(subject, false);
+
+// Query current state.
+boolean open = integration.isMarketOpen(subject);   // false while paused
+
+// Resume trading (market reappears with an empty order book).
+integration.setMarketOpen(subject, true);
+```
+
+### `setMarketOpen(subject, false)` vs `closeMarket(subject)`
+
+Two different operations — do not confuse them:
+
+- **`setMarketOpen(subject, false)`** — **reversible pause**. The market keeps
+  existing (price history intact); it is only hidden and its player orders are
+  cancelled+refunded. Reopen it any time with `setMarketOpen(subject, true)`.
+- **`closeMarket(subject)`** — **permanent delete** (see §8). The market is
+  removed entirely (unsubscribed from all plugins, deleted, removal broadcast to
+  clients). There is no "reopen"; you must `openMarket` again to recreate it.
+
+---
+
+## 8. Threading & safety notes · FAQ / gotchas
+
+- **Server-thread only.** All `IStockMarketIntegration` methods must run on
   the server thread. From another thread, marshal onto it first.
 - **Server-only.** `getIntegration()` is `null` on a pure client and before the
   server starts. Always null-check.
