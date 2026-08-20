@@ -570,6 +570,7 @@ With player flow influence enabled, it shifts permanently with the cumulative ne
 
 | Version | Status | Highlights |
 |---|---|---|
+| [v2.1.2](changelog/v2.1.2.md) | In Development | |
 | [v2.1.1](changelog/v2.1.1.md) | Released | Dependency version alignment — ModUtilities ListView performance improvement |
 | [v2.1.0](changelog/v2.1.0.md) | Released | Company share support, public market-creation/pause API, virtual orderbook toggle, preset inventory picker |
 | [v2.0.7](changelog/v2.0.7.md) | Released | Paginated candlestick chart history, `/stockmarket backup` DB-quiesce commands, chart control docs |
