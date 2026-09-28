@@ -5,12 +5,14 @@ import net.kroia.banksystem.api.bank.IServerBank;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.banking.bankaccount.ServerBankAccount;
+import net.kroia.banksystem.banking.bankmanager.ServerBankManager;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
 import net.kroia.banksystem.util.VolatileItemComponents;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.stockmarket.market.ServerMarket;
@@ -35,11 +37,25 @@ import java.util.UUID;
  * <p>
  * Uses the same production-safe pattern as
  * {@link net.kroia.banksystem.testing.tests.ItemIDMergeGuardTests}: register
- * synthetic UUID-tagged item variants so the tests never collide with real
+ * synthetic marker-tagged item variants so the tests never collide with real
  * player state, drive merges through the explicit-set overload of
  * {@code ItemIDManager.renormalizeAndMerge(Collection)} so the globally applied
  * volatile-component set stays untouched, and clean up every created market and
  * bank account in {@code try/finally}.
+ * <p>
+ * <b>Shared-state teardown:</b> every test takes a {@link StateSnapshot} up front and
+ * restores it in the outermost {@code finally}. Three separate leaks made this necessary:
+ * <ul>
+ *   <li>the suite permanently minted two synthetic paper ItemIDs per test (12 per run),
+ *       piling up as indistinguishable "Paper" rows in the BankSystem manage screen;</li>
+ *   <li>{@code createMarket} calls {@code allowItemID}, so every test also left an
+ *       allowed-set entry pointing at an ItemID the teardown then dropped — an
+ *       unresolvable filter entry renders as a stray "air" row;</li>
+ *   <li>the event-driven test's {@code renormalizeAndMerge} pass ran against the LIVE
+ *       registry, collapsing every real item pair that differs only by
+ *       {@code minecraft:repair_cost} (and consolidating the corresponding player bank
+ *       balances — an effect nothing can undo).</li>
+ * </ul>
  */
 public class MarketMergeConsolidationTestSuite extends TestSuite {
 
@@ -68,7 +84,101 @@ public class MarketMergeConsolidationTestSuite extends TestSuite {
     // Helpers
     // ========================================================================
 
-    /** Creates a paper stack carrying a unique UUID marker inside minecraft:custom_data. */
+    /**
+     * Bit-exact snapshot of the shared server state this suite mutates: the
+     * {@link ItemIDManager} registry plus BankSystem's item filter sets.
+     * <p>
+     * Taken before a test registers synthetic templates or creates a market, and restored in
+     * {@code finally}. Without it every run of this suite permanently minted two synthetic
+     * paper ItemIDs per test (12 per run — all rendering as an indistinguishable "Paper" row
+     * in the BankSystem manage screen), left an allowed-set entry behind per created market,
+     * and the event-driven test additionally collapsed real item pairs registry-wide. Same
+     * teardown pattern BankSystem's own {@code ItemIDMergeGuardTests} uses around
+     * {@code renormalizeAndMerge(Collection)}.
+     *
+     * @param items      copy of the ItemID → template map
+     * @param aliases    copy of the alias → canonical map
+     * @param quarantined copy of the quarantined-alias map
+     * @param counter    value of the short minting counter
+     * @param filters    copy of the allowed set + runtime blacklist, or null when the
+     *                   concrete master bank manager is unavailable
+     */
+    private record StateSnapshot(Map<ItemID, ItemStack> items,
+                                 Map<ItemID, ItemID> aliases,
+                                 Map<ItemID, ItemID> quarantined,
+                                 int counter,
+                                 ServerBankManager.ItemFilterSnapshot filters) {}
+
+    /** Captures the current shared state for a later {@link #restoreState(StateSnapshot)}. */
+    private static StateSnapshot snapshotState() {
+        ServerBankManager concrete = concreteBankManager();
+        return new StateSnapshot(
+                new HashMap<>(ItemIDManager.getItemIDMap()),
+                new HashMap<>(ItemIDManager.getItemIDAliasMap()),
+                ItemIDManager.getQuarantinedAliases_forTesting(),
+                ItemIDManager.getNextShortCounter_forTesting(),
+                concrete == null ? null : concrete.snapshotItemFilters());
+    }
+
+    /**
+     * Restores a snapshot, discarding every ItemID minted, every alias created and every
+     * filter-set entry added since it was taken. Never throws — it runs inside
+     * {@code finally} blocks.
+     * <p>
+     * Filters are restored <b>before</b> the registry so a restored filter entry can never
+     * reference an ItemID the registry restore has already dropped — an unresolvable filter
+     * entry renders as a stray "air" row in the BankSystem manage screen.
+     * <p>
+     * Note this deliberately does not use {@code disallowItemID} to undo the
+     * {@code allowItemID} calls {@code createMarket} makes: that method is not an inverse, it
+     * runtime-<b>blacklists</b> the ID (and clears holder banks without refund). The
+     * snapshot/restore pair is the only way back to "neither allowed nor blacklisted".
+     *
+     * @param snapshot the state to reinstall
+     */
+    private static void restoreState(StateSnapshot snapshot) {
+        if (snapshot.filters() != null) {
+            try {
+                ServerBankManager concrete = concreteBankManager();
+                if (concrete != null) concrete.restoreItemFilters(snapshot.filters());
+            } catch (Throwable t) {
+                StockMarketMod.LOGGER.error("Failed to restore the BankSystem item filters after a merge-consolidation test", t);
+            }
+        }
+        try {
+            ItemIDManager.replaceState_forTesting(snapshot.items(), snapshot.aliases(), snapshot.counter());
+            ItemIDManager.restoreQuarantinedAliases_forTesting(snapshot.quarantined());
+        } catch (Throwable t) {
+            StockMarketMod.LOGGER.error("Failed to restore the ItemID registry after a merge-consolidation test", t);
+        }
+    }
+
+    /**
+     * The concrete master bank manager, or null if unavailable / not the master impl.
+     * {@code snapshotItemFilters} and {@code restoreItemFilters} are test-support methods on
+     * the implementation, not on the sync interface.
+     */
+    private static ServerBankManager concreteBankManager() {
+        if (backend == null || backend.BANK_SYSTEM_API == null)
+            return null;
+        IServerBankManager bankManager = backend.BANK_SYSTEM_API.getServerBankManager().getSync();
+        return bankManager instanceof ServerBankManager concrete ? concrete : null;
+    }
+
+    /**
+     * Fixed marker value for the synthetic templates. Deliberately <b>not</b> a random UUID:
+     * a stable marker means an aborted run (JVM killed between mint and teardown) leaves at
+     * most this one pair behind, and the next run's
+     * {@code registerItemStackServerSide_direct} returns those same two IDs instead of
+     * minting a fresh pair. Random markers made the residue grow by 12 IDs every run.
+     * <p>
+     * It cannot collide with a real player's paper: the {@code stockmarket_merge_test}
+     * custom_data key is not written by any production path, so only an item deliberately
+     * crafted with this exact NBT would match.
+     */
+    private static final String TEST_MARKER = "market_merge_consolidation_suite";
+
+    /** Creates a paper stack carrying the test marker inside minecraft:custom_data. */
     private static ItemStack paperWithMarker(String marker) {
         ItemStack stack = new ItemStack(Items.PAPER);
         CompoundTag nbt = new CompoundTag();
@@ -81,14 +191,17 @@ public class MarketMergeConsolidationTestSuite extends TestSuite {
      * Registers two synthetic paper templates that differ only in
      * {@code minecraft:repair_cost} — distinct IDs under the server's real
      * volatile set, colliding as soon as repair_cost is added to the set.
-     * Both templates carry the same UUID marker so the pair maps to one
+     * Both templates carry the same {@link #TEST_MARKER} so the pair maps to one
      * "logical" item post-merge.
+     * <p>
+     * <b>Registers into the LIVE registry</b> — callers MUST bracket the call with
+     * {@link #snapshotState()} / {@link #restoreState(StateSnapshot)} or the two
+     * minted IDs stay in the world's ItemID table forever.
      *
      * @return the two registered IDs, index 0 = plain, index 1 = with repair_cost
      */
     private ItemID[] registerRepairCostPair() {
-        String marker = UUID.randomUUID().toString();
-        ItemStack a = paperWithMarker(marker);
+        ItemStack a = paperWithMarker(TEST_MARKER);
         ItemStack b = a.copy();
         b.set(DataComponents.REPAIR_COST, 7);
         ItemID idA = ItemIDManager.registerItemStackServerSide_direct(a);
@@ -131,31 +244,36 @@ public class MarketMergeConsolidationTestSuite extends TestSuite {
     private TestResult test_directCall_deletesAliasWhenNoCanonical() {
         ServerMarketManager smm = getServerMarketManagerOrFail();
         if (smm == null) return fail("ServerMarketManager unavailable — not master?");
-        ItemID[] pair = registerRepairCostPair();
-        if (!pair[0].isValid() || !pair[1].isValid() || pair[0].equals(pair[1]))
-            return fail("failed to register the two synthetic paper templates as distinct IDs");
-        // Simulate BankSystem's canonical selection: lowest short wins.
-        ItemID canonical = lowerShort(pair[0], pair[1]);
-        ItemID alias = higherShort(pair[0], pair[1]);
-
+        StateSnapshot snapshot = snapshotState();
         try {
-            IServerMarket aliasMarket = smm.createMarket(alias);
-            if (aliasMarket == null) return fail("failed to create the alias-keyed market");
+            ItemID[] pair = registerRepairCostPair();
+            if (!pair[0].isValid() || !pair[1].isValid() || pair[0].equals(pair[1]))
+                return fail("failed to register the two synthetic paper templates as distinct IDs");
+            // Simulate BankSystem's canonical selection: lowest short wins.
+            ItemID canonical = lowerShort(pair[0], pair[1]);
+            ItemID alias = higherShort(pair[0], pair[1]);
 
-            // No canonical market exists — reconcile must delete the alias market,
-            // leaving the group empty (no auto-created canonical replacement).
-            smm.consolidateMergedMarkets(Map.of(alias, canonical));
+            try {
+                IServerMarket aliasMarket = smm.createMarket(alias);
+                if (aliasMarket == null) return fail("failed to create the alias-keyed market");
 
-            TestResult r = assertFalse("alias key removed from markets map",
-                    smm.marketExists(alias));
-            if (!r.passed()) return r;
-            r = assertFalse("no canonical market auto-created",
-                    smm.marketExists(canonical));
-            if (!r.passed()) return r;
-            return pass("consolidateMergedMarkets deleted the alias market and did not create a canonical one");
+                // No canonical market exists — reconcile must delete the alias market,
+                // leaving the group empty (no auto-created canonical replacement).
+                smm.consolidateMergedMarkets(Map.of(alias, canonical));
+
+                TestResult r = assertFalse("alias key removed from markets map",
+                        smm.marketExists(alias));
+                if (!r.passed()) return r;
+                r = assertFalse("no canonical market auto-created",
+                        smm.marketExists(canonical));
+                if (!r.passed()) return r;
+                return pass("consolidateMergedMarkets deleted the alias market and did not create a canonical one");
+            } finally {
+                smm.deleteMarket(canonical);
+                smm.deleteMarket(alias);
+            }
         } finally {
-            smm.deleteMarket(canonical);
-            smm.deleteMarket(alias);
+            restoreState(snapshot);
         }
     }
 
@@ -167,34 +285,39 @@ public class MarketMergeConsolidationTestSuite extends TestSuite {
     private TestResult test_directCall_keepsCanonicalDeletesAlias() {
         ServerMarketManager smm = getServerMarketManagerOrFail();
         if (smm == null) return fail("ServerMarketManager unavailable — not master?");
-        ItemID[] pair = registerRepairCostPair();
-        if (!pair[0].isValid() || !pair[1].isValid() || pair[0].equals(pair[1]))
-            return fail("failed to register the two synthetic paper templates as distinct IDs");
-        ItemID canonical = lowerShort(pair[0], pair[1]);
-        ItemID alias = higherShort(pair[0], pair[1]);
-
+        StateSnapshot snapshot = snapshotState();
         try {
-            IServerMarket canonicalMarket = smm.createMarket(canonical);
-            IServerMarket aliasMarket = smm.createMarket(alias);
-            if (canonicalMarket == null || aliasMarket == null)
-                return fail("failed to create the two test markets");
+            ItemID[] pair = registerRepairCostPair();
+            if (!pair[0].isValid() || !pair[1].isValid() || pair[0].equals(pair[1]))
+                return fail("failed to register the two synthetic paper templates as distinct IDs");
+            ItemID canonical = lowerShort(pair[0], pair[1]);
+            ItemID alias = higherShort(pair[0], pair[1]);
 
-            smm.consolidateMergedMarkets(Map.of(alias, canonical));
+            try {
+                IServerMarket canonicalMarket = smm.createMarket(canonical);
+                IServerMarket aliasMarket = smm.createMarket(alias);
+                if (canonicalMarket == null || aliasMarket == null)
+                    return fail("failed to create the two test markets");
 
-            TestResult r = assertTrue("canonical-keyed market still exists",
-                    smm.marketExists(canonical));
-            if (!r.passed()) return r;
-            r = assertFalse("alias-keyed duplicate deleted",
-                    smm.marketExists(alias));
-            if (!r.passed()) return r;
-            // The surviving market must be the original canonical instance, not the alias one.
-            r = assertTrue("survivor is the original canonical instance",
-                    smm.getMarket(canonical) == canonicalMarket);
-            if (!r.passed()) return r;
-            return pass("consolidateMergedMarkets kept canonical and deleted alias duplicate");
+                smm.consolidateMergedMarkets(Map.of(alias, canonical));
+
+                TestResult r = assertTrue("canonical-keyed market still exists",
+                        smm.marketExists(canonical));
+                if (!r.passed()) return r;
+                r = assertFalse("alias-keyed duplicate deleted",
+                        smm.marketExists(alias));
+                if (!r.passed()) return r;
+                // The surviving market must be the original canonical instance, not the alias one.
+                r = assertTrue("survivor is the original canonical instance",
+                        smm.getMarket(canonical) == canonicalMarket);
+                if (!r.passed()) return r;
+                return pass("consolidateMergedMarkets kept canonical and deleted alias duplicate");
+            } finally {
+                smm.deleteMarket(canonical);
+                smm.deleteMarket(alias);
+            }
         } finally {
-            smm.deleteMarket(canonical);
-            smm.deleteMarket(alias);
+            restoreState(snapshot);
         }
     }
 
@@ -210,43 +333,48 @@ public class MarketMergeConsolidationTestSuite extends TestSuite {
     private TestResult test_directCall_isIdempotent() {
         ServerMarketManager smm = getServerMarketManagerOrFail();
         if (smm == null) return fail("ServerMarketManager unavailable — not master?");
-        ItemID[] pair = registerRepairCostPair();
-        if (!pair[0].isValid() || !pair[1].isValid() || pair[0].equals(pair[1]))
-            return fail("failed to register the two synthetic paper templates as distinct IDs");
-        ItemID canonical = lowerShort(pair[0], pair[1]);
-        ItemID alias = higherShort(pair[0], pair[1]);
-
+        StateSnapshot snapshot = snapshotState();
         try {
-            IServerMarket canonicalMarket = smm.createMarket(canonical);
-            IServerMarket aliasMarket = smm.createMarket(alias);
-            if (canonicalMarket == null || aliasMarket == null)
-                return fail("failed to create the two test markets");
+            ItemID[] pair = registerRepairCostPair();
+            if (!pair[0].isValid() || !pair[1].isValid() || pair[0].equals(pair[1]))
+                return fail("failed to register the two synthetic paper templates as distinct IDs");
+            ItemID canonical = lowerShort(pair[0], pair[1]);
+            ItemID alias = higherShort(pair[0], pair[1]);
 
-            Map<ItemID, ItemID> aliasMap = Map.of(alias, canonical);
-            smm.consolidateMergedMarkets(aliasMap);
-            IServerMarket afterFirst = smm.getMarket(canonical);
-            if (afterFirst == null) return fail("canonical market missing after first reconcile");
-            if (afterFirst != canonicalMarket)
-                return fail("first reconcile replaced the canonical instance — it should not");
-            if (smm.marketExists(alias))
-                return fail("alias market survived first reconcile");
+            try {
+                IServerMarket canonicalMarket = smm.createMarket(canonical);
+                IServerMarket aliasMarket = smm.createMarket(alias);
+                if (canonicalMarket == null || aliasMarket == null)
+                    return fail("failed to create the two test markets");
 
-            // Second call: nothing to change. Same identity, same canonical key.
-            smm.consolidateMergedMarkets(aliasMap);
-            IServerMarket afterSecond = smm.getMarket(canonical);
-            TestResult r = assertTrue("canonical market still present after 2nd reconcile",
-                    afterSecond != null);
-            if (!r.passed()) return r;
-            r = assertTrue("same market instance survives the 2nd reconcile",
-                    afterSecond == afterFirst);
-            if (!r.passed()) return r;
-            r = assertFalse("alias-keyed market still absent",
-                    smm.marketExists(alias));
-            if (!r.passed()) return r;
-            return pass("consolidateMergedMarkets is idempotent");
+                Map<ItemID, ItemID> aliasMap = Map.of(alias, canonical);
+                smm.consolidateMergedMarkets(aliasMap);
+                IServerMarket afterFirst = smm.getMarket(canonical);
+                if (afterFirst == null) return fail("canonical market missing after first reconcile");
+                if (afterFirst != canonicalMarket)
+                    return fail("first reconcile replaced the canonical instance — it should not");
+                if (smm.marketExists(alias))
+                    return fail("alias market survived first reconcile");
+
+                // Second call: nothing to change. Same identity, same canonical key.
+                smm.consolidateMergedMarkets(aliasMap);
+                IServerMarket afterSecond = smm.getMarket(canonical);
+                TestResult r = assertTrue("canonical market still present after 2nd reconcile",
+                        afterSecond != null);
+                if (!r.passed()) return r;
+                r = assertTrue("same market instance survives the 2nd reconcile",
+                        afterSecond == afterFirst);
+                if (!r.passed()) return r;
+                r = assertFalse("alias-keyed market still absent",
+                        smm.marketExists(alias));
+                if (!r.passed()) return r;
+                return pass("consolidateMergedMarkets is idempotent");
+            } finally {
+                smm.deleteMarket(canonical);
+                smm.deleteMarket(alias);
+            }
         } finally {
-            smm.deleteMarket(canonical);
-            smm.deleteMarket(alias);
+            restoreState(snapshot);
         }
     }
 
@@ -263,46 +391,51 @@ public class MarketMergeConsolidationTestSuite extends TestSuite {
     private TestResult test_directCall_neverAutoCreates() {
         ServerMarketManager smm = getServerMarketManagerOrFail();
         if (smm == null) return fail("ServerMarketManager unavailable — not master?");
-        ItemID[] pair = registerRepairCostPair();
-        if (!pair[0].isValid() || !pair[1].isValid() || pair[0].equals(pair[1]))
-            return fail("failed to register the two synthetic paper templates as distinct IDs");
-        ItemID canonical = lowerShort(pair[0], pair[1]);
-        ItemID alias = higherShort(pair[0], pair[1]);
-
-        // Defensive: nothing should exist under either ID at this point (fresh templates).
-        // If a stale entry from a previous test run exists, clean it before the assertion.
-        smm.deleteMarket(canonical);
-        smm.deleteMarket(alias);
-
-        // Case 1: empty group — reconcile must not create either market.
-        smm.consolidateMergedMarkets(Map.of(alias, canonical));
-
-        TestResult r = assertFalse("empty group: no canonical market auto-created",
-                smm.marketExists(canonical));
-        if (!r.passed()) return r;
-        r = assertFalse("empty group: no alias market auto-created", smm.marketExists(alias));
-        if (!r.passed()) return r;
-
-        // Case 2: alias-only group — reconcile must delete the alias and still not
-        // create a canonical replacement (this is the case that would have triggered
-        // the removed re-key path under the old policy).
+        StateSnapshot snapshot = snapshotState();
         try {
-            IServerMarket aliasMarket = smm.createMarket(alias);
-            if (aliasMarket == null) return fail("failed to create the alias-keyed market");
+            ItemID[] pair = registerRepairCostPair();
+            if (!pair[0].isValid() || !pair[1].isValid() || pair[0].equals(pair[1]))
+                return fail("failed to register the two synthetic paper templates as distinct IDs");
+            ItemID canonical = lowerShort(pair[0], pair[1]);
+            ItemID alias = higherShort(pair[0], pair[1]);
 
-            smm.consolidateMergedMarkets(Map.of(alias, canonical));
-
-            r = assertFalse("alias-only group: alias deleted", smm.marketExists(alias));
-            if (!r.passed()) return r;
-            r = assertFalse("alias-only group: no canonical market auto-created",
-                    smm.marketExists(canonical));
-            if (!r.passed()) return r;
-        } finally {
+            // Defensive: nothing should exist under either ID at this point (fresh templates).
+            // If a stale entry from a previous test run exists, clean it before the assertion.
             smm.deleteMarket(canonical);
             smm.deleteMarket(alias);
-        }
 
-        return pass("consolidateMergedMarkets never auto-creates markets");
+            // Case 1: empty group — reconcile must not create either market.
+            smm.consolidateMergedMarkets(Map.of(alias, canonical));
+
+            TestResult r = assertFalse("empty group: no canonical market auto-created",
+                    smm.marketExists(canonical));
+            if (!r.passed()) return r;
+            r = assertFalse("empty group: no alias market auto-created", smm.marketExists(alias));
+            if (!r.passed()) return r;
+
+            // Case 2: alias-only group — reconcile must delete the alias and still not
+            // create a canonical replacement (this is the case that would have triggered
+            // the removed re-key path under the old policy).
+            try {
+                IServerMarket aliasMarket = smm.createMarket(alias);
+                if (aliasMarket == null) return fail("failed to create the alias-keyed market");
+
+                smm.consolidateMergedMarkets(Map.of(alias, canonical));
+
+                r = assertFalse("alias-only group: alias deleted", smm.marketExists(alias));
+                if (!r.passed()) return r;
+                r = assertFalse("alias-only group: no canonical market auto-created",
+                        smm.marketExists(canonical));
+                if (!r.passed()) return r;
+            } finally {
+                smm.deleteMarket(canonical);
+                smm.deleteMarket(alias);
+            }
+
+            return pass("consolidateMergedMarkets never auto-creates markets");
+        } finally {
+            restoreState(snapshot);
+        }
     }
 
     /**
@@ -319,38 +452,57 @@ public class MarketMergeConsolidationTestSuite extends TestSuite {
             return pass("skipped: minecraft:repair_cost is already volatile on this server — "
                     + "the collapse scenario cannot be constructed");
 
-        ItemID[] pair = registerRepairCostPair();
-        if (!pair[0].isValid() || !pair[1].isValid() || pair[0].equals(pair[1]))
-            return fail("failed to register the two synthetic paper templates as distinct IDs");
-        // BankSystem's canonical rule: lowest short wins.
-        ItemID canonical = lowerShort(pair[0], pair[1]);
-        ItemID alias = higherShort(pair[0], pair[1]);
-
+        StateSnapshot snapshot = snapshotState();
         try {
-            IServerMarket canonicalMarket = smm.createMarket(canonical);
-            IServerMarket aliasMarket = smm.createMarket(alias);
-            if (canonicalMarket == null || aliasMarket == null)
-                return fail("failed to create the two test markets");
+            ItemID[] pair = registerRepairCostPair();
+            if (!pair[0].isValid() || !pair[1].isValid() || pair[0].equals(pair[1]))
+                return fail("failed to register the two synthetic paper templates as distinct IDs");
+            // BankSystem's canonical rule: lowest short wins.
+            ItemID canonical = lowerShort(pair[0], pair[1]);
+            ItemID alias = higherShort(pair[0], pair[1]);
 
-            // Apply the merge under the explicitly grown set — repair_cost becomes volatile,
-            // the two paper variants collapse in the BankSystem registry, the ITEM_IDS_MERGED
-            // event fires, and our listener runs consolidateMergedMarkets.
-            ItemIDManager.renormalizeAndMerge(withRepairCost(realSet));
+            try {
+                IServerMarket canonicalMarket = smm.createMarket(canonical);
+                IServerMarket aliasMarket = smm.createMarket(alias);
+                if (canonicalMarket == null || aliasMarket == null)
+                    return fail("failed to create the two test markets");
 
-            TestResult r = assertTrue("canonical-keyed market still exists post-merge",
-                    smm.marketExists(canonical));
-            if (!r.passed()) return r;
-            r = assertFalse("alias-keyed market deleted by the event listener",
-                    smm.marketExists(alias));
-            if (!r.passed()) return r;
-            // Alias must now resolve to canonical in the BankSystem registry.
-            r = assertEquals("BankSystem resolves alias to canonical",
-                    canonical, ItemIDManager.resolveAlias(alias));
-            if (!r.passed()) return r;
-            return pass("BankSystem merge event triggered market consolidation");
+                // Install a fixture registry holding ONLY the synthetic pair before applying
+                // the grown set. renormalizeAndMerge() re-normalizes and merges EVERY template
+                // in the registry, so running it against the live registry would permanently
+                // collapse real item pairs that differ only by repair_cost (and consolidate the
+                // corresponding player bank balances — an effect no restore can undo). With the
+                // fixture in place the only alias pair produced is ours, so the ITEM_IDS_MERGED
+                // consolidation is scoped to the synthetic templates.
+                Map<ItemID, ItemStack> fixture = new HashMap<>();
+                fixture.put(canonical, ItemIDManager.getItemStackTemplate(canonical).copy());
+                fixture.put(alias, ItemIDManager.getItemStackTemplate(alias).copy());
+                ItemIDManager.replaceState_forTesting(fixture, Map.of(), snapshot.counter());
+
+                // Apply the merge under the explicitly grown set — repair_cost becomes volatile,
+                // the two paper variants collapse in the BankSystem registry, the ITEM_IDS_MERGED
+                // event fires, and our listener runs consolidateMergedMarkets.
+                ItemIDManager.renormalizeAndMerge(withRepairCost(realSet));
+
+                TestResult r = assertTrue("canonical-keyed market still exists post-merge",
+                        smm.marketExists(canonical));
+                if (!r.passed()) return r;
+                r = assertFalse("alias-keyed market deleted by the event listener",
+                        smm.marketExists(alias));
+                if (!r.passed()) return r;
+                // Alias must now resolve to canonical in the BankSystem registry.
+                r = assertEquals("BankSystem resolves alias to canonical",
+                        canonical, ItemIDManager.resolveAlias(alias));
+                if (!r.passed()) return r;
+                return pass("BankSystem merge event triggered market consolidation");
+            } finally {
+                smm.deleteMarket(canonical);
+                smm.deleteMarket(alias);
+            }
         } finally {
-            smm.deleteMarket(canonical);
-            smm.deleteMarket(alias);
+            // Undoes both the fixture swap and the merge: the live registry, alias table,
+            // quarantine map and short counter all go back to their pre-test values.
+            restoreState(snapshot);
         }
     }
 
@@ -368,71 +520,79 @@ public class MarketMergeConsolidationTestSuite extends TestSuite {
         IServerBankManager bankManager = backend.BANK_SYSTEM_API.getServerBankManager().getSync();
         if (bankManager == null) return fail("ServerBankManager unavailable");
 
-        ItemID[] pair = registerRepairCostPair();
-        if (!pair[0].isValid() || !pair[1].isValid() || pair[0].equals(pair[1]))
-            return fail("failed to register the two synthetic paper templates as distinct IDs");
-        ItemID canonical = lowerShort(pair[0], pair[1]);
-        ItemID alias = higherShort(pair[0], pair[1]);
-
-        int accountNr = ServerBankAccount.INVALID_ACCOUNT_NUMBER;
+        StateSnapshot snapshot = snapshotState();
         try {
-            if (!bankManager.allowItemID(canonical) || !bankManager.allowItemID(alias))
-                return fail("could not allow the synthetic paper templates for banking");
+            ItemID[] pair = registerRepairCostPair();
+            if (!pair[0].isValid() || !pair[1].isValid() || pair[0].equals(pair[1]))
+                return fail("failed to register the two synthetic paper templates as distinct IDs");
+            ItemID canonical = lowerShort(pair[0], pair[1]);
+            ItemID alias = higherShort(pair[0], pair[1]);
 
-            IServerBankAccount account = bankManager.createBankAccount("MarketMergeRefundTest");
-            if (account == null) return fail("failed to create the test bank account");
-            accountNr = account.getAccountNumber();
+            int accountNr = ServerBankAccount.INVALID_ACCOUNT_NUMBER;
+            try {
+                if (!bankManager.allowItemID(canonical) || !bankManager.allowItemID(alias))
+                    return fail("could not allow the synthetic paper templates for banking");
 
-            // Give the account 500 items under BOTH the alias and canonical, lock 200 on alias —
-            // simulates a player limit-sell order sitting on the alias-keyed market.
-            IServerBank canonicalBank = account.createBank(canonical, 500);
-            IServerBank aliasBank = account.createBank(alias, 500);
-            if (canonicalBank == null || aliasBank == null)
-                return fail("failed to create the two per-item banks");
-            if (aliasBank.lockAmount(200) != BankStatus.SUCCESS)
-                return fail("failed to lock 200 items on the alias bank");
-            TestResult r = assertEquals("precondition: 200 items locked on alias bank",
-                    200L, aliasBank.getLockedBalance());
-            if (!r.passed()) return r;
+                IServerBankAccount account = bankManager.createBankAccount("MarketMergeRefundTest");
+                if (account == null) return fail("failed to create the test bank account");
+                accountNr = account.getAccountNumber();
 
-            // Both markets exist as separate entries.
-            IServerMarket canonicalMarket = smm.createMarket(canonical);
-            IServerMarket aliasMarket = smm.createMarket(alias);
-            if (canonicalMarket == null || aliasMarket == null)
-                return fail("failed to create the two test markets");
+                // Give the account 500 items under BOTH the alias and canonical, lock 200 on alias —
+                // simulates a player limit-sell order sitting on the alias-keyed market.
+                IServerBank canonicalBank = account.createBank(canonical, 500);
+                IServerBank aliasBank = account.createBank(alias, 500);
+                if (canonicalBank == null || aliasBank == null)
+                    return fail("failed to create the two per-item banks");
+                if (aliasBank.lockAmount(200) != BankStatus.SUCCESS)
+                    return fail("failed to lock 200 items on the alias bank");
+                TestResult r = assertEquals("precondition: 200 items locked on alias bank",
+                        200L, aliasBank.getLockedBalance());
+                if (!r.passed()) return r;
 
-            // Feed alias-keyed market a player limit sell order that references the
-            // locked amount. It goes straight into the orderbook (bypassing the input
-            // buffer / matching engine) so cancelAllPlayerOrders sees it during close.
-            UUID playerUUID = UUID.randomUUID();
-            net.kroia.stockmarket.stockmarket.market.core.order.Order sellOrder =
-                    new net.kroia.stockmarket.stockmarket.market.core.order.Order(
-                            alias,
-                            net.kroia.stockmarket.stockmarket.market.core.order.Order.Type.LIMIT,
-                            -200, 100, 0, playerUUID, accountNr);
-            ((ServerMarket) aliasMarket).getOrderbook().putOrder(sellOrder);
+                // Both markets exist as separate entries.
+                IServerMarket canonicalMarket = smm.createMarket(canonical);
+                IServerMarket aliasMarket = smm.createMarket(alias);
+                if (canonicalMarket == null || aliasMarket == null)
+                    return fail("failed to create the two test markets");
 
-            // Trigger reconciliation — alias market is deleted, its player order canceled,
-            // its locked funds unlocked via the standard deleteMarket path.
-            smm.consolidateMergedMarkets(Map.of(alias, canonical));
+                // Feed alias-keyed market a player limit sell order that references the
+                // locked amount. It goes straight into the orderbook (bypassing the input
+                // buffer / matching engine) so cancelAllPlayerOrders sees it during close.
+                UUID playerUUID = UUID.randomUUID();
+                net.kroia.stockmarket.stockmarket.market.core.order.Order sellOrder =
+                        new net.kroia.stockmarket.stockmarket.market.core.order.Order(
+                                alias,
+                                net.kroia.stockmarket.stockmarket.market.core.order.Order.Type.LIMIT,
+                                -200, 100, 0, playerUUID, accountNr);
+                ((ServerMarket) aliasMarket).getOrderbook().putOrder(sellOrder);
 
-            r = assertFalse("alias-keyed market deleted", smm.marketExists(alias));
-            if (!r.passed()) return r;
-            // BankSystem's getBank(alias) resolves through the alias table if a merge
-            // happened, but here we bypassed the merge and called consolidate directly —
-            // the alias bank still lives under its original key. Read it back through
-            // the account directly to avoid alias-resolution surprises.
-            r = assertEquals("locked balance on alias bank refunded to 0",
-                    0L, aliasBank.getLockedBalance());
-            if (!r.passed()) return r;
-            return pass("deleteMarket path refunded the locked funds on the deleted duplicate");
+                // Trigger reconciliation — alias market is deleted, its player order canceled,
+                // its locked funds unlocked via the standard deleteMarket path.
+                smm.consolidateMergedMarkets(Map.of(alias, canonical));
+
+                r = assertFalse("alias-keyed market deleted", smm.marketExists(alias));
+                if (!r.passed()) return r;
+                // BankSystem's getBank(alias) resolves through the alias table if a merge
+                // happened, but here we bypassed the merge and called consolidate directly —
+                // the alias bank still lives under its original key. Read it back through
+                // the account directly to avoid alias-resolution surprises.
+                r = assertEquals("locked balance on alias bank refunded to 0",
+                        0L, aliasBank.getLockedBalance());
+                if (!r.passed()) return r;
+                return pass("deleteMarket path refunded the locked funds on the deleted duplicate");
+            } finally {
+                if (accountNr != ServerBankAccount.INVALID_ACCOUNT_NUMBER)
+                    bankManager.deleteBankAccount(accountNr);
+                // NO disallowItemID here: it is not the inverse of allowItemID. It delegates
+                // to disallowItemIDAndReport, which runtime-BLACKLISTS the ID (and clears the
+                // item's bank from every holder account without refunding). The blacklist rows
+                // then outlived the registry restore below and showed up as stray "air" entries
+                // in the manage screen. restoreState() puts both filter sets back verbatim.
+                smm.deleteMarket(canonical);
+                smm.deleteMarket(alias);
+            }
         } finally {
-            if (accountNr != ServerBankAccount.INVALID_ACCOUNT_NUMBER)
-                bankManager.deleteBankAccount(accountNr);
-            bankManager.disallowItemID(canonical);
-            bankManager.disallowItemID(alias);
-            smm.deleteMarket(canonical);
-            smm.deleteMarket(alias);
+            restoreState(snapshot);
         }
     }
 }

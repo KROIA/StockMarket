@@ -14,8 +14,8 @@ import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
+import net.kroia.stockmarket.testing.TestFixture;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.world.item.Items;
 
 import java.util.UUID;
 import java.util.function.Function;
@@ -47,6 +47,9 @@ public class InterMarketExecutorTestSuite extends TestSuite {
     private IServerBankAccount counterpartyAccount;
     private int counterpartyAccountNr;
     private UUID counterpartyUUID;
+
+    /** Owns every scratch market/account/user this suite creates; drained in {@link #teardown()}. */
+    private final TestFixture fixture = new TestFixture("InterMarketExecutor");
 
     @Override
     public TestCategory getCategory() {
@@ -177,28 +180,30 @@ public class InterMarketExecutorTestSuite extends TestSuite {
             throw new RuntimeException("InterMarketExecutorTestSuite requires BACKEND_INSTANCES to be set");
         }
 
+        fixture.setBackend(BACKEND_INSTANCES);
         moneyID = ItemID.getOrRegisterFromItemStackServerSide_direct(BankSystemItems.MONEY.get().getDefaultInstance());
-        itemA_ID = ItemID.getOrRegisterFromItemStackServerSide_direct(Items.GOLD_INGOT.getDefaultInstance());
-        itemB_ID = ItemID.getOrRegisterFromItemStackServerSide_direct(Items.IRON_INGOT.getDefaultInstance());
 
-        marketA = BACKEND_INSTANCES.MARKET_MANAGER.getSync().createMarket(itemA_ID);
-        marketB = BACKEND_INSTANCES.MARKET_MANAGER.getSync().createMarket(itemB_ID);
+        // Scratch markets on synthetic ItemIDs — never the player's live gold/iron markets.
+        // This matters doubly here: resetState() cancels every inter-market order touching
+        // these two markets, which on a live market would wipe real players' orders.
+        marketA = fixture.createMarket("itemA");
+        marketB = fixture.createMarket("itemB");
+        itemA_ID = marketA.getItemID();
+        itemB_ID = marketB.getItemID();
         marketManager = (ServerMarketManager) BACKEND_INSTANCES.MARKET_MANAGER.getSync();
         scaleFactor = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync().getItemFractionScaleFactor();
 
         // Create test player and bank account
-        testPlayerUUID = UUID.randomUUID();
-        BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(testPlayerUUID, "IMTTestPlayer");
-        bankAccount = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync().createBankAccount("IMTTestAccount");
+        testPlayerUUID = fixture.createUser("IMTTestPlayer");
+        bankAccount = fixture.createBankAccount("IMTTestAccount");
         bankAccountNr = bankAccount.getAccountNumber();
         bankAccount.createBank(itemA_ID, 100 * scaleFactor);
         bankAccount.createBank(itemB_ID, 100 * scaleFactor);
         bankAccount.createBank(moneyID, 100000);
 
         // Create counterparty player and bank account (for real order tests)
-        counterpartyUUID = UUID.randomUUID();
-        BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(counterpartyUUID, "IMTCounterparty");
-        counterpartyAccount = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync().createBankAccount("IMTCounterpartyAccount");
+        counterpartyUUID = fixture.createUser("IMTCounterparty");
+        counterpartyAccount = fixture.createBankAccount("IMTCounterpartyAccount");
         counterpartyAccountNr = counterpartyAccount.getAccountNumber();
         counterpartyAccount.createBank(itemA_ID, 100 * scaleFactor);
         counterpartyAccount.createBank(itemB_ID, 100 * scaleFactor);
@@ -207,15 +212,27 @@ public class InterMarketExecutorTestSuite extends TestSuite {
 
     @Override
     public void teardown() {
-        // Restore markets to a clean state with uniform volume
+        // Drain both matching engines (inter-market orders first, so their locked funds
+        // are refunded) before the scratch markets and accounts are dropped.
+        if (marketManager != null) {
+            try {
+                if (itemA_ID != null) marketManager.cancelInterMarketOrdersForMarket(itemA_ID);
+                if (itemB_ID != null) marketManager.cancelInterMarketOrdersForMarket(itemB_ID);
+            } catch (Exception ignored) {
+                // Best effort — fixture.cleanup() below must still run.
+            }
+        }
         if (marketA != null) {
-            marketA.test_setDefaultVolumeProviderFunction(p -> 5f);
-            marketA.test_resetVirtualOrderBookVolume();
+            marketA.test_clearOrderbook();
+            marketA.test_clearIncomingOrderBuffers();
         }
         if (marketB != null) {
-            marketB.test_setDefaultVolumeProviderFunction(p -> 5f);
-            marketB.test_resetVirtualOrderBookVolume();
+            marketB.test_clearOrderbook();
+            marketB.test_clearIncomingOrderBuffers();
         }
+        marketA = null;
+        marketB = null;
+        fixture.cleanup();
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -228,7 +245,8 @@ public class InterMarketExecutorTestSuite extends TestSuite {
 
     private void resetState(long priceA, long priceB,
                             Function<Double, Float> depthA, Function<Double, Float> depthB) {
-        // Cancel any leftover inter-market orders from previous tests
+        // Cancel any leftover inter-market orders from previous tests. itemA_ID/itemB_ID are
+        // this suite's scratch markets (see setup), so this can never cancel a real order.
         marketManager.cancelInterMarketOrdersForMarket(itemA_ID);
         marketManager.cancelInterMarketOrdersForMarket(itemB_ID);
 

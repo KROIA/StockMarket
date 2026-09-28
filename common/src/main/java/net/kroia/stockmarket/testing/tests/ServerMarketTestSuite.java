@@ -13,8 +13,8 @@ import net.kroia.stockmarket.stockmarket.market.MarketSettings;
 import net.kroia.stockmarket.stockmarket.market.ServerMarket;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
+import net.kroia.stockmarket.testing.TestFixture;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.world.item.Items;
 
 import java.util.UUID;
 
@@ -25,6 +25,9 @@ public class ServerMarketTestSuite extends TestSuite {
     public static void setBackend(StockMarketModBackend.ServerInstances backend) {
         ServerMarketTestSuite.backend = backend;
     }
+
+    /** Owns the scratch market/account this suite creates; drained in {@link #teardown()}. */
+    private final TestFixture fixture = new TestFixture("ServerMarket");
 
     private ItemID itemID;
     private ItemID moneyID;
@@ -75,15 +78,15 @@ public class ServerMarketTestSuite extends TestSuite {
         if (backend == null) {
             throw new RuntimeException("ServerMarketTestSuite requires backend to be set");
         }
+        fixture.setBackend(backend);
         moneyID = ItemID.getOrRegisterFromItemStackServerSide_direct(BankSystemItems.MONEY.get().getDefaultInstance());
-        itemID = ItemID.getOrRegisterFromItemStackServerSide_direct(Items.GOLD_INGOT.getDefaultInstance());
-        serverMarket = backend.MARKET_MANAGER.getSync().createMarket(itemID);
+        // Scratch market on a synthetic ItemID — never the player's live gold market, so
+        // the setMarketOpen(false) calls below can never close a market a player trades on.
+        serverMarket = fixture.createMarket("main");
+        itemID = serverMarket.getItemID();
 
-        bankAccount = backend.BANK_SYSTEM_API.getServerBankManager().getSync().getBankAccount(2);
-        if (bankAccount == null)
-            bankAccount = backend.BANK_SYSTEM_API.getServerBankManager().getSync().createBankAccount("ServerMarketTest");
-        if (bankAccount == null)
-            throw new RuntimeException("Can't create ServerMarketTest bank account");
+        // Scratch account — never a fixed account number, which would squat on a real player's account.
+        bankAccount = fixture.createBankAccount("trader");
         bankAccountNr = bankAccount.getAccountNumber();
         bankAccount.createBank(itemID, 100);
         bankAccount.createBank(moneyID, 10000);
@@ -91,12 +94,14 @@ public class ServerMarketTestSuite extends TestSuite {
 
     @Override
     public void teardown() {
+        // Reopen + clear so deleteMarket sees no dangling orders, then drop everything.
         if (serverMarket != null) {
             serverMarket.setMarketOpen(true);
             serverMarket.test_clearOrderbook();
-            serverMarket.test_setDefaultVolumeProviderFunction(null);
-            serverMarket.test_resetVirtualOrderBookVolume();
+            serverMarket.test_clearIncomingOrderBuffers();
         }
+        serverMarket = null;
+        fixture.cleanup();
     }
 
     private void resetMarket(long price, boolean open) {

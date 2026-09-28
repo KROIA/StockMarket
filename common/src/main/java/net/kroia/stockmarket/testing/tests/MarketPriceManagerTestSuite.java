@@ -3,6 +3,7 @@ package net.kroia.stockmarket.testing.tests;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.data.table.MarketPriceManager;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
@@ -24,6 +25,34 @@ public class MarketPriceManagerTestSuite extends TestSuite {
     }
 
     private MarketPriceManager manager;
+
+    /**
+     * Scratch market short IDs used by the two write tests. Real markets are keyed by
+     * ItemID shorts minted from 1 upwards, so negative values can never collide with a
+     * real market's price history — the tests used to insert under short {@code 1} and
+     * {@code 2} and never delete, permanently polluting the live MarketPrice table with
+     * fake candles for whatever items happened to own those shorts.
+     */
+    private static final short SCRATCH_MARKET_ID_A = -31001;
+    private static final short SCRATCH_MARKET_ID_B = -31002;
+
+    /**
+     * Deletes every MarketPrice row written under a scratch market ID. Blocks briefly so
+     * the purge is done before the test returns; never throws (runs inside {@code finally}).
+     *
+     * @param marketId the scratch short ID to purge
+     */
+    private void purgeScratchRows(short marketId) {
+        if (manager == null)
+            return;
+        try {
+            manager.removeHistory(Optional.empty(), Optional.of(new EqualityFilter(marketId)))
+                    .get(5, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            StockMarketMod.LOGGER.error("Failed to purge scratch MarketPrice rows for market "
+                    + marketId, e);
+        }
+    }
 
     @Override
     public TestCategory getCategory() {
@@ -98,9 +127,9 @@ public class MarketPriceManagerTestSuite extends TestSuite {
             if (manager == null)
                 return fail("MARKET_PRICE_HISTORY_MANAGER is null");
 
-            // Save a record and verify it can be queried back
+            // Save a record under a scratch market ID and verify it can be queried back.
             MarketPriceStruct testRecord = new MarketPriceStruct(
-                    (short) 1, 100L, 90L, 110L, System.currentTimeMillis(), 0f);
+                    SCRATCH_MARKET_ID_A, 100L, 90L, 110L, System.currentTimeMillis(), 0f);
 
             CompletableFuture<Void> saveFuture = manager.save(testRecord);
             saveFuture.get(5, TimeUnit.SECONDS);
@@ -108,7 +137,7 @@ public class MarketPriceManagerTestSuite extends TestSuite {
             // Query back with market filter
             CompletableFuture<List<MarketPriceStruct>> queryFuture = manager.getHistory(
                     Optional.empty(),
-                    Optional.of(new EqualityFilter((short) 1)),
+                    Optional.of(new EqualityFilter(SCRATCH_MARKET_ID_A)),
                     1);
             List<MarketPriceStruct> results = queryFuture.get(5, TimeUnit.SECONDS);
 
@@ -116,11 +145,13 @@ public class MarketPriceManagerTestSuite extends TestSuite {
             if (!r.passed()) return r;
 
             MarketPriceStruct retrieved = results.get(results.size() - 1);
-            r = assertEquals("Market ID should match", (short) 1, retrieved.id());
+            r = assertEquals("Market ID should match", SCRATCH_MARKET_ID_A, retrieved.id());
             if (!r.passed()) return r;
             return pass("queueRecord sets all 5 fields correctly and data is retrievable");
         } catch (Exception e) {
             return fail("Exception: " + e.getMessage());
+        } finally {
+            purgeScratchRows(SCRATCH_MARKET_ID_A);
         }
     }
 
@@ -199,15 +230,15 @@ public class MarketPriceManagerTestSuite extends TestSuite {
             if (manager == null)
                 return fail("MARKET_PRICE_HISTORY_MANAGER is null");
 
-            // Insert a few records first
+            // Insert a few records first, under a scratch market ID.
             for (int i = 0; i < 5; i++) {
                 MarketPriceStruct record = new MarketPriceStruct(
-                        (short) 2, 100L + i, 90L, 110L, System.currentTimeMillis() + i, 0f);
+                        SCRATCH_MARKET_ID_B, 100L + i, 90L, 110L, System.currentTimeMillis() + i, 0f);
                 manager.save(record).get(5, TimeUnit.SECONDS);
             }
 
             CompletableFuture<List<MarketPriceStruct>> future = manager.getHistory(
-                    Optional.empty(), Optional.of(new EqualityFilter((short) 2)), 3);
+                    Optional.empty(), Optional.of(new EqualityFilter(SCRATCH_MARKET_ID_B)), 3);
             List<MarketPriceStruct> results = future.get(5, TimeUnit.SECONDS);
 
             TestResult r = assertTrue("Should return at most 3 results with LIMIT 3, got " + results.size(),
@@ -216,6 +247,8 @@ public class MarketPriceManagerTestSuite extends TestSuite {
             return pass("LIMIT clause correctly applied, returned " + results.size() + " records");
         } catch (Exception e) {
             return fail("Exception: " + e.getMessage());
+        } finally {
+            purgeScratchRows(SCRATCH_MARKET_ID_B);
         }
     }
 

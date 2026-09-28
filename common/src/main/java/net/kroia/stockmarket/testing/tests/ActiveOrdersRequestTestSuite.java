@@ -13,7 +13,7 @@ import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.networking.request.ActiveOrdersRequest;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
-import net.minecraft.world.item.Items;
+import net.kroia.stockmarket.testing.TestFixture;
 
 import java.util.List;
 import java.util.UUID;
@@ -25,6 +25,21 @@ public class ActiveOrdersRequestTestSuite extends TestSuite {
 
     public static void setBackend(StockMarketModBackend.ServerInstances backend) {
         ActiveOrdersRequestTestSuite.backend = backend;
+    }
+
+    /** Owns every scratch market/account/user this suite creates; drained in {@link #teardown()}. */
+    private final TestFixture fixture = new TestFixture("ActiveOrdersRequest");
+
+    /**
+     * Registers a scratch bank user and records it with the fixture, so
+     * {@link #teardown()} removes it again instead of leaving it in the world.
+     *
+     * @param playerUUID the scratch player UUID
+     * @param name       display name for the user
+     */
+    private void registerAndAddUser(UUID playerUUID, String name) {
+        fixture.registerUser(playerUUID);
+        backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(playerUUID, name);
     }
 
     private ItemID itemID;
@@ -55,20 +70,24 @@ public class ActiveOrdersRequestTestSuite extends TestSuite {
         if (backend == null) {
             throw new RuntimeException("ActiveOrdersRequestTestSuite requires backend to be set");
         }
+        fixture.setBackend(backend);
         moneyID = ItemID.getOrRegisterFromItemStackServerSide_direct(BankSystemItems.MONEY.get().getDefaultInstance());
-        itemID = ItemID.getOrRegisterFromItemStackServerSide_direct(Items.GOLD_INGOT.getDefaultInstance());
-        serverMarket = backend.MARKET_MANAGER.getSync().createMarket(itemID);
-        bankAccount = backend.BANK_SYSTEM_API.getServerBankManager().getSync().createBankAccount("ActiveOrdersRequestTest");
-        if (bankAccount == null)
-            throw new RuntimeException("Can't create ActiveOrdersRequestTest bank account");
+        // Scratch market on a synthetic ItemID — never the player's live gold market.
+        serverMarket = fixture.createMarket("main");
+        itemID = serverMarket.getItemID();
+        bankAccount = fixture.createBankAccount("trader");
         bankAccountNr = bankAccount.getAccountNumber();
     }
 
     @Override
     public void teardown() {
+        // Clear any order left in the matching engine before the market is dropped.
         if (serverMarket != null) {
             serverMarket.test_clearOrderbook();
+            serverMarket.test_clearIncomingOrderBuffers();
         }
+        serverMarket = null;
+        fixture.cleanup();
     }
 
     private void resetMarket() {
@@ -104,9 +123,9 @@ public class ActiveOrdersRequestTestSuite extends TestSuite {
         try {
             resetMarket();
             UUID executor = UUID.randomUUID();
-            backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(executor, "PermTestUser");
+            registerAndAddUser(executor, "PermTestUser");
 
-            bankAccount.addUser(new User(executor, "TestUser", false), BankPermission.getAllPermissions());
+            bankAccount.addUser(new User(executor, "TestUser"), BankPermission.getAllPermissions());
 
             placeTestOrders(executor, executor, bankAccountNr, bankAccountNr);
 
@@ -134,11 +153,11 @@ public class ActiveOrdersRequestTestSuite extends TestSuite {
             resetMarket();
             UUID executor1 = UUID.randomUUID();
             UUID executor2 = UUID.randomUUID();
-            backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(executor1, "ExecFilter1");
-            backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(executor2, "ExecFilter2");
+            registerAndAddUser(executor1, "ExecFilter1");
+            registerAndAddUser(executor2, "ExecFilter2");
 
-            bankAccount.addUser(new User(executor1, "TestUser1", false), BankPermission.getAllPermissions());
-            bankAccount.addUser(new User(executor2, "TestUser2", false), BankPermission.getAllPermissions());
+            bankAccount.addUser(new User(executor1, "TestUser1"), BankPermission.getAllPermissions());
+            bankAccount.addUser(new User(executor2, "TestUser2"), BankPermission.getAllPermissions());
 
             placeTestOrders(executor1, executor2, bankAccountNr, bankAccountNr);
 
@@ -176,11 +195,11 @@ public class ActiveOrdersRequestTestSuite extends TestSuite {
             resetMarket();
             UUID executor = UUID.randomUUID();
             UUID otherPlayer = UUID.randomUUID();
-            backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(executor, "MatchExecUser");
-            backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(otherPlayer, "OtherExecUser");
+            registerAndAddUser(executor, "MatchExecUser");
+            registerAndAddUser(otherPlayer, "OtherExecUser");
 
-            bankAccount.addUser(new User(executor, "TestUser", false), BankPermission.getAllPermissions());
-            bankAccount.addUser(new User(otherPlayer, "OtherUser", false), BankPermission.getAllPermissions());
+            bankAccount.addUser(new User(executor, "TestUser"), BankPermission.getAllPermissions());
+            bankAccount.addUser(new User(otherPlayer, "OtherUser"), BankPermission.getAllPermissions());
 
             Order o1 = new Order(itemID, Order.Type.LIMIT, 5, 90, 1000, executor, bankAccountNr);
             serverMarket.getOrderbook().putOrder(o1);
@@ -208,9 +227,9 @@ public class ActiveOrdersRequestTestSuite extends TestSuite {
         try {
             resetMarket();
             UUID player = UUID.randomUUID();
-            backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(player, "BankAcctFilterUser");
+            registerAndAddUser(player, "BankAcctFilterUser");
 
-            bankAccount.addUser(new User(player, "TestPlayer", false), BankPermission.getAllPermissions());
+            bankAccount.addUser(new User(player, "TestPlayer"), BankPermission.getAllPermissions());
 
             Order o1 = new Order(itemID, Order.Type.LIMIT, 5, 90, 1000, player, bankAccountNr);
             Order o2 = new Order(itemID, Order.Type.LIMIT, 3, 85, 2000, player, 9999);
@@ -243,9 +262,9 @@ public class ActiveOrdersRequestTestSuite extends TestSuite {
         try {
             resetMarket();
             UUID player = UUID.randomUUID();
-            backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(player, "NegBankFilterUser");
+            registerAndAddUser(player, "NegBankFilterUser");
 
-            bankAccount.addUser(new User(player, "TestPlayer", false), BankPermission.getAllPermissions());
+            bankAccount.addUser(new User(player, "TestPlayer"), BankPermission.getAllPermissions());
 
             Order o1 = new Order(itemID, Order.Type.LIMIT, 5, 90, 1000, player, bankAccountNr);
             Order o2 = new Order(itemID, Order.Type.LIMIT, 3, 85, 2000, player, 9999);
@@ -279,9 +298,9 @@ public class ActiveOrdersRequestTestSuite extends TestSuite {
         try {
             resetMarket();
             UUID player = UUID.randomUUID();
-            backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(player, "TimeRangeUser");
+            registerAndAddUser(player, "TimeRangeUser");
 
-            bankAccount.addUser(new User(player, "TestPlayer", false), BankPermission.getAllPermissions());
+            bankAccount.addUser(new User(player, "TestPlayer"), BankPermission.getAllPermissions());
 
             Order o1 = new Order(itemID, Order.Type.LIMIT, 5, 90, 1000, player, bankAccountNr);
             Order o2 = new Order(itemID, Order.Type.LIMIT, -5, 110, 5000, player, bankAccountNr);
@@ -313,9 +332,9 @@ public class ActiveOrdersRequestTestSuite extends TestSuite {
         try {
             resetMarket();
             UUID player = UUID.randomUUID();
-            backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(player, "NullExecUser");
+            registerAndAddUser(player, "NullExecUser");
 
-            bankAccount.addUser(new User(player, "TestPlayer", false), BankPermission.getAllPermissions());
+            bankAccount.addUser(new User(player, "TestPlayer"), BankPermission.getAllPermissions());
 
             placeTestOrders(player, player, bankAccountNr, bankAccountNr);
 
@@ -342,9 +361,9 @@ public class ActiveOrdersRequestTestSuite extends TestSuite {
         try {
             resetMarket();
             UUID player = UUID.randomUUID();
-            backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(player, "NullItemUser");
+            registerAndAddUser(player, "NullItemUser");
 
-            bankAccount.addUser(new User(player, "TestPlayer", false), BankPermission.getAllPermissions());
+            bankAccount.addUser(new User(player, "TestPlayer"), BankPermission.getAllPermissions());
 
             placeTestOrders(player, player, bankAccountNr, bankAccountNr);
 

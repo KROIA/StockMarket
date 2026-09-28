@@ -10,7 +10,7 @@ import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.pluginsystem.pluginmanager.ServerPluginManager;
 import net.kroia.stockmarket.pluginsystem.plugin.core.cache.MarketCache;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
-import net.minecraft.world.item.Items;
+import net.kroia.stockmarket.testing.TestFixture;
 
 public class PluginTestSuite extends TestSuite {
 
@@ -19,6 +19,9 @@ public class PluginTestSuite extends TestSuite {
     public static void setBackend(StockMarketModBackend.ServerInstances backend) {
         PluginTestSuite.backend = backend;
     }
+
+    /** Owns the scratch market and plugin cache this suite creates; drained in {@link #teardown()}. */
+    private final TestFixture fixture = new TestFixture("Plugin");
 
     private ItemID itemID;
     private IServerMarket serverMarket;
@@ -52,8 +55,14 @@ public class PluginTestSuite extends TestSuite {
         if (backend == null) {
             throw new RuntimeException("PluginTestSuite requires backend to be set");
         }
-        itemID = ItemID.getOrRegisterFromItemStackServerSide_direct(Items.GOLD_INGOT.getDefaultInstance());
-        serverMarket = backend.MARKET_MANAGER.getSync().createMarket(itemID);
+        fixture.setBackend(backend);
+        // Scratch market on a synthetic ItemID — never the player's live gold market, so the
+        // caches created below belong to this suite alone and can be dropped safely.
+        serverMarket = fixture.createMarket("main");
+        itemID = serverMarket.getItemID();
+        // createCache() below targets the scratch market; register it so teardown drains it
+        // even if deleteMarket's implicit removeCache ever changes.
+        fixture.registerPluginCache(itemID);
 
         if (backend.PLUGIN_MANAGER != null && backend.PLUGIN_MANAGER.getSync() != null) {
             pluginManager = (ServerPluginManager) backend.PLUGIN_MANAGER.getSync();
@@ -62,7 +71,8 @@ public class PluginTestSuite extends TestSuite {
 
     @Override
     public void teardown() {
-        // Nothing to tear down - we don't want to modify the plugin manager state
+        serverMarket = null;
+        fixture.cleanup();
     }
 
     // ── State Guards ─────────────────────────────────────────────────────────
