@@ -123,7 +123,9 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
         // Clamp PID output to [-1, 1] as a fraction of how aggressively to push
         double pidFraction = Math.min(Math.max(-1, output), 1);
 
-        float volumeToTarget = market.oderBook.getRealVolume(currentPrice, data.targetPrice);
+        // Size from virtual depth only: counting resting player limit orders here let the bot fill a
+        // whole player order in one go at its limit price, before the player's flow could move the price.
+        float volumeToTarget = market.oderBook.getRealVirtualVolume(currentPrice, data.targetPrice);
         double absVolumeToTarget = Math.abs(volumeToTarget);
 
         double normalized;

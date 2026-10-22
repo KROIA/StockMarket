@@ -612,6 +612,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
 
         matchingEngine.update(currentMarketPrice);
         candleTradedVolume += matchingEngine.getLastTradedVolume();
+        trackPlayerNetFlow(matchingEngine.getLastPlayerFilledVolume());
 
         // Update the current candle
         candleLowPrice = Math.min(candleLowPrice, currentMarketPrice);
@@ -625,7 +626,6 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     private void onOrderConsumed(Order order)
     {
         unlockRemainingFunds(order);
-        trackPlayerNetFlow(order);
         saveOrderRecord(order);
     }
 
@@ -651,7 +651,6 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     private void onOrderCanceled(Order order)
     {
         unlockRemainingFunds(order);
-        trackPlayerNetFlow(order);
         saveOrderRecord(order);
     }
 
@@ -673,16 +672,12 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
 
 
     /**
-     * Tracks the net player item flow for completed/cancelled orders.
-     * filledVolume is negative for sell orders, so subtracting it adds to the counter.
-     * Bot orders are excluded.
+     * Tracks the net player item flow, per fill (not when an order completes), so a large
+     * order's impact reaches the price plugins while it is still filling.
+     * filledVolume is negative for sell fills, so subtracting it adds to the counter.
+     * Bot and inter-market orders are excluded by the matching engine.
      */
-    private void trackPlayerNetFlow(Order order) {
-        if (order.isBotOrder()) return;
-        if (order.getType() == Order.Type.INTER_MARKET) return; // tracked at inter-market level
-        long filledVolume = order.getFilledVolume();
-        if (filledVolume == 0) return;
-        // filledVolume is negative for sell orders, so subtracting it adds to the counter
+    private void trackPlayerNetFlow(long filledVolume) {
         netPlayerItemFlow -= filledVolume;
     }
 
