@@ -67,6 +67,8 @@ public class MatchingEngineTestSuite extends TestSuite {
         addTest("flowCurve_buyThenSellAfterCatchUp_neverProfits", () -> flowRoundTrip(1, true));
         addTest("flowCurve_splitBuysThenSellAfterCatchUp_neverProfits", () -> flowRoundTrip(10, true));
         addTest("flowCurve_buyThenSellBeforeCatchUp_neverProfits", () -> flowRoundTrip(1, false));
+        addTest("flowCurve_restingSell_fillsOnlyWhileCurveStaysAboveLimit", this::test_flowCurve_restingSell_fillsOnlyWhileCurveStaysAboveLimit);
+        addTest("flowCurve_restingBuy_fillsOnlyWhileCurveStaysBelowLimit", this::test_flowCurve_restingBuy_fillsOnlyWhileCurveStaysBelowLimit);
         addTest("flowCurve_smallOrderPaysBookPrice", this::test_flowCurve_smallOrderPaysBookPrice);
         addTest("restingLimitBuy_filledInTwoSells_recordsItsLimitPrice", this::test_restingLimitBuy_filledInTwoSells_recordsItsLimitPrice);
 
@@ -635,6 +637,97 @@ public class MatchingEngineTestSuite extends TestSuite {
             if (left > 0 && profit > 0) return pass("Part of the position is unsold (" + left / isf + " items left); no realised profit check");
             return assertTrue("Round trip made money: spent " + spent + ", net " + profit + ", bought " + held / isf + " items, unsold " + left / isf
                     + ", caughtUp=" + bookCaughtUp + ", splits=" + splits, profit <= 0);
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /**
+     * A bot order that pushes the price through a resting player order may fill it only as far as the order's own flow
+     * keeps the flow curve's price on the right side of its limit. Curve: anchor 500, 50 items of flow per factor e.
+     * Resting sell at 600 -> curve reaches 600 at flow -50*ln(1.2) = -9.12 items; with flow at -20 that leaves 10.88 items.
+     */
+    private TestResult test_flowCurve_restingSell_fillsOnlyWhileCurveStaysAboveLimit() {
+        try {
+            double sf = net.kroia.banksystem.BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+            long isf = (long) sf;
+            resetMarketState(false, 500);
+            serverMarket.resetNetPlayerItemFlow();
+            ItemID item = serverMarket.getItemID();
+            bankAccount1.getBank(item).setBalance(1000 * isf);
+            bankAccount2.getBank(moneyID).setBalance(1_000_000_000L);
+            bankAccount2.getBank(item).setBalance(0);
+
+            // flow of -20 items: the player bought 20 from bots (curve inactive for this setup step)
+            Order seed = new Order(item, Order.Type.MARKET, 20 * isf, 0, 0, UUID.randomUUID(), bankAccountNr2);
+            serverMarket.test_setDefaultVolumeProviderFunction(this::uniformVolumeDistribution);
+            uniformVolumeDistributionScale = 50 * isf;
+            serverMarket.test_setCurrentMarketPrice(500);
+            serverMarket.test_clearOrderbook();
+            serverMarket.putOrder(seed);
+            serverMarket.update();
+            if (serverMarket.getNetPlayerItemFlow() != -20 * isf)
+                return fail("Setup: expected flow -20 items, got " + serverMarket.getNetPlayerItemFlow() / sf);
+
+            serverMarket.setFlowPriceCurve(new net.kroia.stockmarket.stockmarket.market.core.FlowPriceCurve(500 / sf, 50, 0.1, 10));
+            serverMarket.test_setDefaultVolumeProviderFunction(this::emptyVolumeDistribution);   // only the resting order supplies
+            serverMarket.test_setCurrentMarketPrice(500);
+            serverMarket.test_clearOrderbook();
+            Order resting = new Order(item, Order.Type.LIMIT, -100 * isf, 600, 0, UUID.randomUUID(), bankAccountNr1);
+            serverMarket.putOrder(resting);
+            serverMarket.update();
+
+            // a bot buys everything up to 700
+            serverMarket.putOrder(new Order(item, Order.Type.MARKET, 100 * isf, 700, 0));
+            serverMarket.update();
+
+            double filled = -resting.getFilledVolume() / sf;
+            return assertTrue("Resting sell should fill about 10.88 items before the curve drops below its limit, got " + filled,
+                    filled > 10.0 && filled < 11.5);
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Mirror of the resting-sell test. Curve: anchor 500, 50 items of flow per factor e.
+     * Resting buy at 400 -> curve falls to 400 at flow +50*ln(1.25) = +11.16 items; with flow at +20 that leaves 8.84 items.
+     */
+    private TestResult test_flowCurve_restingBuy_fillsOnlyWhileCurveStaysBelowLimit() {
+        try {
+            double sf = net.kroia.banksystem.BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+            long isf = (long) sf;
+            resetMarketState(false, 500);
+            serverMarket.resetNetPlayerItemFlow();
+            ItemID item = serverMarket.getItemID();
+            bankAccount1.getBank(item).setBalance(1000 * isf);
+            bankAccount2.getBank(moneyID).setBalance(1_000_000_000L);
+
+            // flow of +20 items: the player sold 20 to bots (curve inactive for this setup step)
+            serverMarket.test_setDefaultVolumeProviderFunction(this::uniformVolumeDistribution);
+            uniformVolumeDistributionScale = 50 * isf;
+            serverMarket.test_setCurrentMarketPrice(500);
+            serverMarket.test_clearOrderbook();
+            serverMarket.putOrder(new Order(item, Order.Type.MARKET, -20 * isf, 0, 0, UUID.randomUUID(), bankAccountNr1));
+            serverMarket.update();
+            if (serverMarket.getNetPlayerItemFlow() != 20 * isf)
+                return fail("Setup: expected flow +20 items, got " + serverMarket.getNetPlayerItemFlow() / sf);
+
+            serverMarket.setFlowPriceCurve(new net.kroia.stockmarket.stockmarket.market.core.FlowPriceCurve(500 / sf, 50, 0.1, 10));
+            serverMarket.test_setDefaultVolumeProviderFunction(this::emptyVolumeDistribution);   // only the resting order supplies
+            serverMarket.test_setCurrentMarketPrice(500);
+            serverMarket.test_clearOrderbook();
+            Order resting = new Order(item, Order.Type.LIMIT, 100 * isf, 400, 0, UUID.randomUUID(), bankAccountNr2);
+            serverMarket.putOrder(resting);
+            serverMarket.update();
+
+            // a bot sells everything down to 300
+            serverMarket.putOrder(new Order(item, Order.Type.MARKET, -100 * isf, 300, 0));
+            serverMarket.update();
+
+            double filled = resting.getFilledVolume() / sf;
+            return assertTrue("Resting buy should fill about 8.84 items before the curve rises above its limit, got " + filled,
+                    filled > 8.3 && filled < 9.4);
         } catch (Exception e) {
             return fail("Exception: " + e.getMessage());
         }

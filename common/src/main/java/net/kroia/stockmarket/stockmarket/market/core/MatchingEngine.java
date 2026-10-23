@@ -614,6 +614,30 @@ public class MatchingEngine
     }
 
     /**
+     * How much of a resting player limit order a bot order may fill without the order's own flow pushing the
+     * flow curve's price past its limit. A resting sell at L fills only while the curve's price stays at or above L,
+     * a resting buy only while it stays at or below L. Without this a resting order is filled in full at its limit
+     * however much price impact the fill causes, which lets a player dump a large position at the top and rebuy
+     * after the crash it caused.
+     * <p>
+     * Fills against other players' orders move no net flow and are not limited.
+     *
+     * @return the largest raw volume that may fill (0 = none), or Long.MAX_VALUE when unrestricted
+     */
+    private long flowFillAllowance(Order incoming, Order resting, boolean restingIsSeller)
+    {
+        if (flowCurve == null || !incoming.isBotOrder() || !resting.isPlayerOrder()
+                || resting.getType() == Order.Type.INTER_MARKET)
+            return Long.MAX_VALUE;
+        double sf = BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+        double limitFlow = flowCurve.flowForPrice(resting.getStartPrice() / sf);
+        if (Double.isNaN(limitFlow)) return Long.MAX_VALUE;
+        double flowNow = (baseFlowRaw.getAsLong() - playerFilledVolumeSinceLastReset) / sf;
+        double room = restingIsSeller ? limitFlow - flowNow : flowNow - limitFlow;
+        return room <= 0.0 ? 0 : (long) Math.floor(room * sf);
+    }
+
+    /**
      * The price a virtual fill is charged: the level price, or the flow curve's price once this
      * order's flow has moved it, whichever is worse for the player.
      * @param itemDeltaAfterChunk the order's signed item delta including the chunk about to fill
@@ -830,6 +854,11 @@ public class MatchingEngine
             long fillPotential = buyOrder.getRemainingVolume(); // positive
             if(fillPotential > -orderVolume)
                 fillPotential = -orderVolume;
+            long flowRoom = flowFillAllowance(order, buyOrder, false);
+            if (fillPotential > flowRoom)
+                fillPotential = flowRoom;
+            if (fillPotential <= 0)
+                continue;   // the flow curve's price has not reached this order's limit
 
             if (buyOrder.isPlayerOrder())
             {
@@ -980,6 +1009,11 @@ public class MatchingEngine
             long fillPotential = sellOrder.getRemainingVolume(); // negative
             if (-fillPotential > orderVolume)
                 fillPotential = -orderVolume;
+            long flowRoom = flowFillAllowance(order, sellOrder, true);
+            if (-fillPotential > flowRoom)
+                fillPotential = -flowRoom;
+            if (fillPotential >= 0)
+                continue;   // the flow curve's price has not reached this order's limit
 
             if (sellOrder.isPlayerOrder())
             {

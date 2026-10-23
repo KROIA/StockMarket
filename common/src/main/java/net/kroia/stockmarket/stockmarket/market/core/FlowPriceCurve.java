@@ -56,4 +56,15 @@ public final class FlowPriceCurve {
         }
         return bookPrice * multiplier(flowEnd) / multiplier(bookFlow);
     }
+
+    /**
+     * The cumulative flow at which the curve's price equals {@code price}, or NaN when the price is outside
+     * the curve's range (news, a misconfigured anchor), where the curve says nothing useful.
+     */
+    public double flowForPrice(double price) {
+        if (!(price > 0.0)) return Double.NaN;
+        double exponent = Math.log(price / anchorPrice);
+        if (!(exponent > logMin && exponent < logMax)) return Double.NaN;
+        return -capacity * exponent;
+    }
 }
