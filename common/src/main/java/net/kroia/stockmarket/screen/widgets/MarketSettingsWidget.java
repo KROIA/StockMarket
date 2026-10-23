@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.screen.widgets;
 
+import net.kroia.modutilities.TimerMillis;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.CheckBox;
 import net.kroia.modutilities.gui.elements.Label;
@@ -27,9 +28,24 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
 
     private static final int elementHeight = 20;
 
+    /** How often the Net Flow value is re-requested from the server, in milliseconds. */
+    private static final long NET_FLOW_REFRESH_INTERVAL_MS = 1000;
+
     private final ClientMarket market;
     private final MarketSettings settings;
     private boolean loading = false;
+
+    /**
+     * Throttle for the live Net Flow refresh. Auto-restarting, ticked from {@link #render()},
+     * which the GUI framework only calls while this element is actually visible
+     * (see {@code GuiElement.renderInternal} / {@code isVisible}). That means the polling
+     * stops by itself as soon as the panel is hidden, the tab is switched away or the screen
+     * is closed — there is no background thread or scheduled task to tear down.
+     */
+    private final TimerMillis netFlowRefreshTimer = new TimerMillis(true);
+
+    /** Guards against stacking requests if the server (or a master hop) is slow to answer. */
+    private boolean netFlowRequestInFlight = false;
 
     private final CheckBox marketOpenCheckBox;
     private final CheckBox virtualOrderbookEnabledCheckBox;
@@ -128,10 +144,49 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
         // One extra row for the virtual-orderbook checkbox + the clear/reset row.
         setHeight(8 * elementHeight + 9 * padding);
         loadSettings();
+        netFlowRefreshTimer.start(NET_FLOW_REFRESH_INTERVAL_MS);
     }
 
+    /**
+     * Drives the live Net Flow refresh. {@code netPlayerItemFlow} is server-side state
+     * (ServerMarket) that is shipped inside {@link MarketSettings}; there is no server push
+     * for it, so the client has to re-request it. We reuse the existing
+     * {@code ClientMarket.getSettings()} request rather than adding a dedicated one, and
+     * throttle it to roughly once per second via {@link #netFlowRefreshTimer}.
+     * <p>
+     * Only {@code netFlowValueLabel} is updated — deliberately <b>not</b> {@link #setSettings}.
+     * That method also calls {@code setText} on the price/abundance text boxes and
+     * {@code setChecked} on the checkboxes, so running it on a timer would clobber whatever
+     * the admin is currently typing or toggling before they press Apply.
+     * <p>
+     * The framework only calls {@code render()} while the element is visible, so this stops
+     * polling automatically when the panel is hidden or the screen is closed.
+     */
     @Override
-    protected void render() {}
+    protected void render() {
+        if (!netFlowRequestInFlight && netFlowRefreshTimer.check()) {
+            netFlowRequestInFlight = true;
+            // whenComplete (not thenAccept) so an exceptionally completed future still clears
+            // the in-flight flag — otherwise one failed request would stop the refresh forever.
+            market.getSettings().whenComplete((result, error) -> updateNetFlowLabel(error == null ? result : null));
+        }
+    }
+
+    /**
+     * Writes the freshly fetched net player item flow into the value label and keeps the
+     * locally cached {@link #settings} in sync, so a later Apply does not push a stale value
+     * back to the server. Touches nothing else on the form — see {@link #render()}.
+     *
+     * @param marketSettings the settings snapshot returned by the server; may be {@code null}
+     *                       if the request failed
+     */
+    private void updateNetFlowLabel(MarketSettings marketSettings) {
+        netFlowRequestInFlight = false;
+        if (marketSettings == null)
+            return;
+        settings.netPlayerItemFlow = marketSettings.netPlayerItemFlow;
+        netFlowValueLabel.setText(String.valueOf(getBankManager().convertToRealAmount(settings.netPlayerItemFlow)));
+    }
 
     @Override
     protected void layoutChanged() {
