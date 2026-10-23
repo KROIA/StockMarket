@@ -103,6 +103,18 @@ public interface IPluginMarket {
 
     void setTargetPrice(double targetPrice);
 
+    /**
+     * Declares how strongly cumulative player item flow moves this market's price, so player
+     * fills pay for the impact they cause while they fill instead of after.
+     * Buffered in the per-tick cache like {@link #setTargetPrice}; the anchor is derived from the final target price.
+     * Not calling it in a tick clears the effect for that tick.
+     *
+     * @param capacity real items of flow that move the price by a factor of e
+     * @param minMult  lower clamp of the price multiplier, 0 &lt; minMult &lt; 1
+     * @param maxMult  upper clamp of the price multiplier, maxMult &gt; 1
+     */
+    default void setFlowPriceCurve(double capacity, double minMult, double maxMult) {}
+
 
     /**
      * Adds the given delta to the target price.

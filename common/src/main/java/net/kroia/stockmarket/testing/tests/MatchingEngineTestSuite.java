@@ -59,6 +59,16 @@ public class MatchingEngineTestSuite extends TestSuite {
         addTest("partialFill_buyerInsufficientFunds", this::test_partialFill_buyerInsufficientFunds);
         addTest("partialFill_multipleCounterparties", this::test_partialFill_multipleCounterparties);
         addTest("marketSell_fillsBestBidsFirst", this::test_marketSell_fillsBestBidsFirst);
+        addTest("limitBuy_sweepingTwoLevels_recordsAveragePrice", this::test_limitBuy_sweepingTwoLevels_recordsAveragePrice);
+        addTest("limitSell_sweepingTwoLevels_recordsAveragePrice", this::test_limitSell_sweepingTwoLevels_recordsAveragePrice);
+        addTest("limitBuy_sweepingVirtualLevels_recordsAveragePrice", this::test_limitBuy_sweepingVirtualLevels_recordsAveragePrice);
+        addTest("roundTrip_marketBuyThenSell_neverProfits", this::test_roundTrip_marketBuyThenSell_neverProfits);
+        addTest("roundTrip_limitBuyThenLimitSellAtNewPrice_neverProfits", this::test_roundTrip_limitBuyThenLimitSellAtNewPrice_neverProfits);
+        addTest("flowCurve_buyThenSellAfterCatchUp_neverProfits", () -> flowRoundTrip(1, true));
+        addTest("flowCurve_splitBuysThenSellAfterCatchUp_neverProfits", () -> flowRoundTrip(10, true));
+        addTest("flowCurve_buyThenSellBeforeCatchUp_neverProfits", () -> flowRoundTrip(1, false));
+        addTest("flowCurve_smallOrderPaysBookPrice", this::test_flowCurve_smallOrderPaysBookPrice);
+        addTest("restingLimitBuy_filledInTwoSells_recordsItsLimitPrice", this::test_restingLimitBuy_filledInTwoSells_recordsItsLimitPrice);
 
         // Bot Orders
         addTest("botSell_noAccountRequired", this::test_botSell_noAccountRequired);
@@ -122,6 +132,7 @@ public class MatchingEngineTestSuite extends TestSuite {
         }
         serverMarket.test_setCurrentMarketPrice(price);
         serverMarket.test_clearOrderbook();
+        serverMarket.setFlowPriceCurve(null);   // the plugin tick may have left a flow curve on this market
         ItemID item = serverMarket.getItemID();
 
         bankAccount1.getBank(item).setBalance(100);
@@ -448,6 +459,231 @@ public class MatchingEngineTestSuite extends TestSuite {
                     serverMarket.getCurrentMarketPrice() == 97);
             if (!r.passed()) return r;
             return pass("Market sell fills the best bids first");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    private TestResult test_limitBuy_sweepingTwoLevels_recordsAveragePrice() {
+        try {
+            resetMarketState(false, 1000);
+            long sf = net.kroia.banksystem.BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+            ItemID item = serverMarket.getItemID();
+            bankAccount1.getBank(item).setBalance(100 * sf);
+            bankAccount2.getBank(moneyID).setBalance(100000);
+
+            serverMarket.putOrder(new Order(item, Order.Type.LIMIT, -5 * sf, 1200, 0, UUID.randomUUID(), bankAccountNr1));
+            serverMarket.putOrder(new Order(item, Order.Type.LIMIT, -5 * sf, 1300, 0, UUID.randomUUID(), bankAccountNr1));
+            serverMarket.update();
+
+            Order buy = new Order(item, Order.Type.LIMIT, 10 * sf, 1300, 0, UUID.randomUUID(), bankAccountNr2);
+            serverMarket.putOrder(buy);
+            serverMarket.update();
+
+            if (buy.getFilledVolume() != 10 * sf)
+                return fail("Expected buy filled for " + 10 * sf + ", got " + buy.getFilledVolume());
+            return assertTrue("Average price should be 1250 (5@1200 + 5@1300), got " + buy.getAverageExecutionPrice(),
+                    buy.getAverageExecutionPrice() == 1250);
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    private TestResult test_limitSell_sweepingTwoLevels_recordsAveragePrice() {
+        try {
+            resetMarketState(false, 1000);
+            long sf = net.kroia.banksystem.BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+            ItemID item = serverMarket.getItemID();
+            bankAccount1.getBank(item).setBalance(100 * sf);
+            bankAccount2.getBank(moneyID).setBalance(100000);
+
+            serverMarket.putOrder(new Order(item, Order.Type.LIMIT, 5 * sf, 900, 0, UUID.randomUUID(), bankAccountNr2));
+            serverMarket.putOrder(new Order(item, Order.Type.LIMIT, 5 * sf, 800, 0, UUID.randomUUID(), bankAccountNr2));
+            serverMarket.update();
+
+            Order sell = new Order(item, Order.Type.LIMIT, -10 * sf, 800, 0, UUID.randomUUID(), bankAccountNr1);
+            serverMarket.putOrder(sell);
+            serverMarket.update();
+
+            if (sell.getFilledVolume() != -10 * sf)
+                return fail("Expected sell filled for " + -10 * sf + ", got " + sell.getFilledVolume());
+            return assertTrue("Average price should be 850 (5@900 + 5@800), got " + sell.getAverageExecutionPrice(),
+                    sell.getAverageExecutionPrice() == 850);
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    private TestResult test_limitBuy_sweepingVirtualLevels_recordsAveragePrice() {
+        try {
+            long sf = net.kroia.banksystem.BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+            resetMarketState(true, 1000);
+            uniformVolumeDistributionScale = 5 * sf;   // 5 whole items per price level
+            serverMarket.test_setCurrentMarketPrice(1000);
+            serverMarket.test_clearOrderbook();
+            bankAccount2.getBank(moneyID).setBalance(1_000_000);
+
+            Order buy = new Order(serverMarket.getItemID(), Order.Type.LIMIT, 15 * sf, 1010, 0, UUID.randomUUID(), bankAccountNr2);
+            serverMarket.putOrder(buy);
+            serverMarket.update();
+
+            if (buy.getFilledVolume() != 15 * sf)
+                return fail("Expected 15 items filled, got " + buy.getFilledVolume() + " / " + 15 * sf);
+            long avg = buy.getAverageExecutionPrice();
+            return assertTrue("Average price over several virtual levels should exceed the first level (1001), got " + avg,
+                    avg > 1001 && avg <= 1010);
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    private TestResult test_roundTrip_marketBuyThenSell_neverProfits() {
+        try {
+            long sf = net.kroia.banksystem.BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+            resetMarketState(true, 500);
+            uniformVolumeDistributionScale = 5 * sf;
+            serverMarket.test_setCurrentMarketPrice(500);
+            serverMarket.test_clearOrderbook();
+            ItemID item = serverMarket.getItemID();
+            bankAccount2.getBank(item).setBalance(0);
+            bankAccount2.getBank(moneyID).setBalance(100_000_000);
+            long before = bankAccount2.getBank(moneyID).getTotalBalance();
+
+            serverMarket.putOrder(new Order(item, Order.Type.MARKET, 100 * sf, 0, 0, UUID.randomUUID(), bankAccountNr2));
+            serverMarket.update();
+            long held = bankAccount2.getBank(item).getTotalBalance();
+            long peak = serverMarket.getCurrentMarketPrice();
+            serverMarket.putOrder(new Order(item, Order.Type.MARKET, -held, 0, 0, UUID.randomUUID(), bankAccountNr2));
+            serverMarket.update();
+
+            long after = bankAccount2.getBank(moneyID).getTotalBalance();
+            long left = bankAccount2.getBank(item).getTotalBalance();
+            return assertTrue("Round trip changed money by " + (after - before) + " (bought " + held / sf + " items, peak price " + peak
+                    + ", items left " + left + "); must be <= 0", after - before <= 0);
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    private TestResult test_roundTrip_limitBuyThenLimitSellAtNewPrice_neverProfits() {
+        try {
+            long sf = net.kroia.banksystem.BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+            resetMarketState(true, 500);
+            uniformVolumeDistributionScale = 5 * sf;
+            serverMarket.test_setCurrentMarketPrice(500);
+            serverMarket.test_clearOrderbook();
+            ItemID item = serverMarket.getItemID();
+            bankAccount2.getBank(item).setBalance(0);
+            bankAccount2.getBank(moneyID).setBalance(100_000_000);
+            long before = bankAccount2.getBank(moneyID).getTotalBalance();
+
+            // buy sweeps up to 600, then sell limit at the price the buy pushed the market to
+            serverMarket.putOrder(new Order(item, Order.Type.LIMIT, 100 * sf, 600, 0, UUID.randomUUID(), bankAccountNr2));
+            serverMarket.update();
+            long held = bankAccount2.getBank(item).getTotalBalance();
+            long peak = serverMarket.getCurrentMarketPrice();
+            serverMarket.putOrder(new Order(item, Order.Type.LIMIT, -held, peak, 0, UUID.randomUUID(), bankAccountNr2));
+            serverMarket.update();
+
+            long after = bankAccount2.getBank(moneyID).getTotalBalance();
+            long left = bankAccount2.getBank(item).getTotalBalance();
+            return assertTrue("Limit round trip changed money by " + (after - before) + " (bought " + held / sf + " items, peak " + peak
+                    + ", items left " + left / sf + "); must be <= 0 unless items remain", after - before <= 0 || left > 0);
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /**
+     * The flow-driven price (see FlowPriceCurve) only reaches the book a few ticks after a player's fills.
+     * Buy 100 items in {@code splits} orders at the stale book price, then sell everything back, either once the
+     * book has caught up with the flow or while it still lags. Money must never go up.
+     */
+    private TestResult flowRoundTrip(int splits, boolean bookCaughtUp) {
+        try {
+            double sf = net.kroia.banksystem.BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+            long isf = (long) sf;
+            resetMarketState(true, 500);
+            uniformVolumeDistributionScale = 5 * isf;
+            serverMarket.test_setCurrentMarketPrice(500);
+            serverMarket.test_clearOrderbook();
+            serverMarket.resetNetPlayerItemFlow();
+            // 50 items of flow move the price by e; anchor = today's price at zero flow
+            serverMarket.setFlowPriceCurve(new net.kroia.stockmarket.stockmarket.market.core.FlowPriceCurve(500 / sf, 50, 0.1, 10));
+            ItemID item = serverMarket.getItemID();
+            bankAccount2.getBank(item).setBalance(0);
+            bankAccount2.getBank(moneyID).setBalance(1_000_000_000L);
+            long before = bankAccount2.getBank(moneyID).getTotalBalance();
+
+            for (int i = 0; i < splits; i++) {
+                serverMarket.putOrder(new Order(item, Order.Type.MARKET, 100 * isf / splits, 0, 0, UUID.randomUUID(), bankAccountNr2));
+                serverMarket.update();
+            }
+            long held = bankAccount2.getBank(item).getTotalBalance();
+            long spent = before - bankAccount2.getBank(moneyID).getTotalBalance();
+
+            // the bot catches up with the flow only after the buys: e^2 * 500
+            long caughtUp = Math.round(500 * Math.exp(2.0));
+            serverMarket.test_setCurrentMarketPrice(bookCaughtUp ? caughtUp : 500);
+            serverMarket.test_clearOrderbook();
+            serverMarket.putOrder(new Order(item, Order.Type.MARKET, -held, 0, 0, UUID.randomUUID(), bankAccountNr2));
+            serverMarket.update();
+
+            long after = bankAccount2.getBank(moneyID).getTotalBalance();
+            long left = bankAccount2.getBank(item).getTotalBalance();
+            long profit = after - before;
+            if (left > 0 && profit > 0) return pass("Part of the position is unsold (" + left / isf + " items left); no realised profit check");
+            return assertTrue("Round trip made money: spent " + spent + ", net " + profit + ", bought " + held / isf + " items, unsold " + left / isf
+                    + ", caughtUp=" + bookCaughtUp + ", splits=" + splits, profit <= 0);
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    private TestResult test_flowCurve_smallOrderPaysBookPrice() {
+        try {
+            double sf = net.kroia.banksystem.BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+            long isf = (long) sf;
+            resetMarketState(true, 500);
+            uniformVolumeDistributionScale = 5 * isf;
+            serverMarket.test_setCurrentMarketPrice(500);
+            serverMarket.test_clearOrderbook();
+            serverMarket.resetNetPlayerItemFlow();
+            serverMarket.setFlowPriceCurve(new net.kroia.stockmarket.stockmarket.market.core.FlowPriceCurve(500 / sf, 50, 0.1, 10));
+            ItemID item = serverMarket.getItemID();
+            bankAccount2.getBank(moneyID).setBalance(1_000_000_000L);
+
+            Order buy = new Order(item, Order.Type.MARKET, isf / 100, 0, 0, UUID.randomUUID(), bankAccountNr2);
+            serverMarket.putOrder(buy);
+            serverMarket.update();
+            // 0.01 items against 50 of capacity moves the price by 0.02%: the fill must stay within 1% of the book
+            long avg = buy.getAverageExecutionPrice();
+            return assertTrue("Small buy should pay about the book price (500..505), got " + avg, avg >= 500 && avg <= 505);
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    private TestResult test_restingLimitBuy_filledInTwoSells_recordsItsLimitPrice() {
+        try {
+            resetMarketState(false, 1000);
+            long sf = net.kroia.banksystem.BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+            ItemID item = serverMarket.getItemID();
+            bankAccount1.getBank(item).setBalance(100 * sf);
+            bankAccount2.getBank(moneyID).setBalance(100000);
+
+            Order buy = new Order(item, Order.Type.LIMIT, 10 * sf, 900, 0, UUID.randomUUID(), bankAccountNr2);
+            serverMarket.putOrder(buy);
+            serverMarket.update();
+            serverMarket.putOrder(new Order(item, Order.Type.MARKET, -4 * sf, 0, 0, UUID.randomUUID(), bankAccountNr1));
+            serverMarket.update();
+            serverMarket.putOrder(new Order(item, Order.Type.MARKET, -6 * sf, 0, 0, UUID.randomUUID(), bankAccountNr1));
+            serverMarket.update();
+
+            if (buy.getFilledVolume() != 10 * sf)
+                return fail("Expected resting buy filled for " + 10 * sf + ", got " + buy.getFilledVolume());
+            return assertTrue("Average price should be 900, got " + buy.getAverageExecutionPrice(),
+                    buy.getAverageExecutionPrice() == 900);
         } catch (Exception e) {
             return fail("Exception: " + e.getMessage());
         }

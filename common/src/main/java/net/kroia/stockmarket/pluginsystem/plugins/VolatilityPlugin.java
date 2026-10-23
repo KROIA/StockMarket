@@ -168,6 +168,13 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
             // Scale random walk proportionally to the equilibrium price for equal percentage volatility
             double deviation = data.priceGenerator.getCurrentValue() * data.settings.volatilityScale();
             market.market.setTargetPrice(Math.max(0, equilibrium * (1.0 + deviation)));
+
+            // Let player fills pay for the impact they cause while filling (see FlowPriceCurve)
+            double capacity = flowCapacity(market.market.getNaturalAbundance(), data.settings);
+            if (capacity > 0.0) {
+                market.market.setFlowPriceCurve(capacity,
+                        sanitizedMinMult(data.settings), sanitizedMaxMult(data.settings));
+            }
         }
     }
 
@@ -242,6 +249,24 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
         exponent = Math.min(Math.max(exponent, Math.log(minMult)), Math.log(maxMult));
 
         return defaultPrice * Math.exp(exponent);
+    }
+
+    /** Items of flow that move the price by a factor of e; 0 when the flow effect is off or misconfigured. */
+    static double flowCapacity(float naturalAbundance, Settings settings) {
+        if (settings == null || !settings.flowInfluenceEnabled()) return 0.0;
+        double capacity = (double) settings.flowSensitivity() * naturalAbundance
+                / (1.0 + settings.volatilityScale());
+        return (capacity > 0.0 && !Double.isInfinite(capacity)) ? capacity : 0.0;
+    }
+
+    static double sanitizedMinMult(Settings settings) {
+        double minMult = settings.minPriceMult();
+        return (!(minMult > 0.0) || !(minMult < 1.0)) ? DEFAULT_MIN_PRICE_MULT : minMult;
+    }
+
+    static double sanitizedMaxMult(Settings settings) {
+        double maxMult = settings.maxPriceMult();
+        return !(maxMult > 1.0) ? DEFAULT_MAX_PRICE_MULT : maxMult;
     }
 
     @Override

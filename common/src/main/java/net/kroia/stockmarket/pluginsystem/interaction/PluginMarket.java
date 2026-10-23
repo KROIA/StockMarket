@@ -80,6 +80,12 @@ public class PluginMarket implements IPluginMarket
     }
 
     @Override
+    public void setFlowPriceCurve(double capacity, double minMult, double maxMult)
+    {
+        cache.setFlowCurveShape(capacity, minMult, maxMult);
+    }
+
+    @Override
     public double getPreviousTargetPrice() {
         return cache.getLastTargetPrice();
     }

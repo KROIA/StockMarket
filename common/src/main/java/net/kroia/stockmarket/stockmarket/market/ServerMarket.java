@@ -471,6 +471,16 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
 
     @Override
     public long getNetPlayerItemFlow() { return netPlayerItemFlow; }
+
+    /**
+     * Sets (or clears, with null) the price impact curve player fills are charged against
+     * while they fill. Set by the plugin cache every tick.
+     */
+    @Override
+    public void setFlowPriceCurve(@org.jetbrains.annotations.Nullable net.kroia.stockmarket.stockmarket.market.core.FlowPriceCurve curve)
+    {
+        matchingEngine.setFlowPriceCurve(curve, () -> netPlayerItemFlow);
+    }
     @Override
     public void resetNetPlayerItemFlow() { netPlayerItemFlow = 0; }
     @Override

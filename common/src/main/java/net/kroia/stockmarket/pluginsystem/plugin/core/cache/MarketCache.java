@@ -15,6 +15,8 @@ public class MarketCache {
     private final VirtualOrderBookCache virtualOrderBookCache = new VirtualOrderBookCache();
     private double lastTargetPrice = 0;
     private double nextTargetPrice = 0;
+    // capacity, minMult, maxMult of this tick's flow price curve; null = flow impact off
+    private double[] flowCurveShape = null;
 
     private final IServerMarket serverMarket;
     private final IPluginMarket pluginMarket;
@@ -46,6 +48,7 @@ public class MarketCache {
     {
         orderCache.apply(serverMarket);
         virtualOrderBookCache.apply(serverMarket);
+        applyFlowCurve();
 
         lastTargetPrice = nextTargetPrice;
     }
@@ -72,6 +75,30 @@ public class MarketCache {
     public void resetVirtualVolume()
     {
         virtualOrderBookCache.resetVirtualVolume();
+    }
+
+    public void setFlowCurveShape(double capacity, double minMult, double maxMult)
+    {
+        flowCurveShape = new double[]{capacity, minMult, maxMult};
+    }
+
+    /**
+     * The curve's anchor is the price the final target implies at zero flow, so the curve
+     * agrees with whatever every plugin together asked for this tick.
+     */
+    private void applyFlowCurve()
+    {
+        double[] shape = flowCurveShape;
+        flowCurveShape = null;
+        net.kroia.stockmarket.stockmarket.market.core.FlowPriceCurve curve = null;
+        if (shape != null && nextTargetPrice > 0 && shape[0] > 0 && shape[1] > 0 && shape[1] < 1 && shape[2] > 1)
+        {
+            double flowReal = MarketManager.convertToRealAmountStatic(serverMarket.getNetPlayerItemFlow());
+            var unanchored = new net.kroia.stockmarket.stockmarket.market.core.FlowPriceCurve(1.0, shape[0], shape[1], shape[2]);
+            double anchor = nextTargetPrice / unanchored.multiplier(flowReal);
+            curve = new net.kroia.stockmarket.stockmarket.market.core.FlowPriceCurve(anchor, shape[0], shape[1], shape[2]);
+        }
+        serverMarket.setFlowPriceCurve(curve);
     }
 
     public void setNextTargetPrice(double nextTargetPrice)

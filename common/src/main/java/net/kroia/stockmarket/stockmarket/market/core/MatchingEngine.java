@@ -586,6 +586,49 @@ public class MatchingEngine
     private float tradedVolumeSinceLastReset = 0;
     private long playerFilledVolumeSinceLastReset = 0;
 
+    // Flow price impact (see FlowPriceCurve): set by the market each tick, null when the flow effect is off.
+    private @Nullable FlowPriceCurve flowCurve;
+    private java.util.function.LongSupplier baseFlowRaw = () -> 0L;
+    // Set per order by beginFlowOrder; null when this order's virtual fills are not flow-priced.
+    private @Nullable Order flowOrder;
+    private long flowOrderBookPrice;
+    private long flowOrderStartFlowRaw;
+
+    public void setFlowPriceCurve(@Nullable FlowPriceCurve curve, java.util.function.LongSupplier baseFlowRaw)
+    {
+        this.flowCurve = curve;
+        this.baseFlowRaw = baseFlowRaw;
+    }
+
+    /** Player orders pay for their own price impact on virtual liquidity; bots and inter-market orders do not. */
+    private void beginFlowOrder(Order order)
+    {
+        if (flowCurve != null && order.isPlayerOrder() && order.getType() != Order.Type.INTER_MARKET)
+        {
+            flowOrder = order;
+            flowOrderBookPrice = currentMarketPrice;
+            flowOrderStartFlowRaw = baseFlowRaw.getAsLong() - playerFilledVolumeSinceLastReset;
+        }
+        else
+            flowOrder = null;
+    }
+
+    /**
+     * The price a virtual fill is charged: the level price, or the flow curve's price once this
+     * order's flow has moved it, whichever is worse for the player.
+     * @param itemDeltaAfterChunk the order's signed item delta including the chunk about to fill
+     */
+    private long flowAdjustedPrice(long levelPrice, long itemDeltaAfterChunk, boolean buy)
+    {
+        if (flowOrder == null || flowCurve == null || flowOrderBookPrice <= 0) return levelPrice;
+        double sf = BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+        long flowNowRaw = baseFlowRaw.getAsLong() - playerFilledVolumeSinceLastReset;
+        double flowEnd = (flowNowRaw - itemDeltaAfterChunk) / sf;
+        long ref = Math.round(flowCurve.priceAt(flowOrderBookPrice / sf, flowOrderStartFlowRaw / sf, flowEnd) * sf);
+        if (ref <= 0) return levelPrice;
+        return buy ? Math.max(levelPrice, ref) : Math.min(levelPrice, ref);
+    }
+
 
     public MatchingEngine(ItemID itemID, Orderbook orderbook,
                           PriorityQueue<Order> buyMarketOrders_inputBuffer,
@@ -742,6 +785,7 @@ public class MatchingEngine
 
     private void processSell(Order order, long orderVolume, @Nullable IServerBank itemBank, @Nullable IServerBank moneyBank, long minimalAcceptedPrice)
     {
+        beginFlowOrder(order);
         if(itemBank != null) {
             // Cap sell volume to what the player actually holds
             long available = itemBank.getTotalBalance();
@@ -884,6 +928,7 @@ public class MatchingEngine
 
     private void processBuy(Order order, long orderVolume, @Nullable IServerBank itemBank, @Nullable IServerBank moneyBank, long maximalAcceptedPrice)
     {
+        beginFlowOrder(order);
         long availableFunds = Long.MAX_VALUE;
         if(moneyBank != null) {
             availableFunds = moneyBank.getTotalBalance();
@@ -1069,8 +1114,11 @@ public class MatchingEngine
             long virtualVol = orderbook.getRawVirtualVolumeRounded(nextExecutedPrice);
             if (virtualVol > 0)
             {
+                long execPrice = flowAdjustedPrice(nextExecutedPrice, itemDelta - Math.min(-orderVolume, virtualVol), false);
+                if (flowOrder != null && execPrice < stopPrice)
+                    break;   // the flow-adjusted price is below what the order accepts
                 long filled = orderbook.fillVirtual(nextExecutedPrice, orderVolume);
-                long virtualCost = Math.round((double)nextExecutedPrice * filled / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
+                long virtualCost = Math.round((double)execPrice * filled / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
                 itemDelta  += filled;
                 moneyDelta -= virtualCost;
                 orderVolume -= filled;
@@ -1125,11 +1173,14 @@ public class MatchingEngine
             long virtualVol = orderbook.getRawVirtualVolumeRounded(nextExecutedPrice);
             if (virtualVol < 0)
             {
+                long execPrice = flowAdjustedPrice(nextExecutedPrice, itemDelta + Math.min(orderVolume, -virtualVol), true);
+                if (flowOrder != null && execPrice > stopPrice)
+                    break;   // the flow-adjusted price is above what the order accepts
                 long maxByFunds;
-                if (nextExecutedPrice <= 0 || availableFunds >= Long.MAX_VALUE / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR) {
+                if (execPrice <= 0 || availableFunds >= Long.MAX_VALUE / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR) {
                     maxByFunds = orderVolume;
                 } else {
-                    maxByFunds = affordableVolume(availableFunds, nextExecutedPrice);
+                    maxByFunds = affordableVolume(availableFunds, execPrice);
                 }
                 long wantToFill = Math.min(orderVolume, maxByFunds);
 
@@ -1138,7 +1189,7 @@ public class MatchingEngine
 
                 long filled = orderbook.fillVirtual(nextExecutedPrice, wantToFill);
                 // cost = rawPrice * rawVolume / scaleFactor
-                long cost = Math.round((double)nextExecutedPrice * filled / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
+                long cost = Math.round((double)execPrice * filled / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
                 itemDelta      += filled;
                 moneyDelta     -= cost;
                 availableFunds -= cost;
