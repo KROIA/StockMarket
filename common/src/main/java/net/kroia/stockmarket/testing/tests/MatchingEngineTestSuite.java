@@ -65,6 +65,7 @@ public class MatchingEngineTestSuite extends TestSuite {
         // Bot Orders
         addTest("botSell_noAccountRequired", this::test_botSell_noAccountRequired);
         addTest("botBuy_noAccountRequired", this::test_botBuy_noAccountRequired);
+        addTest("botSell_partialFillOfPlayerLimit_creditsFlowImmediately", this::test_botSell_partialFillOfPlayerLimit_creditsFlowImmediately);
 
         // Price Movement
         addTest("priceChangedCallback_fired", this::test_priceChangedCallback_fired);
@@ -450,6 +451,33 @@ public class MatchingEngineTestSuite extends TestSuite {
             return pass("Bot buy order processes without requiring a bank account");
         } catch (Exception e) {
             return fail("Bot buy order caused exception: " + e.getMessage());
+        }
+    }
+
+    private TestResult test_botSell_partialFillOfPlayerLimit_creditsFlowImmediately() {
+        try {
+            resetMarketState(false, 10);
+            serverMarket.resetNetPlayerItemFlow();
+
+            // Player limit buy rests in the orderbook (below market price)
+            Order limitBuy = new Order(serverMarket.getItemID(), Order.Type.LIMIT, 5, 8, 0, UUID.randomUUID(), bankAccountNr1);
+            serverMarket.putOrder(limitBuy);
+            serverMarket.update();
+
+            // Bot sell fills only part of it
+            Order botSell = new Order(serverMarket.getItemID(), Order.Type.MARKET, -2, 10, 0);
+            serverMarket.putOrder(botSell);
+            serverMarket.update();
+
+            if (limitBuy.getFilledVolume() != 2)
+                return fail("Expected limit buy filledVolume=2, got: " + limitBuy.getFilledVolume());
+            // The flow must count the fill now, not only once the order completes.
+            // Otherwise the price plugins only react after the whole order filled at its limit price.
+            if (serverMarket.getNetPlayerItemFlow() != -2)
+                return fail("Expected net player item flow -2 after partial fill, got: " + serverMarket.getNetPlayerItemFlow());
+            return pass("Partial fill of a resting player limit order is credited to the player flow immediately");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
         }
     }
 

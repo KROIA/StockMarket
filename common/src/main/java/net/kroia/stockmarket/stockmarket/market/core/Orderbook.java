@@ -241,6 +241,13 @@ public class Orderbook implements ServerSaveable
         }
         return (long)volume;
     }
+    /** Like {@link #getRealVolume(double, double)} but only counts virtual depth, not resting limit orders. */
+    public float getRealVirtualVolume(double realStartPrice, double realEndPrice)
+    {
+        long rawStartPrice = MarketManager.convertToRawAmountStatic(realStartPrice);
+        long rawEndPrice = MarketManager.convertToRawAmountStatic(realEndPrice);
+        return (float)MarketManager.convertToRealAmountStatic((long)virtualOrderbook.getVolumeInterpolated(rawStartPrice, rawEndPrice, 10));
+    }
     public float getRealVolume(double realStartPrice, double realEndPrice)
     {
         long rawStartPrice = MarketManager.convertToRawAmountStatic(realStartPrice);

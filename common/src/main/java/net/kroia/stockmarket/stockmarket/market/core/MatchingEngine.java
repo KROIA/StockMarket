@@ -584,6 +584,7 @@ public class MatchingEngine
     private final Orderbook.LongPair pair_cache =  new Orderbook.LongPair();
     private long currentMarketPrice;
     private float tradedVolumeSinceLastReset = 0;
+    private long playerFilledVolumeSinceLastReset = 0;
 
 
     public MatchingEngine(ItemID itemID, Orderbook orderbook,
@@ -612,10 +613,15 @@ public class MatchingEngine
     // Total matched trade volume accumulated during the last update() call (real-scaled)
     public float getLastTradedVolume() { return tradedVolumeSinceLastReset; }
 
+    // Net raw volume filled by player orders during the last update() call (buys positive, sells negative).
+    // Counted per fill so the player's market impact is known while a large order is still filling.
+    public long getLastPlayerFilledVolume() { return playerFilledVolumeSinceLastReset; }
+
     public void update(long currentMarketPrice)
     {
         this.currentMarketPrice = currentMarketPrice;
         tradedVolumeSinceLastReset = 0;
+        playerFilledVolumeSinceLastReset = 0;
 
         if(!buyLimitOrders_inputBuffer.isEmpty())
         {
@@ -803,6 +809,7 @@ public class MatchingEngine
                 long cost = Math.round((double)fillPotential * buyOrder.getStartPrice() / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
                 buyOrder.edit(fillPotential, -cost);
                 order.edit(-fillPotential, cost);
+                trackPlayerFill(buyOrder, fillPotential);
                 other.itemBank.deposit(fillPotential);
                 other.moneyBank.withdrawLockedPrefered(cost);
                 orderVolume += fillPotential;
@@ -959,6 +966,7 @@ public class MatchingEngine
                 long cost = Math.round((double)fillPotential * sellOrder.getStartPrice() / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
                 sellOrder.edit(fillPotential, -cost);
                 order.edit(-fillPotential, cost);
+                trackPlayerFill(sellOrder, fillPotential);
                 other.itemBank.withdrawLockedPrefered(-fillPotential);
                 other.moneyBank.deposit(-cost);
                 orderVolume    += fillPotential;
@@ -1165,6 +1173,7 @@ public class MatchingEngine
             itemBank.withdrawLockedPrefered(-itemDelta);  // itemDelta is negative → withdraw positive
         if(moneyBank != null)
             moneyBank.deposit(moneyDelta);
+        trackPlayerFill(order, itemDelta);
         if(order.isFilled())
             orderConsumed(order);
         else
@@ -1182,6 +1191,7 @@ public class MatchingEngine
             moneyBank.withdrawLockedPrefered(-moneyDelta);  // moneyDelta is negative → withdraw positive
         if(itemBank != null)
             itemBank.deposit(itemDelta);
+        trackPlayerFill(order, itemDelta);
         if(order.isFilled())
             orderConsumed(order);
         else
@@ -1274,6 +1284,12 @@ public class MatchingEngine
     }
 
 
+    /** Adds a player order's fill to the per-update player volume. Inter-market orders are tracked elsewhere. */
+    private void trackPlayerFill(Order order, long filledVolume)
+    {
+        if (order.isPlayerOrder() && order.getType() != Order.Type.INTER_MARKET)
+            playerFilledVolumeSinceLastReset += filledVolume;
+    }
     private void orderConsumed(Order order)
     {
         consumedOrderCallback.accept(order);

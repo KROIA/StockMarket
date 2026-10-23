@@ -47,6 +47,12 @@ public interface IPluginOrderBook {
 
     float getRealVirtualVolume(long backendPrice);
 
+    /**
+     * Like {@link #getRealVolume(double, double)}, but only counts the virtual orderbook depth.
+     * Resting limit orders (for example player orders) are not included.
+     */
+    float getRealVirtualVolume(double minPrice, double maxPrice);
+
     long getRawVolume(long backendPrice);
 
     float getRawVirtualVolume(long backendPrice);

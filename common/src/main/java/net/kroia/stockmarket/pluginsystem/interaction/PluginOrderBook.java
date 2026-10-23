@@ -75,6 +75,17 @@ public class PluginOrderBook implements IPluginOrderBook
     }
 
     @Override
+    public float getRealVirtualVolume(double minPrice, double maxPrice) {
+        if(minPrice > maxPrice)
+        {
+            double tmp = minPrice;
+            minPrice = maxPrice;
+            maxPrice = tmp;
+        }
+        return orderbook.getRealVirtualVolume(minPrice, maxPrice);
+    }
+
+    @Override
     public float getRealVolume(long backendPrice) {
         return (float)MarketManager.convertToRealAmountStatic(orderbook.getRawVolume(backendPrice));
     }
