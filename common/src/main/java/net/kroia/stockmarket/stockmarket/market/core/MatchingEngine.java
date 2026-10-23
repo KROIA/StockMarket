@@ -760,6 +760,8 @@ public class MatchingEngine
         // Copy to a temporary list to avoid ConcurrentModificationException
         // (the loop body calls orderbook.removeOrder which modifies the PriorityQueue)
         List<Order> buyOrderSnapshot = new ArrayList<>(buyOrders);
+        // PriorityQueue copies are in heap order, not priority order: match best price first
+        buyOrderSnapshot.sort(buyOrders.comparator());
         List<Order> buyOrdersToRemove = new ArrayList<>();
         boolean sellEarlyReturn = false;
 
@@ -903,6 +905,8 @@ public class MatchingEngine
         // Copy to a temporary list to avoid ConcurrentModificationException
         // (the loop body calls orderbook.removeOrder which modifies the PriorityQueue)
         List<Order> sellOrderSnapshot = new ArrayList<>(sellOrders);
+        // PriorityQueue copies are in heap order, not priority order: match best price first
+        sellOrderSnapshot.sort(sellOrders.comparator());
         List<Order> sellOrdersToRemove = new ArrayList<>();
         boolean buyEarlyReturn = false;
 

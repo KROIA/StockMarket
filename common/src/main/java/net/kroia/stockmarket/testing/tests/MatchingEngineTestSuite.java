@@ -61,6 +61,7 @@ public class MatchingEngineTestSuite extends TestSuite {
         addTest("partialFill_sellerInsufficientStock", this::test_partialFill_sellerInsufficientStock);
         addTest("partialFill_buyerInsufficientFunds", this::test_partialFill_buyerInsufficientFunds);
         addTest("partialFill_multipleCounterparties", this::test_partialFill_multipleCounterparties);
+        addTest("marketSell_fillsBestBidsFirst", this::test_marketSell_fillsBestBidsFirst);
 
         // Bot Orders
         addTest("botSell_noAccountRequired", this::test_botSell_noAccountRequired);
@@ -415,6 +416,38 @@ public class MatchingEngineTestSuite extends TestSuite {
             TestResult r = assertTrue("Buy should be filled or partially filled", buy.getFilledVolume() > 0);
             if (!r.passed()) return r;
             return pass("Order fills across multiple counterparties at different prices");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    private TestResult test_marketSell_fillsBestBidsFirst() {
+        try {
+            resetMarketState(false, 100);
+
+            // Seven resting buys inserted so the PriorityQueue's internal (heap) order is not price order
+            long[] prices = {90, 95, 80, 99, 85, 97, 92};
+            Order[] buys = new Order[prices.length];
+            for (int i = 0; i < prices.length; i++) {
+                buys[i] = new Order(serverMarket.getItemID(), Order.Type.LIMIT, 1, prices[i], 0, UUID.randomUUID(), bankAccountNr1);
+                serverMarket.putOrder(buys[i]);
+            }
+            serverMarket.update();
+
+            // Selling 2 should hit the best two bids: 99 and 97
+            Order sell = new Order(serverMarket.getItemID(), Order.Type.MARKET, -2, 0, 0, UUID.randomUUID(), bankAccountNr2);
+            serverMarket.putOrder(sell);
+            serverMarket.update();
+
+            for (int i = 0; i < prices.length; i++) {
+                boolean shouldFill = prices[i] == 99 || prices[i] == 97;
+                if (buys[i].isFilled() != shouldFill)
+                    return fail("Buy at " + prices[i] + (shouldFill ? " should be filled (best bids first)" : " should not be filled"));
+            }
+            TestResult r = assertTrue("Market price should end at the last (97) bid filled, but was " + serverMarket.getCurrentMarketPrice(),
+                    serverMarket.getCurrentMarketPrice() == 97);
+            if (!r.passed()) return r;
+            return pass("Market sell fills the best bids first");
         } catch (Exception e) {
             return fail("Exception: " + e.getMessage());
         }
