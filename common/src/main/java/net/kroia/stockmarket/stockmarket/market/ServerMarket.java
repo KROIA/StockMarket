@@ -682,6 +682,60 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     }
 
     /**
+     * Credits a real player fill to this market's net player item flow directly, bypassing
+     * the per-update accumulator that {@link #update()} drains.
+     *
+     * <p><b>When to use this and not the accumulator.</b> The normal path is
+     * {@code MatchingEngine.trackPlayerFill} → {@code getLastPlayerFilledVolume()} →
+     * {@link #trackPlayerNetFlow(long)}, which only works for fills that happen
+     * <i>inside</i> {@code matchingEngine.update(..)}: that method zeroes
+     * {@code playerFilledVolumeSinceLastReset} on entry, so anything accumulated outside
+     * an update() call is discarded before it is ever read. The bilateral inter-market
+     * walk ({@code MatchingEngine.executeCrossMarketLimitOrder}) fills real orders on two
+     * markets without calling {@link #update()} on either one, so it must credit here.</p>
+     *
+     * <p><b>Sign.</b> {@code signedVolume} uses the same convention as an order's filled
+     * volume: <b>positive = the player received items</b> (a buy, i.e. demand), <b>negative
+     * = the player gave items away</b> (a sell, i.e. supply). The stored counter is the
+     * negation of that, so a player buy lowers {@code netPlayerItemFlow} and a player sell
+     * raises it — matching {@code VolatilityPlugin.computeEquilibriumPrice}, which reads
+     * the counter as net <i>supply</i> pressure.</p>
+     *
+     * <p>Call once per fill, and only for player orders — bot fills and virtual-depth fills
+     * are not player supply/demand and must not be credited.</p>
+     *
+     * @param signedVolume raw fill volume, positive when the player received items
+     */
+    public void addPlayerItemFlow(long signedVolume) {
+        trackPlayerNetFlow(signedVolume);
+    }
+
+    /**
+     * Fires the "order fully consumed" bookkeeping for an order that was filled outside
+     * this market's {@link MatchingEngine} loop (currently only the bilateral inter-market
+     * depth walk, which consumes resting orders through static helpers that have no access
+     * to the engine's callbacks). Releases any leftover reservation and writes the order
+     * history record — exactly what the in-loop {@code consumedOrderCallback} does.
+     *
+     * @param order the resting order that was fully filled
+     */
+    public void notifyOrderConsumed(Order order) {
+        onOrderConsumed(order);
+    }
+
+    /**
+     * Fires the "order canceled" bookkeeping for an order whose remainder was dropped
+     * outside this market's {@link MatchingEngine} loop. Critically this runs
+     * {@link #unlockRemainingFunds(Order)}: without it the canceled remainder's locked
+     * money (buy) or locked items (sell) stay reserved in the player's bank forever.
+     *
+     * @param order the resting order whose unfilled remainder was canceled
+     */
+    public void notifyOrderCanceled(Order order) {
+        onOrderCanceled(order);
+    }
+
+    /**
      * Unlocks the bank funds reserved for the unfilled portion of a cancelled order.
      * Buy orders locked money (remainingVolume * startPrice) in the money bank.
      * Sell orders locked items (abs(remainingVolume)) in the item bank.

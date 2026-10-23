@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.testing.tests;
 
+import net.kroia.banksystem.api.bank.IServerBank;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.banksystem.util.ItemID;
@@ -8,7 +9,11 @@ import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IServerMarket;
+import net.kroia.stockmarket.stockmarket.market.ServerMarket;
+import net.kroia.stockmarket.stockmarket.market.core.MatchingEngine;
+import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
+import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.testing.TestFixture;
 
@@ -32,6 +37,24 @@ public class MatchingEngineTestSuite extends TestSuite {
     private int bankAccountNr2;
     private IServerBankAccount bankAccount2;
     private long uniformVolumeDistributionScale = 5;
+
+    // ── Net-player-flow / fund-unlock fixtures ────────────────────────────────
+    /** Second scratch market, so an inter-market (item-for-item) trade has a "want" side. */
+    private IServerMarket wantMarket;
+    private ServerMarketManager marketManager;
+    private int scaleFactor;
+    private UUID flowPlayerUUID;
+    /** Trader for the inter-market flow tests: holds both items plus money. */
+    private IServerBankAccount flowAccount;
+    private int flowAccountNr;
+    /**
+     * A resting-order owner that has a money bank but deliberately NO bank for the
+     * scratch market's item. Resolving its counterparty banks therefore fails, which is
+     * one of the branches that drops a resting order mid-walk — the branch that used to
+     * leak the order's reservation.
+     */
+    private IServerBankAccount orphanAccount;
+    private int orphanAccountNr;
 
     @Override
     public TestCategory getCategory() {
@@ -76,6 +99,11 @@ public class MatchingEngineTestSuite extends TestSuite {
         // Timeout Handling
         addTest("drainVirtualSell_timeout", this::test_drainVirtualSell_timeout);
         addTest("drainVirtualBuy_timeout", this::test_drainVirtualBuy_timeout);
+
+        // Inter-market net player flow (issue #36 follow-up)
+        addTest("interMarketMarketOrder_creditsFlowOnBothMarkets", this::test_interMarketMarketOrder_creditsFlowOnBothMarkets);
+        addTest("interMarketLimitOrder_creditsFlowOnBothMarkets", this::test_interMarketLimitOrder_creditsFlowOnBothMarkets);
+        addTest("consumeBuySideDepth_droppedRestingOrder_unlocksFunds", this::test_consumeBuySideDepth_droppedRestingOrder_unlocksFunds);
     }
 
     @Override
@@ -100,16 +128,50 @@ public class MatchingEngineTestSuite extends TestSuite {
         bankAccount2.createBank(id, 100);
         bankAccount1.createBank(moneyID, 10000);
         bankAccount2.createBank(moneyID, 10000);
+
+        // ── Inter-market flow fixtures ────────────────────────────────────────
+        marketManager = (ServerMarketManager) backend.MARKET_MANAGER.getSync();
+        scaleFactor = backend.BANK_SYSTEM_API.getServerBankManager().getSync().getItemFractionScaleFactor();
+
+        // Second scratch market: the "want" side of an item-for-item trade.
+        wantMarket = fixture.createMarket("want");
+
+        flowPlayerUUID = fixture.createUser("flowTrader");
+        flowAccount = fixture.createBankAccount("flowAccount");
+        flowAccountNr = flowAccount.getAccountNumber();
+        flowAccount.createBank(id, 100L * scaleFactor);
+        flowAccount.createBank(wantMarket.getItemID(), 100L * scaleFactor);
+        flowAccount.createBank(moneyID, 1000000);
+
+        // Money bank only — no bank for `id`, so counterparty resolution fails for it.
+        orphanAccount = fixture.createBankAccount("orphanBuyer");
+        orphanAccountNr = orphanAccount.getAccountNumber();
+        orphanAccount.createBank(moneyID, 10000);
     }
 
     @Override
     public void teardown() {
+        // Inter-market orders first: cancelling them refunds their locked items before
+        // the scratch markets and accounts are dropped.
+        if (marketManager != null) {
+            try {
+                if (serverMarket != null) marketManager.cancelInterMarketOrdersForMarket(serverMarket.getItemID());
+                if (wantMarket != null) marketManager.cancelInterMarketOrdersForMarket(wantMarket.getItemID());
+            } catch (Exception ignored) {
+                // Best effort — fixture.cleanup() below must still run.
+            }
+        }
         // Clear any order left in the matching engine before the market is dropped.
         if (serverMarket != null) {
             serverMarket.test_clearOrderbook();
             serverMarket.test_clearIncomingOrderBuffers();
         }
+        if (wantMarket != null) {
+            wantMarket.test_clearOrderbook();
+            wantMarket.test_clearIncomingOrderBuffers();
+        }
         serverMarket = null;
+        wantMarket = null;
         fixture.cleanup();
     }
 
@@ -612,6 +674,201 @@ public class MatchingEngineTestSuite extends TestSuite {
             TestResult r = assertTrue("Should complete within 30 seconds (timeout prevents hang)", elapsed < 30000);
             if (!r.passed()) return r;
             return pass("drainVirtualBuy timeout prevents infinite loop (completed in " + elapsed + "ms)");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    // ── Inter-market net player flow ──────────────────────────────────────────
+
+    /**
+     * Puts both scratch markets into a known state for an inter-market trade: uniform
+     * virtual depth on each, empty orderbooks, no leftover inter-market orders, and a
+     * trader who holds enough of both items plus money. Both flow counters start at 0.
+     *
+     * @param havePrice starting price of the "have" market ({@link #serverMarket})
+     * @param wantPrice starting price of the "want" market ({@link #wantMarket})
+     */
+    private void resetInterMarketState(long havePrice, long wantPrice) {
+        marketManager.cancelInterMarketOrdersForMarket(serverMarket.getItemID());
+        marketManager.cancelInterMarketOrdersForMarket(wantMarket.getItemID());
+
+        serverMarket.test_clearOrderbook();
+        serverMarket.test_setDefaultVolumeProviderFunction(p -> 5f);
+        serverMarket.test_setCurrentMarketPrice(havePrice);
+        serverMarket.test_resetVirtualOrderBookVolume();
+        serverMarket.setMarketOpen(true);
+
+        wantMarket.test_clearOrderbook();
+        wantMarket.test_setDefaultVolumeProviderFunction(p -> 5f);
+        wantMarket.test_setCurrentMarketPrice(wantPrice);
+        wantMarket.test_resetVirtualOrderBookVolume();
+        wantMarket.setMarketOpen(true);
+
+        unlockAll(flowAccount.getBank(serverMarket.getItemID()));
+        unlockAll(flowAccount.getBank(wantMarket.getItemID()));
+        unlockAll(flowAccount.getBank(moneyID));
+        flowAccount.getBank(serverMarket.getItemID()).setBalance(100L * scaleFactor);
+        flowAccount.getBank(wantMarket.getItemID()).setBalance(100L * scaleFactor);
+        flowAccount.getBank(moneyID).setBalance(1000000);
+
+        serverMarket.resetNetPlayerItemFlow();
+        wantMarket.resetNetPlayerItemFlow();
+    }
+
+    private void unlockAll(IServerBank bank) {
+        long locked = bank.getLockedBalance();
+        if (locked > 0) bank.unlockAmount(locked);
+    }
+
+    /**
+     * Builds an inter-market order that sells {@code sellVolume} of the have-market item
+     * to buy want-market items.
+     *
+     * @param sellVolume     raw volume of have-items to sell
+     * @param crossRateLimit 0 for a market order, &gt;0 for a limit order (bilateral walk)
+     */
+    private InterMarketOrder createFlowIMO(long sellVolume, long crossRateLimit) {
+        long havePrice = serverMarket.getCurrentMarketPrice();
+        long wantPrice = wantMarket.getCurrentMarketPrice();
+        long estimatedBuyVolume = (wantPrice > 0) ? (sellVolume * havePrice / wantPrice) : sellVolume;
+        if (estimatedBuyVolume <= 0) estimatedBuyVolume = 1;
+        return new InterMarketOrder(
+                wantMarket.getItemID(), serverMarket.getItemID(),
+                (crossRateLimit == 0) ? Order.Type.MARKET : Order.Type.LIMIT,
+                estimatedBuyVolume, wantPrice,
+                sellVolume, havePrice,
+                System.currentTimeMillis(),
+                flowPlayerUUID, flowAccountNr,
+                crossRateLimit);
+    }
+
+    /**
+     * Shared assertion for both inter-market paths.
+     * <p>
+     * An item-for-item trade is a sell on the have-market plus a buy on the want-market,
+     * so the have-market must see supply and the want-market must see demand. The stored
+     * counter is the negation of the signed fill, hence:
+     * <ul>
+     *   <li>have-market flow == {@code -sellLeg.getFilledVolume()} — the sell leg's filled
+     *       volume is negative, so the flow ends up <b>positive</b> (supply);</li>
+     *   <li>want-market flow == {@code -buyLeg.getFilledVolume()} — the buy leg's filled
+     *       volume is positive, so the flow ends up <b>negative</b> (demand).</li>
+     * </ul>
+     * Both markets trade against virtual depth only here, so there is no resting
+     * counterparty credit to net against and the magnitudes must match exactly.
+     */
+    private TestResult assertBothLegsCredited(InterMarketOrder imo, String context) {
+        long sellFilled = imo.getSellOrder().getFilledVolume();   // negative
+        long buyFilled = imo.getBuyOrder().getFilledVolume();     // positive
+        if (sellFilled >= 0 || buyFilled <= 0)
+            return fail(context + ": expected a two-sided fill, got sellFilled=" + sellFilled
+                    + ", buyFilled=" + buyFilled);
+
+        long haveFlow = serverMarket.getNetPlayerItemFlow();
+        long wantFlow = wantMarket.getNetPlayerItemFlow();
+
+        if (haveFlow != -sellFilled)
+            return fail(context + ": have-market flow should be " + (-sellFilled)
+                    + " (supply, positive), got " + haveFlow);
+        if (wantFlow != -buyFilled)
+            return fail(context + ": want-market flow should be " + (-buyFilled)
+                    + " (demand, negative), got " + wantFlow);
+        return pass(context + ": have-market flow +" + haveFlow + " (supply), want-market flow "
+                + wantFlow + " (demand)");
+    }
+
+    /**
+     * Market-type inter-market order (two real INTER_MARKET leg orders routed through
+     * putOrder + update). Regression for the {@code trackPlayerFill} guard that used to
+     * drop INTER_MARKET fills on the floor, leaving both markets' flow at 0.
+     */
+    private TestResult test_interMarketMarketOrder_creditsFlowOnBothMarkets() {
+        try {
+            resetInterMarketState(100, 50);
+
+            long sellVolume = 10L * scaleFactor;
+            InterMarketOrder imo = createFlowIMO(sellVolume, 0);
+            flowAccount.getBank(serverMarket.getItemID()).lockAmount(sellVolume);
+            if (!marketManager.putInterMarketOrder(imo))
+                return fail("InterMarketOrder was not enqueued");
+
+            marketManager.update();
+
+            return assertBothLegsCredited(imo, "Inter-market market order");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Limit-type inter-market order, which takes the bilateral depth-walk path
+     * ({@code executeCrossMarketLimitOrder}). That path builds no leg Orders and never
+     * calls ServerMarket.update(), so it must credit the flow directly — this is the
+     * regression for that.
+     */
+    private TestResult test_interMarketLimitOrder_creditsFlowOnBothMarkets() {
+        try {
+            resetInterMarketState(100, 50);
+
+            long sellVolume = 10L * scaleFactor;
+            // Generous cross-rate limit (4 have-items per want-item at a 100/50 price pair
+            // the fair rate is 0.5), so the walk is never stopped by the rate check.
+            InterMarketOrder imo = createFlowIMO(sellVolume, 4L * scaleFactor);
+            flowAccount.getBank(serverMarket.getItemID()).lockAmount(sellVolume);
+            if (!marketManager.putInterMarketOrder(imo))
+                return fail("InterMarketOrder was not enqueued");
+
+            marketManager.update();
+
+            return assertBothLegsCredited(imo, "Inter-market limit order");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /**
+     * The bilateral walk's depth consumer drops a resting order whose counterparty banks
+     * cannot be resolved. It used to do that with a bare {@code orderbook.removeOrder},
+     * skipping the cancel callback — so the buyer's locked money stayed reserved forever.
+     * The consumer now routes the drop through the market's cancel bookkeeping, which
+     * releases the reservation.
+     */
+    private TestResult test_consumeBuySideDepth_droppedRestingOrder_unlocksFunds() {
+        try {
+            resetMarketState(false, 10);
+            if (!(serverMarket instanceof ServerMarket market))
+                return fail("Expected the scratch market to be a master ServerMarket");
+
+            // 1 item at price 8 → exactly 8 money locked, well above the rounding floor.
+            long price = 8;
+            long volume = scaleFactor;
+            long cost = Math.round((double) volume * price / scaleFactor);
+
+            IServerBank orphanMoney = orphanAccount.getBank(moneyID);
+            unlockAll(orphanMoney);
+            orphanMoney.setBalance(10000);
+            orphanMoney.lockAmount(cost);
+            if (orphanMoney.getLockedBalance() != cost)
+                return fail("Setup failed: expected " + cost + " locked, got " + orphanMoney.getLockedBalance());
+
+            // Rests in the orderbook: 8 is below the market price of 10.
+            Order resting = new Order(serverMarket.getItemID(), Order.Type.LIMIT, volume, price, 0,
+                    UUID.randomUUID(), orphanAccountNr);
+            serverMarket.putOrder(resting);
+            serverMarket.update();
+
+            // The orphan has no item bank for this market, so the consumer cannot resolve
+            // its counterparty banks and drops the order unfilled.
+            MatchingEngine.consumeBuySideDepthAtPrice(market, price, volume);
+
+            if (resting.getFilledVolume() != 0)
+                return fail("Expected the dropped order to stay unfilled, got filledVolume="
+                        + resting.getFilledVolume());
+            if (orphanMoney.getLockedBalance() != 0)
+                return fail("Cancelled resting buy order leaked its reservation: "
+                        + orphanMoney.getLockedBalance() + " money still locked");
+            return pass("Dropping a resting buy order mid-walk unlocks its reserved " + cost + " money");
         } catch (Exception e) {
             return fail("Exception: " + e.getMessage());
         }

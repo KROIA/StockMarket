@@ -14,7 +14,9 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.function.Consumer;
 
@@ -42,15 +44,34 @@ public class MatchingEngine
      * Fills virtual depth first, then real buy limit orders (FIFO).
      * Handles counterparty bank operations for real orders.
      *
-     * @param orderbook  the orderbook to consume from
-     * @param itemID     the item being traded (for counterparty bank resolution)
+     * <p><b>Counterparty bookkeeping.</b> This runs outside {@code market}'s own
+     * {@link #update(long)} loop, so none of the engine's callbacks fire by themselves.
+     * Every resting <i>player</i> buy order that is touched here therefore gets, directly
+     * on {@code market}:</p>
+     * <ul>
+     *   <li>a net-flow credit of {@code +fillPotential} — the resting buyer <b>received</b>
+     *       items, which is demand, and {@link ServerMarket#addPlayerItemFlow(long)} turns a
+     *       positive (received) volume into a negative flow contribution;</li>
+     *   <li>{@link ServerMarket#notifyOrderConsumed(Order)} when it is fully filled, or
+     *       {@link ServerMarket#notifyOrderCanceled(Order)} when its remainder is dropped
+     *       (broke buyer / missing bank account). The cancel notification is what releases
+     *       the buyer's still-locked money; dropping the order silently used to leak it.</li>
+     * </ul>
+     * <p>Virtual depth and bot orders are deliberately not flow-credited: neither is real
+     * player supply or demand. The <i>taker</i> side of the trade is credited by the caller,
+     * so a player-to-player fill nets to zero on this market.</p>
+     *
+     * @param market     the market to consume from (supplies the orderbook, the item for
+     *                   counterparty bank resolution, and the bookkeeping callbacks)
      * @param price      the price level to consume at
      * @param maxVolume  maximum volume to consume (positive)
      * @return consumed volume and dollar amount received from selling into buy-side
      */
     public static DepthConsumeResult consumeBuySideDepthAtPrice(
-            Orderbook orderbook, ItemID itemID, long price, long maxVolume)
+            ServerMarket market, long price, long maxVolume)
     {
+        final Orderbook orderbook = market.getOrderbook();
+        final ItemID itemID = market.getItemID();
         long remaining = maxVolume;   // positive, counts down as we sell into buy-side
         long totalConsumed = 0;       // total volume consumed (positive)
         long totalDollars  = 0;       // total dollars received (positive)
@@ -77,7 +98,10 @@ public class MatchingEngine
         // ── 2. Consume real buy limit orders at this price ──────────────────
         // Snapshot to avoid ConcurrentModificationException
         List<Order> buyOrderSnapshot = new ArrayList<>(orderbook.getBuyLimitOrders());
-        List<Order> toRemove = new ArrayList<>();
+        // order -> true if its remainder was canceled, false if it was fully consumed.
+        // A map (not a list) so an order that is both capped-and-canceled and then
+        // reported filled can never be removed or notified twice.
+        Map<Order, Boolean> toRemove = new LinkedHashMap<>();
 
         for (Order buyOrder : buyOrderSnapshot)
         {
@@ -93,7 +117,7 @@ public class MatchingEngine
                 BankPair other = resolveCounterpartyBanksStatic(buyOrder, itemID);
                 if (other == null)
                 {
-                    toRemove.add(buyOrder);
+                    toRemove.put(buyOrder, true);  // unusable account, cancel the whole order
                     continue;
                 }
 
@@ -102,7 +126,7 @@ public class MatchingEngine
                 if (maxAffordable < fillPotential)
                 {
                     fillPotential = maxAffordable;
-                    toRemove.add(buyOrder);  // buyer is broke, cancel remainder
+                    toRemove.put(buyOrder, true);  // buyer is broke, cancel remainder
                 }
 
                 if (fillPotential <= 0) continue;
@@ -113,17 +137,19 @@ public class MatchingEngine
                 buyOrder.edit(fillPotential, -cost);
                 other.itemBank.deposit(fillPotential);
                 other.moneyBank.withdrawLockedPrefered(cost);
+                // Flow: the resting buyer received +fillPotential items on THIS market → demand.
+                market.addPlayerItemFlow(fillPotential);
 
                 totalConsumed += fillPotential;
                 totalDollars  += cost;
                 remaining     -= fillPotential;
 
                 if (buyOrder.isFilled())
-                    toRemove.add(buyOrder);
+                    toRemove.putIfAbsent(buyOrder, false);
             }
             else
             {
-                // Bot order — no bank operations needed
+                // Bot order — no bank operations and no player flow
                 long cost = Math.round((double) fillPotential * price / SF);
                 buyOrder.edit(fillPotential, -cost);
 
@@ -132,13 +158,20 @@ public class MatchingEngine
                 remaining     -= fillPotential;
 
                 if (buyOrder.isFilled())
-                    toRemove.add(buyOrder);
+                    toRemove.putIfAbsent(buyOrder, false);
             }
         }
 
-        // Deferred removal of consumed/canceled orders
-        for (Order o : toRemove)
-            orderbook.removeOrder(o);
+        // Deferred removal of consumed/canceled orders, each with the bookkeeping the
+        // engine's own loop would have fired (unlock the remainder + save the history record).
+        for (Map.Entry<Order, Boolean> e : toRemove.entrySet())
+        {
+            orderbook.removeOrder(e.getKey());
+            if (e.getValue())
+                market.notifyOrderCanceled(e.getKey());
+            else
+                market.notifyOrderConsumed(e.getKey());
+        }
 
         return new DepthConsumeResult(totalConsumed, totalDollars);
     }
@@ -148,16 +181,27 @@ public class MatchingEngine
      * Fills virtual depth first, then real sell limit orders (FIFO).
      * Handles counterparty bank operations for real orders.
      *
-     * @param orderbook      the orderbook to consume from
-     * @param itemID         the item being traded (for counterparty bank resolution)
+     * <p><b>Counterparty bookkeeping.</b> Mirror image of
+     * {@link #consumeBuySideDepthAtPrice(ServerMarket, long, long)}: every resting
+     * <i>player</i> sell order touched here is flow-credited on {@code market} with
+     * {@code fillPotential}, which is <b>negative</b> on this side (the resting seller
+     * <b>gave</b> items away), so it registers as supply. Fully filled orders fire
+     * {@link ServerMarket#notifyOrderConsumed(Order)}; orders whose remainder is dropped
+     * (out of stock / missing bank account) fire {@link ServerMarket#notifyOrderCanceled(Order)},
+     * which unlocks the seller's still-reserved items.</p>
+     *
+     * @param market         the market to consume from (supplies the orderbook, the item for
+     *                       counterparty bank resolution, and the bookkeeping callbacks)
      * @param price          the price level to consume at
      * @param maxVolume      maximum volume to consume (positive)
      * @param availableFunds maximum dollars available to spend (Long.MAX_VALUE for bots)
      * @return consumed volume and dollar amount spent buying from sell-side
      */
     public static DepthConsumeResult consumeSellSideDepthAtPrice(
-            Orderbook orderbook, ItemID itemID, long price, long maxVolume, long availableFunds)
+            ServerMarket market, long price, long maxVolume, long availableFunds)
     {
+        final Orderbook orderbook = market.getOrderbook();
+        final ItemID itemID = market.getItemID();
         long remaining = maxVolume;   // positive, counts down as we buy from sell-side
         long totalConsumed = 0;       // total volume bought (positive)
         long totalDollars  = 0;       // total dollars spent (positive)
@@ -194,7 +238,8 @@ public class MatchingEngine
         // ── 2. Consume real sell limit orders at this price ─────────────────
         // Snapshot to avoid ConcurrentModificationException
         List<Order> sellOrderSnapshot = new ArrayList<>(orderbook.getSellLimitOrders());
-        List<Order> toRemove = new ArrayList<>();
+        // order -> true if its remainder was canceled, false if it was fully consumed (see buy side).
+        Map<Order, Boolean> toRemove = new LinkedHashMap<>();
 
         for (Order sellOrder : sellOrderSnapshot)
         {
@@ -212,7 +257,7 @@ public class MatchingEngine
                 BankPair other = resolveCounterpartyBanksStatic(sellOrder, itemID);
                 if (other == null)
                 {
-                    toRemove.add(sellOrder);
+                    toRemove.put(sellOrder, true);  // unusable account, cancel the whole order
                     continue;
                 }
 
@@ -220,8 +265,8 @@ public class MatchingEngine
                 long sellerStock = other.itemBank.getTotalBalance();
                 if (sellerStock < -fillPotential)
                 {
-                    fillPotential = -sellerStock;  // partial — seller is out of stock
-                    toRemove.add(sellOrder);        // cancel remainder of sell order
+                    fillPotential = -sellerStock;   // partial — seller is out of stock
+                    toRemove.put(sellOrder, true);  // cancel remainder of sell order
                 }
 
                 // Cap fill to what the buyer can still afford
@@ -238,6 +283,9 @@ public class MatchingEngine
                 sellOrder.edit(fillPotential, -cost);
                 other.itemBank.withdrawLockedPrefered(-fillPotential);
                 other.moneyBank.deposit(-cost);
+                // Flow: fillPotential is negative here — the resting seller GAVE items
+                // away on THIS market → supply.
+                market.addPlayerItemFlow(fillPotential);
 
                 long absConsumed = -fillPotential;
                 long absCost     = -cost;
@@ -247,11 +295,11 @@ public class MatchingEngine
                 availableFunds -= absCost;
 
                 if (sellOrder.isFilled())
-                    toRemove.add(sellOrder);
+                    toRemove.putIfAbsent(sellOrder, false);
             }
             else
             {
-                // Bot order — no bank operations needed
+                // Bot order — no bank operations and no player flow
                 long costFull = Math.round((double) fillPotential * price / SF);
                 if (availableFunds < -costFull)
                     fillPotential = -affordableVolume(availableFunds, price);
@@ -269,13 +317,20 @@ public class MatchingEngine
                 availableFunds -= absCost;
 
                 if (sellOrder.isFilled())
-                    toRemove.add(sellOrder);
+                    toRemove.putIfAbsent(sellOrder, false);
             }
         }
 
-        // Deferred removal of consumed/canceled orders
-        for (Order o : toRemove)
-            orderbook.removeOrder(o);
+        // Deferred removal of consumed/canceled orders, each with the bookkeeping the
+        // engine's own loop would have fired (unlock the remainder + save the history record).
+        for (Map.Entry<Order, Boolean> e : toRemove.entrySet())
+        {
+            orderbook.removeOrder(e.getKey());
+            if (e.getValue())
+                market.notifyOrderCanceled(e.getKey());
+            else
+                market.notifyOrderConsumed(e.getKey());
+        }
 
         return new DepthConsumeResult(totalConsumed, totalDollars);
     }
@@ -450,7 +505,7 @@ public class MatchingEngine
                     }
 
                     DepthConsumeResult consumed = consumeBuySideDepthAtPrice(
-                            haveMarket.getOrderbook(), haveMarket.getItemID(), haveSamplePrice, haveToSell);
+                            haveMarket, haveSamplePrice, haveToSell);
 
                     haveLockedVolume -= consumed.volumeConsumed();
                     transactionMoneyBalance += consumed.dollarAmount();
@@ -459,6 +514,16 @@ public class MatchingEngine
                     if (consumed.volumeConsumed() > 0)
                     {
                         order.getSellOrder().edit(-consumed.volumeConsumed(), consumed.dollarAmount());
+                        // Flow (taker side, have-market): the player handed over
+                        // volumeConsumed() items, so the signed fill is NEGATIVE → supply.
+                        // No ServerMarket.update() runs on this path, so the engine's
+                        // per-tick accumulator would be discarded; credit directly.
+                        // The resting counterparties were already credited inside
+                        // consumeBuySideDepthAtPrice with the opposite sign, so a
+                        // player-to-player fill nets to zero here and only the portion
+                        // taken from virtual depth moves this market's flow.
+                        if (!order.isBotOrder())
+                            haveMarket.addPlayerItemFlow(-consumed.volumeConsumed());
                         madeProgress = true;
                         lastHaveFillPrice = haveSamplePrice;
                     }
@@ -476,7 +541,7 @@ public class MatchingEngine
             if (wantToBuy > 0)
             {
                 DepthConsumeResult consumed = consumeSellSideDepthAtPrice(
-                        wantMarket.getOrderbook(), wantMarket.getItemID(), wantSamplePrice, wantToBuy, transactionMoneyBalance);
+                        wantMarket, wantSamplePrice, wantToBuy, transactionMoneyBalance);
 
                 transactionMoneyBalance -= consumed.dollarAmount();
                 wantTargetVolume -= consumed.volumeConsumed();
@@ -492,6 +557,13 @@ public class MatchingEngine
                 if (consumed.volumeConsumed() > 0)
                 {
                     order.getBuyOrder().edit(consumed.volumeConsumed(), -consumed.dollarAmount());
+                    // Flow (taker side, want-market): the player RECEIVED volumeConsumed()
+                    // items, so the signed fill is POSITIVE → demand. Same reasoning as the
+                    // have-market credit above (no update() on this path; resting
+                    // counterparties already credited with the opposite sign inside
+                    // consumeSellSideDepthAtPrice).
+                    if (!order.isBotOrder())
+                        wantMarket.addPlayerItemFlow(consumed.volumeConsumed());
                     madeProgress = true;
                     lastWantFillPrice = wantSamplePrice;
                 }
@@ -518,12 +590,16 @@ public class MatchingEngine
             {
                 long sellPrice = lastHaveFillPrice > 0 ? lastHaveFillPrice : haveSamplePrice;
                 DepthConsumeResult consumed = consumeBuySideDepthAtPrice(
-                        haveMarket.getOrderbook(), haveMarket.getItemID(), sellPrice, haveLockedVolume);
+                        haveMarket, sellPrice, haveLockedVolume);
 
                 long unsold = haveLockedVolume - consumed.volumeConsumed();
                 haveLockedVolume -= consumed.volumeConsumed();
                 transactionMoneyBalance += consumed.dollarAmount();
                 order.getSellOrder().edit(-consumed.volumeConsumed(), consumed.dollarAmount());
+                // Flow (taker side, have-market): this dust sweep is a real sell of
+                // volumeConsumed() items by the player, so the signed fill is NEGATIVE
+                // → supply. Guarded by !isBotOrder() above, so no extra check is needed.
+                haveMarket.addPlayerItemFlow(-consumed.volumeConsumed());
 
                 if (consumed.volumeConsumed() > 0)
                     lastHaveFillPrice = sellPrice;
@@ -1288,10 +1364,25 @@ public class MatchingEngine
     }
 
 
-    /** Adds a player order's fill to the per-update player volume. Inter-market orders are tracked elsewhere. */
+    /**
+     * Adds a player order's fill to the per-update player volume, positive when the player
+     * received items (buy) and negative when the player gave them away (sell).
+     * {@link ServerMarket#update()} drains this into the market's net player item flow.
+     *
+     * <p>INTER_MARKET legs are counted like any other player order. They are real orders
+     * routed through {@code putOrder} + {@code update()} by
+     * {@link InterMarketExecutor}, they move real items and real money, and an
+     * item-for-item trade is economically a sell on the have-market plus a buy on the
+     * want-market — so both legs belong in their own market's flow. (They were excluded
+     * here on the mistaken belief that the executor credited them itself; it never did,
+     * and the parent {@code InterMarketOrder}'s inner orders are only mirrored for
+     * bookkeeping — they are never submitted to a market, so there is no double count.)</p>
+     *
+     * <p>Bot orders are still excluded: they are not real player supply or demand.</p>
+     */
     private void trackPlayerFill(Order order, long filledVolume)
     {
-        if (order.isPlayerOrder() && order.getType() != Order.Type.INTER_MARKET)
+        if (order.isPlayerOrder())
             playerFilledVolumeSinceLastReset += filledVolume;
     }
     private void orderConsumed(Order order)

@@ -302,7 +302,11 @@ public class InterMarketExecutor
             long buyPriceCap)
     {
         // ── Create and execute the sell Order ─────────────────────────────────
-        // INTER_MARKET type: ServerMarket skips history/net-flow tracking.
+        // INTER_MARKET type: ServerMarket skips only the order-history record here
+        // (saveOrderRecord), because the executor saves the parent order with its groupID
+        // instead. Net player item flow IS tracked: both legs run through the normal
+        // putOrder + update() path, so MatchingEngine.trackPlayerFill credits the sell leg
+        // to haveMarket (negative → supply) and the buy leg to wantMarket (positive → demand).
         // The MatchingEngine uses startPrice as the minimum accepted sell price
         // for INTER_MARKET orders (0 = no floor for market-type orders).
         Order sellOrder;
