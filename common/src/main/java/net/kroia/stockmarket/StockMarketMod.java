@@ -11,7 +11,7 @@ public final class StockMarketMod {
     public static final Logger LOGGER = LogUtils.getLogger();
 
     // Set to false for release builds to hide dev-only commands (exportrecipes, devTestScreen, etc.)
-    public static final boolean ENABLE_DEV_FEATURES = true;
+    public static final boolean ENABLE_DEV_FEATURES = false;
 
     private static StockMarketModBackend backend;
 
