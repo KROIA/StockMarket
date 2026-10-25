@@ -47,6 +47,31 @@ public interface IPluginOrderBook {
 
     float getRealVirtualVolume(long backendPrice);
 
+    /**
+     * Like {@link #getRealVolume(double, double)}, but only counts the virtual orderbook depth.
+     * Resting limit orders (for example player orders) are not included.
+     * <p>
+     * The sign follows the same convention as {@link #getRealVolume(double, double)}:
+     * positive for buy-side depth, negative for sell-side depth.
+     * <p>
+     * Default: {@code 0}, meaning "no virtual depth information available". There is no
+     * way to derive this from the other methods of this interface (the per-level
+     * {@link #getRealVirtualVolume(long)} would need a real-to-backend price conversion
+     * that is not exposed here), and throwing would turn a missing override into a runtime
+     * crash. Returning 0 keeps callers that size orders from virtual depth safely inert.
+     * Implementers that back a real orderbook MUST override this for accurate
+     * virtual-depth sizing.
+     *
+     * @param minPrice Minimum real price (inclusive)
+     * @param maxPrice Maximum real price (inclusive)
+     * @return Signed virtual volume in the given price range, or {@code 0} if the
+     *         implementation does not provide virtual-depth information.
+     */
+    default float getRealVirtualVolume(double minPrice, double maxPrice)
+    {
+        return 0;
+    }
+
     long getRawVolume(long backendPrice);
 
     float getRawVirtualVolume(long backendPrice);

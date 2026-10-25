@@ -10,7 +10,7 @@ import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
-import net.minecraft.world.item.Items;
+import net.kroia.stockmarket.testing.TestFixture;
 
 import java.util.UUID;
 
@@ -21,6 +21,9 @@ public class MarketIntegrationTestSuite extends TestSuite {
     public static void setBackend(StockMarketModBackend.ServerInstances backend) {
         BACKEND_INSTANCES = backend;
     }
+
+    /** Owns every scratch market/account this suite creates; drained in {@link #teardown()}. */
+    private final TestFixture fixture = new TestFixture("MarketIntegration");
 
     private ItemID moneyID;
     private IServerMarket serverMarket;
@@ -56,23 +59,18 @@ public class MarketIntegrationTestSuite extends TestSuite {
             throw new RuntimeException("MarketIntegrationTestSuite requires BACKEND_INSTANCES to be set");
         }
 
+        fixture.setBackend(BACKEND_INSTANCES);
         moneyID = ItemID.getOrRegisterFromItemStackServerSide_direct(BankSystemItems.MONEY.get().getDefaultInstance());
-        bankAccount1 = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync().getBankAccount(2);
-        if (bankAccount1 == null)
-            bankAccount1 = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync().createBankAccount("UnitTestAccount_1");
-        if (bankAccount1 == null)
-            throw new RuntimeException("Can't create UnitTestBankAccount_1");
-        bankAccountNr1 = bankAccount1.getAccountNumber();
 
-        bankAccount2 = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync().getBankAccount(3);
-        if (bankAccount2 == null)
-            bankAccount2 = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync().createBankAccount("UnitTestAccount_2");
-        if (bankAccount2 == null)
-            throw new RuntimeException("Can't create UnitTestBankAccount_2");
+        // Scratch accounts — never fixed account numbers, which would squat on real players' accounts.
+        bankAccount1 = fixture.createBankAccount("account1");
+        bankAccountNr1 = bankAccount1.getAccountNumber();
+        bankAccount2 = fixture.createBankAccount("account2");
         bankAccountNr2 = bankAccount2.getAccountNumber();
 
-        ItemID id = ItemID.getOrRegisterFromItemStackServerSide_direct(Items.GOLD_INGOT.getDefaultInstance());
-        serverMarket = BACKEND_INSTANCES.MARKET_MANAGER.getSync().createMarket(id);
+        // Scratch market on a synthetic ItemID — never the player's live gold market.
+        serverMarket = fixture.createMarket("main");
+        ItemID id = serverMarket.getItemID();
         scaleFactor = BACKEND_INSTANCES.BANK_SYSTEM_API.getServerBankManager().getSync().getItemFractionScaleFactor();
 
         bankAccount1.createBank(id, 100 * scaleFactor);
@@ -83,10 +81,13 @@ public class MarketIntegrationTestSuite extends TestSuite {
 
     @Override
     public void teardown() {
+        // Clear any order left in the matching engine before the market is dropped.
         if (serverMarket != null) {
-            serverMarket.test_setDefaultVolumeProviderFunction(this::uniformVolumeDistribution);
-            serverMarket.test_resetVirtualOrderBookVolume();
+            serverMarket.test_clearOrderbook();
+            serverMarket.test_clearIncomingOrderBuffers();
         }
+        serverMarket = null;
+        fixture.cleanup();
     }
 
     private void resetMarketState(boolean useUniformVolume, long price) {

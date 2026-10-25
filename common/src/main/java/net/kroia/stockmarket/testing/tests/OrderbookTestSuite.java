@@ -10,8 +10,8 @@ import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.stockmarket.market.core.Orderbook;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
+import net.kroia.stockmarket.testing.TestFixture;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.world.item.Items;
 
 import java.util.List;
 import java.util.UUID;
@@ -23,6 +23,9 @@ public class OrderbookTestSuite extends TestSuite {
     public static void setBackend(StockMarketModBackend.ServerInstances backend) {
         OrderbookTestSuite.backend = backend;
     }
+
+    /** Owns the scratch market this suite creates; drained in {@link #teardown()}. */
+    private final TestFixture fixture = new TestFixture("Orderbook");
 
     private ItemID itemID;
     private ItemID moneyID;
@@ -74,19 +77,24 @@ public class OrderbookTestSuite extends TestSuite {
         if (backend == null) {
             throw new RuntimeException("OrderbookTestSuite requires backend to be set");
         }
+        fixture.setBackend(backend);
         moneyID = ItemID.getOrRegisterFromItemStackServerSide_direct(BankSystemItems.MONEY.get().getDefaultInstance());
-        itemID = ItemID.getOrRegisterFromItemStackServerSide_direct(Items.GOLD_INGOT.getDefaultInstance());
-        serverMarket = backend.MARKET_MANAGER.getSync().createMarket(itemID);
+        // Scratch market on a synthetic ItemID — never the player's live gold market.
+        serverMarket = fixture.createMarket("main");
+        itemID = serverMarket.getItemID();
         orderbook = serverMarket.getOrderbook();
     }
 
     @Override
     public void teardown() {
+        // Clear any order left in the matching engine before the market is dropped.
         if (serverMarket != null) {
             serverMarket.test_clearOrderbook();
-            serverMarket.test_setDefaultVolumeProviderFunction(null);
-            serverMarket.test_resetVirtualOrderBookVolume();
+            serverMarket.test_clearIncomingOrderBuffers();
         }
+        serverMarket = null;
+        orderbook = null;
+        fixture.cleanup();
     }
 
     private void resetOrderbook(long marketPrice) {

@@ -13,7 +13,7 @@ import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.networking.request.CreateOrderRequest;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
-import net.minecraft.world.item.Items;
+import net.kroia.stockmarket.testing.TestFixture;
 
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -25,6 +25,9 @@ public class CreateOrderRequestTestSuite extends TestSuite {
     public static void setBackend(StockMarketModBackend.ServerInstances backend) {
         CreateOrderRequestTestSuite.backend = backend;
     }
+
+    /** Owns every scratch market/account/user this suite creates; drained in {@link #teardown()}. */
+    private final TestFixture fixture = new TestFixture("CreateOrderRequest");
 
     private ItemID itemID;
     private ItemID moneyID;
@@ -106,6 +109,18 @@ public class CreateOrderRequestTestSuite extends TestSuite {
     }
 
     /**
+     * Registers a scratch bank user and records it with the fixture, so
+     * {@link #teardown()} removes it again instead of leaving it in the world.
+     *
+     * @param playerUUID the scratch player UUID
+     * @param name       display name for the user
+     */
+    private void registerAndAddUser(UUID playerUUID, String name) {
+        fixture.registerUser(playerUUID);
+        backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(playerUUID, name);
+    }
+
+    /**
      * Creates a fresh bank account with a unique name (append test-suffix + timestamp)
      * so state doesn't leak between tests via the shared account. Returns the account
      * pre-configured with the given money balance and item balance. The account has a
@@ -113,9 +128,9 @@ public class CreateOrderRequestTestSuite extends TestSuite {
      */
     private IServerBankAccount freshAccount(String label, long moneyBalance, long itemBalance, UUID player) {
         String accountName = label + "_" + System.nanoTime();
-        IServerBankAccount acc = backend.BANK_SYSTEM_API.getServerBankManager().getSync().createBankAccount(accountName);
-        backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(player, accountName + "_user");
-        acc.addUser(new User(player, accountName + "_user", false), BankPermission.getAllPermissions());
+        IServerBankAccount acc = fixture.createBankAccount(label);
+        registerAndAddUser(player, accountName + "_user");
+        acc.addUser(new User(player, accountName + "_user"), BankPermission.getAllPermissions());
         acc.createBank(itemID, 0);
         acc.createBank(moneyID, 0);
         acc.getBank(itemID).setBalance(itemBalance);
@@ -128,13 +143,13 @@ public class CreateOrderRequestTestSuite extends TestSuite {
         if (backend == null) {
             throw new RuntimeException("CreateOrderRequestTestSuite requires backend to be set");
         }
+        fixture.setBackend(backend);
         moneyID = ItemID.getOrRegisterFromItemStackServerSide_direct(BankSystemItems.MONEY.get().getDefaultInstance());
-        itemID = ItemID.getOrRegisterFromItemStackServerSide_direct(Items.GOLD_INGOT.getDefaultInstance());
-        serverMarket = backend.MARKET_MANAGER.getSync().createMarket(itemID);
+        // Scratch market on a synthetic ItemID — never the player's live gold market.
+        serverMarket = fixture.createMarket("main");
+        itemID = serverMarket.getItemID();
         serverMarket.test_setCurrentMarketPrice(100);
-        bankAccount = backend.BANK_SYSTEM_API.getServerBankManager().getSync().createBankAccount("CreateOrderRequestTest");
-        if (bankAccount == null)
-            throw new RuntimeException("Can't create CreateOrderRequestTest bank account");
+        bankAccount = fixture.createBankAccount("trader");
         bankAccountNr = bankAccount.getAccountNumber();
         bankAccount.createBank(itemID, 0);
         bankAccount.createBank(moneyID, 10000000);
@@ -142,9 +157,13 @@ public class CreateOrderRequestTestSuite extends TestSuite {
 
     @Override
     public void teardown() {
+        // Clear any order left in the matching engine before the market is dropped.
         if (serverMarket != null) {
             serverMarket.test_clearOrderbook();
+            serverMarket.test_clearIncomingOrderBuffers();
         }
+        serverMarket = null;
+        fixture.cleanup();
     }
 
     private CreateOrderRequest.OutputData executeRequest(CreateOrderRequest.InputData input, UUID playerSender) {
@@ -169,7 +188,7 @@ public class CreateOrderRequestTestSuite extends TestSuite {
                     itemID, 2, Order.Type.LIMIT, largeVol, largePrice);
             UUID player = UUID.randomUUID();
             // Register a user in the bank system
-            backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(player, "OverflowTestUser");
+            registerAndAddUser(player, "OverflowTestUser");
 
             CreateOrderRequest.OutputData result = executeRequest(input, player);
 
@@ -191,7 +210,7 @@ public class CreateOrderRequestTestSuite extends TestSuite {
             CreateOrderRequest.InputData input = new CreateOrderRequest.InputData(
                     itemID, 2, Order.Type.LIMIT, maxVal, maxVal);
             UUID player = UUID.randomUUID();
-            backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(player, "MaxLongTestUser");
+            registerAndAddUser(player, "MaxLongTestUser");
 
             CreateOrderRequest.OutputData result = executeRequest(input, player);
 
@@ -210,8 +229,8 @@ public class CreateOrderRequestTestSuite extends TestSuite {
             // Lock amount = toRawAmount(volume) * toRawAmount(price), which for scaleFactor=100
             // is (5*100) * (10*100) = 500 * 1000 = 500,000. Use a large balance to be safe.
             UUID player = UUID.randomUUID();
-            backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(player, "NormalLockTestUser");
-            bankAccount.addUser(new User(player, "TestPlayer", false), BankPermission.getAllPermissions());
+            registerAndAddUser(player, "NormalLockTestUser");
+            bankAccount.addUser(new User(player, "TestPlayer"), BankPermission.getAllPermissions());
 
             bankAccount.createBank(itemID, 0);
             bankAccount.createBank(moneyID, 0);
@@ -237,7 +256,7 @@ public class CreateOrderRequestTestSuite extends TestSuite {
             CreateOrderRequest.InputData input = new CreateOrderRequest.InputData(
                     itemID, 2, Order.Type.LIMIT, 0.0, 10.0);
             UUID player = UUID.randomUUID();
-            backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(player, "ZeroVolUser");
+            registerAndAddUser(player, "ZeroVolUser");
 
             CreateOrderRequest.OutputData result = executeRequest(input, player);
 
@@ -255,7 +274,7 @@ public class CreateOrderRequestTestSuite extends TestSuite {
             CreateOrderRequest.InputData input = new CreateOrderRequest.InputData(
                     itemID, 2, Order.Type.LIMIT, 5.0, -10.0);
             UUID player = UUID.randomUUID();
-            backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(player, "NegPriceUser");
+            registerAndAddUser(player, "NegPriceUser");
 
             CreateOrderRequest.OutputData result = executeRequest(input, player);
 
@@ -274,7 +293,7 @@ public class CreateOrderRequestTestSuite extends TestSuite {
             CreateOrderRequest.InputData input = new CreateOrderRequest.InputData(
                     unknownItem, 2, Order.Type.LIMIT, 5.0, 10.0);
             UUID player = UUID.randomUUID();
-            backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(player, "NullMarketUser");
+            registerAndAddUser(player, "NullMarketUser");
 
             CreateOrderRequest.OutputData result = executeRequest(input, player);
 
@@ -308,8 +327,8 @@ public class CreateOrderRequestTestSuite extends TestSuite {
     private TestResult test_interMarketType_rejected() {
         try {
             UUID player = UUID.randomUUID();
-            backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(player, "InterMarketUser");
-            bankAccount.addUser(new User(player, "TestPlayer", false), BankPermission.getAllPermissions());
+            registerAndAddUser(player, "InterMarketUser");
+            bankAccount.addUser(new User(player, "TestPlayer"), BankPermission.getAllPermissions());
             bankAccount.createBank(itemID, 100);
             bankAccount.createBank(moneyID, 10000);
 
@@ -333,8 +352,8 @@ public class CreateOrderRequestTestSuite extends TestSuite {
             // The code checks INTER_MARKET type after validation but before fund locking,
             // so this should be safe
             UUID player = UUID.randomUUID();
-            backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(player, "InterMarketFundsUser");
-            bankAccount.addUser(new User(player, "TestPlayer", false), BankPermission.getAllPermissions());
+            registerAndAddUser(player, "InterMarketFundsUser");
+            bankAccount.addUser(new User(player, "TestPlayer"), BankPermission.getAllPermissions());
             bankAccount.createBank(moneyID, 10000);
             bankAccount.getBank(moneyID).setBalance(10000);
             long balanceBefore = bankAccount.getBank(moneyID).getTotalBalance();
@@ -380,7 +399,7 @@ public class CreateOrderRequestTestSuite extends TestSuite {
     private TestResult test_nonMember_rejected() {
         try {
             UUID nonMember = UUID.randomUUID();
-            backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(nonMember, "NonMemberUser");
+            registerAndAddUser(nonMember, "NonMemberUser");
 
             CreateOrderRequest.InputData input = new CreateOrderRequest.InputData(
                     itemID, bankAccount.getAccountNumber(), Order.Type.LIMIT, 5.0, 10.0);
@@ -403,8 +422,8 @@ public class CreateOrderRequestTestSuite extends TestSuite {
     private TestResult test_buyLimit_locksCorrectAmount() {
         try {
             UUID player = UUID.randomUUID();
-            backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(player, "BuyLimitLockUser");
-            bankAccount.addUser(new User(player, "TestPlayer", false), BankPermission.getAllPermissions());
+            registerAndAddUser(player, "BuyLimitLockUser");
+            bankAccount.addUser(new User(player, "TestPlayer"), BankPermission.getAllPermissions());
             bankAccount.createBank(moneyID, 0);
             bankAccount.getBank(moneyID).setBalance(10000000);
             bankAccount.createBank(itemID, 0);
@@ -433,8 +452,8 @@ public class CreateOrderRequestTestSuite extends TestSuite {
     private TestResult test_buyMarket_locksAtMarketPrice() {
         try {
             UUID player = UUID.randomUUID();
-            backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(player, "BuyMarketLockUser");
-            bankAccount.addUser(new User(player, "TestPlayer", false), BankPermission.getAllPermissions());
+            registerAndAddUser(player, "BuyMarketLockUser");
+            bankAccount.addUser(new User(player, "TestPlayer"), BankPermission.getAllPermissions());
             bankAccount.createBank(moneyID, 0);
             bankAccount.getBank(moneyID).setBalance(10000000);
             bankAccount.createBank(itemID, 0);
@@ -463,8 +482,8 @@ public class CreateOrderRequestTestSuite extends TestSuite {
     private TestResult test_sell_locksItemVolume() {
         try {
             UUID player = UUID.randomUUID();
-            backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(player, "SellLockUser");
-            bankAccount.addUser(new User(player, "TestPlayer", false), BankPermission.getAllPermissions());
+            registerAndAddUser(player, "SellLockUser");
+            bankAccount.addUser(new User(player, "TestPlayer"), BankPermission.getAllPermissions());
             bankAccount.createBank(itemID, 0);
             bankAccount.getBank(itemID).setBalance(1000);
             bankAccount.createBank(moneyID, 0);
@@ -696,8 +715,8 @@ public class CreateOrderRequestTestSuite extends TestSuite {
             serverMarket.setMarketOpen(false);
 
             UUID player = UUID.randomUUID();
-            backend.BANK_SYSTEM_API.getServerBankManager().getSync().addUser(player, "PutOrderFailUser");
-            bankAccount.addUser(new User(player, "TestPlayer", false), BankPermission.getAllPermissions());
+            registerAndAddUser(player, "PutOrderFailUser");
+            bankAccount.addUser(new User(player, "TestPlayer"), BankPermission.getAllPermissions());
             bankAccount.createBank(moneyID, 0);
             bankAccount.getBank(moneyID).setBalance(100000);
             bankAccount.createBank(itemID, 0);
