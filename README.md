@@ -570,6 +570,7 @@ With player flow influence enabled, it shifts permanently with the cumulative ne
 
 | Version | Status | Highlights |
 |---|---|---|
+| [v2.1.3](changelog/v2.1.3.md) | In Development | Bugfixes |
 | [v2.1.2](changelog/v2.1.2.md) | Released | Money-duplication exploit fix, per-fill net flow accounting, best-price matching, world-safe test fixture |
 | [v2.1.1](changelog/v2.1.1.md) | Released | Dependency version alignment — ModUtilities ListView performance improvement |
 | [v2.1.0](changelog/v2.1.0.md) | Released | Company share support, public market-creation/pause API, virtual orderbook toggle, preset inventory picker |

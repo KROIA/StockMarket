@@ -7,11 +7,11 @@ import org.slf4j.Logger;
 
 public final class StockMarketMod {
     public static final String MOD_ID = "stockmarket";
-    public static final String VERSION = "2.1.2";
+    public static final String VERSION = "2.1.3";
     public static final Logger LOGGER = LogUtils.getLogger();
 
     // Set to false for release builds to hide dev-only commands (exportrecipes, devTestScreen, etc.)
-    public static final boolean ENABLE_DEV_FEATURES = false;
+    public static final boolean ENABLE_DEV_FEATURES = true;
 
     private static StockMarketModBackend backend;
 
