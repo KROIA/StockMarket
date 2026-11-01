@@ -1,5 +1,6 @@
 plugins {
-    id 'com.github.johnrengelman.shadow'
+    id 'com.github.johnrengelman.shadow' // mc<=1.21.11
+    //id 'com.gradleup.shadow' // mc>=26.1
 }
 
 repositories {
@@ -39,24 +40,31 @@ configurations {
 }
 
 dependencies {
-    modImplementation "net.fabricmc:fabric-loader:$rootProject.fabric_loader_version"
+    modImplementation "net.fabricmc:fabric-loader:$rootProject.fabric_loader_version" // mc<=1.21.11
+    //implementation "net.fabricmc:fabric-loader:$rootProject.fabric_loader_version" // mc>=26.1
 
     // Fabric API. This is technically optional, but you probably want it anyway.
-    modImplementation "net.fabricmc.fabric-api:fabric-api:$rootProject.fabric_api_version"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:$rootProject.fabric_api_version" // mc<=1.21.11
+    //implementation "net.fabricmc.fabric-api:fabric-api:$rootProject.fabric_api_version" // mc>=26.1
 
     // Architectury API. This is optional, and you can comment it out if you don't need it.
-    modImplementation "dev.architectury:architectury-fabric:$rootProject.architectury_api_version"
+    modImplementation "dev.architectury:architectury-fabric:$rootProject.architectury_api_version" // mc<=1.21.11
+    //implementation "dev.architectury:architectury-fabric:$rootProject.architectury_api_version" // mc>=26.1
 
-    common(project(path: ':common', configuration: 'namedElements')) { transitive false }
+    common(project(path: ':common', configuration: 'namedElements')) { transitive false } // mc<=1.21.11
+    //common(project(path: ':common')) { transitive false } // mc>=26.1
     shadowBundle project(path: ':common', configuration: 'transformProductionFabric')
 
-    modImplementation("com.github.KROIA.MC_ModUtilities:modutilities-fabric:$rootProject.modutilities_version")
-    modImplementation("com.github.KROIA.BankSystem:banksystem-fabric:$rootProject.banksystem_version")
+    modImplementation("com.github.KROIA.MC_ModUtilities:modutilities-fabric:$rootProject.modutilities_version") // mc<=1.21.11
+    //implementation("com.github.KROIA.MC_ModUtilities:modutilities-fabric:$rootProject.modutilities_version") // mc>=26.1
+    modImplementation("com.github.KROIA.BankSystem:banksystem-fabric:$rootProject.banksystem_version") // mc<=1.21.11
+    //implementation("com.github.KROIA.BankSystem:banksystem-fabric:$rootProject.banksystem_version") // mc>=26.1
     //include("com.github.KROIA.MC_ModUtilities:modutilities-fabric:$rootProject.modutilities_version")
 
     //modCompileOnlyApi("mezz.jei:jei-${rootProject.jei_minecraft_version}-fabric-api:${rootProject.jei_version}") // mc<=1.21.3
     //compileOnly("mezz.jei:jei-${rootProject.jei_minecraft_version}-common-api:${rootProject.jei_version}") // mc>=1.21.4 mc<=1.21.4 (JEI has no Fabric build for 1.21.4)
-    modCompileOnlyApi("mezz.jei:jei-${rootProject.jei_minecraft_version}-fabric-api:${rootProject.jei_version}") // mc>=1.21.5
+    modCompileOnlyApi("mezz.jei:jei-${rootProject.jei_minecraft_version}-fabric-api:${rootProject.jei_version}") // mc>=1.21.5 mc<=1.21.11
+    //compileOnly("mezz.jei:jei-${rootProject.jei_minecraft_version}-fabric-api:${rootProject.jei_version}") // mc>=26.1
     // Dev-runtime-only JEI: the Architectury platform transformer walks class
     // frames on launch and must resolve every referenced JEI type (from this
     // mod's and BankSystem's JEI plugins) even though JEI stays a soft
@@ -68,7 +76,8 @@ dependencies {
     //runtimeOnly("mezz.jei:jei-${rootProject.jei_minecraft_version}-common-api:${rootProject.jei_version}") // mc>=1.21.4 mc<=1.21.4 (JEI has no Fabric build for 1.21.4)
     modRuntimeOnly("mezz.jei:jei-${rootProject.jei_minecraft_version}-fabric:${rootProject.jei_version}") // mc>=1.21.5 mc<=1.21.5
     //modRuntimeOnly("mezz.jei:jei-${rootProject.jei_minecraft_version}-fabric-api:${rootProject.jei_version}") // mc>=1.21.6 mc<=1.21.6 (no JEI build for 1.21.6; API jar only at dev runtime)
-    //modRuntimeOnly("mezz.jei:jei-${rootProject.jei_minecraft_version}-fabric:${rootProject.jei_version}") // mc>=1.21.7
+    //modRuntimeOnly("mezz.jei:jei-${rootProject.jei_minecraft_version}-fabric:${rootProject.jei_version}") // mc>=1.21.7 mc<=1.21.11
+    //runtimeOnly("mezz.jei:jei-${rootProject.jei_minecraft_version}-fabric:${rootProject.jei_version}") // mc>=26.1
 
 }
 
@@ -82,9 +91,13 @@ processResources {
 
 shadowJar {
     configurations = [project.configurations.shadowBundle]
-    archiveClassifier = 'dev-shadow'
+    archiveClassifier = 'dev-shadow' // mc<=1.21.11
+    //archiveClassifier = null // mc>=26.1
 }
 
-remapJar {
-    inputFile.set shadowJar.archiveFile
-}
+remapJar { // mc<=1.21.11
+    inputFile.set shadowJar.archiveFile // mc<=1.21.11
+} // mc<=1.21.11
+//jar { // mc>=26.1
+    //archiveClassifier = 'raw' // mc>=26.1
+//} // mc>=26.1
