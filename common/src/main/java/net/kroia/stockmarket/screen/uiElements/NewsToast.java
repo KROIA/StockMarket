@@ -6,7 +6,8 @@ import net.kroia.stockmarket.news.NewsRecord;
 import net.kroia.stockmarket.news.NewsTranslations;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphics; // mc<=1.21.11
+//import net.minecraft.client.gui.GuiGraphicsExtractor; // mc>=26.1
 import net.minecraft.client.gui.components.toasts.Toast;
 //import net.minecraft.client.gui.components.toasts.ToastComponent; // mc<=1.21.1
 import net.minecraft.client.gui.components.toasts.ToastManager; // mc>=1.21.2
@@ -95,7 +96,8 @@ public class NewsToast implements Toast {
         return wantedVisibility; // mc>=1.21.2
     } // mc>=1.21.2
     @Override // mc>=1.21.2
-    public void render(GuiGraphics guiGraphics, Font font, long timeSinceLastVisible) { // mc>=1.21.2
+    public void render(GuiGraphics guiGraphics, Font font, long timeSinceLastVisible) { // mc>=1.21.2 mc<=1.21.11
+    //public void extractRenderState(GuiGraphicsExtractor guiGraphics, Font font, long timeSinceLastVisible) { // mc>=26.1
         draw(guiGraphics, font); // mc>=1.21.2
     } // mc>=1.21.2
 
@@ -116,12 +118,14 @@ public class NewsToast implements Toast {
      * @param guiGraphics the draw context
      * @param font        the font used for title and headline
      */
-    private void draw(GuiGraphics guiGraphics, Font font) {
+    private void draw(GuiGraphics guiGraphics, Font font) { // mc<=1.21.11
+    //private void draw(GuiGraphicsExtractor guiGraphics, Font font) { // mc>=26.1
         //guiGraphics.blitSprite(BACKGROUND_SPRITE, 0, 0, width(), height()); // mc<=1.21.1
         //guiGraphics.blitSprite(RenderType::guiTextured, BACKGROUND_SPRITE, 0, 0, width(), height()); // mc>=1.21.2 mc<=1.21.5
         guiGraphics.blitSprite(RenderPipelines.GUI_TEXTURED, BACKGROUND_SPRITE, 0, 0, width(), height()); // mc>=1.21.6
 
-        guiGraphics.drawString(font, TITLE, TEXT_X, 7, TITLE_COLOR, false);
+        guiGraphics.drawString(font, TITLE, TEXT_X, 7, TITLE_COLOR, false); // mc<=1.21.11
+        //guiGraphics.text(font, TITLE, TEXT_X, 7, TITLE_COLOR, false); // mc>=26.1
 
         // Resolve at render time so a mid-session language switch is reflected.
         String headline = NewsTranslations.resolve(record.getHeadline(),
@@ -130,9 +134,11 @@ public class NewsToast implements Toast {
         if (!lines.isEmpty()) {
             // Single line only (32px toast height) — clipped headlines are fine,
             // the newspaper screen shows the full text.
-            guiGraphics.drawString(font, lines.get(0), TEXT_X, 18, HEADLINE_COLOR, false);
+            guiGraphics.drawString(font, lines.get(0), TEXT_X, 18, HEADLINE_COLOR, false); // mc<=1.21.11
+            //guiGraphics.text(font, lines.get(0), TEXT_X, 18, HEADLINE_COLOR, false); // mc>=26.1
         }
 
-        guiGraphics.renderFakeItem(new ItemStack(StockMarketItems.NEWSPAPER.get()), 8, 8);
+        guiGraphics.renderFakeItem(new ItemStack(StockMarketItems.NEWSPAPER.get()), 8, 8); // mc<=1.21.11
+        //guiGraphics.fakeItem(new ItemStack(StockMarketItems.NEWSPAPER.get()), 8, 8); // mc>=26.1
     }
 }
