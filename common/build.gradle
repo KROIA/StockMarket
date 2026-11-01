@@ -21,13 +21,17 @@ dependencies {
     // We depend on Fabric Loader here to use the Fabric @Environment annotations,
     // which get remapped to the correct annotations on each platform.
     // Do NOT use other classes from Fabric Loader.
-    modImplementation "net.fabricmc:fabric-loader:$rootProject.fabric_loader_version"
+    //modImplementation "net.fabricmc:fabric-loader:$rootProject.fabric_loader_version" // mc<=1.21.11
+    implementation "net.fabricmc:fabric-loader:$rootProject.fabric_loader_version" // mc>=26.1
 
     // Architectury API. This is optional, and you can comment it out if you don't need it.
-    modImplementation "dev.architectury:architectury:$rootProject.architectury_api_version"
+    //modImplementation "dev.architectury:architectury:$rootProject.architectury_api_version" // mc<=1.21.11
+    implementation "dev.architectury:architectury:$rootProject.architectury_api_version" // mc>=26.1
 
-    modCompileOnly("com.github.KROIA.BankSystem:banksystem-common:$rootProject.banksystem_version")
-    modCompileOnly("com.github.KROIA.MC_ModUtilities:modutilities-common:$rootProject.modutilities_version")
+    //modCompileOnly("com.github.KROIA.BankSystem:banksystem-common:$rootProject.banksystem_version") // mc<=1.21.11
+    compileOnly("com.github.KROIA.BankSystem:banksystem-common:$rootProject.banksystem_version:dev") // mc>=26.1 (common jars carry the dev classifier on 26.1)
+    //modCompileOnly("com.github.KROIA.MC_ModUtilities:modutilities-common:$rootProject.modutilities_version") // mc<=1.21.11
+    compileOnly("com.github.KROIA.MC_ModUtilities:modutilities-common:$rootProject.modutilities_version:dev") // mc>=26.1 (common jars carry the dev classifier on 26.1)
 
     compileOnly("mezz.jei:jei-${rootProject.jei_minecraft_version}-common-api:${jei_version}")
     compileOnly('org.xerial:sqlite-jdbc:3.46.0.0'){

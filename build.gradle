@@ -2,9 +2,12 @@ plugins {
     //id 'dev.architectury.loom' version '1.7-SNAPSHOT' apply false // mc<=1.21.4
     //id 'dev.architectury.loom' version '1.10-SNAPSHOT' apply false // mc>=1.21.5 mc<=1.21.8 (1.21.5 dependencies are built with Loom 1.10)
     //id 'dev.architectury.loom' version '1.11-SNAPSHOT' apply false // mc>=1.21.9 mc<=1.21.9 (1.21.9 dependencies are built with Loom 1.11)
-    id 'dev.architectury.loom' version '1.14-SNAPSHOT' apply false // mc>=1.21.10 (JEI and NeoForge 21.10.57+ for 1.21.10 need Loom 1.13+)
-    id 'architectury-plugin' version '3.4-SNAPSHOT'
-    id 'com.github.johnrengelman.shadow' version '8.1.1' apply false
+    //id 'dev.architectury.loom' version '1.14-SNAPSHOT' apply false // mc>=1.21.10 mc<=1.21.11 (JEI and NeoForge 21.10.57+ for 1.21.10 need Loom 1.13+)
+    id 'dev.architectury.loom-no-remap' version '1.17-SNAPSHOT' apply false // mc>=26.1 (Minecraft 26.1 ships unobfuscated; needs Gradle 9)
+    //id 'architectury-plugin' version '3.4-SNAPSHOT' // mc<=1.21.11
+    id 'architectury-plugin' version '3.5-SNAPSHOT' // mc>=26.1
+    //id 'com.github.johnrengelman.shadow' version '8.1.1' apply false // mc<=1.21.11
+    id 'com.gradleup.shadow' version '9.6.1' apply false // mc>=26.1 (Shadow 8 does not run on Gradle 9)
 }
 
 architectury {
@@ -26,7 +29,8 @@ allprojects {
 }
 
 subprojects {
-    apply plugin: 'dev.architectury.loom'
+    //apply plugin: 'dev.architectury.loom' // mc<=1.21.11
+    apply plugin: 'dev.architectury.loom-no-remap' // mc>=26.1
     apply plugin: 'architectury-plugin'
     apply plugin: 'maven-publish'
 
@@ -57,7 +61,7 @@ subprojects {
         minecraft "net.minecraft:minecraft:$rootProject.minecraft_version"
         //mappings "net.fabricmc:yarn:$rootProject.yarn_mappings:v2"
 
-        mappings loom.officialMojangMappings()
+        //mappings loom.officialMojangMappings() // mc<=1.21.11 (26.1 is unobfuscated)
 
         //mappings loom.layered() {
         //    officialMojangMappings()
@@ -75,12 +79,15 @@ subprojects {
         // If you remove this line, sources will not be generated.
         withSourcesJar()
 
-        sourceCompatibility = JavaVersion.VERSION_21
-        targetCompatibility = JavaVersion.VERSION_21
+        //sourceCompatibility = JavaVersion.VERSION_21 // mc<=1.21.11
+        sourceCompatibility = JavaVersion.VERSION_25 // mc>=26.1
+        //targetCompatibility = JavaVersion.VERSION_21 // mc<=1.21.11
+        targetCompatibility = JavaVersion.VERSION_25 // mc>=26.1
     }
 
     tasks.withType(JavaCompile).configureEach {
-        it.options.release = 21
+        //it.options.release = 21 // mc<=1.21.11
+        it.options.release = 25 // mc>=26.1
     }
 
     // Configure Maven publishing.

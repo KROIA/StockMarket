@@ -231,7 +231,8 @@ public class StockMarketClientHooks {
 
             // Notify the player in chat
             String message = "StockMarket: Exported " + successCount + "/2 recipe images to " + exportDir;
-            mc.gui.getChat().addMessage(Component.literal(message));
+            //mc.gui.getChat().addMessage(Component.literal(message)); // mc<=1.21.11
+            mc.gui.getChat().addClientSystemMessage(Component.literal(message)); // mc>=26.1
         });
     }
 }

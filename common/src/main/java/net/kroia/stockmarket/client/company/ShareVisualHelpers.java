@@ -6,7 +6,8 @@ import net.kroia.banksystem.api.company.IShareIconRenderer;
 import net.kroia.banksystem.api.company.ShareVisuals;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.StockMarketModBackend;
-import net.minecraft.client.gui.GuiGraphics;
+//import net.minecraft.client.gui.GuiGraphics; // mc<=1.21.11
+import net.minecraft.client.gui.GuiGraphicsExtractor; // mc>=26.1
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -161,7 +162,8 @@ public final class ShareVisualHelpers {
      * @param id  the market/share item id (may be any id; non-shares return false)
      * @return {@code true} if a custom icon was drawn; {@code false} to fall back
      */
-    public static boolean tryRenderShareIcon(@NotNull GuiGraphics gfx,
+    //public static boolean tryRenderShareIcon(@NotNull GuiGraphics gfx, // mc<=1.21.11
+    public static boolean tryRenderShareIcon(@NotNull GuiGraphicsExtractor gfx, // mc>=26.1
                                              int x, int y, int w, int h,
                                              @NotNull ItemID id) {
         if (!isCompanyShare(id)) return false;

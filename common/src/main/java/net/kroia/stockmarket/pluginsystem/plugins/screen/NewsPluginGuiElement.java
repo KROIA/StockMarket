@@ -919,9 +919,11 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
                     boolean truncated = showStatus(response.message(), response.success());
                     if (printLinesToChat) {
                         Minecraft mc = Minecraft.getInstance();
-                        mc.gui.getChat().addMessage(Component.literal(response.message()));
+                        //mc.gui.getChat().addMessage(Component.literal(response.message())); // mc<=1.21.11
+                        mc.gui.getChat().addClientSystemMessage(Component.literal(response.message())); // mc>=26.1
                         for (String line : response.lines()) {
-                            mc.gui.getChat().addMessage(Component.literal(line));
+                            //mc.gui.getChat().addMessage(Component.literal(line)); // mc<=1.21.11
+                            mc.gui.getChat().addClientSystemMessage(Component.literal(line)); // mc>=26.1
                         }
                     }
                     // Every successful response carries the structured details
