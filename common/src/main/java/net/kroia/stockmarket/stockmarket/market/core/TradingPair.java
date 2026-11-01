@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.stockmarket.market.core;
 
+import net.kroia.modutilities.NbtCompat;
+
 import net.kroia.banksystem.util.ItemID;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -138,8 +140,8 @@ public record TradingPair(@NotNull ItemID baseItem, @NotNull ItemID quoteItem) {
         if (!tag.contains(NBT_BASE_ITEM) || !tag.contains(NBT_QUOTE_ITEM)) {
             return null;
         }
-        ItemID base = new ItemID(tag.getShort(NBT_BASE_ITEM));
-        ItemID quote = new ItemID(tag.getShort(NBT_QUOTE_ITEM));
+        ItemID base = new ItemID(NbtCompat.getShort(tag, NBT_BASE_ITEM));
+        ItemID quote = new ItemID(NbtCompat.getShort(tag, NBT_QUOTE_ITEM));
         return new TradingPair(base, quote);
     }
 

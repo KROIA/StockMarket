@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.testing.tests;
 
+import net.kroia.modutilities.NbtCompat;
+
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
@@ -484,7 +486,7 @@ public class InterMarketOrderTestSuite extends TestSuite {
         tag.put("buyOrder", buyTag);
         tag.put("sellOrder", sellTag);
         tag.putLong("crossRateLimit", 5000L);
-        tag.putUUID("interMarketGroupID", UUID.randomUUID());
+        NbtCompat.putUUID(tag, "interMarketGroupID", UUID.randomUUID());
         // DO NOT add transactionMoneyBalance — simulating pre-v2.0.3 saved orders
 
         InterMarketOrder loaded = InterMarketOrder.createFromNBT(tag);

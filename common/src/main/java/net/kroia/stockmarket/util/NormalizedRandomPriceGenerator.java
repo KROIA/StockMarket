@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.util;
 
+import net.kroia.modutilities.NbtCompat;
+
 import net.kroia.modutilities.persistence.ServerSaveable;
 import net.kroia.stockmarket.StockMarketMod;
 import net.minecraft.nbt.CompoundTag;
@@ -68,7 +70,7 @@ public class NormalizedRandomPriceGenerator implements ServerSaveable {
 
     @Override
     public boolean load(CompoundTag tag) {
-        int order = tag.getInt("order");
+        int order = NbtCompat.getInt(tag, "order");
         if (order <= 0) {
             StockMarketMod.LOGGER.error("NormalizedRandomPriceGenerator.load: invalid order ({})", order);
             return false; // Invalid order
@@ -77,13 +79,13 @@ public class NormalizedRandomPriceGenerator implements ServerSaveable {
         coefficients = new double[order];
 
         for (int i = 0; i < order; i++) {
-            CompoundTag walkTag = tag.getCompound("walk_" + i);
+            CompoundTag walkTag = NbtCompat.getCompound(tag, "walk_" + i);
             randomWalk[i] = new MeanRevertingRandomWalk(0.1, 0.05); // Default step size and mean reversion strength
             randomWalk[i].load(walkTag);
-            coefficients[i] = tag.getDouble("coefficient_" + i);
+            coefficients[i] = NbtCompat.getDouble(tag, "coefficient_" + i);
         }
-        counter = tag.getLong("counter");
-        currentValue = tag.getDouble("currentValue");
+        counter = NbtCompat.getLong(tag, "counter");
+        currentValue = NbtCompat.getDouble(tag, "currentValue");
         return true;
     }
 

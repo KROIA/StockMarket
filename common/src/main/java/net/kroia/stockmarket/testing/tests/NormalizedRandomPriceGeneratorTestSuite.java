@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.testing.tests;
 
+import net.kroia.modutilities.NbtCompat;
+
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
@@ -52,14 +54,14 @@ public class NormalizedRandomPriceGeneratorTestSuite extends TestSuite {
         CompoundTag tag = new CompoundTag();
         gen.save(tag);
 
-        int order = tag.getInt("order");
+        int order = NbtCompat.getInt(tag, "order");
         TestResult r = assertEquals("Order should be 5", 5, order);
         if (!r.passed()) return r;
 
         // Verify all coefficients are present
         double sumCoeffs = 0;
         for (int i = 0; i < order; i++) {
-            double coeff = tag.getDouble("coefficient_" + i);
+            double coeff = NbtCompat.getDouble(tag, "coefficient_" + i);
             sumCoeffs += coeff;
         }
         // The normalization formula: coefficients[i] = (i+1) * order / sum(1..order)
@@ -83,7 +85,7 @@ public class NormalizedRandomPriceGeneratorTestSuite extends TestSuite {
         // Save and check counter
         CompoundTag tag = new CompoundTag();
         gen.save(tag);
-        long counter = tag.getLong("counter");
+        long counter = NbtCompat.getLong(tag, "counter");
         return assertEquals("Counter should be 10 after 10 calls", 10L, counter);
     }
 
@@ -105,14 +107,14 @@ public class NormalizedRandomPriceGeneratorTestSuite extends TestSuite {
         gen.save(tag1);
 
         // Walk 0 should have been updated (counter=1, 1%1==0)
-        CompoundTag walk0 = tag1.getCompound("walk_0");
-        double walk0Value = walk0.getDouble("currentValue");
+        CompoundTag walk0 = NbtCompat.getCompound(tag1, "walk_0");
+        double walk0Value = NbtCompat.getDouble(walk0, "currentValue");
         // Walk 0 should have a non-zero value after 1 update (statistically very likely)
         // But walk 1 might not have updated yet, or it updated at counter=1 since 1%11!=0
         // Actually at counter=1: 1 % (10*1*1+1) = 1 % 11 = 1 != 0, so walk 1 does NOT update
 
         // The important thing is that the generator runs without error and counter advances
-        long counter = tag1.getLong("counter");
+        long counter = NbtCompat.getLong(tag1, "counter");
         TestResult r = assertEquals("Counter should be 1", 1L, counter);
         if (!r.passed()) return r;
 
@@ -145,7 +147,7 @@ public class NormalizedRandomPriceGeneratorTestSuite extends TestSuite {
         // Verify counter was preserved
         CompoundTag checkTag = new CompoundTag();
         loaded.save(checkTag);
-        r = assertEquals("Counter should be 100 after load", 100L, checkTag.getLong("counter"));
+        r = assertEquals("Counter should be 100 after load", 100L, NbtCompat.getLong(checkTag, "counter"));
         if (!r.passed()) return r;
 
         return pass("Save/load round-trip preserves full state");

@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.util;
 
+import net.kroia.modutilities.NbtCompat;
+
 import net.kroia.modutilities.persistence.ServerSaveable;
 import net.kroia.stockmarket.StockMarketMod;
 import net.minecraft.nbt.CompoundTag;
@@ -560,8 +562,8 @@ public class DynamicIndexedArray implements ServerSaveable {
             return false;
         }
 
-        indexOffset = tag.getLong("indexOffset");
-        byte[] byteArray = tag.getByteArray("array");
+        indexOffset = NbtCompat.getLong(tag, "indexOffset");
+        byte[] byteArray = NbtCompat.getByteArray(tag, "array");
         if(byteArray.length % 4 != 0) {
             StockMarketMod.LOGGER.error("[DynamicIndexedArray]: Can't load from NBT tag: invalid byte array length for floats");
             return false;

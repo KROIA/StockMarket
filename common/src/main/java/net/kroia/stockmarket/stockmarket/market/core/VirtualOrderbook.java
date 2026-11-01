@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.stockmarket.market.core;
 
+import net.kroia.modutilities.NbtCompat;
+
 import net.kroia.modutilities.persistence.ServerSaveable;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.util.DynamicIndexedArray;
@@ -412,7 +414,7 @@ public class VirtualOrderbook implements ServerSaveable
         }
         else
         {
-            CompoundTag arrayTag = tag.getCompound("array");
+            CompoundTag arrayTag = NbtCompat.getCompound(tag, "array");
             success &= dynamicArray.load(arrayTag);
         }
         return success;

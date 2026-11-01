@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.testing.tests;
 
+import net.kroia.modutilities.NbtCompat;
+
 import com.google.gson.JsonObject;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.JsonUtilities;
@@ -1388,10 +1390,10 @@ public class NewsPluginTestSuite extends TestSuite {
             plugin.save(saved);
             // Simulate a pre-T-095 save: strip the new sequence-snapshot keys so only
             // the legacy envelope vocabulary remains.
-            ListTag eventsTag = saved.getList("activeEvents", Tag.TAG_COMPOUND);
+            ListTag eventsTag = NbtCompat.getList(saved, "activeEvents", Tag.TAG_COMPOUND);
             r = assertEquals("one persisted active event", 1, eventsTag.size());
             if (!r.passed()) return r;
-            CompoundTag eventTag = eventsTag.getCompound(0);
+            CompoundTag eventTag = NbtCompat.getCompound(eventsTag, 0);
             eventTag.remove("steps");
             eventTag.remove("sequenceName");
 

@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.pluginsystem.plugins;
 
+import net.kroia.modutilities.NbtCompat;
+
 import io.netty.buffer.ByteBuf;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.TimerMillis;
@@ -296,26 +298,26 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
         // Restore per-market price generator state (marketData map is already populated
         // because subscribeToMarket() is called before load() in ServerPluginManager)
         if (tag.contains("marketData")) {
-            ListTag marketsTag = tag.getList("marketData", 10);
+            ListTag marketsTag = NbtCompat.getList(tag, "marketData", 10);
             for (int i = 0; i < marketsTag.size(); i++) {
-                CompoundTag marketTag = marketsTag.getCompound(i);
+                CompoundTag marketTag = NbtCompat.getCompound(marketsTag, i);
                 ItemID marketID = ItemID.createFromTag(marketTag);
                 if (marketID != null && marketID.isValid()) {
                     MarketData data = marketData.get(marketID);
                     if (data != null) {
                         if (marketTag.contains("priceGenerator")) {
-                            data.priceGenerator.load(marketTag.getCompound("priceGenerator"));
+                            data.priceGenerator.load(NbtCompat.getCompound(marketTag, "priceGenerator"));
                         }
                         // Each field falls back to the currently applied settings so
                         // old saves (which only stored volatilityScale) keep the
                         // defaults for the newer flow-equilibrium fields.
                         Settings cur = data.settings;
                         data.settings = new Settings(
-                                marketTag.contains("volatilityScale") ? marketTag.getFloat("volatilityScale") : cur.volatilityScale(),
-                                marketTag.contains("flowInfluenceEnabled") ? marketTag.getBoolean("flowInfluenceEnabled") : cur.flowInfluenceEnabled(),
-                                marketTag.contains("flowSensitivity") ? marketTag.getFloat("flowSensitivity") : cur.flowSensitivity(),
-                                marketTag.contains("minPriceMult") ? marketTag.getFloat("minPriceMult") : cur.minPriceMult(),
-                                marketTag.contains("maxPriceMult") ? marketTag.getFloat("maxPriceMult") : cur.maxPriceMult());
+                                marketTag.contains("volatilityScale") ? NbtCompat.getFloat(marketTag, "volatilityScale") : cur.volatilityScale(),
+                                marketTag.contains("flowInfluenceEnabled") ? NbtCompat.getBoolean(marketTag, "flowInfluenceEnabled") : cur.flowInfluenceEnabled(),
+                                marketTag.contains("flowSensitivity") ? NbtCompat.getFloat(marketTag, "flowSensitivity") : cur.flowSensitivity(),
+                                marketTag.contains("minPriceMult") ? NbtCompat.getFloat(marketTag, "minPriceMult") : cur.minPriceMult(),
+                                marketTag.contains("maxPriceMult") ? NbtCompat.getFloat(marketTag, "maxPriceMult") : cur.maxPriceMult());
                     }
                 }
             }

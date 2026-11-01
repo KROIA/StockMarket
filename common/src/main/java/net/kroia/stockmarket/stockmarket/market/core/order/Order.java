@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.stockmarket.market.core.order;
 
+import net.kroia.modutilities.NbtCompat;
+
 import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
@@ -306,7 +308,7 @@ public class Order implements ServerSaveable
     public boolean save(CompoundTag tag) {
         tag.putShort("ItemID", itemID.getShort());
         if(orderExecutor != null)
-            tag.putUUID("orderExecutor", orderExecutor);
+            NbtCompat.putUUID(tag, "orderExecutor", orderExecutor);
         tag.putInt("bankAccountNr", bankAccountNr);
         tag.putInt("Type", type.ordinal());
         tag.putLong("TargetVolume", targetVolume);
@@ -335,21 +337,21 @@ public class Order implements ServerSaveable
             return false;
         }
 
-        itemID = new ItemID(tag.getShort("ItemID"));
+        itemID = new ItemID(NbtCompat.getShort(tag, "ItemID"));
         if(tag.contains("orderExecutor"))
-            orderExecutor = tag.getUUID("orderExecutor");
+            orderExecutor = NbtCompat.getUUID(tag, "orderExecutor");
         else
             orderExecutor = null;
-        bankAccountNr = tag.contains("bankAccountNr") ? tag.getInt("bankAccountNr") : 0;
-        int typeOrdinal = tag.getInt("Type");
+        bankAccountNr = tag.contains("bankAccountNr") ? NbtCompat.getInt(tag, "bankAccountNr") : 0;
+        int typeOrdinal = NbtCompat.getInt(tag, "Type");
         if (typeOrdinal < 0 || typeOrdinal >= Type.values().length)
             return false;
         type = Type.values()[typeOrdinal];
-        targetVolume = tag.getLong("TargetVolume");
-        filledVolume = tag.getLong("FilledVolume");
-        startPrice = tag.getLong("StartPrice");
-        time = tag.getLong("Time");
-        transferredMoney = tag.getLong("TransferredMoney");
+        targetVolume = NbtCompat.getLong(tag, "TargetVolume");
+        filledVolume = NbtCompat.getLong(tag, "FilledVolume");
+        startPrice = NbtCompat.getLong(tag, "StartPrice");
+        time = NbtCompat.getLong(tag, "Time");
+        transferredMoney = NbtCompat.getLong(tag, "TransferredMoney");
         return true;
     }
 
