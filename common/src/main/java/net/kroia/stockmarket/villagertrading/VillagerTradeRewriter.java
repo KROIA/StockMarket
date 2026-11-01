@@ -8,6 +8,7 @@ import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.minecraft.core.component.DataComponentPatch;
 import net.minecraft.core.component.DataComponentType;
+import net.minecraft.core.component.TypedDataComponent;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
@@ -21,7 +22,6 @@ import net.minecraft.world.item.trading.MerchantOffer;
 import net.minecraft.world.item.trading.MerchantOffers;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.Map;
 import java.util.Optional;
 import java.util.function.ToLongFunction;
 
@@ -528,10 +528,11 @@ public final class VillagerTradeRewriter {
         // DataComponentPredicate.Builder up to 1.21.4 and
         // DataComponentExactPredicate.Builder from 1.21.5, so this compiles on every version.
         return new ItemCost(stack.getItem(), stack.getCount()).withComponents(builder -> {
-            for (Map.Entry<DataComponentType<?>, Optional<?>> entry : patch.entrySet()) {
-                // Removed components (empty Optional) cannot be expressed in the
-                // predicate — only added/changed components are expected.
-                entry.getValue().ifPresent(value -> builder.expect((DataComponentType) entry.getKey(), value));
+            // Removed components cannot be expressed in the predicate; only the
+            // added/changed ones are expected. split() exists on every version,
+            // entrySet() is gone in 26.3.
+            for (TypedDataComponent<?> component : patch.split().added()) {
+                builder.expect((DataComponentType) component.type(), component.value());
             }
             return builder;
         });

@@ -429,7 +429,8 @@ public final class MoneyPayment {
             }
             // 2. Inventory (with built-in server-side ground-drop fallback).
             if (!note.isEmpty()) {
-                player.getInventory().placeItemBackInInventory(note);
+                //player.getInventory().placeItemBackInInventory(note); // mc<=26.2
+                player.getInventory().placeItemBackInInventory(note, net.minecraft.util.Prediction.SERVER_ONLY); // mc>=26.3
             }
         }
     }
