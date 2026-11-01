@@ -7,7 +7,8 @@ import net.kroia.stockmarket.villagertrading.VillagerTradePriceTable;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+//import net.minecraft.resources.Identifier; // mc>=1.21.11
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -35,7 +36,8 @@ import org.jetbrains.annotations.NotNull;
 public class VillagerTradePriceTablePacket extends StockMarketNetworkPacket {
 
     public static final Type<VillagerTradePriceTablePacket> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath(StockMarketMod.MOD_ID, "villager_trade_price_table_packet"));
+            ResourceLocation.fromNamespaceAndPath(StockMarketMod.MOD_ID, "villager_trade_price_table_packet")); // mc<=1.21.10
+            //Identifier.fromNamespaceAndPath(StockMarketMod.MOD_ID, "villager_trade_price_table_packet")); // mc>=1.21.11
 
     public static final StreamCodec<RegistryFriendlyByteBuf, VillagerTradePriceTablePacket> STREAM_CODEC =
             StreamCodec.composite(
