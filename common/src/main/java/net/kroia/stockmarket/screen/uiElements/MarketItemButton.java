@@ -93,7 +93,7 @@ public class MarketItemButton extends ItemView {
 
     @Override
     protected boolean mouseClickedOverElement(int button) {
-        if (button == 0) {
+        if (button == net.kroia.modutilities.gui.InputConstants.MOUSE_BUTTON_LEFT) {
             if (isInCloseArea(getMouseX(), getMouseY())) {
                 closeButtonPressed = true;
                 return true;
@@ -106,7 +106,7 @@ public class MarketItemButton extends ItemView {
 
     @Override
     protected void mouseReleased(int button) {
-        if (button == 0 && closeButtonPressed) {
+        if (button == net.kroia.modutilities.gui.InputConstants.MOUSE_BUTTON_LEFT && closeButtonPressed) {
             closeButtonPressed = false;
             if (isMouseOver() && isInCloseArea(getMouseX(), getMouseY())) {
                 onRemove.run();
