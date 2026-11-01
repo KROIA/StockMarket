@@ -9,7 +9,7 @@ import net.kroia.modutilities.testing.TestSuite;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.villagertrading.VillagerTradePriceTable;
 import net.kroia.stockmarket.villagertrading.VillagerTradeRewriter;
-import net.kroia.stockmarket.villagertrading.VillagerTradeSavedData;
+import net.kroia.stockmarket.villagertrading.VillagerTradeData;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemStack;
@@ -130,7 +130,7 @@ public class VillagerTradeRewriteTestSuite extends TestSuite {
     private TestResult test_sell_offer_rewritten_to_currency() {
         MerchantOffers offers = new MerchantOffers();
         offers.add(sellIronOffer());
-        VillagerTradeSavedData.VillagerEntry entry = new VillagerTradeSavedData.VillagerEntry();
+        VillagerTradeData.VillagerEntry entry = new VillagerTradeData.VillagerEntry();
 
         boolean changed = VillagerTradeRewriter.processOffers(
                 offers, entry, moneyTable(1L), syntheticLookup(), null);
@@ -158,7 +158,7 @@ public class VillagerTradeRewriteTestSuite extends TestSuite {
     private TestResult test_buy_offer_rewritten_result() {
         MerchantOffers offers = new MerchantOffers();
         offers.add(buyCoalOffer());
-        VillagerTradeSavedData.VillagerEntry entry = new VillagerTradeSavedData.VillagerEntry();
+        VillagerTradeData.VillagerEntry entry = new VillagerTradeData.VillagerEntry();
 
         VillagerTradeRewriter.processOffers(offers, entry, moneyTable(1L), syntheticLookup(), null);
 
@@ -185,7 +185,7 @@ public class VillagerTradeRewriteTestSuite extends TestSuite {
     private TestResult test_idempotent_same_version() {
         MerchantOffers offers = new MerchantOffers();
         offers.add(sellIronOffer());
-        VillagerTradeSavedData.VillagerEntry entry = new VillagerTradeSavedData.VillagerEntry();
+        VillagerTradeData.VillagerEntry entry = new VillagerTradeData.VillagerEntry();
         VillagerTradePriceTable table = moneyTable(1L);
 
         boolean first = VillagerTradeRewriter.processOffers(offers, entry, table, syntheticLookup(), null);
@@ -206,7 +206,7 @@ public class VillagerTradeRewriteTestSuite extends TestSuite {
     private TestResult test_version_bump_reprices_from_original() {
         MerchantOffers offers = new MerchantOffers();
         offers.add(sellIronOffer());
-        VillagerTradeSavedData.VillagerEntry entry = new VillagerTradeSavedData.VillagerEntry();
+        VillagerTradeData.VillagerEntry entry = new VillagerTradeData.VillagerEntry();
 
         VillagerTradeRewriter.processOffers(offers, entry, moneyTable(1L), syntheticLookup(), null);
 
@@ -236,7 +236,7 @@ public class VillagerTradeRewriteTestSuite extends TestSuite {
     private TestResult test_tail_append_after_level_up() {
         MerchantOffers offers = new MerchantOffers();
         offers.add(sellIronOffer());
-        VillagerTradeSavedData.VillagerEntry entry = new VillagerTradeSavedData.VillagerEntry();
+        VillagerTradeData.VillagerEntry entry = new VillagerTradeData.VillagerEntry();
         VillagerTradePriceTable table = moneyTable(1L);
 
         VillagerTradeRewriter.processOffers(offers, entry, table, syntheticLookup(), null);
@@ -263,7 +263,7 @@ public class VillagerTradeRewriteTestSuite extends TestSuite {
         offers.add(new MerchantOffer(new ItemCost(Items.EMERALD, 10),
                 Optional.of(new ItemCost(Items.BOOK, 1)),
                 new ItemStack(Items.ENCHANTED_BOOK), 0, 12, 5, 0.2f, 0));
-        VillagerTradeSavedData.VillagerEntry entry = new VillagerTradeSavedData.VillagerEntry();
+        VillagerTradeData.VillagerEntry entry = new VillagerTradeData.VillagerEntry();
 
         VillagerTradeRewriter.processOffers(offers, entry, moneyTable(1L), syntheticLookup(), null);
 
@@ -289,7 +289,7 @@ public class VillagerTradeRewriteTestSuite extends TestSuite {
         offers.add(new MerchantOffer(new ItemCost(Items.EMERALD, 13),
                 Optional.of(new ItemCost(Items.COMPASS, 1)),
                 new ItemStack(Items.MAP), 0, 12, 5, 0.2f, 0));
-        VillagerTradeSavedData.VillagerEntry entry = new VillagerTradeSavedData.VillagerEntry();
+        VillagerTradeData.VillagerEntry entry = new VillagerTradeData.VillagerEntry();
 
         VillagerTradeRewriter.processOffers(offers, entry, moneyTable(1L), syntheticLookup(), null);
 
@@ -307,7 +307,7 @@ public class VillagerTradeRewriteTestSuite extends TestSuite {
         MerchantOffers offers = new MerchantOffers();
         MerchantOffer vanilla = sellIronOffer();
         offers.add(vanilla);
-        VillagerTradeSavedData.VillagerEntry entry = new VillagerTradeSavedData.VillagerEntry();
+        VillagerTradeData.VillagerEntry entry = new VillagerTradeData.VillagerEntry();
 
         // No market for iron in this lookup → the offer must stay untouched.
         boolean changed = VillagerTradeRewriter.processOffers(
@@ -334,7 +334,7 @@ public class VillagerTradeRewriteTestSuite extends TestSuite {
     private TestResult test_market_removed_restores_emerald() {
         MerchantOffers offers = new MerchantOffers();
         offers.add(sellIronOffer());
-        VillagerTradeSavedData.VillagerEntry entry = new VillagerTradeSavedData.VillagerEntry();
+        VillagerTradeData.VillagerEntry entry = new VillagerTradeData.VillagerEntry();
 
         // v1: iron is listed → currency form.
         VillagerTradeRewriter.processOffers(offers, entry, moneyTable(1L), syntheticLookup(), null);
@@ -375,7 +375,7 @@ public class VillagerTradeRewriteTestSuite extends TestSuite {
     private TestResult test_market_created_later_converts() {
         MerchantOffers offers = new MerchantOffers();
         offers.add(sellIronOffer());
-        VillagerTradeSavedData.VillagerEntry entry = new VillagerTradeSavedData.VillagerEntry();
+        VillagerTradeData.VillagerEntry entry = new VillagerTradeData.VillagerEntry();
 
         // v1: no iron market → snapshot taken, offer left in emerald form.
         VillagerTradeRewriter.processOffers(offers, entry, moneyTable(1L), stack -> 0L, null);
@@ -402,7 +402,7 @@ public class VillagerTradeRewriteTestSuite extends TestSuite {
     private TestResult test_partially_used_offer_preserved() {
         MerchantOffers offers = new MerchantOffers();
         offers.add(sellIronOffer());
-        VillagerTradeSavedData.VillagerEntry entry = new VillagerTradeSavedData.VillagerEntry();
+        VillagerTradeData.VillagerEntry entry = new VillagerTradeData.VillagerEntry();
 
         VillagerTradeRewriter.processOffers(offers, entry, moneyTable(1L), syntheticLookup(), null);
 
@@ -433,7 +433,7 @@ public class VillagerTradeRewriteTestSuite extends TestSuite {
         MerchantOffers offers = new MerchantOffers();
         offers.add(sellIronOffer());
         offers.add(buyCoalOffer());
-        VillagerTradeSavedData.VillagerEntry entry = new VillagerTradeSavedData.VillagerEntry();
+        VillagerTradeData.VillagerEntry entry = new VillagerTradeData.VillagerEntry();
 
         VillagerTradeRewriter.processOffers(offers, entry, moneyTable(1L), syntheticLookup(), null);
         VillagerTradeRewriter.restoreAll(offers, entry);
@@ -504,7 +504,7 @@ public class VillagerTradeRewriteTestSuite extends TestSuite {
         MerchantOffers offers = new MerchantOffers();
         offers.add(noEmerald);
         offers.add(sellIronOffer());
-        VillagerTradeSavedData.VillagerEntry entry = new VillagerTradeSavedData.VillagerEntry();
+        VillagerTradeData.VillagerEntry entry = new VillagerTradeData.VillagerEntry();
         VillagerTradeRewriter.processOffers(offers, entry, moneyTable(1L), syntheticLookup(), null);
         r = assertTrue("Pass-through offer keeps a marker at its index", entry.get(0).isPassthrough());
         if (!r.passed()) return r;
@@ -520,7 +520,7 @@ public class VillagerTradeRewriteTestSuite extends TestSuite {
     private TestResult test_item_cost_accepts_plain_currency() {
         MerchantOffers offers = new MerchantOffers();
         offers.add(sellIronOffer());
-        VillagerTradeSavedData.VillagerEntry entry = new VillagerTradeSavedData.VillagerEntry();
+        VillagerTradeData.VillagerEntry entry = new VillagerTradeData.VillagerEntry();
 
         VillagerTradeRewriter.processOffers(offers, entry, moneyTable(1L), syntheticLookup(), null);
 
@@ -551,7 +551,7 @@ public class VillagerTradeRewriteTestSuite extends TestSuite {
         MerchantOffers offers = new MerchantOffers();
         offers.add(new MerchantOffer(new ItemCost(Items.EMERALD, 64), Optional.empty(),
                 new ItemStack(Items.DIAMOND), 0, 16, 2, 0.05f, 0));
-        VillagerTradeSavedData.VillagerEntry entry = new VillagerTradeSavedData.VillagerEntry();
+        VillagerTradeData.VillagerEntry entry = new VillagerTradeData.VillagerEntry();
 
         AtomicInteger clampCount = new AtomicInteger();
         VillagerTradeRewriter.processOffers(offers, entry, v1, diamondMarket, i -> clampCount.incrementAndGet());
