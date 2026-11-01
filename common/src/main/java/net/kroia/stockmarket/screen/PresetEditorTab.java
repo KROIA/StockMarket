@@ -236,7 +236,7 @@ public class PresetEditorTab extends StockMarketGuiElement {
         IAsyncPresetManager pm = getPresetManager();
         if (pm == null) return;
         pm.getCategoriesAsync().thenAccept(categories -> {
-            Minecraft.getInstance().tell(() -> {
+            runNextTick(() -> {
                 cachedCategories.clear();
                 cachedCategories.addAll(categories);
                 buildCategoryButtons();
@@ -337,7 +337,7 @@ public class PresetEditorTab extends StockMarketGuiElement {
 
         String toDelete = selectedCategory;
         pm.deleteCategoryAsync(toDelete).thenAccept(success -> {
-            Minecraft.getInstance().tell(() -> {
+            runNextTick(() -> {
                 if (success) {
                     cachedCategories.removeIf(c -> c.getCategory().equals(toDelete));
                     if (selectedCategory != null && selectedCategory.equals(toDelete)) {
@@ -366,7 +366,7 @@ public class PresetEditorTab extends StockMarketGuiElement {
             if (selectedCategory == null) return;
             String oldName = selectedCategory;
             pm.renameCategoryAsync(oldName, name).thenAccept(success -> {
-                Minecraft.getInstance().tell(() -> {
+                runNextTick(() -> {
                     if (success) {
                         MarketPresetCategory cat = findCategory(oldName);
                         if (cat != null) cat.setCategory(name);
@@ -382,7 +382,7 @@ public class PresetEditorTab extends StockMarketGuiElement {
         } else {
             MarketPresetCategory newCat = new MarketPresetCategory(name, new ArrayList<>());
             pm.saveCategoryAsync(newCat).thenAccept(success -> {
-                Minecraft.getInstance().tell(() -> {
+                runNextTick(() -> {
                     if (success) {
                         cachedCategories.add(newCat);
                         selectedCategory = name;
@@ -433,7 +433,7 @@ public class PresetEditorTab extends StockMarketGuiElement {
         // the mode calls removeChilds() on the picker which would CME.
         // tell() unconditionally enqueues for the next tick — execute() would
         // run inline on the render thread and still CME.
-        Minecraft.getInstance().tell(this::exitAddItemMode);
+        runNextTick(this::exitAddItemMode);
     }
 
     private void exitAddItemMode() {
@@ -452,7 +452,7 @@ public class PresetEditorTab extends StockMarketGuiElement {
     /**
      * Shared logic for adding a stack to the selected category — used by both
      * the registry picker and the inventory picker. Callers are responsible for
-     * deferring via {@code Minecraft.getInstance().tell(...)} so that they
+     * deferring via {@code runNextTick(...)} so that they
      * don't mutate widget trees while a click iterator is still active.
      */
     private void addStackToSelectedCategory(ItemStack stack) {
@@ -480,7 +480,7 @@ public class PresetEditorTab extends StockMarketGuiElement {
         // its child-list mouse iteration; exitAddItemMode() clears children →
         // ConcurrentModificationException without this deferral. tell() enqueues
         // for the next tick (execute() would run inline on the render thread).
-        Minecraft.getInstance().tell(() -> {
+        runNextTick(() -> {
             addStackToSelectedCategory(stack);
             exitAddItemMode();
             rebuildItemGrid();
@@ -518,7 +518,7 @@ public class PresetEditorTab extends StockMarketGuiElement {
     private void onCancelAddFromInventoryClicked() {
         // T-154 fix #1: defer — same CME reason as onCancelAddItemClicked.
         // tell() enqueues for next tick; execute() would run inline.
-        Minecraft.getInstance().tell(this::exitAddFromInventoryMode);
+        runNextTick(this::exitAddFromInventoryMode);
     }
 
     /**
@@ -631,7 +631,7 @@ public class PresetEditorTab extends StockMarketGuiElement {
                             // before any mode/exit/rebuild logic runs. tell() enqueues
                             // for the next tick — execute() short-circuits and runs
                             // inline on the render thread, so it would still CME.
-                            Minecraft.getInstance().tell(() -> onInventoryItemSelected(captured));
+                            runNextTick(() -> onInventoryItemSelected(captured));
                             return true;
                         }
                         return false;
@@ -666,7 +666,7 @@ public class PresetEditorTab extends StockMarketGuiElement {
         // exitAddFromInventoryMode() clears the picker's children (36 buttons)
         // and CMEs the iterator without this deferral. tell() enqueues for the
         // next tick (execute() would run inline on the render thread).
-        Minecraft.getInstance().tell(() -> {
+        runNextTick(() -> {
             if (stack == null || stack.isEmpty()) return;
             addStackToSelectedCategory(stack);
             exitAddFromInventoryMode();
@@ -715,7 +715,7 @@ public class PresetEditorTab extends StockMarketGuiElement {
         if (pm == null) return;
 
         pm.saveCategoryAsync(category).thenAccept(success -> {
-            Minecraft.getInstance().tell(() -> {
+            runNextTick(() -> {
                 if (success) {
                     editedPresets.clear();
                     categoryModified = false;
@@ -1071,5 +1071,16 @@ public class PresetEditorTab extends StockMarketGuiElement {
         } catch (NumberFormatException e) {
             return defaultVal;
         }
+    }
+
+    /**
+     * Queues a task on the client main thread for the next tick. Unlike
+     * {@code execute()}, this never runs inline, even when already on the main thread.
+     *
+     * @param task the task to run on the next client tick
+     */
+    private static void runNextTick(Runnable task) {
+        Minecraft.getInstance().tell(task); // mc<=1.21.1
+        //Minecraft.getInstance().schedule(task); // mc>=1.21.2
     }
 }
