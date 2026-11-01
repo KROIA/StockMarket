@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.news;
 
+import net.kroia.modutilities.NbtCompat;
+
 import net.kroia.modutilities.persistence.ServerSaveable;
 import net.kroia.stockmarket.StockMarketMod;
 import net.minecraft.nbt.CompoundTag;
@@ -309,11 +311,11 @@ public class NewsWorldRegistry implements ServerSaveable {
     @Override
     public boolean load(CompoundTag tag) {
         clearAll();
-        if (tag.contains(KEY_FIRES, Tag.TAG_LIST)) {
-            ListTag firesTag = tag.getList(KEY_FIRES, Tag.TAG_COMPOUND);
+        if (NbtCompat.contains(tag, KEY_FIRES, Tag.TAG_LIST)) {
+            ListTag firesTag = NbtCompat.getList(tag, KEY_FIRES, Tag.TAG_COMPOUND);
             for (int i = 0; i < firesTag.size(); i++) {
-                CompoundTag fireTag = firesTag.getCompound(i);
-                String eventId = fireTag.getString(KEY_FIRE_ID);
+                CompoundTag fireTag = NbtCompat.getCompound(firesTag, i);
+                String eventId = NbtCompat.getString(fireTag, KEY_FIRE_ID);
                 if (eventId.isBlank()) {
                     StockMarketMod.LOGGER.warn("[NewsWorldRegistry] load(): skipped fire entry {} without event id", i);
                     continue;
@@ -321,18 +323,18 @@ public class NewsWorldRegistry implements ServerSaveable {
                 // Absent numeric keys default to 0 (getInt/getLong contract); clamp the
                 // count so a loaded entry always means "fired at least once".
                 fireInfos.put(eventId, new FireInfo(
-                        Math.max(1, fireTag.getInt(KEY_FIRE_COUNT)),
-                        fireTag.getLong(KEY_FIRE_FIRST_MS),
-                        fireTag.getLong(KEY_FIRE_LAST_MS),
-                        fireTag.getLong(KEY_FIRE_GAME_DAY)));
+                        Math.max(1, NbtCompat.getInt(fireTag, KEY_FIRE_COUNT)),
+                        NbtCompat.getLong(fireTag, KEY_FIRE_FIRST_MS),
+                        NbtCompat.getLong(fireTag, KEY_FIRE_LAST_MS),
+                        NbtCompat.getLong(fireTag, KEY_FIRE_GAME_DAY)));
             }
         }
-        if (tag.contains(KEY_VALUES, Tag.TAG_COMPOUND)) {
-            CompoundTag valuesTag = tag.getCompound(KEY_VALUES);
-            for (String key : valuesTag.getAllKeys()) {
+        if (NbtCompat.contains(tag, KEY_VALUES, Tag.TAG_COMPOUND)) {
+            CompoundTag valuesTag = NbtCompat.getCompound(tag, KEY_VALUES);
+            for (String key : NbtCompat.keys(valuesTag)) {
                 // Re-apply the write caps (a saved file honors them, but the file may
                 // have been edited by hand); putValue logs the WARN for each refusal.
-                putValue(key, valuesTag.getString(key));
+                putValue(key, NbtCompat.getString(valuesTag, key));
             }
         }
         return true;

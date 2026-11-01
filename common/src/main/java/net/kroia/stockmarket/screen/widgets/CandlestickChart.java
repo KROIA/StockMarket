@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.screen.widgets;
 
+import net.kroia.modutilities.NbtCompat;
+
 import net.kroia.modutilities.ColorUtilities;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.geometry.Rectangle;
@@ -923,13 +925,13 @@ public class CandlestickChart extends StockMarketGuiElement {
      */
     protected void deserializeViewport(CompoundTag tag) {
         if (tag == null || tag.isEmpty()) return;
-        chartviewRect.x = tag.getDouble("viewX");
-        chartviewRect.y = tag.getDouble("viewY");
-        chartviewRect.width = tag.getDouble("viewW");
-        chartviewRect.height = tag.getDouble("viewH");
-        zoomLevel = tag.getDouble("zoom");
+        chartviewRect.x = NbtCompat.getDouble(tag, "viewX");
+        chartviewRect.y = NbtCompat.getDouble(tag, "viewY");
+        chartviewRect.width = NbtCompat.getDouble(tag, "viewW");
+        chartviewRect.height = NbtCompat.getDouble(tag, "viewH");
+        zoomLevel = NbtCompat.getDouble(tag, "zoom");
         skipAutoCenterOnce = true;
-        selectCandleTimeDeltaByIndex(tag.getInt("candleTimeIdx"));
+        selectCandleTimeDeltaByIndex(NbtCompat.getInt(tag, "candleTimeIdx"));
         // The deserialised viewport is an authoritative placement — mark this
         // delta as fitted so future reselects don't clobber it with a fresh
         // auto-fit.

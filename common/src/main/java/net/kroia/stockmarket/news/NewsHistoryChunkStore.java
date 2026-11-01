@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.news;
 
+import net.kroia.modutilities.NbtCompat;
+
 import net.kroia.stockmarket.StockMarketMod;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -235,10 +237,10 @@ public final class NewsHistoryChunkStore {
             return;
         }
 
-        ListTag recordsTag = legacyTag.getList(KEY_RECORDS, Tag.TAG_COMPOUND);
+        ListTag recordsTag = NbtCompat.getList(legacyTag, KEY_RECORDS, Tag.TAG_COMPOUND);
         List<NewsRecord> loaded = new ArrayList<>(recordsTag.size());
         for (int i = 0; i < recordsTag.size(); i++) {
-            NewsRecord record = NewsRecord.createFromTag(recordsTag.getCompound(i));
+            NewsRecord record = NewsRecord.createFromTag(NbtCompat.getCompound(recordsTag, i));
             if (record != null) loaded.add(record);
         }
 
@@ -684,10 +686,10 @@ public final class NewsHistoryChunkStore {
             return null;
         }
         if (tag == null) return null;
-        ListTag recordsTag = tag.getList(KEY_RECORDS, Tag.TAG_COMPOUND);
+        ListTag recordsTag = NbtCompat.getList(tag, KEY_RECORDS, Tag.TAG_COMPOUND);
         List<NewsRecord> out = new ArrayList<>(recordsTag.size());
         for (int i = 0; i < recordsTag.size(); i++) {
-            NewsRecord record = NewsRecord.createFromTag(recordsTag.getCompound(i));
+            NewsRecord record = NewsRecord.createFromTag(NbtCompat.getCompound(recordsTag, i));
             if (record != null) out.add(record);
         }
         return out;
@@ -733,13 +735,13 @@ public final class NewsHistoryChunkStore {
         }
         if (tag == null) return null;
         ChunkMeta meta = new ChunkMeta();
-        meta.recordCount = Math.max(0, tag.getInt(KEY_RECORD_COUNT));
-        meta.oldestUid = tag.getLong(KEY_OLDEST_UID);
-        meta.newestUid = tag.getLong(KEY_NEWEST_UID);
-        ListTag hashes = tag.getList(KEY_HASHES, Tag.TAG_COMPOUND);
+        meta.recordCount = Math.max(0, NbtCompat.getInt(tag, KEY_RECORD_COUNT));
+        meta.oldestUid = NbtCompat.getLong(tag, KEY_OLDEST_UID);
+        meta.newestUid = NbtCompat.getLong(tag, KEY_NEWEST_UID);
+        ListTag hashes = NbtCompat.getList(tag, KEY_HASHES, Tag.TAG_COMPOUND);
         for (int i = 0; i < hashes.size(); i++) {
-            CompoundTag hashTag = hashes.getCompound(i);
-            byte[] hash = hashTag.getByteArray("h");
+            CompoundTag hashTag = NbtCompat.getCompound(hashes, i);
+            byte[] hash = NbtCompat.getByteArray(hashTag, "h");
             if (hash != null && hash.length == NewsPictureLibrary.SHA1_LENGTH) {
                 meta.referencedHexHashes.add(NewsPictureLibrary.toHex(hash));
             }

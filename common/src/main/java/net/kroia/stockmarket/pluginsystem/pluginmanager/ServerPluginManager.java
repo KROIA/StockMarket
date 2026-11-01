@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.pluginsystem.pluginmanager;
 
+import net.kroia.modutilities.NbtCompat;
+
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.persistence.ServerSaveableChunked;
 import net.kroia.stockmarket.StockMarketModBackend;
@@ -477,7 +479,7 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
 
         boolean success = true;
         for (int i = 0; i < pluginsTag.size(); i++) {
-            CompoundTag pluginTag = pluginsTag.getCompound(i);
+            CompoundTag pluginTag = NbtCompat.getCompound(pluginsTag, i);
 
             // Read plugin type ID to find the registry entry
             if (!pluginTag.contains("pluginTypeID")) {
@@ -485,7 +487,7 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
                 success = false;
                 continue;
             }
-            String pluginTypeID = pluginTag.getString("pluginTypeID");
+            String pluginTypeID = NbtCompat.getString(pluginTag, "pluginTypeID");
             PluginRegistryObject registryObject = PluginRegistry.findPlugin(pluginTypeID);
             if (registryObject == null) {
                 warn("load(): Unknown plugin type '" + pluginTypeID + "', skipping");
@@ -494,7 +496,7 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
             }
 
             // Read saved instanceID
-            UUID savedInstanceID = pluginTag.contains("instanceID") ? pluginTag.getUUID("instanceID") : null;
+            UUID savedInstanceID = pluginTag.contains("instanceID") ? NbtCompat.getUUID(pluginTag, "instanceID") : null;
 
             // Instantiate and register the plugin
             ServerPlugin plugin = addPluginFromSave(registryObject, savedInstanceID);
@@ -506,17 +508,17 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
 
             // Restore generic data fields (name, description, loggerEnabled, auto-subscribe — NOT enabled yet)
             GenericPluginData genericData = plugin.getGenericPluginData();
-            if (pluginTag.contains("name")) plugin.setName(pluginTag.getString("name"));
-            if (pluginTag.contains("description")) plugin.setDescription(pluginTag.getString("description"));
-            if (pluginTag.contains("loggerEnabled")) plugin.setLoggerEnabled(pluginTag.getBoolean("loggerEnabled"));
-            if (pluginTag.contains("autoSubscribeNewMarkets")) plugin.setAutoSubscribeNewMarkets(pluginTag.getBoolean("autoSubscribeNewMarkets"));
-            if (pluginTag.contains("subscriptionOrder")) plugin.setSubscriptionOrder(pluginTag.getInt("subscriptionOrder"));
+            if (pluginTag.contains("name")) plugin.setName(NbtCompat.getString(pluginTag, "name"));
+            if (pluginTag.contains("description")) plugin.setDescription(NbtCompat.getString(pluginTag, "description"));
+            if (pluginTag.contains("loggerEnabled")) plugin.setLoggerEnabled(NbtCompat.getBoolean(pluginTag, "loggerEnabled"));
+            if (pluginTag.contains("autoSubscribeNewMarkets")) plugin.setAutoSubscribeNewMarkets(NbtCompat.getBoolean(pluginTag, "autoSubscribeNewMarkets"));
+            if (pluginTag.contains("subscriptionOrder")) plugin.setSubscriptionOrder(NbtCompat.getInt(pluginTag, "subscriptionOrder"));
 
             // Restore subscribed markets
             if (pluginTag.contains("subscribedMarkets")) {
-                ListTag marketsTag = pluginTag.getList("subscribedMarkets", 10); // 10 = CompoundTag type
+                ListTag marketsTag = NbtCompat.getList(pluginTag, "subscribedMarkets", 10); // 10 = CompoundTag type
                 for (int j = 0; j < marketsTag.size(); j++) {
-                    CompoundTag marketTag = marketsTag.getCompound(j);
+                    CompoundTag marketTag = NbtCompat.getCompound(marketsTag, j);
                     ItemID marketID = ItemID.createFromTag(marketTag);
                     if (marketID != null && marketID.isValid()) {
                         plugin.subscribeToMarket(marketID);
@@ -528,30 +530,30 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
 
             // Restore per-market custom settings (with backwards compatibility for legacy single-settings format)
             if (pluginTag.contains("customSettingsMap")) {
-                ListTag settingsListTag = pluginTag.getList("customSettingsMap", 10);
+                ListTag settingsListTag = NbtCompat.getList(pluginTag, "customSettingsMap", 10);
                 for (int j = 0; j < settingsListTag.size(); j++) {
-                    CompoundTag entryTag = settingsListTag.getCompound(j);
+                    CompoundTag entryTag = NbtCompat.getCompound(settingsListTag, j);
                     ItemID marketID = ItemID.createFromTag(entryTag);
                     if (marketID != null && marketID.isValid() && entryTag.contains("settingsData")) {
-                        byte[] settingsBytes = entryTag.getByteArray("settingsData");
+                        byte[] settingsBytes = NbtCompat.getByteArray(entryTag, "settingsData");
                         plugin.decodeAndApplyCustomSettings(marketID, settingsBytes);
                     }
                 }
             } else if (pluginTag.contains("customSettings")) {
                 // Legacy: single settings applied to all subscribed markets
-                byte[] legacySettings = pluginTag.getByteArray("customSettings");
+                byte[] legacySettings = NbtCompat.getByteArray(pluginTag, "customSettings");
                 plugin.decodeAndApplyCustomSettingsLegacy(legacySettings);
             }
 
             // Restore plugin-specific NBT data
             if (pluginTag.contains("pluginData")) {
-                CompoundTag pluginDataTag = pluginTag.getCompound("pluginData");
+                CompoundTag pluginDataTag = NbtCompat.getCompound(pluginTag, "pluginData");
                 plugin.load(pluginDataTag);
             }
 
             // Set enabled state LAST (triggers onEnable which may need markets subscribed)
             if (pluginTag.contains("enabled")) {
-                plugin.setEnabled(pluginTag.getBoolean("enabled"));
+                plugin.setEnabled(NbtCompat.getBoolean(pluginTag, "enabled"));
             }
         }
 
@@ -570,8 +572,8 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
     private static boolean readNewsAutoCreateFlag(Map<String, ListTag> listTags) {
         ListTag managerDataTag = listTags.get("managerData");
         if (managerDataTag == null || managerDataTag.isEmpty()) return false;
-        CompoundTag flagsTag = managerDataTag.getCompound(0);
-        return flagsTag.getBoolean("newsPluginAutoCreateDone");
+        CompoundTag flagsTag = NbtCompat.getCompound(managerDataTag, 0);
+        return NbtCompat.getBoolean(flagsTag, "newsPluginAutoCreateDone");
     }
 
     /**

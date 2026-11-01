@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.pluginsystem.plugin.core;
 
+import net.kroia.modutilities.NbtCompat;
+
 import net.kroia.stockmarket.pluginsystem.registry.PluginRegistryObject;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.nbt.CompoundTag;
@@ -161,7 +163,7 @@ public class GenericPluginData {
      */
     public boolean save(CompoundTag tag) {
         if (pluginTypeID != null) tag.putString("pluginTypeID", pluginTypeID);
-        tag.putUUID("instanceID", instanceID);
+        NbtCompat.putUUID(tag, "instanceID", instanceID);
         if (name != null) tag.putString("name", name);
         if (description != null) tag.putString("description", description);
         tag.putBoolean("loggerEnabled", loggerEnabled);
@@ -179,17 +181,17 @@ public class GenericPluginData {
      * @return true if the load succeeded, false if instanceID is missing
      */
     public boolean load(CompoundTag tag) {
-        if (!tag.contains("instanceID")) {
+        if (!NbtCompat.hasUUID(tag, "instanceID")) {
             return false;
         }
-        instanceID = tag.getUUID("instanceID");
-        if (tag.contains("pluginTypeID")) pluginTypeID = tag.getString("pluginTypeID");
-        if (tag.contains("name")) name = tag.getString("name");
-        if (tag.contains("description")) description = tag.getString("description");
-        if (tag.contains("loggerEnabled")) loggerEnabled = tag.getBoolean("loggerEnabled");
-        if (tag.contains("enabled")) enabled = tag.getBoolean("enabled");
-        if (tag.contains("autoSubscribeNewMarkets")) autoSubscribeNewMarkets = tag.getBoolean("autoSubscribeNewMarkets");
-        if (tag.contains("subscriptionOrder")) subscriptionOrder = tag.getInt("subscriptionOrder");
+        instanceID = NbtCompat.getUUID(tag, "instanceID");
+        if (tag.contains("pluginTypeID")) pluginTypeID = NbtCompat.getString(tag, "pluginTypeID");
+        if (tag.contains("name")) name = NbtCompat.getString(tag, "name");
+        if (tag.contains("description")) description = NbtCompat.getString(tag, "description");
+        if (tag.contains("loggerEnabled")) loggerEnabled = NbtCompat.getBoolean(tag, "loggerEnabled");
+        if (tag.contains("enabled")) enabled = NbtCompat.getBoolean(tag, "enabled");
+        if (tag.contains("autoSubscribeNewMarkets")) autoSubscribeNewMarkets = NbtCompat.getBoolean(tag, "autoSubscribeNewMarkets");
+        if (tag.contains("subscriptionOrder")) subscriptionOrder = NbtCompat.getInt(tag, "subscriptionOrder");
         return true;
     }
 }

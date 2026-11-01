@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.testing.tests;
 
+import net.kroia.modutilities.NbtCompat;
+
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
 import net.kroia.banksystem.util.ItemID;
@@ -338,7 +340,7 @@ public class ServerMarketTestSuite extends TestSuite {
                     tag.contains("currentMarketPrice"));
             if (!r.passed()) return r;
 
-            long savedPrice = tag.getLong("currentMarketPrice");
+            long savedPrice = NbtCompat.getLong(tag, "currentMarketPrice");
             r = assertEquals("Saved market price should be 150", 150L, savedPrice);
             if (!r.passed()) return r;
 

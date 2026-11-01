@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.villagertrading;
 
+import net.kroia.modutilities.NbtCompat;
+
 import net.kroia.stockmarket.StockMarketMod;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -277,21 +279,21 @@ public class VillagerTradeSavedData extends SavedData {
         VillagerTradeSavedData data = new VillagerTradeSavedData();
         RegistryOps<Tag> ops = registries.createSerializationContext(NbtOps.INSTANCE);
 
-        ListTag villagerList = tag.getList("villagers", Tag.TAG_COMPOUND);
+        ListTag villagerList = NbtCompat.getList(tag, "villagers", Tag.TAG_COMPOUND);
         for (int i = 0; i < villagerList.size(); i++) {
-            CompoundTag villagerTag = villagerList.getCompound(i);
-            if (!villagerTag.hasUUID("uuid")) {
+            CompoundTag villagerTag = NbtCompat.getCompound(villagerList, i);
+            if (!NbtCompat.hasUUID(villagerTag, "uuid")) {
                 continue;
             }
             VillagerEntry entry = new VillagerEntry();
-            entry.lastSeenGameTime = villagerTag.getLong("lastSeenGameTime");
-            entry.pricedVersion = villagerTag.getLong("pricedVersion");
-            entry.clampedMask = villagerTag.getLong("clampedMask");
+            entry.lastSeenGameTime = NbtCompat.getLong(villagerTag, "lastSeenGameTime");
+            entry.pricedVersion = NbtCompat.getLong(villagerTag, "pricedVersion");
+            entry.clampedMask = NbtCompat.getLong(villagerTag, "clampedMask");
 
-            ListTag originalsList = villagerTag.getList("originals", Tag.TAG_COMPOUND);
+            ListTag originalsList = NbtCompat.getList(villagerTag, "originals", Tag.TAG_COMPOUND);
             for (int j = 0; j < originalsList.size(); j++) {
-                CompoundTag originalTag = originalsList.getCompound(j);
-                if (originalTag.getBoolean("passthrough") || !originalTag.contains("offer")) {
+                CompoundTag originalTag = NbtCompat.getCompound(originalsList, j);
+                if (NbtCompat.getBoolean(originalTag, "passthrough") || !originalTag.contains("offer")) {
                     entry.originals.add(OriginalOffer.PASSTHROUGH);
                     continue;
                 }
@@ -302,13 +304,13 @@ public class VillagerTradeSavedData extends SavedData {
                 // Missing flag (data written before the flag existed) defaults to
                 // true: back then every stored snapshot was immediately rewritten,
                 // so the live offer is in currency form and must be restorable.
-                boolean rewritten = !originalTag.contains("rewritten") || originalTag.getBoolean("rewritten");
+                boolean rewritten = !originalTag.contains("rewritten") || NbtCompat.getBoolean(originalTag, "rewritten");
                 // Decode failure degrades to pass-through to keep index alignment.
                 entry.originals.add(offer
                         .map(o -> new OriginalOffer(o, rewritten))
                         .orElse(OriginalOffer.PASSTHROUGH));
             }
-            data.villagers.put(villagerTag.getUUID("uuid"), entry);
+            data.villagers.put(NbtCompat.getUUID(villagerTag, "uuid"), entry);
         }
         return data;
     }
@@ -322,7 +324,7 @@ public class VillagerTradeSavedData extends SavedData {
         for (Map.Entry<UUID, VillagerEntry> mapEntry : villagers.entrySet()) {
             VillagerEntry entry = mapEntry.getValue();
             CompoundTag villagerTag = new CompoundTag();
-            villagerTag.putUUID("uuid", mapEntry.getKey());
+            NbtCompat.putUUID(villagerTag, "uuid", mapEntry.getKey());
             villagerTag.putLong("lastSeenGameTime", entry.lastSeenGameTime);
             villagerTag.putLong("pricedVersion", entry.pricedVersion);
             villagerTag.putLong("clampedMask", entry.clampedMask);

@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.util;
 
+import net.kroia.modutilities.NbtCompat;
+
 import net.kroia.modutilities.persistence.ServerSaveable;
 import net.kroia.stockmarket.StockMarketMod;
 import net.minecraft.nbt.CompoundTag;
@@ -47,12 +49,12 @@ public class PID implements ServerSaveable {
             return false;
         }
 
-        kp = tag.getDouble("kp");
-        ki = tag.getDouble("ki");
-        kd = tag.getDouble("kd");
-        i = tag.getDouble("i");
-        lastError = tag.getDouble("lastError");
-        iBound = tag.getDouble("iBound");
+        kp = NbtCompat.getDouble(tag, "kp");
+        ki = NbtCompat.getDouble(tag, "ki");
+        kd = NbtCompat.getDouble(tag, "kd");
+        i = NbtCompat.getDouble(tag, "i");
+        lastError = NbtCompat.getDouble(tag, "lastError");
+        iBound = NbtCompat.getDouble(tag, "iBound");
         return true;
     }
 

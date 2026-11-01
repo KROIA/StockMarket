@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.minecraft.entity.custom;
 
+import net.kroia.modutilities.NbtCompat;
+
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ColorUtilities;
 import net.kroia.modutilities.gui.Gui;
@@ -249,20 +251,20 @@ public class StockMarketDisplayBlockEntity extends AbstractDisplayBlockEntity {
     @Override
     protected void loadCustomData(CompoundTag tag, HolderLookup.Provider registries) {
         if (tag.contains("displayType")) {
-            displayType = DisplayType.fromId(tag.getString("displayType"));
+            displayType = DisplayType.fromId(NbtCompat.getString(tag, "displayType"));
         }
         if (tag.contains("selectedItemID")) {
-            selectedItemID = new ItemID(tag.getShort("selectedItemID"));
+            selectedItemID = new ItemID(NbtCompat.getShort(tag, "selectedItemID"));
         } else {
             selectedItemID = null;
         }
         if (tag.contains("secondItemID")) {
-            secondItemID = new ItemID(tag.getShort("secondItemID"));
+            secondItemID = new ItemID(NbtCompat.getShort(tag, "secondItemID"));
         } else {
             secondItemID = null;
         }
         if (tag.contains("viewport")) {
-            pendingViewport = tag.getCompound("viewport");
+            pendingViewport = NbtCompat.getCompound(tag, "viewport");
         }
     }
 
