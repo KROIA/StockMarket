@@ -288,6 +288,7 @@ public class StockMarketModBackend implements StockMarketAPI {
             SERVER_INSTANCES.COMMAND_HANDLER = StockMarketCommandHandler.createMaster();
             SERVER_INSTANCES.DATA_MANAGER = new DataManager();
             SERVER_INSTANCES.VILLAGER_TRADE_MANAGER = new VillagerTradeManager(SERVER_INSTANCES);
+            SERVER_INSTANCES.VILLAGER_TRADE_MANAGER.load(UtilitiesPlatform.getServer());
 
             // Master-only: listen for BankSystem ItemID merges and consolidate our own
             // markets under the resulting canonical IDs. The load-time reconcile inside
@@ -376,6 +377,8 @@ public class StockMarketModBackend implements StockMarketAPI {
             // Slave: only receives price tables from the master (applyTable);
             // recompute/tick are inert without sync market access.
             SERVER_INSTANCES.VILLAGER_TRADE_MANAGER = new VillagerTradeManager(SERVER_INSTANCES);
+            // The villager trade file is local to every server, slaves included.
+            SERVER_INSTANCES.VILLAGER_TRADE_MANAGER.load(UtilitiesPlatform.getServer());
 
             // T-126 slave-trust cache wiring.
             //
@@ -834,6 +837,9 @@ public class StockMarketModBackend implements StockMarketAPI {
     {
         if(SERVER_INSTANCES != null && SERVER_INSTANCES.DATA_MANAGER != null)
             SERVER_INSTANCES.DATA_MANAGER.save(server);
+        // Villager trade file: saved on master and slave (local per server).
+        if(SERVER_INSTANCES != null && SERVER_INSTANCES.VILLAGER_TRADE_MANAGER != null)
+            SERVER_INSTANCES.VILLAGER_TRADE_MANAGER.save(server);
     }
 
 
