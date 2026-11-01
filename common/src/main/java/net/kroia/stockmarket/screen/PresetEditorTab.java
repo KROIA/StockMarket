@@ -626,7 +626,7 @@ public class PresetEditorTab extends StockMarketGuiElement {
                 ItemView cell = new ItemView(captured) {
                     @Override
                     protected boolean mouseClickedOverElement(int button) {
-                        if (button == 0) {
+                        if (button == net.kroia.modutilities.gui.InputConstants.MOUSE_BUTTON_LEFT) {
                             // T-154 fix (resurfaced after inventory-picker rewrite):
                             // defer the selection callback so that no ancestor's
                             // child list is mutated while GuiElement.mouseClickedInternal

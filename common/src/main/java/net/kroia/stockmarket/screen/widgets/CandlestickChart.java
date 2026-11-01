@@ -888,13 +888,13 @@ public class CandlestickChart extends StockMarketGuiElement {
     @Override
     protected boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         boolean ctrlKeyDown = isKeyPressed(InputConstants.KEY_LEFT_CONTROL);
-        if (keyCode == 32 && !ctrlKeyDown) {
+        if (keyCode == InputConstants.KEY_SPACE && !ctrlKeyDown) {
             if (data != null) {
                 // Recenter vertical range over currently visible candles
                 applyVerticalFitToRange(firstVisibleCandleIndex, lastVisibleCandleIndex);
                 return true;
             }
-        } else if (keyCode == 32) {
+        } else if (keyCode == InputConstants.KEY_SPACE) {
             if (data != null) {
                 autoCenterView();
                 return true;
