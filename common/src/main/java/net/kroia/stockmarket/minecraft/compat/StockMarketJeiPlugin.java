@@ -5,7 +5,8 @@ import mezz.jei.api.JeiPlugin;
 import mezz.jei.api.registration.IGuiHandlerRegistration;
 import mezz.jei.api.runtime.IJeiRuntime;
 import net.kroia.stockmarket.StockMarketMod;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+//import net.minecraft.resources.Identifier; // mc>=1.21.11
 
 @JeiPlugin
 public class StockMarketJeiPlugin implements IModPlugin {
@@ -18,10 +19,12 @@ public class StockMarketJeiPlugin implements IModPlugin {
     {
         //JEIIntegration.registerPlugin(new BankSystemJeiPlugin());
     }
-    private static final ResourceLocation PLUGIN_UID = ResourceLocation.fromNamespaceAndPath(StockMarketMod.MOD_ID, "jei_plugin");
+    private static final ResourceLocation PLUGIN_UID = ResourceLocation.fromNamespaceAndPath(StockMarketMod.MOD_ID, "jei_plugin"); // mc<=1.21.10
+    //private static final Identifier PLUGIN_UID = Identifier.fromNamespaceAndPath(StockMarketMod.MOD_ID, "jei_plugin"); // mc>=1.21.11
 
     @Override
-    public ResourceLocation getPluginUid() {
+    public ResourceLocation getPluginUid() { // mc<=1.21.10
+    //public Identifier getPluginUid() { // mc>=1.21.11
         return PLUGIN_UID;
     }
 

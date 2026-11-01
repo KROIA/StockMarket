@@ -11,9 +11,11 @@ import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.minecraft.block.StockMarketBlocks;
 import net.kroia.stockmarket.minecraft.entity.custom.StockMarketDisplayBlockEntity;
 import net.kroia.modutilities.gui.display.client.AbstractDisplayBlockEntityRenderer;
-import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.RenderType; // mc<=1.21.10
+//import net.minecraft.client.renderer.rendertype.RenderType; import net.minecraft.client.renderer.rendertype.RenderTypes; // mc>=1.21.11
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+//import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.world.level.block.entity.BlockEntityType;
 
 import java.util.function.Supplier;
@@ -53,6 +55,7 @@ public class StockMarketEntities {
 
     public static <T extends BlockEntityType<?>> RegistrySupplier<T> registerBlockEntity(String name, Supplier<T> item)
     {
-        return BLOCK_ENTITIES.register(ResourceLocation.fromNamespaceAndPath(StockMarketMod.MOD_ID, name), item);
+        return BLOCK_ENTITIES.register(ResourceLocation.fromNamespaceAndPath(StockMarketMod.MOD_ID, name), item); // mc<=1.21.10
+        //return BLOCK_ENTITIES.register(Identifier.fromNamespaceAndPath(StockMarketMod.MOD_ID, name), item); // mc>=1.21.11
     }
 }
