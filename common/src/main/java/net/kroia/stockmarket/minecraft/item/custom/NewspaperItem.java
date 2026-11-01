@@ -46,10 +46,10 @@ public class NewspaperItem extends Item {
     @Override
     public @NotNull InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) { // mc<=1.21.1
     //public @NotNull InteractionResult use(Level level, Player player, InteractionHand hand) { // mc>=1.21.2
-        if (level.isClientSide) {
+        if (level.isClientSide()) {
             StockMarketClientHooks.openNewsScreen();
         }
-        return InteractionResultHolder.sidedSuccess(player.getItemInHand(hand), level.isClientSide); // mc<=1.21.1
+        return InteractionResultHolder.sidedSuccess(player.getItemInHand(hand), level.isClientSide()); // mc<=1.21.1
         //return InteractionResult.SUCCESS; // mc>=1.21.2 (swings on client, same as sidedSuccess)
     }
 }
