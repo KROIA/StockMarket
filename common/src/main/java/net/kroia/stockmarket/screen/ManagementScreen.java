@@ -558,7 +558,7 @@ public class ManagementScreen extends StockMarketGuiScreen {
 
             @Override
             protected boolean mouseClickedOverElement(int button) {
-                if (button == 0) {
+                if (button == net.kroia.modutilities.gui.InputConstants.MOUSE_BUTTON_LEFT) {
                     // Select strictly by the market's ItemID. Never round-trip through the
                     // ItemStack: a stack whose components drifted away from the registry
                     // template would re-register as a *new* ItemID and select nothing.
@@ -639,14 +639,14 @@ public class ManagementScreen extends StockMarketGuiScreen {
             // ModUtilities for this).
             net.minecraft.client.player.LocalPlayer player = Minecraft.getInstance().player;
             if (player != null) {
-                player.displayClientMessage(
+                net.kroia.modutilities.PlayerCompat.sendMessage(player,
                         Component.translatable("gui.stockmarket.untrusted_slave.management_blocked"),
                         false);
             }
             return;
         }
         ManagementScreen screen = new ManagementScreen();
-        Minecraft.getInstance().setScreen(screen);
+        net.kroia.modutilities.gui.client.ClientCompat.setScreen(screen);
     }
 
     @Override

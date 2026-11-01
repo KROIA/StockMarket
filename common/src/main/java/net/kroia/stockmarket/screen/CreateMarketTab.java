@@ -587,7 +587,7 @@ public class CreateMarketTab extends StockMarketGuiElement {
 
         @Override
         protected boolean mouseClickedOverElement(int button) {
-            if (button == 0 && !alreadyExists) {
+            if (button == net.kroia.modutilities.gui.InputConstants.MOUSE_BUTTON_LEFT && !alreadyExists) {
                 toggleItemSelection(presetKey, preset, this);
                 return true;
             }
