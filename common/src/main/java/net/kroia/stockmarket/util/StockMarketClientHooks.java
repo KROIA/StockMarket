@@ -80,7 +80,8 @@ public class StockMarketClientHooks {
         if (!StockMarketGuiElement.getPlayerPreferences().isNewsToastEnabled())
             return;
         Minecraft.getInstance().getToasts().addToast(new NewsToast(record)); // mc<=1.21.1
-        //Minecraft.getInstance().getToastManager().addToast(new NewsToast(record)); // mc>=1.21.2
+        //Minecraft.getInstance().getToastManager().addToast(new NewsToast(record)); // mc>=1.21.2 mc<=26.1
+        //Minecraft.getInstance().gui.toastManager().addToast(new NewsToast(record)); // mc>=26.2
     }
 
     /**
@@ -232,7 +233,8 @@ public class StockMarketClientHooks {
             // Notify the player in chat
             String message = "StockMarket: Exported " + successCount + "/2 recipe images to " + exportDir;
             mc.gui.getChat().addMessage(Component.literal(message)); // mc<=1.21.11
-            //mc.gui.getChat().addClientSystemMessage(Component.literal(message)); // mc>=26.1
+            //mc.gui.getChat().addClientSystemMessage(Component.literal(message)); // mc>=26.1 mc<=26.1
+            //mc.gui.hud.getChat().addClientSystemMessage(Component.literal(message)); // mc>=26.2
         });
     }
 }
