@@ -1,0 +1,715 @@
+package net.kroia.stockmarket.screen;
+
+import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.ClientPlayerUtilities;
+import net.kroia.modutilities.gui.elements.*;
+import net.kroia.modutilities.gui.elements.base.ListView;
+import net.kroia.modutilities.gui.layout.LayoutGrid;
+import net.kroia.modutilities.gui.layout.LayoutVertical;
+import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.api.preset.IAsyncPresetManager;
+import net.kroia.stockmarket.stockmarket.market.preset.MarketPreset;
+import net.kroia.stockmarket.stockmarket.market.preset.MarketPresetCategory;
+import net.kroia.stockmarket.util.StockMarketGuiElement;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+/**
+ * Tab content element for creating markets from preset categories.
+ * Shows category buttons along the top, a grid of selectable items on the left,
+ * and a list of selected items with a "Create All" button on the right.
+ *
+ * <pre>
+ * +-Categories-+--Search: ________--+-Selected Items--+
+ * | CommonBlock|  [item] [item]     | - Iron Ingot    |
+ * | Wood       |  [item] [item]     |   price: 10.0   |
+ * | Ore        |  [item] [item]     | - Gold Ingot    |
+ * | Food       |  [item] [item]     |   price: 50.0   |
+ * | ...        |                    |                  |
+ * |            |                    | [Clear]          |
+ * |            |                    | [Create All]     |
+ * +------------+--------------------+------------------+
+ * </pre>
+ */
+public class CreateMarketTab extends StockMarketGuiElement {
+
+    private static class Texts {
+        private static final String PREFIX = "gui." + StockMarketMod.MOD_ID + ".create_market_tab.";
+        public static final Component TITLE = Component.translatable(PREFIX + "title");
+        public static final Component CREATE_ALL = Component.translatable(PREFIX + "create_all");
+        public static final Component SELECTED_ITEMS = Component.translatable(PREFIX + "selected_items");
+        public static final Component SEARCH = Component.translatable(PREFIX + "search");
+        public static final Component NO_PRESETS = Component.translatable(PREFIX + "no_presets");
+        public static final Component PRICE_LABEL = Component.translatable(PREFIX + "price");
+        public static final Component ABUNDANCE_LABEL = Component.translatable(PREFIX + "abundance");
+        public static final Component ORDERBOOK_ENABLED_LABEL = Component.translatable(PREFIX + "orderbook_enabled");
+        public static final Component IGNORE_PLUGIN_AUTOSUBSCRIBE_LABEL = Component.translatable(PREFIX + "ignore_plugin_autosubscribe");
+        public static final Component ALREADY_EXISTS = Component.translatable(PREFIX + "already_exists");
+        public static final Component CLEAR_SELECTION = Component.translatable(PREFIX + "clear_selection");
+        public static final Component SELECT_ALL = Component.translatable(PREFIX + "select_all");
+        public static final Component DESELECT_ALL = Component.translatable(PREFIX + "deselect_all");
+    }
+
+    // Scrollable vertical list of category buttons (left panel)
+    private final ListView categoryListView;
+    private final List<Button> categoryButtons = new ArrayList<>();
+    // Search box for filtering items within a category
+    private final TextBox searchField;
+    private final Label searchLabel;
+    // Grid of item icons from the selected category
+    private final ListView itemGridView;
+    private final LayoutGrid itemGridLayout;
+    // Bulk selection buttons above the item grid — apply to the whole current category
+    private final Button selectAllButton;
+    private final Button deselectAllButton;
+    // Right panel: list of selected items
+    private final Label selectedLabel;
+    private final ListView selectedItemsView;
+    private final Button createButton;
+    private final Button clearButton;
+
+    // Currently selected category name (null = none)
+    private @Nullable String selectedCategory;
+    // Map of unique preset keys to preset references for batch creation
+    private final LinkedHashMap<String, MarketPreset> selectedPresets = new LinkedHashMap<>();
+    // Cached list of existing market ItemStacks for component-aware "already exists" detection
+    private final List<ItemStack> existingMarketStacks = new ArrayList<>();
+    // Dirty flags — rebuilt in render() to avoid modifying child lists during event handling
+    private boolean selectedListDirty = false;
+    private boolean itemGridDirty = false;
+    private @Nullable Runnable onMarketsChanged;
+    // Cached categories fetched asynchronously from the server
+    private final List<MarketPresetCategory> cachedCategories = new ArrayList<>();
+
+    public void setOnMarketsChanged(@Nullable Runnable callback) {
+        this.onMarketsChanged = callback;
+    }
+
+    public CreateMarketTab() {
+        super();
+        setEnableBackground(false);
+
+        // Category list (scrollable vertical list on the left)
+        categoryListView = new VerticalListView();
+        LayoutVertical catLayout = new LayoutVertical();
+        catLayout.stretchX = true;
+        catLayout.stretchY = false;
+        categoryListView.setLayout(catLayout);
+
+        // Search bar
+        searchLabel = new Label(Texts.SEARCH.getString());
+        searchLabel.setAlignment(Label.Alignment.RIGHT);
+        searchField = new TextBox();
+        searchField.setOnTextChanged(s -> rebuildItemGrid());
+
+        // Item grid (scrollable)
+        itemGridView = new VerticalListView();
+        itemGridLayout = new LayoutGrid(0, 0, false, false, 0, 1, Alignment.TOP);
+        itemGridView.setLayout(itemGridLayout);
+
+        // Bulk selection buttons: they operate on the whole current category
+        // regardless of the search filter. "Select all" adds every not-yet-
+        // existing preset in the category to the selection; "Deselect all"
+        // removes every preset in the category from the selection.
+        // Disabled by default — enabled state is recomputed inside
+        // rebuildItemGrid() once categories are loaded and a category is
+        // selected. Guards against the brief window between construction and
+        // the async category load returning.
+        selectAllButton = new Button(Texts.SELECT_ALL.getString(), this::onSelectAllClicked);
+        selectAllButton.setEnabled(false);
+        // Deselect-all is always enabled per admin request — clearing an already-empty
+        // selection is a harmless no-op, so gating the button just gets in the way.
+        deselectAllButton = new Button(Texts.DESELECT_ALL.getString(), this::onDeselectAllClicked);
+
+        // Right panel
+        selectedLabel = new Label(Texts.SELECTED_ITEMS.getString());
+        selectedLabel.setAlignment(Label.Alignment.CENTER);
+
+        selectedItemsView = new VerticalListView();
+        LayoutVertical selectedLayout = new LayoutVertical();
+        selectedLayout.stretchX = true;
+        selectedLayout.stretchY = false;
+        selectedItemsView.setLayout(selectedLayout);
+
+        createButton = new Button(Texts.CREATE_ALL.getString(), this::onCreateAllClicked);
+        createButton.setBackgroundColor(0xFF2d8a4e);
+        createButton.setHoverColor(0xFF238b40);
+        createButton.setPressedColor(0xFF1a6b30);
+
+        clearButton = new Button(Texts.CLEAR_SELECTION.getString(), this::onClearSelectionClicked);
+
+        // Add children
+        addChild(categoryListView);
+        addChild(searchLabel);
+        addChild(searchField);
+        addChild(selectAllButton);
+        addChild(deselectAllButton);
+        addChild(itemGridView);
+        addChild(selectedLabel);
+        addChild(selectedItemsView);
+        addChild(createButton);
+        addChild(clearButton);
+
+        // T-123 (untrusted slave gate): the "Create All" button is the only
+        // mutating action on this tab. Users can still browse categories and
+        // build a selection; only the write to master is blocked. (The Clear
+        // button just resets the client-side selection, so it stays enabled.)
+        if (isUntrustedSlave()) {
+            createButton.setEnabled(false);
+        }
+
+        // Fetch categories from server asynchronously
+        loadCategoriesFromServer();
+
+        // Cache existing markets
+        refreshExistingMarkets();
+    }
+
+    /**
+     * Fetches categories from the server asynchronously and builds the UI when data arrives.
+     */
+    private void loadCategoriesFromServer() {
+        IAsyncPresetManager pm = getPresetManager();
+        if (pm == null) return;
+        pm.getCategoriesAsync().thenAccept(categories -> {
+            Minecraft.getInstance().execute(() -> {
+                cachedCategories.clear();
+                cachedCategories.addAll(categories);
+                buildCategoryButtons();
+            });
+        });
+    }
+
+    /**
+     * Builds the category buttons from the cached categories.
+     */
+    private void buildCategoryButtons() {
+        categoryListView.removeChilds();
+        categoryButtons.clear();
+
+        for (MarketPresetCategory category : cachedCategories) {
+            Button btn = new Button(category.getCategory(), () -> onCategorySelected(category.getCategory()));
+            btn.setHeight(defaultElementHeight);
+            categoryButtons.add(btn);
+            categoryListView.addChild(btn);
+        }
+
+        // Auto-select first category if available
+        if (!cachedCategories.isEmpty()) {
+            selectedCategory = cachedCategories.get(0).getCategory();
+            rebuildItemGrid();
+        }
+    }
+
+    /**
+     * Caches existing market ItemStacks so we can do component-aware "already exists" detection.
+     * Uses full ItemStack comparison instead of just item ID strings, so that e.g.
+     * "Enchanted Book (Infinity)" and "Enchanted Book (Mending)" are treated as distinct items.
+     */
+    private void refreshExistingMarkets() {
+        existingMarketStacks.clear();
+        List<ItemID> markets = getAvailableMarkets();
+        if (markets != null) {
+            for (ItemID id : markets) {
+                ItemStack stack = id.getStack();
+                if (stack != null && !stack.isEmpty()) {
+                    existingMarketStacks.add(stack);
+                }
+            }
+        }
+    }
+
+    /**
+     * Called when a category button is clicked.
+     */
+    private void onCategorySelected(String category) {
+        selectedCategory = category;
+        searchField.setText("");
+        rebuildItemGrid();
+    }
+
+    /**
+     * Rebuilds the item grid for the currently selected category, applying search filter.
+     * Also refreshes the enabled state of the Select-all / Deselect-all buttons based
+     * on how many presets in the category are selectable and how many are in the
+     * current selection set.
+     */
+    private void rebuildItemGrid() {
+        itemGridView.removeChilds();
+
+        if (selectedCategory == null) {
+            selectAllButton.setEnabled(false);
+            // Deselect-all stays enabled unconditionally — see button construction.
+            return;
+        }
+
+        MarketPresetCategory category = findCategory(selectedCategory);
+        if (category == null) {
+            selectAllButton.setEnabled(false);
+            return;
+        }
+
+        String searchText = searchField.getText().toLowerCase().trim();
+
+        // Refresh existing markets cache
+        refreshExistingMarkets();
+
+        // Track category-scoped selectable/selected counts so we can enable
+        // or disable the bulk buttons at the end of the loop. This piggybacks
+        // on the existing iteration to avoid a second pass over the presets.
+        int selectableInCategory = 0;
+        int selectedInCategory = 0;
+
+        for (MarketPreset preset : category.getPresets()) {
+            ItemStack stack = preset.toItemStack();
+            if (stack.isEmpty()) continue;
+
+            String key = preset.getUniqueKey();
+            // Component-aware comparison: matches item type AND components (e.g. enchantments)
+            boolean alreadyExists = existingMarketStacks.stream()
+                    .anyMatch(existing -> ItemStack.isSameItemSameComponents(existing, stack));
+            boolean isSelected = selectedPresets.containsKey(key);
+
+            // Count against the WHOLE category (before the search filter drops
+            // rows) so the bulk-selection buttons reflect the true state of
+            // the category, not just what the current search shows.
+            if (!alreadyExists) selectableInCategory++;
+            if (isSelected) selectedInCategory++;
+
+            // Apply search filter on display name, registry ID, and component text (enchantments, potions, etc.)
+            String displayName = stack.getHoverName().getString().toLowerCase();
+            if (!searchText.isEmpty()
+                    && !displayName.contains(searchText)
+                    && !preset.getItemId().toLowerCase().contains(searchText)
+                    && !ClientPlayerUtilities.getItemDisplayText(stack).toLowerCase().contains(searchText)) {
+                continue;
+            }
+
+            SelectableItemView itemView = new SelectableItemView(stack, key, isSelected, alreadyExists, preset);
+            itemGridView.addChild(itemView);
+        }
+
+        // Select-all only enables when there's something in the category to add.
+        // Deselect-all stays enabled unconditionally (harmless no-op on empty).
+        selectAllButton.setEnabled(selectableInCategory > 0);
+    }
+
+    /**
+     * Rebuilds the right-side panel showing selected items with their preset info.
+     */
+    private void rebuildSelectedList() {
+        selectedItemsView.removeChilds();
+
+        for (Map.Entry<String, MarketPreset> entry : selectedPresets.entrySet()) {
+            MarketPreset preset = entry.getValue();
+            ItemStack stack = preset.toItemStack();
+            if (stack.isEmpty()) continue;
+
+            SelectedItemEntry selectedEntry = new SelectedItemEntry(stack, preset, entry.getKey());
+            selectedItemsView.addChild(selectedEntry);
+        }
+    }
+
+    /**
+     * Called when "Create All" is clicked. Creates markets for all selected items.
+     */
+    private void onCreateAllClicked() {
+        if (selectedPresets.isEmpty()) return;
+
+        // Copy since we'll modify during iteration
+        List<Map.Entry<String, MarketPreset>> toCreate = new ArrayList<>(selectedPresets.entrySet());
+
+        // Collect all creation futures so we fire the callback only once when all complete
+        List<CompletableFuture<Void>> futures = new ArrayList<>();
+        AtomicBoolean anyCreated = new AtomicBoolean(false);
+
+        for (Map.Entry<String, MarketPreset> entry : toCreate) {
+            String key = entry.getKey();
+            MarketPreset preset = entry.getValue();
+
+            // Use pre-registered ItemID from server when available (avoids cross-registry
+            // Holder issues with enchanted books/potions in singleplayer)
+            CompletableFuture<ItemID> itemIDFuture;
+            if (preset.hasRegisteredItemID()) {
+                itemIDFuture = CompletableFuture.completedFuture(new ItemID(preset.getRegisteredItemIDShort()));
+            } else {
+                ItemStack stack = preset.toItemStack();
+                if (stack.isEmpty()) continue;
+                itemIDFuture = ItemID.getOrRegisterFromItemStackClientSide(stack);
+            }
+
+            CompletableFuture<Void> future = itemIDFuture.thenCompose(registeredID ->
+                getMarketManager().requestCreateMarket(registeredID).thenAccept(success -> {
+                    if (success) {
+                        info("Created market for " + preset.getItemId());
+                        anyCreated.set(true);
+                        Minecraft.getInstance().execute(() -> {
+                            selectedPresets.remove(key);
+                            itemGridDirty = true;
+                            selectedListDirty = true;
+                        });
+                    } else {
+                        warn("Failed to create market for " + preset.getItemId());
+                    }
+                })
+            );
+            futures.add(future);
+        }
+
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).thenRun(() -> {
+            if (anyCreated.get()) {
+                Minecraft.getInstance().execute(() -> {
+                    refreshExistingMarkets();
+                    if (onMarketsChanged != null) onMarketsChanged.run();
+                });
+            }
+        });
+    }
+
+    /**
+     * Called when "Clear Selection" is clicked.
+     */
+    private void onClearSelectionClicked() {
+        selectedPresets.clear();
+        itemGridDirty = true;
+        selectedListDirty = true;
+    }
+
+    /**
+     * Handler for the "Select all" button above the item grid.
+     * <p>
+     * Iterates every preset in the currently selected category and adds those
+     * whose market does <em>not</em> yet exist to the selection set. Presets
+     * are filtered using exactly the same component-aware
+     * {@link ItemStack#isSameItemSameComponents} comparison used by
+     * {@link #rebuildItemGrid()} so the exclusion pattern matches the
+     * per-item click behaviour (already-existing markets are click-locked).
+     * <p>
+     * The search field is intentionally ignored: the button label reads
+     * "Select all", so users expect every not-yet-existing item in the
+     * category to end up selected, not only what the current filter shows.
+     * Ignores the call when no category is selected.
+     */
+    private void onSelectAllClicked() {
+        if (selectedCategory == null) return;
+        MarketPresetCategory category = findCategory(selectedCategory);
+        if (category == null) return;
+
+        // Refresh so we filter against the latest set of existing markets
+        // (an admin could have created some in another screen since load).
+        refreshExistingMarkets();
+
+        for (MarketPreset preset : category.getPresets()) {
+            ItemStack stack = preset.toItemStack();
+            if (stack.isEmpty()) continue;
+            // Same "already exists" filter as SelectableItemView — keep the two in sync.
+            boolean alreadyExists = existingMarketStacks.stream()
+                    .anyMatch(existing -> ItemStack.isSameItemSameComponents(existing, stack));
+            if (alreadyExists) continue;
+            selectedPresets.put(preset.getUniqueKey(), preset);
+        }
+        // Defer UI rebuild to render() so we do not mutate child lists mid-event.
+        itemGridDirty = true;
+        selectedListDirty = true;
+    }
+
+    /**
+     * Handler for the "Deselect all" button above the item grid.
+     * <p>
+     * Removes every preset that belongs to the currently selected category
+     * from the selection set. Presets in other categories stay selected —
+     * this is scoped to the category the user is looking at. Already-created
+     * markets are never in the selection set to begin with, so no separate
+     * exclusion is needed here. Ignores the call when no category is
+     * selected.
+     */
+    private void onDeselectAllClicked() {
+        if (selectedCategory == null) return;
+        MarketPresetCategory category = findCategory(selectedCategory);
+        if (category == null) return;
+
+        for (MarketPreset preset : category.getPresets()) {
+            selectedPresets.remove(preset.getUniqueKey());
+        }
+        // Defer UI rebuild to render() so we do not mutate child lists mid-event.
+        itemGridDirty = true;
+        selectedListDirty = true;
+    }
+
+    /**
+     * Toggles selection state of an item in the grid.
+     */
+    private void toggleItemSelection(String key, MarketPreset preset, SelectableItemView view) {
+        if (selectedPresets.containsKey(key)) {
+            selectedPresets.remove(key);
+            view.selected = false;
+        } else {
+            selectedPresets.put(key, preset);
+            view.selected = true;
+        }
+        selectedListDirty = true;
+    }
+
+    private @Nullable MarketPresetCategory findCategory(String name) {
+        for (MarketPresetCategory cat : cachedCategories) {
+            if (cat.getCategory().equals(name)) return cat;
+        }
+        return null;
+    }
+
+    @Override
+    protected void render() {
+        // Process deferred rebuilds safely outside event propagation
+        if (itemGridDirty) {
+            itemGridDirty = false;
+            rebuildItemGrid();
+        }
+        if (selectedListDirty) {
+            selectedListDirty = false;
+            rebuildSelectedList();
+        }
+
+        // Highlight the selected category button
+        for (Button btn : categoryButtons) {
+            if (btn.getText().equals(selectedCategory)) {
+                btn.setBackgroundColor(0xFF4a6fa5);
+            } else {
+                btn.setBackgroundColor(Button.DEFAULT_BACKGROUND_COLOR);
+            }
+        }
+    }
+
+    @Override
+    protected void layoutChanged() {
+        int width = getWidth() - 2 * padding;
+        int height = getHeight() - 2 * padding;
+        int eh = defaultElementHeight;
+
+        // 3-column layout: [categories | search+items | selected]
+        int catWidth = width / 6;
+        int rightWidth = width / 4;
+        int midWidth = width - catWidth - rightWidth - 2 * spacing;
+
+        int midX = padding + catWidth + spacing;
+        int rightX = midX + midWidth + spacing;
+
+        // Left column: category list (full height)
+        categoryListView.setBounds(padding, padding, catWidth, height);
+
+        // Middle column: search bar on top, Select-all/Deselect-all row
+        // beneath it, then the item grid filling the rest.
+        int searchLabelWidth = 50;
+        searchLabel.setBounds(midX, padding, searchLabelWidth, 15);
+        searchField.setBounds(searchLabel.getRight() + spacing, padding, midWidth - searchLabelWidth - spacing, 15);
+
+        // Row with the two bulk-selection buttons, split 50/50 across the
+        // middle column width. The remainder of `midWidth` after the spacing
+        // is distributed to the right button so the row lines up exactly with
+        // the item grid on either side.
+        int bulkRowY = searchLabel.getBottom() + spacing;
+        int bulkLeftW = (midWidth - spacing) / 2;
+        int bulkRightW = midWidth - bulkLeftW - spacing;
+        selectAllButton.setBounds(midX, bulkRowY, bulkLeftW, eh);
+        deselectAllButton.setBounds(selectAllButton.getRight() + spacing, bulkRowY, bulkRightW, eh);
+
+        int gridTop = selectAllButton.getBottom() + spacing;
+        int gridHeight = height - (gridTop - padding);
+        itemGridView.setBounds(midX, gridTop, midWidth, gridHeight);
+        int containerWidth = itemGridView.getContainerWidth();
+        itemGridLayout.columns = Math.max(1, containerWidth / ItemView.DEFAULT_WIDTH);
+
+        // Right column: selected items label, list, buttons
+        selectedLabel.setBounds(rightX, padding, rightWidth, eh);
+
+        int btnHeight = eh;
+        int bottomBtnsHeight = btnHeight * 2 + spacing;
+        int listTop = selectedLabel.getBottom() + spacing;
+        int listHeight = height - eh - spacing - bottomBtnsHeight - spacing;
+        selectedItemsView.setBounds(rightX, listTop, rightWidth, listHeight);
+
+        clearButton.setBounds(rightX, selectedItemsView.getBottom() + spacing, rightWidth, btnHeight);
+        createButton.setBounds(rightX, clearButton.getBottom() + spacing, rightWidth, btnHeight);
+    }
+
+    // ---- Inner classes ----
+
+    /**
+     * An item icon in the grid that can be toggled for selection.
+     * Shows a green overlay when selected, and a dark overlay when a market already exists.
+     */
+    private class SelectableItemView extends ItemView {
+        private final String presetKey;
+        private boolean selected;
+        private final boolean alreadyExists;
+        private final MarketPreset preset;
+
+        SelectableItemView(ItemStack stack, String presetKey, boolean selected, boolean alreadyExists, MarketPreset preset) {
+            super(stack);
+            this.presetKey = presetKey;
+            this.selected = selected;
+            this.alreadyExists = alreadyExists;
+            this.preset = preset;
+
+            // Build tooltip (includes enchantment/potion names via ClientPlayerUtilities)
+            String tooltip = ClientPlayerUtilities.getItemDisplayText(stack);
+            tooltip += "\n" + Texts.PRICE_LABEL.getString() + ": " + String.format(Locale.ROOT, "%.1f", preset.getDefaultPrice());
+            tooltip += "\n" + Texts.ABUNDANCE_LABEL.getString() + ": " + String.format(Locale.ROOT, "%.1f", preset.getNaturalAbundance());
+            if (alreadyExists) {
+                tooltip += "\n" + Texts.ALREADY_EXISTS.getString();
+            }
+            String finalTooltip = tooltip;
+            setHoverTooltipSupplier(() -> finalTooltip);
+            setHoverTooltipMousePositionAlignment(Alignment.TOP_RIGHT);
+            setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
+            setShowTooltip(false); // Disable item tooltip, use custom one
+        }
+
+        @Override
+        public void renderBackground() {
+            super.renderBackground();
+            if (alreadyExists) {
+                // Dark overlay for existing markets
+                drawRect(0, 0, getWidth(), getHeight(), 0x80000000);
+            } else if (selected) {
+                // Green overlay for selected items
+                drawRect(0, 0, getWidth(), getHeight(), 0x6000FF00);
+            }
+            if (isMouseOver() && !alreadyExists) {
+                drawRect(0, 0, getWidth(), getHeight(), 0x40FFFFFF);
+            }
+        }
+
+        @Override
+        protected boolean mouseClickedOverElement(int button) {
+            if (button == 0 && !alreadyExists) {
+                toggleItemSelection(presetKey, preset, this);
+                return true;
+            }
+            return false;
+        }
+    }
+
+    /**
+     * Entry in the selected items list showing the item icon, name, price, and abundance.
+     */
+    private class SelectedItemEntry extends StockMarketGuiElement {
+        // One line per preset setting: bullet + name at full font, value at reduced font
+        // (matches StockMarketGuiElement.hoverToolTipFontSize, the codebase's standard for
+        // subordinate text). Four settings → four rows + the top name/remove row.
+        private static final int BULLET_ROW_HEIGHT = 10;
+        private static final float VALUE_FONT_SCALE = StockMarketGuiElement.hoverToolTipFontSize;
+
+        private final ItemView itemView;
+        private final Label nameLabel;
+        private final Label priceNameLabel;
+        private final Label priceValueLabel;
+        private final Label abundanceNameLabel;
+        private final Label abundanceValueLabel;
+        private final Label orderbookNameLabel;
+        private final Label orderbookValueLabel;
+        private final Label autosubNameLabel;
+        private final Label autosubValueLabel;
+        private final Button removeButton;
+
+        SelectedItemEntry(ItemStack stack, MarketPreset preset, String presetKey) {
+            super();
+            setEnableBackground(true);
+
+            itemView = new ItemView(stack);
+            nameLabel = new Label(stack.getHoverName().getString());
+
+            // Fix 1: name labels also use the reduced scale so the whole bullet list
+            // reads as a compact block of secondary text under the item name.
+            priceNameLabel = new Label("- " + Texts.PRICE_LABEL.getString() + ":");
+            priceNameLabel.setTextFontScale(VALUE_FONT_SCALE);
+            priceValueLabel = new Label(String.format(Locale.ROOT, "%.2f", preset.getDefaultPrice()));
+            priceValueLabel.setTextFontScale(VALUE_FONT_SCALE);
+
+            abundanceNameLabel = new Label("- " + Texts.ABUNDANCE_LABEL.getString() + ":");
+            abundanceNameLabel.setTextFontScale(VALUE_FONT_SCALE);
+            abundanceValueLabel = new Label(String.format(Locale.ROOT, "%.2f", preset.getNaturalAbundance()));
+            abundanceValueLabel.setTextFontScale(VALUE_FONT_SCALE);
+
+            orderbookNameLabel = new Label("- " + Texts.ORDERBOOK_ENABLED_LABEL.getString() + ":");
+            orderbookNameLabel.setTextFontScale(VALUE_FONT_SCALE);
+            orderbookValueLabel = new Label(String.valueOf(preset.isOrderbookEnabled()));
+            orderbookValueLabel.setTextFontScale(VALUE_FONT_SCALE);
+
+            autosubNameLabel = new Label("- " + Texts.IGNORE_PLUGIN_AUTOSUBSCRIBE_LABEL.getString() + ":");
+            autosubNameLabel.setTextFontScale(VALUE_FONT_SCALE);
+            autosubValueLabel = new Label(String.valueOf(preset.isIgnorePluginAutosubscribe()));
+            autosubValueLabel.setTextFontScale(VALUE_FONT_SCALE);
+
+            removeButton = new Button("x", () -> {
+                selectedPresets.remove(presetKey);
+                itemGridDirty = true;
+                selectedListDirty = true;
+            });
+            removeButton.setBackgroundColor(0xFFe8711c);
+            removeButton.setHoverColor(0xFFe04c12);
+
+            addChild(itemView);
+            addChild(nameLabel);
+            addChild(priceNameLabel);
+            addChild(priceValueLabel);
+            addChild(abundanceNameLabel);
+            addChild(abundanceValueLabel);
+            addChild(orderbookNameLabel);
+            addChild(orderbookValueLabel);
+            addChild(autosubNameLabel);
+            addChild(autosubValueLabel);
+            addChild(removeButton);
+
+            // Title row + 4 bullet rows + padding.
+            setHeight(defaultElementHeight + 4 * (BULLET_ROW_HEIGHT + spacing) + 2 * spacing);
+        }
+
+        @Override
+        protected void render() {
+            // No dynamic rendering
+        }
+
+        @Override
+        protected void layoutChanged() {
+            int w = getWidth() - 2 * padding;
+            int btnSize = 16;
+
+            itemView.setBounds(padding, padding, 16, 16);
+            nameLabel.setBounds(itemView.getRight() + spacing, padding, w - 16 - btnSize - 2 * spacing, defaultElementHeight);
+            removeButton.setBounds(nameLabel.getRight() + spacing, padding, btnSize, btnSize);
+
+            // Bullet rows underneath. The value column starts at ~55% of the row width so
+            // the eye can scan the names first; both columns start left-aligned so any
+            // shorter name still lines up with its sibling.
+            int rowY = nameLabel.getBottom() + spacing;
+            int nameCol = padding;
+            // Fix 1: split shifted from 55% → 70% to give long setting names (e.g.
+            // "Ignore Plugin Autosubscribe:") room to render without overlapping the
+            // value column.
+            int valueCol = padding + (int) (w * 0.70f);
+            int nameW = valueCol - nameCol - spacing;
+            int valueW = w - (valueCol - padding);
+
+            priceNameLabel.setBounds(nameCol, rowY, nameW, BULLET_ROW_HEIGHT);
+            priceValueLabel.setBounds(valueCol, rowY, valueW, BULLET_ROW_HEIGHT);
+            rowY += BULLET_ROW_HEIGHT + spacing;
+
+            abundanceNameLabel.setBounds(nameCol, rowY, nameW, BULLET_ROW_HEIGHT);
+            abundanceValueLabel.setBounds(valueCol, rowY, valueW, BULLET_ROW_HEIGHT);
+            rowY += BULLET_ROW_HEIGHT + spacing;
+
+            orderbookNameLabel.setBounds(nameCol, rowY, nameW, BULLET_ROW_HEIGHT);
+            orderbookValueLabel.setBounds(valueCol, rowY, valueW, BULLET_ROW_HEIGHT);
+            rowY += BULLET_ROW_HEIGHT + spacing;
+
+            autosubNameLabel.setBounds(nameCol, rowY, nameW, BULLET_ROW_HEIGHT);
+            autosubValueLabel.setBounds(valueCol, rowY, valueW, BULLET_ROW_HEIGHT);
+        }
+    }
+}

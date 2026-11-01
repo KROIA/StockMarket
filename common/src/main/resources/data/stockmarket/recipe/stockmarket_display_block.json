@@ -1,0 +1,20 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "D": "banksystem:display",
+    "G": "minecraft:glass_pane",
+    "I": "minecraft:iron_nugget",
+    "E": "minecraft:emerald"
+  },
+  "pattern": [
+    "IGI",
+    "GDG",
+    "IEI"
+  ],
+  "result": {
+    "count": 1,
+    "id": "stockmarket:stockmarket_display_block"
+  },
+  "show_notification": true
+}

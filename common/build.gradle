@@ -1,0 +1,38 @@
+architectury {
+    common rootProject.enabled_platforms.split(',')
+}
+repositories {
+    maven { url 'https://maven.quiltmc.org/repository/release/' }
+    maven {
+        // location of the maven that hosts JEI files since January 2023
+        name = "Jared's maven"
+        url = "https://maven.blamejared.com/"
+    }
+    flatDir {
+        dir "../../../BankSystem/mc_${minecraft_version}_BankSystem/common/build/libs"
+        dir "../../../MC_ModUtilities/mc_${minecraft_version}_MC_ModUtilities/common/build/libs"
+    }
+    maven { url 'https://jitpack.io' }
+
+}
+
+
+dependencies {
+    // We depend on Fabric Loader here to use the Fabric @Environment annotations,
+    // which get remapped to the correct annotations on each platform.
+    // Do NOT use other classes from Fabric Loader.
+    modImplementation "net.fabricmc:fabric-loader:$rootProject.fabric_loader_version"
+
+    // Architectury API. This is optional, and you can comment it out if you don't need it.
+    modImplementation "dev.architectury:architectury:$rootProject.architectury_api_version"
+
+    modCompileOnly("com.github.KROIA.BankSystem:banksystem-common:$rootProject.banksystem_version")
+    modCompileOnly("com.github.KROIA.MC_ModUtilities:modutilities-common:$rootProject.modutilities_version")
+
+    compileOnly("mezz.jei:jei-${rootProject.jei_minecraft_version}-common-api:${jei_version}")
+    compileOnly('org.xerial:sqlite-jdbc:3.46.0.0'){
+        exclude group: "org.slf4j"
+    }
+
+
+}

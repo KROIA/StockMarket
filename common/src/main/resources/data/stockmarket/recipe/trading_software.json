@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "S": "banksystem:software",
+    "T": "minecraft:emerald"
+  },
+  "pattern": [
+    "ST"
+  ],
+  "result": {
+    "count": 1,
+    "id": "stockmarket:trading_software"
+  },
+  "show_notification": true
+}

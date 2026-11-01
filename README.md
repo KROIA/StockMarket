@@ -1,39 +1,110 @@
 # StockMarket Mod
 
 ## About
-StockMarket is a Minecraft mod that brings a better way for trading to the game. It enables players to trade items on a virtual stock market, making it ideal for multiplayer servers with active economies. For Server that have not enough players or even for single player, a market bot can be added that simulates a large player base and provides liquidity to the market.
-<table>
+StockMarket is a Minecraft mod that brings a better way for trading to the game. It enables players to trade items on a virtual stock market, making it ideal for multiplayer servers with active economies. For servers that do not have enough players or even for single player, plugins can be added that simulate a large player base and provide liquidity and price movements to the market.
+
 <tr>
 <td>
 <div align="center">
-    <img src="documentation/images/tradingView.png" > 
+    <img src="documentation/images/tradingView.gif" > 
 </div>
 </td>
-</table>
 
+You want to support me?<br>
+[!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://buymeacoffee.com/alexkrieg)
 ---
 
 
 ## Chapters 
 * [Features](#features)
 * [Blocks](#blocks)
-* [Items](#items)
+* [Crafting Recipes](#crafting-recipes)
 * [Matching Engine](#matching-engine)
-    * [market-order](#market-order)
+    * [Market Order](#market-order)
     * [Limit Order](#limit-order)
 * [How to use](#how-to-use)
-    * [For server player / single player](#for-server-player--single-player)
-    * [For admins / single player](#for-admins--single-player)
+    * [For Players](#for-players)
+    * [For Admins / Single Player](#for-admins--single-player)
 * [Commands](#commands)
-* [Stock Market Bot](#stock-market-bot)
-
+* [Access Control & Trust Model](#access-control--trust-model)
+* [Plugins](#plugins)
+* [Villager Trading](#villager-trading)
+* [Changelog](#changelog)
+* [Discord to help me improve the mod](https://discord.gg/qHNVaDGAyB)
 
 ---
 ## Features
-- Adds a banking system to the game for money and items.
-- Adds new [blocks](#blocks) to interact with the market or bank account.
+- Adds new [blocks](#blocks) to interact with the market.
 - Implementation of a [matching engine](#matching-engine) inspired by the real market.
-- Configurable [bot](#stock-market-bot) which provides the market with liquidity and volatility 
+- Configurable [plugins](#plugins) that provide the market with liquidity, volatility and price movements.
+- A JSON-configurable [news event system](documentation/user-guide/news-system/overview.md) that publishes headlines with [pictures](documentation/user-guide/news-system/pictures.md) and moves market prices — players follow the market through a craftable newspaper item. Server admins and content creators can [author their own events](documentation/user-guide/news-system/authoring-tutorial.md) without touching code.
+
+## Dependencies
+- [Bank System Mod](https://github.com/KROIA/BankSystem)
+- [Architectury](https://www.curseforge.com/minecraft/mc-mods/architectury-api)
+- [Quilted Fabric API](https://www.curseforge.com/minecraft/mc-mods/qsl) (Only needed for Quilt)
+- [Mod Utilities](https://www.curseforge.com/minecraft/mc-mods/modutilities) (Only needed for Quilt)
+- [Fabric API](https://www.curseforge.com/minecraft/mc-mods/fabric-api) (Only needed for Fabric)
+
+---
+## Downloads
+<!--
+[CurseForge](https://www.curseforge.com/minecraft/mc-mods/stockmarket)
+
+
+| Version | Download |
+|---------|----------|
+|1.3.0    | [![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21.1-green)](https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6002691)<br>[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.6-blue)](https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6002684)<br>[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.4-blue)](https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6002682)<br>[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.3-blue)](https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6002681)<br>[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.2-blue)](https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6002679)<br>[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.1-blue)](https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6002676)<br>[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.4-blue)](https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6004639)<br>[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.3-blue)](https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6004641)<br>[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.2-blue)](https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6004643) |
+
+-->
+[CurseForge](https://www.curseforge.com/minecraft/mc-mods/stockmarket)
+| Minecraft | Fabric | Forge | Quilt | Neoforge |
+|-----------|--------|-------|-------|----------|
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21.1-green)    | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-fabric-1.21.1] [![Version](https://img.shields.io/badge/v2.1.0--alpha-orange)][2.1.0-fabric-1.21.1] <br> |                                                                                  |                                                                                   | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-neoforge-1.21.1] [![Version](https://img.shields.io/badge/v2.1.0--alpha-orange)][2.1.0-neoforge-1.21.1]  |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21-green)      | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-fabric-1.21]   <br> |                                                                                  |                                                                                   | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-neoforge-1.21]    |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.6-green)    | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-fabric-1.20.6] <br> |                                                                                  |                                                                                   | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-neoforge-1.20.6]  |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.4-green)    | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-fabric-1.20.4] <br> | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-forge-1.20.4] <br> | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-quilt-1.20.4] <br>  |                                                                                 |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.2-green)    | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-fabric-1.20.2] <br> | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-forge-1.20.2] <br> | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-quilt-1.20.2] <br>  |                                                                                 |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.1-green)    | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-fabric-1.20.1] <br> | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-forge-1.20.1] <br> | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-quilt-1.20.1] <br>  |                                                                                 |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.4-green)    | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-fabric-1.19.4] <br> | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-forge-1.19.4] <br> |                                                                             <br>  |                                                                                 |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.3-green)    | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-fabric-1.19.3] <br> | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-forge-1.19.3] <br> | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-quilt-1.19.3] <br>  |                                                                                 |
+| ![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.2-green)    | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-fabric-1.19.2] <br> | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-forge-1.19.2] <br> | [![Version](https://img.shields.io/badge/v1.3.1-green)][1.3.1-quilt-1.19.2] <br>  |                                                                                 |
+
+
+
+
+
+<!--	Links to curseforge:	-->
+[2.1.0-neoforge-1.21.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/files/8656714
+[2.1.0-fabric-1.21.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/files/8656710
+
+[1.3.1-fabric-1.21.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200719
+[1.3.1-fabric-1.21]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200713
+[1.3.1-fabric-1.20.6]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200704
+[1.3.1-fabric-1.20.4]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200697
+[1.3.1-fabric-1.20.2]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200673
+[1.3.1-fabric-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200639
+[1.3.1-fabric-1.19.4]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200635
+[1.3.1-fabric-1.19.3]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200628
+[1.3.1-fabric-1.19.2]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200617
+
+[1.3.1-forge-1.20.4]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200698
+[1.3.1-forge-1.20.2]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200684
+[1.3.1-forge-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200647
+[1.3.1-forge-1.19.4]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200638
+[1.3.1-forge-1.19.3]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200631
+[1.3.1-forge-1.19.2]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200620
+					 
+[1.3.1-quilt-1.20.4]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200701
+[1.3.1-quilt-1.20.2]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200692
+[1.3.1-quilt-1.20.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200659
+[1.3.1-quilt-1.19.3]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200632
+[1.3.1-quilt-1.19.2]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200622
+
+[1.3.1-neoforge-1.21.1]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200720
+[1.3.1-neoforge-1.21]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200717
+[1.3.1-neoforge-1.20.6]:https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6200707
+
 
 
 
@@ -42,55 +113,7 @@ StockMarket is a Minecraft mod that brings a better way for trading to the game.
 <table>
 <tr>
 <td>
-<b>Metal Case Block</b><br>
-Casing for the Terminal block.<br>
-8 Iron ingots
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/metalCaseBlock.png" width="300"> 
-</div>
-</td>
-</tr>
-
-
-<tr>
-<td>
-<b>Terminal Block</b><br>
-Unprogrammed terminal.<br>
-Can be programmed using a software item.<br>
-4 Iron nuggets<br>
-1 Metal Case Block<br>
-1 Display<br>
-1 Circuit Board<br>
-2 Redstone
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/terminalBlock.png" width="300"> 
-</div>
-</td>
-</tr>
-
-
-<tr>
-<td>
-<b>Banking Terminal Block</b><br>
-Used to get access to the bank account.<br>
-Interaction using right click.<br>
-Right click on a <b>Terminal Block</b> using a <b>Banking Software</b> to create this block.
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/bankingTerminalBlock.png" width="100"> 
-</div>
-</td>
-</tr>
-
-
-<tr>
-<td>
-<b>Banking Terminal Block</b><br>
+<b>Stock Market Block</b><br>
 Used to get access to the stock market.<br>
 Interaction using right click.<br>
 Right click on a <b>Terminal Block</b> using a <b>Trading Software</b> to create this block.
@@ -104,83 +127,24 @@ Right click on a <b>Terminal Block</b> using a <b>Trading Software</b> to create
 </table>
 
 ---
-## Items
+## Crafting Recipes
+
 <table>
 <tr>
-<td>
-<b>Circuit Board</b><br>
-Electronics for other Items.<br>
-1 Nether Quartz<br>
-3 Copper Ingots<br>
-3 Paper<br>
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/circuitBoard.png" width="300"> 
-</div>
-</td>
+<td><b>Trading Software</b></td>
+<td><b>Stock Market Display Block</b></td>
 </tr>
-
-
 <tr>
-<td>
-<b>Display</b><br>
-Display for the <b>Terminal Block</b><br>
-6 Glass Planes<br>
-2 Iron Ingots<br>
-1 Ciruit Board
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/display.png" width="300"> 
-</div>
-</td>
+<td><img src="documentation/images/recipe_trading_software.png" width="350"></td>
+<td><img src="documentation/images/recipe_stockmarket_display_block.png" width="350"></td>
 </tr>
-
-
 <tr>
-<td>
-<b>Empty Software</b><br>
-Used to create a specific software<br>
-4 Iron nuggets<br>
-2 Ink Sacs<br>
-3 Paper
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/emptySoftware.png" width="300"> 
-</div>
-</td>
+<td><b>Newspaper</b></td>
+<td></td>
 </tr>
-
-
 <tr>
-<td>
-<b>Banking Software</b><br>
-Used to programm the <b>Terminal Block</b> to be a <b>Bank Terminal Block</b><br>
-1 Empty Software<br>
-1 Gold Ingot<br>
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/bankingSoftware.png" width="300"> 
-</div>
-</td>
-</tr>
-
-
-<tr>
-<td>
-<b>Trading Software</b><br>
-Used to programm the <b>Terminal Block</b> to be a <b>Stock Market Terminal Block</b><br>
-1 Empty Software<br>
-1 Emerald<br>
-</td>
-<td>
-<div align="center">
-    <img src="documentation/images/tradingSoftware.png" width="300"> 
-</div>
-</td>
+<td><img src="documentation/images/recepe_newspaper.png" width="350" alt="Newspaper crafting recipe -- paper and ink sac shapeless in a 3x3 grid yielding one newspaper"></td>
+<td></td>
 </tr>
 </table>
 
@@ -195,7 +159,7 @@ For simplicity are no special roles implemented. The type of order and the price
 ---
 ### Type of Trades
 #### Market Order
-A market-order requires only the **amount** to buy/sell. The trade is executed on the best available price.<br>
+A market order requires only the **amount** to buy/sell. The trade is executed on the best available price.<br>
 
 **Benefits**
 - The trade is executed immediately
@@ -203,7 +167,7 @@ A market-order requires only the **amount** to buy/sell. The trade is executed o
 **Disadvantages**
 - When buing/selling, the average buy/sell price is mostly higher/lower than the market price before the trade.
 - Creates high volatility for markets with low liquidity, see: [Order Book Swipe](#order-book-swipe)
-- A market-order can only be executed when there are enough volume present on the opposite side to fill the order. Otherwise the order may only be filled partially.
+- A market order can only be executed when there are enough volume present on the opposite side to fill the order. Otherwise the order may only be filled partially.
 
 
 #### Limit Order
@@ -212,7 +176,7 @@ A limit order requires an **amount** and **price** at which the trade gets execu
 **Benefits**
 - For a buy order, the price a trader has to pay is at the **price** level or lower.
 - For a sell order, the received amount is at least the **price** or higher.
-- Limit orders are important for a market because it provides the required liquidity for the market to be able to process market-orders.
+- Limit orders are important for a market because it provides the required liquidity for the market to be able to process market orders.
 
 **Disadvantages**
 - The order needs time to be filled by the market.
@@ -221,176 +185,152 @@ A limit order requires an **amount** and **price** at which the trade gets execu
 
 ---
 ## How to use
-### For server player / single player
-#### Selling Items
-To sell items the item must be available on the market. This is managed by the server admin.<br>
-Assuming the item can be traded on the market, you first have to deposit the item to your bank account. This can be done using the **Bank Terminal Block**.<br>
-Open that block using right click. A window will appear.<br>
-Place your item stacks in the blocks inventory and press the button **Send items to market**.<br>
-This will transfer the items to your bank account.<br>
-<div align="center">
-    <img src="documentation/images/bankingView.png" > 
-</div>
-<br>
+### For Players
 
-Now open the **Stock Market Terminal Block** using right click.<br>
-This opens the trading window.<br>
-On the left side you can see the [Candle stick chart](#candle-stick-chart)<br>
-On the left edge of the chart is the price axis.<br>
-On the right edge of the chart is the [Order Book](#order-book) volume displayed.<br>
-On the right side of the window is the interaction panel. There you can select the desired item to be traded. Just click on the button and a list of all tradable items will appear.<br>
-Type the amount of items you want to buy/sell.<br>
-Decide whether you want to execute a market-order or a limit order.<br>
-If you want to create a limt order, you have to type in the desired price.<br>
-Click on the **sell** button for market or limit order to execute the trade.<br>
-A market-order is executet directly but the limit order will be listed on the left side until it is filled or gets canceled.<br>
-<div align="center">
-    <img src="documentation/images/tradingView.png" > 
-</div>
+#### Getting Started
+To trade items, the item must have an active market. This is managed by the [server admin](#for-admins--single-player).<br>
+Before trading, deposit the items you want to sell into your bank account using the **Bank Terminal Block**.<br>
+See [Bank System Mod](https://github.com/KROIA/BankSystem) to learn how banking works.
 
----
-### Buying Items
-To buy a item you have to get some money first. You can do that by selling other items or receiving money from other players.<br>
-A server admin can also provide you money...<br>
-Assuming you have money, open the **Stock Market Terminal Block**<br>
-Select the item you want to trade by pressing the button on the top right with the Label "Price: XX".<br>
-Type the amount you want to buy, type a limit price if you want to execute a limit order.<br>
-Clock on the **buy** button.<br>
-A market-order gets executed directly but a limit order may take some time until it gets filled by the market.<br>
-
-Once you have received the items, you can go to the **Bank Terminal Block**.<br>
-On the left side you can see your items on the bank account.<br>
-Type the amount you want to receive back in to the text field and click **Receive items from market**.<br>
-The items will be transfered to the Bank Terminal Block.<br>
-
-
+#### Opening the Trading Terminal
+Right-click on a **Stock Market Terminal Block** to open the trading interface.
 
 <div align="center">
-    <img src="documentation/images/bankingView.png" > 
+    <img src="documentation/images/StockMarketTerminal.gif" >
 </div>
-<br>
+
+#### Trading Interface Overview
+The trading screen has two main areas:
+- **Left side** — A real-time [candlestick chart](#candle-stick-chart) showing price history, with the [order book](#order-book) volume displayed along the right edge of the chart. You can drag and zoom the chart.<br>Controlls inside the chart:
+  - **Click SPACEBAR**: Centers the view to fit the chart in the vertical axis.
+  - **Click  CTRL+SPACEBAR**: Moves the viewport to the newest candle and recenters it vertically for best fit.
+  - **MouseWheel-Scroll**: Vertical+Horizontal-zoom (centered at the mouse position. Mouse must be inside the chartview).
+  - **Holding SHIFT + MouseWheel-Scroll**: Horizontal-zoom (centered at the mouse position. Mouse must be inside the chartview).
+  - **Holding CTRL + MouseWheel-Scroll**: Vertical-zoom (centered at the mouse position. Mouse must be inside the chartview).
+  
+- **Right side** — The trading panel with tabs for placing orders, viewing pending orders, order history, and recent market trades.
+
+At the top of the screen is a **favorites bar** for quickly switching between markets. Click any market button, or use the market selector popup to browse all available items.
+
+#### Trading Modes
+The terminal supports two trading modes, switchable via toggle buttons:
+
+**Money Mode** — Trade a single item for money. This is the standard mode.<br>
+**Pair Mode** — Trade between two different items directly (e.g. trade iron ingots for diamonds). Select a "have" item and a "want" item using the pair selector.
+
+#### Placing Orders
+Select the **Market Order** or **Limit Order** tab in the trading panel:
+
+**Market Order:**
+1. Enter the quantity you want to buy or sell (use the quick-add buttons: +1, +10, +32, +64, +128).
+2. Click **Buy** or **Sell**. The order executes immediately at the best available price.
+
+**Limit Order:**
+1. Enter the quantity and your desired price.
+2. Click **Buy** or **Sell**. The order is placed on the order book and waits until the market reaches your price.
+
+In **Pair Mode**, the trading panel switches to show **Market Exchange** and **Limit Exchange** tabs, which work the same way but for cross-market trades at the current exchange rate.
+
+#### Managing Orders
+- **Pending Orders** tab shows all your active limit orders. Each order has a cancel button.
+- **Drag and drop** — Limit orders appear as markers on the chart. Drag a marker to change the order price. If you don't have enough funds to move a buy order higher, it will stay in place.
+- **My History** tab shows your completed and cancelled orders.
+- **Market Trades** tab shows the latest trades on the selected market.
+
+Once your buy orders are filled, withdraw the purchased items from your bank account using the **Bank Terminal Block**.
 
 ---
 ### For Admins / Single Player
-#### Getting started
-When you first join a server/save using this mod, some default markets are getting created by the mod.
-Each player receives its bank account with 0 balance. 
 
-<details open> 
-    <summary> 
-      <b>Quickstart</b>
+All market management in v2.0 is done through graphical interfaces. The old command-based bot setup has been replaced by the **Management GUI** and the **Plugin System**.
+
+For a walkthrough of common server setups — the default bot-driven market vs. a fully player-driven market — see the [Admin Setup Use Cases](documentation/user-guide/admin-setup.md) guide.
+
+#### Getting Admin Access
+A server operator needs to grant StockMarket admin privileges:<br>
+<code>/stockmarket op</code> — Grant admin to yourself<br>
+<code>/stockmarket op [username]</code> — Grant admin to another player
+
+#### Opening the Management GUI
+Run <code>/stockmarket manage</code> to open the management interface. It has three tabs:
+
+<div align="center">
+    <img src="documentation/images/StockmarketManagement.png">
+</div>
+
+<details close>
+    <summary>
+      <b>Overview Tab</b>
     </summary>
-    <b>Setting up the market bots</b><br>
-    The simplest way to setup the bots is by calling the command bellow.<br>
-    This command creats a bot for each market which was added by default from the mod.<br>
-    You may want to change the settings for the bots later.<br>
-<code>/StockMarket createDefaultBots</code>
+    The overview shows all existing markets in a searchable grid.<br>
+    - Click a market to select it and view its price chart.<br>
+    - Use the <b>Market Settings</b> button to configure individual market parameters.<br>
+    - Use the <b>Open/Close</b> checkbox to enable or disable trading on a market. Close a market before making major changes to prevent players from exploiting price movements.<br>
+    - Use the <b>Remove</b> button to delete a market. Open positions from players will be automatically closed.<br>
+    - The <b>Manage Plugins</b> button opens the Plugin Management screen (see below).<br>
 </details>
 
-<details close> 
-    <summary> 
-      <b>Create a new market</b>
+<details close>
+    <summary>
+      <b>Create Markets Tab</b>
     </summary>
-    Replace the <b>[itemID]</b> with the minecraft item ID for which you want to create a market.<br>
-    Check out the website <a href="https://minecraftitemids.com/">https://minecraftitemids.com/</a> to find the item ID you need.<br>
-    <code>/StockMarket [itemID] create</code><br>
-    You may need to type the <b>"</b> in order to type a string that contains <b>:</b>.<br>
-    <code>/StockMarket "minecraft:copper_ingot" create</code>
+    Create new markets for items to be traded on the stock market.<br>
+    <b>1)</b> Select an item category from the left panel.<br>
+    <b>2)</b> Browse or search for items in the grid.<br>
+    <b>3)</b> Click items to add them to the selection list on the right.<br>
+    <b>4)</b> Set a starting price and abundance for each selected item.<br>
+    <b>5)</b> Click <b>Create All</b> to create all selected markets at once.<br>
 </details>
 
-<details close> 
-    <summary> 
-      <b>Creating a custom bot</b>
+<details close>
+    <summary>
+      <b>Presets Tab</b>
     </summary>
-    To create a bot from scratch make sure the market, for which you want to create the bot, already exists. <br>
-    Type the following command, replace the item ID with your markets item ID.<br>
-    <code>/StockMarket "minecraft:copper_ingot" bot create</code><br>
-    The bot gets created but is not active, you have to configure it first.<br>
-    Type the following command to read the settings the bot has by default:<br>
-    <code>/StockMarket "minecraft:copper_ingot" bot settings get</code><br>
-    To set a setting you can type the following and use the auto complete to select your desired parameter.<br>
-    (**[parameter]** is a placeholder for your chosen parameter you want to set)<br>
-    <code>/StockMarket "minecraft:copper_ingot" bot settings set [parameter]</code><br>
-    If you are not sure about what you have to set to which value, just let the values on default. <br>
-    The only values you have to change because they are unique for each item are the following:<br>
-    - <b>Target Price Range</b><br> Defines the range the bot will try to move the price around. The value you have to set is the upper bound of the range. The lower bound is automaticly 0.<br>
-    - <b>Target Item Balance</b><br> Defines the amount of items the bot try's to hold in its bank account. If player buy to many items from a bot, the bot will rise the price. When players sell to many items, <br>
-    the bot will lower the price. When the bot holds exactly the target amount balance, the price will move to the <b>target_price_range_value/2</b>.<br>
-    Lets say you want the bot to hold <b>1000 copper ingots</b> and the price should than be at around 100$, you have to type the following:<br>
-    <code>/StockMarket "minecraft:copper_ingot" bot settings set targetItemBalance 1000</code><br>
-    <code>/StockMarket "minecraft:copper_ingot" bot settings set targetPriceRange 200</code><br>
-    Before the bot can be enabled, you have to overwrite the item balance of the bot.<br>
-    <code>/bank "StockMarketBot" setBalance "minecraft:copper_ingot" 1000</code><br>
-    If you want the bot to start the market at the <b>target_price_range_value/2</b> you must give the bot the same amount of items as you have set the <b>Target Item Balance</b>.<br>
-    If you want to create an artificial demand from the bot at the start, you can give less to the bot.<br><br>
-   <div style="border-left: 7px solid #f39c12; background-color: #fcf8e3; padding: 20px; margin: 10px 0;">
-      <p><strong>⚠️ Warning:</strong> Do not set the item balance to 0 since this will break the bot.</br>
-       The bot must always have some items and money, otherwise it can't place orders.</p>
-    </div>
-    You may want to change the money balance of the bot.<br>
-    <code>/bank "StockMarketBot" show</code><br>
-    <code>/bank "StockMarketBot" setBalance "$" 1000000000</code><br>
+    Edit the default price and abundance values used when creating new markets.<br>
+    - Browse presets by category.<br>
+    - Adjust price and abundance fields for any item.<br>
+    - Click <b>Save</b> to persist your changes.<br>
 </details>
 
-<details close> 
-    <summary> 
-      <b>Change bot settings</b>
-    </summary>
-    <span class="icon">🚧</span>
-    Work in progress
-</details>
+#### Mod Settings (master server only)
+The **Mod Settings** button on the Management GUI's overview tab opens an editor for the server's `settings.json` (`world/data/StockMarket/settings.json`), so autosave interval, logging, market and villager-trading settings can be changed without touching the file:
+* The button is only shown when connected to the **master server** — slave servers never load `settings.json`; the master pushes derived data (e.g. villager prices) to them automatically. The server additionally enforces op level 2 and master status for every request.
+* **Apply** validates and clamps the values server-side, saves them to `settings.json` and re-displays the confirmed state. **Reload** re-fetches the current server values, **Defaults** resets the fields to the compile-time defaults (nothing is saved until Apply).
+* Most settings take effect immediately. Fields marked with an orange **⟳ Restart required** label (orderbook array size, trading currency) are only read once at startup — the new value is saved but only applies after a server restart.
+* Changes to the **Villager Trading** group are propagated to all connected slave servers right away (the villager price table is recomputed and re-broadcast).
 
+This screen is the recommended way to change any persisted mod setting — admins do not need to edit `settings.json` by hand.
+
+#### Plugin System
+Plugins replace the old bot system. They are modular components that can be added to markets to provide liquidity, simulate price movements, and more.
+
+Open the **Plugin Management** screen from the Management GUI overview tab:
+
+<div align="center">
+    <img src="documentation/images/PluginManagement.png">
+</div>
+
+- **Add plugins** — Click the add button and choose from available plugin types.
+- **Configure** — Each plugin has its own settings. Simple plugins show settings inline; complex ones open a dedicated configuration screen.
+- **Subscribe to markets** — Plugins can be subscribed to one or more markets. Use the subscribe button to choose which markets a plugin operates on.
+- **Enable/Disable** — Toggle plugins on or off without removing them.
+- **Reorder** — Move plugins up or down to change their execution priority. Plugins are executed from top to bottom.
+- **Auto-subscribe** — Enable to automatically subscribe a plugin to newly created markets.
+
+<div style="border-left: 7px solid #f39c12; background-color: #fcf8e3; padding: 20px; margin: 10px 0;">
+    <p><strong>Tip:</strong> Close a market before changing its plugin settings to prevent players from exploiting price movements during configuration. Re-open it once you are satisfied with the result. When a market gets closed, all pending orders are cancelled.</p>
+</div>
 
 
 ## Commands
 | Command | Description | Admin only |
 |---------|-------------|------------|
-| /money                           											| Show balance                                  |  |
-| /money add [amount]              											| Add money to self                             | :heavy_check_mark: |
-| /money add [user] [amount]       											| Add money to another player                   | :heavy_check_mark: |
-| /money set [amount]              											| Set money to self                             | :heavy_check_mark: |
-| /money set [user] [amount]       											| Set money to another player                   | :heavy_check_mark: |
-| /money remove [amount]           											| Remove money from self                        | :heavy_check_mark: |
-| /money remove [user] [amount]    											| Remove money from another player              | :heavy_check_mark: |
-| /money send [user] [amount]      											| Send money to another player                  |  |
-| /money circulation               											| Show money circulation of all players + bot   |  |
-| /bank                                                						| Show bank balance (money and items)      		|  |
-| /bank [username] show                                						| Show bank balance of another player      		| :heavy_check_mark: |
-| /bank [username] create [itemID] [amount]            						| Create a bank for another player         		| :heavy_check_mark: |
-| /bank [username] setBalance [itemID] [amount]        						| Set balance of a bank for another player 		| :heavy_check_mark: |
-| /bank [username] delete [itemID]                     						| Delete a bank for another player         		| :heavy_check_mark: |
-| /StockMarket setPriceCandleTimeInterval [seconds]                         | Set price candle time interval                | :heavy_check_mark: |
-| /StockMarket createDefaultBots                                            | Create default bots                           | :heavy_check_mark: |
-| /StockMarket order cancelAll                                              | Cancel all orders                             |  |
-| /StockMarket order cancelAll [itemID]                                     | Cancel all orders of an item                  |  |
-| /StockMarket order [username] cancelAll                                   | Cancel all orders of a player                 | :heavy_check_mark: |
-| /StockMarket order [username] cancelAll [itemID]                          | Cancel all orders of a player for an item     | :heavy_check_mark: |
-| /StockMarket [itemID] bot settings get                                    | Get bot settings                         		| :heavy_check_mark: |
-| /StockMarket [itemID] bot settings set enabled                            | Enable bot                               		| :heavy_check_mark: |
-| /StockMarket [itemID] bot settings set disabled                           | Disable bot                              		| :heavy_check_mark: |
-| /StockMarket [itemID] bot settings set volatility [volatility]            | Market volatility strength					| :heavy_check_mark: |
-| /StockMarket [itemID] bot settings set orderRandomness [orderRandomness]  | Additional random sell/buy orders        		| :heavy_check_mark: |
-| /StockMarket [itemID] bot settings set imbalancePriceChangeFactorLinear [factor]  | Linear scale how much a price changes when the item stock moves away from the target item stock.        		| :heavy_check_mark: |
-| /StockMarket [itemID] bot settings set imbalancePriceChangeFactorQuadratic [factor]  | Quadratic scale how much a price changes when the item stock moves away from the target item stock. (only active when current balance [ desired balance) | :heavy_check_mark: |
-| /StockMarket [itemID] bot settings set imbalancePriceRange [priceRange]   | Set imbalance price range                		| :heavy_check_mark: |
-| /StockMarket [itemID] bot settings set targetPriceRange [balance]         | Set the amount the bot trys to hold in its bank | :heavy_check_mark: |
-| /StockMarket [itemID] bot settings set maxOrderCount [orderCount]         | Set max order count a bot can create          | :heavy_check_mark: |
-| /StockMarket [itemID] bot settings set volumeScale [volumeScale]          | Set volume scale factor to scale the liquidity in the orders | :heavy_check_mark: |
-| /StockMarket [itemID] bot settings set volumeSpread [volumeSpread]        | Set the price range the bot places some orders | :heavy_check_mark: |
-| /StockMarket [itemID] bot settings set volumeRandomness [volumeRandomness]| Set volume randomness added to each limit order | :heavy_check_mark: |
-| /StockMarket [itemID] bot settings set timer [timer]                      | Set the current timer millis, used to do a new random walk step | :heavy_check_mark: |
-| /StockMarket [itemID] bot settings set minTimer [timer]                   | Set random min timer value for random walk timer | :heavy_check_mark: |
-| /StockMarket [itemID] bot settings set maxTimer [timer]                   | Set random max timer value for random walk timer | :heavy_check_mark: |
-| /StockMarket [itemID] bot settings set updateInterval [timeMS]            | Set the bot update interval				    | :heavy_check_mark: |
-| /StockMarket [itemID] bot settings set pidP [pidP]                        | Set PID P                                		| :heavy_check_mark: |
-| /StockMarket [itemID] bot settings set pidI [pidI]                        | Set PID I                                		| :heavy_check_mark: |
-| /StockMarket [itemID] bot settings set pidD [pidD]                        | Set PID D                                		| :heavy_check_mark: |
-| /StockMarket [itemID] bot settings set pidIBounds [bounds]                | Set PID I bounds, abs(I) will be [ pidIBounds | :heavy_check_mark: |
-| /StockMarket [itemID] bot create                                          | Create bot                               		| :heavy_check_mark: |
-| /StockMarket [itemID] bot remove                                          | Remove bot                               		| :heavy_check_mark: |
-| /StockMarket [itemID] create                                              | Create marketplace                       		| :heavy_check_mark: |
-| /StockMarket [itemID] remove                                              | Remove marketplace                            | :heavy_check_mark: |
-| /StockMarket [itemID] currentPrice                                        | Get current price                        		| :heavy_check_mark: |
+| /stockmarket manage                | Open the Management GUI to create/remove markets and manage plugins | :heavy_check_mark: |
+| /stockmarket op [username]         | Grant StockMarket admin privileges (to yourself if no username given) | :heavy_check_mark: |
+| /stockmarket deop [username]       | Revoke StockMarket admin privileges (from yourself if no username given) | :heavy_check_mark: |
+| /stockmarket \<market\> remove     | Delete a market without the GUI. `<market>` is the item's registry name in quotes (e.g. `"minecraft:iron_ingot"`) or the numeric market ID shown when a name is ambiguous. Also works for broken markets whose item can no longer be resolved | :heavy_check_mark: |
+| /stockmarket preset add \<category\> [name] | Capture the item in your main hand (including data components like enchantments or custom names) as a market preset in `<category>` (created if it doesn't exist yet; quote names containing spaces). The optional `[name]` gives the captured item a custom name; otherwise the preset uses the item's normal display name | :heavy_check_mark: |
+| /stockmarket news                  | Open the in-game newspaper with the latest market news. Admin subcommands manage the news event system — see the [full command reference](documentation/user-guide/news-system/configuration.md#admin-commands) | Subcommands only |
 
 
 
@@ -398,81 +338,166 @@ Each player receives its bank account with 0 balance.
 
 
 
-## Stock Market Bot
-The StockMarketBot has multiple purposes. 
-- Providing the market with liquidity
-- Changing price depending on supply and demand
-- Source for capital for players (if they start with 0 money)
-
-#### Providing liquidity
-Liquidity is a very important part of every market. 
-For example if player A wants to buy wood, someone has to sell the same amount.
-Without the counterpart, a trade can't be made.
-Since it is unlikely that a server creates enough sell/buy orders to create this
-liquidity, the bot is used to provide both buy and sell orders.
-The bot will buy if a player wants to sell, and he will sell if a player wants to buy.
-The bot can only sell so many items it has and he also can only buy as long as he has money.
-The bot always needs some balance of items and money. Without that its function will break.
-
-#### Changing price
-The bot is responsible for the most price movements you see on the chart.
-The bot is always buying and selling to it self. 
-Using a combination of [limit](#limit-order) and [market](#market-order) -orders will create 
-movements in price.<br>
-To create a random price chart that also stays in its realistic bounds, multiple stages are needed.
-1) **Defining parameters**
-    - target stock balance
-    - target price range
-    - Others...
-
-2) **Defining a target price the market should move to**
-    Depending on how many items the bot holds and what its target item balance is,
-    it will try to rise or lower the price.
-    For example if the bot holds 1000 items, wants to hold 500,
-    the bot will lower the target price, making it attractive to players to buy.
-    In the case the bot has more items than the target stock balance,
-    the target price fall linear and also can reach a price of 0.
-    In the case the bot holds less than he wants, the target price will 
-    rise quadraticly, producing a even larger price increase.
-    The reason for that is, that the bot is dependend on enough supplies to work correct,
-    a larger price increase makes it lucrative for players to sell to the bot.
 
 
-    Additionaly some random noise is used to create the volatility.
-    This noise is added to the target price and is generated using a 
-    [Random Walk](#random-walk) generator.
+## Access Control & Trust Model
 
-3) **Move the market to the target price**
-    To change the price the bot creates market- sell/buy -orders. 
-    The market oder will fill the previously placed limit orders from the bot or a player.
-    [Click here to learn why a price moves](#why-does-a-price-move).
-    The size of the market-order defines how fast the price will change.
-    A [PID-Controller](#pid-controller) is used to generate the buy/sell market-orders.
-    The PID-Controller will make sure to generate the right amount of orders until the 
-    target price is reached.
+StockMarket separates **public data** — available to every player — from **management data** — reserved for admins. Access is enforced **server-side on the master**, not by hiding the client UI, so a modified or self-compiled client cannot unlock management features it is not entitled to.
+
+Two independent checks must **both** pass before the master serves management data or accepts a management operation.
+
+### 1. Server trust (multi-server setups)
+
+In a master + slave setup, every slave server is either **trusted** or **untrusted**. Trust is stored in BankSystem and toggled from the master with:
+
+<code>/banksystem trust &lt;slaveID&gt;</code> — mark a slave as trusted<br>
+<code>/banksystem untrust &lt;slaveID&gt;</code> — mark a slave as untrusted
+
+Both require operator level 2 and only run on the master. The master itself (and single player) always counts as trusted.
+
+From an **untrusted** slave the master refuses **all** of:
+- mutating operations — placing/cancelling orders, and every plugin, preset, market and settings write;
+- management-data reads — the plugin list & settings, the preset catalog and the mod settings;
+- the live plugin runtime data feed.
+
+A **trusted** slave behaves normally. Trust changes take effect live — untrusting a slave mid-session tears down its live plugin feed within about one stream interval. Public market data (prices, market list, a player's own orders/history, news) stays available even from an untrusted slave.
+
+### 2. StockMarket admin (per-player)
+
+Management data and operations additionally require the requesting player to be a **StockMarket admin** — a persistent per-player flag, granted and revoked with:
+
+<code>/stockmarket op [username]</code> — grant admin (yourself if no username is given)<br>
+<code>/stockmarket deop [username]</code> — revoke admin
+
+This flag is **distinct from the vanilla operator level.** Being operator level 2 lets you *run* `/stockmarket op`, but you are not a StockMarket admin until it is granted to you. A non-admin player — even opped, even on a trusted slave, even with a client modified to force-open the management menu — is served no plugin settings or target prices, no presets, no mod settings and no live plugin feed.
+
+### Both checks are ANDed
+
+For any management data or operation, an **untrusted slave OR a non-admin player** is refused. Because the check runs on the master, un-hiding the client UI cannot bypass it.
+
+The table below summarizes which access each data class needs:
+
+| Data class | Access required |
+|------------|-----------------|
+| Market list & prices, public orderbook volume | Public — any player |
+| A player's own active orders / order history / transaction history / preferences | Public — any player |
+| News feed & pictures, server time | Public — any player |
+| Placing / cancelling orders | Trusted slave |
+| Plugin list & settings, target prices, live plugin feed | Trusted slave **and** admin |
+| Preset catalog, market / plugin / preset writes | Trusted slave **and** admin |
+| Mod settings (read & write) | Trusted slave **and** admin |
+
+## Plugins
+Since v2.0, the old monolithic StockMarketBot has been replaced by a modular **plugin system**. Each plugin handles one aspect of market simulation and can be independently configured, enabled, or subscribed to specific markets through the [Plugin Management](#plugin-system) screen.
+
+The mod ships with four built-in plugins:
+
+### VolatilityPlugin
+Simulates realistic price movements using a [random walk](#random-walk) algorithm. Each market gets independent price fluctuations around its default price, creating the organic-looking charts you see in-game.
+
+The random walk is anchored on a flow-driven [price equilibrium](#price-equilibrium) instead of the static default price: sustained net selling by players permanently lowers a market's price range, sustained net buying permanently raises it — so the server economy balances itself (heavily farmed items get cheap, sought-after items get expensive). The equilibrium shifts exponentially with the net item flow, so the price can approach but never reach 0, and it is clamped between the Min/Max Price Multipliers. Items with a higher Abundance absorb more trading before their price moves. To re-anchor a market at its default price, reset its **Net Flow** in the market settings.
+
+**Settings:**
+| Parameter | Description |
+|-----------|-------------|
+| Volatility Scale | Multiplier for how far the price deviates from the equilibrium price. Higher values produce larger swings. |
+| Player Flow Influence | Enables the flow-driven equilibrium. When off, the price wanders around the static default price. Enabled by default. |
+| Flow Sensitivity | How many items (per unit of the market's Abundance) players must net-sell to lower the equilibrium price to ~37% of its default. Higher values make the market more inert. Default: 500. |
+| Min Price Multiplier | Lower clamp for the equilibrium as a fraction of the default price. Default: 0.05 (never below 5% of the default price). |
+| Max Price Multiplier | Upper clamp for the equilibrium as a multiple of the default price. Default: 20 (never above 20x the default price). |
+
+### TargetPriceBot
+The market-making bot that drives prices toward a target value. It places [market orders](#market-order) to push the price in the desired direction. A [PID controller](#pid-controller) determines the size and direction of each order to smoothly converge on the target price without overshooting.
+
+The target price is influenced by the **VolatilityPlugin** (random walk noise) and by player trading activity (supply and demand).
+
+**Settings:**
+| Parameter | Description |
+|-----------|-------------|
+| PID P | Proportional gain — how aggressively the bot reacts to the current price difference. |
+| PID I | Integral gain — how much accumulated past error influences the bot's orders. |
+| PID D | Derivative gain — how much the rate of price change dampens the bot's response. |
+| PID Rate | How quickly the PID controller updates. |
+
+### DefaultOrderbookVolumeDistributionPlugin
+Automatically fills the [order book](#order-book) with a realistic volume distribution so that players always have liquidity to trade against. Without this plugin, market orders would have no counterpart to fill against.
+
+The distribution uses a power-law shape near the current price (tighter spreads close to market) with a Gaussian cluster around the default price and a background liquidity level across all price levels.
+
+**Settings:**
+| Parameter | Description |
+|-----------|-------------|
+| Volume Scale | Base volume multiplier, scaled further by each market's natural abundance. |
+| Speed | How quickly the order book converges toward the target distribution. |
+| Accumulation Rate | How fast volume builds up when below target. |
+| Decumulation Rate | How fast excess volume decreases (slower for stability). |
+| Reset Volume | Force an immediate reset of the order book to the target distribution. |
+
+### NewsPlugin
+Randomly publishes news events defined in JSON files (`config/StockMarket/news/`) and moves the prices of the affected markets — shocks, trends, crashes and even permanent shifts. Players read the headlines with a craftable **newspaper item**; an opt-in popup notifies interested players when news breaks. Admins control everything through the plugin's management window and the `/stockmarket news` commands.
+
+See the [News Event System overview](documentation/user-guide/news-system/overview.md), the [JSON configuration reference](documentation/user-guide/news-system/configuration.md), and the step-by-step [event authoring tutorial](documentation/user-guide/news-system/authoring-tutorial.md).
+
+### How the plugins work together
+The three plugins combine to create a functioning market:
+1. The **VolatilityPlugin** generates a wandering target price using random walk noise, centered on the flow-adjusted [price equilibrium](#price-equilibrium).
+2. The **TargetPriceBot** places market orders to push the actual price toward the target, using a PID controller for smooth convergence.
+3. The **DefaultOrderbookVolumeDistributionPlugin** keeps the order book filled with liquidity so that both bot orders and player orders can be executed.
+
+While a news event is active, the **NewsPlugin** multiplies the target price from step 1 before the bot acts on it — turning headlines into real price movement.
 
 
-:construction:
+---
+## Villager Trading
+Villager (and wandering trader) trade offers for **market-listed items** no longer use emeralds — both trade directions are converted to the configured trading-currency item (`ServerMarket.CURRENCY`, editable in-game via the Mod Settings screen's Market group / ServerMarket section, or directly in `world/data/StockMarket/settings.json`) and priced from the stock market:
+* Only offers whose traded item exists on the stock market are repriced (component-aware, so e.g. specific enchanted books can have their own markets). A trade where the villager sells requires a market for the sold item; a trade where the villager buys requires a market for every item it asks for.
+* Items **without** a market keep their normal vanilla emerald trades. If a market is created for such an item later, the offer converts to currency pricing on the next price refresh; if a market is deleted, affected offers return to their original emerald form.
+* Prices refresh automatically on the configured interval (default 20 real minutes ≈ one Minecraft day).
+* Original emerald offers are stored in world data; disabling the feature restores every villager's original offers the next time it is interacted with. Partially used offers stay partially used.
+
+### Settings (`VillagerTrading` group in `settings.json`)
+Edit these in-game via `/stockmarket manage` → **Mod Settings** → **VillagerTrading** group (requires op level 2 and the StockMarket-admin flag; the button only appears when connected to the master server). You can also edit the JSON directly at `world/data/StockMarket/settings.json` if the server isn't running.
+
+| Setting | Default | Description |
+|-----------|---------|-------------|
+| `ENABLED` | `true` | Master switch for villager trade repricing. Enabled by default; toggle it off in the Mod Settings screen (or set `ENABLED` to `false` in `settings.json`) to disable the feature. |
+| `PRICE_REFRESH_INTERVAL_MINUTES` | `20` | Real-time minutes between price refreshes/broadcasts. |
+| `VILLAGER_BUY_MARGIN` | `0.8` | Multiplier on the market price when the villager **buys** from the player (villager pays below market). |
+| `VILLAGER_SELL_MARGIN` | `1.2` | Multiplier on the market price when the villager **sells** to the player (villager charges above market). |
+
+### Paying with money
+When an offer's price is BankSystem money, the trade accepts **any combination of denominations** — the price is matched by value, not by exact note type. A 20.00 cost can be paid with 1×20, 2×10, 4×5, 20×1, or even a single 50 note:
+* Overpayment returns **exact change** (fewest notes), placed back into the payment slots when possible, otherwise into your inventory (or dropped at your feet if that is full too). No value is ever lost — shift-clicking through a whole stack of large notes settles every trade to the cent.
+* Clicking an offer row **auto-fills** the payment slots with money from your inventory, even when you don't own the exact denomination shown on the offer.
+* Only genuine BankSystem money is matched by value — renamed/modified notes and other mods' currencies are treated as regular items. Non-money offers (emerald trades, generic currency items) keep exact vanilla matching.
+
+### Behavior notes
+* **Master-authoritative:** in a multi-server setup only the master server's `settings.json` matters. The master broadcasts a price table to all slave servers, so enabling it on the master enables it everywhere.
+* **Any currency item works:** BankSystem money prices are expressed in a single denomination per slot — the note/coin type that best matches the price (e.g. 1×20$ instead of 1×10$ + 2×5$), lightly rounding when no denomination fits exactly; any other item is valued at 1 item = 1.00 currency units and respects its own max stack size (including 16 or 1).
+* **Low-capacity currencies:** if a price cannot fit into the offer's currency slots (e.g. an unstackable currency), the price is capped at the maximum representable amount — in the player's favor — and a one-time warning is logged. Use a finer-grained currency to avoid this.
+* **Reputation & demand:** offers where the player pays currency ignore demand scaling and gossip/Hero-of-the-Village discounts (the price stays at the configured margin). Offers where the player hands over items keep vanilla discount behavior on the item amount.
+* **Item cost slots are preserved:** trades like enchanted books (book + emeralds) or treasure maps (compass + emeralds) keep their item ingredient; only the emerald part becomes currency.
+* Known limitation: rewritten offers always grant trade XP (all vanilla offers do anyway).
 
 ---
 
 ## Why does a price move?
 If you don't know what a [Order Book](#order-book) is, learn the basics first and come back later.<br>
 A price can move in two ways:
-* market-order 
+* market order 
 * Limit on oposite price
-A market-order is always executed at the current price. 
-Example with a buy market-order:
+A market order is always executed at the current price. 
+Example with a buy market order:
 1) A player places a market buy order with a volume of 8.
 2) The matching engine will search a sell limit order with the lowest price.
-3) The market-order gets filled by the sell order. 
+3) The market order gets filled by the sell order. 
 4) If the buy order is not filled completly, the matching engine searches again for the best sell order
-5) The fill-search process gets repeated until the complete market-order is filled.
+5) The fill-search process gets repeated until the complete market order is filled.
 6) If no more sell orders can be found to fill the buy order, the buy order can not be filled completly. No one is selling, so the remainings of the order will get canceled. To avoid this problem, enough liquidity is needed for the market.
 
 Example with a buy limit order:
 1) A player places a limit order with a volume of 8 above the current market price.
-2) The matching engine will search a sell limit order with the lowest price to fill the buy order, just like the market-order. But the engine will not search for higher limit orders than the limit price of the buy order.
+2) The matching engine will search a sell limit order with the lowest price to fill the buy order, just like the market order. But the engine will not search for higher limit orders than the limit price of the buy order.
 3) If the order was not filled completly, the remaining amount will stay at that position as a normal limit buy order.
 
 As you can see in the pictures below, the current price is always that price, where the matching engine has last processed 2 orders.
@@ -493,9 +518,9 @@ Buy/Sell orders which are placed nearer to the current market price will get pro
 
 ---
 ### Order Book Swipe
-A order book swipe can occure when a market does not provide enough liquidity to fill large market-orders.
+A order book swipe can occure when a market does not provide enough liquidity to fill large market orders.
 The image above shows that in an example for a large buy order and to less sell limit orders.
-Since the matching engine try's to fill the market-order, the market price can rise extremly high when the market-order is large enough and the sell volume is low enough.
+Since the matching engine try's to fill the market order, the market price can rise extremly high when the market order is large enough and the sell volume is low enough.
 For the player who executed the buy order, this is bad since all sell orders are on different prices, the average buy price can rise much higher than expected.
 The same can happen for sell orders, in that case the player will not receive as much money for the selled goods as expected.
 <div align="center">
@@ -534,10 +559,32 @@ A random walk is a way to generate pseudorandom values ​​that depend on the 
 This value is a great source to create random market prive movements.
 
 
+### Price Equilibrium
+The base price a market's random walk oscillates around.
+With player flow influence enabled, it shifts permanently with the cumulative net amount of items players traded on that market: net selling lowers it, net buying raises it.
 
-### PID-Controller
-Since this is a complex field from control theory, I will not cover this here.
-[PID Controller Wikipedia](https://en.wikipedia.org/wiki/Proportional%E2%80%93integral%E2%80%93derivative_controller)
-<div align="center">
-    <img src="https://upload.wikimedia.org/wikipedia/commons/4/43/PID_en.svg" width=500> 
-</div>
+
+---
+
+## Changelog
+
+| Version | Status | Highlights |
+|---|---|---|
+| [v2.2.0](changelog/v2.2.0.md) | In Development | Bugfixes |
+| [v2.1.2](changelog/v2.1.2.md) | Released | Money-duplication exploit fix, per-fill net flow accounting, best-price matching, world-safe test fixture |
+| [v2.1.1](changelog/v2.1.1.md) | Released | Dependency version alignment — ModUtilities ListView performance improvement |
+| [v2.1.0](changelog/v2.1.0.md) | Released | Company share support, public market-creation/pause API, virtual orderbook toggle, preset inventory picker |
+| [v2.0.7](changelog/v2.0.7.md) | Released | Paginated candlestick chart history, `/stockmarket backup` DB-quiesce commands, chart control docs |
+| [v2.0.6](changelog/v2.0.6.md) | Released | Version marker release |
+| [v2.0.5](changelog/v2.0.5.md) | Released | Build fix — restore BankSystem dependency on the fabric build |
+| [v2.0.4](changelog/v2.0.4.md) | Released | Stock-market-driven villager trading, news event system, value-based money payment |
+| [v2.0.3](changelog/v2.0.3.md) | Released | Market lifecycle fixes — deletion sync, broken-market recovery, ItemID-merge consolidation |
+| [v2.0.2](changelog/v2.0.2.md) | Released | Crash hotfix and UI locale hardening |
+| [v2.0.1](changelog/v2.0.1.md) | Released | Plugin system frontend, inter-market trading, TradingView, preset editor, 30+ features |
+| [v2.0.0_ALPHA_1](changelog/v2.0.0_ALPHA_1.md) | Released | Plugin system, management UI, security hardening, 45 bug fixes |
+| v1.3.1 | Stable | Multi-version support (MC 1.19.2–1.21.1), bot settings GUI, market management |
+| v1.3.0 | Stable | |
+| v1.2.x | Legacy | |
+| v1.1.x | Legacy | |
+
+

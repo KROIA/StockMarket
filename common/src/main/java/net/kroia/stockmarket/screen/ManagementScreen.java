@@ -1,0 +1,849 @@
+package net.kroia.stockmarket.screen;
+
+
+import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.ClientPlayerUtilities;
+import net.kroia.modutilities.gui.Gui;
+import net.kroia.modutilities.gui.elements.*;
+import net.kroia.modutilities.gui.elements.base.GuiElement;
+import net.kroia.modutilities.gui.elements.base.ListView;
+import net.kroia.modutilities.gui.layout.LayoutGrid;
+import net.kroia.modutilities.gui.layout.LayoutVertical;
+import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.screen.widgets.CandlestickChart;
+import net.kroia.stockmarket.stockmarket.market.ClientMarket;
+import net.kroia.stockmarket.util.StockMarketGuiElement;
+import net.kroia.stockmarket.util.StockMarketGuiScreen;
+import net.minecraft.client.Minecraft;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.ItemLore;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Management screen using a TabElement to organize:
+ * - Overview tab: market selector, candlestick chart, market management widgets, plugin overview
+ * - Create Markets tab: category-based preset browser for batch market creation
+ */
+
+public class ManagementScreen extends StockMarketGuiScreen {
+
+    private static class Texts{
+        private static final String PREFIX = "gui."+ StockMarketMod.MOD_ID + ".management_screen.";
+        private static final Component TITLE = Component.translatable(PREFIX +"title");
+
+
+        public static final Component NEW_MARKET_TITLE = Component.translatable(PREFIX + "new_market_title");
+        public static final Component NEW_CUSTOM_MARKET_BUTTON = Component.translatable(PREFIX + "new_custom_market");
+        public static final Component NEW_MARKET_BY_CATEGORY = Component.translatable(PREFIX + "new_market_by_category");
+        public static final Component SELECTED_MARKET_TITLE = Component.translatable(PREFIX + "selected_market_title");
+        public static final Component REMOVE_MARKET_BUTTON = Component.translatable(PREFIX + "remove_market");
+
+        public static final Component ASK_TITLE = Component.translatable(PREFIX + "ask_remove_title");
+        public static final Component ASK_MSG = Component.translatable(PREFIX + "ask_remove_message");
+        public static final Component MARKET_SETTINGS = Component.translatable(PREFIX + "market_settings");
+        public static final Component MARKET_OPEN = Component.translatable(PREFIX + "market_open");
+        public static final Component TOOLTIP_NEW_CUSTOM_MARKET = Component.translatable(PREFIX + "new_custom_market.tooltip");
+        public static final Component TOOLTIP_NEW_MARKET_BY_CATEGORY = Component.translatable(PREFIX + "new_market_by_category.tooltip");
+        public static final Component TOOLTIP_REMOVE_SELECTED_TRADING_PAIR = Component.translatable(PREFIX + "remove_selected_trading_pair.tooltip");
+        //public static final Component TOOLTIP_SELECTED_TRADING_PAIR = Component.translatable(PREFIX + "selected_trading_pair.tooltip");
+
+        // "Broken market" placeholder texts: shown when a market's ItemID can no
+        // longer be resolved to an ItemStack (dangling registry entry, e.g. caused
+        // by items whose data components drift over time).
+        public static Component brokenMarketName(short marketID) {
+            return Component.translatable(PREFIX + "broken_market_name", String.valueOf(marketID));
+        }
+        public static final Component BROKEN_MARKET_TOOLTIP_LINE1 = Component.translatable(PREFIX + "broken_market.tooltip_line1");
+        public static final Component BROKEN_MARKET_TOOLTIP_LINE2 = Component.translatable(PREFIX + "broken_market.tooltip_line2");
+
+
+        public static final Component GENERAL_TITLE = Component.translatable(PREFIX + "general.title");
+        public static final Component GENERAL_CLOSE_ALL_MARKETS = Component.translatable(PREFIX + "general.close_all_markets");
+        public static final Component GENERAL_CLOSE_ALL_MARKETS_TOOLTIP = Component.translatable(PREFIX + "general.close_all_markets.tooltip");
+        public static final Component GENERAL_OPEN_ALL_MARKETS = Component.translatable(PREFIX + "general.open_all_markets");
+        public static final Component GENERAL_OPEN_ALL_MARKETS_TOOLTIP = Component.translatable(PREFIX + "general.open_all_markets.tooltip");
+        public static final Component GENERAL_RESET_ALL_MARKETS_PRICE_CHART = Component.translatable(PREFIX + "general.reset_all_markets_price_chart");
+        public static final Component GENERAL_RESET_ALL_MARKETS_PRICE_CHART_TOOLTIP = Component.translatable(PREFIX + "general.reset_all_markets_price_chart.tooltip");
+        public static final Component GENERAL_RESET_ALL_MARKETS_PRICE_CHART_POPUP_ASK = Component.translatable(PREFIX + "general.reset_all_markets_price_chart_popup_ask");
+        public static final Component GENERAL_RESET_ALL_MARKETS_PRICE_CHART_POPUP_MSG = Component.translatable(PREFIX + "general.reset_all_markets_price_chart_popup_msg");
+        public static final Component GENERAL_DELETE_ALL_MARKETS = Component.translatable(PREFIX + "general.delete_all_markets");
+        public static final Component GENERAL_DELETE_ALL_MARKETS_TOOLTIP = Component.translatable(PREFIX + "general.delete_all_markets.tooltip");
+        public static final Component GENERAL_DELETE_ALL_MARKETS_POPUP_ASK = Component.translatable(PREFIX + "general.delete_all_markets_popup_ask");
+        public static final Component GENERAL_DELETE_ALL_MARKETS_POPUP_MSG = Component.translatable(PREFIX + "general.delete_all_markets_popup_msg");
+
+        public static final Component PLUGINS_TITLE = Component.translatable(PREFIX + "plugins.title");
+        public static final Component PLUGINS_ENABLED = Component.translatable(PREFIX + "plugins.enabled");
+        public static final Component PLUGINS_MANAGE = Component.translatable(PREFIX + "plugins.manage");
+
+        public static final Component MOD_SETTINGS = Component.translatable(PREFIX + "mod_settings");
+        public static final Component MOD_SETTINGS_TOOLTIP = Component.translatable(PREFIX + "mod_settings.tooltip");
+
+        public static final Component NEWS = Component.translatable(PREFIX + "news");
+        public static final Component NEWS_TOOLTIP = Component.translatable(PREFIX + "news.tooltip");
+
+    }
+    public static final int elementHeight = 20;
+
+    // Tab names
+    private static final String TAB_OVERVIEW = "Overview";
+    private static final String TAB_CREATE_MARKETS = "Create Markets";
+    private static final String TAB_PRESETS = "Presets";
+
+    // ---- Inner widget classes (used inside OverviewTab) ----
+
+    /**
+     * Widget for managing the currently selected market.
+     * Shows the selected item icon, remove button, open/close toggle, and settings button.
+     */
+    public final class CurrentMarketManagerWidget extends StockMarketGuiElement{
+
+        private final ItemView currentItemView;
+        private final Label selectedMarketLabel;
+        private final Button removeTradingPairButton;
+        private final Button marketSettingsButton;
+        private final CheckBox marketOpenCheckBox;
+        private final Button openAllMarketsButton;
+        private final Button closeAllMarketsButton;
+        private final ManagementScreen parentScreen;
+        private boolean loadingCheckBox = false;
+        // Tracks whether a market is currently selected. Drives the visibility of
+        // marketOpenCheckBox and marketSettingsButton — both are meaningless without
+        // a target market, and now hide instead of showing a dead-looking control.
+        private boolean hasSelection = false;
+
+        public CurrentMarketManagerWidget(ManagementScreen parent)
+        {
+            super();
+            this.setEnableBackground(false);
+            parentScreen = parent;
+            selectedMarketLabel = new Label(Texts.SELECTED_MARKET_TITLE.getString());
+            selectedMarketLabel.setAlignment(Label.Alignment.CENTER);
+
+
+            removeTradingPairButton = new Button(Texts.REMOVE_MARKET_BUTTON.getString(), this::onRemoveTradingPairButtonClicked);
+            removeTradingPairButton.setBackgroundColor(0xFFe8711c);
+            removeTradingPairButton.setHoverColor(0xFFe04c12);
+            removeTradingPairButton.setPressedColor(0xFFe04c12);
+            removeTradingPairButton.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.TOP_RIGHT);
+            removeTradingPairButton.setHoverTooltipSupplier(Texts.TOOLTIP_REMOVE_SELECTED_TRADING_PAIR::getString);
+            removeTradingPairButton.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
+
+            currentItemView = new ItemView();
+            currentItemView.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.TOP_RIGHT);
+            currentItemView.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
+
+            marketSettingsButton = new Button(Texts.MARKET_SETTINGS.getString(), this::onMarketSettingsButtonClicked);
+
+            marketOpenCheckBox = new CheckBox(Texts.MARKET_OPEN.getString(),this::onMarketOpenCheckBoxChanged);
+            marketOpenCheckBox.setTextAlignment(GuiElement.Alignment.CENTER);
+
+            openAllMarketsButton = new Button(Texts.GENERAL_OPEN_ALL_MARKETS.getString(), this::onOpenAllMarkets);
+            openAllMarketsButton.setHoverTooltipSupplier(Texts.GENERAL_OPEN_ALL_MARKETS_TOOLTIP::getString);
+            openAllMarketsButton.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.TOP_RIGHT);
+            openAllMarketsButton.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
+
+            closeAllMarketsButton = new Button(Texts.GENERAL_CLOSE_ALL_MARKETS.getString(), this::onCloseAllMarkets);
+            closeAllMarketsButton.setHoverTooltipSupplier(Texts.GENERAL_CLOSE_ALL_MARKETS_TOOLTIP::getString);
+            closeAllMarketsButton.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.TOP_RIGHT);
+            closeAllMarketsButton.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
+
+            this.addChild(selectedMarketLabel);
+            this.addChild(removeTradingPairButton);
+            this.addChild(currentItemView);
+            this.addChild(marketSettingsButton);
+            this.addChild(marketOpenCheckBox);
+            this.addChild(openAllMarketsButton);
+            this.addChild(closeAllMarketsButton);
+
+            this.setHeight(5*(elementHeight+spacing));
+
+            // T-125: per-element disable from T-123 is intentionally removed —
+            // an untrusted slave now cannot open the ManagementScreen at all
+            // (see the openScreen() entry guard), so the per-widget gate here
+            // would be dead code. If the screen ever becomes reachable on an
+            // untrusted slave via a new entry point, add the guard THERE, not
+            // back here.
+        }
+        @Override
+        protected void render() {
+
+        }
+
+        @Override
+        protected void layoutChanged() {
+            int width = getWidth()-2*padding;
+
+            selectedMarketLabel.setBounds(padding, padding, width, elementHeight-spacing);
+
+            // Task 3: when no market is selected, hide the orange Delete button too
+            // (same off-screen-bounds pattern used for marketOpenCheckBox / marketSettingsButton).
+            // The item view stays full-width in that state so the "no selection" placeholder
+            // reads cleanly without a floating Delete button to its right.
+            if (hasSelection) {
+                currentItemView.setBounds(padding, selectedMarketLabel.getBottom()+spacing, width/2, elementHeight);
+                removeTradingPairButton.setBounds(currentItemView.getRight()+spacing, currentItemView.getTop(), width/2-spacing, elementHeight);
+            } else {
+                currentItemView.setBounds(padding, selectedMarketLabel.getBottom()+spacing, width, elementHeight);
+                removeTradingPairButton.setBounds(-1000, -1000, 0, 0);
+            }
+
+            // Task 3: hide marketOpenCheckBox + marketSettingsButton when no market
+            // is selected. Collapse their rows to zero-height so the open/close-all
+            // buttons slide up and no dead space remains. Visibility is derived from
+            // hasSelection (set by setCurrentMarket).
+            if (hasSelection) {
+                marketOpenCheckBox.setBounds(currentItemView.getLeft(), currentItemView.getBottom()+spacing, width, elementHeight);
+                marketSettingsButton.setBounds(marketOpenCheckBox.getLeft(), marketOpenCheckBox.getBottom()+spacing, width, elementHeight);
+            } else {
+                // Zero-size + off-screen so hit-testing can't trigger these controls.
+                marketOpenCheckBox.setBounds(-1000, -1000, 0, 0);
+                marketSettingsButton.setBounds(-1000, -1000, 0, 0);
+            }
+
+            int btnW = (width - spacing) / 2;
+            int btnY = hasSelection
+                    ? marketSettingsButton.getBottom() + spacing
+                    : currentItemView.getBottom() + spacing;
+            openAllMarketsButton.setBounds(padding, btnY, btnW, elementHeight);
+            closeAllMarketsButton.setBounds(openAllMarketsButton.getRight() + spacing, btnY, btnW, elementHeight);
+        }
+        public void setCurrentMarket(ItemID marketID) {
+            if(marketID == null) {
+                currentItemView.setItemStack(ItemStack.EMPTY);
+                hasSelection = false;
+                // Re-layout so marketOpenCheckBox / marketSettingsButton hide.
+                setBounds(getLeft(), getTop(), getWidth(), getHeight());
+                return;
+            }
+            ItemStack stack = marketID.getStack();
+            if(stack.isEmpty()) {
+                // Dangling ItemID: show the "broken market" placeholder instead of a
+                // blank slot so the admin can see what is selected and delete it.
+                stack = createBrokenMarketPlaceholder(marketID);
+            }
+            currentItemView.setItemStack(stack);
+            hasSelection = true;
+            setBounds(getLeft(), getTop(), getWidth(), getHeight());
+        }
+        public void setMarketOpenCheckBoxChecked(boolean isOpen) {
+            loadingCheckBox = true;
+            marketOpenCheckBox.setChecked(isOpen);
+            loadingCheckBox = false;
+        }
+
+        private void onRemoveTradingPairButtonClicked()
+        {
+            // Delete by the screen's selected ItemID instead of the selected ClientMarket:
+            // broken markets (unresolvable item stack) never get a ClientMarket instance
+            // on the client, but the server can still delete them by their ItemID.
+            ItemID marketID = parentScreen.getSelectedMarketID();
+            if (marketID == null) return;
+            setScreen(new ConfirmDeletePopup(parentScreen, marketID));
+        }
+        private void onMarketSettingsButtonClicked()
+        {
+            ClientMarket currentMarket = getSelectedMarket();
+            if(currentMarket == null)
+                return;
+
+            MarketManagementScreen managementScreen = new MarketManagementScreen(parentScreen, currentMarket.getItemID());
+            setScreen(managementScreen);
+        }
+        private void onMarketOpenCheckBoxChanged(Boolean isOpen)
+        {
+            if (loadingCheckBox) return;
+            ClientMarket currentMarket = getSelectedMarket();
+            if (currentMarket == null) return;
+            currentMarket.setMarketOpenAsync(isOpen).thenAccept(success -> {
+                if (success) {
+                    Minecraft.getInstance().execute(() -> overviewTab.refreshMarketStates());
+                }
+            });
+        }
+        private void setAllMarketsOpen(boolean open) {
+            List<ItemID> markets = getAvailableMarkets();
+            int total = markets.size();
+            final int[] completed = {0};
+            for (ItemID marketID : markets) {
+                ClientMarket market = getMarket(marketID);
+                if (market == null) { completed[0]++; continue; }
+                market.setMarketOpenAsync(open).thenAccept(success -> {
+                    completed[0]++;
+                    if (completed[0] >= total) {
+                        Minecraft.getInstance().execute(() -> {
+                            setMarketOpenCheckBoxChecked(open);
+                            overviewTab.refreshMarketStates();
+                        });
+                    }
+                });
+            }
+        }
+        private void onOpenAllMarkets() {
+            setAllMarketsOpen(true);
+        }
+        private void onCloseAllMarkets() {
+            setAllMarketsOpen(false);
+        }
+    }
+
+    /**
+     * Widget that shows a summary of the plugin system and provides
+     * a button to open the plugin management screen.
+     *
+     * <pre>
+     * +---------------------------+
+     * |       Plugins             |  (title label, centered)
+     * |   2 / 3 enabled           |  (status label, live-updated)
+     * |  [ Manage Plugins ]       |  (button, opens PluginManagementScreen)
+     * +---------------------------+
+     * </pre>
+     */
+    public final class PluginOverviewWidget extends StockMarketGuiElement {
+        private final Label titleLabel;
+        private final Label statusLabel;
+        private final Button managePluginsButton;
+        private final ManagementScreen parentScreen;
+
+        public PluginOverviewWidget(ManagementScreen parent) {
+            super();
+            this.setEnableBackground(false);
+            parentScreen = parent;
+
+            titleLabel = new Label(Texts.PLUGINS_TITLE.getString());
+            titleLabel.setAlignment(Label.Alignment.CENTER);
+
+            statusLabel = new Label("");
+            statusLabel.setAlignment(Label.Alignment.CENTER);
+
+            managePluginsButton = new Button(Texts.PLUGINS_MANAGE.getString(), this::onManagePluginsButtonClicked);
+
+            this.addChild(titleLabel);
+            this.addChild(statusLabel);
+            this.addChild(managePluginsButton);
+
+            this.setHeight(3 * (defaultElementHeight + spacing));
+        }
+
+        @Override
+        protected void render() {
+            int enabled = getPluginManager().getEnabledPluginCount();
+            int total = getPluginManager().getPluginCount();
+            statusLabel.setText(enabled + " / " + total + " " + Texts.PLUGINS_ENABLED.getString());
+        }
+
+        @Override
+        protected void layoutChanged() {
+            int width = getWidth() - 2 * padding;
+
+            titleLabel.setBounds(padding, padding, width, defaultElementHeight - spacing);
+            statusLabel.setBounds(padding, titleLabel.getBottom() + spacing, width, defaultElementHeight);
+            managePluginsButton.setBounds(padding, statusLabel.getBottom() + spacing, width, defaultElementHeight);
+        }
+
+        private void onManagePluginsButtonClicked() {
+            PluginManagementScreen pluginScreen = new PluginManagementScreen(parentScreen);
+            setScreen(pluginScreen);
+        }
+    }
+
+    // ---- Overview tab ----
+
+    /**
+     * Container element for the "Overview" tab content.
+     * Holds the candlestick chart, market selector, and the settings/widget list view
+     * (current market manager + plugin overview).
+     */
+    public final class OverviewTab extends StockMarketGuiElement {
+        private final CandlestickChart candlestickChart;
+        private final Label searchLabel;
+        private final TextBox searchField;
+        private final ListView marketGridView;
+        private final LayoutGrid marketGridLayout;
+        private final List<MarketItemView> allMarketItems = new ArrayList<>();
+        private final ListView listView;
+        private final CurrentMarketManagerWidget currentMarketManagerWidget;
+        private final PluginOverviewWidget pluginOverviewWidget;
+
+        public OverviewTab(ManagementScreen parent) {
+            super();
+            setEnableBackground(false);
+
+            candlestickChart = new CandlestickChart();
+
+            searchLabel = new Label(Component.translatable("gui.stockmarket.create_market_tab.search").getString());
+            searchLabel.setAlignment(Label.Alignment.RIGHT);
+
+            searchField = new TextBox();
+            searchField.setOnTextChanged(text -> applySearchFilter());
+
+            marketGridView = new VerticalListView();
+            marketGridLayout = new LayoutGrid(0, 0, false, false, 0, 1, Alignment.TOP);
+            marketGridView.setLayout(marketGridLayout);
+
+            listView = new VerticalListView();
+            LayoutVertical layout = new LayoutVertical();
+            layout.stretchX = true;
+            layout.stretchY = false;
+            listView.setLayout(layout);
+
+            currentMarketManagerWidget = new CurrentMarketManagerWidget(parent);
+            listView.addChild(currentMarketManagerWidget);
+
+            pluginOverviewWidget = new PluginOverviewWidget(parent);
+            listView.addChild(pluginOverviewWidget);
+
+            // News button: opens the newspaper screen (T-074) — available to
+            // everyone, the news feed is not admin-gated.
+            Button newsButton = new Button(Texts.NEWS.getString(),
+                    () -> setScreen(new NewsScreen(parent)));
+            newsButton.setHeight(elementHeight);
+            newsButton.setHoverTooltipSupplier(Texts.NEWS_TOOLTIP::getString);
+            newsButton.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
+            newsButton.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.TOP_RIGHT);
+            listView.addChild(newsButton);
+
+            // Master-only: button that opens the Mod Settings screen (edits the
+            // server's settings.json in-game). Only the master server loads/owns
+            // settings.json, so the button is hidden on slave servers — the flag
+            // is synced at join via PlayerJoinSyncPacket/ClientSettings. The server
+            // additionally enforces op level 2 + master status in ModSettingsRequest.
+            if (isMasterServer()) {
+                Button modSettingsButton = new Button(Texts.MOD_SETTINGS.getString(),
+                        () -> setScreen(new ModSettingsScreen(parent)));
+                modSettingsButton.setHeight(elementHeight);
+                modSettingsButton.setHoverTooltipSupplier(Texts.MOD_SETTINGS_TOOLTIP::getString);
+                modSettingsButton.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
+                modSettingsButton.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.TOP_RIGHT);
+                listView.addChild(modSettingsButton);
+            }
+
+            addChild(candlestickChart);
+            addChild(searchLabel);
+            addChild(searchField);
+            addChild(marketGridView);
+            addChild(listView);
+
+            loadMarketGrid();
+            getPluginManager().requestPluginList();
+        }
+
+        private void loadMarketGrid() {
+            allMarketItems.clear();
+            marketGridView.removeChilds();
+            getMarketManager().requestMarkets().thenAccept(markets -> {
+                Minecraft.getInstance().execute(() -> {
+                    List<ItemID> sorted = new ArrayList<>(markets);
+                    sorted.sort(MARKET_TYPE_COMPARATOR);
+                    for (ItemID id : sorted) {
+                        ItemStack stack = id.getStack();
+                        if (stack.isEmpty()) {
+                            // The ItemID can no longer be resolved to an item (dangling
+                            // registry entry). Show an explicit "broken market" placeholder
+                            // instead of skipping the entry, so the market stays visible,
+                            // selectable and deletable.
+                            stack = createBrokenMarketPlaceholder(id);
+                        }
+                        MarketItemView view = new MarketItemView(stack, id);
+                        allMarketItems.add(view);
+                        marketGridView.addChild(view);
+                    }
+                    refreshMarketStates();
+                });
+            });
+        }
+
+        /**
+         * Filters the market grid based on the search field text.
+         * Matches against the item display name first, then falls back to the full
+         * tooltip text (includes enchantment names, potion effects, etc.).
+         */
+        private void applySearchFilter() {
+            String filter = searchField.getText().toLowerCase();
+            marketGridView.removeChilds();
+            for (MarketItemView view : allMarketItems) {
+                if (filter.isEmpty()
+                        || view.itemName.toLowerCase().contains(filter)
+                        || ClientPlayerUtilities.getItemDisplayText(view.getItemStack()).toLowerCase().contains(filter)) {
+                    marketGridView.addChild(view);
+                }
+            }
+        }
+
+        public void refreshMarketList() {
+            loadMarketGrid();
+        }
+
+        public void refreshMarketStates() {
+            for (MarketItemView view : allMarketItems) {
+                ClientMarket market = getMarket(view.marketID);
+                if (market != null) {
+                    market.isMarketOpenAsync().thenAccept(isOpen ->
+                        Minecraft.getInstance().execute(() -> view.setMarketOpen(isOpen))
+                    );
+                }
+            }
+        }
+
+        @Override
+        protected void render() {}
+
+        @Override
+        protected void layoutChanged() {
+            int w = getWidth() - 2 * padding;
+            int h = getHeight() - 2 * padding;
+
+            // Task 2: right-panel width halved (was ~w/2, now ~w/4). The chart and
+            // market grid expand into the freed space on the left (~3w/4 minus
+            // spacing) so they're easier to scan.
+            int rightWidth = w / 4;
+            int leftWidth = w - rightWidth - spacing;
+
+            candlestickChart.setBounds(padding, padding, leftWidth, h / 2);
+
+            int searchY = candlestickChart.getBottom() + spacing;
+            int searchLabelW = w / 8;
+            searchLabel.setBounds(padding, searchY, searchLabelW, elementHeight);
+            searchField.setBounds(searchLabel.getRight() + spacing, searchY, leftWidth - searchLabelW - spacing, elementHeight);
+
+            int gridY = searchField.getBottom() + spacing;
+            marketGridView.setBounds(padding, gridY, leftWidth, h - (gridY - padding));
+
+            int containerWidth = marketGridView.getContainerWidth();
+            marketGridLayout.columns = Math.max(1, containerWidth / ItemView.DEFAULT_WIDTH);
+
+            listView.setBounds(candlestickChart.getRight() + spacing, padding, rightWidth, h);
+        }
+
+        public CurrentMarketManagerWidget getCurrentMarketManagerWidget() {
+            return currentMarketManagerWidget;
+        }
+
+        public CandlestickChart getCandlestickChart() {
+            return candlestickChart;
+        }
+
+        /**
+         * Item icon in the market grid with a green/red overlay indicating open/closed state.
+         */
+        private class MarketItemView extends ItemView {
+            private final ItemID marketID;
+            private final String itemName;
+            private boolean marketOpen = true;
+
+            MarketItemView(ItemStack stack, ItemID marketID) {
+                super(stack);
+                this.marketID = marketID;
+                this.itemName = stack.getHoverName().getString();
+            }
+
+            void setMarketOpen(boolean open) {
+                this.marketOpen = open;
+            }
+
+            @Override
+            public void renderBackground() {
+                super.renderBackground();
+                int overlayColor = marketOpen ? 0x3000FF00 : 0x40FF0000;
+                drawRect(0, 0, getWidth(), getHeight(), overlayColor);
+                if (isMouseOver()) {
+                    drawRect(0, 0, getWidth(), getHeight(), 0x40FFFFFF);
+                }
+            }
+
+            @Override
+            protected boolean mouseClickedOverElement(int button) {
+                if (button == 0) {
+                    // Select strictly by the market's ItemID. Never round-trip through the
+                    // ItemStack: a stack whose components drifted away from the registry
+                    // template would re-register as a *new* ItemID and select nothing.
+                    onMarketSelected(marketID);
+                    return true;
+                }
+                return false;
+            }
+        }
+    }
+
+    // ---- ManagementScreen fields ----
+
+    private final TabElement tabElement;
+    private final OverviewTab overviewTab;
+    private final CreateMarketTab createMarketTab;
+    private final PresetEditorTab presetEditorTab;
+    // T-125: the T-123 in-screen banner label has been removed. Untrusted
+    // slaves never reach this screen (openScreen()/openGUI() send a chat
+    // message and return early), so the banner would be unreachable UI.
+
+    /**
+     * The ItemID of the market currently selected in the overview tab.
+     * Tracked separately from {@link StockMarketGuiElement#getSelectedMarket()} because
+     * broken markets (whose item can no longer be resolved) have no ClientMarket
+     * instance, yet must still be selectable so they can be removed.
+     */
+    private @Nullable ItemID selectedMarketID = null;
+
+    /**
+     * @return the ItemID of the market currently selected in the overview tab,
+     *         or {@code null} if none is selected
+     */
+    public @Nullable ItemID getSelectedMarketID() {
+        return selectedMarketID;
+    }
+
+    public ManagementScreen() {
+        super(Texts.TITLE);
+
+        tabElement = new TabElement();
+
+        // Overview tab -- wraps existing chart/selector/widgets
+        overviewTab = new OverviewTab(this);
+        tabElement.addTab(TAB_OVERVIEW, overviewTab);
+
+        // Create Markets tab -- category-based preset browser
+        createMarketTab = new CreateMarketTab();
+        createMarketTab.setOnMarketsChanged(overviewTab::refreshMarketList);
+        tabElement.addTab(TAB_CREATE_MARKETS, createMarketTab);
+
+        // Presets tab -- edit preset prices and abundance values
+        presetEditorTab = new PresetEditorTab();
+        tabElement.addTab(TAB_PRESETS, presetEditorTab);
+
+        // T-125: the T-123 red info banner has been removed. See the
+        // openScreen() entry guard: untrusted slaves never reach construction.
+
+        addElement(tabElement);
+    }
+
+    /**
+     * Opens the Management screen. On an untrusted slave the screen is NOT
+     * opened at all (T-125 user request: "don't allow the opening of that
+     * screen when on an untrusted server"). Instead a chat message points the
+     * player at {@code /banksystem trust <slaveID>}.
+     * <p>
+     * The other T-123 screens (TradeScreen, PluginManagementScreen,
+     * CreateMarketScreen, PresetEditorTab, CreateMarketTab) keep their
+     * per-element disable + banner — only Management uses the "block entirely"
+     * pattern.
+     */
+    public static void openScreen()
+    {
+        if (StockMarketGuiElement.isUntrustedSlave()) {
+            // Chat notice via the local player. Same idiom as the other
+            // "action unavailable" chat notices in the mod (no toast API in
+            // ModUtilities for this).
+            net.minecraft.client.player.LocalPlayer player = Minecraft.getInstance().player;
+            if (player != null) {
+                player.displayClientMessage(
+                        Component.translatable("gui.stockmarket.untrusted_slave.management_blocked"),
+                        false);
+            }
+            return;
+        }
+        ManagementScreen screen = new ManagementScreen();
+        Minecraft.getInstance().setScreen(screen);
+    }
+
+    @Override
+    public void onClose()
+    {
+        ClientMarket currentMarket = StockMarketGuiElement.getSelectedMarket();
+        if(currentMarket != null)
+        {
+            currentMarket.unsubscribeFromMarketPriceUpdate();
+            StockMarketGuiElement.selectMarket(null);
+        }
+        selectedMarketID = null;
+        super.onClose();
+    }
+
+    @Override
+    protected void updateLayout(Gui gui) {
+        int p = StockMarketGuiElement.padding;
+        int w = getWidth() - 2 * p;
+        int h = getHeight() - 2 * p;
+
+        // T-125: banner reserve removed alongside the banner Label itself.
+        // TabElement fills the full available area.
+        tabElement.setBounds(p, p, w, h);
+    }
+
+    /**
+     * Called when a market item is selected in the overview tab's market selector.
+     * <p>
+     * Selection is done strictly by the market's {@link ItemID}. The ItemStack is
+     * intentionally never re-registered via
+     * {@code ItemID.getOrRegisterFromItemStackClientSide}: for items with volatile
+     * data components (e.g. TerraFirmaCraft food decay) the displayed stack may no
+     * longer component-match the registry template, so a stack round-trip would
+     * mint a different ItemID and the market would become unselectable.
+     *
+     * @param itemID the ItemID key of the clicked market
+     */
+    private void onMarketSelected(ItemID itemID)
+    {
+        ClientMarket currentMarket = StockMarketGuiElement.getSelectedMarket();
+        if(currentMarket != null)
+        {
+            currentMarket.unsubscribeFromMarketPriceUpdate();
+            StockMarketGuiElement.selectMarket(null);
+            overviewTab.getCurrentMarketManagerWidget().setCurrentMarket(null);
+        }
+        selectedMarketID = itemID;
+        ClientMarket market = getMarket(itemID);
+        if(market != null) {
+            market.subscribeToMarketPriceUpdate();
+            StockMarketGuiElement.selectMarket(itemID);
+            overviewTab.getCandlestickChart().setMarket(market);
+            overviewTab.getCurrentMarketManagerWidget().setCurrentMarket(itemID);
+            market.isMarketOpenAsync().thenAccept(isOpen ->
+                Minecraft.getInstance().execute(() ->
+                    overviewTab.getCurrentMarketManagerWidget().setMarketOpenCheckBoxChecked(isOpen)
+                )
+            );
+        }
+        else {
+            // Broken market: no ClientMarket exists because the item can't be resolved.
+            // Still display it as the selected market so the Remove button can delete it.
+            overviewTab.getCurrentMarketManagerWidget().setCurrentMarket(itemID);
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     * Server broadcast: a market was deleted (possibly by another admin or via the
+     * {@code /stockmarket <market> remove} command). Deselects the market if it was
+     * the current selection and reloads the market grid from the server.
+     */
+    @Override
+    public void onMarketRemoved(ItemID marketID) {
+        if (marketID.equals(selectedMarketID)) {
+            // The ClientMarket (and its price stream) is already gone — only clear
+            // the screen-side selection state.
+            selectedMarketID = null;
+            StockMarketGuiElement.selectMarket(null);
+            overviewTab.getCurrentMarketManagerWidget().setCurrentMarket(null);
+            overviewTab.getCandlestickChart().setMarket(null);
+        }
+        // Refresh the grid so the deleted market disappears from the selector.
+        overviewTab.refreshMarketList();
+    }
+
+    /**
+     * Builds a placeholder ItemStack for a market whose {@link ItemID} can no longer
+     * be resolved to an item ("broken" market). This happens when the registered item
+     * template dangles or drifts — e.g. items with volatile data components such as
+     * TerraFirmaCraft food decay. Instead of rendering an invisible entry (which made
+     * such markets unselectable and undeletable in this GUI), the market is shown as
+     * a barrier icon with an explanatory name and tooltip so it stays visible and can
+     * still be selected and removed.
+     *
+     * @param marketID the dangling market ItemID
+     * @return a barrier stack carrying a translatable "broken market" name and tooltip
+     */
+    private static ItemStack createBrokenMarketPlaceholder(ItemID marketID) {
+        ItemStack placeholder = new ItemStack(Items.BARRIER);
+        placeholder.set(DataComponents.CUSTOM_NAME,
+                Texts.brokenMarketName(marketID.getShort()).copy().withStyle(style -> style.withItalic(false)));
+        placeholder.set(DataComponents.LORE, new ItemLore(List.of(
+                Texts.BROKEN_MARKET_TOOLTIP_LINE1,
+                Texts.BROKEN_MARKET_TOOLTIP_LINE2)));
+        return placeholder;
+    }
+
+    /**
+     * Confirmation popup shown before deleting a market.
+     * Displays the market name, a warning message, and Yes/No buttons.
+     * On confirm, sends the delete request to the server and returns to a fresh ManagementScreen.
+     */
+    private static class ConfirmDeletePopup extends StockMarketGuiScreen {
+        private final ManagementScreen parentScreen;
+        private final ItemID marketID;
+
+        private final Label titleLabel;
+        private final Label msgLabel;
+        private final Button confirmButton;
+        private final Button cancelButton;
+
+        ConfirmDeletePopup(ManagementScreen parent, ItemID marketID) {
+            super(Texts.ASK_TITLE, parent);
+            this.parentScreen = parent;
+            this.marketID = marketID;
+
+            titleLabel = new Label(Texts.ASK_TITLE.getString());
+            titleLabel.setAlignment(Label.Alignment.CENTER);
+
+            msgLabel = new Label(Texts.ASK_MSG.getString());
+            msgLabel.setAlignment(Label.Alignment.CENTER);
+
+            confirmButton = new Button("Yes", this::onConfirm);
+            confirmButton.setBackgroundColor(0xFFe8711c);
+            confirmButton.setHoverColor(0xFFe04c12);
+            confirmButton.setPressedColor(0xFFe04c12);
+
+            cancelButton = new Button("No", this::onCancel);
+
+            addElement(titleLabel);
+            addElement(msgLabel);
+            addElement(confirmButton);
+            addElement(cancelButton);
+        }
+
+        @Override
+        protected void updateLayout(Gui gui) {
+            int p = StockMarketGuiElement.padding;
+            int s = StockMarketGuiElement.spacing;
+            int eh = StockMarketGuiElement.defaultElementHeight;
+
+            int panelW = (int)(getWidth() * 0.4);
+            int panelH = 4 * eh + 5 * s;
+            int panelX = (getWidth() - panelW) / 2;
+            int panelY = (getHeight() - panelH) / 2;
+
+            titleLabel.setBounds(panelX, panelY, panelW, eh);
+            msgLabel.setBounds(panelX, titleLabel.getBottom() + s, panelW, eh * 2);
+
+            int btnW = (panelW - s) / 2;
+            int btnY = msgLabel.getBottom() + s;
+            confirmButton.setBounds(panelX, btnY, btnW, eh);
+            cancelButton.setBounds(confirmButton.getRight() + s, btnY, btnW, eh);
+        }
+
+        private void onConfirm() {
+            getMarketManager().requestDeleteMarket(marketID).thenAccept(success -> {
+                Minecraft.getInstance().execute(() -> {
+                    if (success) {
+                        // Unsubscribe from price updates and deselect
+                        ClientMarket market = getMarket(marketID);
+                        if (market != null) {
+                            market.unsubscribeFromMarketPriceUpdate();
+                        }
+                        StockMarketGuiElement.selectMarket(null);
+                    }
+                    // Return to a fresh ManagementScreen so the market list is refreshed
+                    setScreen(new ManagementScreen());
+                });
+            });
+        }
+
+        private void onCancel() {
+            setScreen(parentScreen);
+        }
+
+        /**
+         * {@inheritDoc}
+         * While this popup is displayed it is the screen receiving market-removed
+         * notifications — forward them to the covered ManagementScreen so its
+         * selection/grid stay consistent when e.g. another admin deletes a market.
+         */
+        @Override
+        public void onMarketRemoved(ItemID removedMarketID) {
+            parentScreen.onMarketRemoved(removedMarketID);
+        }
+    }
+}

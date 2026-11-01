@@ -1,0 +1,457 @@
+package net.kroia.stockmarket;
+
+
+import net.kroia.banksystem.BankSystemMod;
+import net.kroia.banksystem.minecraft.item.BankSystemItems;
+import net.kroia.modutilities.setting.ModSettings;
+import net.kroia.modutilities.setting.Setting;
+import net.kroia.modutilities.setting.SettingsGroup;
+import net.kroia.modutilities.setting.parser.ItemStackJsonParser;
+import net.kroia.stockmarket.util.ClientSettings;
+import net.kroia.stockmarket.util.SlaveTrustCache;
+import net.minecraft.world.item.ItemStack;
+
+import java.util.List;
+
+/**
+ * All server-side settings of the StockMarket mod, persisted to
+ * {@code world/data/StockMarket/settings.json}. The file is loaded once at startup
+ * on the MASTER server only; slave servers keep the compile-time defaults.
+ * <p>
+ * Admins can edit these settings in-game via the "Mod Settings" screen
+ * ({@code net.kroia.stockmarket.screen.ModSettingsScreen}, reachable from the
+ * ManagementScreen on the master server).
+ * <p>
+ * <b>DEVELOPER NOTE — when adding a new setting:</b>
+ * <ol>
+ *   <li>You MUST also add a matching editing field to the Mod Settings screen
+ *       ({@code ModSettingsScreen}). The screen builds its fields generically from
+ *       {@link #getEditableGroups()}, so a setting in a registered group with a
+ *       supported type (Boolean/Integer/Long/Float/ItemStack) appears automatically —
+ *       but you still must add its label/tooltip lang keys and verify the field works.</li>
+ *   <li>If the new setting is only read ONCE at startup (cached for the server
+ *       lifetime), mark the field as restart-required in
+ *       {@code ModSettingsScreen.RESTART_REQUIRED_SETTINGS}.</li>
+ *   <li>Consider whether the value must be propagated to slave servers after a
+ *       change (see the per-group propagation decision in
+ *       {@code ModSettingsRequest.handleOnMasterServer}).</li>
+ * </ol>
+ */
+public class StockMarketModSettings extends ModSettings {
+
+    private static StockMarketModBackend.ServerInstances BACKEND_INSTANCES;
+    public static void setBackend(StockMarketModBackend.ServerInstances backend) {
+        BACKEND_INSTANCES = backend;
+    }
+
+    public final Utilities UTILITIES = createGroup(new Utilities());
+    public final Market MARKET = createGroup(new Market());
+    public final VillagerTrading VILLAGER_TRADING = createGroup(new VillagerTrading());
+    //public final Networking NETWORKING = createGroup(new Networking());
+
+    public StockMarketModSettings() {
+        super("StockMarketModSettings");
+    }
+
+    public static void init()
+    {
+      //  ServerMarket.init();
+    }
+
+    public static final class Utilities extends SettingsGroup
+    {
+        public final Setting<Long> SAVE_INTERVAL_MINUTES = registerSetting("SAVE_INTERVAL_MINUTES",5L, Long.class); // 5 minutes
+        public final Setting<Boolean> LOGGING_ENABLE_INFO = registerSetting("LOGGING_ENABLE_INFO",true, Boolean.class);
+        public final Setting<Boolean> LOGGING_ENABLE_WARNING = registerSetting("LOGGING_ENABLE_WARNING",true, Boolean.class);
+        public final Setting<Boolean> LOGGING_ENABLE_ERROR = registerSetting("LOGGING_ENABLE_ERROR",true, Boolean.class);
+        public final Setting<Boolean> LOGGING_ENABLE_DEBUG = registerSetting("LOGGING_ENABLE_DEBUG",false, Boolean.class);
+       // public final Setting<Integer> ADMIN_PERMISSION_LEVEL = registerSetting("ADMIN_PERMISSION_LEVEL",2, Integer.class);
+
+        public Utilities() { super("Utilities"); }
+
+        /*public boolean playerIsAdmin(ServerPlayer player)
+        {
+            return player.hasPermissions(ADMIN_PERMISSION_LEVEL.get());
+        }*/
+    }
+    public static final class Player extends SettingsGroup
+    {
+        public final Setting<Float> STARTING_BALANCE = registerSetting("STARTING_BALANCE", 0.f, Float.class); // Starting balance for new players
+
+        public Player() { super("Player"); }
+    }
+
+
+    public static final class Market extends SettingsGroup
+    {
+        public final Setting<Integer> VIRTUAL_ORDERBOOK_DEFAULT_ARRAY_SIZE = registerSetting("VIRTUAL_ORDERBOOK_DEFAULT_ARRAY_SIZE", 1000, Integer.class); // Starting balance for new players
+        public final Setting<ItemStack> CURRENCY = registerSetting("CURRENCY", BankSystemItems.MONEY.get().getDefaultInstance(), ItemStack.class, new ItemStackJsonParser()); // Starting balance for new players
+        public final Setting<Long> CANDLE_TIME = registerSetting("CANDLE_TIME", 60000L, Long.class); // Time interval of candle sticks in ms
+
+        /**
+         * Server-side hard cap on the number of candles returned by a single
+         * {@code MarketPriceHistoryRequest} response when the client sends
+         * {@code maxCandles = 0}. The master truncates the OLDEST side of the
+         * aggregated result to this cap so the client can page for more.
+         * <p>
+         * Default matches {@code MarketPriceHistoryRequest.MAX_CANDLES_PER_RESPONSE_DEFAULT}.
+         * The constant is kept as a fallback for the (early startup / test) case
+         * where {@code BACKEND_INSTANCES.SERVER_SETTINGS} is not yet available.
+         * <p>
+         * Read live on every request — no restart required.
+         * <p>
+         * Server-authoritative: the value is only consumed inside
+         * {@code MarketPriceHistoryRequest.handleOnMasterServer}, which always
+         * runs on the master. Slaves never read it, so no explicit slave-broadcast
+         * is required after a SET.
+         */
+        public final Setting<Integer> PRICE_HISTORY_MAX_CANDLES_PER_RESPONSE = registerSetting("PRICE_HISTORY_MAX_CANDLES_PER_RESPONSE", 4096, Integer.class);
+
+        /**
+         * Client-side initial window size (in candles) used when a chart first
+         * opens for a market. Consumed by the client's chart / cache code
+         * (see T-135). Not consulted server-side.
+         * <p>
+         * Read live on every chart open — no restart required.
+         * <p>
+         * Slave-propagation: NOT propagated. This is a client-only preference;
+         * it lives in the master's settings.json so admins can tune the default,
+         * but slaves never consume it (they don't render charts) and the client
+         * receives its value via the normal GET path when opening the Mod
+         * Settings screen. No push-broadcast is needed.
+         */
+        public final Setting<Integer> PRICE_HISTORY_INITIAL_LOAD_CANDLES = registerSetting("PRICE_HISTORY_INITIAL_LOAD_CANDLES", 512, Integer.class);
+
+        public Market() { super("ServerMarket"); }
+
+        /**
+         * Convenience accessor for the server-side price-history response cap.
+         * Falls back to {@code MarketPriceHistoryRequest.MAX_CANDLES_PER_RESPONSE_DEFAULT}
+         * (via the field's own default) when the value is null.
+         *
+         * @return the maximum number of candles the server will return in one response
+         */
+        public int getPriceHistoryMaxCandlesPerResponse()
+        {
+            Integer v = PRICE_HISTORY_MAX_CANDLES_PER_RESPONSE.get();
+            return v != null ? v : PRICE_HISTORY_MAX_CANDLES_PER_RESPONSE.getDefaultValue();
+        }
+
+        /**
+         * Convenience accessor for the client-side initial chart window size.
+         *
+         * @return the number of candles to request when a chart first opens
+         */
+        public int getPriceHistoryInitialLoadCandles()
+        {
+            Integer v = PRICE_HISTORY_INITIAL_LOAD_CANDLES.get();
+            return v != null ? v : PRICE_HISTORY_INITIAL_LOAD_CANDLES.getDefaultValue();
+        }
+    }
+
+
+    /**
+     * Settings for the stock-market-driven villager trade repricing feature.
+     * <p>
+     * When {@code ENABLED}, villager (and wandering trader) offers whose traded
+     * item is listed on the stock market no longer use emeralds: both directions
+     * of such a trade are converted to the configured trading currency
+     * ({@link Market#CURRENCY}) and priced from the market. Offers for items
+     * <b>without</b> a market keep their vanilla emerald form.
+     * <p>
+     * These settings are only read on the <b>master</b> server (slave servers never
+     * load {@code settings.json}); the master broadcasts the resulting price table
+     * to all slaves, so enabling the feature here also enables it on slaves.
+     */
+    public static final class VillagerTrading extends SettingsGroup
+    {
+        /** Master switch for villager trade repricing. Enabled by default. */
+        public final Setting<Boolean> ENABLED = registerSetting("ENABLED", true, Boolean.class);
+
+        /**
+         * Wall-clock interval (in minutes) between price-table refreshes/broadcasts.
+         * Default 20 minutes = one Minecraft day.
+         */
+        public final Setting<Long> PRICE_REFRESH_INTERVAL_MINUTES = registerSetting("PRICE_REFRESH_INTERVAL_MINUTES", 20L, Long.class);
+
+        /**
+         * Margin applied when the villager BUYS items from the player (player sells):
+         * the villager pays {@code market price × margin}. Below 1.0 means the
+         * villager pays less than market value.
+         */
+        public final Setting<Float> VILLAGER_BUY_MARGIN = registerSetting("VILLAGER_BUY_MARGIN", 0.8f, Float.class);
+
+        /**
+         * Margin applied when the villager SELLS items to the player (player buys):
+         * the villager charges {@code market price × margin}. Above 1.0 means the
+         * villager charges more than market value.
+         */
+        public final Setting<Float> VILLAGER_SELL_MARGIN = registerSetting("VILLAGER_SELL_MARGIN", 1.2f, Float.class);
+
+        public VillagerTrading() { super("VillagerTrading"); }
+    }
+
+
+    /*public static final class Networking extends SettingsGroup
+    {
+        public final Setting<Boolean> ENABLE_SERVER_SERVER_COMMUNICATION = registerSetting("ENABLE_SERVER_SERVER_COMMUNICATION", false, Boolean.class);
+        public final Setting<Boolean> IS_MASTER = registerSetting("IS_MASTER", false, Boolean.class);
+        public final Setting<Integer> MASTER_TCP_PORT = registerSetting("MASTER_TCP_PORT", 25575, Integer.class);
+        public final Setting<String> MASTER_IP = registerSetting("MASTER_IP", "127.0.0.1", String.class);
+        public final Setting<String> SLAVE_ID = registerSetting("SLAVE_ID", "server_a", String.class);
+        public final Setting<String> SHARED_SECRET =  registerSetting("SHARED_SECRET", "change-me-please", String.class);
+
+
+        public Networking() { super("Networking"); }
+    }*/
+
+
+    /**
+     * Returns the list of settings groups that are editable through the in-game
+     * "Mod Settings" screen and the {@code ModSettingsRequest} GET/SET payloads.
+     * <p>
+     * This is exactly the set of groups registered via {@code createGroup(...)}
+     * (Utilities, ServerMarket, VillagerTrading). The {@link Player} group is
+     * intentionally EXCLUDED: it is never registered, never serialized to
+     * settings.json and therefore dead — do not expose it in the UI.
+     *
+     * @return the registered, editable settings groups in display order
+     */
+    public List<SettingsGroup> getEditableGroups()
+    {
+        return List.of(UTILITIES, MARKET, VILLAGER_TRADING);
+    }
+
+    /**
+     * Builds the {@link ClientSettings} snapshot that is synced to a client at
+     * player join (via {@code PlayerJoinSyncPacket}). Server-side only.
+     *
+     * @return the settings snapshot to send to the joining client
+     */
+    public ClientSettings getClientSettings()
+    {
+        ClientSettings settings = new ClientSettings();
+        //settings.setCandleTimeMs(MARKET.CANDLE_TIME.get());
+
+        // Tell the client whether this server is the master server. Used to gate
+        // master-only UI (the "Mod Settings" button in the ManagementScreen).
+        // Server-side enforcement happens separately in ModSettingsRequest.
+        try {
+            boolean isMaster = BankSystemMod.getAPI().getServerBankManager().isMaster();
+            settings.setMasterServer(isMaster);
+
+            // T-123 / T-125 / T-126 (untrusted slave gate): tell the client
+            // whether the master trusts this slave.
+            //
+            // Trust storage lives ONLY on the master (BankSystem's
+            // {@code ServerBankManager.trustedSlaveServers}); the slave-local
+            // {@code ISyncServerBankManager} instance is null on a slave — see
+            // {@code IBankManager.getSync()} contract "returns null on a slave".
+            //
+            // T-125 tried to forward the question inline via
+            // {@code AsyncBankManager.isSlaveServerTrustedAsync(slaveID).get(2s)}.
+            // That accessor short-circuits synchronously to {@code false} when
+            // {@code MultiServerUtils.canInteractWithBankSystem()} is not yet
+            // true — which is the normal state at server-startup / early player
+            // join time (the slave→master TCP handshake has not yet completed).
+            // So the future is already completed with {@code false}; the
+            // {@code .get(2s)} never actually waits, and the trusted-slave case
+            // silently reads inverted.
+            //
+            // T-126 fix: read from a slave-side cache instead. The cache is
+            // populated by a listener on BankSystem's SLAVE_CONNECTION_ACCEPTED
+            // signal (registered in {@code StockMarketModBackend.onServerStart}'s
+            // slave branch), which fires AFTER the handshake completes — i.e.
+            // AFTER the async forwarder becomes usable. The listener issues a
+            // non-blocking {@code isSlaveServerTrustedAsync(...).thenAccept(...)},
+            // stores the master's answer in {@link SlaveTrustCache}, and
+            // broadcasts a {@code SlaveTrustSyncPacket} to every already-connected
+            // client so any client that got the fail-closed default here
+            // transitions to the correct state within a tick.
+            //
+            // Master case: unconditionally {@code true} — a master implicitly
+            // trusts itself and never consults the cache.
+            //
+            // Client-joined-before-cache-fills case: this method returns
+            // {@code false} (fail-closed via {@link SlaveTrustCache#getOrFalse()}),
+            // the client renders the gated UI, and the {@code SlaveTrustSyncPacket}
+            // that fires as soon as the handshake completes corrects them.
+            //
+            // Live master-side trust toggle ({@code /banksystem trust <slaveID>}
+            // mid-session): still DEFERRED — BankSystem does not expose a
+            // trust-changed event and the reconnect path picks it up.
+            if (isMaster) {
+                settings.setSlaveTrusted(true);
+            } else {
+                settings.setSlaveTrusted(SlaveTrustCache.getOrFalse());
+            }
+        } catch (Exception e) {
+            // BankSystem not ready — leave the flags at their safe defaults
+            // (isMasterServer=false, slaveTrusted=true so single-player is not
+            // accidentally locked out; the fallthrough only happens if BankSystem
+            // failed to initialize, which is a bigger problem than a UI gray-out).
+        }
+
+        return settings;
+    }
+
+    /**
+     * ---------------------------------------------------------------------------------------
+     *                Utilities for creating and managing settings groups
+     * ---------------------------------------------------------------------------------------
+     */
+
+    @Override
+    public boolean saveSettings(String filePath) {
+        boolean success = super.saveSettings(filePath);
+        if (success) {
+            // todo: replace the below
+            //BACKEND_INSTANCES.SERVER_EVENTS.SETTINGS_SAVED_TO_FILE.notifyListeners();
+        }
+        return success;
+    }
+
+    @Override
+    public boolean loadSettings(String filePaht) {
+        boolean success = super.loadSettings(filePaht);
+        if (success) {
+            // todo: replace the below
+            //BACKEND_INSTANCES.SERVER_EVENTS.SETTINGS_LOADED_FROM_FILE.notifyListeners();
+        }
+        return success;
+    }
+
+
+
+   /* public static final class UI
+    {
+        public static final int PRICE_HISTORY_SIZE = 100;
+        public static final int MAX_ORDERBOOK_TILES = 100;
+    }
+
+    public static final class ServerMarket
+    {
+        public static final long SHIFT_PRICE_CANDLE_INTERVAL_MS = 60000;
+        public static HashMap<String, Integer> TRADABLE_ITEMS;
+        public static ArrayList<String> NOT_TRADABLE_ITEMS;
+
+        public static void init()
+        {
+            TRADABLE_ITEMS = new HashMap<>();
+            TRADABLE_ITEMS.put("minecraft:diamond", 160);
+            TRADABLE_ITEMS.put("minecraft:iron_ingot", 15);
+            TRADABLE_ITEMS.put("minecraft:gold_ingot", 40);
+            TRADABLE_ITEMS.put("minecraft:emerald", 100);
+            TRADABLE_ITEMS.put("minecraft:coal", 8);
+            TRADABLE_ITEMS.put("minecraft:oak_log", 10);
+            TRADABLE_ITEMS.put("minecraft:netherite_scrap", 500);
+
+            NOT_TRADABLE_ITEMS = new ArrayList<>();
+            NOT_TRADABLE_ITEMS.add(BankSystemMod.MOD_ID+":"+MoneyItem.NAME);
+        }
+    }
+
+    public static final class MarketBot
+    {
+        public static final boolean ENABLED = true;
+
+        public static final String USER_NAME = "StockMarketBot";
+        public static final long STARTING_BALANCE = 1000_000_000L*1000L; // Money balance
+
+        public static final int MAX_ORDERS = 200;
+
+        public static final double VOLUME_SCALE = 10;
+        public static final double VOLUME_SPREAD = MAX_ORDERS/2.0;
+        public static final double VOLUME_RANDOMNESS = 2;
+        public static final long UPDATE_TIMER_INTERVAL_MS = 500;
+
+        private static HashMap<String, ServerTradingBotFactory.BotBuilderContainer> botBuilder;
+        public static HashMap<String, ServerTradingBotFactory.BotBuilderContainer> getBotBuilder()
+        {
+            botBuilder = new HashMap<>();
+
+            double priceScale = 1;
+            long updateMS = 500;
+            double volatility = 0.2;
+            botBuilder = new HashMap<>();
+
+            Map<String, ServerTradingBotFactory.DefaultBotSettings> allSettigns = StockMarketDataHandler.loadDefaultBotSettings();
+            if(allSettigns.isEmpty())
+            {
+                // Create defaults:
+                Map<String, ServerTradingBotFactory.DefaultBotSettings> ores = new HashMap<>();
+                ores.put("minecraft:coal", new ServerTradingBotFactory.DefaultBotSettings((int)(8*priceScale),0.05,volatility,updateMS));
+                ores.put("minecraft:copper_ingot", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.1,volatility,updateMS));
+                ores.put("minecraft:iron_ingot", new ServerTradingBotFactory.DefaultBotSettings((int)(15*priceScale),0.1,volatility,updateMS));
+                ores.put("minecraft:gold_ingot", new ServerTradingBotFactory.DefaultBotSettings((int)(40*priceScale),0.3,volatility,updateMS));
+                ores.put("minecraft:diamond", new ServerTradingBotFactory.DefaultBotSettings((int)(160*priceScale),0.4,volatility,updateMS));
+                ores.put("minecraft:lapis_lazuli", new ServerTradingBotFactory.DefaultBotSettings((int)(8*priceScale),0.25,volatility,updateMS));
+                ores.put("minecraft:emerald", new ServerTradingBotFactory.DefaultBotSettings((int)(100*priceScale),0.75,volatility,updateMS));
+                ores.put("minecraft:quartz", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.2,volatility,updateMS));
+                ores.put("minecraft:redstone", new ServerTradingBotFactory.DefaultBotSettings((int)(4*priceScale),0.2,volatility,updateMS));
+                ores.put("minecraft:glowstone_dust", new ServerTradingBotFactory.DefaultBotSettings((int)(4*priceScale),0.3,volatility,updateMS));
+                ores.put("minecraft:netherite_scrap", new ServerTradingBotFactory.DefaultBotSettings((int)(500*priceScale),0.9,volatility,updateMS));
+                StockMarketDataHandler.saveDefaultBotSettings(ores, "Ores.json");
+
+                // Building blocks
+                Map<String, ServerTradingBotFactory.DefaultBotSettings> buildingBlocks = new HashMap<>();
+                buildingBlocks.put("minecraft:oak_log", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.01,0.1,updateMS));
+                buildingBlocks.put("minecraft:spruce_log", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.01,0.1,updateMS));
+                buildingBlocks.put("minecraft:birch_log", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.01,0.1,updateMS));
+                buildingBlocks.put("minecraft:jungle_log", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.01,0.1,updateMS));
+                buildingBlocks.put("minecraft:acacia_log", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.01,0.1,updateMS));
+                buildingBlocks.put("minecraft:dark_oak_log", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.01,0.1,updateMS));
+                buildingBlocks.put("minecraft:sand", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01,0.1,updateMS));
+                buildingBlocks.put("minecraft:dirt", new ServerTradingBotFactory.DefaultBotSettings((int)(3*priceScale),0.01,0.05,updateMS));
+                buildingBlocks.put("minecraft:gravel", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01,0.1,updateMS));
+                buildingBlocks.put("minecraft:clay_ball", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01,0.1,updateMS));
+                buildingBlocks.put("minecraft:stone", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01,0.1,updateMS));
+                buildingBlocks.put("minecraft:obsidian", new ServerTradingBotFactory.DefaultBotSettings((int)(20*priceScale),0.01,0.1,updateMS));
+                buildingBlocks.put("minecraft:glass", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01,0.1,updateMS));
+                StockMarketDataHandler.saveDefaultBotSettings(buildingBlocks, "BuildingBlocks.json");
+
+                // Foods
+                Map<String, ServerTradingBotFactory.DefaultBotSettings> food = new HashMap<>();
+                food.put("minecraft:apple", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01,volatility,updateMS));
+                food.put("minecraft:cooked_beef", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.01,volatility,updateMS));
+                food.put("minecraft:cooked_porkchop", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.01,volatility,updateMS));
+                food.put("minecraft:cooked_chicken", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.01,volatility,updateMS));
+                food.put("minecraft:cooked_mutton", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.01,volatility,updateMS));
+                food.put("minecraft:cooked_rabbit", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.01,volatility,updateMS));
+                food.put("minecraft:bread", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01,volatility,updateMS));
+                food.put("minecraft:carrot", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01,volatility,updateMS));
+                food.put("minecraft:potato", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01,volatility,updateMS));
+                food.put("minecraft:beetroot", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01,volatility,updateMS));
+                food.put("minecraft:melon_slice", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01,volatility,updateMS));
+                food.put("minecraft:pumpkin_pie", new ServerTradingBotFactory.DefaultBotSettings((int)(10*priceScale),0.01,volatility,updateMS));
+                food.put("minecraft:cookie", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01,volatility,updateMS));
+                food.put("minecraft:sweet_berries", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01,volatility,updateMS));
+                food.put("minecraft:cake", new ServerTradingBotFactory.DefaultBotSettings((int)(20*priceScale),0.01,volatility,updateMS));
+                food.put("minecraft:chorus_fruit", new ServerTradingBotFactory.DefaultBotSettings((int)(20*priceScale),0.01,volatility,updateMS));
+                StockMarketDataHandler.saveDefaultBotSettings(food, "Food.json");
+
+                // misc
+                Map<String, ServerTradingBotFactory.DefaultBotSettings> misc = new HashMap<>();
+                misc.put("minecraft:bone", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01,volatility,updateMS));
+                misc.put("minecraft:gunpowder", new ServerTradingBotFactory.DefaultBotSettings((int)(5*priceScale),0.01,volatility,updateMS));
+                misc.put("minecraft:ender_pearl", new ServerTradingBotFactory.DefaultBotSettings((int)(50*priceScale),0.01,volatility,updateMS));
+                misc.put("minecraft:blaze_rod", new ServerTradingBotFactory.DefaultBotSettings((int)(20*priceScale),0.01,volatility,updateMS));
+                misc.put("minecraft:ghast_tear", new ServerTradingBotFactory.DefaultBotSettings((int)(100*priceScale),0.01,volatility,updateMS));
+                misc.put("minecraft:elytra", new ServerTradingBotFactory.DefaultBotSettings((int)(5000*priceScale),0.01,volatility,updateMS).setVolumeSpread(100).setPid_iBound(10));
+                StockMarketDataHandler.saveDefaultBotSettings(misc, "Misc.json");
+
+                allSettigns = StockMarketDataHandler.loadDefaultBotSettings();
+            }
+            for(Map.Entry<String, ServerTradingBotFactory.DefaultBotSettings> entry : allSettigns.entrySet())
+            {
+                ServerTradingBotFactory.botTableBuilder(botBuilder, entry.getKey(), entry.getValue());
+            }
+            return botBuilder;
+        }
+        public static ServerTradingBotFactory.BotBuilderContainer getBotBuilder(String item)
+        {
+            return getBotBuilder().get(item);
+        }
+    }*/
+
+}

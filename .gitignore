@@ -20,6 +20,14 @@ build
 # other
 eclipse
 run
+.architectury-transformer
 
 # Files from Forge MDK
 forge*changelog.txt
+
+*.bat
+
+.claude
+CLAUDE.md
+
+graphify-out/

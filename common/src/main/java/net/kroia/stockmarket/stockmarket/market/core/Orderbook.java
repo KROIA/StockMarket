@@ -1,0 +1,727 @@
+package net.kroia.stockmarket.stockmarket.market.core;
+
+import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.persistence.ServerSaveable;
+import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.stockmarket.market.core.order.Order;
+import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.util.Tuple;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.PriorityQueue;
+import java.util.function.Consumer;
+import java.util.function.Function;
+
+public class Orderbook implements ServerSaveable
+{
+    private static StockMarketModBackend.ServerInstances BACKEND_INSTANCES;
+    public static void setBackend(StockMarketModBackend.ServerInstances backend) {
+        BACKEND_INSTANCES = backend;
+        VirtualOrderbook.setBackend(backend);
+    }
+    public static class LongPair {
+        public long first;
+        public long second;
+    }
+
+    private static final int TIMEOUT_COUNT = 10000;
+
+
+
+
+    private final ItemID itemID;
+    private long currentMarketPrice = 0;
+
+    private final VirtualOrderbook virtualOrderbook;
+    private final PriorityQueue<Order>  buyLimitOrders = new PriorityQueue<>((o1, o2) -> Long.compare(o2.getStartPrice(), o1.getStartPrice()));
+    private final PriorityQueue<Order> sellLimitOrders = new PriorityQueue<>(Comparator.comparingLong(Order::getStartPrice));
+
+
+    private final @NotNull Consumer<Order> consumedOrderCallback;
+    private final @NotNull Consumer<Order> cancelOrderCallback;
+
+    public Orderbook(@NotNull ItemID id,
+                     @NotNull Consumer<Order> consumedOrderCallback,
+                     @NotNull Consumer<Order> cancelOrderCallback,
+                     @Nullable Function<Long, Float> volumeProvider)
+    {
+        this.itemID = id;
+        this.consumedOrderCallback = consumedOrderCallback;
+        this.cancelOrderCallback = cancelOrderCallback;
+        this.virtualOrderbook = new VirtualOrderbook();
+        this.virtualOrderbook.setDefaultVolumeProvider(volumeProvider);
+    }
+
+    //public void setDefaultVolumeProvider(@Nullable Function<Long, Float> volumeProvider)
+    //{
+    //    virtualOrderbook.setDefaultVolumeProvider(volumeProvider);
+    //}
+    public void resetVirtualVolumeDistribution()
+    {
+        virtualOrderbook.resetVolumeDistribution();
+    }
+
+    /**
+     * Zeroes the virtual orderbook AND enables sticky-clear so any future array shift
+     * also fills with zero. See {@link VirtualOrderbook#clearVolume()}.
+     */
+    public void clearVirtualVolume()
+    {
+        virtualOrderbook.clearVolume();
+    }
+
+    /**
+     * Direct setter for the sticky-clear flag on the underlying {@link VirtualOrderbook}.
+     * Used by ServerMarket to re-sync the flag after loading persisted settings.
+     */
+    public void setVirtualCleared(boolean cleared)
+    {
+        virtualOrderbook.setCleared(cleared);
+    }
+
+    /**
+     * Direct setter for the runtime "disabled" flag on the underlying {@link VirtualOrderbook}.
+     * Used by ServerMarket to keep the source-gated flag in sync with
+     * {@link net.kroia.stockmarket.stockmarket.market.MarketSettings#virtualOrderbookEnabled}.
+     * When disabled, every VO read returns 0 and every write is dropped.
+     */
+    public void setVirtualDisabled(boolean disabled)
+    {
+        virtualOrderbook.setDisabled(disabled);
+    }
+
+    public void setCurrentMarketPrice(long currentMarketPrice)
+    {
+        this.currentMarketPrice = currentMarketPrice;
+        virtualOrderbook.setCurrentMarketPrice(currentMarketPrice);
+    }
+
+    public boolean putOrder(Order order)
+    {
+        if(order.isBuyOrder())
+        {
+            buyLimitOrders.add(order);
+        }
+        else
+        {
+            sellLimitOrders.add(order);
+        }
+        return true;
+    }
+    public PriorityQueue<Order> getBuyLimitOrders()
+    {
+        return buyLimitOrders;
+    }
+    public PriorityQueue<Order> getSellLimitOrders()
+    {
+        return sellLimitOrders;
+    }
+    public void clear()
+    {
+        buyLimitOrders.clear();
+        sellLimitOrders.clear();
+    }
+
+
+
+
+    public long getRawVolume(long price)
+    {
+        long volume = (long)virtualOrderbook.getVolume(price);
+
+        // PriorityQueue iterator does NOT traverse in priority order — must scan all orders.
+        if(currentMarketPrice > price) {
+            for(Order order : buyLimitOrders)
+            {
+                if(order.getStartPrice() == price) {
+                    volume += order.getRemainingVolume();
+                }
+            }
+        }
+        else if(currentMarketPrice < price){
+            for (Order order : sellLimitOrders) {
+                if (order.getStartPrice() == price) {
+                    volume += order.getRemainingVolume();
+                }
+            }
+        }
+        else
+        {
+            // Can be a sell or a buy order, laying exactly on the current price
+            for (Order order : sellLimitOrders)
+            {
+                if(order.getStartPrice() == price) {
+                    volume += order.getRemainingVolume();
+                }
+            }
+            for (Order order : buyLimitOrders)
+            {
+                if(order.getStartPrice() == price) {
+                    volume += order.getRemainingVolume();
+                }
+            }
+        }
+        return volume;
+    }
+    public long getRawVolumeRounded(long price)
+    {
+        long volume = virtualOrderbook.roundConservative(virtualOrderbook.getVolume(price));
+        // PriorityQueue iterator does NOT traverse in priority order — must scan all orders.
+        if(currentMarketPrice > price) {
+            for(Order order : buyLimitOrders)
+            {
+                if(order.getStartPrice() == price) {
+                    volume += order.getRemainingVolume();
+                }
+            }
+        }
+        else if(currentMarketPrice < price){
+            for (Order order : sellLimitOrders) {
+                if (order.getStartPrice() == price) {
+                    volume += order.getRemainingVolume();
+                }
+            }
+        }
+        else
+        {
+            // Can be a sell or a buy order, laying exactly on the current price
+            for (Order order : sellLimitOrders)
+            {
+                if(order.getStartPrice() == price) {
+                    volume += order.getRemainingVolume();
+                }
+            }
+            for (Order order : buyLimitOrders)
+            {
+                if(order.getStartPrice() == price) {
+                    volume += order.getRemainingVolume();
+                }
+            }
+        }
+        return volume;
+    }
+    public float getRealVolumeRounded(double realPrice)
+    {
+        long rawPrice = MarketManager.convertToRawAmountStatic(realPrice);
+        return (float)MarketManager.convertToRealAmountStatic(getRawVolumeRounded(rawPrice));
+    }
+
+    public float getRawVirtualVolume(long rawPrice)
+    {
+        return virtualOrderbook.getVolume(rawPrice);
+    }
+    public long getRawVirtualVolumeRounded(long rawPrice)
+    {
+        return virtualOrderbook.roundConservative(getRawVirtualVolume(rawPrice));
+    }
+
+
+    public long getRawVolume(long startPrice, long endPrice)
+    {
+        //float volume = virtualOrderbook.getVolume(startPrice, endPrice); // = virtualOrderbook.getVolume(price);
+        float volume = virtualOrderbook.getVolumeInterpolated(startPrice, endPrice, 10); // = virtualOrderbook.getVolume(price);
+        // PriorityQueue iterator does NOT traverse in priority order — must scan all orders.
+        for(Order order : buyLimitOrders)
+        {
+            long orderPrice = order.getStartPrice();
+            if(orderPrice >= startPrice && orderPrice <= endPrice)
+                volume += order.getRemainingVolume();
+        }
+        for(Order order : sellLimitOrders)
+        {
+            long orderPrice = order.getStartPrice();
+            if(orderPrice >= startPrice && orderPrice <= endPrice)
+                volume += order.getRemainingVolume();
+        }
+        return (long)volume;
+    }
+    /** Like {@link #getRealVolume(double, double)} but only counts virtual depth, not resting limit orders. */
+    public float getRealVirtualVolume(double realStartPrice, double realEndPrice)
+    {
+        long rawStartPrice = MarketManager.convertToRawAmountStatic(realStartPrice);
+        long rawEndPrice = MarketManager.convertToRawAmountStatic(realEndPrice);
+        return (float)MarketManager.convertToRealAmountStatic((long)virtualOrderbook.getVolumeInterpolated(rawStartPrice, rawEndPrice, 10));
+    }
+    public float getRealVolume(double realStartPrice, double realEndPrice)
+    {
+        long rawStartPrice = MarketManager.convertToRawAmountStatic(realStartPrice);
+        long rawEndPrice = MarketManager.convertToRawAmountStatic(realEndPrice);
+        return (float)MarketManager.convertToRealAmountStatic(getRawVolume(rawStartPrice, rawEndPrice));
+    }
+    public long getRawVolumeRounded(long startPrice, long endPrice)
+    {
+        long volume = virtualOrderbook.getVolumeRounded(startPrice, endPrice); // = virtualOrderbook.getVolume(price);
+        // PriorityQueue iterator does NOT traverse in priority order — must scan all orders.
+        for(Order order : buyLimitOrders)
+        {
+            long orderPrice = order.getStartPrice();
+            if(orderPrice >= startPrice && orderPrice <= endPrice)
+                volume += order.getRemainingVolume();
+        }
+        for(Order order : sellLimitOrders)
+        {
+            long orderPrice = order.getStartPrice();
+            if(orderPrice >= startPrice && orderPrice <= endPrice)
+                volume += order.getRemainingVolume();
+        }
+        return volume;
+    }
+    public float getRealVolumeRounded(double realStartPrice, double realEndPrice)
+    {
+        long rawStartPrice = MarketManager.convertToRawAmountStatic(realStartPrice);
+        long rawEndPrice = MarketManager.convertToRawAmountStatic(realEndPrice);
+        return (float)MarketManager.convertToRealAmountStatic(getRawVolumeRounded(rawStartPrice, rawEndPrice));
+    }
+
+    public @NotNull Tuple<@NotNull Double,@NotNull  Double> getEditableRealPriceRange()
+    {
+        if(virtualOrderbook != null)
+        {
+            long minRawPrice = virtualOrderbook.getMinEditablePrice();
+            long maxRawPrice = virtualOrderbook.getMaxEditablePrice();
+            return new Tuple<>(
+                    MarketManager.convertToRealAmountStatic(minRawPrice),
+                    MarketManager.convertToRealAmountStatic(maxRawPrice)
+            );
+        }
+        return new Tuple<>(0.0, 0.0);
+    }
+    public @NotNull Tuple<@NotNull Long,@NotNull  Long> getEditableRawPriceRange()
+    {
+        if(virtualOrderbook != null)
+        {
+            long minRawPrice = virtualOrderbook.getMinEditablePrice();
+            long maxRawPrice = virtualOrderbook.getMaxEditablePrice();
+            return new Tuple<>(
+                    minRawPrice,
+                    maxRawPrice
+            );
+        }
+        return new Tuple<>(0L, 0L);
+    }
+    public void setVirtualOrderbookVolume(double minPrice, double maxPrice, float volume)
+    {
+        if(virtualOrderbook == null)
+            return;
+        long rawMinPrice = MarketManager.convertToRawAmountStatic(minPrice);
+        long rawMaxPrice = MarketManager.convertToRawAmountStatic(maxPrice);
+        long rawVolume = MarketManager.convertToRawAmountStatic(volume);
+        virtualOrderbook.setVolume(rawMinPrice, rawMaxPrice, rawVolume);
+    }
+    public void addVirtualOrderbookVolume(double minPrice, double maxPrice, float volume)
+    {
+        if(virtualOrderbook == null)
+            return;
+        long rawMinPrice = MarketManager.convertToRawAmountStatic(minPrice);
+        long rawMaxPrice = MarketManager.convertToRawAmountStatic(maxPrice);
+        long rawVolume = MarketManager.convertToRawAmountStatic(volume);
+        virtualOrderbook.addVolume(rawMinPrice, rawMaxPrice, rawVolume);
+    }
+    public void setVirtualOrderbookVolume(long backendStartPrice, float[] volume)
+    {
+        if(virtualOrderbook == null)
+            return;
+        virtualOrderbook.setVolume(backendStartPrice, volume);
+    }
+    public void addVirtualOrderbookVolume(long backendStartPrice, float[] volume)
+    {
+        if(virtualOrderbook == null)
+            return;
+        virtualOrderbook.addVolume(backendStartPrice, volume);
+    }
+    
+    
+
+    /**
+     * Retains the money-value of the volume at the given price
+     * Calculated using: Floor(volume * price)
+     * @param price
+     * @return money
+     */
+    public float getRawCapital(long price)
+    {
+        float volume = getRawVolume(price);
+        return volume * price;
+    }
+    public long getRawCapitalRounded(long price)
+    {
+        long volume = virtualOrderbook.roundConservative(getRawVolume(price));
+        return volume * price;
+    }
+
+
+    public float getCapital(long startPrice, long endPrice)
+    {
+        float capital = virtualOrderbook.getCapital(startPrice, endPrice); // = virtualOrderbook.getVolume(price);
+        // PriorityQueue iterator does NOT traverse in priority order — must scan all orders.
+        for(Order order : buyLimitOrders)
+        {
+            long orderPrice = order.getStartPrice();
+            if(orderPrice >= startPrice && orderPrice <= endPrice)
+                capital += order.getRemainingVolume() * orderPrice;
+        }
+        for(Order order : sellLimitOrders)
+        {
+            long orderPrice = order.getStartPrice();
+            if(orderPrice >= startPrice && orderPrice <= endPrice)
+                capital += order.getRemainingVolume() * orderPrice;
+        }
+        return capital;
+    }
+    public long getCapitalRounded(long startPrice, long endPrice)
+    {
+        long volume = virtualOrderbook.getCapitalRounded(startPrice, endPrice); // = virtualOrderbook.getVolume(price);
+        // PriorityQueue iterator does NOT traverse in priority order — must scan all orders.
+        for(Order order : buyLimitOrders)
+        {
+            long orderPrice = order.getStartPrice();
+            if(orderPrice >= startPrice && orderPrice <= endPrice)
+                volume += order.getRemainingVolume() *  orderPrice;
+        }
+        for(Order order : sellLimitOrders)
+        {
+            long orderPrice = order.getStartPrice();
+            if(orderPrice >= startPrice && orderPrice <= endPrice)
+                volume += order.getRemainingVolume() *  orderPrice;
+        }
+        return volume;
+    }
+
+
+    /**
+     * Returns the stockmarket price that will be if the given volume gets
+     * consumed by the order.
+     * @param volume can be positive for consuming the sell order
+     *               can be negative for consuming the buy order
+     * @param resultOut a pair object, who's elements are filled by the function call
+     *                  resultOut.first contains the new stockmarket price
+     *                  resultOut.second contains the amount of money that would flow out or into the stockmarket.
+     *                                   For positive volume -> consuming sell order -> resultOut.second is negative.
+     *                                   For negative volume -> consuming buy order -> resultOut.second is positive.
+     * @return true if success
+     *         false if run into a timeout, meaning there is not enough volume to consume without increasing the
+     *               price too much
+     */
+    public boolean getPriceWhenConsumingVolume(long volume, @NotNull LongPair resultOut)
+    {
+        long newMarketPrice = currentMarketPrice;
+        long transferedMoney = 0;
+        int timeoutCount = TIMEOUT_COUNT; // If it runs into that timeout level
+                                          // It means that the price would move by this amount and more to fill the volume
+                                          // If that is legit, increase this value to not encounter problems.
+
+
+        if(volume > 0)
+        {
+            // Consuming the sell order -> moving price up
+
+            // max only necessary for the current stockmarket price since there can be a sell and a buy order
+            // We only want sell order
+            // Flipping the orderbook volume to be positive for easy comparison with the function
+            // provided volume variable
+            long currentVolume = Math.max(0, -getRawVolumeRounded(newMarketPrice));
+            do
+            {
+                if(currentVolume >= volume)
+                {
+                    // Can be fully consumed at this price level
+                    transferedMoney -= volume * newMarketPrice;
+                    resultOut.first = newMarketPrice;
+                    resultOut.second = transferedMoney;
+                    return true;
+                }
+                else
+                {
+                    // Fully consume the available stockmarket volume
+                    transferedMoney -= currentVolume * newMarketPrice;
+                    volume -= currentVolume;
+                    newMarketPrice++;
+                }
+                timeoutCount--;
+                currentVolume = -getRawVolumeRounded(newMarketPrice);
+            }while(timeoutCount > 0);
+        }
+        else
+        {
+            // Consuming the buy order -> moving price down
+            // Flipping the orderbook volume to be negatice for easy comparison with the function
+            // provided volume variable
+            long currentVolume = Math.min(0, -getRawVolumeRounded(newMarketPrice));
+            do
+            {
+                if(currentVolume <= volume)
+                {
+                    // Can be fully consumed
+                    transferedMoney -= volume * newMarketPrice;
+                    resultOut.first = newMarketPrice;
+                    resultOut.second = transferedMoney;
+                    return true;
+                }
+                else
+                {
+                    // Fully consume the available stockmarket volume
+                    transferedMoney -= currentVolume * newMarketPrice;
+                    volume -= currentVolume;
+                    newMarketPrice--;
+                }
+                timeoutCount--;
+                currentVolume = -getRawVolumeRounded(newMarketPrice);
+            }while(timeoutCount > 0);
+        }
+
+        warn("Timeout reached on function call: getPriceWhenConsumingVolume("+volume+")");
+        resultOut.first = currentMarketPrice;
+        resultOut.second = 0;
+        return false;
+    }
+
+
+
+    public List<Order> getBuyOrders()
+    {
+        return new ArrayList<>(buyLimitOrders);
+    }
+    public List<Order> getSellOrders()
+    {
+        return new ArrayList<>(sellLimitOrders);
+    }
+    public List<Order> getLimitOrders()
+    {
+        List<Order> orders = new ArrayList<>(buyLimitOrders);
+        orders.addAll(sellLimitOrders);
+        return orders;
+    }
+    public List<Order> getBuyOrders(long startPrice, long endPrice)
+    {
+        List<Order> orders = new ArrayList<>();
+        for(Order order : buyLimitOrders)
+        {
+            long orderPrice = order.getStartPrice();
+            if(startPrice <= orderPrice && orderPrice <= endPrice)
+                orders.add(order);
+        }
+        return orders;
+    }
+
+    public List<Order> getSellOrders(long startPrice, long endPrice)
+    {
+        List<Order> orders = new ArrayList<>();
+        for(Order order : sellLimitOrders)
+        {
+            long orderPrice = order.getStartPrice();
+            if(startPrice <= orderPrice && orderPrice <= endPrice)
+                orders.add(order);
+        }
+        return orders;
+    }
+
+
+    public long fillVirtual(long price, long volume)
+    {
+        long currentVolume = virtualOrderbook.getVolumeRounded(price, price);
+        if(currentVolume > 0 && volume < 0)
+        {
+            long newVolume = currentVolume + volume;
+            if(newVolume < 0)
+                newVolume = 0;
+
+            virtualOrderbook.setVolume(price, newVolume);
+            return newVolume - currentVolume;
+        }
+        else if(currentVolume < 0 && volume > 0)
+        {
+            long newVolume = currentVolume + volume;
+            if(newVolume > 0)
+                newVolume = 0;
+
+            virtualOrderbook.setVolume(price, newVolume);
+            return newVolume - currentVolume;
+        }
+        return 0;
+    }
+
+
+    public boolean removeOrder(Order order)
+    {
+        if(order.isBuyOrder())
+            return buyLimitOrders.remove(order);
+        else
+            return sellLimitOrders.remove(order);
+    }
+    /*public long fillVolume(long price, long volume)
+    {
+        if(volume > 0)
+        {
+            // use positive volume
+            List<Order> order = getSellOrders(price, price);
+            for(Order order : order)
+            {
+                long pendingVolume = order.getRemainingVolume(); // negative value
+                long newPendingVolume = pendingVolume + volume;
+                if(pendingVolume * newPendingVolume >= 0)
+                {
+                    // Same sign
+
+                }
+            }
+        }
+    }*/
+
+    /*public long fillVolume(long volume)
+    {
+        long marketPrice = currentMarketPrice;
+        if(volume > 0)
+        {
+            // fill sell order
+            int timeout = TIMEOUT_COUNT;
+            do {
+                List<Order> order = getSellOrders(marketPrice, marketPrice);
+                for(Order order : order)
+                {
+
+                }
+
+
+                timeout--;
+            }while(timeout > 0);
+        }
+        else
+        {
+
+        }
+        return marketPrice;
+    }*/
+
+
+
+    @Override
+    public boolean save(CompoundTag tag) {
+        boolean success = true;
+        CompoundTag virtualOrderbookTag = new CompoundTag();
+        success &= virtualOrderbook.save(virtualOrderbookTag);
+        tag.put("virtualOrderbook", virtualOrderbookTag);
+
+        ListTag buyLimitOrdersTag = new ListTag();
+        for(Order order : this.buyLimitOrders)
+        {
+            CompoundTag buyLimitOrderTag = new CompoundTag();
+            if(order.save(buyLimitOrderTag)){
+                buyLimitOrdersTag.add(buyLimitOrderTag);
+            }
+            else  {
+                error(String.format("Can't save order %s", order));
+                success = false;
+            }
+        }
+        tag.put("buyLimitOrders", buyLimitOrdersTag);
+
+
+        ListTag sellLimitOrdersTag = new ListTag();
+        for(Order order : this.sellLimitOrders)
+        {
+            CompoundTag sellLimitOrderTag = new CompoundTag();
+            if(order.save(sellLimitOrderTag)){
+                sellLimitOrdersTag.add(sellLimitOrderTag);
+            }
+            else  {
+                error(String.format("Can't save order %s", order));
+            }
+        }
+        tag.put("sellLimitOrders", sellLimitOrdersTag);
+
+        return success;
+    }
+
+    @Override
+    public boolean load(CompoundTag tag) {
+        boolean success = true;
+
+        if(tag.contains("virtualOrderbook"))
+        {
+            CompoundTag virtualOrderbookTag = tag.getCompound("virtualOrderbook");
+            success &= virtualOrderbook.load(virtualOrderbookTag);
+        }
+        else
+        {
+            success = false;
+            error("Can't load Orderbook from NBT tag");
+        }
+
+
+        buyLimitOrders.clear();
+        if(tag.contains("buyLimitOrders"))
+        {
+
+            ListTag buyLimitOrdersTag = tag.getList("buyLimitOrders", CompoundTag.TAG_COMPOUND);
+            for(int i = 0; i < buyLimitOrdersTag.size(); i++)
+            {
+                CompoundTag buyLimitOrderTag = buyLimitOrdersTag.getCompound(i);
+                Order order = Order.createFromNBT(buyLimitOrderTag);
+                if(order != null)
+                {
+                    buyLimitOrders.add(order);
+                }
+                else
+                {
+                    error(String.format("Can't load buyLimitOrder [%s] from tag  %s", i, buyLimitOrderTag));
+                    success = false;
+                }
+            }
+        }
+
+        sellLimitOrders.clear();
+        if(tag.contains("sellLimitOrders"))
+        {
+
+            ListTag sellLimitOrdersTag =  tag.getList("sellLimitOrders", CompoundTag.TAG_COMPOUND);
+            for(int i = 0; i < sellLimitOrdersTag.size(); i++)
+            {
+                CompoundTag sellLimitOrderTag = sellLimitOrdersTag.getCompound(i);
+                Order order = Order.createFromNBT(sellLimitOrderTag);
+                if(order != null)
+                {
+                    sellLimitOrders.add(order);
+                }
+                else
+                {
+                    error(String.format("Can't load sellLimitOrder [%s] from tag  %s", i, sellLimitOrderTag));
+                    success = false;
+                }
+            }
+        }
+        return success;
+    }
+
+
+
+    private void orderConsumed(Order order)
+    {
+        consumedOrderCallback.accept(order);
+    }
+    private void orderCanceled(Order order)
+    {
+        cancelOrderCallback.accept(order);
+    }
+
+    protected void info(String message) {
+        BACKEND_INSTANCES.LOGGER.info("[Orderbook:"+itemID+"]: "+message);
+    }
+    protected void error(String message) {
+        BACKEND_INSTANCES.LOGGER.error("[Orderbook:"+itemID+"]: "+message);
+    }
+    protected void error(String message, Throwable throwable) {
+        BACKEND_INSTANCES.LOGGER.error("[Orderbook]: "+message, throwable);
+    }
+    protected void warn(String message) {
+        BACKEND_INSTANCES.LOGGER.warn("[Orderbook:"+itemID+"]: "+message);
+    }
+    protected void debug(String message) {
+        BACKEND_INSTANCES.LOGGER.debug("[Orderbook:"+itemID+"]: "+message);
+    }
+}
