@@ -36,6 +36,7 @@ import net.kroia.stockmarket.testing.tests.OrderRecordManagerTestSuite;
 import net.kroia.stockmarket.testing.tests.OrderTestSuite;
 import net.kroia.stockmarket.testing.tests.OrderbookTestSuite;
 import net.kroia.stockmarket.testing.tests.PIDTestSuite;
+import net.kroia.stockmarket.testing.tests.PlaceholderNamingTestSuite;
 import net.kroia.stockmarket.testing.tests.PluginTestSuite;
 import net.kroia.stockmarket.testing.tests.PriceHistoryCacheTestSuite;
 import net.kroia.stockmarket.testing.tests.PriceHistoryTestSuite;
@@ -95,6 +96,7 @@ public class StockMarketTestRegistration {
         TestRegistry.register(new NewsRegistryTestSuite());
         TestRegistry.register(new NewsRequirementTestSuite());
         TestRegistry.register(new NewsChainsTestSuite());
+        TestRegistry.register(new PlaceholderNamingTestSuite());
 
         // New master-only test suites
         TestRegistry.register(new MatchingEngineTestSuite());
