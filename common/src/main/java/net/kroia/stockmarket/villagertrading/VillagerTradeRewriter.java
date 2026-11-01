@@ -142,10 +142,10 @@ public final class VillagerTradeRewriter {
      * @param savedData the sidecar store
      * @param table     the current price table (non-null)
      */
-    static void processVillager(AbstractVillager villager, VillagerTradeSavedData savedData,
+    static void processVillager(AbstractVillager villager, VillagerTradeData savedData,
                                 VillagerTradePriceTable table) {
         MerchantOffers offers = villager.getOffers(); // server-side lazy generation happens here
-        VillagerTradeSavedData.VillagerEntry entry = savedData.getEntry(villager.getUUID());
+        VillagerTradeData.VillagerEntry entry = savedData.getEntry(villager.getUUID());
 
         if (!table.enabled()) {
             // Feature disabled (or currency unresolvable): lazily restore this
@@ -166,7 +166,7 @@ public final class VillagerTradeRewriter {
             entry = savedData.getOrCreateEntry(villager.getUUID(), nowGameTime);
         }
 
-        VillagerTradeSavedData.VillagerEntry finalEntry = entry;
+        VillagerTradeData.VillagerEntry finalEntry = entry;
         boolean changed = processOffers(offers, entry, table, tableLookup(table),
                 offerIndex -> StockMarketMod.LOGGER.warn(
                         "[VillagerTradeRewriter] Offer " + offerIndex + " of villager " + villager.getUUID()
@@ -202,7 +202,7 @@ public final class VillagerTradeRewriter {
      * @param clampCallback fired once per newly clamped offer index; may be {@code null}
      * @return {@code true} when any offer was rewritten or restored
      */
-    public static boolean processOffers(MerchantOffers offers, VillagerTradeSavedData.VillagerEntry entry,
+    public static boolean processOffers(MerchantOffers offers, VillagerTradeData.VillagerEntry entry,
                                         VillagerTradePriceTable table, ToLongFunction<ItemStack> priceLookup,
                                         @Nullable ClampCallback clampCallback) {
         // Another mod removed offers → realign by truncating the snapshot list.
@@ -218,9 +218,9 @@ public final class VillagerTradeRewriter {
             MerchantOffer live = offers.get(i);
             if (classify(live, table.currency()) != OfferKind.PASS) {
                 // Not rewritten yet — the live offer is still the emerald form.
-                entry.append(new VillagerTradeSavedData.OriginalOffer(live.copy(), false));
+                entry.append(new VillagerTradeData.OriginalOffer(live.copy(), false));
             } else {
-                entry.append(VillagerTradeSavedData.OriginalOffer.PASSTHROUGH);
+                entry.append(VillagerTradeData.OriginalOffer.PASSTHROUGH);
             }
             tailAppended = true;
         }
@@ -233,7 +233,7 @@ public final class VillagerTradeRewriter {
 
         boolean changed = false;
         for (int i = 0; i < entry.size(); i++) {
-            VillagerTradeSavedData.OriginalOffer original = entry.get(i);
+            VillagerTradeData.OriginalOffer original = entry.get(i);
             if (original.isPassthrough()) {
                 continue;
             }
@@ -271,10 +271,10 @@ public final class VillagerTradeRewriter {
      * @param offers the villager's live offer list (mutated in place)
      * @param entry  the villager's sidecar entry
      */
-    public static void restoreAll(MerchantOffers offers, VillagerTradeSavedData.VillagerEntry entry) {
+    public static void restoreAll(MerchantOffers offers, VillagerTradeData.VillagerEntry entry) {
         int count = Math.min(offers.size(), entry.size());
         for (int i = 0; i < count; i++) {
-            VillagerTradeSavedData.OriginalOffer original = entry.get(i);
+            VillagerTradeData.OriginalOffer original = entry.get(i);
             // Only offers currently in currency form need restoring — snapshots
             // that were never (or are no longer) rewritten are already emerald.
             if (original.isPassthrough() || !original.isRewritten()) {

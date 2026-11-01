@@ -1,15 +1,25 @@
 package net.kroia.stockmarket.villagertrading;
 
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.NbtCompat;
+import net.kroia.modutilities.persistence.DataPersistence;
+import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.api.marketmanager.ISyncServerMarketManager;
+import net.kroia.stockmarket.data.DataManager;
 import net.kroia.stockmarket.networking.packet.VillagerTradePriceTablePacket;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.storage.LevelResource;
 import org.jetbrains.annotations.Nullable;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -29,8 +39,12 @@ import java.util.Map;
  * packet may arrive off the main thread while the rewriter reads on the main
  * thread).
  * <p>
- * Also owns access to the {@link VillagerTradeSavedData} sidecar (with a
- * one-time stale-entry prune per server lifetime).
+ * Also owns the {@link VillagerTradeData} sidecar and its file
+ * {@code <world>/data/StockMarket/villager_trades.nbt} (compressed NBT in the
+ * DataManager folder). Unlike the master-only DataManager files it is kept on
+ * master <b>and</b> slave servers, since every server rewrites its own villagers.
+ * Loaded on server start ({@link #load}), saved with the other StockMarket data
+ * ({@link #save}), with a one-time stale-entry prune per server lifetime.
  */
 public class VillagerTradeManager {
 
@@ -48,6 +62,19 @@ public class VillagerTradeManager {
 
     /** One-time prune of stale sidecar entries per server lifetime. */
     private boolean savedDataPruned = false;
+
+    /** Sidecar file name inside the DataManager folder {@code <world>/data/StockMarket/}. */
+    public static final String DATA_FILE = "villager_trades.nbt";
+
+    /** File of releases up to 2.1.x (vanilla SavedData in {@code <world>/data/}); migrated once. */
+    private static final String LEGACY_FILE = "stockmarket_villager_trades.dat";
+
+    /** File access in the DataManager folder, same format (compressed NBT) as the DataManager files. */
+    private final DataPersistence persistence = new DataPersistence(
+            DataPersistence.JsonFormat.PRETTY, DataPersistence.NbtFormat.COMPRESSED, DataManager.BASE_PATH);
+
+    /** The loaded sidecar; {@code null} until {@link #load} ran. */
+    private @Nullable VillagerTradeData savedData = null;
 
     /** Warn only once when the configured currency cannot be resolved. */
     private boolean warnedCurrencyUnresolvable = false;
@@ -169,12 +196,115 @@ public class VillagerTradeManager {
      * @param server the running server
      * @return the sidecar
      */
-    public VillagerTradeSavedData getSavedData(MinecraftServer server) {
-        VillagerTradeSavedData savedData = VillagerTradeSavedData.get(server);
+    public VillagerTradeData getSavedData(MinecraftServer server) {
+        if (savedData == null) {
+            load(server);
+        }
         if (!savedDataPruned) {
             savedDataPruned = true;
             savedData.pruneStale(server.overworld().getGameTime());
         }
         return savedData;
+    }
+
+    /**
+     * Loads the sidecar from {@code <world>/data/StockMarket/villager_trades.nbt},
+     * after moving a pre-2.2.0 file there once (see {@link #migrateLegacyFile}).
+     * A missing or unreadable file yields an empty sidecar.
+     *
+     * @param server the starting server (master or slave)
+     */
+    public void load(MinecraftServer server) {
+        Path file = dataFile(server);
+        StockMarketMod.LOGGER.info("[VillagerTradeManager] Villager trade data file: {}", file.toAbsolutePath().normalize());
+        migrateLegacyFile(server.getWorldPath(LevelResource.ROOT), file);
+        CompoundTag tag = Files.exists(file) ? persistence.readDataCompound(file) : null;
+        savedData = tag != null ? VillagerTradeData.load(tag, server.registryAccess()) : new VillagerTradeData();
+        savedDataPruned = false;
+    }
+
+    /**
+     * Writes the sidecar if it changed, atomically (temp file, then move).
+     * Called wherever the other StockMarket data is saved.
+     *
+     * @param server the running server (master or slave)
+     */
+    public void save(MinecraftServer server) {
+        VillagerTradeData data = savedData;
+        if (data == null || !data.isDirty()) {
+            return;
+        }
+        if (writeAtomic(dataFile(server), data.save(new CompoundTag(), server.registryAccess()))) {
+            data.clearDirty();
+        }
+    }
+
+    /**
+     * @param server the running server
+     * @return the absolute sidecar file path inside the server's world
+     */
+    private Path dataFile(MinecraftServer server) {
+        persistence.setLevelSavePath(server.getWorldPath(LevelResource.ROOT));
+        return persistence.getAbsoluteSavePath(DATA_FILE);
+    }
+
+    /**
+     * Writes {@code tag} to a temp file next to {@code target}, then moves it over the target.
+     *
+     * @param target the file to write
+     * @param tag    the content
+     * @return {@code true} on success; failures are logged and leave the previous file untouched
+     */
+    private boolean writeAtomic(Path target, CompoundTag tag) {
+        Path temp = target.resolveSibling(target.getFileName() + ".tmp");
+        try {
+            Files.createDirectories(target.getParent());
+            if (!persistence.saveDataCompound(temp, tag)) {
+                throw new IOException("could not write " + temp);
+            }
+            Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            return true;
+        } catch (IOException e) {
+            StockMarketMod.LOGGER.error("[VillagerTradeManager] Failed to save villager trade data to {}", target, e);
+            return false;
+        }
+    }
+
+    /**
+     * One-time move of the villager trade file of releases up to 2.1.x. Those used vanilla
+     * SavedData at {@code <world>/data/stockmarket_villager_trades.dat}: a gzip NBT whose
+     * {@code data} compound has the same format as {@link #DATA_FILE}. Minecraft 26.1's world
+     * upgrade leaves that file where it is; the {@code data/minecraft/} candidate covers a vanilla
+     * move into the namespaced folder. Only runs while {@code target} is missing, never overwrites,
+     * and keeps the old file when reading or writing fails.
+     *
+     * @param world  the world root folder
+     * @param target the new sidecar file
+     */
+    private void migrateLegacyFile(Path world, Path target) {
+        if (Files.exists(target)) {
+            return;
+        }
+        Path[] candidates = {
+                world.resolve("data").resolve(LEGACY_FILE),
+                world.resolve("data").resolve("minecraft").resolve(LEGACY_FILE), // mc>=26.1
+        };
+        for (Path source : candidates) {
+            if (!Files.isRegularFile(source)) {
+                continue;
+            }
+            CompoundTag root = persistence.readDataCompound(source);
+            if (root == null || !writeAtomic(target, NbtCompat.getCompound(root, "data"))) {
+                StockMarketMod.LOGGER.error("[VillagerTradeManager] Could not migrate villager trade data from {}; the old file is kept", source);
+                return;
+            }
+            try {
+                Files.delete(source);
+            } catch (IOException e) {
+                StockMarketMod.LOGGER.error("[VillagerTradeManager] Migrated villager trade data, but could not delete the old file {}", source, e);
+            }
+            StockMarketMod.LOGGER.info("[VillagerTradeManager] Migrated villager trade data from {} to {}", source, target);
+            return;
+        }
     }
 }
