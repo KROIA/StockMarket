@@ -4,7 +4,8 @@ import net.kroia.modutilities.RegistryCompat;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.minecraft.item.StockMarketCreativeModeTab;
 import net.kroia.stockmarket.util.StockMarketClientHooks;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+//import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.world.InteractionHand;
 //import net.minecraft.world.InteractionResultHolder; // mc<=1.21.1
 import net.minecraft.world.InteractionResult; // mc>=1.21.2
@@ -35,7 +36,8 @@ public class NewspaperItem extends Item {
     public NewspaperItem() {
         // RegistryCompat: no-op on 1.21.1, applies setId on 1.21.2+ (id must match the registration name)
         super(RegistryCompat.itemProperties(new Properties().arch$tab(StockMarketCreativeModeTab.STOCK_MARKET_TAB),
-                ResourceLocation.fromNamespaceAndPath(StockMarketMod.MOD_ID, NAME)));
+                ResourceLocation.fromNamespaceAndPath(StockMarketMod.MOD_ID, NAME))); // mc<=1.21.10
+                //Identifier.fromNamespaceAndPath(StockMarketMod.MOD_ID, NAME))); // mc>=1.21.11
     }
 
     /**

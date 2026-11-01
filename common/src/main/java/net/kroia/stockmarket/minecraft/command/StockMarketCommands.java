@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.minecraft.command;
 
+import net.kroia.modutilities.PermissionCompat;
 import com.google.gson.JsonObject;
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
@@ -106,7 +107,7 @@ public class StockMarketCommands {
 
         dispatcher.register(Commands.literal("stockmarket")
                 .then(Commands.literal("op")
-                        .requires(source -> source.hasPermission(2)) // Admin-only
+                        .requires(source -> PermissionCompat.hasPermission(source, 2)) // Admin-only
                         .executes(context -> {
                             CommandSourceStack source = context.getSource();
                             ServerPlayer player = source.getPlayerOrException();
@@ -130,7 +131,7 @@ public class StockMarketCommands {
                         )
                 )
                 .then(Commands.literal("deop")
-                        .requires(source -> source.hasPermission(2)) // Admin-only
+                        .requires(source -> PermissionCompat.hasPermission(source, 2)) // Admin-only
                         .executes(context -> {
                             CommandSourceStack source = context.getSource();
                             ServerPlayer player = source.getPlayerOrException();
@@ -154,7 +155,7 @@ public class StockMarketCommands {
                         )
                 )
                 .then(Commands.literal("manage")
-                        .requires(source -> source.hasPermission(2))
+                        .requires(source -> PermissionCompat.hasPermission(source, 2))
                         .executes(context -> {
                             CommandSourceStack source = context.getSource();
                             ServerPlayer player = source.getPlayerOrException();
@@ -164,7 +165,7 @@ public class StockMarketCommands {
 
                 )
                 .then(Commands.literal("devTestScreen")
-                        .requires(source -> source.hasPermission(2) && StockMarketMod.ENABLE_DEV_FEATURES)
+                        .requires(source -> PermissionCompat.hasPermission(source, 2) && StockMarketMod.ENABLE_DEV_FEATURES)
                         .executes(context -> {
                             CommandSourceStack source = context.getSource();
                             ServerPlayer player = source.getPlayerOrException();
@@ -175,7 +176,7 @@ public class StockMarketCommands {
                 )
                 // Dev-only: export recipe images to PNG files
                 .then(Commands.literal("exportrecipes")
-                        .requires(source -> source.hasPermission(2) && StockMarketMod.ENABLE_DEV_FEATURES)
+                        .requires(source -> PermissionCompat.hasPermission(source, 2) && StockMarketMod.ENABLE_DEV_FEATURES)
                         .executes(context -> {
                             CommandSourceStack source = context.getSource();
                             ServerPlayer player = source.getPlayerOrException();
@@ -204,7 +205,7 @@ public class StockMarketCommands {
                 // captured stack, which is how a preset's display name is represented; without
                 // it the preset keeps the item's normal hover name.
                 .then(Commands.literal("preset")
-                        .requires(source -> source.hasPermission(2)) // Admin-only, like the other management commands
+                        .requires(source -> PermissionCompat.hasPermission(source, 2)) // Admin-only, like the other management commands
                         .then(Commands.literal("add")
                                 .then(Commands.argument("category", StringArgumentType.string())
                                         .suggests((context, builder) -> getPresetCategoryNamesSuggestion(builder))
@@ -253,7 +254,7 @@ public class StockMarketCommands {
                             return Command.SINGLE_SUCCESS;
                         })
                         .then(Commands.literal("reload")
-                                .requires(source -> source.hasPermission(2)) // Admin-only, like preset
+                                .requires(source -> PermissionCompat.hasPermission(source, 2)) // Admin-only, like preset
                                 .executes(context -> {
                                     executeNewsAdminOp(context.getSource(),
                                             NewsAdminRequest.Op.RELOAD, null, null);
@@ -261,7 +262,7 @@ public class StockMarketCommands {
                                 })
                         )
                         .then(Commands.literal("trigger")
-                                .requires(source -> source.hasPermission(2)) // Admin-only, like preset
+                                .requires(source -> PermissionCompat.hasPermission(source, 2)) // Admin-only, like preset
                                 .then(Commands.argument("eventId", StringArgumentType.string())
                                         .suggests((context, builder) -> getNewsEventIdsSuggestion(builder))
                                         .executes(context -> {
@@ -281,7 +282,7 @@ public class StockMarketCommands {
                                 )
                         )
                         .then(Commands.literal("list")
-                                .requires(source -> source.hasPermission(2)) // Admin-only, like preset
+                                .requires(source -> PermissionCompat.hasPermission(source, 2)) // Admin-only, like preset
                                 .executes(context -> {
                                     executeNewsAdminOp(context.getSource(),
                                             NewsAdminRequest.Op.LIST, null, null);
@@ -289,7 +290,7 @@ public class StockMarketCommands {
                                 })
                         )
                         .then(Commands.literal("stop")
-                                .requires(source -> source.hasPermission(2)) // Admin-only, like preset
+                                .requires(source -> PermissionCompat.hasPermission(source, 2)) // Admin-only, like preset
                                 .then(Commands.argument("eventId", StringArgumentType.string())
                                         .suggests((context, builder) -> getActiveNewsEventIdsSuggestion(builder, true))
                                         .executes(context -> {
@@ -304,7 +305,7 @@ public class StockMarketCommands {
                         // which cancels the event — skipping the last phase ends it
                         // normally (reversal:none bakes like a natural completion).
                         .then(Commands.literal("skipphase")
-                                .requires(source -> source.hasPermission(2)) // Admin-only, like preset
+                                .requires(source -> PermissionCompat.hasPermission(source, 2)) // Admin-only, like preset
                                 .then(Commands.argument("eventId", StringArgumentType.string())
                                         // Active ids only — no "all" keyword for skipphase.
                                         .suggests((context, builder) -> getActiveNewsEventIdsSuggestion(builder, false))
@@ -316,7 +317,7 @@ public class StockMarketCommands {
                                 )
                         )
                         .then(Commands.literal("info")
-                                .requires(source -> source.hasPermission(2)) // Admin-only, like preset
+                                .requires(source -> PermissionCompat.hasPermission(source, 2)) // Admin-only, like preset
                                 .then(Commands.argument("eventId", StringArgumentType.string())
                                         .suggests((context, builder) -> getNewsEventIdsSuggestion(builder))
                                         .executes(context -> {
@@ -327,7 +328,7 @@ public class StockMarketCommands {
                                 )
                         )
                         .then(Commands.literal("enable")
-                                .requires(source -> source.hasPermission(2)) // Admin-only, like preset
+                                .requires(source -> PermissionCompat.hasPermission(source, 2)) // Admin-only, like preset
                                 .then(Commands.argument("eventId", StringArgumentType.string())
                                         // Only disabled ids are useful enable targets
                                         .suggests((context, builder) -> getNewsEventIdsSuggestionFiltered(builder, false))
@@ -339,7 +340,7 @@ public class StockMarketCommands {
                                 )
                         )
                         .then(Commands.literal("disable")
-                                .requires(source -> source.hasPermission(2)) // Admin-only, like preset
+                                .requires(source -> PermissionCompat.hasPermission(source, 2)) // Admin-only, like preset
                                 .then(Commands.argument("eventId", StringArgumentType.string())
                                         // Only enabled ids are useful disable targets
                                         .suggests((context, builder) -> getNewsEventIdsSuggestionFiltered(builder, true))
@@ -351,7 +352,7 @@ public class StockMarketCommands {
                                 )
                         )
                         .then(Commands.literal("resetcooldown")
-                                .requires(source -> source.hasPermission(2)) // Admin-only, like preset
+                                .requires(source -> PermissionCompat.hasPermission(source, 2)) // Admin-only, like preset
                                 .then(Commands.argument("eventId", StringArgumentType.string())
                                         .suggests((context, builder) -> getNewsEventIdsSuggestion(builder))
                                         .executes(context -> {
@@ -366,7 +367,7 @@ public class StockMarketCommands {
                         // per-value sentinel / resetAll flag), so slave routing and the
                         // admin audit work exactly like the other news admin commands.
                         .then(Commands.literal("scheduler")
-                                .requires(source -> source.hasPermission(2)) // Admin-only, like preset
+                                .requires(source -> PermissionCompat.hasPermission(source, 2)) // Admin-only, like preset
                                 .then(Commands.literal("show")
                                         .executes(context -> {
                                             executeNewsSchedulerOp(context.getSource(),
@@ -416,7 +417,7 @@ public class StockMarketCommands {
                         // travels in the eventId field; "key" mode is flagged via the
                         // (otherwise unused) market field — see NewsAdminRequest.
                         .then(Commands.literal("registry")
-                                .requires(source -> source.hasPermission(2)) // Admin-only, like preset
+                                .requires(source -> PermissionCompat.hasPermission(source, 2)) // Admin-only, like preset
                                 .then(Commands.literal("list")
                                         .executes(context -> {
                                             executeNewsAdminOp(context.getSource(),
@@ -467,7 +468,7 @@ public class StockMarketCommands {
                 // timeout auto-resumes to prevent softlock if the operator forgets.
                 // Master-only: all DB writes happen on the master server.
                 .then(Commands.literal("backup")
-                        .requires(source -> source.hasPermission(2)) // Op, level 2
+                        .requires(source -> PermissionCompat.hasPermission(source, 2)) // Op, level 2
                         .then(Commands.literal("pause")
                                 .executes(context -> {
                                     CommandSourceStack source = context.getSource();
@@ -542,7 +543,7 @@ public class StockMarketCommands {
                 // ItemStack — so even "broken" markets whose item can no longer be resolved
                 // (e.g. items with volatile data components) can be deleted.
                 .then(Commands.argument("market", StringArgumentType.string())
-                        .requires(source -> source.hasPermission(2)) // Admin-only, like the other management commands
+                        .requires(source -> PermissionCompat.hasPermission(source, 2)) // Admin-only, like the other management commands
                         .suggests((context, builder) -> getMarketNamesSuggestion(builder))
                         .then(Commands.literal("remove")
                                 .executes(context -> {

@@ -8,7 +8,8 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+//import net.minecraft.resources.Identifier; // mc>=1.21.11
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -40,7 +41,8 @@ import org.jetbrains.annotations.NotNull;
 public class TrustFlagUpdatePacket extends StockMarketNetworkPacket {
 
     public static final Type<TrustFlagUpdatePacket> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath(StockMarketMod.MOD_ID, "trust_flag_update_packet"));
+            ResourceLocation.fromNamespaceAndPath(StockMarketMod.MOD_ID, "trust_flag_update_packet")); // mc<=1.21.10
+            //Identifier.fromNamespaceAndPath(StockMarketMod.MOD_ID, "trust_flag_update_packet")); // mc>=1.21.11
 
     public static final StreamCodec<RegistryFriendlyByteBuf, TrustFlagUpdatePacket> STREAM_CODEC = StreamCodec.composite(
             ByteBufCodecs.BOOL, p -> p.trusted,

@@ -36,6 +36,7 @@ public class StockMarketCreativeModeTab {
 
     public static <T extends CreativeModeTab> RegistrySupplier<T> registerTab(String name, Supplier<T> tab)
     {
-        return TABS.register(new ResourceLocation(StockMarketMod.MOD_ID, name), tab);
+        return TABS.register(new ResourceLocation(StockMarketMod.MOD_ID, name), tab); // mc<=1.21.10
+        //return TABS.register(new Identifier(StockMarketMod.MOD_ID, name), tab); // mc>=1.21.11
     }*/
 }
