@@ -16,7 +16,8 @@ import net.kroia.stockmarket.client.company.ShareVisualHelpers;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphics; // mc<=1.21.11
+//import net.minecraft.client.gui.GuiGraphicsExtractor; // mc>=26.1
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
@@ -456,7 +457,8 @@ public class PairSelectorWidget extends StockMarketGuiElement {
             ) {
                 @Override
                 protected void render() {
-                    GuiGraphics raw = (getGraphics() instanceof ClientGraphics cg) ? cg.getGraphics() : null;
+                    GuiGraphics raw = (getGraphics() instanceof ClientGraphics cg) ? cg.getGraphics() : null; // mc<=1.21.11
+                    //GuiGraphicsExtractor raw = (getGraphics() instanceof ClientGraphics cg) ? cg.getGraphics() : null; // mc>=26.1
                     boolean customDrawn = raw != null
                             && ShareVisualHelpers.tryRenderShareIcon(raw, 0, 0, getWidth(), getHeight(), getMarketID());
                     if (!customDrawn) {
