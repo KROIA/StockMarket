@@ -5,6 +5,7 @@ StockMarket provides text placeholders for scoreboards, tab lists, chat formats 
 ## Chapters
 
 * [Requirements](#requirements)
+  * [Known issues](#known-issues)
 * [Syntax](#syntax)
 * [Market placeholders](#market-placeholders)
 * [Player placeholders](#player-placeholders)
@@ -24,6 +25,14 @@ A placeholder mod must be installed on the server:
 | [Patbox Text Placeholder API](https://github.com/Patbox/TextPlaceholderAPI) | Fabric |
 
 Without one of them the placeholders are simply not available. No configuration is needed; StockMarket registers its placeholders automatically.
+
+TAB and Placeholder API are server-side only. Players don't need to install them. In singleplayer the integrated server runs on the client, so TAB must be in the client's `mods` folder there.
+
+### Known issues
+
+| Placeholder mod | Issue | Workaround |
+|---|---|---|
+| TAB 5.5.0 | Opening a second singleplayer world in the same game session disconnects the client with `An objective with the name TAB-PlayerList already exists`. This is a TAB issue and happens with only TAB installed. Dedicated servers are not affected. | Restart the game between singleplayer worlds. |
 
 ---
 
