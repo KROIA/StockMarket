@@ -12,7 +12,6 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.stockmarket.api.command.IAsyncStockMarketCommandHandler;
 import net.kroia.stockmarket.api.command.IServerStockMarketCommandHandler;
-import net.kroia.modutilities.testing.TestCommandRegistration;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.pluginmanager.IServerPluginManager;
@@ -555,13 +554,17 @@ public class StockMarketCommands {
                         )
                 )
         );
+    }
 
-        boolean isSlave = BACKEND_INSTANCES != null
+    /**
+     * Used by the dev-only test commands (DevBootstrap) when they are registered.
+     *
+     * @return {@code true} if this server runs the slave market manager (no sync market access)
+     */
+    public static boolean isSlaveServer() {
+        return BACKEND_INSTANCES != null
                 && BACKEND_INSTANCES.MARKET_MANAGER != null
                 && BACKEND_INSTANCES.MARKET_MANAGER.getSync() == null;
-
-        if (StockMarketMod.ENABLE_DEV_FEATURES)
-            TestCommandRegistration.register(dispatcher, "stockmarket", "StockMarket", "stockmarket", isSlave);
     }
 
 
