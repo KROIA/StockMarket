@@ -10,8 +10,8 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.toasts.Toast;
 //import net.minecraft.client.gui.components.toasts.ToastComponent; // mc<=1.21.1
 import net.minecraft.client.gui.components.toasts.ToastManager; // mc>=1.21.2
-import net.minecraft.client.renderer.RenderType; // mc>=1.21.2 mc<=1.21.5
-//import net.minecraft.client.renderer.RenderPipelines; // mc>=1.21.6
+//import net.minecraft.client.renderer.RenderType; // mc>=1.21.2 mc<=1.21.5
+import net.minecraft.client.renderer.RenderPipelines; // mc>=1.21.6
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.FormattedText;
 import net.minecraft.resources.ResourceLocation;
@@ -115,8 +115,8 @@ public class NewsToast implements Toast {
      */
     private void draw(GuiGraphics guiGraphics, Font font) {
         //guiGraphics.blitSprite(BACKGROUND_SPRITE, 0, 0, width(), height()); // mc<=1.21.1
-        guiGraphics.blitSprite(RenderType::guiTextured, BACKGROUND_SPRITE, 0, 0, width(), height()); // mc>=1.21.2 mc<=1.21.5
-        //guiGraphics.blitSprite(RenderPipelines.GUI_TEXTURED, BACKGROUND_SPRITE, 0, 0, width(), height()); // mc>=1.21.6
+        //guiGraphics.blitSprite(RenderType::guiTextured, BACKGROUND_SPRITE, 0, 0, width(), height()); // mc>=1.21.2 mc<=1.21.5
+        guiGraphics.blitSprite(RenderPipelines.GUI_TEXTURED, BACKGROUND_SPRITE, 0, 0, width(), height()); // mc>=1.21.6
 
         guiGraphics.drawString(font, TITLE, TEXT_X, 7, TITLE_COLOR, false);
 

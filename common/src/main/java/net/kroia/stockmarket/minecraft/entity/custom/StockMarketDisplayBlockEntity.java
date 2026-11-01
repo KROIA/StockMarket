@@ -268,10 +268,10 @@ public class StockMarketDisplayBlockEntity extends AbstractDisplayBlockEntity {
         }
     }
 
-    @Override // mc<=1.21.5
-    protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) { DisplayType oldType = displayType; ItemID oldItemID = selectedItemID; ItemID oldSecondID = secondItemID; super.loadAdditional(tag, registries); afterLoad(oldType, oldItemID, oldSecondID); } // mc<=1.21.5
-    //@Override // mc>=1.21.6
-    //protected void loadAdditional(net.minecraft.world.level.storage.ValueInput input) { DisplayType oldType = displayType; ItemID oldItemID = selectedItemID; ItemID oldSecondID = secondItemID; super.loadAdditional(input); afterLoad(oldType, oldItemID, oldSecondID); } // mc>=1.21.6
+    //@Override // mc<=1.21.5
+    //protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) { DisplayType oldType = displayType; ItemID oldItemID = selectedItemID; ItemID oldSecondID = secondItemID; super.loadAdditional(tag, registries); afterLoad(oldType, oldItemID, oldSecondID); } // mc<=1.21.5
+    @Override // mc>=1.21.6
+    protected void loadAdditional(net.minecraft.world.level.storage.ValueInput input) { DisplayType oldType = displayType; ItemID oldItemID = selectedItemID; ItemID oldSecondID = secondItemID; super.loadAdditional(input); afterLoad(oldType, oldItemID, oldSecondID); } // mc>=1.21.6
 
     /**
      * Client-side controller refresh after the base class loaded the tag
