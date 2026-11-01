@@ -366,7 +366,7 @@ public class OrderMarkerOverlay implements CandlestickChart.InteractiveOverlay {
 
     @Override
     public boolean mouseClicked(CandlestickChart chart, int mouseX, int mouseY, int button) {
-        if (button != 0) return false;
+        if (button != net.kroia.modutilities.gui.InputConstants.MOUSE_BUTTON_LEFT) return false;
 
         // Check cancel buttons first (higher priority than drag handles)
         for (MarkerHitRegion region : hitRegions) {

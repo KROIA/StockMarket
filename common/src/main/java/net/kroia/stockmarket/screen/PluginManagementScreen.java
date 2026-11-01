@@ -871,7 +871,7 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
 
             @Override
             protected boolean mouseClickedOverElement(int button) {
-                if (button == 0) {
+                if (button == net.kroia.modutilities.gui.InputConstants.MOUSE_BUTTON_LEFT) {
                     toggleSubscription(this);
                     return true;
                 }
