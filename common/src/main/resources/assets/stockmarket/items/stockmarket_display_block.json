@@ -1,0 +1,6 @@
+{
+  "model": {
+    "type": "minecraft:model",
+    "model": "stockmarket:item/stockmarket_display_block"
+  }
+}

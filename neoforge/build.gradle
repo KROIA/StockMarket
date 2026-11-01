@@ -68,8 +68,8 @@ dependencies {
     // a soft dependency of the shipped mod - this line only affects dev.
     //modRuntimeOnly("mezz.jei:jei-${rootProject.jei_minecraft_version}-neoforge:${rootProject.jei_version}") // mc<=1.21.1
     // No JEI build exists for 1.21.2/1.21.3: only the 1.21.1 API jar at dev runtime.
-    modRuntimeOnly("mezz.jei:jei-${rootProject.jei_minecraft_version}-neoforge-api:${rootProject.jei_version}") // mc>=1.21.2 mc<=1.21.3
-    //modRuntimeOnly("mezz.jei:jei-${rootProject.jei_minecraft_version}-neoforge:${rootProject.jei_version}") // mc>=1.21.4
+    //modRuntimeOnly("mezz.jei:jei-${rootProject.jei_minecraft_version}-neoforge-api:${rootProject.jei_version}") // mc>=1.21.2 mc<=1.21.3
+    modRuntimeOnly("mezz.jei:jei-${rootProject.jei_minecraft_version}-neoforge:${rootProject.jei_version}") // mc>=1.21.4
 
 
 
