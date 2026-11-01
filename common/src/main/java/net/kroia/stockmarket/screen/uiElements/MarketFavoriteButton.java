@@ -119,7 +119,7 @@ public class MarketFavoriteButton extends ItemView {
 
     @Override
     protected boolean mouseClickedOverElement(int button) {
-        if (button == 0) {
+        if (button == net.kroia.modutilities.gui.InputConstants.MOUSE_BUTTON_LEFT) {
             if (isInStarArea(getMouseX(), getMouseY())) {
                 starPressed = true;
                 return true;
@@ -132,7 +132,7 @@ public class MarketFavoriteButton extends ItemView {
 
     @Override
     protected void mouseReleased(int button) {
-        if (button == 0 && starPressed) {
+        if (button == net.kroia.modutilities.gui.InputConstants.MOUSE_BUTTON_LEFT && starPressed) {
             starPressed = false;
             if (isMouseOver() && isInStarArea(getMouseX(), getMouseY())) {
                 onFavoriteToggle.run();
