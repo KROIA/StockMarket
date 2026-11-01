@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.pluginsystem.plugins;
 
+import net.kroia.modutilities.NbtCompat;
+
 import io.netty.buffer.ByteBuf;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.pluginsystem.interaction.MarketInterface;
@@ -250,23 +252,23 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
         // Restore per-market PID settings and state (marketData map is already populated
         // because subscribeToMarket() is called before load() in ServerPluginManager)
         if (tag.contains("marketData")) {
-            ListTag marketsTag = tag.getList("marketData", 10);
+            ListTag marketsTag = NbtCompat.getList(tag, "marketData", 10);
             for (int i = 0; i < marketsTag.size(); i++) {
-                CompoundTag marketTag = marketsTag.getCompound(i);
+                CompoundTag marketTag = NbtCompat.getCompound(marketsTag, i);
                 ItemID marketID = ItemID.createFromTag(marketTag);
                 if (marketID != null && marketID.isValid()) {
                     RuntimeData data = marketData.get(marketID);
                     if (data != null) {
                         if (marketTag.contains("pidP")) {
-                            data.pidP = marketTag.getFloat("pidP");
-                            data.pidI = marketTag.getFloat("pidI");
-                            data.pidD = marketTag.getFloat("pidD");
-                            data.pidRate = marketTag.getFloat("pidRate");
+                            data.pidP = NbtCompat.getFloat(marketTag, "pidP");
+                            data.pidI = NbtCompat.getFloat(marketTag, "pidI");
+                            data.pidD = NbtCompat.getFloat(marketTag, "pidD");
+                            data.pidRate = NbtCompat.getFloat(marketTag, "pidRate");
                             data.pid = new PID(data.pidP, data.pidI, data.pidD, data.pidRate);
                         }
-                        if (marketTag.contains("targetPrice")) data.targetPrice = marketTag.getDouble("targetPrice");
-                        if (marketTag.contains("tickCounter")) data.tickCounter = marketTag.getInt("tickCounter");
-                        if (marketTag.contains("pid")) data.pid.load(marketTag.getCompound("pid"));
+                        if (marketTag.contains("targetPrice")) data.targetPrice = NbtCompat.getDouble(marketTag, "targetPrice");
+                        if (marketTag.contains("tickCounter")) data.tickCounter = NbtCompat.getInt(marketTag, "tickCounter");
+                        if (marketTag.contains("pid")) data.pid.load(NbtCompat.getCompound(marketTag, "pid"));
                     }
                 }
             }

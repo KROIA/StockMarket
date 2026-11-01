@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.stockmarket.market;
 
+import net.kroia.modutilities.NbtCompat;
+
 import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.bank.BankStatus;
 import net.kroia.banksystem.api.bank.IServerBank;
@@ -845,7 +847,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
 
         if(tag.contains("orderbook"))
         {
-            CompoundTag virtualOrderbookTag = tag.getCompound("orderbook");
+            CompoundTag virtualOrderbookTag = NbtCompat.getCompound(tag, "orderbook");
             success &= orderbook.load(virtualOrderbookTag);
         }
         else
@@ -856,31 +858,31 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
 
         if(tag.contains("currentMarketPrice"))
         {
-            currentMarketPrice =  tag.getLong("currentMarketPrice");
+            currentMarketPrice =  NbtCompat.getLong(tag, "currentMarketPrice");
         }
         if(tag.contains("defaultPrice"))
         {
-            settings.defaultPrice = tag.getLong("defaultPrice");
+            settings.defaultPrice = NbtCompat.getLong(tag, "defaultPrice");
         }
         if(tag.contains("naturalAbundance"))
         {
-            settings.naturalAbundance = tag.getFloat("naturalAbundance");
+            settings.naturalAbundance = NbtCompat.getFloat(tag, "naturalAbundance");
         }
         if(tag.contains("netPlayerItemFlow"))
         {
-            netPlayerItemFlow = tag.getLong("netPlayerItemFlow");
+            netPlayerItemFlow = NbtCompat.getLong(tag, "netPlayerItemFlow");
         }
         if(tag.contains("virtualOrderbookEnabled"))
         {
-            settings.virtualOrderbookEnabled = tag.getBoolean("virtualOrderbookEnabled");
+            settings.virtualOrderbookEnabled = NbtCompat.getBoolean(tag, "virtualOrderbookEnabled");
         }
         if(tag.contains("virtualOrderbookCleared"))
         {
-            settings.virtualOrderbookCleared = tag.getBoolean("virtualOrderbookCleared");
+            settings.virtualOrderbookCleared = NbtCompat.getBoolean(tag, "virtualOrderbookCleared");
         }
         if(tag.contains("ignorePluginAutosubscribe"))
         {
-            settings.ignorePluginAutosubscribe = tag.getBoolean("ignorePluginAutosubscribe");
+            settings.ignorePluginAutosubscribe = NbtCompat.getBoolean(tag, "ignorePluginAutosubscribe");
         }
         // Sync the runtime flags on the VirtualOrderbook with the loaded persisted state.
         // These flags live in memory only on VirtualOrderbook — the settings are the

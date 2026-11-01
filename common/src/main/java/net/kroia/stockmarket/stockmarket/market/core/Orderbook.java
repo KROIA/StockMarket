@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.stockmarket.market.core;
 
+import net.kroia.modutilities.NbtCompat;
+
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.persistence.ServerSaveable;
 import net.kroia.stockmarket.StockMarketModBackend;
@@ -644,7 +646,7 @@ public class Orderbook implements ServerSaveable
 
         if(tag.contains("virtualOrderbook"))
         {
-            CompoundTag virtualOrderbookTag = tag.getCompound("virtualOrderbook");
+            CompoundTag virtualOrderbookTag = NbtCompat.getCompound(tag, "virtualOrderbook");
             success &= virtualOrderbook.load(virtualOrderbookTag);
         }
         else
@@ -658,10 +660,10 @@ public class Orderbook implements ServerSaveable
         if(tag.contains("buyLimitOrders"))
         {
 
-            ListTag buyLimitOrdersTag = tag.getList("buyLimitOrders", CompoundTag.TAG_COMPOUND);
+            ListTag buyLimitOrdersTag = NbtCompat.getList(tag, "buyLimitOrders", CompoundTag.TAG_COMPOUND);
             for(int i = 0; i < buyLimitOrdersTag.size(); i++)
             {
-                CompoundTag buyLimitOrderTag = buyLimitOrdersTag.getCompound(i);
+                CompoundTag buyLimitOrderTag = NbtCompat.getCompound(buyLimitOrdersTag, i);
                 Order order = Order.createFromNBT(buyLimitOrderTag);
                 if(order != null)
                 {
@@ -679,10 +681,10 @@ public class Orderbook implements ServerSaveable
         if(tag.contains("sellLimitOrders"))
         {
 
-            ListTag sellLimitOrdersTag =  tag.getList("sellLimitOrders", CompoundTag.TAG_COMPOUND);
+            ListTag sellLimitOrdersTag =  NbtCompat.getList(tag, "sellLimitOrders", CompoundTag.TAG_COMPOUND);
             for(int i = 0; i < sellLimitOrdersTag.size(); i++)
             {
-                CompoundTag sellLimitOrderTag = sellLimitOrdersTag.getCompound(i);
+                CompoundTag sellLimitOrderTag = NbtCompat.getCompound(sellLimitOrdersTag, i);
                 Order order = Order.createFromNBT(sellLimitOrderTag);
                 if(order != null)
                 {

@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.news;
 
+import net.kroia.modutilities.NbtCompat;
+
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.modutilities.persistence.ServerSaveable;
@@ -116,9 +118,9 @@ public class NewsRecord implements ServerSaveable {
         /** @return the affected market read from the tag, or null if the tag is malformed */
         static @Nullable AffectedMarket fromTag(CompoundTag tag) {
             if (!tag.contains(KEY_MARKET_ID) || !tag.contains(KEY_ITEM_NAME)) return null;
-            ItemID marketId = ItemID.createFromTag(tag.getCompound(KEY_MARKET_ID));
-            return new AffectedMarket(marketId, tag.getString(KEY_ITEM_NAME),
-                    tag.getFloat(KEY_WEIGHT_FACTOR));
+            ItemID marketId = ItemID.createFromTag(NbtCompat.getCompound(tag, KEY_MARKET_ID));
+            return new AffectedMarket(marketId, NbtCompat.getString(tag, KEY_ITEM_NAME),
+                    NbtCompat.getFloat(tag, KEY_WEIGHT_FACTOR));
         }
     }
 
@@ -356,37 +358,37 @@ public class NewsRecord implements ServerSaveable {
     @Override
     public boolean load(CompoundTag tag) {
         if (!tag.contains(KEY_NEWS_UID) || !tag.contains(KEY_EVENT_ID)) return false;
-        newsUid = tag.getLong(KEY_NEWS_UID);
-        eventId = tag.getString(KEY_EVENT_ID);
-        timestampEpochMs = tag.getLong(KEY_TIMESTAMP);
-        gameDay = tag.getLong(KEY_GAME_DAY);
-        headline = loadTextMap(tag.getList(KEY_HEADLINE, Tag.TAG_COMPOUND));
-        text = loadTextMap(tag.getList(KEY_TEXT, Tag.TAG_COMPOUND));
+        newsUid = NbtCompat.getLong(tag, KEY_NEWS_UID);
+        eventId = NbtCompat.getString(tag, KEY_EVENT_ID);
+        timestampEpochMs = NbtCompat.getLong(tag, KEY_TIMESTAMP);
+        gameDay = NbtCompat.getLong(tag, KEY_GAME_DAY);
+        headline = loadTextMap(NbtCompat.getList(tag, KEY_HEADLINE, Tag.TAG_COMPOUND));
+        text = loadTextMap(NbtCompat.getList(tag, KEY_TEXT, Tag.TAG_COMPOUND));
 
         affectedMarkets = new ArrayList<>();
-        ListTag marketsTag = tag.getList(KEY_AFFECTED_MARKETS, Tag.TAG_COMPOUND);
+        ListTag marketsTag = NbtCompat.getList(tag, KEY_AFFECTED_MARKETS, Tag.TAG_COMPOUND);
         for (int i = 0; i < marketsTag.size(); i++) {
-            AffectedMarket market = AffectedMarket.fromTag(marketsTag.getCompound(i));
+            AffectedMarket market = AffectedMarket.fromTag(NbtCompat.getCompound(marketsTag, i));
             if (market != null) affectedMarkets.add(market);
         }
 
-        impactType = tag.getString(KEY_IMPACT_TYPE);
-        peakFactor = tag.getFloat(KEY_PEAK_FACTOR);
-        reversal = tag.getString(KEY_REVERSAL);
-        totalDurationSeconds = tag.getInt(KEY_TOTAL_DURATION);
+        impactType = NbtCompat.getString(tag, KEY_IMPACT_TYPE);
+        peakFactor = NbtCompat.getFloat(tag, KEY_PEAK_FACTOR);
+        reversal = NbtCompat.getString(tag, KEY_REVERSAL);
+        totalDurationSeconds = NbtCompat.getInt(tag, KEY_TOTAL_DURATION);
         // contains() guard: history files written before the picture feature (T-088)
         // have no such tag and load unchanged as text-only records.
         pictureHash = null;
         if (tag.contains(KEY_PICTURE_HASH)) {
-            byte[] hash = tag.getByteArray(KEY_PICTURE_HASH);
+            byte[] hash = NbtCompat.getByteArray(tag, KEY_PICTURE_HASH);
             if (hash.length == NewsPictureLibrary.SHA1_LENGTH) {
                 pictureHash = hash;
             }
         }
         // contains() guard (T-099): history files written before the sequence fields
         // load unchanged as "no sequence descriptor" (empty name, count 0).
-        sequenceName = tag.contains(KEY_SEQUENCE_NAME) ? tag.getString(KEY_SEQUENCE_NAME) : "";
-        stepCount = tag.contains(KEY_STEP_COUNT) ? Math.max(0, tag.getInt(KEY_STEP_COUNT)) : 0;
+        sequenceName = tag.contains(KEY_SEQUENCE_NAME) ? NbtCompat.getString(tag, KEY_SEQUENCE_NAME) : "";
+        stepCount = tag.contains(KEY_STEP_COUNT) ? Math.max(0, NbtCompat.getInt(tag, KEY_STEP_COUNT)) : 0;
         return true;
     }
 
@@ -417,9 +419,9 @@ public class NewsRecord implements ServerSaveable {
     private static Map<String, String> loadTextMap(ListTag list) {
         Map<String, String> map = new LinkedHashMap<>();
         for (int i = 0; i < list.size(); i++) {
-            CompoundTag pair = list.getCompound(i);
+            CompoundTag pair = NbtCompat.getCompound(list, i);
             if (pair.contains(KEY_LANG) && pair.contains(KEY_VALUE)) {
-                map.put(pair.getString(KEY_LANG), pair.getString(KEY_VALUE));
+                map.put(NbtCompat.getString(pair, KEY_LANG), NbtCompat.getString(pair, KEY_VALUE));
             }
         }
         return map;

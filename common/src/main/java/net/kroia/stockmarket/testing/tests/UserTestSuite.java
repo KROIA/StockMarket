@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.testing.tests;
 
+import net.kroia.modutilities.NbtCompat;
+
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.kroia.banksystem.util.ItemID;
@@ -78,7 +80,7 @@ public class UserTestSuite extends TestSuite {
      */
     private TestResult test_load_missingUserName() {
         CompoundTag tag = new CompoundTag();
-        tag.putUUID("userUUID", UUID.randomUUID());
+        NbtCompat.putUUID(tag, "userUUID", UUID.randomUUID());
         tag.putBoolean("isStockMarketAdmin", false);
         // No userName
 
@@ -92,7 +94,7 @@ public class UserTestSuite extends TestSuite {
     private TestResult test_load_missingAdminFlag() {
         UUID uuid = UUID.randomUUID();
         CompoundTag tag = new CompoundTag();
-        tag.putUUID("userUUID", uuid);
+        NbtCompat.putUUID(tag, "userUUID", uuid);
         tag.putString("userName", "TestPlayer");
         // No isStockMarketAdmin
 
@@ -110,7 +112,7 @@ public class UserTestSuite extends TestSuite {
     private TestResult test_createFromTag_validTag() {
         UUID uuid = UUID.randomUUID();
         CompoundTag tag = new CompoundTag();
-        tag.putUUID("userUUID", uuid);
+        NbtCompat.putUUID(tag, "userUUID", uuid);
         tag.putString("userName", "ValidUser");
         tag.putBoolean("isStockMarketAdmin", true);
 

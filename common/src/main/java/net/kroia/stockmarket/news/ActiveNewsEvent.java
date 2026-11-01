@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.news;
 
+import net.kroia.modutilities.NbtCompat;
+
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.persistence.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
@@ -559,51 +561,51 @@ public final class ActiveNewsEvent implements ServerSaveable {
         if (!tag.contains(KEY_DEFINITION_ID) || (!hasSteps && !tag.contains(KEY_IMPACT_TYPE))) {
             return false;
         }
-        definitionId = tag.getString(KEY_DEFINITION_ID);
-        newsUid = tag.getLong(KEY_NEWS_UID);
-        headline = loadTextMap(tag.getList(KEY_HEADLINE, Tag.TAG_COMPOUND));
-        text = loadTextMap(tag.getList(KEY_TEXT, Tag.TAG_COMPOUND));
-        sampledDelayMs = tag.getLong(KEY_SAMPLED_DELAY);
-        ageMs = tag.getLong(KEY_AGE);
+        definitionId = NbtCompat.getString(tag, KEY_DEFINITION_ID);
+        newsUid = NbtCompat.getLong(tag, KEY_NEWS_UID);
+        headline = loadTextMap(NbtCompat.getList(tag, KEY_HEADLINE, Tag.TAG_COMPOUND));
+        text = loadTextMap(NbtCompat.getList(tag, KEY_TEXT, Tag.TAG_COMPOUND));
+        sampledDelayMs = NbtCompat.getLong(tag, KEY_SAMPLED_DELAY);
+        ageMs = NbtCompat.getLong(tag, KEY_AGE);
         impactStartAgeMs = Math.max(sampledDelayMs, 0);
         publishAgeMs = Math.max(-sampledDelayMs, 0);
-        published = tag.getBoolean(KEY_PUBLISHED);
-        marketWeights = loadWeightMap(tag.getList(KEY_MARKET_WEIGHTS, Tag.TAG_COMPOUND));
-        bakedMarkets = loadWeightMap(tag.getList(KEY_BAKED_MARKETS, Tag.TAG_COMPOUND));
+        published = NbtCompat.getBoolean(tag, KEY_PUBLISHED);
+        marketWeights = loadWeightMap(NbtCompat.getList(tag, KEY_MARKET_WEIGHTS, Tag.TAG_COMPOUND));
+        bakedMarkets = loadWeightMap(NbtCompat.getList(tag, KEY_BAKED_MARKETS, Tag.TAG_COMPOUND));
 
         // Legacy envelope descriptor (present for legacy-impact events, both formats).
         legacyEnvelope = null;
         if (tag.contains(KEY_IMPACT_TYPE)) {
             NewsImpactEnvelope.ImpactType type =
-                    NewsImpactEnvelope.ImpactType.fromString(tag.getString(KEY_IMPACT_TYPE));
+                    NewsImpactEnvelope.ImpactType.fromString(NbtCompat.getString(tag, KEY_IMPACT_TYPE));
             NewsImpactEnvelope.ReversalMode reversal =
-                    NewsImpactEnvelope.ReversalMode.fromString(tag.getString(KEY_REVERSAL));
-            legacyEnvelope = new NewsImpactEnvelope(type, tag.getDouble(KEY_PEAK_FACTOR),
-                    tag.getLong(KEY_RAMP_UP_SECONDS), tag.getLong(KEY_DURATION_SECONDS),
-                    reversal, tag.getLong(KEY_REVERSAL_SECONDS), tag.getDouble(KEY_NOISE));
+                    NewsImpactEnvelope.ReversalMode.fromString(NbtCompat.getString(tag, KEY_REVERSAL));
+            legacyEnvelope = new NewsImpactEnvelope(type, NbtCompat.getDouble(tag, KEY_PEAK_FACTOR),
+                    NbtCompat.getLong(tag, KEY_RAMP_UP_SECONDS), NbtCompat.getLong(tag, KEY_DURATION_SECONDS),
+                    reversal, NbtCompat.getLong(tag, KEY_REVERSAL_SECONDS), NbtCompat.getDouble(tag, KEY_NOISE));
         }
 
         stepMarketWeights = new ArrayList<>();
         if (hasSteps) {
             // New format: resolved steps with their ROLLED durations (never re-rolled).
             sequenceName = tag.contains(KEY_SEQUENCE_NAME)
-                    ? tag.getString(KEY_SEQUENCE_NAME) : LEGACY_SEQUENCE_NAME;
-            ListTag stepsTag = tag.getList(KEY_STEPS, Tag.TAG_COMPOUND);
+                    ? NbtCompat.getString(tag, KEY_SEQUENCE_NAME) : LEGACY_SEQUENCE_NAME;
+            ListTag stepsTag = NbtCompat.getList(tag, KEY_STEPS, Tag.TAG_COMPOUND);
             List<NewsSequence.StepSpec> specs = new ArrayList<>(stepsTag.size());
             List<@Nullable Map<ItemID, Float>> stepMaps = new ArrayList<>(stepsTag.size());
             for (int i = 0; i < stepsTag.size(); i++) {
-                CompoundTag stepTag = stepsTag.getCompound(i);
-                NewsSequence.Curve curve = NewsSequence.Curve.fromString(stepTag.getString(KEY_STEP_CURVE));
+                CompoundTag stepTag = NbtCompat.getCompound(stepsTag, i);
+                NewsSequence.Curve curve = NewsSequence.Curve.fromString(NbtCompat.getString(stepTag, KEY_STEP_CURVE));
                 specs.add(new NewsSequence.StepSpec(
-                        stepTag.getString(KEY_STEP_NAME),
-                        stepTag.getLong(KEY_STEP_DURATION_MS),
-                        stepTag.getDouble(KEY_STEP_TARGET),
+                        NbtCompat.getString(stepTag, KEY_STEP_NAME),
+                        NbtCompat.getLong(stepTag, KEY_STEP_DURATION_MS),
+                        NbtCompat.getDouble(stepTag, KEY_STEP_TARGET),
                         curve != null ? curve : NewsSequence.Curve.LINEAR,
-                        stepTag.getDouble(KEY_STEP_NOISE),
-                        stepTag.getBoolean(KEY_STEP_PERMANENT)));
+                        NbtCompat.getDouble(stepTag, KEY_STEP_NOISE),
+                        NbtCompat.getBoolean(stepTag, KEY_STEP_PERMANENT)));
                 // Absent per-step markets = the step map equaled the union at save time.
                 stepMaps.add(stepTag.contains(KEY_STEP_MARKETS)
-                        ? loadWeightMap(stepTag.getList(KEY_STEP_MARKETS, Tag.TAG_COMPOUND))
+                        ? loadWeightMap(NbtCompat.getList(stepTag, KEY_STEP_MARKETS, Tag.TAG_COMPOUND))
                         : null);
             }
             sequence = NewsSequence.create(specs);
@@ -651,9 +653,9 @@ public final class ActiveNewsEvent implements ServerSaveable {
     private static Map<String, String> loadTextMap(ListTag list) {
         Map<String, String> map = new LinkedHashMap<>();
         for (int i = 0; i < list.size(); i++) {
-            CompoundTag pair = list.getCompound(i);
+            CompoundTag pair = NbtCompat.getCompound(list, i);
             if (pair.contains(KEY_LANG) && pair.contains(KEY_VALUE)) {
-                map.put(pair.getString(KEY_LANG), pair.getString(KEY_VALUE));
+                map.put(NbtCompat.getString(pair, KEY_LANG), NbtCompat.getString(pair, KEY_VALUE));
             }
         }
         return map;
@@ -681,10 +683,10 @@ public final class ActiveNewsEvent implements ServerSaveable {
     private static Map<ItemID, Float> loadWeightMap(ListTag list) {
         Map<ItemID, Float> map = new LinkedHashMap<>();
         for (int i = 0; i < list.size(); i++) {
-            CompoundTag entryTag = list.getCompound(i);
+            CompoundTag entryTag = NbtCompat.getCompound(list, i);
             ItemID marketID = ItemID.createFromTag(entryTag);
             if (marketID != null && marketID.getShort() != 0 && entryTag.contains(KEY_WEIGHT)) {
-                map.put(marketID, entryTag.getFloat(KEY_WEIGHT));
+                map.put(marketID, NbtCompat.getFloat(entryTag, KEY_WEIGHT));
             }
         }
         return map;

@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.stockmarket.marketmanager;
 
+import net.kroia.modutilities.NbtCompat;
+
 import net.kroia.banksystem.api.bank.BankStatus;
 import net.kroia.banksystem.api.bank.IServerBank;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
@@ -904,7 +906,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
 
         for (int i = 0; i < marketListTag.size(); i++)
         {
-            CompoundTag marketTag = marketListTag.getCompound(i);
+            CompoundTag marketTag = NbtCompat.getCompound(marketListTag, i);
             ItemID id = ItemID.createFromTag(marketTag);
             if(id.isValid())
             {
@@ -934,7 +936,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
         {
             for (int i = 0; i < interMarketOrdersTag.size(); i++)
             {
-                CompoundTag orderTag = interMarketOrdersTag.getCompound(i);
+                CompoundTag orderTag = NbtCompat.getCompound(interMarketOrdersTag, i);
                 InterMarketOrder imo = InterMarketOrder.createFromNBT(orderTag);
                 if (imo != null)
                 {
@@ -954,7 +956,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
             userMap.clear();
             for(int i = 0; i < userListTag.size(); i++)
             {
-                CompoundTag userTag = userListTag.getCompound(i);
+                CompoundTag userTag = NbtCompat.getCompound(userListTag, i);
                 User user = User.createFromTag(userTag);
                 if(user != null)
                     userMap.put(user.getUUID(), user);

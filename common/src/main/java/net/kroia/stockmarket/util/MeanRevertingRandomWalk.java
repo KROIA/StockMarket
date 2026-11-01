@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.util;
 
+import net.kroia.modutilities.NbtCompat;
+
 
 import net.kroia.modutilities.persistence.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
@@ -58,15 +60,15 @@ public class MeanRevertingRandomWalk implements ServerSaveable {
     @Override
     public boolean load(CompoundTag tag) {
         if(tag.contains("currentValue"))
-            currentValue = tag.getDouble("currentValue");
+            currentValue = NbtCompat.getDouble(tag, "currentValue");
         else
             currentValue = 0.0;
         if(tag.contains("stepSize"))
-            stepSize = tag.getDouble("stepSize");
+            stepSize = NbtCompat.getDouble(tag, "stepSize");
         else
             stepSize = 0.1; // Default value if not present
         if(tag.contains("meanReversionStrength"))
-            meanReversionStrength = tag.getDouble("meanReversionStrength");
+            meanReversionStrength = NbtCompat.getDouble(tag, "meanReversionStrength");
         else
             meanReversionStrength = 0.05; // Default value if not present
         return true;
