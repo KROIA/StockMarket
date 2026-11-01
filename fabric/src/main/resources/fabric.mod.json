@@ -18,7 +18,10 @@
     "main": [
       "net.kroia.stockmarket.fabric.StockMarketFabric"
     ],
-    "client": []
+    "client": [],
+    "jei_mod_plugin": [
+      "net.kroia.stockmarket.minecraft.compat.StockMarketJeiPlugin"
+    ]
   },
   "mixins": [
     "stockmarket.mixins.json"
