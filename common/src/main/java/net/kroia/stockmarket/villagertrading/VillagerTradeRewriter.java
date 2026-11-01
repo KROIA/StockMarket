@@ -7,7 +7,6 @@ import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.minecraft.core.component.DataComponentPatch;
-import net.minecraft.core.component.DataComponentPredicate;
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.InteractionHand;
@@ -518,24 +517,22 @@ public final class VillagerTradeRewriter {
      * @param stack the currency stack (item, components, count)
      * @return the equivalent ItemCost
      */
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private static ItemCost toItemCost(ItemStack stack) {
         DataComponentPatch patch = stack.getComponentsPatch();
         if (patch.isEmpty()) {
             return new ItemCost(stack.getItem(), stack.getCount());
         }
-        DataComponentPredicate.Builder builder = DataComponentPredicate.builder();
-        for (Map.Entry<DataComponentType<?>, Optional<?>> entry : patch.entrySet()) {
-            // Removed components (empty Optional) cannot be expressed in the
-            // predicate — only added/changed components are expected.
-            entry.getValue().ifPresent(value -> expect(builder, entry.getKey(), value));
-        }
-        return new ItemCost(stack.getItemHolder(), stack.getCount(), builder.build());
-    }
-
-    /** Generic helper to funnel a wildcard component entry into the predicate builder. */
-    @SuppressWarnings("unchecked")
-    private static <T> void expect(DataComponentPredicate.Builder builder,
-                                   DataComponentType<T> type, Object value) {
-        builder.expect(type, (T) value);
+        // withComponents keeps the predicate builder type implicit: it is
+        // DataComponentPredicate.Builder up to 1.21.4 and
+        // DataComponentExactPredicate.Builder from 1.21.5, so this compiles on every version.
+        return new ItemCost(stack.getItem(), stack.getCount()).withComponents(builder -> {
+            for (Map.Entry<DataComponentType<?>, Optional<?>> entry : patch.entrySet()) {
+                // Removed components (empty Optional) cannot be expressed in the
+                // predicate — only added/changed components are expected.
+                entry.getValue().ifPresent(value -> builder.expect((DataComponentType) entry.getKey(), value));
+            }
+            return builder;
+        });
     }
 }

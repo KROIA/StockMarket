@@ -564,7 +564,12 @@ public class PresetEditorTab extends StockMarketGuiElement {
         // vanilla-like 18px so the slot hugs the item with just a thin frame.
         final int cellSize = 18;
 
-        List<ItemStack> items = mc.player.getInventory().items;
+        // Snapshot of the 36 main slots via getItem(i): Inventory.items became
+        // private in 1.21.5, getItem(int) works on every version.
+        List<ItemStack> items = new ArrayList<>(36);
+        for (int i = 0; i < 36; i++) {
+            items.add(mc.player.getInventory().getItem(i));
+        }
 
         // Main inventory: 3 rows x 9 cols, slots 9..35 in row-major order.
         inventoryPickerView.addChild(buildSlotGrid(items, 9, 36, 3, cellSize));
