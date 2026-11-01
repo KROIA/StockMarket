@@ -11,7 +11,8 @@ import net.minecraft.core.component.DataComponentType;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.npc.AbstractVillager;
+import net.minecraft.world.entity.npc.AbstractVillager; // mc<=1.21.10
+//import net.minecraft.world.entity.npc.villager.AbstractVillager; // mc>=1.21.11
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;

@@ -10,7 +10,8 @@ import net.kroia.modutilities.JsonUtilities;
 import net.kroia.stockmarket.stockmarket.market.preset.MarketPreset;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+//import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -281,7 +282,8 @@ public final class NewsEventDefinition {
             // Tag matcher: "#namespace:path"
             if (item.startsWith("#")) {
                 String tagId = item.substring(1);
-                ResourceLocation loc = ResourceLocation.tryParse(tagId);
+                ResourceLocation loc = ResourceLocation.tryParse(tagId); // mc<=1.21.10
+                //Identifier loc = Identifier.tryParse(tagId); // mc>=1.21.11
                 if (loc == null) {
                     report.addWarning(file, eventId,
                             "markets entry '" + item + "': invalid tag id — entry ignored");
@@ -309,7 +311,8 @@ public final class NewsEventDefinition {
             }
 
             // Exact / component matcher
-            ResourceLocation loc = ResourceLocation.tryParse(item);
+            ResourceLocation loc = ResourceLocation.tryParse(item); // mc<=1.21.10
+            //Identifier loc = Identifier.tryParse(item); // mc>=1.21.11
             if (loc == null) {
                 report.addWarning(file, eventId,
                         "markets entry '" + item + "': invalid registry id — entry ignored");
