@@ -376,10 +376,10 @@ public class ModSettingsScreen extends StockMarketGuiScreen {
                                 copy.setCount(1);
                                 stackSetting.set(copy);
                                 itemView.setItemStack(copy);
-                                Minecraft.getInstance().setScreen(ModSettingsScreen.this);
+                                net.kroia.modutilities.gui.client.ClientCompat.setScreen(ModSettingsScreen.this);
                             },
-                            () -> Minecraft.getInstance().setScreen(ModSettingsScreen.this));
-                    Minecraft.getInstance().setScreen(selectionScreen);
+                            () -> net.kroia.modutilities.gui.client.ClientCompat.setScreen(ModSettingsScreen.this));
+                    net.kroia.modutilities.gui.client.ClientCompat.setScreen(selectionScreen);
                 });
                 selectItemButton.setHoverTooltipSupplier(() -> tooltip);
                 selectItemButton.setHoverTooltipFontScale(hoverToolTipFontSize);
