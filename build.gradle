@@ -1,5 +1,6 @@
 plugins {
-    id 'dev.architectury.loom' version '1.7-SNAPSHOT' apply false
+    id 'dev.architectury.loom' version '1.7-SNAPSHOT' apply false // mc<=1.21.4
+    //id 'dev.architectury.loom' version '1.10-SNAPSHOT' apply false // mc>=1.21.5 (1.21.5 dependencies are built with Loom 1.10)
     id 'architectury-plugin' version '3.4-SNAPSHOT'
     id 'com.github.johnrengelman.shadow' version '8.1.1' apply false
 }

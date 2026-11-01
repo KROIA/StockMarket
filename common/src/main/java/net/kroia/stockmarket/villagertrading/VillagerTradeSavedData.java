@@ -59,8 +59,9 @@ public class VillagerTradeSavedData extends SavedData {
     // DataFixTypes is intentionally null: this is mod data, vanilla datafixers
     // never apply (the vanilla 2-arg convenience constructor is NeoForge-only,
     // so the canonical 3-arg form is used for cross-loader compatibility).
-    private static final SavedData.Factory<VillagerTradeSavedData> FACTORY =
-            new SavedData.Factory<>(VillagerTradeSavedData::new, VillagerTradeSavedData::load, null);
+    private static final SavedData.Factory<VillagerTradeSavedData> FACTORY = new SavedData.Factory<>(VillagerTradeSavedData::new, VillagerTradeSavedData::load, null); // mc<=1.21.4
+    // 1.21.5 replaced SavedData.Factory by the codec-based SavedDataType; the codec wraps the same NBT load/save.
+    //private static final net.minecraft.world.level.saveddata.SavedDataType<VillagerTradeSavedData> FACTORY = new net.minecraft.world.level.saveddata.SavedDataType<>(NAME, ctx -> new VillagerTradeSavedData(), ctx -> CompoundTag.CODEC.xmap(tag -> load(tag, ctx.levelOrThrow().registryAccess()), data -> data.save(new CompoundTag(), ctx.levelOrThrow().registryAccess())), null); // mc>=1.21.5
 
     /** Villager UUID → sidecar entry. */
     private final Map<UUID, VillagerEntry> villagers = new HashMap<>();
@@ -197,7 +198,8 @@ public class VillagerTradeSavedData extends SavedData {
      * @return the sidecar instance
      */
     public static VillagerTradeSavedData get(MinecraftServer server) {
-        return server.overworld().getDataStorage().computeIfAbsent(FACTORY, NAME);
+        return server.overworld().getDataStorage().computeIfAbsent(FACTORY, NAME); // mc<=1.21.4
+        //return server.overworld().getDataStorage().computeIfAbsent(FACTORY); // mc>=1.21.5
     }
 
     /**
@@ -315,7 +317,7 @@ public class VillagerTradeSavedData extends SavedData {
         return data;
     }
 
-    @Override
+    @Override // mc<=1.21.4
     public CompoundTag save(CompoundTag tag, HolderLookup.Provider registries) {
         RegistryOps<Tag> ops = registries.createSerializationContext(NbtOps.INSTANCE);
         tag.putInt("version", DATA_VERSION);

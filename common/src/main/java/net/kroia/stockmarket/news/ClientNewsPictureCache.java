@@ -699,10 +699,13 @@ public class ClientNewsPictureCache {
                 return null;
             }
             try {
-                image.applyToAllPixels(ClientNewsPictureCache::newsprintPixelAbgr);
+                image.applyToAllPixels(ClientNewsPictureCache::newsprintPixelAbgr); // mc<=1.21.4
+                // 1.21.5 removed applyToAllPixels; getPixel/setPixel are ARGB there, so convert around the ABGR math.
+                //for (int y = 0; y < image.getHeight(); y++) for (int x = 0; x < image.getWidth(); x++) image.setPixel(x, y, net.minecraft.util.ARGB.fromABGR(newsprintPixelAbgr(net.minecraft.util.ARGB.toABGR(image.getPixel(x, y))))); // mc>=1.21.5
                 ResourceLocation location = ResourceLocation.fromNamespaceAndPath(
                         StockMarketMod.MOD_ID, TEXTURE_PATH_PREFIX + sha1Hex);
-                DynamicTexture texture = new DynamicTexture(image);
+                DynamicTexture texture = new DynamicTexture(image); // mc<=1.21.4
+                //DynamicTexture texture = new DynamicTexture(() -> "stockmarket news picture " + sha1Hex, image); // mc>=1.21.5
                 Minecraft.getInstance().getTextureManager().register(location, texture);
                 return new LoadedPicture(location, image.getWidth(), image.getHeight(), texture);
             } catch (Exception e) {
