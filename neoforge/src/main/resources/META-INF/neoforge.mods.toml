@@ -16,28 +16,28 @@ Stock Market Mod that allows players to buy and sell goods on a virtual serverMa
 [[dependencies.stockmarket]]
 modId = "neoforge"
 type = "required"
-versionRange = "[26.1,)"
+versionRange = "[26.2,)"
 ordering = "NONE"
 side = "BOTH"
 
 [[dependencies.stockmarket]]
 modId = "minecraft"
 type = "required"
-versionRange = "[26.1,)"
+versionRange = "[26.2,)"
 ordering = "NONE"
 side = "BOTH"
 
 [[dependencies.stockmarket]]
 modId = "architectury"
 type = "required"
-versionRange = "[20.0.5,)"
+versionRange = "[21.1.12,)"
 ordering = "AFTER"
 side = "BOTH"
 
 [[dependencies.stockmarket]]
 modId = "banksystem"
 mandatory = true
-versionRange = "[26.1-2.2.0, 26.1-2.3.0)"
+versionRange = "[26.2-2.2.0, 26.2-2.3.0)"
 ordering = "BEFORE"
 side = "BOTH"
 

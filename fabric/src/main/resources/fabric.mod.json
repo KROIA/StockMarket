@@ -28,11 +28,11 @@
   ],
   "depends": {
     "fabricloader": ">=0.18.5",
-    "minecraft": "~26.1",
+    "minecraft": "~26.2",
     "java": ">=25",
-    "architectury": ">=20.0.5",
+    "architectury": ">=21.1.12",
     "fabric-api": "*",
-    "banksystem": ">=26.1-2.2.0 <26.1-2.3.0"
+    "banksystem": ">=26.2-2.2.0 <26.2-2.3.0"
   },
   "suggests": {
     "another-mod": "*"
