@@ -18,6 +18,7 @@ import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.kroia.stockmarket.util.StockMarketGuiScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.resources.language.I18n;
+import net.minecraft.locale.Language;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
@@ -93,7 +94,7 @@ public class NewsEventDetailsScreen extends StockMarketGuiScreen {
          */
         static String curveName(String curve) {
             String key = PREFIX + "curve." + curve.toLowerCase(Locale.ROOT);
-            return I18n.exists(key) ? I18n.get(key) : curve;
+            return Language.getInstance().has(key) ? I18n.get(key) : curve;
         }
 
         private Texts() {
