@@ -161,6 +161,14 @@ public class StockMarketModBackend implements StockMarketAPI {
         StockMarketCreativeModeTab.init();
         StockMarketTextMessages.init();
 
+        // Display GUI elements must be known to ModUtilities' GuiElementRegistry on both
+        // sides: if a display GUI's structure changes at runtime, the server ships a guiTree
+        // and the client rebuilds it by type key. Unregistered elements would be dropped.
+        // (Label and ItemView, also used by the display builders, are registered by ModUtilities.)
+        net.kroia.modutilities.gui.GuiElementRegistry.register("stockmarket_display_candlestick_chart",
+                net.kroia.stockmarket.screen.widgets.DisplayCandlestickChart.class,
+                net.kroia.stockmarket.screen.widgets.DisplayCandlestickChart::new);
+
         EventRegistration.init();
 
         StockMarketNetworking.setBackend(COMMON_INSTANCES);
