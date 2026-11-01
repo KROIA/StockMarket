@@ -9,9 +9,7 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.RegistryOps;
-import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.item.trading.MerchantOffer;
-import net.minecraft.world.level.saveddata.SavedData;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -23,7 +21,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Vanilla {@link SavedData} sidecar storing the <b>original (emerald-form)</b>
+ * Sidecar storing the <b>original (emerald-form)</b>
  * merchant offers of every villager whose trades have been rewritten to the
  * stock-market currency, keyed by villager UUID.
  * <p>
@@ -32,12 +30,12 @@ import java.util.UUID;
  * placed in the cost predicate would have to be present on the player's payment
  * items ({@code ItemCost.test}), and components on the sell result would leak
  * into player inventories — breaking stacking and BankSystem's
- * {@code MoneyItem.isMoney} (component-sensitive). A plain SavedData file works
- * identically on master and slave servers (slaves have no StockMarket
- * DataManager, but vanilla world storage is always available).
+ * {@code MoneyItem.isMoney} (component-sensitive).
  * <p>
- * Stored in the <b>overworld</b> data storage as the vanilla-global store —
- * villagers from all dimensions are keyed by UUID here.
+ * Persisted by {@link VillagerTradeManager} to
+ * {@code <world>/data/StockMarket/villager_trades.nbt} on master and slave
+ * servers alike (each server keeps the originals of its own villagers). One
+ * global file: villagers from all dimensions are keyed by UUID.
  * <p>
  * The {@code originals} list of an entry is <b>index-aligned</b> with the
  * villager's live {@code MerchantOffers} (vanilla only appends offers on
@@ -45,10 +43,7 @@ import java.util.UUID;
  * a {@link OriginalOffer#PASSTHROUGH} marker at their index so alignment is
  * preserved.
  */
-public class VillagerTradeSavedData extends SavedData {
-
-    /** File name inside {@code world/data}. */
-    public static final String NAME = "stockmarket_villager_trades";
+public class VillagerTradeData {
 
     /** Schema version written to disk for future migrations. */
     private static final int DATA_VERSION = 1;
@@ -56,20 +51,11 @@ public class VillagerTradeSavedData extends SavedData {
     /** Entries not seen for ~100 in-game days are pruned (villager gone/discarded). */
     private static final long PRUNE_AGE_GAME_TICKS = 100L * 24000L;
 
-    // DataFixTypes is intentionally null: this is mod data, vanilla datafixers
-    // never apply (the vanilla 2-arg convenience constructor is NeoForge-only,
-    // so the canonical 3-arg form is used for cross-loader compatibility).
-    //private static final SavedData.Factory<VillagerTradeSavedData> FACTORY = new SavedData.Factory<>(VillagerTradeSavedData::new, VillagerTradeSavedData::load, null); // mc<=1.21.4
-    // 1.21.5 replaced SavedData.Factory by the codec-based SavedDataType; the codec wraps the same NBT load/save.
-    private static final net.minecraft.world.level.saveddata.SavedDataType<VillagerTradeSavedData> FACTORY = new net.minecraft.world.level.saveddata.SavedDataType<>(NAME, ctx -> new VillagerTradeSavedData(), ctx -> CompoundTag.CODEC.xmap(tag -> load(tag, ctx.levelOrThrow().registryAccess()), data -> data.save(new CompoundTag(), ctx.levelOrThrow().registryAccess())), null); // mc>=1.21.5 mc<=1.21.10
-    // 1.21.11 dropped the SavedDataType context; the registries come from the running server instead.
-    //private static final net.minecraft.world.level.saveddata.SavedDataType<VillagerTradeSavedData> FACTORY = new net.minecraft.world.level.saveddata.SavedDataType<>(NAME, VillagerTradeSavedData::new, CompoundTag.CODEC.xmap(tag -> load(tag, net.kroia.modutilities.UtilitiesPlatform.getRegistryAccessServerSide()), data -> data.save(new CompoundTag(), net.kroia.modutilities.UtilitiesPlatform.getRegistryAccessServerSide())), null); // mc>=1.21.11 mc<=1.21.11
-    // 26.1 keys saved data by Identifier and stores it at <world>/data/<namespace>/<path>.dat.
-    //private static final net.minecraft.resources.Identifier ID = net.minecraft.resources.Identifier.fromNamespaceAndPath(StockMarketMod.MOD_ID, "villager_trades"); // mc>=26.1
-    //private static final net.minecraft.world.level.saveddata.SavedDataType<VillagerTradeSavedData> FACTORY = new net.minecraft.world.level.saveddata.SavedDataType<>(ID, VillagerTradeSavedData::new, CompoundTag.CODEC.xmap(tag -> load(tag, net.kroia.modutilities.UtilitiesPlatform.getRegistryAccessServerSide()), data -> data.save(new CompoundTag(), net.kroia.modutilities.UtilitiesPlatform.getRegistryAccessServerSide())), null); // mc>=26.1
-
     /** Villager UUID → sidecar entry. */
     private final Map<UUID, VillagerEntry> villagers = new HashMap<>();
+
+    /** Set on every change; cleared by {@link VillagerTradeManager} after a successful save. */
+    private boolean dirty = false;
 
     /**
      * Snapshot of a single original offer. Either holds the exact pre-rewrite
@@ -195,55 +181,20 @@ public class VillagerTradeSavedData extends SavedData {
         }
     }
 
-    /**
-     * Gets (or creates) the sidecar for the given server. Uses the overworld's
-     * data storage as the global store.
-     *
-     * @param server the running server (master or slave)
-     * @return the sidecar instance
-     */
-    public static VillagerTradeSavedData get(MinecraftServer server) {
-        //return server.overworld().getDataStorage().computeIfAbsent(FACTORY, NAME); // mc<=1.21.4
-        return server.overworld().getDataStorage().computeIfAbsent(FACTORY); // mc>=1.21.5 mc<=1.21.11
-        //migrateLegacyFile(server); // mc>=26.1
-        // 26.1 split the overworld storage off into dimensions/; the server-wide storage is <world>/data.
-        //return server.getDataStorage().computeIfAbsent(FACTORY); // mc>=26.1
+    /** Marks the sidecar as changed so the next save writes it. */
+    public void setDirty() {
+        dirty = true;
     }
 
-    /** Server the legacy-file migration last ran for, so it runs once per server start. */
-    //private static MinecraftServer migratedServer; // mc>=26.1
+    /** @return whether the sidecar changed since the last successful save */
+    public boolean isDirty() {
+        return dirty;
+    }
 
-    /**
-     * Moves the pre-26.1 sidecar file to its 26.1 location before the first load.
-     * <p>
-     * Up to 1.21.11 the file was {@code <world>/data/stockmarket_villager_trades.dat}. 26.1 stores
-     * {@link #ID} at {@code <world>/data/stockmarket/villager_trades.dat}, and vanilla's world upgrade
-     * ({@code DimensionStorageFileFix}) only moves its own named files, so without this the villager
-     * trade state of an upgraded world would be silently reset. Also picks up the file from the
-     * {@code minecraft} namespace paths an early 26.1 build used. Only moves if the new file is
-     * missing; never deletes the source on failure.
-     *
-     * @param server the running server whose world is migrated
-     */
-    //private static void migrateLegacyFile(MinecraftServer server) { // mc>=26.1
-    //    if (migratedServer == server) return; // mc>=26.1
-    //    migratedServer = server; // mc>=26.1
-    //    java.nio.file.Path world = server.getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT); // mc>=26.1
-    //    java.nio.file.Path target = ID.withSuffix(".dat").resolveAgainst(server.getWorldPath(net.minecraft.world.level.storage.LevelResource.DATA)); // mc>=26.1
-    //    if (java.nio.file.Files.exists(target)) return; // mc>=26.1
-    //    for (String legacy : new String[]{"data/" + NAME + ".dat", "data/minecraft/" + NAME + ".dat", "dimensions/minecraft/overworld/data/minecraft/" + NAME + ".dat"}) { // mc>=26.1
-    //        java.nio.file.Path source = world.resolve(legacy); // mc>=26.1
-    //        if (!java.nio.file.Files.isRegularFile(source)) continue; // mc>=26.1
-    //        try { // mc>=26.1
-    //            java.nio.file.Files.createDirectories(target.getParent()); // mc>=26.1
-    //            java.nio.file.Files.move(source, target); // mc>=26.1
-    //            StockMarketMod.LOGGER.info("Migrated villager trade data from {} to {}", source, target); // mc>=26.1
-    //        } catch (java.io.IOException e) { // mc>=26.1
-    //            StockMarketMod.LOGGER.warn("Could not migrate villager trade data from {} to {}; the old file is kept", source, target, e); // mc>=26.1
-    //        } // mc>=26.1
-    //        return; // mc>=26.1
-    //    } // mc>=26.1
-    //} // mc>=26.1
+    /** Clears the change flag after a successful save. */
+    public void clearDirty() {
+        dirty = false;
+    }
 
     /**
      * Returns the entry for the given villager UUID.
@@ -320,8 +271,8 @@ public class VillagerTradeSavedData extends SavedData {
      * @param registries registry context required by {@code MerchantOffer.CODEC}
      * @return the loaded sidecar
      */
-    public static VillagerTradeSavedData load(CompoundTag tag, HolderLookup.Provider registries) {
-        VillagerTradeSavedData data = new VillagerTradeSavedData();
+    public static VillagerTradeData load(CompoundTag tag, HolderLookup.Provider registries) {
+        VillagerTradeData data = new VillagerTradeData();
         RegistryOps<Tag> ops = registries.createSerializationContext(NbtOps.INSTANCE);
 
         ListTag villagerList = NbtCompat.getList(tag, "villagers", Tag.TAG_COMPOUND);
@@ -345,7 +296,7 @@ public class VillagerTradeSavedData extends SavedData {
                 Optional<MerchantOffer> offer = MerchantOffer.CODEC
                         .parse(ops, originalTag.get("offer"))
                         .resultOrPartial(error -> StockMarketMod.LOGGER.warn(
-                                "[VillagerTradeSavedData] Failed to decode original offer: {}", error));
+                                "[VillagerTradeData] Failed to decode original offer: {}", error));
                 // Missing flag (data written before the flag existed) defaults to
                 // true: back then every stored snapshot was immediately rewritten,
                 // so the live offer is in currency form and must be restorable.
@@ -360,7 +311,6 @@ public class VillagerTradeSavedData extends SavedData {
         return data;
     }
 
-    //@Override // mc<=1.21.4
     public CompoundTag save(CompoundTag tag, HolderLookup.Provider registries) {
         RegistryOps<Tag> ops = registries.createSerializationContext(NbtOps.INSTANCE);
         tag.putInt("version", DATA_VERSION);
@@ -383,7 +333,7 @@ public class VillagerTradeSavedData extends SavedData {
                     Optional<Tag> encoded = MerchantOffer.CODEC
                             .encodeStart(ops, original.offer())
                             .resultOrPartial(error -> StockMarketMod.LOGGER.warn(
-                                    "[VillagerTradeSavedData] Failed to encode original offer: {}", error));
+                                    "[VillagerTradeData] Failed to encode original offer: {}", error));
                     if (encoded.isPresent()) {
                         originalTag.put("offer", encoded.get());
                         originalTag.putBoolean("rewritten", original.isRewritten());
