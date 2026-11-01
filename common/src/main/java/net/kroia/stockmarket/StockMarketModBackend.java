@@ -360,8 +360,11 @@ public class StockMarketModBackend implements StockMarketAPI {
             // would include the vanilla server's inter-tick sleep and always
             // report ~50 ms regardless of real load, which would render the
             // effective-budget calculation meaningless.
-            TickEvent.SERVER_PRE.register(StockMarketModBackend::onServerTickPre);
-            TickEvent.SERVER_POST.register(StockMarketModBackend::onServerTick);
+            // Same instances as in onServerStop; isRegistered guards against a double register.
+            if (!TickEvent.SERVER_PRE.isRegistered(SERVER_TICK_PRE))
+                TickEvent.SERVER_PRE.register(SERVER_TICK_PRE);
+            if (!TickEvent.SERVER_POST.isRegistered(SERVER_TICK_POST))
+                TickEvent.SERVER_POST.register(SERVER_TICK_POST);
 
             if (TestRegistry.ENABLE_TESTS && StockMarketMod.ENABLE_DEV_FEATURES) {
                 MatchingEngineTestSuite.setBackend(SERVER_INSTANCES);
@@ -580,8 +583,8 @@ public class StockMarketModBackend implements StockMarketAPI {
         if (SERVER_INSTANCES != null && SERVER_INSTANCES.BANK_SYSTEM_API != null) {
             SERVER_INSTANCES.BANK_SYSTEM_API.setItemPriceProvider(null);
         }
-        TickEvent.SERVER_PRE.unregister(StockMarketModBackend::onServerTickPre);
-        TickEvent.SERVER_POST.unregister(StockMarketModBackend::onServerTick);
+        TickEvent.SERVER_PRE.unregister(SERVER_TICK_PRE);
+        TickEvent.SERVER_POST.unregister(SERVER_TICK_POST);
         StockMarketPlaceholders.shutdown();
         saveDataToFiles(server);
 
@@ -692,6 +695,13 @@ public class StockMarketModBackend implements StockMarketAPI {
     }
 
     private static long autosaveTimer_lastMs = 0;
+
+    // Listeners held as single instances: every `Class::method` expression creates a new
+    // object, so unregister() with a fresh method reference never matches the registered
+    // one and the handlers stack across singleplayer world switches. Always register and
+    // unregister through these fields.
+    private static final TickEvent.Server SERVER_TICK_PRE = StockMarketModBackend::onServerTickPre;
+    private static final TickEvent.Server SERVER_TICK_POST = StockMarketModBackend::onServerTick;
 
     /**
      * Nanosecond timestamp captured at the start of the current server tick
