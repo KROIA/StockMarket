@@ -21,7 +21,7 @@ import net.kroia.stockmarket.api.pluginmanager.IClientPluginManager;
 import net.kroia.stockmarket.minecraft.block.StockMarketBlocks;
 import net.kroia.stockmarket.minecraft.command.StockMarketCommandHandler;
 import net.kroia.stockmarket.minecraft.command.StockMarketCommands;
-import net.kroia.stockmarket.minecraft.compat.NEZNAMY_TAB_Placeholders;
+import net.kroia.stockmarket.minecraft.compat.StockMarketPlaceholders;
 import net.kroia.stockmarket.data.DataManager;
 import net.kroia.stockmarket.data.DatabaseManager;
 import net.kroia.stockmarket.data.table.MarketPriceManager;
@@ -249,7 +249,6 @@ public class StockMarketModBackend implements StockMarketAPI {
         MarketManager.setBackend(SERVER_INSTANCES);
         PluginManager.setBackend(SERVER_INSTANCES);
         StockMarketNetworking.setBackend(SERVER_INSTANCES);
-        NEZNAMY_TAB_Placeholders.setBackend(SERVER_INSTANCES);
         StockMarketCommands.setBackend(SERVER_INSTANCES);
         StockMarketCommandHandler.setBackend(SERVER_INSTANCES);
         DataManager.setBackend(SERVER_INSTANCES);
@@ -434,6 +433,10 @@ public class StockMarketModBackend implements StockMarketAPI {
                 onSlaveConnectedRefreshTrustCache();
             }
         }
+
+        // Placeholders (master + slave): registers player placeholders and the refresh tick.
+        // Placed after the master/slave branch so MARKET_MANAGER exists when the tick runs.
+        StockMarketPlaceholders.init(SERVER_INSTANCES);
     }
 
     /**
@@ -579,6 +582,7 @@ public class StockMarketModBackend implements StockMarketAPI {
         }
         TickEvent.SERVER_PRE.unregister(StockMarketModBackend::onServerTickPre);
         TickEvent.SERVER_POST.unregister(StockMarketModBackend::onServerTick);
+        StockMarketPlaceholders.shutdown();
         saveDataToFiles(server);
 
         if(SERVER_INSTANCES != null && SERVER_INSTANCES.DATABASE_MANAGER != null) {

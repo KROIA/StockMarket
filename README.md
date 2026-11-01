@@ -246,6 +246,8 @@ All market management in v2.0 is done through graphical interfaces. The old comm
 
 For a walkthrough of common server setups — the default bot-driven market vs. a fully player-driven market — see the [Admin Setup Use Cases](documentation/user-guide/admin-setup.md) guide.
 
+For scoreboard / tab-list placeholders (requires TAB or Placeholder API) see the [Placeholders](documentation/user-guide/placeholders.md) guide.
+
 #### Getting Admin Access
 A server operator needs to grant StockMarket admin privileges:<br>
 <code>/stockmarket op</code> — Grant admin to yourself<br>

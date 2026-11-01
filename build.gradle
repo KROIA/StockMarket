@@ -45,7 +45,7 @@ subprojects {
         //maven { url 'https://jitpack.io' }
         //mavenLocal()
 
-        // https://github.com/NEZNAMY/TAB API
+        // JitPack: ModUtilities / BankSystem fallback
         maven { url 'https://jitpack.io' }
         maven { url = "https://api.modrinth.com/maven" }
     }
@@ -62,8 +62,6 @@ subprojects {
         //}
 
 
-        // https://github.com/NEZNAMY/TAB API
-        compileOnly 'com.github.NEZNAMY:TAB-API:5.2.5'
 
 
     }

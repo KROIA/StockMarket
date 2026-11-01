@@ -10,7 +10,6 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
-import net.kroia.stockmarket.minecraft.compat.NEZNAMY_TAB_Placeholders;
 
 public final class StockMarketFabric implements ModInitializer {
     @Override
@@ -33,10 +32,6 @@ public final class StockMarketFabric implements ModInitializer {
         ServerLifecycleEvents.SERVER_STARTED.register((server)->
         {
             StockMarketModBackend.onServerStart(server);
-            // Check if NEZNAMY/TAB is present and register placeholders
-            if (Platform.isModLoaded("tab")) {
-                NEZNAMY_TAB_Placeholders.register();
-            }
         });
 
         ServerLifecycleEvents.SERVER_STOPPING.register(StockMarketModBackend::onServerStop);
