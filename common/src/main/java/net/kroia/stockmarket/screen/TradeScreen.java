@@ -476,7 +476,7 @@ public class TradeScreen extends StockMarketGuiScreen {
     public static void openScreen()
     {
         TradeScreen screen = new TradeScreen();
-        Minecraft.getInstance().setScreen(screen);
+        net.kroia.modutilities.gui.client.ClientCompat.setScreen(screen);
     }
 
     @Override
