@@ -47,7 +47,8 @@ public class StockMarketEntities {
     public static void registerRenderers() {
         // Architectury API method to register BlockEntityRenderer in a platform-neutral way
         BlockEntityRendererRegistry.register((BlockEntityType<StockMarketDisplayBlockEntity>) STOCKMARKET_DISPLAY_BLOCK_ENTITY.get(), AbstractDisplayBlockEntityRenderer::new);
-        RenderTypeRegistry.register(RenderType.cutout(), StockMarketBlocks.STOCKMARKET_DISPLAY_BLOCK.get());
+        RenderTypeRegistry.register(RenderType.cutout(), StockMarketBlocks.STOCKMARKET_DISPLAY_BLOCK.get()); // mc<=1.21.5
+        //RenderTypeRegistry.register(net.minecraft.client.renderer.chunk.ChunkSectionLayer.CUTOUT, StockMarketBlocks.STOCKMARKET_DISPLAY_BLOCK.get()); // mc>=1.21.6
     }
 
     public static <T extends BlockEntityType<?>> RegistrySupplier<T> registerBlockEntity(String name, Supplier<T> item)
