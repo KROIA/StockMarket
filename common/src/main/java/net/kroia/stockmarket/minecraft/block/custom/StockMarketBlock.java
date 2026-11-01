@@ -1,8 +1,10 @@
 package net.kroia.stockmarket.minecraft.block.custom;
 
 import net.kroia.banksystem.minecraft.block.custom.TerminalBlock;
+import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.util.StockMarketClientHooks;
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Player;
@@ -17,7 +19,9 @@ public class StockMarketBlock extends TerminalBlock {
 
     public StockMarketBlock()
     {
-        super();
+        // Pass the registered id so the BankSystem base class can apply RegistryCompat (multi-version support).
+        // Must match the id used in StockMarketBlocks registration.
+        super(ResourceLocation.fromNamespaceAndPath(StockMarketMod.MOD_ID, NAME));
     }
     /*@Nullable
     @Override
