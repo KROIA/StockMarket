@@ -2402,7 +2402,8 @@ public class NewsPlugin extends ServerPlugin<NewsPlugin.Settings, NewsPlugin.Run
         try {
             MinecraftServer server = UtilitiesPlatform.getServer();
             if (server != null && server.overworld() != null) {
-                return server.overworld().getDayTime() / 24000L;
+                return server.overworld().getDayTime() / 24000L; // mc<=1.21.11
+                //return server.overworld().getOverworldClockTime() / 24000L; // mc>=26.1
             }
         } catch (Exception ignored) {
             // No server (unit-test context) — day 0.
