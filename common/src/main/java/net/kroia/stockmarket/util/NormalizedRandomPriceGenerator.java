@@ -88,37 +88,4 @@ public class NormalizedRandomPriceGenerator implements ServerSaveable {
         currentValue = NbtCompat.getDouble(tag, "currentValue");
         return true;
     }
-
-    public void testToFile(int steps)
-    {
-        if(!StockMarketMod.ENABLE_DEV_FEATURES)
-            return;
-
-        String fileName = "normalized_random_walk.csv";
-
-        StringBuilder sb = new StringBuilder();
-        sb.append("Step;");
-        for(int i=0; i<randomWalk.length; i++)
-        {
-            sb.append("Walk_").append(i).append(";");
-        }
-        sb.append("sum\n");
-
-        for(int i=0; i<steps; i++)
-        {
-            sb.append(i).append(";");
-            for(int j=0; j<randomWalk.length; j++)
-            {
-                double value = randomWalk[j].getCurrentValue() * coefficients[j];
-                sb.append(value).append(";");
-            }
-            sb.append(getNextValue()).append("\n");
-        }
-        try {
-            java.nio.file.Files.write(java.nio.file.Paths.get(fileName), sb.toString().getBytes());
-            System.out.println("Data written to " + fileName);
-        } catch (java.io.IOException e) {
-            System.err.println("Error writing to file: " + e.getMessage());
-        }
-    }
 }
