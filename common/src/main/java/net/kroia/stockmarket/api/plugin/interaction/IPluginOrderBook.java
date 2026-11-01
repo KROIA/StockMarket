@@ -1,7 +1,7 @@
 package net.kroia.stockmarket.api.plugin.interaction;
 
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
-import net.minecraft.util.Tuple;
+import net.kroia.modutilities.Tuple;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
