@@ -27,12 +27,12 @@
     "stockmarket.mixins.json"
   ],
   "depends": {
-    "fabricloader": ">=0.17.0",
-    "minecraft": "~1.21.11",
-    "java": ">=21",
-    "architectury": ">=19.0.1",
+    "fabricloader": ">=0.18.5",
+    "minecraft": "~26.1",
+    "java": ">=25",
+    "architectury": ">=20.0.5",
     "fabric-api": "*",
-    "banksystem": ">=1.21.11-2.2.0 <1.21.11-2.3.0"
+    "banksystem": ">=26.1-2.2.0 <26.1-2.3.0"
   },
   "suggests": {
     "another-mod": "*"
