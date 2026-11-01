@@ -1,7 +1,7 @@
 plugins {
     //id 'dev.architectury.loom' version '1.7-SNAPSHOT' apply false // mc<=1.21.4
-    id 'dev.architectury.loom' version '1.10-SNAPSHOT' apply false // mc>=1.21.5 mc<=1.21.8 (1.21.5 dependencies are built with Loom 1.10)
-    //id 'dev.architectury.loom' version '1.11-SNAPSHOT' apply false // mc>=1.21.9 mc<=1.21.9 (1.21.9 dependencies are built with Loom 1.11)
+    //id 'dev.architectury.loom' version '1.10-SNAPSHOT' apply false // mc>=1.21.5 mc<=1.21.8 (1.21.5 dependencies are built with Loom 1.10)
+    id 'dev.architectury.loom' version '1.11-SNAPSHOT' apply false // mc>=1.21.9 mc<=1.21.9 (1.21.9 dependencies are built with Loom 1.11)
     //id 'dev.architectury.loom' version '1.14-SNAPSHOT' apply false // mc>=1.21.10 (JEI and NeoForge 21.10.57+ for 1.21.10 need Loom 1.13+)
     id 'architectury-plugin' version '3.4-SNAPSHOT'
     id 'com.github.johnrengelman.shadow' version '8.1.1' apply false
