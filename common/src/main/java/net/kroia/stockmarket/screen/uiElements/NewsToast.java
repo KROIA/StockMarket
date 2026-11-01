@@ -8,9 +8,9 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.toasts.Toast;
-import net.minecraft.client.gui.components.toasts.ToastComponent; // mc<=1.21.1
-//import net.minecraft.client.gui.components.toasts.ToastManager; // mc>=1.21.2
-//import net.minecraft.client.renderer.RenderType; // mc>=1.21.2
+//import net.minecraft.client.gui.components.toasts.ToastComponent; // mc<=1.21.1
+import net.minecraft.client.gui.components.toasts.ToastManager; // mc>=1.21.2
+import net.minecraft.client.renderer.RenderType; // mc>=1.21.2
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.FormattedText;
 import net.minecraft.resources.ResourceLocation;
@@ -63,7 +63,7 @@ public class NewsToast implements Toast {
     }
 
     // Visibility computed in update(), returned by getWantedVisibility() (1.21.2+ toast API).
-    //private Visibility wantedVisibility = Visibility.SHOW; // mc>=1.21.2
+    private Visibility wantedVisibility = Visibility.SHOW; // mc>=1.21.2
 
     /**
      * Toast entry point (1.21.1 API): draws the toast and decides its visibility.
@@ -73,26 +73,26 @@ public class NewsToast implements Toast {
      * @param timeSinceLastVisible milliseconds since the toast became visible
      * @return {@code SHOW} while within the display time, then {@code HIDE}
      */
-    @Override // mc<=1.21.1
-    public @NotNull Visibility render(GuiGraphics guiGraphics, ToastComponent toastComponent, // mc<=1.21.1
-                                      long timeSinceLastVisible) { // mc<=1.21.1
-        draw(guiGraphics, toastComponent.getMinecraft().font); // mc<=1.21.1
-        return visibilityAt(timeSinceLastVisible, toastComponent.getNotificationDisplayTimeMultiplier()); // mc<=1.21.1
-    } // mc<=1.21.1
+    //@Override // mc<=1.21.1
+    //public @NotNull Visibility render(GuiGraphics guiGraphics, ToastComponent toastComponent, // mc<=1.21.1
+                                      //long timeSinceLastVisible) { // mc<=1.21.1
+        //draw(guiGraphics, toastComponent.getMinecraft().font); // mc<=1.21.1
+        //return visibilityAt(timeSinceLastVisible, toastComponent.getNotificationDisplayTimeMultiplier()); // mc<=1.21.1
+    //} // mc<=1.21.1
 
     // 1.21.2+ toast API: visibility is updated per tick, rendering is separate.
-    //@Override // mc>=1.21.2
-    //public void update(ToastManager toastManager, long timeSinceLastVisible) { // mc>=1.21.2
-    //    wantedVisibility = visibilityAt(timeSinceLastVisible, toastManager.getNotificationDisplayTimeMultiplier()); // mc>=1.21.2
-    //} // mc>=1.21.2
-    //@Override // mc>=1.21.2
-    //public @NotNull Visibility getWantedVisibility() { // mc>=1.21.2
-    //    return wantedVisibility; // mc>=1.21.2
-    //} // mc>=1.21.2
-    //@Override // mc>=1.21.2
-    //public void render(GuiGraphics guiGraphics, Font font, long timeSinceLastVisible) { // mc>=1.21.2
-    //    draw(guiGraphics, font); // mc>=1.21.2
-    //} // mc>=1.21.2
+    @Override // mc>=1.21.2
+    public void update(ToastManager toastManager, long timeSinceLastVisible) { // mc>=1.21.2
+        wantedVisibility = visibilityAt(timeSinceLastVisible, toastManager.getNotificationDisplayTimeMultiplier()); // mc>=1.21.2
+    } // mc>=1.21.2
+    @Override // mc>=1.21.2
+    public @NotNull Visibility getWantedVisibility() { // mc>=1.21.2
+        return wantedVisibility; // mc>=1.21.2
+    } // mc>=1.21.2
+    @Override // mc>=1.21.2
+    public void render(GuiGraphics guiGraphics, Font font, long timeSinceLastVisible) { // mc>=1.21.2
+        draw(guiGraphics, font); // mc>=1.21.2
+    } // mc>=1.21.2
 
     /**
      * @param timeSinceLastVisible milliseconds since the toast became visible
@@ -112,8 +112,8 @@ public class NewsToast implements Toast {
      * @param font        the font used for title and headline
      */
     private void draw(GuiGraphics guiGraphics, Font font) {
-        guiGraphics.blitSprite(BACKGROUND_SPRITE, 0, 0, width(), height()); // mc<=1.21.1
-        //guiGraphics.blitSprite(RenderType::guiTextured, BACKGROUND_SPRITE, 0, 0, width(), height()); // mc>=1.21.2
+        //guiGraphics.blitSprite(BACKGROUND_SPRITE, 0, 0, width(), height()); // mc<=1.21.1
+        guiGraphics.blitSprite(RenderType::guiTextured, BACKGROUND_SPRITE, 0, 0, width(), height()); // mc>=1.21.2
 
         guiGraphics.drawString(font, TITLE, TEXT_X, 7, TITLE_COLOR, false);
 

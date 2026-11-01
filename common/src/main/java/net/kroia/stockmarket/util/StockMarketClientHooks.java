@@ -79,8 +79,8 @@ public class StockMarketClientHooks {
         // defaults (toast flag off), so nothing is ever shown by accident.
         if (!StockMarketGuiElement.getPlayerPreferences().isNewsToastEnabled())
             return;
-        Minecraft.getInstance().getToasts().addToast(new NewsToast(record)); // mc<=1.21.1
-        //Minecraft.getInstance().getToastManager().addToast(new NewsToast(record)); // mc>=1.21.2
+        //Minecraft.getInstance().getToasts().addToast(new NewsToast(record)); // mc<=1.21.1
+        Minecraft.getInstance().getToastManager().addToast(new NewsToast(record)); // mc>=1.21.2
     }
 
     /**

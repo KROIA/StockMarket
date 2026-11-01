@@ -2,10 +2,10 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "key": {
-    "D": {"item": "banksystem:display"},
-    "G": {"item": "minecraft:glass_pane"},
-    "I": {"item": "minecraft:iron_nugget"},
-    "E": {"item": "minecraft:emerald"}
+    "D": "banksystem:display",
+    "G": "minecraft:glass_pane",
+    "I": "minecraft:iron_nugget",
+    "E": "minecraft:emerald"
   },
   "pattern": [
     "IGI",

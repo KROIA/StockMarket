@@ -6,8 +6,8 @@ import net.kroia.stockmarket.minecraft.item.StockMarketCreativeModeTab;
 import net.kroia.stockmarket.util.StockMarketClientHooks;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.InteractionResultHolder; // mc<=1.21.1
-//import net.minecraft.world.InteractionResult; // mc>=1.21.2
+//import net.minecraft.world.InteractionResultHolder; // mc<=1.21.1
+import net.minecraft.world.InteractionResult; // mc>=1.21.2
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -44,12 +44,12 @@ public class NewspaperItem extends Item {
      * consistently on both sides.
      */
     @Override
-    public @NotNull InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) { // mc<=1.21.1
-    //public @NotNull InteractionResult use(Level level, Player player, InteractionHand hand) { // mc>=1.21.2
+    //public @NotNull InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) { // mc<=1.21.1
+    public @NotNull InteractionResult use(Level level, Player player, InteractionHand hand) { // mc>=1.21.2
         if (level.isClientSide) {
             StockMarketClientHooks.openNewsScreen();
         }
-        return InteractionResultHolder.sidedSuccess(player.getItemInHand(hand), level.isClientSide); // mc<=1.21.1
-        //return InteractionResult.SUCCESS; // mc>=1.21.2 (swings on client, same as sidedSuccess)
+        //return InteractionResultHolder.sidedSuccess(player.getItemInHand(hand), level.isClientSide); // mc<=1.21.1
+        return InteractionResult.SUCCESS; // mc>=1.21.2 (swings on client, same as sidedSuccess)
     }
 }

@@ -1080,7 +1080,7 @@ public class PresetEditorTab extends StockMarketGuiElement {
      * @param task the task to run on the next client tick
      */
     private static void runNextTick(Runnable task) {
-        Minecraft.getInstance().tell(task); // mc<=1.21.1
-        //Minecraft.getInstance().schedule(task); // mc>=1.21.2
+        //Minecraft.getInstance().tell(task); // mc<=1.21.1
+        Minecraft.getInstance().schedule(task); // mc>=1.21.2
     }
 }
