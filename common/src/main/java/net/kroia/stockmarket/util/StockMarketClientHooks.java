@@ -43,7 +43,7 @@ public class StockMarketClientHooks {
      */
     public static void notifyScreenMarketRemoved(ItemID marketID)
     {
-        if (Minecraft.getInstance().screen instanceof StockMarketGuiScreen guiScreen) {
+        if (net.kroia.modutilities.gui.client.ClientCompat.screen() instanceof StockMarketGuiScreen guiScreen) {
             guiScreen.onMarketRemoved(marketID);
         }
     }
@@ -151,7 +151,7 @@ public class StockMarketClientHooks {
             {
                 if(StockMarketMod.ENABLE_DEV_FEATURES) {
                     DevTestScreen screen = new DevTestScreen();
-                    mc.setScreen(screen);
+                    net.kroia.modutilities.gui.client.ClientCompat.setScreen(screen);
                 }
                 break;
             }
