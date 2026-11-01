@@ -64,7 +64,9 @@ public class VillagerTradeSavedData extends SavedData {
     //private static final net.minecraft.world.level.saveddata.SavedDataType<VillagerTradeSavedData> FACTORY = new net.minecraft.world.level.saveddata.SavedDataType<>(NAME, ctx -> new VillagerTradeSavedData(), ctx -> CompoundTag.CODEC.xmap(tag -> load(tag, ctx.levelOrThrow().registryAccess()), data -> data.save(new CompoundTag(), ctx.levelOrThrow().registryAccess())), null); // mc>=1.21.5 mc<=1.21.10
     // 1.21.11 dropped the SavedDataType context; the registries come from the running server instead.
     private static final net.minecraft.world.level.saveddata.SavedDataType<VillagerTradeSavedData> FACTORY = new net.minecraft.world.level.saveddata.SavedDataType<>(NAME, VillagerTradeSavedData::new, CompoundTag.CODEC.xmap(tag -> load(tag, net.kroia.modutilities.UtilitiesPlatform.getRegistryAccessServerSide()), data -> data.save(new CompoundTag(), net.kroia.modutilities.UtilitiesPlatform.getRegistryAccessServerSide())), null); // mc>=1.21.11 mc<=1.21.11
-    //private static final net.minecraft.world.level.saveddata.SavedDataType<VillagerTradeSavedData> FACTORY = new net.minecraft.world.level.saveddata.SavedDataType<>(net.minecraft.resources.Identifier.withDefaultNamespace(NAME), VillagerTradeSavedData::new, CompoundTag.CODEC.xmap(tag -> load(tag, net.kroia.modutilities.UtilitiesPlatform.getRegistryAccessServerSide()), data -> data.save(new CompoundTag(), net.kroia.modutilities.UtilitiesPlatform.getRegistryAccessServerSide())), null); // mc>=26.1
+    // 26.1 keys saved data by Identifier and stores it at <world>/data/<namespace>/<path>.dat.
+    //private static final net.minecraft.resources.Identifier ID = net.minecraft.resources.Identifier.fromNamespaceAndPath(StockMarketMod.MOD_ID, "villager_trades"); // mc>=26.1
+    //private static final net.minecraft.world.level.saveddata.SavedDataType<VillagerTradeSavedData> FACTORY = new net.minecraft.world.level.saveddata.SavedDataType<>(ID, VillagerTradeSavedData::new, CompoundTag.CODEC.xmap(tag -> load(tag, net.kroia.modutilities.UtilitiesPlatform.getRegistryAccessServerSide()), data -> data.save(new CompoundTag(), net.kroia.modutilities.UtilitiesPlatform.getRegistryAccessServerSide())), null); // mc>=26.1
 
     /** Villager UUID → sidecar entry. */
     private final Map<UUID, VillagerEntry> villagers = new HashMap<>();
@@ -202,8 +204,46 @@ public class VillagerTradeSavedData extends SavedData {
      */
     public static VillagerTradeSavedData get(MinecraftServer server) {
         //return server.overworld().getDataStorage().computeIfAbsent(FACTORY, NAME); // mc<=1.21.4
-        return server.overworld().getDataStorage().computeIfAbsent(FACTORY); // mc>=1.21.5
+        return server.overworld().getDataStorage().computeIfAbsent(FACTORY); // mc>=1.21.5 mc<=1.21.11
+        //migrateLegacyFile(server); // mc>=26.1
+        // 26.1 split the overworld storage off into dimensions/; the server-wide storage is <world>/data.
+        //return server.getDataStorage().computeIfAbsent(FACTORY); // mc>=26.1
     }
+
+    /** Server the legacy-file migration last ran for, so it runs once per server start. */
+    //private static MinecraftServer migratedServer; // mc>=26.1
+
+    /**
+     * Moves the pre-26.1 sidecar file to its 26.1 location before the first load.
+     * <p>
+     * Up to 1.21.11 the file was {@code <world>/data/stockmarket_villager_trades.dat}. 26.1 stores
+     * {@link #ID} at {@code <world>/data/stockmarket/villager_trades.dat}, and vanilla's world upgrade
+     * ({@code DimensionStorageFileFix}) only moves its own named files, so without this the villager
+     * trade state of an upgraded world would be silently reset. Also picks up the file from the
+     * {@code minecraft} namespace paths an early 26.1 build used. Only moves if the new file is
+     * missing; never deletes the source on failure.
+     *
+     * @param server the running server whose world is migrated
+     */
+    //private static void migrateLegacyFile(MinecraftServer server) { // mc>=26.1
+    //    if (migratedServer == server) return; // mc>=26.1
+    //    migratedServer = server; // mc>=26.1
+    //    java.nio.file.Path world = server.getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT); // mc>=26.1
+    //    java.nio.file.Path target = ID.withSuffix(".dat").resolveAgainst(server.getWorldPath(net.minecraft.world.level.storage.LevelResource.DATA)); // mc>=26.1
+    //    if (java.nio.file.Files.exists(target)) return; // mc>=26.1
+    //    for (String legacy : new String[]{"data/" + NAME + ".dat", "data/minecraft/" + NAME + ".dat", "dimensions/minecraft/overworld/data/minecraft/" + NAME + ".dat"}) { // mc>=26.1
+    //        java.nio.file.Path source = world.resolve(legacy); // mc>=26.1
+    //        if (!java.nio.file.Files.isRegularFile(source)) continue; // mc>=26.1
+    //        try { // mc>=26.1
+    //            java.nio.file.Files.createDirectories(target.getParent()); // mc>=26.1
+    //            java.nio.file.Files.move(source, target); // mc>=26.1
+    //            StockMarketMod.LOGGER.info("Migrated villager trade data from {} to {}", source, target); // mc>=26.1
+    //        } catch (java.io.IOException e) { // mc>=26.1
+    //            StockMarketMod.LOGGER.warn("Could not migrate villager trade data from {} to {}; the old file is kept", source, target, e); // mc>=26.1
+    //        } // mc>=26.1
+    //        return; // mc>=26.1
+    //    } // mc>=26.1
+    //} // mc>=26.1
 
     /**
      * Returns the entry for the given villager UUID.
