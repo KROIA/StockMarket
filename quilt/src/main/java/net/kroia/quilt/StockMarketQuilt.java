@@ -33,10 +33,6 @@ public final class StockMarketQuilt implements ModInitializer {
         ServerLifecycleEvents.READY.register((server)->
         {
             StockMarketModBackend.onServerStart(server);
-            // Check if NEZNAMY/TAB is present and register placeholders
-            if (Platform.isModLoaded("tab")) {
-                NEZNAMY_TAB_Placeholders.register();
-            }
         });
 
         // Handle world save (stop)

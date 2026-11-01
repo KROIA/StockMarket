@@ -10,7 +10,9 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
@@ -23,6 +25,10 @@ public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
     public static final String DELETE = "DELETE FROM MarketPrice";
     public static final String COUNT =  "SELECT COUNT(*) FROM MarketPrice";
     public static final String MIN_TIME = "SELECT MIN(time) FROM MarketPrice";
+    /** Per-market volume sum + oldest open since a timestamp (both ? bind the same window start). */
+    public static final String WINDOW_STATS = "SELECT m.marketid, SUM(m.traded_volume), "
+            + "(SELECT o.open FROM MarketPrice o WHERE o.marketid = m.marketid AND o.time >= ? ORDER BY o.time ASC LIMIT 1) "
+            + "FROM MarketPrice m WHERE m.time >= ? GROUP BY m.marketid";
 
     public MarketPriceManager(DatabaseManager databaseManager) {
         this.databaseManager = databaseManager;
@@ -213,6 +219,34 @@ public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
                 StockMarketMod.LOGGER.warn("Failed to query MarketPrice oldest timestamp: {}", e.getMessage());
                 return Long.MAX_VALUE;
             }
+        }, databaseManager.getDatabaseThread());
+    }
+
+    /**
+     * Rolling-window aggregate for every market in one query (used by the placeholder system).
+     * Runs on the database thread.
+     *
+     * @param sinceMs window start (inclusive) as epoch milliseconds, e.g. {@code now - 24h}
+     * @return a future completing with {@code marketid -> {oldestOpen, tradedVolumeSum}}, where
+     *         {@code oldestOpen} is the open of the oldest candle with {@code time >= sinceMs} and
+     *         {@code tradedVolumeSum} is the raw traded volume of all candles in the window.
+     *         Markets without candles in the window are absent. Empty map on SQL error.
+     */
+    public CompletableFuture<Map<Short, double[]>> getWindowStats(long sinceMs) {
+        return CompletableFuture.supplyAsync(() -> {
+            Map<Short, double[]> result = new HashMap<>();
+            try (PreparedStatement ps = databaseManager.getConnection().prepareStatement(WINDOW_STATS)) {
+                ps.setLong(1, sinceMs);
+                ps.setLong(2, sinceMs);
+                try (ResultSet rs = ps.executeQuery()) {
+                    // Read-only SELECT — no commit needed (see rationale in query()).
+                    while (rs.next())
+                        result.put(rs.getShort(1), new double[]{rs.getDouble(3), rs.getDouble(2)});
+                }
+            } catch (SQLException e) {
+                StockMarketMod.LOGGER.warn("Failed to query MarketPrice window stats: {}", e.getMessage());
+            }
+            return result;
         }, databaseManager.getDatabaseThread());
     }
 

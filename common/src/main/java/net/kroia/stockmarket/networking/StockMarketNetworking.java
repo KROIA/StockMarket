@@ -81,6 +81,8 @@ public class StockMarketNetworking extends NetworkPacketManager {
     public final NewsAdminRequest NEWS_ADMIN_REQUEST = (NewsAdminRequest) AsynchronousRequestResponseSystem.register(new NewsAdminRequest());
     /** Hash-batched published news-picture fetch for the client picture cache (T-089, not admin-gated, rate-limited). */
     public final NewsPictureRequest NEWS_PICTURE_REQUEST = (NewsPictureRequest) AsynchronousRequestResponseSystem.register(new NewsPictureRequest());
+    /** Slave → master pull of cached placeholder values (market + trusted-slave player values); not client-callable. */
+    public final PlaceholderSnapshotRequest PLACEHOLDER_SNAPSHOT_REQUEST = (PlaceholderSnapshotRequest) AsynchronousRequestResponseSystem.register(new PlaceholderSnapshotRequest());
 
     //public final MarketSettingsGetRequest MARKET_SETTINGS_GET_REQUEST = (MarketSettingsGetRequest) AsynchronousRequestResponseSystem.register(new MarketSettingsGetRequest());
 
