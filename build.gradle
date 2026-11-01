@@ -34,6 +34,16 @@ subprojects {
     apply plugin: 'architectury-plugin'
     apply plugin: 'maven-publish'
 
+    // Dev-only code (unit tests, test commands, dev test screen) is compiled only when gradle.properties has
+    // enable_dev_features=true. Release builds do not compile it at all, so any release code that
+    // still references it fails to compile instead of shipping test code. StockMarketModBackend
+    // reaches it only through the reflective DevBootstrap entry point.
+    if (!(rootProject.findProperty('enable_dev_features') ?: 'false').toBoolean()) {
+        sourceSets.main.java {
+            exclude 'net/kroia/stockmarket/testing/**'
+        }
+    }
+
     base {
         // Set up a suffixed format for the mod jar names, e.g. `example-fabric`.
         archivesName = "$rootProject.archives_name-$project.name"
