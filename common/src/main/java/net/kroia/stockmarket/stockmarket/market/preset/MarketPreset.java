@@ -269,7 +269,7 @@ public class MarketPreset {
         try {
             ResourceLocation loc = ResourceLocation.tryParse(itemIdStr);
             if (loc == null) return ItemStack.EMPTY;
-            Item item = BuiltInRegistries.ITEM.get(loc);
+            Item item = BuiltInRegistries.ITEM.getOptional(loc).orElse(Items.AIR); // get(loc) returns Optional<Holder> on 1.21.2
             if (item == Items.AIR && !itemIdStr.equals("minecraft:air")) return ItemStack.EMPTY;
 
             ItemStack stack = new ItemStack(item);

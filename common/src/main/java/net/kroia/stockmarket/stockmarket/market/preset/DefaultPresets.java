@@ -2,7 +2,7 @@ package net.kroia.stockmarket.stockmarket.market.preset;
 
 import com.google.gson.JsonObject;
 import net.minecraft.core.Holder;
-import net.minecraft.core.Registry;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -64,9 +64,9 @@ public class DefaultPresets {
      * Returns null if the enchantment holder cannot be resolved.
      */
     private static @Nullable MarketPreset enchantedBook(
-            Registry<Enchantment> registry, ResourceKey<Enchantment> key,
+            HolderLookup.RegistryLookup<Enchantment> registry, ResourceKey<Enchantment> key,
             int level, float price, float abundance) {
-        Optional<Holder.Reference<Enchantment>> holder = registry.getHolder(key);
+        Optional<Holder.Reference<Enchantment>> holder = registry.get(key); // HolderGetter.get: same signature on 1.21.1 and 1.21.2
         if (holder.isEmpty()) return null;
         ItemStack book = new ItemStack(Items.ENCHANTED_BOOK);
         ItemEnchantments.Mutable mutable = new ItemEnchantments.Mutable(ItemEnchantments.EMPTY);
@@ -855,14 +855,15 @@ public class DefaultPresets {
      * Price scales with max level: base 30 + 40 per level.
      */
     private static MarketPresetCategory enchantedBooks(RegistryAccess registries) {
-        Registry<Enchantment> reg = registries.registryOrThrow(Registries.ENCHANTMENT);
+        // lookupOrThrow/listElements: identical API on 1.21.1 and 1.21.2 (registryOrThrow was removed in 1.21.2)
+        HolderLookup.RegistryLookup<Enchantment> reg = registries.lookupOrThrow(Registries.ENCHANTMENT);
         List<MarketPreset> presets = new ArrayList<>();
 
-        for (Map.Entry<ResourceKey<Enchantment>, Enchantment> entry : reg.entrySet()) {
+        for (Holder.Reference<Enchantment> ref : reg.listElements().toList()) {
             try {
-                int maxLevel = entry.getValue().getMaxLevel();
+                int maxLevel = ref.value().getMaxLevel();
                 float price = 30 + maxLevel * 40;
-                MarketPreset preset = enchantedBook(reg, entry.getKey(), maxLevel, price, 3f);
+                MarketPreset preset = enchantedBook(reg, ref.key(), maxLevel, price, 3f);
                 if (preset != null) presets.add(preset);
             } catch (Exception ignored) {
                 // Skip enchantments that fail to resolve
@@ -885,7 +886,7 @@ public class DefaultPresets {
         for (Map.Entry<ResourceKey<Potion>, Potion> entry : BuiltInRegistries.POTION.entrySet()) {
             if (entry.getValue().getEffects().isEmpty()) continue;
             try {
-                Holder<Potion> holder = BuiltInRegistries.POTION.getHolderOrThrow(entry.getKey());
+                Holder<Potion> holder = BuiltInRegistries.POTION.wrapAsHolder(entry.getValue()); // version-neutral (getHolderOrThrow renamed in 1.21.2)
                 presets.add(potionPreset(Items.POTION, holder, 20, 5f));
             } catch (Exception ignored) {
                 // Skip potions that fail to resolve
@@ -906,7 +907,7 @@ public class DefaultPresets {
         for (Map.Entry<ResourceKey<Potion>, Potion> entry : BuiltInRegistries.POTION.entrySet()) {
             if (entry.getValue().getEffects().isEmpty()) continue;
             try {
-                Holder<Potion> holder = BuiltInRegistries.POTION.getHolderOrThrow(entry.getKey());
+                Holder<Potion> holder = BuiltInRegistries.POTION.wrapAsHolder(entry.getValue()); // version-neutral (getHolderOrThrow renamed in 1.21.2)
                 presets.add(potionPreset(Items.SPLASH_POTION, holder, 30, 4f));
             } catch (Exception ignored) {
             }
@@ -926,7 +927,7 @@ public class DefaultPresets {
         for (Map.Entry<ResourceKey<Potion>, Potion> entry : BuiltInRegistries.POTION.entrySet()) {
             if (entry.getValue().getEffects().isEmpty()) continue;
             try {
-                Holder<Potion> holder = BuiltInRegistries.POTION.getHolderOrThrow(entry.getKey());
+                Holder<Potion> holder = BuiltInRegistries.POTION.wrapAsHolder(entry.getValue()); // version-neutral (getHolderOrThrow renamed in 1.21.2)
                 presets.add(potionPreset(Items.LINGERING_POTION, holder, 40, 3f));
             } catch (Exception ignored) {
             }
@@ -946,7 +947,7 @@ public class DefaultPresets {
         for (Map.Entry<ResourceKey<Potion>, Potion> entry : BuiltInRegistries.POTION.entrySet()) {
             if (entry.getValue().getEffects().isEmpty()) continue;
             try {
-                Holder<Potion> holder = BuiltInRegistries.POTION.getHolderOrThrow(entry.getKey());
+                Holder<Potion> holder = BuiltInRegistries.POTION.wrapAsHolder(entry.getValue()); // version-neutral (getHolderOrThrow renamed in 1.21.2)
                 presets.add(potionPreset(Items.TIPPED_ARROW, holder, 30, 4f));
             } catch (Exception ignored) {
             }
