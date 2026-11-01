@@ -19,6 +19,7 @@ import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.resources.language.I18n;
+import net.minecraft.locale.Language;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.StreamCodec;
@@ -235,7 +236,7 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
          */
         public static Component phase(String phaseName) {
             String key = PREFIX + "phase." + phaseName.toLowerCase(Locale.ROOT);
-            return I18n.exists(key) ? Component.translatable(key) : Component.literal(phaseName);
+            return Language.getInstance().has(key) ? Component.translatable(key) : Component.literal(phaseName);
         }
 
         /**
@@ -920,10 +921,12 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
                     if (printLinesToChat) {
                         Minecraft mc = Minecraft.getInstance();
                         //mc.gui.getChat().addMessage(Component.literal(response.message())); // mc<=1.21.11
-                        mc.gui.getChat().addClientSystemMessage(Component.literal(response.message())); // mc>=26.1
+                        mc.gui.getChat().addClientSystemMessage(Component.literal(response.message())); // mc>=26.1 mc<=26.1
+                        //mc.gui.hud.getChat().addClientSystemMessage(Component.literal(response.message())); // mc>=26.2
                         for (String line : response.lines()) {
                             //mc.gui.getChat().addMessage(Component.literal(line)); // mc<=1.21.11
-                            mc.gui.getChat().addClientSystemMessage(Component.literal(line)); // mc>=26.1
+                            mc.gui.getChat().addClientSystemMessage(Component.literal(line)); // mc>=26.1 mc<=26.1
+                            //mc.gui.hud.getChat().addClientSystemMessage(Component.literal(line)); // mc>=26.2
                         }
                     }
                     // Every successful response carries the structured details
