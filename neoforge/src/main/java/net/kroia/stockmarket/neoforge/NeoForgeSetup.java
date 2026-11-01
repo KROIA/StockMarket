@@ -8,7 +8,8 @@ import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 
-@EventBusSubscriber(modid = StockMarketMod.MOD_ID, bus = EventBusSubscriber.Bus.MOD)
+@EventBusSubscriber(modid = StockMarketMod.MOD_ID, bus = EventBusSubscriber.Bus.MOD) // mc<=1.21.5
+//@EventBusSubscriber(modid = StockMarketMod.MOD_ID) // mc>=1.21.6
 public class NeoForgeSetup {
 
     // Mod setup for common (server)
