@@ -6,8 +6,8 @@ import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.kroia.stockmarket.networking.request.NewsPictureRequest;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
-import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
-//import net.minecraft.resources.Identifier; // mc>=1.21.11
+//import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+import net.minecraft.resources.Identifier; // mc>=1.21.11
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -171,8 +171,8 @@ public class ClientNewsPictureCache {
      *                 pure cache logic stays free of client-class references — widgets
      *                 must ignore it
      */
-    public record LoadedPicture(ResourceLocation location, int width, int height, // mc<=1.21.10
-    //public record LoadedPicture(Identifier location, int width, int height, // mc>=1.21.11
+    //public record LoadedPicture(ResourceLocation location, int width, int height, // mc<=1.21.10
+    public record LoadedPicture(Identifier location, int width, int height, // mc>=1.21.11
                                 @Nullable AutoCloseable texture) {
     }
 
@@ -704,8 +704,8 @@ public class ClientNewsPictureCache {
                 //image.applyToAllPixels(ClientNewsPictureCache::newsprintPixelAbgr); // mc<=1.21.4
                 // 1.21.5 removed applyToAllPixels; getPixel/setPixel are ARGB there, so convert around the ABGR math.
                 for (int y = 0; y < image.getHeight(); y++) for (int x = 0; x < image.getWidth(); x++) image.setPixel(x, y, net.minecraft.util.ARGB.fromABGR(newsprintPixelAbgr(net.minecraft.util.ARGB.toABGR(image.getPixel(x, y))))); // mc>=1.21.5
-                ResourceLocation location = ResourceLocation.fromNamespaceAndPath( // mc<=1.21.10
-                //Identifier location = Identifier.fromNamespaceAndPath( // mc>=1.21.11
+                //ResourceLocation location = ResourceLocation.fromNamespaceAndPath( // mc<=1.21.10
+                Identifier location = Identifier.fromNamespaceAndPath( // mc>=1.21.11
                         StockMarketMod.MOD_ID, TEXTURE_PATH_PREFIX + sha1Hex);
                 //DynamicTexture texture = new DynamicTexture(image); // mc<=1.21.4
                 DynamicTexture texture = new DynamicTexture(() -> "stockmarket news picture " + sha1Hex, image); // mc>=1.21.5

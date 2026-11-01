@@ -14,8 +14,8 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
-//import net.minecraft.resources.Identifier; // mc>=1.21.11
+//import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -197,8 +197,8 @@ public class MarketPreset {
         stack = VolatileItemComponents.normalize(stack);
 
         JsonObject json = new JsonObject();
-        ResourceLocation itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()); // mc<=1.21.10
-        //Identifier itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()); // mc>=1.21.11
+        //ResourceLocation itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()); // mc<=1.21.10
+        Identifier itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()); // mc>=1.21.11
         json.addProperty("id", itemId.toString());
         json.addProperty("count", stack.getCount());
 
@@ -269,8 +269,8 @@ public class MarketPreset {
      */
     private static ItemStack buildItemStack(String itemIdStr, @Nullable JsonObject components) {
         try {
-            ResourceLocation loc = ResourceLocation.tryParse(itemIdStr); // mc<=1.21.10
-            //Identifier loc = Identifier.tryParse(itemIdStr); // mc>=1.21.11
+            //ResourceLocation loc = ResourceLocation.tryParse(itemIdStr); // mc<=1.21.10
+            Identifier loc = Identifier.tryParse(itemIdStr); // mc>=1.21.11
             if (loc == null) return ItemStack.EMPTY;
             Item item = BuiltInRegistries.ITEM.getOptional(loc).orElse(Items.AIR); // get(loc) returns Optional<Holder> on 1.21.2
             if (item == Items.AIR && !itemIdStr.equals("minecraft:air")) return ItemStack.EMPTY;

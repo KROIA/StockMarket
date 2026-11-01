@@ -9,8 +9,8 @@ import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.minecraft.item.custom.NewspaperItem;
 import net.kroia.stockmarket.minecraft.item.custom.software.TradingSoftware;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
-//import net.minecraft.resources.Identifier; // mc>=1.21.11
+//import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
@@ -43,15 +43,15 @@ public class StockMarketItems {
     public static <T extends Item> RegistrySupplier<T> registerItem(String name, Supplier<T> item)
     {
         //BankSystemMod.LOGGER.info("Registering Item: " + name);
-        return ITEMS.register(ResourceLocation.fromNamespaceAndPath(StockMarketMod.MOD_ID, name), item); // mc<=1.21.10
-        //return ITEMS.register(Identifier.fromNamespaceAndPath(StockMarketMod.MOD_ID, name), item); // mc>=1.21.11
+        //return ITEMS.register(ResourceLocation.fromNamespaceAndPath(StockMarketMod.MOD_ID, name), item); // mc<=1.21.10
+        return ITEMS.register(Identifier.fromNamespaceAndPath(StockMarketMod.MOD_ID, name), item); // mc>=1.21.11
     }
     public static <T extends Block> RegistrySupplier<Item> registerBlockItem(String name, RegistrySupplier<T> block)
     {
         //return registerItem(name, () -> new BlockItem(block.get(), new Item.Properties().tab(BankSystemCreativeModeTab.BANK_SYSTEM_TAB))); // 1.19.3 or below
         // RegistryCompat: no-op on 1.21.1, applies setId + block description prefix on 1.21.2+
-        ResourceLocation id = ResourceLocation.fromNamespaceAndPath(StockMarketMod.MOD_ID, name); // mc<=1.21.10
-        //Identifier id = Identifier.fromNamespaceAndPath(StockMarketMod.MOD_ID, name); // mc>=1.21.11
+        //ResourceLocation id = ResourceLocation.fromNamespaceAndPath(StockMarketMod.MOD_ID, name); // mc<=1.21.10
+        Identifier id = Identifier.fromNamespaceAndPath(StockMarketMod.MOD_ID, name); // mc>=1.21.11
         return registerItem(name, () -> new BlockItem(block.get(),
                 RegistryCompat.blockItemProperties(new Item.Properties().arch$tab(StockMarketCreativeModeTab.STOCK_MARKET_TAB), id)));
     }

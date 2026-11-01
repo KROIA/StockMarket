@@ -9,8 +9,8 @@ import net.kroia.stockmarket.news.ClientNewsPictureCache;
 import net.kroia.stockmarket.news.ClientNewsPictureCache.LoadedPicture;
 import net.kroia.stockmarket.news.NewsPictureLibrary;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
-import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
-//import net.minecraft.resources.Identifier; // mc>=1.21.11
+//import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+import net.minecraft.resources.Identifier; // mc>=1.21.11
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -116,8 +116,8 @@ public class NewsPictureClientCacheTestSuite extends TestSuite {
             if (failKeys.contains(sha1Hex)) return null; // simulated decode failure
             registered.add(sha1Hex);
             return new LoadedPicture(
-                    ResourceLocation.fromNamespaceAndPath("stockmarket", // mc<=1.21.10
-                    //Identifier.fromNamespaceAndPath("stockmarket", // mc>=1.21.11
+                    //ResourceLocation.fromNamespaceAndPath("stockmarket", // mc<=1.21.10
+                    Identifier.fromNamespaceAndPath("stockmarket", // mc>=1.21.11
                             ClientNewsPictureCache.TEXTURE_PATH_PREFIX + sha1Hex),
                     32, 24, null);
         }

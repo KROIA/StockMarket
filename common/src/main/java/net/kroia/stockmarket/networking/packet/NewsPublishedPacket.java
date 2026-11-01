@@ -10,8 +10,8 @@ import net.kroia.stockmarket.util.StockMarketNetworkPacket;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
-//import net.minecraft.resources.Identifier; // mc>=1.21.11
+//import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.server.MinecraftServer;
 import org.jetbrains.annotations.NotNull;
 
@@ -51,8 +51,8 @@ import org.jetbrains.annotations.NotNull;
  */
 public class NewsPublishedPacket extends StockMarketNetworkPacket {
 
-    public static final Type<NewsPublishedPacket> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(StockMarketMod.MOD_ID, "news_published_packet")); // mc<=1.21.10
-    //public static final Type<NewsPublishedPacket> TYPE = new Type<>(Identifier.fromNamespaceAndPath(StockMarketMod.MOD_ID, "news_published_packet")); // mc>=1.21.11
+    //public static final Type<NewsPublishedPacket> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(StockMarketMod.MOD_ID, "news_published_packet")); // mc<=1.21.10
+    public static final Type<NewsPublishedPacket> TYPE = new Type<>(Identifier.fromNamespaceAndPath(StockMarketMod.MOD_ID, "news_published_packet")); // mc>=1.21.11
 
     public static final StreamCodec<RegistryFriendlyByteBuf, NewsPublishedPacket> STREAM_CODEC = StreamCodec.composite(
             NewsRecord.STREAM_CODEC, p -> p.record,

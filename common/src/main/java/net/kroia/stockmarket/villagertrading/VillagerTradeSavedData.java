@@ -61,9 +61,9 @@ public class VillagerTradeSavedData extends SavedData {
     // so the canonical 3-arg form is used for cross-loader compatibility).
     //private static final SavedData.Factory<VillagerTradeSavedData> FACTORY = new SavedData.Factory<>(VillagerTradeSavedData::new, VillagerTradeSavedData::load, null); // mc<=1.21.4
     // 1.21.5 replaced SavedData.Factory by the codec-based SavedDataType; the codec wraps the same NBT load/save.
-    private static final net.minecraft.world.level.saveddata.SavedDataType<VillagerTradeSavedData> FACTORY = new net.minecraft.world.level.saveddata.SavedDataType<>(NAME, ctx -> new VillagerTradeSavedData(), ctx -> CompoundTag.CODEC.xmap(tag -> load(tag, ctx.levelOrThrow().registryAccess()), data -> data.save(new CompoundTag(), ctx.levelOrThrow().registryAccess())), null); // mc>=1.21.5 mc<=1.21.10
+    //private static final net.minecraft.world.level.saveddata.SavedDataType<VillagerTradeSavedData> FACTORY = new net.minecraft.world.level.saveddata.SavedDataType<>(NAME, ctx -> new VillagerTradeSavedData(), ctx -> CompoundTag.CODEC.xmap(tag -> load(tag, ctx.levelOrThrow().registryAccess()), data -> data.save(new CompoundTag(), ctx.levelOrThrow().registryAccess())), null); // mc>=1.21.5 mc<=1.21.10
     // 1.21.11 dropped the SavedDataType context; the registries come from the running server instead.
-    //private static final net.minecraft.world.level.saveddata.SavedDataType<VillagerTradeSavedData> FACTORY = new net.minecraft.world.level.saveddata.SavedDataType<>(NAME, VillagerTradeSavedData::new, CompoundTag.CODEC.xmap(tag -> load(tag, net.kroia.modutilities.UtilitiesPlatform.getRegistryAccessServerSide()), data -> data.save(new CompoundTag(), net.kroia.modutilities.UtilitiesPlatform.getRegistryAccessServerSide())), null); // mc>=1.21.11
+    private static final net.minecraft.world.level.saveddata.SavedDataType<VillagerTradeSavedData> FACTORY = new net.minecraft.world.level.saveddata.SavedDataType<>(NAME, VillagerTradeSavedData::new, CompoundTag.CODEC.xmap(tag -> load(tag, net.kroia.modutilities.UtilitiesPlatform.getRegistryAccessServerSide()), data -> data.save(new CompoundTag(), net.kroia.modutilities.UtilitiesPlatform.getRegistryAccessServerSide())), null); // mc>=1.21.11
 
     /** Villager UUID → sidecar entry. */
     private final Map<UUID, VillagerEntry> villagers = new HashMap<>();

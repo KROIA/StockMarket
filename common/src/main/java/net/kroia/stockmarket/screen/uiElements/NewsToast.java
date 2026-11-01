@@ -14,8 +14,8 @@ import net.minecraft.client.gui.components.toasts.ToastManager; // mc>=1.21.2
 import net.minecraft.client.renderer.RenderPipelines; // mc>=1.21.6
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.FormattedText;
-import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
-//import net.minecraft.resources.Identifier; // mc>=1.21.11
+//import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
@@ -39,10 +39,10 @@ import java.util.List;
 public class NewsToast implements Toast {
 
     /** Vanilla advancement-toast background sprite (gray frame, 160x32). */
-    private static final ResourceLocation BACKGROUND_SPRITE = // mc<=1.21.10
-    //private static final Identifier BACKGROUND_SPRITE = // mc>=1.21.11
-            ResourceLocation.withDefaultNamespace("toast/advancement"); // mc<=1.21.10
-            //Identifier.withDefaultNamespace("toast/advancement"); // mc>=1.21.11
+    //private static final ResourceLocation BACKGROUND_SPRITE = // mc<=1.21.10
+    private static final Identifier BACKGROUND_SPRITE = // mc>=1.21.11
+            //ResourceLocation.withDefaultNamespace("toast/advancement"); // mc<=1.21.10
+            Identifier.withDefaultNamespace("toast/advancement"); // mc>=1.21.11
 
     private static final Component TITLE =
             Component.translatable("gui." + StockMarketMod.MOD_ID + ".news_toast.title");

@@ -8,8 +8,8 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
-//import net.minecraft.resources.Identifier; // mc>=1.21.11
+//import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.server.MinecraftServer;
 import org.jetbrains.annotations.NotNull;
 
@@ -45,8 +45,8 @@ import org.jetbrains.annotations.NotNull;
 public class SlaveTrustSyncPacket extends StockMarketNetworkPacket {
 
     public static final Type<SlaveTrustSyncPacket> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath(StockMarketMod.MOD_ID, "slave_trust_sync_packet")); // mc<=1.21.10
-            //Identifier.fromNamespaceAndPath(StockMarketMod.MOD_ID, "slave_trust_sync_packet")); // mc>=1.21.11
+            //ResourceLocation.fromNamespaceAndPath(StockMarketMod.MOD_ID, "slave_trust_sync_packet")); // mc<=1.21.10
+            Identifier.fromNamespaceAndPath(StockMarketMod.MOD_ID, "slave_trust_sync_packet")); // mc>=1.21.11
 
     public static final StreamCodec<RegistryFriendlyByteBuf, SlaveTrustSyncPacket> STREAM_CODEC = StreamCodec.composite(
             ByteBufCodecs.BOOL, p -> p.trusted,

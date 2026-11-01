@@ -29,15 +29,15 @@
       },
       {
         "id": "minecraft",
-        "version": "~1.21.10"
+        "version": "~1.21.11"
       },
       {
         "id": "architectury",
-        "version": ">=18.0.8"
+        "version": ">=19.0.1"
       },
       {
         "id": "banksystem",
-        "version": ">=1.21.10-2.2.0 <1.21.10-2.3.0"
+        "version": ">=1.21.11-2.2.0 <1.21.11-2.3.0"
       }
     ]
   },
