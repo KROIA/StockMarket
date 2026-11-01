@@ -30,7 +30,7 @@ public class StockMarketBlock extends TerminalBlock {
     }*/
     /*public void onPlace(BlockState state, Level level, BlockPos pos, BlockState oldState, boolean isMoving) {
         super.onPlace(state, level, pos, oldState, isMoving);
-        if (!level.isClientSide) {
+        if (!level.isClientSide()) {
             BlockEntity blockEntity = level.getBlockEntity(pos);
             if (blockEntity instanceof StockMarketBlockEntity) {
                 StockMarketBlockEntity stockMarketBlock = (StockMarketBlockEntity) blockEntity;
@@ -57,11 +57,11 @@ public class StockMarketBlock extends TerminalBlock {
     }*/
     @Override
     public void openGui(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
-        if (!level.isClientSide && player instanceof ServerPlayer)
+        if (!level.isClientSide() && player instanceof ServerPlayer)
         {
             // todo: replace the function below
             //SyncStockMarketBlockEntityPacket.sendPacketToClient(pos, (StockMarketBlockEntity) level.getBlockEntity(pos), (ServerPlayer) player);
-        } else if (level.isClientSide) {
+        } else if (level.isClientSide()) {
             // On the client side, open the TradeScreen
             BlockEntity entity = level.getBlockEntity(pos);
             StockMarketClientHooks.openStockMarketBlockScreen(entity, pos);
