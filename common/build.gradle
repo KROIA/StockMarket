@@ -29,7 +29,7 @@ dependencies {
     modCompileOnly("com.github.KROIA.BankSystem:banksystem-common:$rootProject.banksystem_version")
     modCompileOnly("com.github.KROIA.MC_ModUtilities:modutilities-common:$rootProject.modutilities_version")
 
-    compileOnly("mezz.jei:jei-${minecraft_version}-common-api:${jei_version}")
+    compileOnly("mezz.jei:jei-${rootProject.jei_minecraft_version}-common-api:${jei_version}")
     compileOnly('org.xerial:sqlite-jdbc:3.46.0.0'){
         exclude group: "org.slf4j"
     }
