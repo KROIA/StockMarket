@@ -1,5 +1,6 @@
 package net.kroia.stockmarket;
 
+import net.kroia.modutilities.PermissionCompat;
 
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
@@ -71,7 +72,7 @@ public class StockMarketModSettings extends ModSettings {
 
         /*public boolean playerIsAdmin(ServerPlayer player)
         {
-            return player.hasPermissions(ADMIN_PERMISSION_LEVEL.get());
+            return PermissionCompat.hasPermission(player, ADMIN_PERMISSION_LEVEL.get());
         }*/
     }
     public static final class Player extends SettingsGroup

@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.util;
 
+import net.kroia.modutilities.PermissionCompat;
 
 import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.bankmanager.IBankManager;
@@ -122,7 +123,7 @@ public abstract class StockMarketGenericRequest<IN, OUT> extends GenericRequest<
                 continue;
             }
             // Only send to players with op level 2 (stockmarket admin permission)
-            if (player.hasPermissions(2)) {
+            if (PermissionCompat.hasPermission(player, 2)) {
                 player.sendSystemMessage(chatMessage);
             }
         }
