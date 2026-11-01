@@ -1,4 +1,4 @@
-package net.kroia.stockmarket.screen;
+package net.kroia.stockmarket.testing;
 
 import com.mojang.brigadier.Command;
 import net.kroia.banksystem.util.ItemID;
@@ -200,5 +200,10 @@ public class DevTestScreen extends StockMarketGuiScreen {
         market.createMarketOrder(selfBankAccountNr, amount).thenAccept(result->{
             info("Order creation response: "+result.status);
         });
+    }
+
+    /** Opens the screen; called reflectively from StockMarketClientHooks (dev builds only). */
+    public static void open() {
+        net.kroia.modutilities.gui.client.ClientCompat.setScreen(new DevTestScreen());
     }
 }
