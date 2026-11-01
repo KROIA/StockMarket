@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.stockmarket.marketmanager;
 
+import net.kroia.modutilities.NbtCompat;
+
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.kroia.modutilities.JsonUtilities;
@@ -87,7 +89,7 @@ public class User implements ServerSaveable {
 
     @Override
     public boolean save(CompoundTag tag) {
-        tag.putUUID("userUUID", userUUID);
+        NbtCompat.putUUID(tag, "userUUID", userUUID);
         tag.putString("userName", userName);
         tag.putBoolean("isStockMarketAdmin", isStockMarketAdmin);
 
@@ -100,20 +102,20 @@ public class User implements ServerSaveable {
 
     @Override
     public boolean load(CompoundTag tag) {
-        if(!tag.contains("userUUID") || !tag.contains("userName")) {
+        if(!NbtCompat.hasUUID(tag, "userUUID") || !tag.contains("userName")) {
             StockMarketMod.LOGGER.error("User.load: missing required fields");
             return false; // Invalid data
         }
-        this.userUUID = tag.getUUID("userUUID");
-        this.userName = tag.getString("userName");
+        this.userUUID = NbtCompat.getUUID(tag, "userUUID");
+        this.userName = NbtCompat.getString(tag, "userName");
         if(tag.contains("isStockMarketAdmin"))
-            this.isStockMarketAdmin = tag.getBoolean("isStockMarketAdmin");
+            this.isStockMarketAdmin = NbtCompat.getBoolean(tag, "isStockMarketAdmin");
         else
             this.isStockMarketAdmin = false;
 
         // Load player preferences (backward compatible — defaults to empty if not present)
         if (tag.contains("preferences")) {
-            CompoundTag prefsTag = tag.getCompound("preferences");
+            CompoundTag prefsTag = NbtCompat.getCompound(tag, "preferences");
             preferences = new PlayerPreferences();
             preferences.load(prefsTag);
         } else {

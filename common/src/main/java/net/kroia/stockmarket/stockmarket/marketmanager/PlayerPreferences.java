@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.stockmarket.marketmanager;
 
+import net.kroia.modutilities.NbtCompat;
+
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.modutilities.persistence.ServerSaveable;
@@ -327,8 +329,8 @@ public class PlayerPreferences implements ServerSaveable {
     @Override
     public boolean load(CompoundTag tag) {
         // Load last market
-        if (tag.getBoolean("hasLastMarket") && tag.contains("lastMarket")) {
-            CompoundTag lastMarketTag = tag.getCompound("lastMarket");
+        if (NbtCompat.getBoolean(tag, "hasLastMarket") && tag.contains("lastMarket")) {
+            CompoundTag lastMarketTag = NbtCompat.getCompound(tag, "lastMarket");
             lastMarketID = ItemID.createFromTag(lastMarketTag);
             if (lastMarketID != null && !lastMarketID.isValid()) {
                 lastMarketID = null;
@@ -338,16 +340,16 @@ public class PlayerPreferences implements ServerSaveable {
         }
 
         // Load last pair "I HAVE" selection
-        if (tag.getBoolean("hasLastPairHave") && tag.contains("lastPairHave")) {
-            lastPairHaveMarketID = ItemID.createFromTag(tag.getCompound("lastPairHave"));
+        if (NbtCompat.getBoolean(tag, "hasLastPairHave") && tag.contains("lastPairHave")) {
+            lastPairHaveMarketID = ItemID.createFromTag(NbtCompat.getCompound(tag, "lastPairHave"));
             if (lastPairHaveMarketID != null && !lastPairHaveMarketID.isValid()) lastPairHaveMarketID = null;
         } else {
             lastPairHaveMarketID = null;
         }
 
         // Load last pair "I WANT" selection
-        if (tag.getBoolean("hasLastPairWant") && tag.contains("lastPairWant")) {
-            lastPairWantMarketID = ItemID.createFromTag(tag.getCompound("lastPairWant"));
+        if (NbtCompat.getBoolean(tag, "hasLastPairWant") && tag.contains("lastPairWant")) {
+            lastPairWantMarketID = ItemID.createFromTag(NbtCompat.getCompound(tag, "lastPairWant"));
             if (lastPairWantMarketID != null && !lastPairWantMarketID.isValid()) lastPairWantMarketID = null;
         } else {
             lastPairWantMarketID = null;
@@ -356,9 +358,9 @@ public class PlayerPreferences implements ServerSaveable {
         // Load favorites
         favoriteMarketIDs = new ArrayList<>();
         if (tag.contains("favorites")) {
-            ListTag favTag = tag.getList("favorites", 10); // 10 = CompoundTag type
+            ListTag favTag = NbtCompat.getList(tag, "favorites", 10); // 10 = CompoundTag type
             for (int i = 0; i < favTag.size(); i++) {
-                CompoundTag t = favTag.getCompound(i);
+                CompoundTag t = NbtCompat.getCompound(favTag, i);
                 ItemID id = ItemID.createFromTag(t);
                 if (id != null && id.isValid()) {
                     favoriteMarketIDs.add(id);
@@ -367,21 +369,21 @@ public class PlayerPreferences implements ServerSaveable {
         }
 
         // Load order history clear timestamp (getLong returns 0 if key missing — backward compatible)
-        orderHistoryClearedBeforeMs = tag.getLong("orderHistoryClearedBeforeMs");
+        orderHistoryClearedBeforeMs = NbtCompat.getLong(tag, "orderHistoryClearedBeforeMs");
 
         // Load news toast opt-in flag (getBoolean returns false if key missing —
         // backward compatible AND guarantees the default-off contract for old saves)
-        newsToastEnabled = tag.getBoolean("newsToastEnabled");
+        newsToastEnabled = NbtCompat.getBoolean(tag, "newsToastEnabled");
 
         // T-109: load the newspaper soft-clear cutoff (getLong returns 0 if key missing
         // — backward compatible; 0 = never cleared, so old saves show everything).
-        newsClearedBeforeMs = tag.getLong("newsClearedBeforeMs");
+        newsClearedBeforeMs = NbtCompat.getLong(tag, "newsClearedBeforeMs");
 
         // T-131: load the last trading bank account number. Default to -1 (not 0,
         // which getInt would return for a missing key) so old saves fall back to
         // the personal account instead of accidentally targeting account 0.
         lastTradingBankAccountNr = tag.contains("lastTradingBankAccountNr")
-                ? tag.getInt("lastTradingBankAccountNr") : -1;
+                ? NbtCompat.getInt(tag, "lastTradingBankAccountNr") : -1;
         return true;
     }
 }
