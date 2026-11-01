@@ -41,21 +41,6 @@ import net.kroia.stockmarket.pluginsystem.pluginmanager.ServerPluginManager;
 import net.kroia.stockmarket.stockmarket.marketmanager.ClientMarketManager;
 import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
 
-import net.kroia.stockmarket.testing.StockMarketTestRegistration;
-import net.kroia.stockmarket.testing.tests.ActiveOrdersRequestTestSuite;
-import net.kroia.stockmarket.testing.tests.CreateOrderRequestTestSuite;
-import net.kroia.stockmarket.testing.tests.DatabaseTestSuite;
-import net.kroia.stockmarket.testing.tests.InterMarketExecutorTestSuite;
-import net.kroia.stockmarket.testing.tests.MarketIntegrationTestSuite;
-import net.kroia.stockmarket.testing.tests.MarketMergeConsolidationTestSuite;
-import net.kroia.stockmarket.testing.tests.MarketPriceManagerTestSuite;
-import net.kroia.stockmarket.testing.tests.MatchingEngineTestSuite;
-import net.kroia.stockmarket.testing.tests.NewsHistoryRequestTestSuite;
-import net.kroia.stockmarket.testing.tests.OrderRecordManagerTestSuite;
-import net.kroia.stockmarket.testing.tests.OrderbookTestSuite;
-import net.kroia.stockmarket.testing.tests.PluginTestSuite;
-import net.kroia.stockmarket.testing.tests.ServerMarketTestSuite;
-import net.kroia.modutilities.testing.TestRegistry;
 import net.kroia.stockmarket.minecraft.menu.StockMarketMenus;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.kroia.stockmarket.networking.packet.PlayerJoinSyncPacket;
@@ -170,6 +155,9 @@ public class StockMarketModBackend implements StockMarketAPI {
                 net.kroia.stockmarket.screen.widgets.DisplayCandlestickChart::new);
 
         EventRegistration.init();
+        if (StockMarketMod.ENABLE_DEV_FEATURES) {
+            invokeDevBootstrap("init", new Class<?>[0]);
+        }
 
         StockMarketNetworking.setBackend(COMMON_INSTANCES);
 
@@ -271,13 +259,11 @@ public class StockMarketModBackend implements StockMarketAPI {
         StockMarketLogger.setBackend(SERVER_INSTANCES);
         VillagerTradeRewriter.setBackend(SERVER_INSTANCES);
 
-        if (TestRegistry.ENABLE_TESTS && StockMarketMod.ENABLE_DEV_FEATURES) {
-            MarketIntegrationTestSuite.setBackend(SERVER_INSTANCES);
-            InterMarketExecutorTestSuite.setBackend(SERVER_INSTANCES);
-            StockMarketTestRegistration.register();
-        }
-
         boolean isMaster = BankSystemMod.getAPI().getServerBankManager().isMaster();
+        villagerAutosaveTicks = 0;
+        if (StockMarketMod.ENABLE_DEV_FEATURES) {
+            invokeDevBootstrap("onServerSetup", new Class<?>[]{ServerInstances.class, boolean.class}, SERVER_INSTANCES, isMaster);
+        }
         if(isMaster) {
             SERVER_INSTANCES.DATABASE_MANAGER = new DatabaseManager();
             SERVER_INSTANCES.DATABASE_MANAGER.connectToDatabase(UtilitiesPlatform.getServer());
@@ -355,19 +341,6 @@ public class StockMarketModBackend implements StockMarketAPI {
             if (!TickEvent.SERVER_POST.isRegistered(SERVER_TICK_POST))
                 TickEvent.SERVER_POST.register(SERVER_TICK_POST);
 
-            if (TestRegistry.ENABLE_TESTS && StockMarketMod.ENABLE_DEV_FEATURES) {
-                MatchingEngineTestSuite.setBackend(SERVER_INSTANCES);
-                OrderbookTestSuite.setBackend(SERVER_INSTANCES);
-                CreateOrderRequestTestSuite.setBackend(SERVER_INSTANCES);
-                ActiveOrdersRequestTestSuite.setBackend(SERVER_INSTANCES);
-                DatabaseTestSuite.setBackend(SERVER_INSTANCES);
-                MarketPriceManagerTestSuite.setBackend(SERVER_INSTANCES);
-                OrderRecordManagerTestSuite.setBackend(SERVER_INSTANCES);
-                ServerMarketTestSuite.setBackend(SERVER_INSTANCES);
-                PluginTestSuite.setBackend(SERVER_INSTANCES);
-                MarketMergeConsolidationTestSuite.setBackend(SERVER_INSTANCES);
-                NewsHistoryRequestTestSuite.setBackend(SERVER_INSTANCES);
-            }
         }
         else
         {
@@ -379,6 +352,10 @@ public class StockMarketModBackend implements StockMarketAPI {
             SERVER_INSTANCES.VILLAGER_TRADE_MANAGER = new VillagerTradeManager(SERVER_INSTANCES);
             // The villager trade file is local to every server, slaves included.
             SERVER_INSTANCES.VILLAGER_TRADE_MANAGER.load(UtilitiesPlatform.getServer());
+            // Slaves use the post-tick handler only for the villager trade autosave
+            // (onServerTick skips the master work there). Unregistered in onServerStop.
+            if (!TickEvent.SERVER_POST.isRegistered(SERVER_TICK_POST))
+                TickEvent.SERVER_POST.register(SERVER_TICK_POST);
 
             // T-126 slave-trust cache wiring.
             //
@@ -598,6 +575,24 @@ public class StockMarketModBackend implements StockMarketAPI {
         }
     }
 
+    /**
+     * Calls a static method of the dev-only DevBootstrap (unit tests, test commands). It is compiled only
+     * when gradle.properties has {@code enable_dev_features=true}, so it is reached reflectively: release
+     * code must compile without it.
+     *
+     * @param method the DevBootstrap method name
+     * @param types  its parameter types
+     * @param args   its arguments
+     */
+    private static void invokeDevBootstrap(String method, Class<?>[] types, Object... args) {
+        try {
+            Class.forName(StockMarketMod.DEV_BOOTSTRAP).getMethod(method, types).invoke(null, args);
+        } catch (ReflectiveOperationException e) {
+            StockMarketMod.LOGGER.error("Dev features are enabled but " + StockMarketMod.DEV_BOOTSTRAP + "." + method
+                    + " is missing or failed; check enable_dev_features in gradle.properties", e);
+        }
+    }
+
     // Called from the server side
     public static void onServerStop(MinecraftServer server)
     {
@@ -724,6 +719,28 @@ public class StockMarketModBackend implements StockMarketAPI {
 
     private static long autosaveTimer_lastMs = 0;
 
+    /** Server ticks since the last villager trade autosave; reset on every server start. */
+    private static long villagerAutosaveTicks = 0;
+
+    /**
+     * Saves the villager trade file (dirty-only, atomic) every SAVE_INTERVAL_MINUTES, counted in
+     * server ticks (20 per second). Runs on master and slave, so a crash loses at most one interval
+     * of villager trades. The master's full autosave saves it too; the second call is a no-op
+     * because the data is no longer dirty.
+     *
+     * @param server the ticking server
+     */
+    private static void tickVillagerAutosave(MinecraftServer server)
+    {
+        if (SERVER_INSTANCES.VILLAGER_TRADE_MANAGER == null || SERVER_INSTANCES.SERVER_SETTINGS == null)
+            return;
+        long intervalTicks = SERVER_INSTANCES.SERVER_SETTINGS.UTILITIES.SAVE_INTERVAL_MINUTES.get() * 60L * 20L;
+        if (intervalTicks <= 0 || ++villagerAutosaveTicks < intervalTicks)
+            return;
+        villagerAutosaveTicks = 0;
+        SERVER_INSTANCES.VILLAGER_TRADE_MANAGER.save(server);
+    }
+
     // Listeners held as single instances: every `Class::method` expression creates a new
     // object, so unregister() with a fresh method reference never matches the registered
     // one and the handlers stack across singleplayer world switches. Always register and
@@ -774,6 +791,14 @@ public class StockMarketModBackend implements StockMarketAPI {
     // Called from the master side
     private static void onServerTick(MinecraftServer server)
     {
+        if (SERVER_INSTANCES == null || SERVER_INSTANCES.MARKET_MANAGER == null)
+            return;
+        // Every server (master and slave) keeps its own villager trade file.
+        tickVillagerAutosave(server);
+        // The rest is master work; a slave has no sync market manager.
+        if (SERVER_INSTANCES.MARKET_MANAGER.getSync() == null)
+            return;
+
         SERVER_INSTANCES.PLUGIN_MANAGER.getSync().update();
         SERVER_INSTANCES.MARKET_MANAGER.getSync().update();
 
