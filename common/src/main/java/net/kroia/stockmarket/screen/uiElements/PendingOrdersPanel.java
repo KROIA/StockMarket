@@ -232,7 +232,7 @@ public class PendingOrdersPanel extends StockMarketGuiElement {
 
         @Override
         protected boolean mouseClickedOverElement(int button) {
-            if (button == 0 && isInIconArea(getMouseX(), getMouseY())) {
+            if (button == net.kroia.modutilities.gui.InputConstants.MOUSE_BUTTON_LEFT && isInIconArea(getMouseX(), getMouseY())) {
                 if (onMarketSwitch != null) {
                     onMarketSwitch.accept(order.getItemID());
                 }
@@ -386,7 +386,7 @@ public class PendingOrdersPanel extends StockMarketGuiElement {
 
         @Override
         protected boolean mouseClickedOverElement(int button) {
-            if (button == 0 && onMarketSwitch != null) {
+            if (button == net.kroia.modutilities.gui.InputConstants.MOUSE_BUTTON_LEFT && onMarketSwitch != null) {
                 int mouseX = getMouseX();
                 int mouseY = getMouseY();
                 if (isInHaveIconArea(mouseX, mouseY)) {

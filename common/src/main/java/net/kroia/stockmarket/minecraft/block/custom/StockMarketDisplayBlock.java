@@ -89,7 +89,7 @@ public class StockMarketDisplayBlock extends AbstractDisplayBlock {
             if (ctrl.getChart() instanceof net.kroia.stockmarket.screen.widgets.DisplayCandlestickChart dcc) {
                 viewport = dcc.getViewportState();
             }
-            net.minecraft.client.Minecraft.getInstance().setScreen(
+            net.kroia.modutilities.gui.client.ClientCompat.setScreen(
                     new net.kroia.stockmarket.screen.custom.DisplayChartScreen(
                             ctrl.getBlockPos(), ctrl.getSelectedItemID(),
                             ctrl.getSecondItemID(),
@@ -99,7 +99,7 @@ public class StockMarketDisplayBlock extends AbstractDisplayBlock {
         static void openConfigScreen(BlockPos pos, StockMarketDisplayBlockEntity.DisplayType type,
                                       net.kroia.banksystem.util.ItemID itemID,
                                       net.kroia.banksystem.util.ItemID secondItemID) {
-            net.minecraft.client.Minecraft.getInstance().setScreen(
+            net.kroia.modutilities.gui.client.ClientCompat.setScreen(
                     new net.kroia.stockmarket.screen.custom.DisplayConfigScreen(pos, type, itemID, secondItemID));
         }
     }

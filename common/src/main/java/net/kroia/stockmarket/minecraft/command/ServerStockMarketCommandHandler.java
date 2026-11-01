@@ -90,7 +90,7 @@ public class ServerStockMarketCommandHandler implements IServerStockMarketComman
         for (ItemStack itemStack : items) {
             if (!player.getInventory().add(itemStack)) {
                 // Inventory full — drop the item on the ground
-                player.drop(itemStack, false);
+                net.kroia.modutilities.PlayerCompat.drop(player, itemStack);
             }
         }
 

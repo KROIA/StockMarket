@@ -351,7 +351,7 @@ public class PairSelectorWidget extends StockMarketGuiElement {
      */
     @Override
     protected boolean mouseClickedOverElement(int button) {
-        if (button != 0) return false;
+        if (button != net.kroia.modutilities.gui.InputConstants.MOUSE_BUTTON_LEFT) return false;
 
         int mx = getMouseX();
         int my = getMouseY();
