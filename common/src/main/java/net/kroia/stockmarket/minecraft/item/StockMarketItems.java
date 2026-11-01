@@ -4,6 +4,7 @@ import com.google.common.base.Suppliers;
 import dev.architectury.registry.registries.Registrar;
 import dev.architectury.registry.registries.RegistrarManager;
 import dev.architectury.registry.registries.RegistrySupplier;
+import net.kroia.modutilities.RegistryCompat;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.minecraft.item.custom.NewspaperItem;
 import net.kroia.stockmarket.minecraft.item.custom.software.TradingSoftware;
@@ -46,6 +47,9 @@ public class StockMarketItems {
     public static <T extends Block> RegistrySupplier<Item> registerBlockItem(String name, RegistrySupplier<T> block)
     {
         //return registerItem(name, () -> new BlockItem(block.get(), new Item.Properties().tab(BankSystemCreativeModeTab.BANK_SYSTEM_TAB))); // 1.19.3 or below
-        return registerItem(name, () -> new BlockItem(block.get(), new Item.Properties().arch$tab(StockMarketCreativeModeTab.STOCK_MARKET_TAB)));
+        // RegistryCompat: no-op on 1.21.1, applies setId + block description prefix on 1.21.2+
+        ResourceLocation id = ResourceLocation.fromNamespaceAndPath(StockMarketMod.MOD_ID, name);
+        return registerItem(name, () -> new BlockItem(block.get(),
+                RegistryCompat.blockItemProperties(new Item.Properties().arch$tab(StockMarketCreativeModeTab.STOCK_MARKET_TAB), id)));
     }
 }

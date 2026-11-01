@@ -6,6 +6,7 @@ import dev.architectury.registry.client.rendering.RenderTypeRegistry;
 import dev.architectury.registry.registries.Registrar;
 import dev.architectury.registry.registries.RegistrarManager;
 import dev.architectury.registry.registries.RegistrySupplier;
+import net.kroia.modutilities.RegistryCompat;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.minecraft.block.StockMarketBlocks;
 import net.kroia.stockmarket.minecraft.entity.custom.StockMarketDisplayBlockEntity;
@@ -40,7 +41,8 @@ public class StockMarketEntities {
 
     public static final RegistrySupplier<BlockEntityType<?>> STOCKMARKET_DISPLAY_BLOCK_ENTITY =
             registerBlockEntity("stockmarket_display_block_entity",
-                    () -> BlockEntityType.Builder.of(StockMarketDisplayBlockEntity::new, StockMarketBlocks.STOCKMARKET_DISPLAY_BLOCK.get()).build(null));
+                    // RegistryCompat: Builder.of(...).build(null) on 1.21.1, version-correct constructor on 1.21.2+
+                    () -> RegistryCompat.createBlockEntityType(StockMarketDisplayBlockEntity::new, StockMarketBlocks.STOCKMARKET_DISPLAY_BLOCK.get()));
 
     public static void registerRenderers() {
         // Architectury API method to register BlockEntityRenderer in a platform-neutral way

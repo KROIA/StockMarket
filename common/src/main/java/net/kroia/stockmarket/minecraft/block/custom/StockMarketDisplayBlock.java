@@ -28,15 +28,19 @@ public class StockMarketDisplayBlock extends AbstractDisplayBlock {
     private static final VoxelShape SHAPE_EAST  = Block.box(0, 0, 0, 2, 16, 16);
     private static final VoxelShape SHAPE_WEST  = Block.box(14, 0, 0, 16, 16, 16);
 
-    public static final MapCodec<StockMarketDisplayBlock> CODEC = simpleCodec(p -> new StockMarketDisplayBlock());
+    public static final MapCodec<StockMarketDisplayBlock> CODEC = simpleCodec(StockMarketDisplayBlock::new);
 
     @Override
     protected MapCodec<? extends HorizontalDirectionalBlock> codec() {
         return CODEC;
     }
 
-    public StockMarketDisplayBlock() {
-        super(BlockBehaviour.Properties.of().strength(2.0f).noOcclusion());
+    /**
+     * @param properties block properties; built at registration via RegistryCompat
+     *                   (see {@code StockMarketBlocks}) so the block id is applied on 1.21.2+
+     */
+    public StockMarketDisplayBlock(BlockBehaviour.Properties properties) {
+        super(properties);
     }
 
     @Override

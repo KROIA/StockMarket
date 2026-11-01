@@ -1,7 +1,10 @@
 package net.kroia.stockmarket.minecraft.item.custom;
 
+import net.kroia.modutilities.RegistryCompat;
+import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.minecraft.item.StockMarketCreativeModeTab;
 import net.kroia.stockmarket.util.StockMarketClientHooks;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.entity.player.Player;
@@ -29,7 +32,9 @@ public class NewspaperItem extends Item {
     public static final String NAME = "newspaper";
 
     public NewspaperItem() {
-        super(new Properties().arch$tab(StockMarketCreativeModeTab.STOCK_MARKET_TAB));
+        // RegistryCompat: no-op on 1.21.1, applies setId on 1.21.2+ (id must match the registration name)
+        super(RegistryCompat.itemProperties(new Properties().arch$tab(StockMarketCreativeModeTab.STOCK_MARKET_TAB),
+                ResourceLocation.fromNamespaceAndPath(StockMarketMod.MOD_ID, NAME)));
     }
 
     /**
