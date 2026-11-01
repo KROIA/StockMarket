@@ -8,7 +8,6 @@ import net.kroia.stockmarket.networking.packet.OpenUIPacket;
 import net.kroia.stockmarket.networking.request.NewsHistoryRequest;
 import net.kroia.stockmarket.news.NewsRecord;
 import net.kroia.stockmarket.news.NewsToastCatchUp;
-import net.kroia.stockmarket.screen.DevTestScreen;
 import net.kroia.stockmarket.screen.ManagementScreen;
 import net.kroia.stockmarket.screen.NewsScreen;
 import net.kroia.stockmarket.screen.TradeScreen;
@@ -151,8 +150,12 @@ public class StockMarketClientHooks {
             case DEVELOPMENT:
             {
                 if(StockMarketMod.ENABLE_DEV_FEATURES) {
-                    DevTestScreen screen = new DevTestScreen();
-                    net.kroia.modutilities.gui.client.ClientCompat.setScreen(screen);
+                    // DevTestScreen lives in the dev-only testing package, so it is opened reflectively.
+                    try {
+                        Class.forName("net.kroia.stockmarket.testing.DevTestScreen").getMethod("open").invoke(null);
+                    } catch (ReflectiveOperationException e) {
+                        StockMarketMod.LOGGER.error("Could not open the dev test screen", e);
+                    }
                 }
                 break;
             }
