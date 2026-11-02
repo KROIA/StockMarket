@@ -8,6 +8,8 @@ import net.kroia.stockmarket.data.DatabaseManager;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 
 import java.sql.Connection;
+import java.util.concurrent.Callable;
+import java.util.concurrent.TimeUnit;
 
 public class DatabaseTestSuite extends TestSuite {
 
@@ -24,12 +26,12 @@ public class DatabaseTestSuite extends TestSuite {
 
     @Override
     public void registerTests() {
-        addTest("commitTransaction_success", this::test_commitTransaction_success);
-        addTest("commitTransaction_rollsBackOnFailure", this::test_commitTransaction_rollsBackOnFailure);
-        addTest("commitTransaction_rollbackFailure", this::test_commitTransaction_rollbackFailure);
+        addTest("commitTransaction_success", () -> onDbThread(this::test_commitTransaction_success));
+        addTest("commitTransaction_rollsBackOnFailure", () -> onDbThread(this::test_commitTransaction_rollsBackOnFailure));
+        addTest("commitTransaction_rollbackFailure", () -> onDbThread(this::test_commitTransaction_rollbackFailure));
         addTest("staticFields_staleAfterRestart", this::test_staticFields_staleAfterRestart);
         addTest("createDatabase_logsMisleadingly", this::test_createDatabase_logsMisleadingly);
-        addTest("shutdownDatabase_commitsBeforeClose", this::test_shutdownDatabase_commitsBeforeClose);
+        addTest("shutdownDatabase_commitsBeforeClose", () -> onDbThread(this::test_shutdownDatabase_commitsBeforeClose));
         addTest("shutdownDatabase_nullConnection", this::test_shutdownDatabase_nullConnection);
     }
 
@@ -37,6 +39,27 @@ public class DatabaseTestSuite extends TestSuite {
     public void setup() {
         if (backend == null) {
             throw new RuntimeException("DatabaseTestSuite requires backend to be set");
+        }
+    }
+
+    /**
+     * Runs a test body on the {@code db-worker} executor and waits for its result.
+     * <p>
+     * Production confines every use of the single SQLite {@link Connection} to that
+     * single-thread executor. Touching the connection (statements, commit/rollback) from
+     * the test thread races in-flight db-worker commits and causes intermittent
+     * "cannot commit/rollback - no transaction is active" failures.
+     *
+     * @param body the test body to execute on the database thread
+     * @return the body's result, or a failure on exception/timeout
+     */
+    private TestResult onDbThread(Callable<TestResult> body) {
+        if (backend.DATABASE_MANAGER == null)
+            return fail("DATABASE_MANAGER is null");
+        try {
+            return backend.DATABASE_MANAGER.getDatabaseThread().submit(body).get(10, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            return fail("Test body failed on db-worker thread: " + e);
         }
     }
 
