@@ -9,7 +9,10 @@ import net.kroia.stockmarket.testing.StockMarketTestCategories;
 
 import java.sql.Connection;
 import java.util.concurrent.Callable;
+import java.util.concurrent.Future;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class DatabaseTestSuite extends TestSuite {
 
@@ -33,6 +36,10 @@ public class DatabaseTestSuite extends TestSuite {
         addTest("createDatabase_logsMisleadingly", this::test_createDatabase_logsMisleadingly);
         addTest("shutdownDatabase_commitsBeforeClose", () -> onDbThread(this::test_shutdownDatabase_commitsBeforeClose));
         addTest("shutdownDatabase_nullConnection", this::test_shutdownDatabase_nullConnection);
+        // Isolated DatabaseManager instances; never touch the live backend's manager.
+        addTest("close_waitsForQueuedJob", this::test_close_waitsForQueuedJob);
+        addTest("close_rejectsSubmitAfterClose", this::test_close_rejectsSubmitAfterClose);
+        addTest("close_fromDbWorker_noDeadlock", this::test_close_fromDbWorker_noDeadlock);
     }
 
     @Override
@@ -204,6 +211,57 @@ public class DatabaseTestSuite extends TestSuite {
             return pass("close() on DatabaseManager with null connection does not crash");
         } catch (Exception e) {
             return fail("close() with null connection caused exception: " + e.getMessage());
+        }
+    }
+
+    /**
+     * close() must drain the db-worker before closing: a job queued behind a slow one
+     * has to have run by the time close() returns.
+     */
+    private TestResult test_close_waitsForQueuedJob() {
+        DatabaseManager freshManager = new DatabaseManager();
+        AtomicBoolean queuedJobRan = new AtomicBoolean(false);
+        try {
+            freshManager.getDatabaseThread().submit(() -> {
+                try { Thread.sleep(300); } catch (InterruptedException ignored) { }
+            });
+            freshManager.getDatabaseThread().submit(() -> queuedJobRan.set(true));
+            freshManager.close();
+            return assertTrue("Queued db-worker job should finish before close() returns", queuedJobRan.get());
+        } catch (Exception e) {
+            freshManager.close();
+            return fail("Exception: " + e);
+        }
+    }
+
+    /**
+     * Jobs submitted after close() must be rejected loudly instead of running against a
+     * closed connection.
+     */
+    private TestResult test_close_rejectsSubmitAfterClose() {
+        DatabaseManager freshManager = new DatabaseManager();
+        freshManager.close();
+        try {
+            freshManager.getDatabaseThread().submit(() -> { });
+            return fail("submit() after close() should throw RejectedExecutionException");
+        } catch (RejectedExecutionException e) {
+            return pass("submit() after close() is rejected");
+        }
+    }
+
+    /**
+     * close() called from inside a db-worker job must not wait on its own thread.
+     */
+    private TestResult test_close_fromDbWorker_noDeadlock() {
+        DatabaseManager freshManager = new DatabaseManager();
+        try {
+            Future<?> closing = freshManager.getDatabaseThread().submit(freshManager::close);
+            closing.get(5, TimeUnit.SECONDS);
+            return assertTrue("Executor should be shut down after close() from db-worker",
+                    freshManager.getDatabaseThread().isShutdown());
+        } catch (Exception e) {
+            freshManager.close();
+            return fail("close() from db-worker did not complete: " + e);
         }
     }
 }
