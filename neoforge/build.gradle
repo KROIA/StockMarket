@@ -12,8 +12,8 @@ repositories {
         url = "https://maven.blamejared.com/"
     }
     flatDir {
-        dir "../../../MC_ModUtilities/mc_${minecraft_version}_MC_ModUtilities/neoforge/build/libs"
-        dir "../../../BankSystem/mc_${minecraft_version}_BankSystem/neoforge/build/libs"
+        dir "../../../MC_ModUtilities/mc_26.1_MC_ModUtilities/neoforge/build/libs"
+        dir "../../../BankSystem/mc_26.1_BankSystem/neoforge/build/libs"
     }
     maven { url 'https://jitpack.io' }
 

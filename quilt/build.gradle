@@ -11,7 +11,7 @@ repositories {
         url = "https://maven.blamejared.com/"
     }
     flatDir {
-        dir "../../../MC_ModUtilities/mc_${minecraft_version}_MC_ModUtilities/quilt/build/libs"
+        dir "../../../MC_ModUtilities/mc_26.1_MC_ModUtilities/quilt/build/libs"
     }
 
     //mavenLocal()

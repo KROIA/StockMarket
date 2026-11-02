@@ -9,8 +9,8 @@ repositories {
         url = "https://maven.blamejared.com/"
     }
     flatDir {
-        dir "../../../BankSystem/mc_${minecraft_version}_BankSystem/common/build/libs"
-        dir "../../../MC_ModUtilities/mc_${minecraft_version}_MC_ModUtilities/common/build/libs"
+        dir "../../../BankSystem/mc_26.1_BankSystem/common/build/libs"
+        dir "../../../MC_ModUtilities/mc_26.1_MC_ModUtilities/common/build/libs"
     }
     maven { url 'https://jitpack.io' }
 
