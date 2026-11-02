@@ -10,9 +10,13 @@ import java.nio.charset.StandardCharsets;
 import java.sql.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -21,22 +25,45 @@ public class DatabaseManager {
     private Connection connection;
 
     /**
+     * The current {@code db-worker} thread. Used by {@link #close()} to detect being called
+     * from inside a db-worker job, where awaiting the executor would wait on itself.
+     */
+    private volatile Thread workerThread;
+
+    /**
      * Single-thread executor that owns every SQL write on the SQLite connection.
      * <p>
-     * MUST remain backed by an <i>unbounded</i> queue (the default
-     * {@link java.util.concurrent.LinkedBlockingQueue} inside
-     * {@link Executors#newSingleThreadExecutor(java.util.concurrent.ThreadFactory)}):
+     * MUST remain backed by an <i>unbounded</i> queue ({@link LinkedBlockingQueue}):
      * {@link #pauseForBackup(long)} relies on the FIFO queue holding every write
      * submitted during the pause window so they replay in order after
-     * {@link #resumeFromBackup()}. Switching to a bounded queue or a rejecting
-     * {@link java.util.concurrent.RejectedExecutionHandler} would silently
-     * drop writes submitted while the worker is parked on the pause latch.
+     * {@link #resumeFromBackup()}. A bounded queue would reject writes submitted
+     * while the worker is parked on the pause latch.
+     * <p>
+     * The rejection handler therefore only fires after {@link #close()} has shut the
+     * executor down. It logs the rejected job at ERROR (with the submitter's stack
+     * trace) and throws {@link RejectedExecutionException} so a late write fails
+     * loudly instead of running against a closed connection.
      */
-    private final ExecutorService executor = Executors.newSingleThreadExecutor( r -> {
-        Thread t = new Thread(r, "db-worker");
-        t.setDaemon(true);
-        return t;
-    });
+    private final ThreadPoolExecutor executor = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
+            new LinkedBlockingQueue<>(),
+            r -> {
+                Thread t = new Thread(r, "db-worker");
+                t.setDaemon(true);
+                workerThread = t;
+                return t;
+            },
+            (job, pool) -> {
+                RejectedExecutionException e = new RejectedExecutionException(
+                        "db-worker is shut down, rejected job " + job);
+                StockMarketMod.LOGGER.error("[StockMarket] Database job submitted after close() was rejected: {}", job, e);
+                throw e;
+            });
+
+    /**
+     * How long {@link #close()} waits for queued db-worker jobs to finish before forcing
+     * the executor down.
+     */
+    private static final long CLOSE_DRAIN_TIMEOUT_SECONDS = 10;
 
 
     public static final Path DATABASE_PATH = DataManager.SQL_DATABASE;
@@ -196,10 +223,46 @@ public class DatabaseManager {
 
 
     /**
-     * Closes the database connection and shuts down the executor service.
+     * Shuts down the db-worker executor and then commits and closes the connection.
      * Should be called when the server stops or this instance is no longer needed.
+     * <p>
+     * Ordering matters: the executor is drained <b>first</b> so queued/running jobs
+     * (e.g. the final price candle save from the stop path) finish on an open
+     * connection, and only then is the connection committed and closed.
+     * <ol>
+     *   <li>A parked {@link #pauseForBackup(long) backup pause} is released, otherwise
+     *       the drain would hang until the pause safety timeout.</li>
+     *   <li>{@code shutdown()} stops accepting new jobs; later submits are rejected.</li>
+     *   <li>Queued jobs are awaited for {@link #CLOSE_DRAIN_TIMEOUT_SECONDS}. When called
+     *       from the db-worker itself, awaiting would wait on our own thread, so the
+     *       remaining queue is run inline instead.</li>
+     *   <li>The connection is committed and closed.</li>
+     * </ol>
      */
     public void close(){
+        resumeFromBackup();
+        executor.shutdown();
+
+        if (Thread.currentThread() == workerThread) {
+            // Called from inside a db-worker job: run what is still queued inline so it
+            // executes before the connection closes, without waiting on ourselves.
+            List<Runnable> remaining = new ArrayList<>();
+            executor.getQueue().drainTo(remaining);
+            remaining.forEach(Runnable::run);
+        } else {
+            try {
+                if (!executor.awaitTermination(CLOSE_DRAIN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                    StockMarketMod.LOGGER.error("[StockMarket] db-worker did not finish its queued jobs within {}s, forcing shutdown; pending database writes may be lost",
+                            CLOSE_DRAIN_TIMEOUT_SECONDS);
+                    executor.shutdownNow();
+                    executor.awaitTermination(1, TimeUnit.SECONDS);
+                }
+            } catch (InterruptedException e) {
+                executor.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+        }
+
         try{
             if(connection != null && !connection.isClosed()) {
                 connection.commit();
@@ -209,16 +272,6 @@ public class DatabaseManager {
         }
         catch (SQLException e) {
             StockMarketMod.LOGGER.error("Failed to close database connection {}",  e.getMessage());
-        }
-
-        executor.shutdown();
-        try {
-            if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
-                executor.shutdownNow();
-            }
-        } catch (InterruptedException e) {
-            executor.shutdownNow();
-            Thread.currentThread().interrupt();
         }
     }
 
