@@ -66,9 +66,10 @@ dependencies {
 processResources {
     inputs.property 'group', project.group
     inputs.property 'version', project.version
+    inputs.property 'minecraft_version', rootProject.minecraft_version
 
     filesMatching('quilt.mod.json') {
-        expand group: project.group, version: project.version
+        expand group: project.group, version: project.version, minecraft_version: rootProject.minecraft_version
     }
 }
 

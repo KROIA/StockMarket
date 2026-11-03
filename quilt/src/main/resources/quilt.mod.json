@@ -29,7 +29,7 @@
       },
       {
         "id": "minecraft",
-        "version": ">=1.21.2 <1.21.3"
+        "version": "${minecraft_version}"
       },
       {
         "id": "architectury",
