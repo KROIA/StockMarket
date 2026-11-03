@@ -23,7 +23,7 @@ side = "BOTH"
 [[dependencies.stockmarket]]
 modId = "minecraft"
 type = "required"
-versionRange = "[1.21.8,)"
+versionRange = "[${minecraft_version}]"
 ordering = "NONE"
 side = "BOTH"
 
