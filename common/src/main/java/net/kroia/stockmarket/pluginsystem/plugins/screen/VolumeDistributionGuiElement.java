@@ -135,10 +135,10 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
     private void populateSettingsFromMarket(ItemID marketID) {
         DefaultOrderbookVolumeDistributionPlugin.Settings s = allSettings.get(marketID);
         if (s != null) {
-            volumeScaleTextBox.setText(s.volumeScale());
-            speedTextBox.setText(s.speed());
-            accumulationRateTextBox.setText(s.accumulationRate());
-            decumulationRateTextBox.setText(s.decumulationRate());
+            volumeScaleTextBox.setText(s.volumeScale(), 6);
+            speedTextBox.setText(s.speed(), 6);
+            accumulationRateTextBox.setText(s.accumulationRate(), 6);
+            decumulationRateTextBox.setText(s.decumulationRate(), 6);
             currentVolumeScale = s.volumeScale();
         }
     }

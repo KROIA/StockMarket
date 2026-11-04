@@ -495,7 +495,7 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
         // value. Without this, the buttons would remain in their construction-time state
         // (enabled) until the user toggles the checkbox for the first time.
         updateVirtualOrderbookButtonEnabled(settings.virtualOrderbookEnabled);
-        defaultPriceTextBox.setText(getBankManager().convertToRealAmount(settings.defaultPrice));
+        defaultPriceTextBox.setText(getBankManager().convertToRealAmount(settings.defaultPrice), getBankManager().getItemFractionDigitsCount());
         abundanceTextBox.setText(formatAbundance(settings.naturalAbundance));
         netFlowValueLabel.setText(String.valueOf(getBankManager().convertToRealAmount(settings.netPlayerItemFlow)));
         setTradingHoursText(settings.tradingOpenMinute, settings.tradingCloseMinute);

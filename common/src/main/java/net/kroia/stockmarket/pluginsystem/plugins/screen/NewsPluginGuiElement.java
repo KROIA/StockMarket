@@ -519,7 +519,7 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
         sensitivityTextBox = new TextBox();
         // Negative sensitivity is allowed (inverts impacts, like a negative weightFactor)
         sensitivityTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, true, 10, 6));
-        sensitivityTextBox.setText(NewsPlugin.DEFAULT_SENSITIVITY);
+        sensitivityTextBox.setText(NewsPlugin.DEFAULT_SENSITIVITY, 6);
         setupRightAnchoredTooltip(sensitivityTextBox, Texts.SENSITIVITY_TOOLTIP);
 
         applyButton = new Button(Texts.APPLY.getString(), this::onApplySettings);
@@ -737,7 +737,7 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
             settings = NewsPlugin.Settings.createDefault();
         }
         newsEnabledCheckBox.setChecked(settings.newsEnabled());
-        sensitivityTextBox.setText(settings.sensitivity());
+        sensitivityTextBox.setText(settings.sensitivity(), 6);
     }
 
     /**

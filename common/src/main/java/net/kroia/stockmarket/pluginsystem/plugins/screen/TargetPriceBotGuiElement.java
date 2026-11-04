@@ -257,10 +257,10 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
     private void populateSettingsFromMarket(ItemID marketID) {
         TargetPriceBot.Settings s = allSettings.get(marketID);
         if (s != null) {
-            pGainTextBox.setText(s.pidP());
-            iGainTextBox.setText(s.pidI());
-            dGainTextBox.setText(s.pidD());
-            rateTextBox.setText(s.pidRate());
+            pGainTextBox.setText(s.pidP(), 6);
+            iGainTextBox.setText(s.pidI(), 6);
+            dGainTextBox.setText(s.pidD(), 6);
+            rateTextBox.setText(s.pidRate(), 6);
         }
     }
 
