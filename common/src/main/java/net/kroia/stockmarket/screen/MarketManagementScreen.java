@@ -21,7 +21,6 @@ public class MarketManagementScreen extends StockMarketGuiScreen {
         private static final Component TITLE = Component.translatable(PREFIX + "title");
     }
 
-    private final StockMarketGuiScreen parent;
     private final ItemID marketID;
     private final ClientMarket market;
 
@@ -32,8 +31,10 @@ public class MarketManagementScreen extends StockMarketGuiScreen {
     private final MarketSettingsWidget marketSettingsWidget;
 
     public MarketManagementScreen(StockMarketGuiScreen parent, ItemID marketID) {
-        super(Texts.TITLE);
-        this.parent = parent;
+        // Parent goes to the GuiScreen base so its onClose() returns to it and restores
+        // the cursor. Closing with a null parent and then calling setScreen(parent)
+        // re-grabs/releases the mouse, which re-centers the cursor.
+        super(Texts.TITLE, parent);
         this.marketID = marketID;
         market = getMarket(marketID);
 
@@ -57,27 +58,22 @@ public class MarketManagementScreen extends StockMarketGuiScreen {
     }
 
     @Override
-    public void onClose() {
-        super.onClose();
-        if(parent != null)
-            setScreen(parent);
-    }
-
-    @Override
     protected void updateLayout(Gui gui) {
         int padding = StockMarketGuiElement.padding;
         int spacing = StockMarketGuiElement.spacing;
         int width = getWidth() - 2 * padding;
         int height = getHeight() - 2 * padding;
 
-        // Right section (listView) halved from ~w/2 → w/4, matching the analogous
-        // shrink on the Overview tab. Chart + histogram expand into the freed pixels
-        // on the left so they read easier on smaller screens.
-        int rightWidth = width / 4;
+        // Right section (settings listView) is 3/8 of the width (1.5x the former w/4) so the
+        // grown MarketSettingsWidget rows (trading hours, apply-all, status, server time)
+        // have room. Chart + histogram take the rest and span the full height.
+        // The listView is a VerticalListView, so the settings column scrolls on its own
+        // whenever the widget is taller than the screen (e.g. GUI scale 3-4).
+        int rightWidth = width * 3 / 8;
         int orderbookVolumeWidth = width / 10;
         int chartWidth = width - rightWidth - orderbookVolumeWidth - spacing;
 
-        candlestickChart.setBounds(padding, padding, chartWidth, height / 2);
+        candlestickChart.setBounds(padding, padding, chartWidth, height);
         orderbookVolumeHistogram.setBounds(candlestickChart.getRight(), candlestickChart.getTop(), orderbookVolumeWidth, candlestickChart.getHeight());
         listView.setBounds(orderbookVolumeHistogram.getRight() + spacing, padding, rightWidth, height);
     }

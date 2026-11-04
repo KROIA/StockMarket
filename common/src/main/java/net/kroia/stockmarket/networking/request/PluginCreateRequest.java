@@ -7,6 +7,7 @@ import net.kroia.stockmarket.pluginsystem.registry.PluginRegistry;
 import net.kroia.stockmarket.pluginsystem.registry.PluginRegistryObject;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import org.jetbrains.annotations.Nullable;
@@ -61,7 +62,7 @@ public class PluginCreateRequest extends StockMarketGenericRequest<String, Boole
         // Notify other admins about the new plugin
         if (plugin != null) {
             broadcastToAdmins(playerSender,
-                    getPlayerName(playerSender) + " created plugin '" + plugin.getName() + "'");
+                    Component.translatable("message.stockmarket.admin_broadcast.plugin_created", getPlayerName(playerSender), plugin.getName()));
         }
 
         return CompletableFuture.completedFuture(plugin != null);

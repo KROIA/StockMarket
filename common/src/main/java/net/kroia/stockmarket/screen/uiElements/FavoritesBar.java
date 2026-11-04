@@ -14,6 +14,7 @@ import net.kroia.stockmarket.client.company.ShareVisualHelpers;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -113,7 +114,7 @@ public class FavoritesBar extends StockMarketGuiElement {
         addChild(priceLabel);
 
         // Search label and field for filtering the market grid
-        searchLabel = new Label("Search");
+        searchLabel = new Label(Component.translatable("gui.stockmarket.create_market_tab.search").getString());
         searchLabel.setTextFontScale(0.7f);
         searchLabel.setAlignment(Label.Alignment.RIGHT);
         addChild(searchLabel);
@@ -135,7 +136,7 @@ public class FavoritesBar extends StockMarketGuiElement {
         balanceFrame.setEnableBackground(true);
         addChild(balanceFrame);
 
-        balanceTitleLabel = new Label("Bank Balance");
+        balanceTitleLabel = new Label(Component.translatable("gui.stockmarket.favorites_bar.bank_balance").getString());
         balanceTitleLabel.setAlignment(Label.Alignment.CENTER);
         balanceTitleLabel.setTextFontScale(0.7f);
         balanceFrame.addChild(balanceTitleLabel);

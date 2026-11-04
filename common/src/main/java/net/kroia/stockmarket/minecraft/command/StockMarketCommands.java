@@ -9,7 +9,6 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import net.kroia.banksystem.util.ItemID;
-import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.stockmarket.api.command.IAsyncStockMarketCommandHandler;
 import net.kroia.stockmarket.api.command.IServerStockMarketCommandHandler;
 import net.kroia.stockmarket.StockMarketMod;
@@ -31,9 +30,12 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -43,6 +45,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 
@@ -113,7 +116,7 @@ public class StockMarketCommands {
                             if (isMaster())
                                 masterHandler().stockmarket_setStockmarketAdminMode(player.getUUID(), true);
                             else
-                                ServerPlayerUtilities.printToClientConsole(player, "This command can only be used on the master server!");
+                                player.sendSystemMessage(Component.translatable("message.stockmarket.command_master_only"));
                             return Command.SINGLE_SUCCESS;
                         })
                         .then(Commands.argument("username", StringArgumentType.string()).suggests((context, builder) -> getPlayerNamesSuggestion(builder))
@@ -124,7 +127,7 @@ public class StockMarketCommands {
                                     if (isMaster())
                                         masterHandler().stockmarket_setStockmarketAdminMode_user(player.getUUID(), toPlayer, true);
                                     else
-                                        ServerPlayerUtilities.printToClientConsole(player, "This command can only be used on the master server!");
+                                        player.sendSystemMessage(Component.translatable("message.stockmarket.command_master_only"));
                                     return Command.SINGLE_SUCCESS;
                                 })
                         )
@@ -137,7 +140,7 @@ public class StockMarketCommands {
                             if (isMaster())
                                 masterHandler().stockmarket_setStockmarketAdminMode(player.getUUID(), false);
                             else
-                                ServerPlayerUtilities.printToClientConsole(player, "This command can only be used on the master server!");
+                                player.sendSystemMessage(Component.translatable("message.stockmarket.command_master_only"));
                             return Command.SINGLE_SUCCESS;
                         })
                         .then(Commands.argument("username", StringArgumentType.string()).suggests((context, builder) -> getPlayerNamesSuggestion(builder))
@@ -148,7 +151,7 @@ public class StockMarketCommands {
                                     if (isMaster())
                                         masterHandler().stockmarket_setStockmarketAdminMode_user(player.getUUID(), toPlayer, false);
                                     else
-                                        ServerPlayerUtilities.printToClientConsole(player, "This command can only be used on the master server!");
+                                        player.sendSystemMessage(Component.translatable("message.stockmarket.command_master_only"));
                                     return Command.SINGLE_SUCCESS;
                                 })
                         )
@@ -192,7 +195,7 @@ public class StockMarketCommands {
                             if (isMaster())
                                 masterHandler().stockmarket_starterKit(player.getUUID());
                             else
-                                ServerPlayerUtilities.printToClientConsole(player, "This command can only be used on the master server!");
+                                player.sendSystemMessage(Component.translatable("message.stockmarket.command_master_only"));
                             return Command.SINGLE_SUCCESS;
                         })
                 )
@@ -535,6 +538,31 @@ public class StockMarketCommands {
                                 })
                         )
                 )
+                // /stockmarket open <market>  /  /stockmarket close <market>
+                // Manual trading-hours override: forces the market open/closed until its next
+                // scheduled transition. Brigadier always prefers an exact literal match over
+                // the generic <market> argument below, and market names are suggested quoted
+                // (or as numeric IDs), so "open"/"close" never collide with a market name.
+                .then(Commands.literal("open")
+                        .requires(source -> PermissionCompat.hasPermission(source, 2)) // Admin-only
+                        .then(Commands.argument("market", StringArgumentType.string())
+                                .suggests((context, builder) -> getMarketNamesSuggestion(builder))
+                                .executes(context -> {
+                                    setTradingOverride(context.getSource(), StringArgumentType.getString(context, "market"), true);
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                        )
+                )
+                .then(Commands.literal("close")
+                        .requires(source -> PermissionCompat.hasPermission(source, 2)) // Admin-only
+                        .then(Commands.argument("market", StringArgumentType.string())
+                                .suggests((context, builder) -> getMarketNamesSuggestion(builder))
+                                .executes(context -> {
+                                    setTradingOverride(context.getSource(), StringArgumentType.getString(context, "market"), false);
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                        )
+                )
                 // /stockmarket <market> remove
                 // Admin fallback to delete a market without the management GUI.
                 // The market is addressed purely by its registry name (e.g. "minecraft:iron_ingot",
@@ -682,22 +710,24 @@ public class StockMarketCommands {
     }
 
     /**
-     * Resolves the given market identifier and deletes the matching market.
+     * Resolves a user-entered market identifier to exactly one market and hands it to
+     * {@code onResolved}.
      * <p>
      * A market matches if its registry name (e.g. "minecraft:iron_ingot") or its
      * numeric ItemID equals {@code marketArg}. Broken markets whose item can no
      * longer be resolved report their numeric ItemID as their name, so they are
-     * addressable by that number.
+     * addressable by that number. If nothing or more than one market matches, a
+     * translatable failure is sent to {@code source} and {@code onResolved} is not called.
      * <p>
-     * Uses the async market manager, so the command works on both master and slave
-     * servers (slaves forward the existing DeleteMarket request to the master).
-     * Feedback is sent to the command source as translatable messages once the
-     * async operations complete.
+     * Uses the async market manager, so it works on both master and slave servers.
+     * {@code onResolved} may run on a network thread - dispatch feedback via
+     * {@code server.execute}.
      *
-     * @param source    the command source to send success/failure feedback to
-     * @param marketArg the market registry name or numeric ItemID entered by the user
+     * @param source     the command source to send failure feedback to
+     * @param marketArg  the market registry name or numeric ItemID entered by the user
+     * @param onResolved called with the single matching market ID
      */
-    private static void removeMarket(CommandSourceStack source, String marketArg)
+    private static void resolveMarket(CommandSourceStack source, String marketArg, Consumer<ItemID> onResolved)
     {
         MinecraftServer server = source.getServer();
         BACKEND_INSTANCES.MARKET_MANAGER.getAsync().getAvailableMarketIDsAsync().thenAccept(marketIDs -> {
@@ -722,18 +752,62 @@ public class StockMarketCommands {
                         Component.translatable("message.stockmarket.command_market_remove_ambiguous", marketArg, candidates)));
                 return;
             }
-
-            ItemID target = matches.get(0);
-            BACKEND_INSTANCES.MARKET_MANAGER.getAsync().deleteMarketAsync(target).thenAccept(success ->
-                    server.execute(() -> {
-                        if (success)
-                            source.sendSuccess(() -> Component.translatable(
-                                    "message.stockmarket.command_market_removed", target.getName()), true);
-                        else
-                            source.sendFailure(Component.translatable(
-                                    "message.stockmarket.command_market_remove_failed", target.getName()));
-                    }));
+            onResolved.accept(matches.get(0));
         });
+    }
+
+    /**
+     * Resolves the given market identifier (see {@link #resolveMarket}) and deletes the
+     * matching market. Slaves forward the DeleteMarket request to the master.
+     *
+     * @param source    the command source to send success/failure feedback to
+     * @param marketArg the market registry name or numeric ItemID entered by the user
+     */
+    private static void removeMarket(CommandSourceStack source, String marketArg)
+    {
+        MinecraftServer server = source.getServer();
+        resolveMarket(source, marketArg, target ->
+                BACKEND_INSTANCES.MARKET_MANAGER.getAsync().deleteMarketAsync(target).thenAccept(success ->
+                        server.execute(() -> {
+                            if (success)
+                                source.sendSuccess(() -> Component.translatable(
+                                        "message.stockmarket.command_market_removed", target.getName()), true);
+                            else
+                                source.sendFailure(Component.translatable(
+                                        "message.stockmarket.command_market_remove_failed", target.getName()));
+                        })));
+    }
+
+    /**
+     * Resolves the given market identifier (see {@link #resolveMarket}) and forces it open
+     * or closed until its next scheduled trading-hours transition.
+     * <p>
+     * On the master the async manager returns the {@code ServerMarket} directly; on a slave
+     * it returns an {@code AsyncMarket} that forwards {@code SetTradingOverride} to the
+     * master without a player UUID (server-originated call). Untrusted slaves are refused by
+     * the master and get the "failed" message.
+     *
+     * @param source    the command source to send success/failure feedback to
+     * @param marketArg the market registry name or numeric ItemID entered by the user
+     * @param open      {@code true} to force the market open, {@code false} to force it closed
+     */
+    private static void setTradingOverride(CommandSourceStack source, String marketArg, boolean open)
+    {
+        MinecraftServer server = source.getServer();
+        resolveMarket(source, marketArg, target ->
+                BACKEND_INSTANCES.MARKET_MANAGER.getAsync().getMarketAsync(target)
+                        .thenCompose(market -> market == null
+                                ? CompletableFuture.completedFuture(false)
+                                : market.setTradingOverrideAsync(open))
+                        .thenAccept(success -> server.execute(() -> {
+                            if (Boolean.TRUE.equals(success))
+                                source.sendSuccess(() -> Component.translatable(open
+                                        ? "message.stockmarket.command_market_trading_opened"
+                                        : "message.stockmarket.command_market_trading_closed", target.getName()), true);
+                            else
+                                source.sendFailure(Component.translatable(
+                                        "message.stockmarket.command_market_trading_failed", target.getName()));
+                        })));
     }
 
     /**
@@ -762,13 +836,47 @@ public class StockMarketCommands {
                 String name = marketID.getName();
                 if (suggestedNames.add(name))
                     builder.suggest("\"" + name + "\"");
-                // Ambiguous names can't be removed by name alone — offer the unique numeric ID too
+                // Ambiguous names can't be addressed by name alone - offer the unique numeric ID
+                // too, with the item's full display name as tooltip so the variants are distinguishable.
                 if (nameCounts.get(name) > 1)
-                    builder.suggest(String.valueOf(marketID.getShort()));
+                    builder.suggest(String.valueOf(marketID.getShort()), getMarketDisplayName(marketID));
             }
             future.complete(builder.build());
         });
         return future;
+    }
+
+    /**
+     * Builds a display name for a market's item that includes the components which tell
+     * variants apart, e.g. "Enchanted Book – Sharpness V". Potions/tipped arrows already
+     * carry their effect in the hover name.
+     * <p>
+     * Built purely from translatable {@link Component}s (resolved on the client that shows
+     * the tooltip), so it is safe on a dedicated server and off the main thread: it only
+     * reads the registry's template stack, never mutates it.
+     *
+     * @param marketID the market's ItemID
+     * @return the display name; the numeric ID as literal text if the item is unknown
+     */
+    private static Component getMarketDisplayName(ItemID marketID)
+    {
+        ItemStack stack = marketID.getStackTemplate(); // read-only, no copy needed
+        if (stack.isEmpty())
+            return Component.literal(String.valueOf(marketID.getShort()));
+        MutableComponent name = stack.getHoverName().copy();
+        ItemEnchantments enchantments = stack.get(DataComponents.STORED_ENCHANTMENTS);
+        if (enchantments == null || enchantments.isEmpty())
+            enchantments = stack.get(DataComponents.ENCHANTMENTS);
+        if (enchantments != null && !enchantments.isEmpty()) {
+            name.append(" – ");
+            boolean first = true;
+            for (var entry : enchantments.entrySet()) {
+                if (!first) name.append(", ");
+                name.append(Enchantment.getFullname(entry.getKey(), entry.getIntValue()));
+                first = false;
+            }
+        }
+        return name;
     }
 
     /**
@@ -877,8 +985,8 @@ public class StockMarketCommands {
             default -> null;
         };
         if (change == null) {
-            source.sendFailure(Component.literal("Unknown scheduler key '" + key
-                    + "' — valid keys: " + String.join(", ", SCHEDULER_KEYS)));
+            source.sendFailure(Component.translatable("message.stockmarket.command_news_unknown_scheduler_key",
+                    key, String.join(", ", SCHEDULER_KEYS)));
             return;
         }
         executeNewsSchedulerOp(source, change);

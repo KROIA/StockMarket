@@ -8,6 +8,7 @@ import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.networking.NetworkGate;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.world.item.ItemStack;
@@ -249,6 +250,10 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
         //   client-only preference (initial chart window size). Clients fetch the
         //   current value via the normal GET path when opening the Mod Settings
         //   screen, so no push-broadcast is needed.
+        // * ServerMarket.TRADING_HOURS_USE_REAL_TIME (T-158): trading hours are
+        //   evaluated only on the master (ServerMarketManager.update reads the
+        //   setting live every tick). Slaves/clients receive the resulting market
+        //   state + clock via the market price stream — no propagation needed.
         String villagerAfter = store.toJsonString(settings.VILLAGER_TRADING);
         if (!villagerAfter.equals(villagerBefore) && BACKEND_INSTANCES.VILLAGER_TRADE_MANAGER != null) {
             BACKEND_INSTANCES.VILLAGER_TRADE_MANAGER.recomputeTable();
@@ -257,7 +262,7 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
         }
 
         // Notify other online admins about the change.
-        broadcastToAdmins(playerSender, getPlayerName(playerSender) + " updated the StockMarket mod settings");
+        broadcastToAdmins(playerSender, Component.translatable("message.stockmarket.admin_broadcast.mod_settings_updated", getPlayerName(playerSender)));
         info("Mod settings updated by " + getPlayerName(playerSender) + (saved ? " (persisted)" : " (PERSIST FAILED)"));
 
         boolean success = saved && applyError == null;

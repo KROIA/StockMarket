@@ -245,7 +245,7 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
 
         if (lineY >= canvasBounds.y && lineY <= canvasBounds.y + canvasBounds.height) {
             chart.drawRect(canvasBounds.x, lineY - 1, canvasBounds.width, 2, 0xFFFF6600);
-            chart.drawText("Target", canvasBounds.x + 4, lineY - chart.getTextHeight() - 2);
+            chart.drawText(Component.translatable("gui.stockmarket.news_plugin.details_table_target").getString(), canvasBounds.x + 4, lineY - chart.getTextHeight() - 2);
         }
     }
 

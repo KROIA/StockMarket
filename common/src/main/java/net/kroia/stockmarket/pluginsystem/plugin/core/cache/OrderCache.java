@@ -40,4 +40,11 @@ public class OrderCache {
         marketOrderVolume = 0;
         limitOrders.clear();
     }
+
+    /** Drops all cached bot orders without placing them (used while the market is closed). */
+    public void clear()
+    {
+        marketOrderVolume = 0;
+        limitOrders.clear();
+    }
 }

@@ -4,6 +4,7 @@ import net.kroia.banksystem.banking.clientdata.BankData;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ClientPlayerUtilities;
 import net.kroia.modutilities.gui.elements.Button;
+import net.kroia.modutilities.gui.elements.EmptyButton;
 import net.kroia.modutilities.gui.elements.Frame;
 import net.kroia.modutilities.gui.elements.ItemView;
 import net.kroia.modutilities.gui.elements.Label;
@@ -53,11 +54,15 @@ public class PairSelectorWidget extends StockMarketGuiElement {
 
     // "I HAVE" side
     private final Label haveLabel;
+    /** Clickable slot behind the "have" icon; always drawn so the slot is visible even when empty. */
+    private final EmptyButton haveSlotButton;
     private final ItemView haveItemView;
     private final Label haveNameLabel;
 
     // "I WANT" side
     private final Label wantLabel;
+    /** Clickable slot behind the "want" icon; always drawn so the slot is visible even when empty. */
+    private final EmptyButton wantSlotButton;
     private final ItemView wantItemView;
     private final Label wantNameLabel;
 
@@ -65,7 +70,11 @@ public class PairSelectorWidget extends StockMarketGuiElement {
     private final Label rateLabel;
     private final Button swapButton;
 
-    // Balance labels
+    // Balance labels. T-159: two lines per side — a "Balance" title row and the
+    // value row below it — so long translated texts fit narrow widths
+    // (ModUtilities' Label renders a single line only).
+    private final Label haveBalanceTitleLabel;
+    private final Label wantBalanceTitleLabel;
     private final Label haveBalanceLabel;
     private final Label wantBalanceLabel;
 
@@ -94,7 +103,7 @@ public class PairSelectorWidget extends StockMarketGuiElement {
     /**
      * T-131 (balance-display fix): the bank account whose balances are shown next to
      * the "have"/"want" items. Mirrors {@code TradeScreen.selectedBankAccountNr} so
-     * the "Bal:" labels reflect the SELECTED account (not always the personal one).
+     * the "Balance:" labels reflect the SELECTED account (not always the personal one).
      * {@code -1} falls back to the player's personal account.
      */
     private int selectedBankAccountNr = -1;
@@ -190,9 +199,14 @@ public class PairSelectorWidget extends StockMarketGuiElement {
         haveLabel.setAlignment(Label.Alignment.CENTER);
         addChild(haveLabel);
 
+        // Slot button: EmptyButton draws its background in every state and switches to
+        // its built-in hover/pressed colors, so the slot reads as clickable even when
+        // no item is selected. The ItemView is a child that only draws the icon.
+        haveSlotButton = new EmptyButton(() -> openDropdown(Side.HAVE));
+        haveSlotButton.setEnableOutline(true);
         haveItemView = new ItemView();
-        haveItemView.setEnabled(false);
-        addChild(haveItemView);
+        haveSlotButton.addChild(haveItemView);
+        addChild(haveSlotButton);
 
         haveNameLabel = new Label(Component.translatable("gui.stockmarket.pair_selector.select").getString());
         haveNameLabel.setTextFontScale(0.6f);
@@ -205,9 +219,12 @@ public class PairSelectorWidget extends StockMarketGuiElement {
         wantLabel.setAlignment(Label.Alignment.CENTER);
         addChild(wantLabel);
 
+        // Same slot button setup as the "have" side.
+        wantSlotButton = new EmptyButton(() -> openDropdown(Side.WANT));
+        wantSlotButton.setEnableOutline(true);
         wantItemView = new ItemView();
-        wantItemView.setEnabled(false);
-        addChild(wantItemView);
+        wantSlotButton.addChild(wantItemView);
+        addChild(wantSlotButton);
 
         wantNameLabel = new Label(Component.translatable("gui.stockmarket.pair_selector.select").getString());
         wantNameLabel.setTextFontScale(0.6f);
@@ -225,7 +242,18 @@ public class PairSelectorWidget extends StockMarketGuiElement {
         swapButton.setTextFontScale(0.8f);
         addChild(swapButton);
 
-        // Balance labels
+        // Balance labels: title row ("Balance") + value row
+        String balanceTitle = Component.translatable("gui.stockmarket.pair_selector.balance").getString();
+        haveBalanceTitleLabel = new Label(balanceTitle);
+        haveBalanceTitleLabel.setTextFontScale(0.6f);
+        haveBalanceTitleLabel.setAlignment(Label.Alignment.CENTER);
+        addChild(haveBalanceTitleLabel);
+
+        wantBalanceTitleLabel = new Label(balanceTitle);
+        wantBalanceTitleLabel.setTextFontScale(0.6f);
+        wantBalanceTitleLabel.setAlignment(Label.Alignment.CENTER);
+        addChild(wantBalanceTitleLabel);
+
         haveBalanceLabel = new Label(Component.translatable("gui.stockmarket.pair_selector.balance_unknown").getString());
         haveBalanceLabel.setTextFontScale(0.6f);
         haveBalanceLabel.setAlignment(Label.Alignment.CENTER);
@@ -272,7 +300,7 @@ public class PairSelectorWidget extends StockMarketGuiElement {
         sortButton.setTextFontScale(0.7f);
         dropdownFrame.addChild(sortButton);
 
-        dropdownSearchLabel = new Label("Search");
+        dropdownSearchLabel = new Label(Component.translatable("gui.stockmarket.create_market_tab.search").getString());
         dropdownSearchLabel.setTextFontScale(0.7f);
         dropdownSearchLabel.setAlignment(Label.Alignment.RIGHT);
         dropdownFrame.addChild(dropdownSearchLabel);
@@ -333,7 +361,7 @@ public class PairSelectorWidget extends StockMarketGuiElement {
 
     /**
      * Sets the bank account whose balances are shown next to the "have"/"want" items
-     * (T-131 balance-display fix) and refreshes the "Bal:" labels immediately so they
+     * (T-131 balance-display fix) and refreshes the "Balance:" labels immediately so they
      * follow the account selected in the trade screen. Passing {@code -1} restores the
      * personal-account fallback.
      * @param accountNr the selected account number, or {@code -1} for personal
@@ -366,14 +394,15 @@ public class PairSelectorWidget extends StockMarketGuiElement {
             return true; // Consume the click (don't let it reach swap button etc.)
         }
 
-        // Check if click is in the "have" area (icon or name label)
-        if (isInBounds(mx, my, haveItemView) || isInBounds(mx, my, haveNameLabel) || isInBounds(mx, my, haveLabel)) {
+        // Check if click is in the "have" area (name/header label; the icon slot is
+        // an EmptyButton that opens the dropdown itself and consumes the click)
+        if (isInBounds(mx, my, haveNameLabel) || isInBounds(mx, my, haveLabel)) {
             openDropdown(Side.HAVE);
             return true;
         }
 
-        // Check if click is in the "want" area (icon or name label)
-        if (isInBounds(mx, my, wantItemView) || isInBounds(mx, my, wantNameLabel) || isInBounds(mx, my, wantLabel)) {
+        // Check if click is in the "want" area (name/header label; see above)
+        if (isInBounds(mx, my, wantNameLabel) || isInBounds(mx, my, wantLabel)) {
             openDropdown(Side.WANT);
             return true;
         }
@@ -402,10 +431,12 @@ public class PairSelectorWidget extends StockMarketGuiElement {
         populateDropdown();
 
         // Hide elements that the dropdown covers
-        haveItemView.setEnabled(false);
-        wantItemView.setEnabled(false);
+        haveSlotButton.setEnabled(false);
+        wantSlotButton.setEnabled(false);
         haveNameLabel.setEnabled(false);
         wantNameLabel.setEnabled(false);
+        haveBalanceTitleLabel.setEnabled(false);
+        wantBalanceTitleLabel.setEnabled(false);
         haveBalanceLabel.setEnabled(false);
         wantBalanceLabel.setEnabled(false);
         rateLabel.setEnabled(false);
@@ -631,10 +662,12 @@ public class PairSelectorWidget extends StockMarketGuiElement {
         allDropdownButtons.clear();
 
         // Restore hidden elements
-        if (haveMarketID != null) haveItemView.setEnabled(true);
-        if (wantMarketID != null) wantItemView.setEnabled(true);
+        haveSlotButton.setEnabled(true);
+        wantSlotButton.setEnabled(true);
         haveNameLabel.setEnabled(true);
         wantNameLabel.setEnabled(true);
+        haveBalanceTitleLabel.setEnabled(true);
+        wantBalanceTitleLabel.setEnabled(true);
         haveBalanceLabel.setEnabled(true);
         wantBalanceLabel.setEnabled(true);
         rateLabel.setEnabled(true);
@@ -699,10 +732,9 @@ public class PairSelectorWidget extends StockMarketGuiElement {
     private void updateHaveDisplay() {
         if (haveMarketID != null) {
             haveItemView.setItemStack(haveMarketID.getStack());
-            haveItemView.setEnabled(true);
             haveNameLabel.setText(haveMarketID.getStack().getHoverName().getString());
         } else {
-            haveItemView.setEnabled(false);
+            haveItemView.setItemStack(null); // empty slot: button background stays visible
             haveNameLabel.setText(Component.translatable("gui.stockmarket.pair_selector.select").getString());
         }
     }
@@ -713,10 +745,9 @@ public class PairSelectorWidget extends StockMarketGuiElement {
     private void updateWantDisplay() {
         if (wantMarketID != null) {
             wantItemView.setItemStack(wantMarketID.getStack());
-            wantItemView.setEnabled(true);
             wantNameLabel.setText(wantMarketID.getStack().getHoverName().getString());
         } else {
-            wantItemView.setEnabled(false);
+            wantItemView.setItemStack(null); // empty slot: button background stays visible
             wantNameLabel.setText(Component.translatable("gui.stockmarket.pair_selector.select").getString());
         }
     }
@@ -772,7 +803,7 @@ public class PairSelectorWidget extends StockMarketGuiElement {
             // "Have" item balance
             if (haveMarketID != null) {
                 BankData haveBalance = bankAccountData.bankData.get(haveMarketID);
-                haveBalanceLabel.setText("Bal: " + (haveBalance != null ? haveBalance.getFormattedBalance() : "0"));
+                haveBalanceLabel.setText(haveBalance != null ? haveBalance.getFormattedBalance() : "0");
             } else {
                 haveBalanceLabel.setText(Component.translatable("gui.stockmarket.pair_selector.balance_unknown").getString());
             }
@@ -780,7 +811,7 @@ public class PairSelectorWidget extends StockMarketGuiElement {
             // "Want" item balance
             if (wantMarketID != null) {
                 BankData wantBalance = bankAccountData.bankData.get(wantMarketID);
-                wantBalanceLabel.setText("Bal: " + (wantBalance != null ? wantBalance.getFormattedBalance() : "0"));
+                wantBalanceLabel.setText(wantBalance != null ? wantBalance.getFormattedBalance() : "0");
             } else {
                 wantBalanceLabel.setText(Component.translatable("gui.stockmarket.pair_selector.balance_unknown").getString());
             }
@@ -821,7 +852,8 @@ public class PairSelectorWidget extends StockMarketGuiElement {
      * Row 0: [I WANT:    ] [I HAVE:    ]
      * Row 1: [  ItemIcon  ] [  ItemIcon  ]
      * Row 2: [  ItemName  ] [  ItemName  ]
-     * Row 3: [  Bal: xxx  ] [  Bal: xxx  ]
+     * Row 3: [  Balance   ] [  Balance   ]
+     *        [    xxx     ] [    xxx     ]
      * Row 4: [ Rate: x.xx have/want ] [Swap]
      * (Dropdown overlays the bottom half when open)
      * </pre>
@@ -835,6 +867,7 @@ public class PairSelectorWidget extends StockMarketGuiElement {
         int halfW = (w - p * 2 - s) / 2;
         int iconSize = 24;
         int labelHeight = 12;
+        int balanceLineHeight = 8; // T-159: one line of the two-line balance block (font scale 0.6)
         int buttonHeight = 16;
         int swapButtonWidth = 36;
 
@@ -849,8 +882,10 @@ public class PairSelectorWidget extends StockMarketGuiElement {
 
         // Row 1: item icons (centered in each half)
         int iconLeftOffset = (halfW - iconSize) / 2;
-        wantItemView.setBounds(leftX + iconLeftOffset, y, iconSize, iconSize);
-        haveItemView.setBounds(rightX + iconLeftOffset, y, iconSize, iconSize);
+        wantSlotButton.setBounds(leftX + iconLeftOffset, y, iconSize, iconSize);
+        haveSlotButton.setBounds(rightX + iconLeftOffset, y, iconSize, iconSize);
+        wantItemView.setBounds(0, 0, iconSize, iconSize);
+        haveItemView.setBounds(0, 0, iconSize, iconSize);
         y += iconSize + s;
 
         // Row 2: item names
@@ -858,10 +893,13 @@ public class PairSelectorWidget extends StockMarketGuiElement {
         haveNameLabel.setBounds(rightX, y, halfW, labelHeight);
         y += labelHeight + s;
 
-        // Row 3: balances
-        wantBalanceLabel.setBounds(leftX, y, halfW, labelHeight);
-        haveBalanceLabel.setBounds(rightX, y, halfW, labelHeight);
-        y += labelHeight + s;
+        // Row 3: balances — "Balance" title line, value line below
+        wantBalanceTitleLabel.setBounds(leftX, y, halfW, balanceLineHeight);
+        haveBalanceTitleLabel.setBounds(rightX, y, halfW, balanceLineHeight);
+        y += balanceLineHeight;
+        wantBalanceLabel.setBounds(leftX, y, halfW, balanceLineHeight);
+        haveBalanceLabel.setBounds(rightX, y, halfW, balanceLineHeight);
+        y += balanceLineHeight + s;
 
         // Row 4: rate label and swap button
         int rateWidth = w - p * 2 - swapButtonWidth - s;

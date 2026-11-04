@@ -209,31 +209,38 @@ void    closeMarket(@NotNull ItemID subject);
 
 ---
 
-## 7. Pausing / resuming a market
+## 7. Maintenance mode
 
-Distinct from creating/deleting a market, you can **pause** (close) and **resume**
-(open) trading on an existing market by toggling its `marketOpen` flag:
+Distinct from creating/deleting a market, you can put an existing market into
+**maintenance mode** and take it out again. These methods map to the market's internal
+**maintenance** flag (`open == !maintenance`); the names are kept for compatibility
+(BankSystem calls them reflectively by name). Maintenance blocks players only; bots keep
+trading. The maintenance flag is **persisted**
+and survives server restarts.
 
 ```java
 void    setMarketOpen(@NotNull ItemID subject, boolean open);
 boolean isMarketOpen(@NotNull ItemID subject);
 ```
 
-- `setMarketOpen(subject, true)` — reopens the market for trading. It reappears on
+- `setMarketOpen(subject, true)` — ends maintenance; players can trade again. It reappears on
   the client trade screen with an empty order book.
-- `setMarketOpen(subject, false)` — closes (pauses) the market for trading.
+- `setMarketOpen(subject, false)` — puts the market into maintenance mode.
 - `isMarketOpen(subject)` — `true` iff a market exists for `subject` **and** it is
-  currently open. Returns `false` if the market is closed **or** if no market
+  currently not under maintenance. Returns `false` if the market is under maintenance **or** if no market
   exists for `subject`.
 
 If no market exists for `subject`, `setMarketOpen` is a **no-op**. All methods are
 **server-thread only**.
 
-> **⚠️ WARNING — closing is DESTRUCTIVE.** `setMarketOpen(subject, false)`:
+> **⚠️ WARNING — maintenance is DESTRUCTIVE.** `setMarketOpen(subject, false)`:
 > - **cancels every open _player_ order**, refunding any locked balances via the
 >   banking system (bot orders are left intact);
 > - **hides the market from the client trade screen** — it is filtered out of the
->   available trading pairs (`GetAvailablePairsRequest`) while closed.
+>   available trading pairs (`GetAvailablePairsRequest`) while under maintenance;
+> - **cancels inter-market orders** that reference the market.
+>
+> Bots keep trading on a market under maintenance.
 >
 > Price history is **preserved** and the order book is emptied of player orders.
 > Reopening with `setMarketOpen(subject, true)` makes the market reappear with an
@@ -243,13 +250,13 @@ If no market exists for `subject`, `setMarketOpen` is a **no-op**. All methods a
 IStockMarketIntegration integration = StockMarketMod.getAPI().getIntegration();
 if (integration == null) return;
 
-// Pause trading (cancels + refunds all open player orders, hides from trade screen).
+// Enter maintenance (cancels + refunds all open player orders, hides from trade screen).
 integration.setMarketOpen(subject, false);
 
 // Query current state.
-boolean open = integration.isMarketOpen(subject);   // false while paused
+boolean open = integration.isMarketOpen(subject);   // false while under maintenance
 
-// Resume trading (market reappears with an empty order book).
+// End maintenance (market reappears with an empty order book).
 integration.setMarketOpen(subject, true);
 ```
 
@@ -257,12 +264,40 @@ integration.setMarketOpen(subject, true);
 
 Two different operations — do not confuse them:
 
-- **`setMarketOpen(subject, false)`** — **reversible pause**. The market keeps
+- **`setMarketOpen(subject, false)`** — **reversible maintenance mode**. The market keeps
   existing (price history intact); it is only hidden and its player orders are
   cancelled+refunded. Reopen it any time with `setMarketOpen(subject, true)`.
 - **`closeMarket(subject)`** — **permanent delete** (see §8). The market is
   removed entirely (unsubscribed from all plugins, deleted, removal broadcast to
   clients). There is no "reopen"; you must `openMarket` again to recreate it.
+
+### Maintenance vs. trading hours
+
+Maintenance is independent of a market's **trading hours** (see
+[Trading Hours](../../user-guide/trading-hours.md)). `setMarketOpen` /
+`isMarketOpen` only control and report the **maintenance** flag: `isMarketOpen` can be
+`true` while the market is outside its trading window and refuses orders. Opening
+or closing by schedule never cancels orders; maintenance does.
+
+Lower-level market interfaces expose both states:
+
+| Interface | Methods |
+|---|---|
+| `ISyncServerMarket` | `isUnderMaintenance()`, `setMaintenance(boolean)` (renamed from `isMarketOpen`/`setMarketOpen`, inverted meaning), `isTradingOpen()`, `getTradingState()` (`MarketSettings.TradingState`: `OPEN`, `CLOSED`, `MAINTENANCE`; `MAINTENANCE` wins), `setTradingHours(int openMinute, int closeMinute)`, `setTradingOverride(boolean open)`, `updateTradingHours(int minuteOfDay)` (called by the market manager each tick, master only) |
+| `IAsyncMarket` | `isUnderMaintenanceAsync()`, `setMaintenanceAsync(boolean)`, `setTradingHoursAsync(int, int)` (admin-gated for players), `setTradingOverrideAsync(boolean)` (server-side only, not callable from clients) |
+
+- Minutes are minutes of the day, `0..1440`. Values are clamped; `open == close` or
+  `0/1440` means always open; `open > close` wraps over midnight. The window is
+  half-open `[open, close)`.
+- `setTradingHours` and `setTradingOverride` only store the value; the open state is
+  re-evaluated at the end of the next market-manager tick.
+- An override lasts until the scheduled state next flips (window edits and
+  clock-source switches count), then it is cleared. It is persisted.
+- Both async setters are refused when forwarded from an untrusted slave.
+
+`CreateOrderRequest.Status.MARKET_CLOSED` (appended to the enum) is returned when an
+order is placed on a market that is under maintenance or outside its trading hours. The check
+runs before any funds are locked.
 
 ---
 

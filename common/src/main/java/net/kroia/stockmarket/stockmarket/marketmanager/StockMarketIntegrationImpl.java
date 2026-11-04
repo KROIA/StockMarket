@@ -91,7 +91,8 @@ public final class StockMarketIntegrationImpl implements IStockMarketIntegration
         if (market == null) return;
         // Sync accessor: the SPI is documented server-thread-only, so the
         // synchronous variant is correct here (no async marshalling needed).
-        market.setMarketOpen(open);
+        // Integration "open" ends maintenance, "closed" enables maintenance.
+        market.setMaintenance(!open);
     }
 
     @Override
@@ -100,6 +101,6 @@ public final class StockMarketIntegrationImpl implements IStockMarketIntegration
         if (mgr == null) return false;
         IServerMarket market = mgr.getMarket(subject);
         // Closed OR no market → not open.
-        return market != null && market.isMarketOpen();
+        return market != null && !market.isUnderMaintenance();
     }
 }

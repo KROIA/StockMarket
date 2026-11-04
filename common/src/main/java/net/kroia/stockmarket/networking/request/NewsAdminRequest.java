@@ -20,6 +20,7 @@ import net.kroia.stockmarket.pluginsystem.plugins.NewsPlugin;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.server.level.ServerPlayer;
@@ -880,8 +881,10 @@ public class NewsAdminRequest extends StockMarketGenericRequest<NewsAdminRequest
         int loaded = plugin.getLibrary().getDefinitionCount();
         String summary = loaded + " event(s) loaded, " + report.errorCount() + " error(s), "
                 + report.warningCount() + " warning(s)";
-        broadcastToAdmins(actor, getPlayerName(actor) + " reloaded the news event definitions ("
-                + summary + ")");
+        // T-159: the reload broadcast is the only translated NewsAdminRequest text
+        // (the /stockmarket news command output stays English by design).
+        broadcastToAdmins(actor, Component.translatable("message.stockmarket.admin_broadcast.news_reloaded", getPlayerName(actor),
+                String.valueOf(loaded), String.valueOf(report.errorCount()), String.valueOf(report.warningCount())));
         info("News definitions reloaded by " + getPlayerName(actor) + ": " + summary);
         return new OutputData(!report.hasErrors(), summary, renderReport(report),
                 definitionIds(plugin), activeEventIds(plugin),

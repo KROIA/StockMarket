@@ -16,6 +16,7 @@ import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.kroia.stockmarket.util.StockMarketGuiScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -47,7 +48,9 @@ public class ManagementScreen extends StockMarketGuiScreen {
         public static final Component ASK_TITLE = Component.translatable(PREFIX + "ask_remove_title");
         public static final Component ASK_MSG = Component.translatable(PREFIX + "ask_remove_message");
         public static final Component MARKET_SETTINGS = Component.translatable(PREFIX + "market_settings");
-        public static final Component MARKET_OPEN = Component.translatable(PREFIX + "market_open");
+        public static final Component MAINTENANCE = Component.translatable(PREFIX + "maintenance");
+        /** Shared with MarketSettingsWidget's maintenance checkbox. */
+        public static final Component MAINTENANCE_TOOLTIP = Component.translatable("gui." + StockMarketMod.MOD_ID + ".market_settings_widget.maintenance.tooltip");
         public static final Component TOOLTIP_NEW_CUSTOM_MARKET = Component.translatable(PREFIX + "new_custom_market.tooltip");
         public static final Component TOOLTIP_NEW_MARKET_BY_CATEGORY = Component.translatable(PREFIX + "new_market_by_category.tooltip");
         public static final Component TOOLTIP_REMOVE_SELECTED_TRADING_PAIR = Component.translatable(PREFIX + "remove_selected_trading_pair.tooltip");
@@ -64,10 +67,10 @@ public class ManagementScreen extends StockMarketGuiScreen {
 
 
         public static final Component GENERAL_TITLE = Component.translatable(PREFIX + "general.title");
-        public static final Component GENERAL_CLOSE_ALL_MARKETS = Component.translatable(PREFIX + "general.close_all_markets");
-        public static final Component GENERAL_CLOSE_ALL_MARKETS_TOOLTIP = Component.translatable(PREFIX + "general.close_all_markets.tooltip");
-        public static final Component GENERAL_OPEN_ALL_MARKETS = Component.translatable(PREFIX + "general.open_all_markets");
-        public static final Component GENERAL_OPEN_ALL_MARKETS_TOOLTIP = Component.translatable(PREFIX + "general.open_all_markets.tooltip");
+        public static final Component GENERAL_MAINTENANCE_ALL_MARKETS = Component.translatable(PREFIX + "general.maintenance_all_markets");
+        public static final Component GENERAL_MAINTENANCE_ALL_MARKETS_TOOLTIP = Component.translatable(PREFIX + "general.maintenance_all_markets.tooltip");
+        public static final Component GENERAL_END_MAINTENANCE_ALL_MARKETS = Component.translatable(PREFIX + "general.end_maintenance_all_markets");
+        public static final Component GENERAL_END_MAINTENANCE_ALL_MARKETS_TOOLTIP = Component.translatable(PREFIX + "general.end_maintenance_all_markets.tooltip");
         public static final Component GENERAL_RESET_ALL_MARKETS_PRICE_CHART = Component.translatable(PREFIX + "general.reset_all_markets_price_chart");
         public static final Component GENERAL_RESET_ALL_MARKETS_PRICE_CHART_TOOLTIP = Component.translatable(PREFIX + "general.reset_all_markets_price_chart.tooltip");
         public static final Component GENERAL_RESET_ALL_MARKETS_PRICE_CHART_POPUP_ASK = Component.translatable(PREFIX + "general.reset_all_markets_price_chart_popup_ask");
@@ -91,9 +94,9 @@ public class ManagementScreen extends StockMarketGuiScreen {
     public static final int elementHeight = 20;
 
     // Tab names
-    private static final String TAB_OVERVIEW = "Overview";
-    private static final String TAB_CREATE_MARKETS = "Create Markets";
-    private static final String TAB_PRESETS = "Presets";
+    private static final String TAB_OVERVIEW = Component.translatable("gui.stockmarket.management_screen.tab_overview").getString();
+    private static final String TAB_CREATE_MARKETS = Component.translatable("gui.stockmarket.create_market_tab.title").getString();
+    private static final String TAB_PRESETS = Component.translatable("gui.stockmarket.management_screen.tab_presets").getString();
 
     // ---- Inner widget classes (used inside OverviewTab) ----
 
@@ -107,13 +110,13 @@ public class ManagementScreen extends StockMarketGuiScreen {
         private final Label selectedMarketLabel;
         private final Button removeTradingPairButton;
         private final Button marketSettingsButton;
-        private final CheckBox marketOpenCheckBox;
-        private final Button openAllMarketsButton;
-        private final Button closeAllMarketsButton;
+        private final CheckBox maintenanceCheckBox;
+        private final Button endMaintenanceAllMarketsButton;
+        private final Button maintenanceAllMarketsButton;
         private final ManagementScreen parentScreen;
         private boolean loadingCheckBox = false;
         // Tracks whether a market is currently selected. Drives the visibility of
-        // marketOpenCheckBox and marketSettingsButton — both are meaningless without
+        // maintenanceCheckBox and marketSettingsButton — both are meaningless without
         // a target market, and now hide instead of showing a dead-looking control.
         private boolean hasSelection = false;
 
@@ -140,26 +143,29 @@ public class ManagementScreen extends StockMarketGuiScreen {
 
             marketSettingsButton = new Button(Texts.MARKET_SETTINGS.getString(), this::onMarketSettingsButtonClicked);
 
-            marketOpenCheckBox = new CheckBox(Texts.MARKET_OPEN.getString(),this::onMarketOpenCheckBoxChanged);
-            marketOpenCheckBox.setTextAlignment(GuiElement.Alignment.CENTER);
+            maintenanceCheckBox = new CheckBox(Texts.MAINTENANCE.getString(),this::onMaintenanceCheckBoxChanged);
+            maintenanceCheckBox.setTextAlignment(GuiElement.Alignment.CENTER);
+            maintenanceCheckBox.setHoverTooltipSupplier(Texts.MAINTENANCE_TOOLTIP::getString);
+            maintenanceCheckBox.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.TOP_RIGHT);
+            maintenanceCheckBox.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
 
-            openAllMarketsButton = new Button(Texts.GENERAL_OPEN_ALL_MARKETS.getString(), this::onOpenAllMarkets);
-            openAllMarketsButton.setHoverTooltipSupplier(Texts.GENERAL_OPEN_ALL_MARKETS_TOOLTIP::getString);
-            openAllMarketsButton.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.TOP_RIGHT);
-            openAllMarketsButton.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
+            endMaintenanceAllMarketsButton = new Button(Texts.GENERAL_END_MAINTENANCE_ALL_MARKETS.getString(), this::onEndMaintenanceAllMarkets);
+            endMaintenanceAllMarketsButton.setHoverTooltipSupplier(Texts.GENERAL_END_MAINTENANCE_ALL_MARKETS_TOOLTIP::getString);
+            endMaintenanceAllMarketsButton.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.TOP_RIGHT);
+            endMaintenanceAllMarketsButton.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
 
-            closeAllMarketsButton = new Button(Texts.GENERAL_CLOSE_ALL_MARKETS.getString(), this::onCloseAllMarkets);
-            closeAllMarketsButton.setHoverTooltipSupplier(Texts.GENERAL_CLOSE_ALL_MARKETS_TOOLTIP::getString);
-            closeAllMarketsButton.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.TOP_RIGHT);
-            closeAllMarketsButton.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
+            maintenanceAllMarketsButton = new Button(Texts.GENERAL_MAINTENANCE_ALL_MARKETS.getString(), this::onMaintenanceAllMarkets);
+            maintenanceAllMarketsButton.setHoverTooltipSupplier(Texts.GENERAL_MAINTENANCE_ALL_MARKETS_TOOLTIP::getString);
+            maintenanceAllMarketsButton.setHoverTooltipMousePositionAlignment(GuiElement.Alignment.TOP_RIGHT);
+            maintenanceAllMarketsButton.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
 
             this.addChild(selectedMarketLabel);
             this.addChild(removeTradingPairButton);
             this.addChild(currentItemView);
             this.addChild(marketSettingsButton);
-            this.addChild(marketOpenCheckBox);
-            this.addChild(openAllMarketsButton);
-            this.addChild(closeAllMarketsButton);
+            this.addChild(maintenanceCheckBox);
+            this.addChild(endMaintenanceAllMarketsButton);
+            this.addChild(maintenanceAllMarketsButton);
 
             this.setHeight(5*(elementHeight+spacing));
 
@@ -182,7 +188,7 @@ public class ManagementScreen extends StockMarketGuiScreen {
             selectedMarketLabel.setBounds(padding, padding, width, elementHeight-spacing);
 
             // Task 3: when no market is selected, hide the orange Delete button too
-            // (same off-screen-bounds pattern used for marketOpenCheckBox / marketSettingsButton).
+            // (same off-screen-bounds pattern used for maintenanceCheckBox / marketSettingsButton).
             // The item view stays full-width in that state so the "no selection" placeholder
             // reads cleanly without a floating Delete button to its right.
             if (hasSelection) {
@@ -193,16 +199,16 @@ public class ManagementScreen extends StockMarketGuiScreen {
                 removeTradingPairButton.setBounds(-1000, -1000, 0, 0);
             }
 
-            // Task 3: hide marketOpenCheckBox + marketSettingsButton when no market
+            // Task 3: hide maintenanceCheckBox + marketSettingsButton when no market
             // is selected. Collapse their rows to zero-height so the open/close-all
             // buttons slide up and no dead space remains. Visibility is derived from
             // hasSelection (set by setCurrentMarket).
             if (hasSelection) {
-                marketOpenCheckBox.setBounds(currentItemView.getLeft(), currentItemView.getBottom()+spacing, width, elementHeight);
-                marketSettingsButton.setBounds(marketOpenCheckBox.getLeft(), marketOpenCheckBox.getBottom()+spacing, width, elementHeight);
+                maintenanceCheckBox.setBounds(currentItemView.getLeft(), currentItemView.getBottom()+spacing, width, elementHeight);
+                marketSettingsButton.setBounds(maintenanceCheckBox.getLeft(), maintenanceCheckBox.getBottom()+spacing, width, elementHeight);
             } else {
                 // Zero-size + off-screen so hit-testing can't trigger these controls.
-                marketOpenCheckBox.setBounds(-1000, -1000, 0, 0);
+                maintenanceCheckBox.setBounds(-1000, -1000, 0, 0);
                 marketSettingsButton.setBounds(-1000, -1000, 0, 0);
             }
 
@@ -210,14 +216,14 @@ public class ManagementScreen extends StockMarketGuiScreen {
             int btnY = hasSelection
                     ? marketSettingsButton.getBottom() + spacing
                     : currentItemView.getBottom() + spacing;
-            openAllMarketsButton.setBounds(padding, btnY, btnW, elementHeight);
-            closeAllMarketsButton.setBounds(openAllMarketsButton.getRight() + spacing, btnY, btnW, elementHeight);
+            endMaintenanceAllMarketsButton.setBounds(padding, btnY, btnW, elementHeight);
+            maintenanceAllMarketsButton.setBounds(endMaintenanceAllMarketsButton.getRight() + spacing, btnY, btnW, elementHeight);
         }
         public void setCurrentMarket(ItemID marketID) {
             if(marketID == null) {
                 currentItemView.setItemStack(ItemStack.EMPTY);
                 hasSelection = false;
-                // Re-layout so marketOpenCheckBox / marketSettingsButton hide.
+                // Re-layout so maintenanceCheckBox / marketSettingsButton hide.
                 setBounds(getLeft(), getTop(), getWidth(), getHeight());
                 return;
             }
@@ -231,9 +237,10 @@ public class ManagementScreen extends StockMarketGuiScreen {
             hasSelection = true;
             setBounds(getLeft(), getTop(), getWidth(), getHeight());
         }
-        public void setMarketOpenCheckBoxChecked(boolean isOpen) {
+        /** Updates the "Maintenance mode" checkbox without firing its change callback. */
+        public void setMaintenanceCheckBoxChecked(boolean maintenance) {
             loadingCheckBox = true;
-            marketOpenCheckBox.setChecked(isOpen);
+            maintenanceCheckBox.setChecked(maintenance);
             loadingCheckBox = false;
         }
 
@@ -255,40 +262,41 @@ public class ManagementScreen extends StockMarketGuiScreen {
             MarketManagementScreen managementScreen = new MarketManagementScreen(parentScreen, currentMarket.getItemID());
             setScreen(managementScreen);
         }
-        private void onMarketOpenCheckBoxChanged(Boolean isOpen)
+        private void onMaintenanceCheckBoxChanged(Boolean maintenance)
         {
             if (loadingCheckBox) return;
             ClientMarket currentMarket = getSelectedMarket();
             if (currentMarket == null) return;
-            currentMarket.setMarketOpenAsync(isOpen).thenAccept(success -> {
+            currentMarket.setMaintenanceAsync(maintenance).thenAccept(success -> {
                 if (success) {
                     Minecraft.getInstance().execute(() -> overviewTab.refreshMarketStates());
                 }
             });
         }
-        private void setAllMarketsOpen(boolean open) {
+        /** Enables or disables maintenance mode on every market, then refreshes the checkbox and tile overlays. */
+        private void setAllMarketsMaintenance(boolean maintenance) {
             List<ItemID> markets = getAvailableMarkets();
             int total = markets.size();
             final int[] completed = {0};
             for (ItemID marketID : markets) {
                 ClientMarket market = getMarket(marketID);
                 if (market == null) { completed[0]++; continue; }
-                market.setMarketOpenAsync(open).thenAccept(success -> {
+                market.setMaintenanceAsync(maintenance).thenAccept(success -> {
                     completed[0]++;
                     if (completed[0] >= total) {
                         Minecraft.getInstance().execute(() -> {
-                            setMarketOpenCheckBoxChecked(open);
+                            setMaintenanceCheckBoxChecked(maintenance);
                             overviewTab.refreshMarketStates();
                         });
                     }
                 });
             }
         }
-        private void onOpenAllMarkets() {
-            setAllMarketsOpen(true);
+        private void onEndMaintenanceAllMarkets() {
+            setAllMarketsMaintenance(false);
         }
-        private void onCloseAllMarkets() {
-            setAllMarketsOpen(false);
+        private void onMaintenanceAllMarkets() {
+            setAllMarketsMaintenance(true);
         }
     }
 
@@ -483,8 +491,8 @@ public class ManagementScreen extends StockMarketGuiScreen {
             for (MarketItemView view : allMarketItems) {
                 ClientMarket market = getMarket(view.marketID);
                 if (market != null) {
-                    market.isMarketOpenAsync().thenAccept(isOpen ->
-                        Minecraft.getInstance().execute(() -> view.setMarketOpen(isOpen))
+                    market.isUnderMaintenanceAsync().thenAccept(maintenance ->
+                        Minecraft.getInstance().execute(() -> view.setMaintenance(maintenance))
                     );
                 }
             }
@@ -501,7 +509,10 @@ public class ManagementScreen extends StockMarketGuiScreen {
             // Task 2: right-panel width halved (was ~w/2, now ~w/4). The chart and
             // market grid expand into the freed space on the left (~3w/4 minus
             // spacing) so they're easier to scan.
-            int rightWidth = w / 4;
+            // Right panel widened by a fifth (w/4 -> 1.2 * w/4 = 3w/10) so the side-by-side
+            // "Maintenance all" / "End maintenance all" buttons fit their labels; the chart,
+            // search row and market grid on the left shrink by the same amount via leftWidth.
+            int rightWidth = w * 3 / 10;
             int leftWidth = w - rightWidth - spacing;
 
             candlestickChart.setBounds(padding, padding, leftWidth, h / 2);
@@ -529,12 +540,12 @@ public class ManagementScreen extends StockMarketGuiScreen {
         }
 
         /**
-         * Item icon in the market grid with a green/red overlay indicating open/closed state.
+         * Item icon in the market grid with a green/red overlay indicating running/under-maintenance state.
          */
         private class MarketItemView extends ItemView {
             private final ItemID marketID;
             private final String itemName;
-            private boolean marketOpen = true;
+            private boolean maintenance = false;
 
             MarketItemView(ItemStack stack, ItemID marketID) {
                 super(stack);
@@ -542,14 +553,14 @@ public class ManagementScreen extends StockMarketGuiScreen {
                 this.itemName = stack.getHoverName().getString();
             }
 
-            void setMarketOpen(boolean open) {
-                this.marketOpen = open;
+            void setMaintenance(boolean maintenance) {
+                this.maintenance = maintenance;
             }
 
             @Override
             public void renderBackground() {
                 super.renderBackground();
-                int overlayColor = marketOpen ? 0x3000FF00 : 0x40FF0000;
+                int overlayColor = maintenance ? 0x40FF0000 : 0x3000FF00;
                 drawRect(0, 0, getWidth(), getHeight(), overlayColor);
                 if (isMouseOver()) {
                     drawRect(0, 0, getWidth(), getHeight(), 0x40FFFFFF);
@@ -701,9 +712,9 @@ public class ManagementScreen extends StockMarketGuiScreen {
             StockMarketGuiElement.selectMarket(itemID);
             overviewTab.getCandlestickChart().setMarket(market);
             overviewTab.getCurrentMarketManagerWidget().setCurrentMarket(itemID);
-            market.isMarketOpenAsync().thenAccept(isOpen ->
+            market.isUnderMaintenanceAsync().thenAccept(maintenance ->
                 Minecraft.getInstance().execute(() ->
-                    overviewTab.getCurrentMarketManagerWidget().setMarketOpenCheckBoxChecked(isOpen)
+                    overviewTab.getCurrentMarketManagerWidget().setMaintenanceCheckBoxChecked(maintenance)
                 )
             );
         }
@@ -781,12 +792,12 @@ public class ManagementScreen extends StockMarketGuiScreen {
             msgLabel = new Label(Texts.ASK_MSG.getString());
             msgLabel.setAlignment(Label.Alignment.CENTER);
 
-            confirmButton = new Button("Yes", this::onConfirm);
+            confirmButton = new Button(CommonComponents.GUI_YES.getString(), this::onConfirm);
             confirmButton.setBackgroundColor(0xFFe8711c);
             confirmButton.setHoverColor(0xFFe04c12);
             confirmButton.setPressedColor(0xFFe04c12);
 
-            cancelButton = new Button("No", this::onCancel);
+            cancelButton = new Button(CommonComponents.GUI_NO.getString(), this::onCancel);
 
             addElement(titleLabel);
             addElement(msgLabel);

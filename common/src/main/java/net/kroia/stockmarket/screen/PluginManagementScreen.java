@@ -51,7 +51,6 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         public static final Component CLOSE = Component.translatable(PREFIX + "subscribe_close");
     }
 
-    private final StockMarketGuiScreen parent;
     private final Label titleLabel;
     private final Button addPluginButton;
     /**
@@ -87,8 +86,10 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
      * @param parent the parent screen to return to on close
      */
     public PluginManagementScreen(StockMarketGuiScreen parent) {
-        super(Texts.TITLE);
-        this.parent = parent;
+        // Parent goes to the GuiScreen base so its onClose() returns to it and restores
+        // the cursor. Closing with a null parent and then calling setScreen(parent)
+        // re-grabs/releases the mouse, which re-centers the cursor.
+        super(Texts.TITLE, parent);
 
         titleLabel = new Label(Texts.TITLE.getString());
         titleLabel.setAlignment(Label.Alignment.CENTER);
@@ -185,10 +186,7 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
         // T-137: tear down the timing stream so the server stops broadcasting
         // to this client once the management window is gone.
         stopTimingStream();
-        super.onClose();
-        if (parent != null) {
-            setScreen(parent);
-        }
+        super.onClose(); // returns to the parent (base class) with the cursor preserved
     }
 
     @Override
@@ -440,7 +438,7 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             autoSubscribeCheckBox.setOnStateChanged(this::onAutoSubscribeChanged);
 
             // Logger checkbox — set state before attaching callback
-            loggerCheckBox = new CheckBox("Logger");
+            loggerCheckBox = new CheckBox(Component.translatable("gui.stockmarket.plugin_management_screen.logger").getString());
             loggerCheckBox.setChecked(data.isLoggerEnabled());
             loggerCheckBox.setOnStateChanged(this::onLoggerChanged);
 
@@ -506,7 +504,7 @@ public class PluginManagementScreen extends StockMarketGuiScreen {
             } else {
                 // Plugin mod not installed on client — show placeholder
                 openPluginScreenButton = null;
-                missingPluginLabel = new Label("Plugin mod not installed — custom UI unavailable");
+                missingPluginLabel = new Label(Component.translatable("gui.stockmarket.plugin_management_screen.plugin_missing").getString());
                 missingPluginLabel.setTextColor(0xFFFF4444);
                 this.addChild(missingPluginLabel);
             }

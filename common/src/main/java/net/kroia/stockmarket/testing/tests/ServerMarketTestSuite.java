@@ -45,7 +45,7 @@ public class ServerMarketTestSuite extends TestSuite {
     @Override
     public void registerTests() {
         // Order Routing
-        addTest("putOrder_marketClosed_rejected", this::test_putOrder_marketClosed_rejected);
+        addTest("putOrder_marketMaintenance_rejected", this::test_putOrder_marketMaintenance_rejected);
         addTest("putOrder_alreadyFilled_rejected", this::test_putOrder_alreadyFilled_rejected);
         addTest("putOrder_wrongItemID_rejected", this::test_putOrder_wrongItemID_rejected);
         addTest("putOrder_buyMarket_goesToBuffer", this::test_putOrder_buyMarket_goesToBuffer);
@@ -54,8 +54,8 @@ public class ServerMarketTestSuite extends TestSuite {
         addTest("putOrder_sellLimit_goesToBuffer", this::test_putOrder_sellLimit_goesToBuffer);
 
         // Market Open/Close
-        addTest("update_marketClosed_noop", this::test_update_marketClosed_noop);
-        addTest("update_marketOpen_processesOrders", this::test_update_marketOpen_processesOrders);
+        addTest("update_marketMaintenance_noop", this::test_update_marketMaintenance_noop);
+        addTest("update_notMaintenance_processesOrders", this::test_update_notMaintenance_processesOrders);
 
         // Default Volume Provider
         addTest("defaultVolumeProvider_nullFunction", this::test_defaultVolumeProvider_nullFunction);
@@ -65,6 +65,7 @@ public class ServerMarketTestSuite extends TestSuite {
         addTest("save_load_roundTrip", this::test_save_load_roundTrip);
         addTest("load_missingOrderbook", this::test_load_missingOrderbook);
         addTest("load_restoresCandleState", this::test_load_restoresCandleState);
+        addTest("save_load_maintenancePersisted", this::test_save_load_maintenancePersisted);
 
         // Candle Tracking
         addTest("getCurrentMarketPriceStructAndReset_resets", this::test_getCurrentMarketPriceStructAndReset_resets);
@@ -73,6 +74,13 @@ public class ServerMarketTestSuite extends TestSuite {
         addTest("cancelOrder_existing_limit", this::test_cancelOrder_existingLimit);
         addTest("cancelOrder_nonexistent", this::test_cancelOrder_nonexistent);
         addTest("cancelOrder_wrong_executor", this::test_cancelOrder_wrongExecutor);
+
+        // Trading hours (T-158)
+        addTest("tradingHours_closed_rejectsAllOrders", this::test_tradingHours_closed_rejectsAllOrders);
+        addTest("tradingHours_closed_staticPrice_restingSurvives", this::test_tradingHours_closed_staticPrice_restingSurvives);
+        addTest("tradingHours_override_clearedOnTransition", this::test_tradingHours_override_clearedOnTransition);
+        addTest("tradingHours_setTradingHours_normalizes", this::test_tradingHours_setTradingHours_normalizes);
+        addTest("tradingHours_save_load_roundTrip_and_oldNbt", this::test_tradingHours_saveLoad);
     }
 
     @Override
@@ -83,7 +91,7 @@ public class ServerMarketTestSuite extends TestSuite {
         fixture.setBackend(backend);
         moneyID = ItemID.getOrRegisterFromItemStackServerSide_direct(BankSystemItems.MONEY.get().getDefaultInstance());
         // Scratch market on a synthetic ItemID — never the player's live gold market, so
-        // the setMarketOpen(false) calls below can never close a market a player trades on.
+        // the setMaintenance(true) calls below can never put a market under maintenance a player trades on.
         serverMarket = fixture.createMarket("main");
         itemID = serverMarket.getItemID();
 
@@ -96,9 +104,10 @@ public class ServerMarketTestSuite extends TestSuite {
 
     @Override
     public void teardown() {
-        // Reopen + clear so deleteMarket sees no dangling orders, then drop everything.
+        // End maintenance + clear so deleteMarket sees no dangling orders, then drop everything.
         if (serverMarket != null) {
-            serverMarket.setMarketOpen(true);
+            serverMarket.setMaintenance(false);
+            resetTradingHours();
             serverMarket.test_clearOrderbook();
             serverMarket.test_clearIncomingOrderBuffers();
         }
@@ -110,14 +119,32 @@ public class ServerMarketTestSuite extends TestSuite {
         serverMarket.test_setCurrentMarketPrice(price);
         serverMarket.test_clearOrderbook();
         serverMarket.test_clearIncomingOrderBuffers();
-        serverMarket.setMarketOpen(open);
+        serverMarket.setMaintenance(!open);
+        resetTradingHours();
         bankAccount.getBank(itemID).setBalance(100);
         bankAccount.getBank(moneyID).setBalance(10000);
     }
 
+    /**
+     * Back to 00:00-24:00, open, no override. A closed-window evaluation followed by the
+     * always-open one forces a scheduled transition, which clears any override.
+     */
+    private void resetTradingHours() {
+        serverMarket.setTradingHours(0, 1);
+        serverMarket.updateTradingHours(5);
+        serverMarket.setTradingHours(0, 1440);
+        serverMarket.updateTradingHours(0);
+    }
+
+    /** Closes the market via its schedule: window 10:00-12:00 evaluated at 00:00. */
+    private void closeBySchedule() {
+        serverMarket.setTradingHours(600, 720);
+        serverMarket.updateTradingHours(0);
+    }
+
     // ── Order Routing ────────────────────────────────────────────────────────
 
-    private TestResult test_putOrder_marketClosed_rejected() {
+    private TestResult test_putOrder_marketMaintenance_rejected() {
         try {
             resetMarket(100, false);
 
@@ -245,7 +272,7 @@ public class ServerMarketTestSuite extends TestSuite {
 
     // ── Market Open/Close ────────────────────────────────────────────────────
 
-    private TestResult test_update_marketClosed_noop() {
+    private TestResult test_update_marketMaintenance_noop() {
         try {
             resetMarket(100, false);
 
@@ -266,7 +293,7 @@ public class ServerMarketTestSuite extends TestSuite {
         }
     }
 
-    private TestResult test_update_marketOpen_processesOrders() {
+    private TestResult test_update_notMaintenance_processesOrders() {
         try {
             resetMarket(100, true);
             serverMarket.test_setDefaultVolumeProviderFunction(p -> 5.0f / backend.BANK_SYSTEM_API.getServerBankManager().getSync().getItemFractionScaleFactor());
@@ -352,6 +379,32 @@ public class ServerMarketTestSuite extends TestSuite {
             r = assertEquals("Market price should be restored", 150L, serverMarket.getCurrentMarketPrice());
             if (!r.passed()) return r;
             return pass("ServerMarket save/load round trip preserves market price");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /**
+     * The maintenance flag survives save/load; NBT without a "maintenance" key (pre-T-158 worlds)
+     * loads as not under maintenance.
+     */
+    private TestResult test_save_load_maintenancePersisted() {
+        try {
+            resetMarket(100, false); // under maintenance
+            CompoundTag tag = new CompoundTag();
+            TestResult r = assertTrue("Save should succeed", ((ServerMarket) serverMarket).save(tag));
+            if (!r.passed()) return r;
+
+            serverMarket.setMaintenance(false);
+            ((ServerMarket) serverMarket).load(tag);
+            r = assertTrue("Maintenance flag should be restored by load", serverMarket.isUnderMaintenance());
+            if (!r.passed()) return r;
+
+            tag.remove("maintenance");
+            ((ServerMarket) serverMarket).load(tag);
+            r = assertFalse("Missing maintenance key should load as not under maintenance", serverMarket.isUnderMaintenance());
+            if (!r.passed()) return r;
+            return pass("Maintenance flag persists and old NBT defaults to not under maintenance");
         } catch (Exception e) {
             return fail("Exception: " + e.getMessage());
         }
@@ -529,6 +582,189 @@ public class ServerMarketTestSuite extends TestSuite {
             return pass("cancelOrder with wrong executor UUID does not remove the order");
         } catch (Exception e) {
             return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    // ── Trading hours (T-158) ───────────────────────────────────────────────
+
+    /** Outside trading hours putOrder rejects player AND bot orders. */
+    private TestResult test_tradingHours_closed_rejectsAllOrders() {
+        try {
+            resetMarket(100, true);
+            closeBySchedule();
+            TestResult r = assertFalse("market should be closed", serverMarket.isTradingOpen());
+            if (!r.passed()) return r;
+            r = assertEquals("state CLOSED", MarketSettings.TradingState.CLOSED, serverMarket.getTradingState());
+            if (!r.passed()) return r;
+
+            Order player = new Order(itemID, Order.Type.LIMIT, 5, 90, 0, UUID.randomUUID(), bankAccountNr);
+            r = assertFalse("player order rejected while closed", serverMarket.putOrder(player));
+            if (!r.passed()) return r;
+            Order bot = new Order(itemID, Order.Type.MARKET, 5, 100, 0);
+            r = assertFalse("bot order rejected while closed", serverMarket.putOrder(bot));
+            if (!r.passed()) return r;
+
+            serverMarket.updateTradingHours(650); // inside 10:00-12:00
+            r = assertTrue("reopens inside the window", serverMarket.isTradingOpen());
+            if (!r.passed()) return r;
+            r = assertTrue("player order accepted after reopen", serverMarket.putOrder(
+                    new Order(itemID, Order.Type.LIMIT, 5, 90, 0, UUID.randomUUID(), bankAccountNr)));
+            if (!r.passed()) return r;
+            return pass("Closed market rejects all new orders, reopen accepts again");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        } finally {
+            resetMarket(100, true);
+        }
+    }
+
+    /** Closed: update() does not match (static price), resting orders survive and stay cancellable. */
+    private TestResult test_tradingHours_closed_staticPrice_restingSurvives() {
+        try {
+            resetMarket(100, true);
+            serverMarket.test_setDefaultVolumeProviderFunction(p -> 5.0f / backend.BANK_SYSTEM_API.getServerBankManager().getSync().getItemFractionScaleFactor());
+            serverMarket.test_resetVirtualOrderBookVolume();
+
+            UUID owner = UUID.randomUUID();
+            Order resting = new Order(itemID, Order.Type.LIMIT, 5, 90, 0, owner, bankAccountNr);
+            serverMarket.getOrderbook().putOrder(resting);
+            // Buffered while open; must not execute once closed.
+            Order buffered = new Order(itemID, Order.Type.MARKET, 10, 100, 0, UUID.randomUUID(), bankAccountNr);
+            serverMarket.putOrder(buffered);
+
+            closeBySchedule();
+            long priceBefore = serverMarket.getCurrentMarketPrice();
+            serverMarket.update();
+            TestResult r = assertEquals("price static while closed", priceBefore, serverMarket.getCurrentMarketPrice());
+            if (!r.passed()) return r;
+            r = assertEquals("buffered order untouched while closed", 0L, buffered.getFilledVolume());
+            if (!r.passed()) return r;
+            r = assertTrue("resting order survives closing", serverMarket.getLimitOrders().contains(resting));
+            if (!r.passed()) return r;
+            r = assertTrue("cancelOrder works while closed", serverMarket.cancelOrder(
+                    owner, resting.getTime(), Order.Type.LIMIT, resting.getStartPrice(), resting.getTargetVolume()));
+            if (!r.passed()) return r;
+            return pass("Closed market keeps a static price, resting orders survive and are cancellable");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        } finally {
+            resetMarket(100, true);
+        }
+    }
+
+    /** A manual override holds until the next scheduled transition, then the schedule wins. */
+    private TestResult test_tradingHours_override_clearedOnTransition() {
+        try {
+            resetMarket(100, true);
+            closeBySchedule(); // 10:00-12:00, now 00:00 -> closed
+
+            serverMarket.setTradingOverride(true);
+            TestResult r = assertFalse("override applied only on next evaluation", serverMarket.isTradingOpen());
+            if (!r.passed()) return r;
+            serverMarket.updateTradingHours(1);
+            r = assertTrue("forced open outside the window", serverMarket.isTradingOpen());
+            if (!r.passed()) return r;
+            serverMarket.updateTradingHours(300);
+            r = assertTrue("still forced open (no transition yet)", serverMarket.isTradingOpen());
+            if (!r.passed()) return r;
+            serverMarket.updateTradingHours(650); // schedule opens -> override cleared
+            r = assertNull("override cleared on transition", ((ServerMarket) serverMarket).getTradingOverride());
+            if (!r.passed()) return r;
+            serverMarket.updateTradingHours(720); // schedule closes
+            r = assertFalse("schedule closes again after override was cleared", serverMarket.isTradingOpen());
+            if (!r.passed()) return r;
+
+            // Forced close inside the window
+            serverMarket.updateTradingHours(650);
+            serverMarket.setTradingOverride(false);
+            serverMarket.updateTradingHours(651);
+            r = assertFalse("forced closed inside the window", serverMarket.isTradingOpen());
+            if (!r.passed()) return r;
+            serverMarket.updateTradingHours(720);
+            serverMarket.updateTradingHours(600); // next day's open
+            r = assertTrue("opens by schedule on the next day", serverMarket.isTradingOpen());
+            if (!r.passed()) return r;
+
+            // Maintenance wins over trading hours for the display state
+            serverMarket.setMaintenance(true);
+            r = assertEquals("MAINTENANCE wins", MarketSettings.TradingState.MAINTENANCE, serverMarket.getTradingState());
+            if (!r.passed()) return r;
+            return pass("Override holds until the next scheduled transition");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        } finally {
+            resetMarket(100, true);
+        }
+    }
+
+    private TestResult test_tradingHours_setTradingHours_normalizes() {
+        try {
+            resetMarket(100, true);
+            MarketSettings s = serverMarket.getSettings();
+            serverMarket.setTradingHours(500, 500);
+            TestResult r = assertTrue("open == close -> 00:00-24:00", s.tradingOpenMinute == 0 && s.tradingCloseMinute == 1440);
+            if (!r.passed()) return r;
+            serverMarket.setTradingHours(-5, 2000);
+            r = assertTrue("out of range clamped -> 00:00-24:00", s.tradingOpenMinute == 0 && s.tradingCloseMinute == 1440);
+            if (!r.passed()) return r;
+            serverMarket.setTradingHours(1440, 600);
+            r = assertTrue("open 24:00 -> 00:00", s.tradingOpenMinute == 0 && s.tradingCloseMinute == 600);
+            if (!r.passed()) return r;
+
+            // setSettings copies the window with the same normalization
+            MarketSettings incoming = new MarketSettings(false, s.defaultPrice, s.naturalAbundance);
+            incoming.tradingOpenMinute = 1320;
+            incoming.tradingCloseMinute = 360;
+            serverMarket.setSettings(incoming);
+            r = assertTrue("setSettings copies the window", s.tradingOpenMinute == 1320 && s.tradingCloseMinute == 360);
+            if (!r.passed()) return r;
+            return pass("Trading window is clamped and normalized");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        } finally {
+            resetMarket(100, true);
+        }
+    }
+
+    /** Window + override + last schedule persist; NBT without the keys loads as always open. */
+    private TestResult test_tradingHours_saveLoad() {
+        try {
+            resetMarket(100, true);
+            ServerMarket market = (ServerMarket) serverMarket;
+            serverMarket.setTradingHours(1320, 360);
+            serverMarket.updateTradingHours(0);      // inside overnight window -> open
+            serverMarket.setTradingOverride(false);  // forced closed until 06:00
+            CompoundTag tag = new CompoundTag();
+            TestResult r = assertTrue("save succeeds", market.save(tag));
+            if (!r.passed()) return r;
+
+            resetMarket(100, true);
+            market.load(tag);
+            MarketSettings s = serverMarket.getSettings();
+            r = assertTrue("window restored", s.tradingOpenMinute == 1320 && s.tradingCloseMinute == 360);
+            if (!r.passed()) return r;
+            r = assertEquals("override restored", Boolean.FALSE, market.getTradingOverride());
+            if (!r.passed()) return r;
+            r = assertFalse("loaded closed by override", serverMarket.isTradingOpen());
+            if (!r.passed()) return r;
+
+            // Old NBT (pre-T-158): no trading-hours keys -> always open, no override
+            tag.remove("tradingOpenMinute");
+            tag.remove("tradingCloseMinute");
+            tag.remove("tradingOverride");
+            tag.remove("lastScheduledOpen");
+            market.load(tag);
+            r = assertTrue("old NBT -> always open window", serverMarket.getSettings().isAlwaysOpen());
+            if (!r.passed()) return r;
+            r = assertNull("old NBT -> no override", market.getTradingOverride());
+            if (!r.passed()) return r;
+            r = assertTrue("old NBT -> open", serverMarket.isTradingOpen());
+            if (!r.passed()) return r;
+            return pass("Trading hours persist and old NBT loads as always open");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        } finally {
+            resetMarket(100, true);
         }
     }
 }

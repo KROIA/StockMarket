@@ -41,7 +41,7 @@ public class GetAvailablePairsRequest extends StockMarketGenericRequest<Integer,
         List<ItemID> openMarkets = new ArrayList<>();
         for (ItemID id : getServerMarketManager().getAvailableMarketIDs()) {
             IServerMarket m = getServerMarketManager().getMarket(id);
-            if (m != null && m.isMarketOpen()) openMarkets.add(id);
+            if (m != null && !m.isUnderMaintenance()) openMarkets.add(id);
         }
 
         // Generate all N*(N-1)/2 pairs in canonical form

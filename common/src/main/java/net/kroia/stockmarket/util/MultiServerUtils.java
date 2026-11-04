@@ -3,7 +3,8 @@ package net.kroia.stockmarket.util;
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.modutilities.ServerPlayerUtilities;
 import net.kroia.modutilities.networking.multi_server.MultiServerManager;
-import net.kroia.stockmarket.StockMarketMod;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 import java.util.UUID;
 
 public class MultiServerUtils {
@@ -16,7 +17,10 @@ public class MultiServerUtils {
     {
         if(checkConnectionToMaster())
             return true;
-        ServerPlayerUtilities.printToClientConsole(executor, "["+ StockMarketMod.getAPI().getModID()+"] This is a slave server and it is not connected to a "+StockMarketMod.getAPI().getModID()+" master server!");
+        // T-159: translatable so the client resolves it in the player's language
+        ServerPlayer player = ServerPlayerUtilities.getOnlinePlayer(executor);
+        if (player != null)
+            player.sendSystemMessage(Component.translatable("message.stockmarket.slave_not_connected"));
         return false;
     }
 

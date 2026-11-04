@@ -48,13 +48,12 @@ public class PresetEditorTab extends StockMarketGuiElement {
         public static final Component SAVED_OK = Component.translatable(PREFIX + "saved_ok");
         public static final Component SAVE_FAILED = Component.translatable(PREFIX + "save_failed");
 
-        // Category/item management labels (hardcoded until translations are added)
-        public static final String NEW_CATEGORY = "+ New";
-        public static final String RENAME = "Rename";
-        public static final String DELETE = "Delete";
-        public static final String ADD_ITEM = "+ Add Item";
-        public static final String CANCEL = "Cancel";
-        public static final String CONFIRM = "OK";
+        // Category/item management labels
+        public static final Component NEW_CATEGORY = Component.translatable(PREFIX + "new_category");
+        public static final Component RENAME = Component.translatable(PREFIX + "rename");
+        public static final Component DELETE = Component.translatable(PREFIX + "delete");
+        public static final Component ADD_ITEM = Component.translatable(PREFIX + "add_item");
+        public static final Component CONFIRM = Component.translatable(PREFIX + "confirm");
 
         // T-152: label for the "+ From Inventory" button — opens the inventory picker mode.
         public static final Component ADD_FROM_INVENTORY = Component.translatable(
@@ -145,16 +144,16 @@ public class PresetEditorTab extends StockMarketGuiElement {
         saveButton.setPressedColor(0xFF1a6b30);
 
         // Category management buttons
-        newCategoryButton = new Button(Texts.NEW_CATEGORY, this::onNewCategoryClicked);
-        renameCategoryButton = new Button(Texts.RENAME, this::onRenameCategoryClicked);
-        deleteCategoryButton = new Button(Texts.DELETE, this::onDeleteCategoryClicked);
+        newCategoryButton = new Button(Texts.NEW_CATEGORY.getString(), this::onNewCategoryClicked);
+        renameCategoryButton = new Button(Texts.RENAME.getString(), this::onRenameCategoryClicked);
+        deleteCategoryButton = new Button(Texts.DELETE.getString(), this::onDeleteCategoryClicked);
         deleteCategoryButton.setBackgroundColor(0xFFc0392b);
         deleteCategoryButton.setHoverColor(0xFFe74c3c);
 
         // Inline category name input (hidden by default)
         categoryNameInput = new TextBox();
         categoryNameInput.setEnabled(false);
-        categoryNameConfirmButton = new Button(Texts.CONFIRM, this::onCategoryNameConfirmed);
+        categoryNameConfirmButton = new Button(Texts.CONFIRM.getString(), this::onCategoryNameConfirmed);
         categoryNameConfirmButton.setEnabled(false);
 
         // Item selection view for adding items (hidden by default)
@@ -162,7 +161,7 @@ public class PresetEditorTab extends StockMarketGuiElement {
         itemSelectionView.setEnabled(false);
 
         // Add/Cancel item buttons
-        addItemButton = new Button(Texts.ADD_ITEM, this::onAddItemClicked);
+        addItemButton = new Button(Texts.ADD_ITEM.getString(), this::onAddItemClicked);
         addItemButton.setBackgroundColor(0xFF2980b9);
         addItemButton.setHoverColor(0xFF3498db);
         // T-154: Cancel became a small square "X" button in the picker header row.

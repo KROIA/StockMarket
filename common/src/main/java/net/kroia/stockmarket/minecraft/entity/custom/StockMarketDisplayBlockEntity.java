@@ -17,6 +17,7 @@ import net.kroia.stockmarket.screen.widgets.DisplayCandlestickChart;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.HorizontalDirectionalBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -314,14 +315,16 @@ public class StockMarketDisplayBlockEntity extends AbstractDisplayBlockEntity {
 
     // ── Unconfigured UI ──
 
+    // T-159: the display GUI is built and rendered client-side only (ContentBuilder),
+    // so translatable texts resolve in the client's language here.
     private static void buildUnconfiguredUI(Gui gui, int w, int h) {
-        Label title = new Label("Stock Market Display");
+        Label title = new Label(Component.translatable("block.stockmarket.stockmarket_display_block").getString());
         title.setBounds(0, h / 2 - 16, w, 14);
         title.setAlignment(GuiElement.Alignment.CENTER);
         title.setTextColor(ColorUtilities.getRGB(200, 220, 255));
         gui.addElement(title);
 
-        Label hint = new Label("Right-click to configure");
+        Label hint = new Label(Component.translatable("gui.stockmarket.display.right_click_hint").getString());
         hint.setBounds(0, h / 2 + 2, w, 12);
         hint.setAlignment(GuiElement.Alignment.CENTER);
         hint.setTextColor(ColorUtilities.getRGB(140, 140, 160));

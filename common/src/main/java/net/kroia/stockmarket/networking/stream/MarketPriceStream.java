@@ -4,6 +4,7 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.client_server.streaming.GenericStream;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
+import net.kroia.stockmarket.stockmarket.market.MarketSettings;
 import net.kroia.stockmarket.stockmarket.market.ServerMarket;
 import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.kroia.stockmarket.util.MultiServerUtils;
@@ -15,31 +16,77 @@ import org.jetbrains.annotations.Nullable;
 
 public class MarketPriceStream extends StockMarketGenericStream<ItemID, MarketPriceStream.ResponseData>
 {
+    /**
+     * One live update of a market: price, current candle volume and the trading status.
+     */
     public static class ResponseData
     {
         public static final StreamCodec<RegistryFriendlyByteBuf, ResponseData> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.VAR_LONG, p -> p.timestamp,
                 ByteBufCodecs.VAR_LONG, p -> p.marketPrice,
                 ByteBufCodecs.FLOAT, p -> p.tradedVolume,
+                TradingStatus.STREAM_CODEC, p -> p.tradingStatus,
                 ResponseData::new
         );
 
         public long timestamp;
         public long marketPrice;
         public float tradedVolume;
+        /** Trading state + master clock at the time of this update (T-158). */
+        public TradingStatus tradingStatus;
 
-        public ResponseData(long timestamp, long marketPrice, float tradedVolume)
+        public ResponseData(long timestamp, long marketPrice, float tradedVolume, TradingStatus tradingStatus)
         {
             this.timestamp = timestamp;
             this.marketPrice = marketPrice;
             this.tradedVolume = tradedVolume;
+            this.tradingStatus = tradingStatus;
+        }
+    }
+
+    /**
+     * Trading status of a market as seen by the master server (T-158).
+     *
+     * @param state         {@link MarketSettings.TradingState} ordinal (MAINTENANCE wins over the trading window)
+     * @param clockMinute   minute of the day (0..1439) of the globally active trading clock on the master
+     * @param clockRealTime {@code true} if the active clock is the master's real time, {@code false} for in-game time
+     * @param openMinute    opening minute of the day of this market's trading window (0..1440)
+     * @param closeMinute   closing minute of the day of this market's trading window (0..1440);
+     *                      {@code open == close} or 00:00-24:00 means always open, {@code open > close} wraps midnight
+     */
+    public record TradingStatus(byte state, short clockMinute, boolean clockRealTime, short openMinute, short closeMinute)
+    {
+        public static final StreamCodec<RegistryFriendlyByteBuf, TradingStatus> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.BYTE, TradingStatus::state,
+                ByteBufCodecs.SHORT, TradingStatus::clockMinute,
+                ByteBufCodecs.BOOL, TradingStatus::clockRealTime,
+                ByteBufCodecs.SHORT, TradingStatus::openMinute,
+                ByteBufCodecs.SHORT, TradingStatus::closeMinute,
+                TradingStatus::new
+        );
+
+        /**
+         * @return the decoded trading state; unknown ordinals (version mismatch) map to OPEN
+         */
+        public MarketSettings.TradingState getTradingState()
+        {
+            MarketSettings.TradingState[] values = MarketSettings.TradingState.values();
+            return state >= 0 && state < values.length ? values[state] : MarketSettings.TradingState.OPEN;
+        }
+
+        /**
+         * @return {@code true} if the window covers the whole day (same rule as {@link MarketSettings#isAlwaysOpen()})
+         */
+        public boolean isAlwaysOpen()
+        {
+            return openMinute == closeMinute || (openMinute <= 0 && closeMinute >= 1440);
         }
     }
 
     private long updateInterval = 100;
     private long lastTimeMs = System.currentTimeMillis();
     private ItemID itemID;
-    private final ResponseData lastPrice = new ResponseData(-1,-1, 0f);
+    private final ResponseData lastPrice = new ResponseData(-1,-1, 0f, null);
 
     @Override
     public GenericStream<ItemID, ResponseData> copy() {
@@ -86,15 +133,37 @@ public class MarketPriceStream extends StockMarketGenericStream<ItemID, MarketPr
             long currentPrice = serverMarket.getCurrentMarketPrice();
             long currentTime = serverMarket.getCurrentTime();
             float currentVolume = serverMarket.getCurrentCandleTradedVolume();
+            TradingStatus currentStatus = buildTradingStatus(manager, serverMarket);
             if(currentPrice != lastPrice.marketPrice ||
                currentTime != lastPrice.timestamp ||
-               currentVolume != lastPrice.tradedVolume) {
+               currentVolume != lastPrice.tradedVolume ||
+               !currentStatus.equals(lastPrice.tradingStatus)) {
                 lastPrice.marketPrice = currentPrice;
                 lastPrice.timestamp = currentTime;
                 lastPrice.tradedVolume = currentVolume;
+                lastPrice.tradingStatus = currentStatus;
                 sendPacket();
             }
         }
+    }
+
+    /**
+     * Snapshots the market's trading state and the master's trading clock. The clock values are the
+     * ones cached by {@link ServerMarketManager} at its last update tick, so the client sees the same
+     * minute the open/closed decision was made with. This stream always runs on the master
+     * (slaves route it there via {@code needsRoutingToMaster()}).
+     */
+    private static TradingStatus buildTradingStatus(IServerMarketManager manager, IServerMarket market)
+    {
+        int clockMinute = 0;
+        boolean realTime = false;
+        if (manager instanceof ServerMarketManager smm) {
+            clockMinute = smm.getCurrentTradingMinute();
+            realTime = smm.isTradingHoursUseRealTime();
+        }
+        MarketSettings settings = market.getSettings();
+        return new TradingStatus((byte) market.getTradingState().ordinal(), (short) clockMinute, realTime,
+                (short) settings.tradingOpenMinute, (short) settings.tradingCloseMinute);
     }
 
     @Override

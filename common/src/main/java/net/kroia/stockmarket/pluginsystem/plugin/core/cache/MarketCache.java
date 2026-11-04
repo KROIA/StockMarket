@@ -42,8 +42,22 @@ public class MarketCache {
         return pluginOrderBook;
     }
 
+    /** @return whether the underlying market is inside its trading hours (maintenance is ignored). */
+    public boolean isTradingOpen()
+    {
+        return serverMarket.isTradingOpen();
+    }
+
     public void apply()
     {
+        // Outside trading hours: the market would reject the bot orders anyway, so drop them.
+        // Pending virtual-orderbook manipulations are kept for the reopen and the target price
+        // is not rolled, so the plugins resume from where they stopped.
+        if (!serverMarket.isTradingOpen())
+        {
+            orderCache.clear();
+            return;
+        }
         orderCache.apply(serverMarket);
         virtualOrderBookCache.apply(serverMarket);
 

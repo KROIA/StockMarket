@@ -8,6 +8,7 @@ import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IClientMarket;
 import net.kroia.stockmarket.api.market.IPriceDataProvider;
 import net.kroia.stockmarket.networking.request.OrderbookVolumeRequest;
+import net.kroia.stockmarket.networking.stream.MarketPriceStream;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.networking.request.ActiveOrdersRequest;
 import net.kroia.stockmarket.networking.request.CreateOrderRequest;
@@ -264,6 +265,8 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
 
     private final int itemScaleFactor;
     private long currentMarketPrice;
+    /** Latest trading status from {@code MarketPriceStream} (T-158); null until the first update arrives. */
+    private @Nullable MarketPriceStream.TradingStatus tradingStatus;
 
     public ClientMarket(@NotNull ItemID itemID, int itemScaleFactor)
     {
@@ -610,6 +613,7 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
         marketPriceUpdateStreamID = StreamSystem.startServerToClientStream(BACKEND_INSTANCES.NETWORKING.MARKET_PRICE_STREAM, itemID, (price)->
         {
             currentMarketPrice = price.marketPrice;
+            tradingStatus = price.tradingStatus;
             for(PriceHistoryContainer priceHistoryContainer : priceHistoryDataMap.values())
                 priceHistoryContainer.history.setCurrentMarketPrice(currentMarketPrice, price.tradedVolume);
         },()->
@@ -617,6 +621,7 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
             // Stream stopped
             info("MARKET_PRICE_STREAM stopped for itemID: "+itemID);
             marketPriceUpdateStreamID  = null;
+            tradingStatus = null; // stale once the stream is gone
         });
         return marketPriceUpdateStreamID != null;
     }
@@ -736,13 +741,64 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
     {
         return asyncMarket.setSettingsAsync(settings);
     }
-    public CompletableFuture<Boolean> isMarketOpenAsync()
+    /**
+     * Latest trading status pushed by the market price stream (state, master clock, trading window).
+     * Only updated while this market is subscribed via {@link #subscribeToMarketPriceUpdate()}.
+     * @return the status, or {@code null} before the first stream update / after the stream stopped
+     */
+    public @Nullable MarketPriceStream.TradingStatus getTradingStatus()
     {
-        return asyncMarket.isMarketOpenAsync();
+        return tradingStatus;
     }
-    public CompletableFuture<Boolean> setMarketOpenAsync(boolean marketOpen)
+
+    /**
+     * Current trading state from the latest stream update.
+     * <p>
+     * Unknown (no data yet) is reported as {@link MarketSettings.TradingState#OPEN} so trading controls
+     * never get stuck disabled; the server still rejects orders on closed/under-maintenance markets, and the first
+     * stream update arrives within ~100 ms of subscribing. UIs that need the exact state immediately can
+     * check {@link #getTradingStatus()} for {@code null} and fall back to {@link #isUnderMaintenanceAsync()}.
+     * @return the trading state, OPEN if unknown
+     */
+    public MarketSettings.TradingState getTradingState()
     {
-        return asyncMarket.setMarketOpenAsync(marketOpen);
+        MarketPriceStream.TradingStatus status = tradingStatus;
+        return status == null ? MarketSettings.TradingState.OPEN : status.getTradingState();
+    }
+
+    /** @return future resolving to {@code true} if this market is under maintenance */
+    public CompletableFuture<Boolean> isUnderMaintenanceAsync()
+    {
+        return asyncMarket.isUnderMaintenanceAsync();
+    }
+    /**
+     * Enables or disables maintenance mode on this market (admin only).
+     * @param maintenance {@code true} to enter maintenance (cancels player orders), {@code false} to end it
+     * @return future resolving to {@code true} on success
+     */
+    public CompletableFuture<Boolean> setMaintenanceAsync(boolean maintenance)
+    {
+        return asyncMarket.setMaintenanceAsync(maintenance);
+    }
+    /**
+     * Sets this market's daily trading window (admin only). Clamped/normalized on the server.
+     * @param openMinute  opening minute of the day (0..1440)
+     * @param closeMinute closing minute of the day (0..1440); open &gt; close wraps over midnight
+     * @return future resolving to {@code true} on success, {@code false} when denied
+     */
+    public CompletableFuture<Boolean> setTradingHoursAsync(int openMinute, int closeMinute)
+    {
+        return asyncMarket.setTradingHoursAsync(openMinute, closeMinute);
+    }
+    /**
+     * Forces the market open/closed until the next scheduled transition. Not client-callable:
+     * the master refuses this function for client requests, so this always resolves to false
+     * on a client. Kept for API symmetry.
+     * @param open {@code true} to force open, {@code false} to force closed
+     */
+    public CompletableFuture<Boolean> setTradingOverrideAsync(boolean open)
+    {
+        return asyncMarket.setTradingOverrideAsync(open);
     }
     public CompletableFuture<Boolean> resetNetPlayerItemFlow()
     {
