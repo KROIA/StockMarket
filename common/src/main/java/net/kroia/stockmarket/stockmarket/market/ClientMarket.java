@@ -4,6 +4,7 @@ import net.kroia.banksystem.banking.bankmanager.BankManager;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.TimerMillis;
 import net.kroia.modutilities.networking.client_server.streaming.StreamSystem;
+import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.market.IClientMarket;
 import net.kroia.stockmarket.api.market.IPriceDataProvider;
@@ -495,15 +496,21 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
         else
         {
             maxTs = beforeTimestamp;
-            minTs = beforeTimestamp - candleDeltaMs * (long) pageCandles;
+            // Open lower bound: the server counts back pageCandles non-empty candles from
+            // maxTs, so paging also crosses downtime gaps longer than one page instead of
+            // getting stuck on an empty fixed-width time window.
+            minTs = -1L;
         }
 
         MarketPriceHistoryRequest.InputData input =
-                new MarketPriceHistoryRequest.InputData(itemID, candleDeltaMs, minTs, maxTs, 0);
+                // maxCandles = one page: the bootstrap (open-ended minTs) only needs the
+                // newest page; asking for the server cap (0) made it ship up to 4096 candles.
+                new MarketPriceHistoryRequest.InputData(itemID, candleDeltaMs, minTs, maxTs, pageCandles);
 
         CompletableFuture<Boolean> future = new CompletableFuture<>();
         inFlightOlder.put(candleDeltaMs, future);
         lastOlderRequestAtMs.put(candleDeltaMs, now);
+        final long perfSentNs = System.nanoTime();
 
         BACKEND_INSTANCES.NETWORKING.MARKET_PRICE_HISTORY_REQUEST.sendRequestToServer(input).whenComplete((historyData, throwable) ->
         {
@@ -515,7 +522,11 @@ public class ClientMarket implements IClientMarket, IPriceDataProvider
                     future.complete(false);
                     return;
                 }
+                final long perfRecvNs = System.nanoTime();
                 boolean added = applyHistoryResponse(candleDeltaMs, historyData);
+                StockMarketMod.LOGGER.debug("[HistoryPerf] client market={} delta={} min={} max={} candles={} roundTripMs={} applyMs={}",
+                        itemID.getShort(), candleDeltaMs, input.minTimestamp(), input.maxTimestamp(), historyData.getCandles().size(),
+                        (perfRecvNs - perfSentNs) / 1_000_000, (System.nanoTime() - perfRecvNs) / 1_000_000);
                 future.complete(added);
             }
             finally

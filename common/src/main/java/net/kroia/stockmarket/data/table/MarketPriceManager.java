@@ -223,6 +223,40 @@ public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
     }
 
     /**
+     * Returns the timestamp of the {@code (skip + 1)}-th newest row {@code <= atOrBefore}
+     * for one market ({@code skip = 0} is the newest row). Walks only the
+     * {@code (marketid, time)} index (covering, no table reads), so it costs
+     * O(skip) index entries no matter how much history the market has. Used by
+     * {@code MarketPriceHistoryRequest} to find where a count-limited window starts
+     * instead of reading the market's whole history.
+     *
+     * @param marketFilter equality filter binding {@code marketid} to the target market
+     * @param atOrBefore   inclusive upper time bound (epoch ms)
+     * @param skip         number of newer rows to skip (&gt;= 0)
+     * @return a future completing with that row's timestamp, or {@link Long#MIN_VALUE}
+     *         when fewer than {@code skip + 1} rows exist (or on SQL error)
+     */
+    public CompletableFuture<Long> getNthNewestTimestamp(EqualityFilter marketFilter, long atOrBefore, int skip){
+        return CompletableFuture.supplyAsync(() -> {
+            String statement = "SELECT time FROM MarketPrice WHERE " + marketFilter.getClause("marketid")
+                    + " AND time <= ? ORDER BY time DESC LIMIT 1 OFFSET ?";
+            try (PreparedStatement ps = databaseManager.getConnection().prepareStatement(statement)) {
+                int idx = marketFilter.bindParameters(ps, 1);
+                ps.setLong(idx, atOrBefore);
+                ps.setInt(idx + 1, Math.max(0, skip));
+                try (ResultSet rs = ps.executeQuery()) {
+                    // Read-only SELECT — no commit needed (see rationale in query()).
+                    if (rs.next())
+                        return rs.getLong(1);
+                }
+            } catch (SQLException e) {
+                StockMarketMod.LOGGER.warn("Failed to query MarketPrice window start: {}", e.getMessage());
+            }
+            return Long.MIN_VALUE;
+        }, databaseManager.getDatabaseThread());
+    }
+
+    /**
      * Rolling-window aggregate for every market in one query (used by the placeholder system).
      * Runs on the database thread.
      *

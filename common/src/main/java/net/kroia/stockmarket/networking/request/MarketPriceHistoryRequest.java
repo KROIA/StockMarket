@@ -2,6 +2,7 @@ package net.kroia.stockmarket.networking.request;
 
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.client_server.streaming.GenericStream;
+import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.data.filter.DateFilter;
 import net.kroia.stockmarket.data.filter.EqualityFilter;
@@ -52,7 +53,12 @@ public class MarketPriceHistoryRequest extends StockMarketGenericRequest<MarketP
      *                        {@link #maxCandles}, the newest-N candles (those
      *                        closest to {@code maxTimestamp}) are kept.
      * @param maxCandles      hard cap for this response. {@code 0} means "use
-     *                        server default" ({@link #MAX_CANDLES_PER_RESPONSE_DEFAULT}).
+     *                        server default" ({@link #MAX_CANDLES_PER_RESPONSE_DEFAULT}
+     *                        / the mod setting). Larger values are clamped to the server
+     *                        cap. Also bounds how many raw rows the server reads: only
+     *                        about {@code maxCandles} non-empty buckets ending at
+     *                        {@code maxTimestamp} are queried (count-anchored, so
+     *                        {@code minTimestamp = -1} means "the page before maxTimestamp").
      */
     public record InputData(ItemID item, long candleDeltaMs, long minTimestamp, long maxTimestamp, int maxCandles)
     {
@@ -82,6 +88,9 @@ public class MarketPriceHistoryRequest extends StockMarketGenericRequest<MarketP
             return CompletableFuture.completedFuture(new PriceHistoryData(System.currentTimeMillis() , input.item, getItemFractionScaleFactor()));
         CompletableFuture<PriceHistoryData> future = new CompletableFuture<>();
         info("MarketPriceHistoryRequest started for item: " + input);
+        // [HistoryPerf] timing: t0 = request accepted, DB = until both queries finished
+        // (includes waiting in the single-thread DB executor queue).
+        final long perfT0 = System.nanoTime();
 
         // Resolve the lower bound: -1 (open-ended) becomes 0 for the SQL DateFilter.
         final long effectiveMin = (input.minTimestamp == -1L) ? 0L : input.minTimestamp;
@@ -96,12 +105,40 @@ public class MarketPriceHistoryRequest extends StockMarketGenericRequest<MarketP
         } catch (Exception ignored) {
             // Fall back to the compile-time default if the setting is not yet available.
         }
-        final int effectiveCap = (input.maxCandles > 0) ? input.maxCandles : defaultCap;
+        // A client may ask for fewer candles than the server cap, never for more.
+        final int effectiveCap = (input.maxCandles > 0) ? Math.min(input.maxCandles, defaultCap) : defaultCap;
         final EqualityFilter marketFilter = new EqualityFilter(input.item.getShort());
 
-        CompletableFuture<List<MarketPriceStruct>>  fut = BACKEND_INSTANCES.MARKET_PRICE_HISTORY_MANAGER.getHistory(
-                Optional.of(new DateFilter(effectiveMin, input.maxTimestamp)),
-                Optional.of(marketFilter), -1);
+        // Never scan more raw rows than the response can hold. Raw rows are written once
+        // per CANDLE_TIME, so effectiveCap candles of candleDeltaMs need about
+        // effectiveCap * (candleDeltaMs / CANDLE_TIME) rows. Look up the timestamp of that
+        // many-th newest row <= maxTimestamp (index-only walk) and start the query at the
+        // beginning of its bucket, so the oldest returned candle is complete.
+        // Counting rows instead of time keeps the window full across downtime gaps and
+        // still jumps to where the data lives when the world was loaded long after the
+        // last save. Without this an open-ended (minTimestamp = -1) request read the
+        // market's ENTIRE history (100k+ rows) only to trim it to the newest candles.
+        final long[] queriedMin = {effectiveMin};
+        CompletableFuture<Long> windowStartFut = CompletableFuture.completedFuture(Long.MIN_VALUE);
+        if (input.candleDeltaMs > 0) {
+            long rawIntervalMs = 60_000L;
+            try {
+                rawIntervalMs = Math.max(1L, BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.CANDLE_TIME.get());
+            } catch (Exception ignored) {
+                // Settings not available (early startup / test) -> assume the 1-minute default.
+            }
+            long rows = (long) effectiveCap * Math.max(1L, input.candleDeltaMs / rawIntervalMs);
+            windowStartFut = BACKEND_INSTANCES.MARKET_PRICE_HISTORY_MANAGER.getNthNewestTimestamp(
+                    marketFilter, input.maxTimestamp, (int) Math.min(Integer.MAX_VALUE, rows - 1));
+        }
+        CompletableFuture<List<MarketPriceStruct>> fut = windowStartFut.thenCompose(windowStartRow -> {
+            // MIN_VALUE: fewer rows than needed exist -> read everything (reaches the start).
+            if (windowStartRow != Long.MIN_VALUE)
+                queriedMin[0] = Math.max(effectiveMin, PriceHistoryData.floorTime(windowStartRow, input.candleDeltaMs));
+            return BACKEND_INSTANCES.MARKET_PRICE_HISTORY_MANAGER.getHistory(
+                    Optional.of(new DateFilter(queriedMin[0], input.maxTimestamp)),
+                    Optional.of(marketFilter), -1);
+        });
         // Query the oldest-available timestamp in parallel so we can tell the client
         // when it has walked back to the beginning of the server's on-disk history.
         CompletableFuture<Long> oldestFut = BACKEND_INSTANCES.MARKET_PRICE_HISTORY_MANAGER.getOldestTimestamp(
@@ -111,6 +148,7 @@ public class MarketPriceHistoryRequest extends StockMarketGenericRequest<MarketP
             @SuppressWarnings("unchecked")
             List<MarketPriceStruct> list = (List<MarketPriceStruct>) pair[0];
             long oldestOnDisk = (Long) pair[1];
+            final long perfTDb = System.nanoTime();
 
             PriceHistoryData data = PriceHistoryData.fromSqlData(list, getCurrentMarketPrice(input.item), getItemFractionScaleFactor());
             if(data == null)
@@ -141,6 +179,7 @@ public class MarketPriceHistoryRequest extends StockMarketGenericRequest<MarketP
                         false);
             }
 
+            final long perfTAgg = System.nanoTime();
             // Enforce the response cap by dropping from the OLDEST side, so the
             // newest-N candles (those anchored at maxTimestamp) survive.
             boolean truncated = false;
@@ -174,10 +213,17 @@ public class MarketPriceHistoryRequest extends StockMarketGenericRequest<MarketP
             // returns Long.MAX_VALUE, which matches PriceHistoryData.NO_OLDER_DATA and
             // signals to the client "you have everything back to server-start".
             data.setOldestAvailableTimestamp(oldestOnDisk);
+            // The window clamp above skipped rows that exist on disk -> more history is available.
+            if (queriedMin[0] > effectiveMin && oldestOnDisk < queriedMin[0])
+                truncated = true;
             if (truncated) {
                 data.setTruncated(true);
             }
 
+            StockMarketMod.LOGGER.debug("[HistoryPerf] server market={} delta={} min={} max={} queriedMin={} cap={} rows={} candles={} dbMs={} aggMs={} totalMs={}",
+                    input.item.getShort(), input.candleDeltaMs, input.minTimestamp, input.maxTimestamp, queriedMin[0], effectiveCap,
+                    list.size(), data.getCandles().size(),
+                    (perfTDb - perfT0) / 1_000_000, (perfTAgg - perfTDb) / 1_000_000, (System.nanoTime() - perfT0) / 1_000_000);
             future.complete(data);
 
         });
