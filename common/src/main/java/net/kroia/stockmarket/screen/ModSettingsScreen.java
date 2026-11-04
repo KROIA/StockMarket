@@ -378,18 +378,7 @@ public class ModSettingsScreen extends StockMarketGuiScreen {
                                 itemView.setItemStack(copy);
                                 net.kroia.modutilities.gui.client.ClientCompat.setScreen(ModSettingsScreen.this);
                             },
-                            () -> net.kroia.modutilities.gui.client.ClientCompat.setScreen(ModSettingsScreen.this)) {
-                        // ModUtilities' onClose() goes through setScreen(null) before the
-                        // onClosed callback reopens this screen, which re-centers the
-                        // cursor. Save the window-space cursor position and put it back.
-                        @Override
-                        public void onClose() {
-                            double mouseX = Minecraft.getInstance().mouseHandler.xpos();
-                            double mouseY = Minecraft.getInstance().mouseHandler.ypos();
-                            super.onClose();
-                            net.kroia.modutilities.gui.client.InputCompat.setCursorPos(mouseX, mouseY);
-                        }
-                    };
+                            () -> net.kroia.modutilities.gui.client.ClientCompat.setScreen(ModSettingsScreen.this));
                     net.kroia.modutilities.gui.client.ClientCompat.setScreen(selectionScreen);
                 });
                 selectItemButton.setHoverTooltipSupplier(() -> tooltip);
