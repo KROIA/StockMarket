@@ -6,6 +6,7 @@ import net.kroia.stockmarket.pluginsystem.pluginmanager.ServerPluginManager;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import org.jetbrains.annotations.Nullable;
@@ -62,7 +63,7 @@ public class PluginDeleteRequest extends StockMarketGenericRequest<UUID, Boolean
 
         // Notify other admins about the deletion
         broadcastToAdmins(playerSender,
-                getPlayerName(playerSender) + " deleted plugin '" + pluginName + "'");
+                Component.translatable("message.stockmarket.admin_broadcast.plugin_deleted", getPlayerName(playerSender), pluginName));
 
         return CompletableFuture.completedFuture(true);
     }

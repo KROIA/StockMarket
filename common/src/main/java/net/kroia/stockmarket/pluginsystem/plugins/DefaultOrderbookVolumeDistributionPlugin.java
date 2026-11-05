@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.pluginsystem.plugins;
 
+import net.kroia.modutilities.NbtCompat;
+
 
 import io.netty.buffer.ByteBuf;
 import net.kroia.banksystem.util.ItemID;
@@ -11,7 +13,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.util.Tuple;
+import net.kroia.modutilities.Tuple;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
@@ -373,17 +375,17 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
     @Override
     public boolean load(CompoundTag tag) {
         if (tag.contains("marketData")) {
-            ListTag marketDataTag = tag.getList("marketData", 10);
+            ListTag marketDataTag = NbtCompat.getList(tag, "marketData", 10);
             for (int i = 0; i < marketDataTag.size(); i++) {
-                CompoundTag marketTag = marketDataTag.getCompound(i);
+                CompoundTag marketTag = NbtCompat.getCompound(marketDataTag, i);
                 ItemID marketID = ItemID.createFromTag(marketTag);
                 if (marketID != null) {
                     RuntimeData data = marketData.get(marketID);
                     if (data != null) {
-                        if (marketTag.contains("volumeScale")) data.volumeScale = marketTag.getFloat("volumeScale");
-                        if (marketTag.contains("speed")) data.speed = marketTag.getFloat("speed");
-                        if (marketTag.contains("accumulationRate")) data.accumulationRate = marketTag.getFloat("accumulationRate");
-                        if (marketTag.contains("decumulationRate")) data.decumulationRate = marketTag.getFloat("decumulationRate");
+                        if (marketTag.contains("volumeScale")) data.volumeScale = NbtCompat.getFloat(marketTag, "volumeScale");
+                        if (marketTag.contains("speed")) data.speed = NbtCompat.getFloat(marketTag, "speed");
+                        if (marketTag.contains("accumulationRate")) data.accumulationRate = NbtCompat.getFloat(marketTag, "accumulationRate");
+                        if (marketTag.contains("decumulationRate")) data.decumulationRate = NbtCompat.getFloat(marketTag, "decumulationRate");
 
                         MarketInterface interf = getMarketInterface(marketID);
                         float abundance = (interf != null) ? interf.market.getNaturalAbundance() : 1.0f;

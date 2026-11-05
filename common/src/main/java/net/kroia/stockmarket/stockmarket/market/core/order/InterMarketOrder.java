@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.stockmarket.market.core.order;
 
+import net.kroia.modutilities.NbtCompat;
+
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.modutilities.persistence.ServerSaveable;
@@ -131,16 +133,16 @@ public class InterMarketOrder implements ServerSaveable
         if(!tag.contains("buyOrder") || !tag.contains("sellOrder"))
             return null;
 
-        Order buyOrder = Order.createFromNBT(tag.getCompound("buyOrder"));
-        Order sellOrder = Order.createFromNBT(tag.getCompound("sellOrder"));
+        Order buyOrder = Order.createFromNBT(NbtCompat.getCompound(tag, "buyOrder"));
+        Order sellOrder = Order.createFromNBT(NbtCompat.getCompound(tag, "sellOrder"));
         if(buyOrder == null || sellOrder == null)
         {
             return null;
         }
         // Backward compatibility: missing fields get sensible defaults
-        long crossRateLimit = tag.contains("crossRateLimit") ? tag.getLong("crossRateLimit") : 0;
-        UUID groupID = tag.contains("interMarketGroupID") ? tag.getUUID("interMarketGroupID") : UUID.randomUUID();
-        long transactionMoneyBalance = tag.contains("transactionMoneyBalance") ? tag.getLong("transactionMoneyBalance") : 0;
+        long crossRateLimit = tag.contains("crossRateLimit") ? NbtCompat.getLong(tag, "crossRateLimit") : 0;
+        UUID groupID = NbtCompat.hasUUID(tag, "interMarketGroupID") ? NbtCompat.getUUID(tag, "interMarketGroupID") : UUID.randomUUID();
+        long transactionMoneyBalance = tag.contains("transactionMoneyBalance") ? NbtCompat.getLong(tag, "transactionMoneyBalance") : 0;
         InterMarketOrder result = new InterMarketOrder(buyOrder, sellOrder, crossRateLimit, groupID);
         result.transactionMoneyBalance = transactionMoneyBalance;
         return result;
@@ -299,7 +301,7 @@ public class InterMarketOrder implements ServerSaveable
             tag.put("buyOrder", buyOrderTag);
             tag.put("sellOrder", sellOrderTag);
             tag.putLong("crossRateLimit", crossRateLimit);
-            tag.putUUID("interMarketGroupID", interMarketGroupID);
+            NbtCompat.putUUID(tag, "interMarketGroupID", interMarketGroupID);
             tag.putLong("transactionMoneyBalance", transactionMoneyBalance);
             return true;
         }
@@ -314,14 +316,14 @@ public class InterMarketOrder implements ServerSaveable
             return false;
         }
 
-        boolean success = buyOrder.load(tag.getCompound("buyOrder")) &&
-                           sellOrder.load(tag.getCompound("sellOrder"));
+        boolean success = buyOrder.load(NbtCompat.getCompound(tag, "buyOrder")) &&
+                           sellOrder.load(NbtCompat.getCompound(tag, "sellOrder"));
         if(success)
         {
             // Backward compatibility: missing fields get sensible defaults
-            crossRateLimit = tag.contains("crossRateLimit") ? tag.getLong("crossRateLimit") : 0;
-            interMarketGroupID = tag.contains("interMarketGroupID") ? tag.getUUID("interMarketGroupID") : UUID.randomUUID();
-            transactionMoneyBalance = tag.contains("transactionMoneyBalance") ? tag.getLong("transactionMoneyBalance") : 0;
+            crossRateLimit = tag.contains("crossRateLimit") ? NbtCompat.getLong(tag, "crossRateLimit") : 0;
+            interMarketGroupID = NbtCompat.hasUUID(tag, "interMarketGroupID") ? NbtCompat.getUUID(tag, "interMarketGroupID") : UUID.randomUUID();
+            transactionMoneyBalance = tag.contains("transactionMoneyBalance") ? NbtCompat.getLong(tag, "transactionMoneyBalance") : 0;
         }
         return success;
     }

@@ -21,7 +21,7 @@ import net.kroia.stockmarket.api.pluginmanager.IClientPluginManager;
 import net.kroia.stockmarket.minecraft.block.StockMarketBlocks;
 import net.kroia.stockmarket.minecraft.command.StockMarketCommandHandler;
 import net.kroia.stockmarket.minecraft.command.StockMarketCommands;
-import net.kroia.stockmarket.minecraft.compat.NEZNAMY_TAB_Placeholders;
+import net.kroia.stockmarket.minecraft.compat.StockMarketPlaceholders;
 import net.kroia.stockmarket.data.DataManager;
 import net.kroia.stockmarket.data.DatabaseManager;
 import net.kroia.stockmarket.data.table.MarketPriceManager;
@@ -41,21 +41,6 @@ import net.kroia.stockmarket.pluginsystem.pluginmanager.ServerPluginManager;
 import net.kroia.stockmarket.stockmarket.marketmanager.ClientMarketManager;
 import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
 
-import net.kroia.stockmarket.testing.StockMarketTestRegistration;
-import net.kroia.stockmarket.testing.tests.ActiveOrdersRequestTestSuite;
-import net.kroia.stockmarket.testing.tests.CreateOrderRequestTestSuite;
-import net.kroia.stockmarket.testing.tests.DatabaseTestSuite;
-import net.kroia.stockmarket.testing.tests.InterMarketExecutorTestSuite;
-import net.kroia.stockmarket.testing.tests.MarketIntegrationTestSuite;
-import net.kroia.stockmarket.testing.tests.MarketMergeConsolidationTestSuite;
-import net.kroia.stockmarket.testing.tests.MarketPriceManagerTestSuite;
-import net.kroia.stockmarket.testing.tests.MatchingEngineTestSuite;
-import net.kroia.stockmarket.testing.tests.NewsHistoryRequestTestSuite;
-import net.kroia.stockmarket.testing.tests.OrderRecordManagerTestSuite;
-import net.kroia.stockmarket.testing.tests.OrderbookTestSuite;
-import net.kroia.stockmarket.testing.tests.PluginTestSuite;
-import net.kroia.stockmarket.testing.tests.ServerMarketTestSuite;
-import net.kroia.modutilities.testing.TestRegistry;
 import net.kroia.stockmarket.minecraft.menu.StockMarketMenus;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
 import net.kroia.stockmarket.networking.packet.PlayerJoinSyncPacket;
@@ -72,6 +57,9 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.Nullable;
+
+import java.util.Map;
+import java.util.function.Consumer;
 
 public class StockMarketModBackend implements StockMarketAPI {
 
@@ -158,7 +146,18 @@ public class StockMarketModBackend implements StockMarketAPI {
         StockMarketCreativeModeTab.init();
         StockMarketTextMessages.init();
 
+        // Display GUI elements must be known to ModUtilities' GuiElementRegistry on both
+        // sides: if a display GUI's structure changes at runtime, the server ships a guiTree
+        // and the client rebuilds it by type key. Unregistered elements would be dropped.
+        // (Label and ItemView, also used by the display builders, are registered by ModUtilities.)
+        net.kroia.modutilities.gui.GuiElementRegistry.register("stockmarket_display_candlestick_chart",
+                net.kroia.stockmarket.screen.widgets.DisplayCandlestickChart.class,
+                net.kroia.stockmarket.screen.widgets.DisplayCandlestickChart::new);
+
         EventRegistration.init();
+        if (StockMarketMod.ENABLE_DEV_FEATURES) {
+            invokeDevBootstrap("init", new Class<?>[0]);
+        }
 
         StockMarketNetworking.setBackend(COMMON_INSTANCES);
 
@@ -186,8 +185,13 @@ public class StockMarketModBackend implements StockMarketAPI {
     {
 
 
-        BankSystemMod.getAPI().getEvents().getBanksystemSetupCompleteSignal().addListener(StockMarketModBackend::onBankSystemSetupComplete);
-        BankSystemMod.getAPI().getEvents().getBankDataLoadedFromFileSignal().addListener(StockMarketModBackend::onPostBankSystemDataLoaded);
+        // Fabric/Quilt call this on every SERVER_STARTING, NeoForge once at common setup, so it is
+        // not undone in onServerStop. Remove-then-add keeps exactly one listener either way.
+        IBankSystemEvents events = BankSystemMod.getAPI().getEvents();
+        events.getBanksystemSetupCompleteSignal().removeListener(BANK_SETUP_COMPLETE_LISTENER);
+        events.getBanksystemSetupCompleteSignal().addListener(BANK_SETUP_COMPLETE_LISTENER);
+        events.getBankDataLoadedFromFileSignal().removeListener(BANK_DATA_LOADED_LISTENER);
+        events.getBankDataLoadedFromFileSignal().addListener(BANK_DATA_LOADED_LISTENER);
 
         Plugins.serverSetup();
     }
@@ -249,20 +253,17 @@ public class StockMarketModBackend implements StockMarketAPI {
         MarketManager.setBackend(SERVER_INSTANCES);
         PluginManager.setBackend(SERVER_INSTANCES);
         StockMarketNetworking.setBackend(SERVER_INSTANCES);
-        NEZNAMY_TAB_Placeholders.setBackend(SERVER_INSTANCES);
         StockMarketCommands.setBackend(SERVER_INSTANCES);
         StockMarketCommandHandler.setBackend(SERVER_INSTANCES);
         DataManager.setBackend(SERVER_INSTANCES);
         StockMarketLogger.setBackend(SERVER_INSTANCES);
         VillagerTradeRewriter.setBackend(SERVER_INSTANCES);
 
-        if (TestRegistry.ENABLE_TESTS && StockMarketMod.ENABLE_DEV_FEATURES) {
-            MarketIntegrationTestSuite.setBackend(SERVER_INSTANCES);
-            InterMarketExecutorTestSuite.setBackend(SERVER_INSTANCES);
-            StockMarketTestRegistration.register();
-        }
-
         boolean isMaster = BankSystemMod.getAPI().getServerBankManager().isMaster();
+        villagerAutosaveTicks = 0;
+        if (StockMarketMod.ENABLE_DEV_FEATURES) {
+            invokeDevBootstrap("onServerSetup", new Class<?>[]{ServerInstances.class, boolean.class}, SERVER_INSTANCES, isMaster);
+        }
         if(isMaster) {
             SERVER_INSTANCES.DATABASE_MANAGER = new DatabaseManager();
             SERVER_INSTANCES.DATABASE_MANAGER.connectToDatabase(UtilitiesPlatform.getServer());
@@ -273,6 +274,7 @@ public class StockMarketModBackend implements StockMarketAPI {
             SERVER_INSTANCES.COMMAND_HANDLER = StockMarketCommandHandler.createMaster();
             SERVER_INSTANCES.DATA_MANAGER = new DataManager();
             SERVER_INSTANCES.VILLAGER_TRADE_MANAGER = new VillagerTradeManager(SERVER_INSTANCES);
+            SERVER_INSTANCES.VILLAGER_TRADE_MANAGER.load(UtilitiesPlatform.getServer());
 
             // Master-only: listen for BankSystem ItemID merges and consolidate our own
             // markets under the resulting canonical IDs. The load-time reconcile inside
@@ -280,31 +282,7 @@ public class StockMarketModBackend implements StockMarketAPI {
             // own startup (before this listener was registered); this listener catches
             // merges that happen later (e.g. VolatileItemComponents config edits + admin
             // confirmation via CONFIRM_ITEMID_MERGE).
-            BankSystemMod.getAPI().getEvents().getItemIDsMergedEvent().addListener(aliasToCanonical -> {
-                if (SERVER_INSTANCES == null || SERVER_INSTANCES.MARKET_MANAGER == null) return;
-                var serverMarketManager = SERVER_INSTANCES.MARKET_MANAGER.getServerMarketManager();
-                if (serverMarketManager == null) return; // slave; guard is redundant here but cheap
-                serverMarketManager.consolidateMergedMarkets(aliasToCanonical);
-
-                // Refresh the currency id used by BankSystem's Total-Wealth balance-history
-                // calculation. It MUST equal the market TRADING currency (the item short where
-                // trades settle and where player cash is actually stored) — NOT
-                // MoneyItem.getItemID().getShort(), which resolves via a ConcurrentHashMap scan
-                // and can land on the WRONG money denomination. A wrong short pushes the real
-                // cash bank into the market-price branch (money has no market -> price 0), which
-                // silently zeroes out the player's total wealth. An ItemID merge can also re-key
-                // the trading currency, so we re-publish it here. Guarded like the startup path
-                // to avoid an NPE during teardown/ordering edge cases.
-                if (SERVER_INSTANCES.BANK_SYSTEM_API != null) {
-                    ISyncServerMarketManager syncMarketManager = SERVER_INSTANCES.MARKET_MANAGER.getSync();
-                    if (syncMarketManager != null) {
-                        ItemID tradingCurrency = syncMarketManager.getTradingCurrencyID();
-                        if (tradingCurrency != null) {
-                            SERVER_INSTANCES.BANK_SYSTEM_API.setPriceCurrencyItem(tradingCurrency.getShort());
-                        }
-                    }
-                }
-            });
+            BankSystemMod.getAPI().getEvents().getItemIDsMergedEvent().addListener(ITEM_IDS_MERGED_LISTENER);
 
             loadDataFromFiles(UtilitiesPlatform.getServer());
             preRegisterPresetItemStacks();
@@ -315,10 +293,7 @@ public class StockMarketModBackend implements StockMarketAPI {
             // slave that connects (fires AFTER BankSystem's ItemID sync, so the
             // table's ItemID shorts are resolvable on the slave).
             SERVER_INSTANCES.VILLAGER_TRADE_MANAGER.recomputeTable();
-            BankSystemMod.getAPI().getEvents().getMasterServerSlaveConnected().addListener(() -> {
-                if (SERVER_INSTANCES == null || SERVER_INSTANCES.VILLAGER_TRADE_MANAGER == null) return;
-                SERVER_INSTANCES.VILLAGER_TRADE_MANAGER.broadcastTable();
-            });
+            BankSystemMod.getAPI().getEvents().getMasterServerSlaveConnected().addListener(SLAVE_CONNECTED_LISTENER);
 
             // T-128 master-side runtime trust-toggle propagation.
             //
@@ -348,8 +323,7 @@ public class StockMarketModBackend implements StockMarketAPI {
             // manager mutator, not from an async worker). Wrapped in try/catch
             // so an exception from the send path never breaks event dispatch
             // for other listeners.
-            BankSystemMod.getAPI().getEvents().getTrustChangedSignal().addListener(
-                    StockMarketModBackend::onTrustChangedNotifyAffectedSlave);
+            BankSystemMod.getAPI().getEvents().getTrustChangedSignal().addListener(TRUST_CHANGED_LISTENER);
 
             autosaveTimer_lastMs = System.currentTimeMillis();
             // T-137: pair SERVER_PRE (stamp start) with SERVER_POST (measure work).
@@ -361,22 +335,12 @@ public class StockMarketModBackend implements StockMarketAPI {
             // would include the vanilla server's inter-tick sleep and always
             // report ~50 ms regardless of real load, which would render the
             // effective-budget calculation meaningless.
-            TickEvent.SERVER_PRE.register(StockMarketModBackend::onServerTickPre);
-            TickEvent.SERVER_POST.register(StockMarketModBackend::onServerTick);
+            // Same instances as in onServerStop; isRegistered guards against a double register.
+            if (!TickEvent.SERVER_PRE.isRegistered(SERVER_TICK_PRE))
+                TickEvent.SERVER_PRE.register(SERVER_TICK_PRE);
+            if (!TickEvent.SERVER_POST.isRegistered(SERVER_TICK_POST))
+                TickEvent.SERVER_POST.register(SERVER_TICK_POST);
 
-            if (TestRegistry.ENABLE_TESTS && StockMarketMod.ENABLE_DEV_FEATURES) {
-                MatchingEngineTestSuite.setBackend(SERVER_INSTANCES);
-                OrderbookTestSuite.setBackend(SERVER_INSTANCES);
-                CreateOrderRequestTestSuite.setBackend(SERVER_INSTANCES);
-                ActiveOrdersRequestTestSuite.setBackend(SERVER_INSTANCES);
-                DatabaseTestSuite.setBackend(SERVER_INSTANCES);
-                MarketPriceManagerTestSuite.setBackend(SERVER_INSTANCES);
-                OrderRecordManagerTestSuite.setBackend(SERVER_INSTANCES);
-                ServerMarketTestSuite.setBackend(SERVER_INSTANCES);
-                PluginTestSuite.setBackend(SERVER_INSTANCES);
-                MarketMergeConsolidationTestSuite.setBackend(SERVER_INSTANCES);
-                NewsHistoryRequestTestSuite.setBackend(SERVER_INSTANCES);
-            }
         }
         else
         {
@@ -386,6 +350,12 @@ public class StockMarketModBackend implements StockMarketAPI {
             // Slave: only receives price tables from the master (applyTable);
             // recompute/tick are inert without sync market access.
             SERVER_INSTANCES.VILLAGER_TRADE_MANAGER = new VillagerTradeManager(SERVER_INSTANCES);
+            // The villager trade file is local to every server, slaves included.
+            SERVER_INSTANCES.VILLAGER_TRADE_MANAGER.load(UtilitiesPlatform.getServer());
+            // Slaves use the post-tick handler only for the villager trade autosave
+            // (onServerTick skips the master work there). Unregistered in onServerStop.
+            if (!TickEvent.SERVER_POST.isRegistered(SERVER_TICK_POST))
+                TickEvent.SERVER_POST.register(SERVER_TICK_POST);
 
             // T-126 slave-trust cache wiring.
             //
@@ -417,10 +387,8 @@ public class StockMarketModBackend implements StockMarketAPI {
             // request-forwarding + NetworkManager.sendToPlayers are both safe
             // from arbitrary threads).
             IBankSystemEvents events = BankSystemMod.getAPI().getEvents();
-            events.getSlaveConnectionAcceptedSignal().addListener(
-                    StockMarketModBackend::onSlaveConnectedRefreshTrustCache);
-            events.getSlaveConnectionLostSignal().addListener(
-                    StockMarketModBackend::onSlaveDisconnectedInvalidateTrustCache);
+            events.getSlaveConnectionAcceptedSignal().addListener(SLAVE_ACCEPTED_LISTENER);
+            events.getSlaveConnectionLostSignal().addListener(SLAVE_LOST_LISTENER);
 
             // T-127: close the race where the SLAVE_CONNECTION_ACCEPTED signal already
             // fired before we subscribed (BankSystem inits first, TCP handshake to master
@@ -434,6 +402,10 @@ public class StockMarketModBackend implements StockMarketAPI {
                 onSlaveConnectedRefreshTrustCache();
             }
         }
+
+        // Placeholders (master + slave): registers player placeholders and the refresh tick.
+        // Placed after the master/slave branch so MARKET_MANAGER exists when the tick runs.
+        StockMarketPlaceholders.init(SERVER_INSTANCES);
     }
 
     /**
@@ -495,6 +467,38 @@ public class StockMarketModBackend implements StockMarketAPI {
      */
     private static void onSlaveDisconnectedInvalidateTrustCache() {
         SlaveTrustCache.clear();
+    }
+
+    /**
+     * Master-only ItemID-merge listener: consolidates our markets under the canonical IDs
+     * and re-publishes the trading currency to BankSystem. Registered in onServerStart.
+     *
+     * @param aliasToCanonical merged alias ItemID mapped to its canonical ItemID
+     */
+    private static void onItemIDsMerged(Map<ItemID, ItemID> aliasToCanonical) {
+        if (SERVER_INSTANCES == null || SERVER_INSTANCES.MARKET_MANAGER == null) return;
+        var serverMarketManager = SERVER_INSTANCES.MARKET_MANAGER.getServerMarketManager();
+        if (serverMarketManager == null) return; // slave; guard is redundant here but cheap
+        serverMarketManager.consolidateMergedMarkets(aliasToCanonical);
+
+        // Refresh the currency id used by BankSystem's Total-Wealth balance-history
+        // calculation. It MUST equal the market TRADING currency (the item short where
+        // trades settle and where player cash is actually stored) — NOT
+        // MoneyItem.getItemID().getShort(), which resolves via a ConcurrentHashMap scan
+        // and can land on the WRONG money denomination. A wrong short pushes the real
+        // cash bank into the market-price branch (money has no market -> price 0), which
+        // silently zeroes out the player's total wealth. An ItemID merge can also re-key
+        // the trading currency, so we re-publish it here. Guarded like the startup path
+        // to avoid an NPE during teardown/ordering edge cases.
+        if (SERVER_INSTANCES.BANK_SYSTEM_API != null) {
+            ISyncServerMarketManager syncMarketManager = SERVER_INSTANCES.MARKET_MANAGER.getSync();
+            if (syncMarketManager != null) {
+                ItemID tradingCurrency = syncMarketManager.getTradingCurrencyID();
+                if (tradingCurrency != null) {
+                    SERVER_INSTANCES.BANK_SYSTEM_API.setPriceCurrencyItem(tradingCurrency.getShort());
+                }
+            }
+        }
     }
 
     /**
@@ -571,14 +575,40 @@ public class StockMarketModBackend implements StockMarketAPI {
         }
     }
 
+    /**
+     * Calls a static method of the dev-only DevBootstrap (unit tests, test commands). It is compiled only
+     * when gradle.properties has {@code enable_dev_features=true}, so it is reached reflectively: release
+     * code must compile without it.
+     *
+     * @param method the DevBootstrap method name
+     * @param types  its parameter types
+     * @param args   its arguments
+     */
+    private static void invokeDevBootstrap(String method, Class<?>[] types, Object... args) {
+        try {
+            Class.forName(StockMarketMod.DEV_BOOTSTRAP).getMethod(method, types).invoke(null, args);
+        } catch (ReflectiveOperationException e) {
+            StockMarketMod.LOGGER.error("Dev features are enabled but " + StockMarketMod.DEV_BOOTSTRAP + "." + method
+                    + " is missing or failed; check enable_dev_features in gradle.properties", e);
+        }
+    }
+
     // Called from the server side
     public static void onServerStop(MinecraftServer server)
     {
         if (SERVER_INSTANCES != null && SERVER_INSTANCES.BANK_SYSTEM_API != null) {
             SERVER_INSTANCES.BANK_SYSTEM_API.setItemPriceProvider(null);
         }
-        TickEvent.SERVER_PRE.unregister(StockMarketModBackend::onServerTickPre);
-        TickEvent.SERVER_POST.unregister(StockMarketModBackend::onServerTick);
+        TickEvent.SERVER_PRE.unregister(SERVER_TICK_PRE);
+        TickEvent.SERVER_POST.unregister(SERVER_TICK_POST);
+        // Listeners added in onServerStart (master or slave branch); removing an absent one is a no-op.
+        IBankSystemEvents events = BankSystemMod.getAPI().getEvents();
+        events.getItemIDsMergedEvent().removeListener(ITEM_IDS_MERGED_LISTENER);
+        events.getMasterServerSlaveConnected().removeListener(SLAVE_CONNECTED_LISTENER);
+        events.getTrustChangedSignal().removeListener(TRUST_CHANGED_LISTENER);
+        events.getSlaveConnectionAcceptedSignal().removeListener(SLAVE_ACCEPTED_LISTENER);
+        events.getSlaveConnectionLostSignal().removeListener(SLAVE_LOST_LISTENER);
+        StockMarketPlaceholders.shutdown();
         saveDataToFiles(server);
 
         if(SERVER_INSTANCES != null && SERVER_INSTANCES.DATABASE_MANAGER != null) {
@@ -689,6 +719,49 @@ public class StockMarketModBackend implements StockMarketAPI {
 
     private static long autosaveTimer_lastMs = 0;
 
+    /** Server ticks since the last villager trade autosave; reset on every server start. */
+    private static long villagerAutosaveTicks = 0;
+
+    /**
+     * Saves the villager trade file (dirty-only, atomic) every SAVE_INTERVAL_MINUTES, counted in
+     * server ticks (20 per second). Runs on master and slave, so a crash loses at most one interval
+     * of villager trades. The master's full autosave saves it too; the second call is a no-op
+     * because the data is no longer dirty.
+     *
+     * @param server the ticking server
+     */
+    private static void tickVillagerAutosave(MinecraftServer server)
+    {
+        if (SERVER_INSTANCES.VILLAGER_TRADE_MANAGER == null || SERVER_INSTANCES.SERVER_SETTINGS == null)
+            return;
+        long intervalTicks = SERVER_INSTANCES.SERVER_SETTINGS.UTILITIES.SAVE_INTERVAL_MINUTES.get() * 60L * 20L;
+        if (intervalTicks <= 0 || ++villagerAutosaveTicks < intervalTicks)
+            return;
+        villagerAutosaveTicks = 0;
+        SERVER_INSTANCES.VILLAGER_TRADE_MANAGER.save(server);
+    }
+
+    // Listeners held as single instances: every `Class::method` expression creates a new
+    // object, so unregister() with a fresh method reference never matches the registered
+    // one and the handlers stack across singleplayer world switches. Always register and
+    // unregister through these fields.
+    private static final TickEvent.Server SERVER_TICK_PRE = StockMarketModBackend::onServerTickPre;
+    private static final TickEvent.Server SERVER_TICK_POST = StockMarketModBackend::onServerTick;
+
+    // Same pattern for BankSystem signals: BankSystemEvents is created once per JVM (mod init),
+    // so listeners added per server start stack across world switches unless removed with the
+    // identical instance.
+    private static final Runnable BANK_SETUP_COMPLETE_LISTENER = StockMarketModBackend::onBankSystemSetupComplete;
+    private static final Runnable BANK_DATA_LOADED_LISTENER = StockMarketModBackend::onPostBankSystemDataLoaded;
+    private static final Consumer<Map<ItemID, ItemID>> ITEM_IDS_MERGED_LISTENER = StockMarketModBackend::onItemIDsMerged;
+    private static final Runnable SLAVE_CONNECTED_LISTENER = () -> {
+        if (SERVER_INSTANCES == null || SERVER_INSTANCES.VILLAGER_TRADE_MANAGER == null) return;
+        SERVER_INSTANCES.VILLAGER_TRADE_MANAGER.broadcastTable();
+    };
+    private static final Consumer<TrustChangeInfo> TRUST_CHANGED_LISTENER = StockMarketModBackend::onTrustChangedNotifyAffectedSlave;
+    private static final Runnable SLAVE_ACCEPTED_LISTENER = StockMarketModBackend::onSlaveConnectedRefreshTrustCache;
+    private static final Runnable SLAVE_LOST_LISTENER = StockMarketModBackend::onSlaveDisconnectedInvalidateTrustCache;
+
     /**
      * Nanosecond timestamp captured at the start of the current server tick
      * (T-137). Written by {@link #onServerTickPre(MinecraftServer)} on every
@@ -718,6 +791,14 @@ public class StockMarketModBackend implements StockMarketAPI {
     // Called from the master side
     private static void onServerTick(MinecraftServer server)
     {
+        if (SERVER_INSTANCES == null || SERVER_INSTANCES.MARKET_MANAGER == null)
+            return;
+        // Every server (master and slave) keeps its own villager trade file.
+        tickVillagerAutosave(server);
+        // The rest is master work; a slave has no sync market manager.
+        if (SERVER_INSTANCES.MARKET_MANAGER.getSync() == null)
+            return;
+
         SERVER_INSTANCES.PLUGIN_MANAGER.getSync().update();
         SERVER_INSTANCES.MARKET_MANAGER.getSync().update();
 
@@ -781,6 +862,9 @@ public class StockMarketModBackend implements StockMarketAPI {
     {
         if(SERVER_INSTANCES != null && SERVER_INSTANCES.DATA_MANAGER != null)
             SERVER_INSTANCES.DATA_MANAGER.save(server);
+        // Villager trade file: saved on master and slave (local per server).
+        if(SERVER_INSTANCES != null && SERVER_INSTANCES.VILLAGER_TRADE_MANAGER != null)
+            SERVER_INSTANCES.VILLAGER_TRADE_MANAGER.save(server);
     }
 
 

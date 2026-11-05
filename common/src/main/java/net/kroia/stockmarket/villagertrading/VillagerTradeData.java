@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.villagertrading;
 
+import net.kroia.modutilities.NbtCompat;
+
 import net.kroia.stockmarket.StockMarketMod;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -7,9 +9,7 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.RegistryOps;
-import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.item.trading.MerchantOffer;
-import net.minecraft.world.level.saveddata.SavedData;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -21,7 +21,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Vanilla {@link SavedData} sidecar storing the <b>original (emerald-form)</b>
+ * Sidecar storing the <b>original (emerald-form)</b>
  * merchant offers of every villager whose trades have been rewritten to the
  * stock-market currency, keyed by villager UUID.
  * <p>
@@ -30,12 +30,12 @@ import java.util.UUID;
  * placed in the cost predicate would have to be present on the player's payment
  * items ({@code ItemCost.test}), and components on the sell result would leak
  * into player inventories — breaking stacking and BankSystem's
- * {@code MoneyItem.isMoney} (component-sensitive). A plain SavedData file works
- * identically on master and slave servers (slaves have no StockMarket
- * DataManager, but vanilla world storage is always available).
+ * {@code MoneyItem.isMoney} (component-sensitive).
  * <p>
- * Stored in the <b>overworld</b> data storage as the vanilla-global store —
- * villagers from all dimensions are keyed by UUID here.
+ * Persisted by {@link VillagerTradeManager} to
+ * {@code <world>/data/StockMarket/villager_trades.nbt} on master and slave
+ * servers alike (each server keeps the originals of its own villagers). One
+ * global file: villagers from all dimensions are keyed by UUID.
  * <p>
  * The {@code originals} list of an entry is <b>index-aligned</b> with the
  * villager's live {@code MerchantOffers} (vanilla only appends offers on
@@ -43,10 +43,7 @@ import java.util.UUID;
  * a {@link OriginalOffer#PASSTHROUGH} marker at their index so alignment is
  * preserved.
  */
-public class VillagerTradeSavedData extends SavedData {
-
-    /** File name inside {@code world/data}. */
-    public static final String NAME = "stockmarket_villager_trades";
+public class VillagerTradeData {
 
     /** Schema version written to disk for future migrations. */
     private static final int DATA_VERSION = 1;
@@ -54,14 +51,11 @@ public class VillagerTradeSavedData extends SavedData {
     /** Entries not seen for ~100 in-game days are pruned (villager gone/discarded). */
     private static final long PRUNE_AGE_GAME_TICKS = 100L * 24000L;
 
-    // DataFixTypes is intentionally null: this is mod data, vanilla datafixers
-    // never apply (the vanilla 2-arg convenience constructor is NeoForge-only,
-    // so the canonical 3-arg form is used for cross-loader compatibility).
-    private static final SavedData.Factory<VillagerTradeSavedData> FACTORY =
-            new SavedData.Factory<>(VillagerTradeSavedData::new, VillagerTradeSavedData::load, null);
-
     /** Villager UUID → sidecar entry. */
     private final Map<UUID, VillagerEntry> villagers = new HashMap<>();
+
+    /** Set on every change; cleared by {@link VillagerTradeManager} after a successful save. */
+    private boolean dirty = false;
 
     /**
      * Snapshot of a single original offer. Either holds the exact pre-rewrite
@@ -187,15 +181,19 @@ public class VillagerTradeSavedData extends SavedData {
         }
     }
 
-    /**
-     * Gets (or creates) the sidecar for the given server. Uses the overworld's
-     * data storage as the global store.
-     *
-     * @param server the running server (master or slave)
-     * @return the sidecar instance
-     */
-    public static VillagerTradeSavedData get(MinecraftServer server) {
-        return server.overworld().getDataStorage().computeIfAbsent(FACTORY, NAME);
+    /** Marks the sidecar as changed so the next save writes it. */
+    public void setDirty() {
+        dirty = true;
+    }
+
+    /** @return whether the sidecar changed since the last successful save */
+    public boolean isDirty() {
+        return dirty;
+    }
+
+    /** Clears the change flag after a successful save. */
+    public void clearDirty() {
+        dirty = false;
     }
 
     /**
@@ -273,47 +271,46 @@ public class VillagerTradeSavedData extends SavedData {
      * @param registries registry context required by {@code MerchantOffer.CODEC}
      * @return the loaded sidecar
      */
-    public static VillagerTradeSavedData load(CompoundTag tag, HolderLookup.Provider registries) {
-        VillagerTradeSavedData data = new VillagerTradeSavedData();
+    public static VillagerTradeData load(CompoundTag tag, HolderLookup.Provider registries) {
+        VillagerTradeData data = new VillagerTradeData();
         RegistryOps<Tag> ops = registries.createSerializationContext(NbtOps.INSTANCE);
 
-        ListTag villagerList = tag.getList("villagers", Tag.TAG_COMPOUND);
+        ListTag villagerList = NbtCompat.getList(tag, "villagers", Tag.TAG_COMPOUND);
         for (int i = 0; i < villagerList.size(); i++) {
-            CompoundTag villagerTag = villagerList.getCompound(i);
-            if (!villagerTag.hasUUID("uuid")) {
+            CompoundTag villagerTag = NbtCompat.getCompound(villagerList, i);
+            if (!NbtCompat.hasUUID(villagerTag, "uuid")) {
                 continue;
             }
             VillagerEntry entry = new VillagerEntry();
-            entry.lastSeenGameTime = villagerTag.getLong("lastSeenGameTime");
-            entry.pricedVersion = villagerTag.getLong("pricedVersion");
-            entry.clampedMask = villagerTag.getLong("clampedMask");
+            entry.lastSeenGameTime = NbtCompat.getLong(villagerTag, "lastSeenGameTime");
+            entry.pricedVersion = NbtCompat.getLong(villagerTag, "pricedVersion");
+            entry.clampedMask = NbtCompat.getLong(villagerTag, "clampedMask");
 
-            ListTag originalsList = villagerTag.getList("originals", Tag.TAG_COMPOUND);
+            ListTag originalsList = NbtCompat.getList(villagerTag, "originals", Tag.TAG_COMPOUND);
             for (int j = 0; j < originalsList.size(); j++) {
-                CompoundTag originalTag = originalsList.getCompound(j);
-                if (originalTag.getBoolean("passthrough") || !originalTag.contains("offer")) {
+                CompoundTag originalTag = NbtCompat.getCompound(originalsList, j);
+                if (NbtCompat.getBoolean(originalTag, "passthrough") || !originalTag.contains("offer")) {
                     entry.originals.add(OriginalOffer.PASSTHROUGH);
                     continue;
                 }
                 Optional<MerchantOffer> offer = MerchantOffer.CODEC
                         .parse(ops, originalTag.get("offer"))
                         .resultOrPartial(error -> StockMarketMod.LOGGER.warn(
-                                "[VillagerTradeSavedData] Failed to decode original offer: {}", error));
+                                "[VillagerTradeData] Failed to decode original offer: {}", error));
                 // Missing flag (data written before the flag existed) defaults to
                 // true: back then every stored snapshot was immediately rewritten,
                 // so the live offer is in currency form and must be restorable.
-                boolean rewritten = !originalTag.contains("rewritten") || originalTag.getBoolean("rewritten");
+                boolean rewritten = !originalTag.contains("rewritten") || NbtCompat.getBoolean(originalTag, "rewritten");
                 // Decode failure degrades to pass-through to keep index alignment.
                 entry.originals.add(offer
                         .map(o -> new OriginalOffer(o, rewritten))
                         .orElse(OriginalOffer.PASSTHROUGH));
             }
-            data.villagers.put(villagerTag.getUUID("uuid"), entry);
+            data.villagers.put(NbtCompat.getUUID(villagerTag, "uuid"), entry);
         }
         return data;
     }
 
-    @Override
     public CompoundTag save(CompoundTag tag, HolderLookup.Provider registries) {
         RegistryOps<Tag> ops = registries.createSerializationContext(NbtOps.INSTANCE);
         tag.putInt("version", DATA_VERSION);
@@ -322,7 +319,7 @@ public class VillagerTradeSavedData extends SavedData {
         for (Map.Entry<UUID, VillagerEntry> mapEntry : villagers.entrySet()) {
             VillagerEntry entry = mapEntry.getValue();
             CompoundTag villagerTag = new CompoundTag();
-            villagerTag.putUUID("uuid", mapEntry.getKey());
+            NbtCompat.putUUID(villagerTag, "uuid", mapEntry.getKey());
             villagerTag.putLong("lastSeenGameTime", entry.lastSeenGameTime);
             villagerTag.putLong("pricedVersion", entry.pricedVersion);
             villagerTag.putLong("clampedMask", entry.clampedMask);
@@ -336,7 +333,7 @@ public class VillagerTradeSavedData extends SavedData {
                     Optional<Tag> encoded = MerchantOffer.CODEC
                             .encodeStart(ops, original.offer())
                             .resultOrPartial(error -> StockMarketMod.LOGGER.warn(
-                                    "[VillagerTradeSavedData] Failed to encode original offer: {}", error));
+                                    "[VillagerTradeData] Failed to encode original offer: {}", error));
                     if (encoded.isPresent()) {
                         originalTag.put("offer", encoded.get());
                         originalTag.putBoolean("rewritten", original.isRewritten());

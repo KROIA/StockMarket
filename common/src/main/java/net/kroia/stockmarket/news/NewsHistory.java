@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.news;
 
+import net.kroia.modutilities.NbtCompat;
+
 import net.kroia.modutilities.persistence.ServerSaveable;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -267,10 +269,10 @@ public class NewsHistory implements ServerSaveable {
      */
     @Override
     public boolean load(CompoundTag tag) {
-        ListTag recordsTag = tag.getList(KEY_RECORDS, Tag.TAG_COMPOUND);
+        ListTag recordsTag = NbtCompat.getList(tag, KEY_RECORDS, Tag.TAG_COMPOUND);
         List<NewsRecord> restored = new ArrayList<>(recordsTag.size());
         for (int i = 0; i < recordsTag.size(); i++) {
-            NewsRecord record = NewsRecord.createFromTag(recordsTag.getCompound(i));
+            NewsRecord record = NewsRecord.createFromTag(NbtCompat.getCompound(recordsTag, i));
             if (record != null) restored.add(record);
         }
         chunkStore.restoreFromList(restored);

@@ -29,7 +29,7 @@
       },
       {
         "id": "minecraft",
-        "version": ">=1.21"
+        "version": "${minecraft_version}"
       },
       {
         "id": "architectury",
@@ -37,7 +37,7 @@
       },
       {
         "id": "banksystem",
-        "version": "~2.1.0"
+        "version": "~2.2.0"
       }
     ]
   },

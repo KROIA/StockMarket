@@ -384,7 +384,10 @@ Places a market order at the best available price. Positive `amount` = buy, nega
 ```java
 boolean isMarketOpen()
 ```
-Returns whether this market is currently open for trading. Closed markets do not process orders.
+Returns whether this market is currently open for trading: **not under maintenance AND inside its trading hours** (`!maintenance && tradingOpen`).
+
+- **Under maintenance** (Maintenance mode in the management screen): player orders are rejected, bot/plugin orders are still processed.
+- **Outside trading hours** (schedule or `/stockmarket open|close` override, see [Trading Hours](../../user-guide/trading-hours.md)): all orders are rejected and the market is **not passed to `update`/`finalize` at all** (`getMarketInterfaces()` still contains it). Cached bot orders for a closed market are dropped; pending virtual-orderbook changes are kept and the target price is not rolled, so plugins resume where they stopped when the market reopens.
 
 ```java
 float getCurrentCandleTradedVolume()

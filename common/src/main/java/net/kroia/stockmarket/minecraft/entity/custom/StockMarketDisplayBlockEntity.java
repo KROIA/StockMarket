@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.minecraft.entity.custom;
 
+import net.kroia.modutilities.NbtCompat;
+
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.ColorUtilities;
 import net.kroia.modutilities.gui.Gui;
@@ -15,6 +17,7 @@ import net.kroia.stockmarket.screen.widgets.DisplayCandlestickChart;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.HorizontalDirectionalBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -249,30 +252,38 @@ public class StockMarketDisplayBlockEntity extends AbstractDisplayBlockEntity {
     @Override
     protected void loadCustomData(CompoundTag tag, HolderLookup.Provider registries) {
         if (tag.contains("displayType")) {
-            displayType = DisplayType.fromId(tag.getString("displayType"));
+            displayType = DisplayType.fromId(NbtCompat.getString(tag, "displayType"));
         }
         if (tag.contains("selectedItemID")) {
-            selectedItemID = new ItemID(tag.getShort("selectedItemID"));
+            selectedItemID = new ItemID(NbtCompat.getShort(tag, "selectedItemID"));
         } else {
             selectedItemID = null;
         }
         if (tag.contains("secondItemID")) {
-            secondItemID = new ItemID(tag.getShort("secondItemID"));
+            secondItemID = new ItemID(NbtCompat.getShort(tag, "secondItemID"));
         } else {
             secondItemID = null;
         }
         if (tag.contains("viewport")) {
-            pendingViewport = tag.getCompound("viewport");
+            pendingViewport = NbtCompat.getCompound(tag, "viewport");
         }
     }
 
-    @Override
-    protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
-        DisplayType oldType = this.displayType;
-        ItemID oldItemID = this.selectedItemID;
-        ItemID oldSecondID = this.secondItemID;
-        super.loadAdditional(tag, registries);
+    @Override // mc<=1.21.5
+    protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) { DisplayType oldType = displayType; ItemID oldItemID = selectedItemID; ItemID oldSecondID = secondItemID; super.loadAdditional(tag, registries); afterLoad(oldType, oldItemID, oldSecondID); } // mc<=1.21.5
+    //@Override // mc>=1.21.6
+    //protected void loadAdditional(net.minecraft.world.level.storage.ValueInput input) { DisplayType oldType = displayType; ItemID oldItemID = selectedItemID; ItemID oldSecondID = secondItemID; super.loadAdditional(input); afterLoad(oldType, oldItemID, oldSecondID); } // mc>=1.21.6
 
+    /**
+     * Client-side controller refresh after the base class loaded the tag
+     * (version-neutral part of loadAdditional). Rebuilds the GUI when the display
+     * type or a selected market changed, then re-wires the callbacks.
+     *
+     * @param oldType     display type before the load
+     * @param oldItemID   selected item before the load
+     * @param oldSecondID second selected item before the load
+     */
+    private void afterLoad(DisplayType oldType, ItemID oldItemID, ItemID oldSecondID) {
         if (level != null && level.isClientSide() && isController()) {
             if (oldType != this.displayType || !itemIDEquals(oldItemID, this.selectedItemID) || !itemIDEquals(oldSecondID, this.secondItemID)) {
                 // Disconnect old chart before rebuilding
@@ -304,14 +315,16 @@ public class StockMarketDisplayBlockEntity extends AbstractDisplayBlockEntity {
 
     // ── Unconfigured UI ──
 
+    // T-159: the display GUI is built and rendered client-side only (ContentBuilder),
+    // so translatable texts resolve in the client's language here.
     private static void buildUnconfiguredUI(Gui gui, int w, int h) {
-        Label title = new Label("Stock Market Display");
+        Label title = new Label(Component.translatable("block.stockmarket.stockmarket_display_block").getString());
         title.setBounds(0, h / 2 - 16, w, 14);
         title.setAlignment(GuiElement.Alignment.CENTER);
         title.setTextColor(ColorUtilities.getRGB(200, 220, 255));
         gui.addElement(title);
 
-        Label hint = new Label("Right-click to configure");
+        Label hint = new Label(Component.translatable("gui.stockmarket.display.right_click_hint").getString());
         hint.setBounds(0, h / 2 + 2, w, 12);
         hint.setAlignment(GuiElement.Alignment.CENTER);
         hint.setTextColor(ColorUtilities.getRGB(140, 140, 160));

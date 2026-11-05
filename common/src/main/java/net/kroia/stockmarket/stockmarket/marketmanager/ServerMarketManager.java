@@ -1,11 +1,14 @@
 package net.kroia.stockmarket.stockmarket.marketmanager;
 
+import net.kroia.modutilities.NbtCompat;
+
 import net.kroia.banksystem.api.bank.BankStatus;
 import net.kroia.banksystem.api.bank.IServerBank;
 import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
 import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.banksystem.util.ItemIDManager;
+import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.persistence.ServerSaveableChunked;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.api.integration.MarketConfig;
@@ -21,9 +24,11 @@ import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
 import net.kroia.stockmarket.stockmarket.market.preset.MarketPreset;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.server.MinecraftServer;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.time.LocalTime;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.IntFunction;
@@ -51,6 +56,11 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
     private long candleSaveTimer_lastMs = (System.currentTimeMillis()/60000)*60000;
     private final Random random = new Random();
     private ItemID tradingCurrencyID = null;
+
+    // Trading-hours clock, evaluated once per update() tick (T-158). Cached so the price
+    // stream / ServerTimeRequest can report the same minute the markets were evaluated with.
+    private int currentTradingMinute = 0;
+    private boolean tradingHoursUseRealTime = false;
 
     public ServerMarketManager()
     {
@@ -141,7 +151,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
                 // setSettings() call.
                 m.getOrderbook().setVirtualDisabled(!preset.isOrderbookEnabled());
             }
-            m.setMarketClosedCallback(this::cancelInterMarketOrdersForMarket);
+            m.setMarketMaintenanceCallback(this::cancelInterMarketOrdersForMarket);
             markets.put(marketID, m);
 
             // Allow the item in the banking system so it can be traded
@@ -194,7 +204,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
         // Sync the runtime "disabled" flag on the underlying VirtualOrderbook so
         // a disabled market immediately behaves as empty in the matching engine.
         m.getOrderbook().setVirtualDisabled(!cfg.virtualOrderbookEnabled());
-        m.setMarketClosedCallback(this::cancelInterMarketOrdersForMarket);
+        m.setMarketMaintenanceCallback(this::cancelInterMarketOrdersForMarket);
         markets.put(marketID, m);
 
         if (bankManager != null) {
@@ -225,8 +235,8 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
         if (market == null) return false;
 
         // Close market: cancels player orders and inter-market orders via callback
-        if (market.isMarketOpen()) {
-            market.setMarketOpen(false);
+        if (!market.isUnderMaintenance()) {
+            market.setMaintenance(true);
         }
 
         // Clear remaining orders (bot orders that survived close)
@@ -514,14 +524,21 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
             warn("putInterMarketOrder: sell market not found for " + order.getSellItemID());
             return false;
         }
-        if (!buyMarket.isMarketOpen())
+        if (buyMarket.isUnderMaintenance())
         {
             warn("putInterMarketOrder: buy market is closed for " + order.getBuyItemID());
             return false;
         }
-        if (!sellMarket.isMarketOpen())
+        if (sellMarket.isUnderMaintenance())
         {
             warn("putInterMarketOrder: sell market is closed for " + order.getSellItemID());
+            return false;
+        }
+        // Outside trading hours no new inter-market orders are accepted (already queued ones
+        // stay queued and are SKIPPED by the executor until both legs reopen).
+        if (!buyMarket.isTradingOpen() || !sellMarket.isTradingOpen())
+        {
+            warn("putInterMarketOrder: a leg is outside its trading hours");
             return false;
         }
 
@@ -584,6 +601,56 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
             candleSaveTimer_lastMs = time;
             BACKEND_INSTANCES.DATA_MANAGER.savePriceCandlesToSQL();
         }
+
+        // Trading hours: flip open/closed only at the END of the tick, after all order buffers
+        // and inter-market orders were processed. This manager only exists on the master.
+        tradingHoursUseRealTime = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.TRADING_HOURS_USE_REAL_TIME.get();
+        currentTradingMinute = tradingHoursUseRealTime ? realMinuteOfDay() : gameMinuteOfDay(UtilitiesPlatform.getServer());
+        for (ServerMarket m : markets.values())
+        {
+            m.updateTradingHours(currentTradingMinute);
+        }
+    }
+
+    /**
+     * @return the minute of the day (0..1439) the trading hours were last evaluated with,
+     *         from the currently active clock source
+     */
+    public int getCurrentTradingMinute()
+    {
+        return currentTradingMinute;
+    }
+
+    /**
+     * @return {@code true} if trading hours currently follow the server's real time,
+     *         {@code false} for in-game time (value cached at the last update tick)
+     */
+    public boolean isTradingHoursUseRealTime()
+    {
+        return tradingHoursUseRealTime;
+    }
+
+    /**
+     * @return the master server's local real time as minute of the day (0..1439)
+     */
+    public static int realMinuteOfDay()
+    {
+        LocalTime now = LocalTime.now();
+        return now.getHour() * 60 + now.getMinute();
+    }
+
+    /**
+     * Converts the overworld day time to a minute of the day. Day-time tick 0 is 06:00.
+     * @param server the server, may be null (returns 0, e.g. in test contexts)
+     * @return in-game minute of the day (0..1439)
+     */
+    public static int gameMinuteOfDay(@Nullable MinecraftServer server)
+    {
+        if (server == null || server.overworld() == null)
+            return 0;
+        long dayTime = server.overworld().getDayTime(); // mc<=1.21.11
+        //long dayTime = server.overworld().getOverworldClockTime(); // mc>=26.1
+        return (int) (((dayTime % 24000L + 6000L) % 24000L) * 1440L / 24000L);
     }
 
 
@@ -904,14 +971,14 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
 
         for (int i = 0; i < marketListTag.size(); i++)
         {
-            CompoundTag marketTag = marketListTag.getCompound(i);
+            CompoundTag marketTag = NbtCompat.getCompound(marketListTag, i);
             ItemID id = ItemID.createFromTag(marketTag);
             if(id.isValid())
             {
                 ServerMarket market = new ServerMarket(id);
                 if(market.load(marketTag))
                 {
-                    market.setMarketClosedCallback(this::cancelInterMarketOrdersForMarket);
+                    market.setMarketMaintenanceCallback(this::cancelInterMarketOrdersForMarket);
                     newMarkets.put(id, market);
                 }
                 else {
@@ -934,7 +1001,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
         {
             for (int i = 0; i < interMarketOrdersTag.size(); i++)
             {
-                CompoundTag orderTag = interMarketOrdersTag.getCompound(i);
+                CompoundTag orderTag = NbtCompat.getCompound(interMarketOrdersTag, i);
                 InterMarketOrder imo = InterMarketOrder.createFromNBT(orderTag);
                 if (imo != null)
                 {
@@ -954,7 +1021,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
             userMap.clear();
             for(int i = 0; i < userListTag.size(); i++)
             {
-                CompoundTag userTag = userListTag.getCompound(i);
+                CompoundTag userTag = NbtCompat.getCompound(userListTag, i);
                 User user = User.createFromTag(userTag);
                 if(user != null)
                     userMap.put(user.getUUID(), user);

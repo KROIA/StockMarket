@@ -7,7 +7,8 @@ import net.kroia.stockmarket.networking.entity.UpdateDisplayViewportPacket;
 import net.kroia.stockmarket.screen.widgets.DisplayCandlestickChart;
 import net.kroia.stockmarket.util.StockMarketGuiScreen;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphics; // mc<=1.21.11
+//import net.minecraft.client.gui.GuiGraphicsExtractor; // mc>=26.1
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
@@ -28,7 +29,7 @@ public class DisplayChartScreen extends StockMarketGuiScreen {
     private DisplayCandlestickChart chart;
 
     public DisplayChartScreen(BlockPos controllerPos, ItemID itemID, ItemID secondItemID, long blockKey, CompoundTag initialViewport) {
-        super(Component.literal("Price Chart"));
+        super(Component.translatable("gui.stockmarket.display_config_screen.price_chart"));
         this.controllerPos = controllerPos;
         this.itemID = itemID;
         this.secondItemID = secondItemID;
@@ -48,7 +49,8 @@ public class DisplayChartScreen extends StockMarketGuiScreen {
     }
 
     @Override
-    public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+    public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) { // mc<=1.21.11
+    //public void render(GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY, float partialTick) { // mc>=26.1
         super.render(guiGraphics, mouseX, mouseY, partialTick);
         syncViewportToDisplay();
     }

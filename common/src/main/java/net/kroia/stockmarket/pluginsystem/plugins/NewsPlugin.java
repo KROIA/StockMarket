@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.pluginsystem.plugins;
 
+import net.kroia.modutilities.NbtCompat;
+
 import io.netty.buffer.ByteBuf;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.TimerMillis;
@@ -684,7 +686,11 @@ public class NewsPlugin extends ServerPlugin<NewsPlugin.Settings, NewsPlugin.Run
     @Override
     public void update(List<MarketInterface> markets) {
         ensureLibraryLoaded();
-        advanceTime(measureTickDelta(), markets);
+        // T-158: `markets` only holds markets inside their trading hours. The news timeline
+        // (publishes, permanent default-price bakes) runs on ALL subscribed markets so news
+        // can move a closed market's default price (overnight gap). The target-price
+        // influence in finalize() still only touches open markets.
+        advanceTime(measureTickDelta(), getMarketInterfaces());
     }
 
     /**
@@ -2400,7 +2406,8 @@ public class NewsPlugin extends ServerPlugin<NewsPlugin.Settings, NewsPlugin.Run
         try {
             MinecraftServer server = UtilitiesPlatform.getServer();
             if (server != null && server.overworld() != null) {
-                return server.overworld().getDayTime() / 24000L;
+                return server.overworld().getDayTime() / 24000L; // mc<=1.21.11
+                //return server.overworld().getOverworldClockTime() / 24000L; // mc>=26.1
             }
         } catch (Exception ignored) {
             // No server (unit-test context) — day 0.
@@ -2661,22 +2668,22 @@ public class NewsPlugin extends ServerPlugin<NewsPlugin.Settings, NewsPlugin.Run
      */
     @Override
     public boolean load(CompoundTag tag) {
-        if (tag.contains("newsUidCounter")) newsUidCounter = tag.getLong("newsUidCounter");
+        if (tag.contains("newsUidCounter")) newsUidCounter = NbtCompat.getLong(tag, "newsUidCounter");
 
         plannedQueue.clear();
         if (tag.contains("plannedActivations")) {
-            ListTag plannedTag = tag.getList("plannedActivations", Tag.TAG_COMPOUND);
+            ListTag plannedTag = NbtCompat.getList(tag, "plannedActivations", Tag.TAG_COMPOUND);
             for (int i = 0; i < plannedTag.size(); i++) {
-                CompoundTag slotTag = plannedTag.getCompound(i);
+                CompoundTag slotTag = NbtCompat.getCompound(plannedTag, i);
                 // Sanitize: stored offsets are always > 0 (due slots fire immediately);
                 // clamp any malformed value instead of discarding the slot.
-                plannedQueue.add(new PlannedSlot(Math.max(1, slotTag.getLong("offsetMs")),
-                        slotTag.getString("eventId")));
+                plannedQueue.add(new PlannedSlot(Math.max(1, NbtCompat.getLong(slotTag, "offsetMs")),
+                        NbtCompat.getString(slotTag, "eventId")));
             }
         } else if (tag.contains("schedulerRemainingMs")) {
             // Legacy single countdown (pre-T-082): convert into a time-only head slot.
             // Values <= 0 meant "not sampled yet" — leave the queue empty to rebuild.
-            long legacyRemainingMs = tag.getLong("schedulerRemainingMs");
+            long legacyRemainingMs = NbtCompat.getLong(tag, "schedulerRemainingMs");
             if (legacyRemainingMs > 0) {
                 plannedQueue.add(new PlannedSlot(legacyRemainingMs, ""));
             }
@@ -2684,21 +2691,21 @@ public class NewsPlugin extends ServerPlugin<NewsPlugin.Settings, NewsPlugin.Run
 
         // Scheduler overrides (T-082): absent key = no override (pre-T-082 compatible).
         overrideMinSecondsBetweenEvents = tag.contains("schedulerOverrideMinSeconds")
-                ? tag.getLong("schedulerOverrideMinSeconds") : null;
+                ? NbtCompat.getLong(tag, "schedulerOverrideMinSeconds") : null;
         overrideMaxSecondsBetweenEvents = tag.contains("schedulerOverrideMaxSeconds")
-                ? tag.getLong("schedulerOverrideMaxSeconds") : null;
+                ? NbtCompat.getLong(tag, "schedulerOverrideMaxSeconds") : null;
         overrideMaxActiveEventsGlobal = tag.contains("schedulerOverrideMaxGlobal")
-                ? tag.getInt("schedulerOverrideMaxGlobal") : null;
+                ? NbtCompat.getInt(tag, "schedulerOverrideMaxGlobal") : null;
         overrideMaxActiveEventsPerMarket = tag.contains("schedulerOverrideMaxPerMarket")
-                ? tag.getInt("schedulerOverrideMaxPerMarket") : null;
+                ? NbtCompat.getInt(tag, "schedulerOverrideMaxPerMarket") : null;
 
         cooldownRemainingMs.clear();
         if (tag.contains("cooldowns")) {
-            ListTag cooldownsTag = tag.getList("cooldowns", 10);
+            ListTag cooldownsTag = NbtCompat.getList(tag, "cooldowns", 10);
             for (int i = 0; i < cooldownsTag.size(); i++) {
-                CompoundTag cooldownTag = cooldownsTag.getCompound(i);
-                String eventId = cooldownTag.getString("eventId");
-                long remainingMs = cooldownTag.getLong("remainingMs");
+                CompoundTag cooldownTag = NbtCompat.getCompound(cooldownsTag, i);
+                String eventId = NbtCompat.getString(cooldownTag, "eventId");
+                long remainingMs = NbtCompat.getLong(cooldownTag, "remainingMs");
                 if (!eventId.isEmpty() && remainingMs > 0) {
                     cooldownRemainingMs.put(eventId, remainingMs);
                 }
@@ -2709,18 +2716,18 @@ public class NewsPlugin extends ServerPlugin<NewsPlugin.Settings, NewsPlugin.Run
         // feature have no "disabledEvents" key — everything stays enabled (default).
         disabledEventIds.clear();
         if (tag.contains("disabledEvents")) {
-            ListTag disabledTag = tag.getList("disabledEvents", Tag.TAG_STRING);
+            ListTag disabledTag = NbtCompat.getList(tag, "disabledEvents", Tag.TAG_STRING);
             for (int i = 0; i < disabledTag.size(); i++) {
-                String id = disabledTag.getString(i);
+                String id = NbtCompat.getString(disabledTag, i);
                 if (!id.isEmpty()) disabledEventIds.add(id);
             }
         }
 
         activeEvents.clear();
         if (tag.contains("activeEvents")) {
-            ListTag eventsTag = tag.getList("activeEvents", 10);
+            ListTag eventsTag = NbtCompat.getList(tag, "activeEvents", 10);
             for (int i = 0; i < eventsTag.size(); i++) {
-                ActiveNewsEvent event = ActiveNewsEvent.createFromTag(eventsTag.getCompound(i));
+                ActiveNewsEvent event = ActiveNewsEvent.createFromTag(NbtCompat.getCompound(eventsTag, i));
                 if (event != null) {
                     activeEvents.add(event);
                 } else {
@@ -2734,19 +2741,19 @@ public class NewsPlugin extends ServerPlugin<NewsPlugin.Settings, NewsPlugin.Run
         eventChainDepth.clear();
         eventChainAncestry.clear();
         if (tag.contains("chainContext")) {
-            ListTag chainContextTag = tag.getList("chainContext", Tag.TAG_COMPOUND);
+            ListTag chainContextTag = NbtCompat.getList(tag, "chainContext", Tag.TAG_COMPOUND);
             for (int i = 0; i < chainContextTag.size(); i++) {
-                CompoundTag ctxTag = chainContextTag.getCompound(i);
-                long uid = ctxTag.getLong("uid");
-                int depth = ctxTag.getInt("depth");
+                CompoundTag ctxTag = NbtCompat.getCompound(chainContextTag, i);
+                long uid = NbtCompat.getLong(ctxTag, "uid");
+                int depth = NbtCompat.getInt(ctxTag, "depth");
                 if (depth > 0) {
                     eventChainDepth.put(uid, depth);
                 }
                 Set<String> ancestry = new LinkedHashSet<>();
                 if (ctxTag.contains("ancestry")) {
-                    ListTag ancestryTag = ctxTag.getList("ancestry", Tag.TAG_STRING);
+                    ListTag ancestryTag = NbtCompat.getList(ctxTag, "ancestry", Tag.TAG_STRING);
                     for (int j = 0; j < ancestryTag.size(); j++) {
-                        String id = ancestryTag.getString(j);
+                        String id = NbtCompat.getString(ancestryTag, j);
                         if (!id.isEmpty()) ancestry.add(id);
                     }
                 }
@@ -2760,29 +2767,29 @@ public class NewsPlugin extends ServerPlugin<NewsPlugin.Settings, NewsPlugin.Run
         // pending chains (pre-T-098 saves).
         pendingChainActivations.clear();
         if (tag.contains("pendingChains")) {
-            ListTag pendingChainsTag = tag.getList("pendingChains", Tag.TAG_COMPOUND);
+            ListTag pendingChainsTag = NbtCompat.getList(tag, "pendingChains", Tag.TAG_COMPOUND);
             for (int i = 0; i < pendingChainsTag.size(); i++) {
-                CompoundTag pcaTag = pendingChainsTag.getCompound(i);
-                String targetEventId = pcaTag.getString("targetEventId");
-                long remainingMs = pcaTag.getLong("remainingMs");
-                String sourceEventId = pcaTag.getString("sourceEventId");
-                int depth = pcaTag.getInt("depth");
+                CompoundTag pcaTag = NbtCompat.getCompound(pendingChainsTag, i);
+                String targetEventId = NbtCompat.getString(pcaTag, "targetEventId");
+                long remainingMs = NbtCompat.getLong(pcaTag, "remainingMs");
+                String sourceEventId = NbtCompat.getString(pcaTag, "sourceEventId");
+                int depth = NbtCompat.getInt(pcaTag, "depth");
                 Set<String> ancestry = new LinkedHashSet<>();
                 if (pcaTag.contains("ancestry")) {
-                    ListTag ancestryTag = pcaTag.getList("ancestry", Tag.TAG_STRING);
+                    ListTag ancestryTag = NbtCompat.getList(pcaTag, "ancestry", Tag.TAG_STRING);
                     for (int j = 0; j < ancestryTag.size(); j++) {
-                        String id = ancestryTag.getString(j);
+                        String id = NbtCompat.getString(ancestryTag, j);
                         if (!id.isEmpty()) ancestry.add(id);
                     }
                 }
                 @Nullable Map<ItemID, Float> marketsOverride = null;
                 if (pcaTag.contains("marketsOverride")) {
-                    ListTag marketsTag = pcaTag.getList("marketsOverride", Tag.TAG_COMPOUND);
+                    ListTag marketsTag = NbtCompat.getList(pcaTag, "marketsOverride", Tag.TAG_COMPOUND);
                     marketsOverride = new LinkedHashMap<>();
                     for (int j = 0; j < marketsTag.size(); j++) {
-                        CompoundTag marketTag = marketsTag.getCompound(j);
-                        marketsOverride.put(new ItemID(marketTag.getShort("id")),
-                                marketTag.getFloat("weight"));
+                        CompoundTag marketTag = NbtCompat.getCompound(marketsTag, j);
+                        marketsOverride.put(new ItemID(NbtCompat.getShort(marketTag, "id")),
+                                NbtCompat.getFloat(marketTag, "weight"));
                     }
                 }
                 if (!targetEventId.isEmpty() && remainingMs > 0) {

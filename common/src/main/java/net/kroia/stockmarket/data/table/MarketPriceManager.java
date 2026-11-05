@@ -10,7 +10,9 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
@@ -23,6 +25,10 @@ public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
     public static final String DELETE = "DELETE FROM MarketPrice";
     public static final String COUNT =  "SELECT COUNT(*) FROM MarketPrice";
     public static final String MIN_TIME = "SELECT MIN(time) FROM MarketPrice";
+    /** Per-market volume sum + oldest open since a timestamp (both ? bind the same window start). */
+    public static final String WINDOW_STATS = "SELECT m.marketid, SUM(m.traded_volume), "
+            + "(SELECT o.open FROM MarketPrice o WHERE o.marketid = m.marketid AND o.time >= ? ORDER BY o.time ASC LIMIT 1) "
+            + "FROM MarketPrice m WHERE m.time >= ? GROUP BY m.marketid";
 
     public MarketPriceManager(DatabaseManager databaseManager) {
         this.databaseManager = databaseManager;
@@ -213,6 +219,68 @@ public class MarketPriceManager implements ITableManager<MarketPriceStruct> {
                 StockMarketMod.LOGGER.warn("Failed to query MarketPrice oldest timestamp: {}", e.getMessage());
                 return Long.MAX_VALUE;
             }
+        }, databaseManager.getDatabaseThread());
+    }
+
+    /**
+     * Returns the timestamp of the {@code (skip + 1)}-th newest row {@code <= atOrBefore}
+     * for one market ({@code skip = 0} is the newest row). Walks only the
+     * {@code (marketid, time)} index (covering, no table reads), so it costs
+     * O(skip) index entries no matter how much history the market has. Used by
+     * {@code MarketPriceHistoryRequest} to find where a count-limited window starts
+     * instead of reading the market's whole history.
+     *
+     * @param marketFilter equality filter binding {@code marketid} to the target market
+     * @param atOrBefore   inclusive upper time bound (epoch ms)
+     * @param skip         number of newer rows to skip (&gt;= 0)
+     * @return a future completing with that row's timestamp, or {@link Long#MIN_VALUE}
+     *         when fewer than {@code skip + 1} rows exist (or on SQL error)
+     */
+    public CompletableFuture<Long> getNthNewestTimestamp(EqualityFilter marketFilter, long atOrBefore, int skip){
+        return CompletableFuture.supplyAsync(() -> {
+            String statement = "SELECT time FROM MarketPrice WHERE " + marketFilter.getClause("marketid")
+                    + " AND time <= ? ORDER BY time DESC LIMIT 1 OFFSET ?";
+            try (PreparedStatement ps = databaseManager.getConnection().prepareStatement(statement)) {
+                int idx = marketFilter.bindParameters(ps, 1);
+                ps.setLong(idx, atOrBefore);
+                ps.setInt(idx + 1, Math.max(0, skip));
+                try (ResultSet rs = ps.executeQuery()) {
+                    // Read-only SELECT — no commit needed (see rationale in query()).
+                    if (rs.next())
+                        return rs.getLong(1);
+                }
+            } catch (SQLException e) {
+                StockMarketMod.LOGGER.warn("Failed to query MarketPrice window start: {}", e.getMessage());
+            }
+            return Long.MIN_VALUE;
+        }, databaseManager.getDatabaseThread());
+    }
+
+    /**
+     * Rolling-window aggregate for every market in one query (used by the placeholder system).
+     * Runs on the database thread.
+     *
+     * @param sinceMs window start (inclusive) as epoch milliseconds, e.g. {@code now - 24h}
+     * @return a future completing with {@code marketid -> {oldestOpen, tradedVolumeSum}}, where
+     *         {@code oldestOpen} is the open of the oldest candle with {@code time >= sinceMs} and
+     *         {@code tradedVolumeSum} is the raw traded volume of all candles in the window.
+     *         Markets without candles in the window are absent. Empty map on SQL error.
+     */
+    public CompletableFuture<Map<Short, double[]>> getWindowStats(long sinceMs) {
+        return CompletableFuture.supplyAsync(() -> {
+            Map<Short, double[]> result = new HashMap<>();
+            try (PreparedStatement ps = databaseManager.getConnection().prepareStatement(WINDOW_STATS)) {
+                ps.setLong(1, sinceMs);
+                ps.setLong(2, sinceMs);
+                try (ResultSet rs = ps.executeQuery()) {
+                    // Read-only SELECT — no commit needed (see rationale in query()).
+                    while (rs.next())
+                        result.put(rs.getShort(1), new double[]{rs.getDouble(3), rs.getDouble(2)});
+                }
+            } catch (SQLException e) {
+                StockMarketMod.LOGGER.warn("Failed to query MarketPrice window stats: {}", e.getMessage());
+            }
+            return result;
         }, databaseManager.getDatabaseThread());
     }
 

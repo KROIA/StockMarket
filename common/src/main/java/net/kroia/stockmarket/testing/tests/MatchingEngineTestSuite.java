@@ -697,13 +697,13 @@ public class MatchingEngineTestSuite extends TestSuite {
         serverMarket.test_setDefaultVolumeProviderFunction(p -> 5f);
         serverMarket.test_setCurrentMarketPrice(havePrice);
         serverMarket.test_resetVirtualOrderBookVolume();
-        serverMarket.setMarketOpen(true);
+        serverMarket.setMaintenance(false);
 
         wantMarket.test_clearOrderbook();
         wantMarket.test_setDefaultVolumeProviderFunction(p -> 5f);
         wantMarket.test_setCurrentMarketPrice(wantPrice);
         wantMarket.test_resetVirtualOrderBookVolume();
-        wantMarket.setMarketOpen(true);
+        wantMarket.setMaintenance(false);
 
         unlockAll(flowAccount.getBank(serverMarket.getItemID()));
         unlockAll(flowAccount.getBank(wantMarket.getItemID()));

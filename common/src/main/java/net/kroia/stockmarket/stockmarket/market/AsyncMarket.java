@@ -75,8 +75,8 @@ public class AsyncMarket implements IAsyncMarket{
         GetRealVolume_2,
         PutOrder_1,
         GetLimitOrders,
-        IsMarketOpen,
-        SetMarketOpen,
+        IsMaintenance,
+        SetMaintenance,
         GetCurrentMarketPriceStruct,
         GetCurrentMarketPriceStructAndReset,
         GetSettings,
@@ -84,6 +84,9 @@ public class AsyncMarket implements IAsyncMarket{
         ResetNetPlayerItemFlow,
         ResetVirtualOrderbook,
         ClearVirtualOrderbook,
+        // Appended at the end: ordinals are part of the wire format.
+        SetTradingHours,
+        SetTradingOverride,
     }
 
 
@@ -108,8 +111,8 @@ public class AsyncMarket implements IAsyncMarket{
         put(FunctionType.GetRealVolume_2,                       codecPacket(ParamGroup_double_double.STREAM_CODEC.cast(), ByteBufCodecs.FLOAT.cast()));
         put(FunctionType.PutOrder_1,                            codecPacket(Order.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
         put(FunctionType.GetLimitOrders,                        codecPacket(null, ExtraCodecUtils.listStreamCodec(Order.STREAM_CODEC)));
-        put(FunctionType.IsMarketOpen,                          codecPacket(null, ByteBufCodecs.BOOL.cast()));
-        put(FunctionType.SetMarketOpen,                         codecPacket(ByteBufCodecs.BOOL.cast(), ByteBufCodecs.BOOL.cast()));
+        put(FunctionType.IsMaintenance,                          codecPacket(null, ByteBufCodecs.BOOL.cast()));
+        put(FunctionType.SetMaintenance,                         codecPacket(ByteBufCodecs.BOOL.cast(), ByteBufCodecs.BOOL.cast()));
         put(FunctionType.GetCurrentMarketPriceStruct,           codecPacket(null, MarketPriceStruct.STREAM_CODEC));
         put(FunctionType.GetCurrentMarketPriceStructAndReset,   codecPacket(null, MarketPriceStruct.STREAM_CODEC));
         put(FunctionType.GetSettings,                           codecPacket(null, MarketSettings.STREAM_CODEC));
@@ -117,6 +120,8 @@ public class AsyncMarket implements IAsyncMarket{
         put(FunctionType.ResetNetPlayerItemFlow,               codecPacket(null, ByteBufCodecs.BOOL.cast()));
         put(FunctionType.ResetVirtualOrderbook,                codecPacket(null, ByteBufCodecs.BOOL.cast()));
         put(FunctionType.ClearVirtualOrderbook,                codecPacket(null, ByteBufCodecs.BOOL.cast()));
+        put(FunctionType.SetTradingHours,                      codecPacket(ParamGroup_long_long.STREAM_CODEC.cast(), ByteBufCodecs.BOOL.cast()));
+        put(FunctionType.SetTradingOverride,                   codecPacket(ByteBufCodecs.BOOL.cast(), ByteBufCodecs.BOOL.cast()));
 
     }};
     /**
@@ -240,15 +245,15 @@ public class AsyncMarket implements IAsyncMarket{
                 }
                 case FunctionType.PutOrder_1 ->                           OutputData.of(input.function, market.putOrder((Order)inputData.extra));
                 case FunctionType.GetLimitOrders ->                       OutputData.of(input.function, market.getLimitOrders());
-                case FunctionType.IsMarketOpen ->                         OutputData.of(input.function, market.isMarketOpen());
-                case FunctionType.SetMarketOpen ->
+                case FunctionType.IsMaintenance ->                         OutputData.of(input.function, market.isUnderMaintenance());
+                case FunctionType.SetMaintenance ->
                 {
                     if(playerSender != null)
                     {
                         if(!isPlayerAdmin(playerSender))
                             yield OutputData.of(input.function, false);
                     }
-                    yield OutputData.of(input.function, market.setMarketOpen((Boolean)inputData.extra));
+                    yield OutputData.of(input.function, market.setMaintenance((Boolean)inputData.extra));
                 }
                 case FunctionType.GetCurrentMarketPriceStruct ->          OutputData.of(input.function, market.getCurrentMarketPriceStruct());
                 case FunctionType.GetCurrentMarketPriceStructAndReset ->  OutputData.of(input.function, market.getCurrentMarketPriceStructAndReset());
@@ -296,6 +301,25 @@ public class AsyncMarket implements IAsyncMarket{
                     market.clearVirtualOrderbook();
                     yield OutputData.of(input.function, true);
                 }
+                case FunctionType.SetTradingHours -> {
+                    if(playerSender != null)
+                    {
+                        if(!isPlayerAdmin(playerSender))
+                            yield OutputData.of(input.function, false);
+                    }
+                    ParamGroup_long_long params = (ParamGroup_long_long)inputData.extra;
+                    yield OutputData.of(input.function, market.setTradingHours((int)params.longValue1, (int)params.longValue2));
+                }
+                case FunctionType.SetTradingOverride -> {
+                    // Not client-callable (see isAllowedToCallByClient); the admin check is a
+                    // second line of defence in case a player UUID is attached anyway.
+                    if(playerSender != null)
+                    {
+                        if(!isPlayerAdmin(playerSender))
+                            yield OutputData.of(input.function, false);
+                    }
+                    yield OutputData.of(input.function, market.setTradingOverride((Boolean)inputData.extra));
+                }
             });
         }
         @Override
@@ -311,15 +335,17 @@ public class AsyncMarket implements IAsyncMarket{
                      FunctionType.GetRealVolume_2,
                      //FunctionType.PutOrder_1,
                      //FunctionType.GetLimitOrders,
-                     FunctionType.IsMarketOpen,
-                     FunctionType.SetMarketOpen,
+                     FunctionType.IsMaintenance,
+                     FunctionType.SetMaintenance,
                      FunctionType.GetCurrentMarketPriceStruct,
                      //FunctionType.GetCurrentMarketPriceStructAndReset,
                      FunctionType.GetSettings,
                      FunctionType.SetSettings,
                      FunctionType.ResetNetPlayerItemFlow,
                      FunctionType.ResetVirtualOrderbook,
-                     FunctionType.ClearVirtualOrderbook
+                     FunctionType.ClearVirtualOrderbook,
+                     FunctionType.SetTradingHours
+                     // SetTradingOverride is server/command-only -> not client-callable
                      -> true;
 
                 default -> false;
@@ -347,10 +373,11 @@ public class AsyncMarket implements IAsyncMarket{
                      FunctionType.GetRawVolume_2,
                      FunctionType.GetRealVolume_1,
                      FunctionType.GetRealVolume_2,
-                     FunctionType.IsMarketOpen,
+                     FunctionType.IsMaintenance,
                      FunctionType.GetCurrentMarketPriceStruct,
                      FunctionType.GetSettings -> true;
-                // SetMarketOpen, SetSettings, ResetNetPlayerItemFlow, PutOrder,
+                // SetMaintenance, SetSettings, ResetNetPlayerItemFlow, PutOrder,
+                // SetTradingHours, SetTradingOverride,
                 // GetCurrentMarketPriceStructAndReset are mutating — refused.
                 default -> false;
             };
@@ -577,22 +604,45 @@ public class AsyncMarket implements IAsyncMarket{
     }
 
     @Override
-    public CompletableFuture<Boolean> isMarketOpenAsync() {
+    public CompletableFuture<Boolean> isUnderMaintenanceAsync() {
+        // Not reachable -> report under maintenance (mirrors the former "closed" fallback).
         if(!MultiServerUtils.canInteractWithStockMarket())
-            return CompletableFuture.completedFuture(false);
+            return CompletableFuture.completedFuture(true);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.IsMarketOpen, itemID);
+        InputData inputData = InputData.of(FunctionType.IsMaintenance, itemID);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;
     }
 
     @Override
-    public CompletableFuture<Boolean> setMarketOpenAsync(boolean marketOpen) {
+    public CompletableFuture<Boolean> setMaintenanceAsync(boolean maintenance) {
         if(!MultiServerUtils.canInteractWithStockMarket())
             return CompletableFuture.completedFuture(false);
         CompletableFuture<Boolean> future = new CompletableFuture<>();
-        InputData inputData = InputData.of(FunctionType.SetMarketOpen, itemID, marketOpen);
+        InputData inputData = InputData.of(FunctionType.SetMaintenance, itemID, maintenance);
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
+    }
+
+    @Override
+    public CompletableFuture<Boolean> setTradingHoursAsync(int openMinute, int closeMinute) {
+        if(!MultiServerUtils.canInteractWithStockMarket())
+            return CompletableFuture.completedFuture(false);
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.SetTradingHours, itemID, new ParamGroup_long_long(openMinute, closeMinute));
+        CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
+        outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
+        return future;
+    }
+
+    @Override
+    public CompletableFuture<Boolean> setTradingOverrideAsync(boolean open) {
+        if(!MultiServerUtils.canInteractWithStockMarket())
+            return CompletableFuture.completedFuture(false);
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        InputData inputData = InputData.of(FunctionType.SetTradingOverride, itemID, open);
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;

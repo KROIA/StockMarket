@@ -19,6 +19,7 @@ import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.resources.language.I18n;
+import net.minecraft.locale.Language;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.StreamCodec;
@@ -235,7 +236,7 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
          */
         public static Component phase(String phaseName) {
             String key = PREFIX + "phase." + phaseName.toLowerCase(Locale.ROOT);
-            return I18n.exists(key) ? Component.translatable(key) : Component.literal(phaseName);
+            return Language.getInstance().has(key) ? Component.translatable(key) : Component.literal(phaseName);
         }
 
         /**
@@ -518,7 +519,7 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
         sensitivityTextBox = new TextBox();
         // Negative sensitivity is allowed (inverts impacts, like a negative weightFactor)
         sensitivityTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, true, 10, 6));
-        sensitivityTextBox.setText(NewsPlugin.DEFAULT_SENSITIVITY);
+        sensitivityTextBox.setText(NewsPlugin.DEFAULT_SENSITIVITY, 6);
         setupRightAnchoredTooltip(sensitivityTextBox, Texts.SENSITIVITY_TOOLTIP);
 
         applyButton = new Button(Texts.APPLY.getString(), this::onApplySettings);
@@ -736,7 +737,7 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
             settings = NewsPlugin.Settings.createDefault();
         }
         newsEnabledCheckBox.setChecked(settings.newsEnabled());
-        sensitivityTextBox.setText(settings.sensitivity());
+        sensitivityTextBox.setText(settings.sensitivity(), 6);
     }
 
     /**
@@ -826,7 +827,7 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
         Component title = unmet.isEmpty()
                 ? Texts.CONFIRM_TRIGGER_TITLE : Texts.CONFIRM_TRIGGER_REQUIREMENTS_TITLE;
         String eventId = fresh.id();
-        Screen current = Minecraft.getInstance().screen;
+        Screen current = net.kroia.modutilities.gui.client.ClientCompat.screen();
         GuiScreen.setScreen(NewsDialogScreen.confirmDialog(current, title, lines,
                 Texts.CONFIRM_TRIGGER_YES, () -> sendTrigger(eventId)));
     }
@@ -906,7 +907,7 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
      */
     private void sendAdminRequest(NewsAdminRequest.InputData input, boolean printLinesToChat,
                                   boolean userInitiated) {
-        final Screen screenAtSend = Minecraft.getInstance().screen;
+        final Screen screenAtSend = net.kroia.modutilities.gui.client.ClientCompat.screen();
         BACKEND_INSTANCES.NETWORKING.NEWS_ADMIN_REQUEST.sendRequestToServer(input)
                 .thenAccept(response -> {
                     if (response == null) {
@@ -919,9 +920,13 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
                     boolean truncated = showStatus(response.message(), response.success());
                     if (printLinesToChat) {
                         Minecraft mc = Minecraft.getInstance();
-                        mc.gui.getChat().addMessage(Component.literal(response.message()));
+                        mc.gui.getChat().addMessage(Component.literal(response.message())); // mc<=1.21.11
+                        //mc.gui.getChat().addClientSystemMessage(Component.literal(response.message())); // mc>=26.1 mc<=26.1
+                        //mc.gui.hud.getChat().addClientSystemMessage(Component.literal(response.message())); // mc>=26.2
                         for (String line : response.lines()) {
-                            mc.gui.getChat().addMessage(Component.literal(line));
+                            mc.gui.getChat().addMessage(Component.literal(line)); // mc<=1.21.11
+                            //mc.gui.getChat().addClientSystemMessage(Component.literal(line)); // mc>=26.1 mc<=26.1
+                            //mc.gui.hud.getChat().addClientSystemMessage(Component.literal(line)); // mc>=26.2
                         }
                     }
                     // Every successful response carries the structured details
@@ -956,7 +961,7 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
                                 || input.op() == NewsAdminRequest.Op.SKIP_PHASE);
                     if (userInitiated && (truncated || multiLineStop)
                             && !silentPerEventOnSuccess
-                            && Minecraft.getInstance().screen == screenAtSend
+                            && net.kroia.modutilities.gui.client.ClientCompat.screen() == screenAtSend
                             && screenAtSend != null) {
                         List<String> dialogLines = new ArrayList<>();
                         dialogLines.add(response.message());
@@ -1006,7 +1011,7 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
             cooldownEndByEventId.put(d.id(), now + d.cooldownRemainingMs());
         }
         allEventsTab.rebuildRows();
-        if (Minecraft.getInstance().screen instanceof NewsEventDetailsScreen detailsScreen) {
+        if (net.kroia.modutilities.gui.client.ClientCompat.screen() instanceof NewsEventDetailsScreen detailsScreen) {
             detailsScreen.onSnapshotRefreshed();
         }
     }
@@ -1118,7 +1123,7 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
      * @param details the server-confirmed definition snapshot to show
      */
     private void openEventDetailsScreen(NewsAdminRequest.EventDetails details) {
-        Screen current = Minecraft.getInstance().screen;
+        Screen current = net.kroia.modutilities.gui.client.ClientCompat.screen();
         GuiScreen.setScreen(new NewsEventDetailsScreen(current, this, details));
     }
 
@@ -1393,7 +1398,7 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
         protected boolean mouseClickedOverElement(int button) {
             // The checkbox and the buttons consume their own clicks first (child
             // dispatch); everything else on the row opens the details screen.
-            if (button == 0) {
+            if (button == net.kroia.modutilities.gui.InputConstants.MOUSE_BUTTON_LEFT) {
                 openEventDetailsScreen(details);
                 return true;
             }
@@ -1697,7 +1702,7 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
 
         @Override
         protected boolean mouseClickedOverElement(int button) {
-            if (button != 0) return false;
+            if (button != net.kroia.modutilities.gui.InputConstants.MOUSE_BUTTON_LEFT) return false;
             int index = slotIndexAt(getMouseY());
             if (index < 0) return false;
             String eventId = lastRuntimeData.upcoming().get(index).eventId();
@@ -1788,7 +1793,7 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
 
         @Override
         protected boolean mouseClickedOverElement(int button) {
-            if (button == 0 && marketID != null) {
+            if (button == net.kroia.modutilities.gui.InputConstants.MOUSE_BUTTON_LEFT && marketID != null) {
                 bindSelectedMarket(marketID);
                 return true; // consumed — the row click (details screen) must not fire
             }
@@ -2047,7 +2052,7 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
          */
         @Override
         protected boolean mouseClickedOverElement(int button) {
-            if (button == 0) {
+            if (button == net.kroia.modutilities.gui.InputConstants.MOUSE_BUTTON_LEFT) {
                 NewsAdminRequest.EventDetails details = detailsFor(eventId);
                 if (details != null) {
                     openEventDetailsScreen(details);

@@ -245,7 +245,7 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
 
         if (lineY >= canvasBounds.y && lineY <= canvasBounds.y + canvasBounds.height) {
             chart.drawRect(canvasBounds.x, lineY - 1, canvasBounds.width, 2, 0xFFFF6600);
-            chart.drawText("Target", canvasBounds.x + 4, lineY - chart.getTextHeight() - 2);
+            chart.drawText(Component.translatable("gui.stockmarket.news_plugin.details_table_target").getString(), canvasBounds.x + 4, lineY - chart.getTextHeight() - 2);
         }
     }
 
@@ -257,10 +257,10 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
     private void populateSettingsFromMarket(ItemID marketID) {
         TargetPriceBot.Settings s = allSettings.get(marketID);
         if (s != null) {
-            pGainTextBox.setText(s.pidP());
-            iGainTextBox.setText(s.pidI());
-            dGainTextBox.setText(s.pidD());
-            rateTextBox.setText(s.pidRate());
+            pGainTextBox.setText(s.pidP(), 6);
+            iGainTextBox.setText(s.pidI(), 6);
+            dGainTextBox.setText(s.pidD(), 6);
+            rateTextBox.setText(s.pidRate(), 6);
         }
     }
 

@@ -10,6 +10,7 @@ import net.kroia.stockmarket.screen.UI_Colors;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.minecraft.network.chat.Component;
 
+import java.util.Locale;
 import java.util.function.Consumer;
 
 class MarketOrderPanel extends StockMarketGuiElement
@@ -19,6 +20,8 @@ class MarketOrderPanel extends StockMarketGuiElement
         private static final Component QUANTITY = Component.translatable(PREFIX +"quantity");
         private static final Component BUY = Component.translatable(PREFIX +"buy");
         private static final Component SELL = Component.translatable(PREFIX +"sell");
+        // T-159: "Est: <cost> <currency>" — shared with LimitOrderPanel
+        private static final String ESTIMATED_COST = "gui."+ StockMarketMod.MOD_ID + ".trade_panel.estimated_cost";
     }
 
     private final TextBox quantityTextBox;
@@ -281,7 +284,7 @@ class MarketOrderPanel extends StockMarketGuiElement
     private void updateEstimatedCost()
     {
         double cost = quantity * currentMarketPrice;
-        String costText = String.format("Est: %.2f %s", cost, currencyName);
+        String costText = Component.translatable(Texts.ESTIMATED_COST, String.format(Locale.ROOT, "%.2f", cost), currencyName).getString();
         estimatedCostLabel.setText(costText);
 
         // Color red only when the displayed money cost exceeds the player's balance

@@ -1,12 +1,16 @@
 package net.kroia.stockmarket.screen.widgets;
 
 import net.kroia.banksystem.util.ItemID;
+import net.kroia.modutilities.NbtCompat;
+import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.stockmarket.api.market.IPriceDataProvider;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.util.PriceHistoryData;
 import net.minecraft.nbt.CompoundTag;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+
+import java.util.List;
 
 /**
  * CandlestickChart variant for the display block system.
@@ -19,9 +23,12 @@ import org.jetbrains.annotations.Nullable;
  * - Item/Item (cross-rate): both targetMarketID and secondMarketID are set
  */
 public class DisplayCandlestickChart extends CandlestickChart {
-    private final ItemID targetMarketID;
-    private final @Nullable ItemID secondMarketID;
-    private final String displayViewportKey;
+    // Not final: deserializeState() fills these in when the chart is rebuilt from a
+    // guiTree shipment through GuiElementRegistry (see the no-arg constructor).
+    private ItemID targetMarketID;
+    private @Nullable ItemID secondMarketID;
+    private long blockKey;
+    private String displayViewportKey;
     private boolean connected = false;
     private @Nullable CompoundTag initialViewport = null;
 
@@ -32,13 +39,68 @@ public class DisplayCandlestickChart extends CandlestickChart {
      */
     public DisplayCandlestickChart(ItemID itemID, @Nullable ItemID secondItemID, long blockKey) {
         super();
+        setTarget(itemID, secondItemID, blockKey);
+    }
+
+    /**
+     * Factory constructor for {@link net.kroia.modutilities.gui.GuiElementRegistry}.
+     * Creates an unbound chart; {@link #deserializeState(CompoundTag)} restores the
+     * market IDs and block key, after which the chart lazily connects on first render.
+     */
+    public DisplayCandlestickChart() {
+        this(null, null, 0L);
+    }
+
+    /**
+     * Binds the chart to its market(s) and derives the display-specific viewport key.
+     *
+     * @param itemID       the primary market, or null if unbound
+     * @param secondItemID optional second market for cross-rate display
+     * @param blockKey     unique identifier for the owning display
+     */
+    private void setTarget(@Nullable ItemID itemID, @Nullable ItemID secondItemID, long blockKey) {
         this.targetMarketID = itemID;
         this.secondMarketID = secondItemID;
+        this.blockKey = blockKey;
         if (secondItemID != null) {
             this.displayViewportKey = "display_" + blockKey + "_pair_" + (itemID != null ? itemID.getShort() : "none") + "_" + secondItemID.getShort();
         } else {
             this.displayViewportKey = "display_" + blockKey + "_" + (itemID != null ? itemID.getShort() : "none");
         }
+    }
+
+    // ── guiTree serialization (GuiElementRegistry) ──
+    // Only the market binding is shipped. Candle data comes from the client market stream
+    // once connected, and the viewport is restored by StockMarketDisplayBlockEntity from its
+    // own custom NBT (the server-side chart never connects, so its viewport is meaningless).
+
+    @Override
+    public CompoundTag serializeState() {
+        CompoundTag tag = super.serializeState();
+        if (targetMarketID != null) tag.putShort("targetMarketID", targetMarketID.getShort());
+        if (secondMarketID != null) tag.putShort("secondMarketID", secondMarketID.getShort());
+        tag.putLong("blockKey", blockKey);
+        return tag;
+    }
+
+    @Override
+    public void deserializeState(CompoundTag tag) {
+        super.deserializeState(tag);
+        if (!tag.contains("blockKey")) return;
+        disconnect();
+        setTarget(
+                tag.contains("targetMarketID") ? new ItemID(NbtCompat.getShort(tag, "targetMarketID")) : null,
+                tag.contains("secondMarketID") ? new ItemID(NbtCompat.getShort(tag, "secondMarketID")) : null,
+                NbtCompat.getLong(tag, "blockKey"));
+    }
+
+    /**
+     * The timescale buttons are created by the {@link CandlestickChart} constructor, so
+     * they must not be serialized as children (a rebuild would duplicate them).
+     */
+    @Override
+    public List<GuiElement> getSerializableChildren() {
+        return List.of();
     }
 
     public ItemID getTargetMarketID() {
@@ -113,11 +175,16 @@ public class DisplayCandlestickChart extends CandlestickChart {
             ClientMarket haveMarket = BACKEND_INSTANCES.MARKET_MANAGER.getMarket(secondMarketID);
             if (haveMarket == null || wantMarket == null) return false;
 
-            haveMarket.subscribeToMarketPriceUpdate();
-            wantMarket.subscribeToMarketPriceUpdate();
-
+            // Resolve the provider BEFORE subscribing: a failed attempt leaves connected == false,
+            // so disconnect() would never release subscriptions taken here and every retry
+            // (once per frame) would leak two ref-counted price streams.
             IPriceDataProvider provider = BACKEND_INSTANCES.MARKET_MANAGER.getCrossRateMarket(secondMarketID, targetMarketID);
             if (provider == null) return false;
+
+            // Subscribe only on the success path (returns true -> connected) so each
+            // subscribe is paired with exactly one unsubscribe in disconnect().
+            haveMarket.subscribeToMarketPriceUpdate();
+            wantMarket.subscribeToMarketPriceUpdate();
 
             setPriceDataProvider(new DisplayProviderWrapper(provider, displayViewportKey));
             if (initialViewport != null) {

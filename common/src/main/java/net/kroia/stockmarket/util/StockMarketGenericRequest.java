@@ -1,5 +1,6 @@
 package net.kroia.stockmarket.util;
 
+import net.kroia.modutilities.PermissionCompat;
 
 import net.kroia.banksystem.BankSystemModSettings;
 import net.kroia.banksystem.api.bankmanager.IBankManager;
@@ -105,14 +106,30 @@ public abstract class StockMarketGenericRequest<IN, OUT> extends GenericRequest<
      * except the player who triggered the action. Used to notify other admins when
      * plugin settings are changed.
      *
+     * T-159: prefer the {@link Component} overload with a {@code Component.translatable(key, args)}
+     * so the text is resolved on each admin's client in their own language.
+     *
      * @param excludePlayer UUID of the player to exclude from the broadcast (the one who made the change), or null to send to all admins
      * @param message       the message text (will be prefixed with [StockMarket] and colored gold)
      */
     protected void broadcastToAdmins(@Nullable UUID excludePlayer, String message) {
+        broadcastToAdmins(excludePlayer, Component.literal(message));
+    }
+
+    /**
+     * Broadcasts a gold-colored system message to all online op-level-2 players except
+     * {@code excludePlayer}. The message is sent as a component, so translatable texts
+     * are resolved client-side (never on the server).
+     *
+     * @param excludePlayer UUID of the player to exclude (the one who made the change), or null to send to all admins
+     * @param message       message body, usually {@code Component.translatable(key, args)};
+     *                      prefixed with a literal "[StockMarket] " and colored gold
+     */
+    protected void broadcastToAdmins(@Nullable UUID excludePlayer, Component message) {
         MinecraftServer server = UtilitiesPlatform.getServer();
         if (server == null) return;
 
-        Component chatMessage = Component.literal("[StockMarket] " + message)
+        Component chatMessage = Component.literal("[StockMarket] ").append(message)
                 .withStyle(ChatFormatting.GOLD);
 
         List<ServerPlayer> players = server.getPlayerList().getPlayers();
@@ -122,7 +139,7 @@ public abstract class StockMarketGenericRequest<IN, OUT> extends GenericRequest<
                 continue;
             }
             // Only send to players with op level 2 (stockmarket admin permission)
-            if (player.hasPermissions(2)) {
+            if (PermissionCompat.hasPermission(player, 2)) {
                 player.sendSystemMessage(chatMessage);
             }
         }

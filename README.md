@@ -29,6 +29,9 @@ You want to support me?<br>
 * [Access Control & Trust Model](#access-control--trust-model)
 * [Plugins](#plugins)
 * [Villager Trading](#villager-trading)
+* [JEI Integration](#jei-integration)
+* [Development](#development)
+* [Documentation index](documentation/README.md)
 * [Changelog](#changelog)
 * [Discord to help me improve the mod](https://discord.gg/qHNVaDGAyB)
 
@@ -39,12 +42,16 @@ You want to support me?<br>
 - Configurable [plugins](#plugins) that provide the market with liquidity, volatility and price movements.
 - A JSON-configurable [news event system](documentation/user-guide/news-system/overview.md) that publishes headlines with [pictures](documentation/user-guide/news-system/pictures.md) and moves market prices — players follow the market through a craftable newspaper item. Server admins and content creators can [author their own events](documentation/user-guide/news-system/authoring-tutorial.md) without touching code.
 
+All guides (admin setup, news system, plugins, placeholders, plugin developer guide, market-creation API) are listed in the [documentation index](documentation/README.md).
+
 ## Dependencies
-- [Bank System Mod](https://github.com/KROIA/BankSystem)
+StockMarket 2.2.0 is built for **Fabric** and **NeoForge**. Required:
+- [Bank System Mod](https://github.com/KROIA/BankSystem) — same version line as StockMarket (`<mc_version>-2.2.0`, e.g. `1.21.1-2.2.0`)
+- [Mod Utilities](https://www.curseforge.com/minecraft/mc-mods/modutilities) — `<mc_version>-2.2.0`, e.g. `1.21.1-2.2.0` (also required by Bank System)
 - [Architectury](https://www.curseforge.com/minecraft/mc-mods/architectury-api)
-- [Quilted Fabric API](https://www.curseforge.com/minecraft/mc-mods/qsl) (Only needed for Quilt)
-- [Mod Utilities](https://www.curseforge.com/minecraft/mc-mods/modutilities) (Only needed for Quilt)
-- [Fabric API](https://www.curseforge.com/minecraft/mc-mods/fabric-api) (Only needed for Fabric)
+- [Fabric API](https://www.curseforge.com/minecraft/mc-mods/fabric-api) (Fabric only)
+
+Optional: [JEI](https://www.curseforge.com/minecraft/mc-mods/jei) — see [JEI Integration](#jei-integration).
 
 ---
 ## Downloads
@@ -57,6 +64,8 @@ You want to support me?<br>
 |1.3.0    | [![Minecraft Version](https://img.shields.io/badge/Minecraft-1.21.1-green)](https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6002691)<br>[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.6-blue)](https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6002684)<br>[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.4-blue)](https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6002682)<br>[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.3-blue)](https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6002681)<br>[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.2-blue)](https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6002679)<br>[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.1-blue)](https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6002676)<br>[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.4-blue)](https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6004639)<br>[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.3-blue)](https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6004641)<br>[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.19.2-blue)](https://www.curseforge.com/minecraft/mc-mods/stockmarket/download/6004643) |
 
 -->
+Supported MC versions (in development): 1.21.1 – 1.21.11, 26.1 (26.1.2), 26.2, 26.3 — Fabric and NeoForge only. The Forge and Quilt columns below refer to legacy 1.3.1 releases; there are no Forge or Quilt builds of 2.x.
+
 [CurseForge](https://www.curseforge.com/minecraft/mc-mods/stockmarket)
 | Minecraft | Fabric | Forge | Quilt | Neoforge |
 |-----------|--------|-------|-------|----------|
@@ -246,6 +255,8 @@ All market management in v2.0 is done through graphical interfaces. The old comm
 
 For a walkthrough of common server setups — the default bot-driven market vs. a fully player-driven market — see the [Admin Setup Use Cases](documentation/user-guide/admin-setup.md) guide.
 
+For scoreboard / tab-list placeholders (requires TAB or Placeholder API) see the [Placeholders](documentation/user-guide/placeholders.md) guide.
+
 #### Getting Admin Access
 A server operator needs to grant StockMarket admin privileges:<br>
 <code>/stockmarket op</code> — Grant admin to yourself<br>
@@ -407,7 +418,7 @@ The random walk is anchored on a flow-driven [price equilibrium](#price-equilibr
 | Max Price Multiplier | Upper clamp for the equilibrium as a multiple of the default price. Default: 20 (never above 20x the default price). |
 
 ### TargetPriceBot
-The market-making bot that drives prices toward a target value. It places [market orders](#market-order) to push the price in the desired direction. A [PID controller](#pid-controller) determines the size and direction of each order to smoothly converge on the target price without overshooting.
+The market-making bot that drives prices toward a target value. It places [market orders](#market-order) to push the price in the desired direction. A [PID controller](https://en.wikipedia.org/wiki/Proportional%E2%80%93integral%E2%80%93derivative_controller) determines the size and direction of each order to smoothly converge on the target price without overshooting.
 
 The target price is influenced by the **VolatilityPlugin** (random walk noise) and by player trading activity (supply and demand).
 
@@ -455,6 +466,11 @@ Villager (and wandering trader) trade offers for **market-listed items** no long
 * Prices refresh automatically on the configured interval (default 20 real minutes ≈ one Minecraft day).
 * Original emerald offers are stored in world data; disabling the feature restores every villager's original offers the next time it is interacted with. Partially used offers stay partially used.
 
+### Trade data file
+* The original offers live in `world/data/StockMarket/villager_trades.nbt` (compressed NBT, one file for all dimensions, villagers keyed by UUID). Every server keeps its own file — master **and** slave servers.
+* **Automatic migration:** releases up to 2.1.x stored this data in `world/data/stockmarket_villager_trades.dat` (on MC 26.1+: `world/data/minecraft/stockmarket_villager_trades.dat`). On the first start with 2.2.0 the old file is moved to the new location and deleted. If the migration fails, the old file is kept and an error is logged.
+* The file is written atomically and only when it changed, every `SAVE_INTERVAL_MINUTES` (Utilities group, default 5) — on slave servers too — so a crash loses at most one interval of villager trades.
+
 ### Settings (`VillagerTrading` group in `settings.json`)
 Edit these in-game via `/stockmarket manage` → **Mod Settings** → **VillagerTrading** group (requires op level 2 and the StockMarket-admin flag; the button only appears when connected to the master server). You can also edit the JSON directly at `world/data/StockMarket/settings.json` if the server isn't running.
 
@@ -478,6 +494,13 @@ When an offer's price is BankSystem money, the trade accepts **any combination o
 * **Reputation & demand:** offers where the player pays currency ignore demand scaling and gossip/Hero-of-the-Village discounts (the price stays at the configured margin). Offers where the player hands over items keep vanilla discount behavior on the item amount.
 * **Item cost slots are preserved:** trades like enchanted books (book + emeralds) or treasure maps (compass + emeralds) keep their item ingredient; only the emerald part becomes currency.
 * Known limitation: rewritten offers always grant trade XP (all vanilla offers do anyway).
+
+---
+## JEI Integration
+[JEI](https://www.curseforge.com/minecraft/mc-mods/jei) is optional — StockMarket runs with or without it.
+* StockMarket ships a JEI plugin (`stockmarket:jei_plugin`) that JEI loads on both NeoForge and Fabric (on Fabric it is registered through the `jei_mod_plugin` entrypoint; before 2.2.0 it was never loaded there).
+* The plugin currently registers nothing: there are no GUI handlers or exclusion areas yet, so JEI's item list may overlap StockMarket screens on narrow windows.
+* JEI has no release for MC 1.21.2, 1.21.3 and 1.21.6, and none for Fabric on 1.21.4 — on those versions there is no JEI integration.
 
 ---
 
@@ -566,11 +589,38 @@ With player flow influence enabled, it shifts permanently with the cumulative ne
 
 ---
 
+## Development
+Dev-only code (in-game unit tests, the `devTestScreen`, `exportrecipes` and `starterkit` commands, debug performance logging) is compiled only when the Gradle property `enable_dev_features` is `true`. It defaults to `false` in `gradle.properties` (keep it that way in commits); enable it for a local build with:
+
+```
+./gradlew build -Penable_dev_features=true
+```
+
+A dev build of StockMarket needs ModUtilities and BankSystem jars that were also built with `-Penable_dev_features=true`. Release builds do not contain any test code.
+
+**In-game tests** (dev builds only, op level 2):
+
+| Command | Description |
+|---------|-------------|
+| /stockmarket test | Run all StockMarket test suites that can run on this server type |
+| /stockmarket test list | List the test categories |
+| /stockmarket test \<category\> | Run one category |
+
+`/stockmarket test` runs the StockMarket suites only; BankSystem and ModUtilities have their own `/banksystem test` and `/modutilities test`. An automated test run of StockMarket (see below) covers all three: every StockMarket run also executes the BankSystem and ModUtilities suites.
+
+**Automated test matrix:** the ModUtilities repository contains an autotest harness (`tools/autotest`). It builds the mod (and its ModUtilities/BankSystem dependencies) with dev features enabled, starts the real game on Fabric and NeoForge in several server setups (singleplayer, client on a master server, master + slave, singleplayer world as slave of a master), runs every registered in-game test and reports a pass/fail table (command line or GUI). See its README in the ModUtilities repository for usage.
+
+<div style="border-left: 7px solid #f39c12; background-color: #fcf8e3; padding: 20px; margin: 10px 0;">
+    <p><strong>Warning:</strong> the in-game tests run against the live world: they create scratch markets, bank accounts and users and touch real mod data. The test fixture cleans up after itself, but a failing or aborted test can leave data behind. Never run them on a real world or a production server — use a throwaway test world.</p>
+</div>
+
+---
+
 ## Changelog
 
 | Version | Status | Highlights |
 |---|---|---|
-| [v2.1.3](changelog/v2.1.3.md) | In Development | Bugfixes |
+| [v2.2.0](changelog/v2.2.0.md) | In Development | Per-market trading hours, maintenance mode, TAB/PlaceholderAPI placeholders, translation pass, bugfixes |
 | [v2.1.2](changelog/v2.1.2.md) | Released | Money-duplication exploit fix, per-fill net flow accounting, best-price matching, world-safe test fixture |
 | [v2.1.1](changelog/v2.1.1.md) | Released | Dependency version alignment — ModUtilities ListView performance improvement |
 | [v2.1.0](changelog/v2.1.0.md) | Released | Company share support, public market-creation/pause API, virtual orderbook toggle, preset inventory picker |

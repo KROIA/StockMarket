@@ -1,9 +1,14 @@
 package net.kroia.stockmarket.minecraft.item.custom;
 
+import net.kroia.modutilities.RegistryCompat;
+import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.minecraft.item.StockMarketCreativeModeTab;
 import net.kroia.stockmarket.util.StockMarketClientHooks;
+import net.minecraft.resources.ResourceLocation; // mc<=1.21.10
+//import net.minecraft.resources.Identifier; // mc>=1.21.11
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.InteractionResultHolder;
+import net.minecraft.world.InteractionResultHolder; // mc<=1.21.1
+//import net.minecraft.world.InteractionResult; // mc>=1.21.2
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -29,7 +34,10 @@ public class NewspaperItem extends Item {
     public static final String NAME = "newspaper";
 
     public NewspaperItem() {
-        super(new Properties().arch$tab(StockMarketCreativeModeTab.STOCK_MARKET_TAB));
+        // RegistryCompat: no-op on 1.21.1, applies setId on 1.21.2+ (id must match the registration name)
+        super(RegistryCompat.itemProperties(new Properties().arch$tab(StockMarketCreativeModeTab.STOCK_MARKET_TAB),
+                ResourceLocation.fromNamespaceAndPath(StockMarketMod.MOD_ID, NAME))); // mc<=1.21.10
+                //Identifier.fromNamespaceAndPath(StockMarketMod.MOD_ID, NAME))); // mc>=1.21.11
     }
 
     /**
@@ -38,10 +46,12 @@ public class NewspaperItem extends Item {
      * consistently on both sides.
      */
     @Override
-    public @NotNull InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
-        if (level.isClientSide) {
+    public @NotNull InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) { // mc<=1.21.1
+    //public @NotNull InteractionResult use(Level level, Player player, InteractionHand hand) { // mc>=1.21.2
+        if (level.isClientSide()) {
             StockMarketClientHooks.openNewsScreen();
         }
-        return InteractionResultHolder.sidedSuccess(player.getItemInHand(hand), level.isClientSide);
+        return InteractionResultHolder.sidedSuccess(player.getItemInHand(hand), level.isClientSide()); // mc<=1.21.1
+        //return InteractionResult.SUCCESS; // mc>=1.21.2 (swings on client, same as sidedSuccess)
     }
 }

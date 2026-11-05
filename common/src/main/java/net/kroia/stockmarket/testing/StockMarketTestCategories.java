@@ -59,6 +59,9 @@ public class StockMarketTestCategories {
     public static final TestCategory CLIENT_MARKET = new TestCategory(
             "stockmarket", "sm_client_market", "ClientMarket tests", BOTH, false);
 
+    public static final TestCategory PLACEHOLDERS = new TestCategory(
+            "stockmarket", "sm_placeholders", "Placeholder pair naming tests", BOTH, false);
+
     public static final TestCategory MARKET_PRESET = new TestCategory(
             "stockmarket", "sm_market_preset", "Market preset system tests", BOTH, false);
 

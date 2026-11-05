@@ -1,7 +1,8 @@
 import com.github.jengelman.gradle.plugins.shadow.transformers.AppendingTransformer
 
 plugins {
-    id 'com.github.johnrengelman.shadow'
+    id 'com.github.johnrengelman.shadow' // mc<=1.21.11
+    //id 'com.gradleup.shadow' // mc>=26.1
 }
 repositories {
     maven { url 'https://maven.quiltmc.org/repository/release/' }
@@ -52,14 +53,31 @@ dependencies {
     neoForge "net.neoforged:neoforge:$rootProject.neoforge_version"
 
     // Architectury API. This is optional, and you can comment it out if you don't need it.
-    modImplementation "dev.architectury:architectury-neoforge:$rootProject.architectury_api_version"
+    modImplementation "dev.architectury:architectury-neoforge:$rootProject.architectury_api_version" // mc<=1.21.11
+    //implementation "dev.architectury:architectury-neoforge:$rootProject.architectury_api_version" // mc>=26.1
 
-    common(project(path: ':common', configuration: 'namedElements')) { transitive false }
+    common(project(path: ':common', configuration: 'namedElements')) { transitive false } // mc<=1.21.11
+    //common(project(path: ':common')) { transitive false } // mc>=26.1
 
-    modImplementation("com.github.KROIA.MC_ModUtilities:modutilities-neoforge:$rootProject.modutilities_version")
+    modImplementation("com.github.KROIA.MC_ModUtilities:modutilities-neoforge:$rootProject.modutilities_version") // mc<=1.21.11
+    //implementation("com.github.KROIA.MC_ModUtilities:modutilities-neoforge:$rootProject.modutilities_version") // mc>=26.1
     include("com.github.KROIA.MC_ModUtilities:modutilities-neoforge:$rootProject.modutilities_version")
 
-    modImplementation("com.github.KROIA.BankSystem:banksystem-neoforge:$rootProject.banksystem_version")
+    modImplementation("com.github.KROIA.BankSystem:banksystem-neoforge:$rootProject.banksystem_version") // mc<=1.21.11
+    //implementation("com.github.KROIA.BankSystem:banksystem-neoforge:$rootProject.banksystem_version") // mc>=26.1
+
+    // Dev-runtime-only JEI (matches fabric/build.gradle rationale): the
+    // Architectury platform transformer needs to resolve JEI types referenced
+    // by the JEI plugins during frame merging, or runClient can crash with
+    // "TypeNotPresentException: Type mezz/jei/... not present". JEI is still
+    // a soft dependency of the shipped mod - this line only affects dev.
+    modRuntimeOnly("mezz.jei:jei-${rootProject.jei_minecraft_version}-neoforge:${rootProject.jei_version}") // mc<=1.21.1
+    // No JEI build exists for 1.21.2/1.21.3: only the 1.21.1 API jar at dev runtime.
+    //modRuntimeOnly("mezz.jei:jei-${rootProject.jei_minecraft_version}-neoforge-api:${rootProject.jei_version}") // mc>=1.21.2 mc<=1.21.3
+    //modRuntimeOnly("mezz.jei:jei-${rootProject.jei_minecraft_version}-neoforge:${rootProject.jei_version}") // mc>=1.21.4 mc<=1.21.5
+    //modRuntimeOnly("mezz.jei:jei-${rootProject.jei_minecraft_version}-neoforge-api:${rootProject.jei_version}") // mc>=1.21.6 mc<=1.21.6 (no JEI build for 1.21.6; API jar only at dev runtime)
+    //modRuntimeOnly("mezz.jei:jei-${rootProject.jei_minecraft_version}-neoforge:${rootProject.jei_version}") // mc>=1.21.7 mc<=1.21.11
+    //runtimeOnly("mezz.jei:jei-${rootProject.jei_minecraft_version}-neoforge:${rootProject.jei_version}") // mc>=26.1
 
 
 
@@ -71,21 +89,26 @@ dependencies {
 
 processResources {
     inputs.property 'version', project.version
+    inputs.property 'minecraft_version', rootProject.minecraft_version
 
     filesMatching('META-INF/neoforge.mods.toml') {
-        expand version: project.version
+        expand version: project.version, minecraft_version: rootProject.minecraft_version
     }
 }
 
 shadowJar {
     configurations = [project.configurations.shadowBundle]
-    archiveClassifier = 'dev-shadow'
+    archiveClassifier = 'dev-shadow' // mc<=1.21.11
+    //archiveClassifier = null // mc>=26.1
     mergeServiceFiles()
     exclude 'META-INF/jars/**'
     exclude 'META-INF/maven/org.xerial/**'
 }
 
-remapJar {
-    inputFile.set shadowJar.archiveFile
-    dependsOn shadowJar
-}
+remapJar { // mc<=1.21.11
+    inputFile.set shadowJar.archiveFile // mc<=1.21.11
+    dependsOn shadowJar // mc<=1.21.11
+} // mc<=1.21.11
+//jar { // mc>=26.1
+    //archiveClassifier = 'raw' // mc>=26.1
+//} // mc>=26.1

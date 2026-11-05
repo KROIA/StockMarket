@@ -8,7 +8,6 @@ import net.kroia.stockmarket.networking.packet.OpenUIPacket;
 import net.kroia.stockmarket.networking.request.NewsHistoryRequest;
 import net.kroia.stockmarket.news.NewsRecord;
 import net.kroia.stockmarket.news.NewsToastCatchUp;
-import net.kroia.stockmarket.screen.DevTestScreen;
 import net.kroia.stockmarket.screen.ManagementScreen;
 import net.kroia.stockmarket.screen.NewsScreen;
 import net.kroia.stockmarket.screen.TradeScreen;
@@ -43,7 +42,7 @@ public class StockMarketClientHooks {
      */
     public static void notifyScreenMarketRemoved(ItemID marketID)
     {
-        if (Minecraft.getInstance().screen instanceof StockMarketGuiScreen guiScreen) {
+        if (net.kroia.modutilities.gui.client.ClientCompat.screen() instanceof StockMarketGuiScreen guiScreen) {
             guiScreen.onMarketRemoved(marketID);
         }
     }
@@ -79,7 +78,9 @@ public class StockMarketClientHooks {
         // defaults (toast flag off), so nothing is ever shown by accident.
         if (!StockMarketGuiElement.getPlayerPreferences().isNewsToastEnabled())
             return;
-        Minecraft.getInstance().getToasts().addToast(new NewsToast(record));
+        Minecraft.getInstance().getToasts().addToast(new NewsToast(record)); // mc<=1.21.1
+        //Minecraft.getInstance().getToastManager().addToast(new NewsToast(record)); // mc>=1.21.2 mc<=26.1
+        //Minecraft.getInstance().gui.toastManager().addToast(new NewsToast(record)); // mc>=26.2
     }
 
     /**
@@ -149,8 +150,12 @@ public class StockMarketClientHooks {
             case DEVELOPMENT:
             {
                 if(StockMarketMod.ENABLE_DEV_FEATURES) {
-                    DevTestScreen screen = new DevTestScreen();
-                    mc.setScreen(screen);
+                    // DevTestScreen lives in the dev-only testing package, so it is opened reflectively.
+                    try {
+                        Class.forName("net.kroia.stockmarket.testing.DevTestScreen").getMethod("open").invoke(null);
+                    } catch (ReflectiveOperationException e) {
+                        StockMarketMod.LOGGER.error("Could not open the dev test screen", e);
+                    }
                 }
                 break;
             }
@@ -230,7 +235,9 @@ public class StockMarketClientHooks {
 
             // Notify the player in chat
             String message = "StockMarket: Exported " + successCount + "/2 recipe images to " + exportDir;
-            mc.gui.getChat().addMessage(Component.literal(message));
+            mc.gui.getChat().addMessage(Component.literal(message)); // mc<=1.21.11
+            //mc.gui.getChat().addClientSystemMessage(Component.literal(message)); // mc>=26.1 mc<=26.1
+            //mc.gui.hud.getChat().addClientSystemMessage(Component.literal(message)); // mc>=26.2
         });
     }
 }

@@ -1,5 +1,6 @@
 package net.kroia.stockmarket;
 
+import net.kroia.modutilities.PermissionCompat;
 
 import net.kroia.banksystem.BankSystemMod;
 import net.kroia.banksystem.minecraft.item.BankSystemItems;
@@ -71,7 +72,7 @@ public class StockMarketModSettings extends ModSettings {
 
         /*public boolean playerIsAdmin(ServerPlayer player)
         {
-            return player.hasPermissions(ADMIN_PERMISSION_LEVEL.get());
+            return PermissionCompat.hasPermission(player, ADMIN_PERMISSION_LEVEL.get());
         }*/
     }
     public static final class Player extends SettingsGroup
@@ -121,6 +122,19 @@ public class StockMarketModSettings extends ModSettings {
          * Settings screen. No push-broadcast is needed.
          */
         public final Setting<Integer> PRICE_HISTORY_INITIAL_LOAD_CANDLES = registerSetting("PRICE_HISTORY_INITIAL_LOAD_CANDLES", 512, Integer.class);
+
+        /**
+         * Clock source for the per-market trading hours (T-158). {@code false} = in-game
+         * overworld time (tick 0 = 06:00), {@code true} = the master server's local real time.
+         * <p>
+         * Read live every tick in {@code ServerMarketManager.update()} — no restart required.
+         * Switching the source may flip a market's scheduled state; that counts as a scheduled
+         * transition and clears any manual open/close override.
+         * <p>
+         * Slave-propagation: NOT needed. Trading hours are evaluated only on the master; clients
+         * and slaves receive the resulting state and clock via the market price stream.
+         */
+        public final Setting<Boolean> TRADING_HOURS_USE_REAL_TIME = registerSetting("TRADING_HOURS_USE_REAL_TIME", false, Boolean.class);
 
         public Market() { super("ServerMarket"); }
 
