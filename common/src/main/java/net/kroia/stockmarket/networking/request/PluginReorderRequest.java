@@ -8,6 +8,7 @@ import net.kroia.stockmarket.pluginsystem.pluginmanager.ServerPluginManager;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import org.jetbrains.annotations.Nullable;
@@ -75,7 +76,7 @@ public class PluginReorderRequest extends StockMarketGenericRequest<PluginReorde
 
         // Notify other admins about the reorder
         broadcastToAdmins(playerSender,
-                getPlayerName(playerSender) + " reordered plugins");
+                Component.translatable("message.stockmarket.admin_broadcast.plugins_reordered", getPlayerName(playerSender)));
 
         return CompletableFuture.completedFuture(buildCurrentPluginList(pluginManager));
     }

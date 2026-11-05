@@ -91,7 +91,7 @@ public class CreateOrderRequestTestSuite extends TestSuite {
         // Also update settings for consistency (the source-gate is what makes the tests
         // deterministic, but keeping settings in sync avoids surprising other code).
         serverMarket.getSettings().virtualOrderbookEnabled = false;
-        serverMarket.getSettings().marketOpen = true;
+        serverMarket.getSettings().maintenance = false;
         serverMarket.test_setCurrentMarketPrice(100);
         serverMarket.test_clearOrderbook();
         serverMarket.test_clearIncomingOrderBuffers();
@@ -710,9 +710,9 @@ public class CreateOrderRequestTestSuite extends TestSuite {
 
     private TestResult test_putOrderFails_unlocksMoneyBuy() {
         try {
-            // Close the market so putOrder returns false
-            boolean wasOpen = serverMarket.isMarketOpen();
-            serverMarket.setMarketOpen(false);
+            // Put the market under maintenance so putOrder returns false
+            boolean wasMaintenance = serverMarket.isUnderMaintenance();
+            serverMarket.setMaintenance(true);
 
             UUID player = UUID.randomUUID();
             registerAndAddUser(player, "PutOrderFailUser");
@@ -730,7 +730,7 @@ public class CreateOrderRequestTestSuite extends TestSuite {
 
             long balanceAfter = bankAccount.getBank(moneyID).getTotalBalance();
 
-            serverMarket.setMarketOpen(wasOpen);
+            serverMarket.setMaintenance(wasMaintenance);
 
             // Balance should be restored if putOrder failed
             TestResult r = assertEquals("Balance should be restored after failed putOrder",

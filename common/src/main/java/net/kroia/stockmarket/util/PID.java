@@ -97,7 +97,9 @@ public class PID implements ServerSaveable {
     public double update(double error)
     {
         long millis = System.currentTimeMillis();
-        double dt = (millis - lastMillis)/1000.0f;
+        // Clamp dt to 1 s: after a long pause (market closed outside trading hours, server lag)
+        // the elapsed time would otherwise saturate the integral term in a single step.
+        double dt = Math.min((millis - lastMillis)/1000.0f, 1.0);
         lastMillis = millis;
         i += error*dt * ki;
         if(i > iBound)

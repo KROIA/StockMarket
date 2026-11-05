@@ -155,9 +155,11 @@ public interface IPluginMarket {
 
 
     /**
-     * Checks whether this market is currently open for trading.
-     * Closed markets do not process orders.
-     * @return true if the market is open, false otherwise
+     * Checks whether this market is currently open for trading, i.e. not under maintenance AND inside
+     * its trading hours ({@code !maintenance && tradingOpen}). Markets under maintenance reject player orders
+     * while bot orders still trade; markets outside their trading hours reject all orders and
+     * are not passed to plugin update/finalize at all.
+     * @return true if the market is open (not under maintenance and inside trading hours), false otherwise
      */
     boolean isMarketOpen();
 

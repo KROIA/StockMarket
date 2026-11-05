@@ -9,6 +9,7 @@ import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
 import net.kroia.stockmarket.stockmarket.marketmanager.PlayerPreferences;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
+import net.minecraft.network.chat.Component;
 
 import java.time.Instant;
 import java.time.ZoneId;
@@ -55,7 +56,7 @@ public class OrderHistoryPanel extends StockMarketGuiElement {
         recordListView.setLayout(layout);
         addChild(recordListView);
 
-        clearButton = new Button("Clear", this::onClearHistory);
+        clearButton = new Button(Component.translatable("gui.stockmarket.order_history_panel.clear").getString(), this::onClearHistory);
         clearButton.setBackgroundColor(0xFFe8711c);
         clearButton.setHoverColor(0xFFe04c12);
         addChild(clearButton);
@@ -252,7 +253,7 @@ public class OrderHistoryPanel extends StockMarketGuiElement {
 
             // BUY / SELL — positive amount = buy, negative = sell
             boolean isBuy = record.amount() > 0;
-            typeLabel = new Label(isBuy ? "BUY" : "SELL");
+            typeLabel = new Label(Component.translatable(isBuy ? "gui.stockmarket.order_row.buy" : "gui.stockmarket.order_row.sell").getString());
             typeLabel.setTextFontScale(0.8f);
             addChild(typeLabel);
 
@@ -345,7 +346,9 @@ public class OrderHistoryPanel extends StockMarketGuiElement {
             // "Traded X.XX -> Y.YY" text
             double sellAmount = Math.abs(MarketManager.convertToRealAmountStatic(sellLeg.amount()));
             double buyAmount = Math.abs(MarketManager.convertToRealAmountStatic(buyLeg.amount()));
-            tradeLabel = new Label(String.format("Traded %.2f -> %.2f", sellAmount, buyAmount));
+            tradeLabel = new Label(Component.translatable("gui.stockmarket.order_history_panel.traded",
+                    String.format(Locale.ROOT, "%.2f", sellAmount),
+                    String.format(Locale.ROOT, "%.2f", buyAmount)).getString());
             tradeLabel.setTextFontScale(0.8f);
             addChild(tradeLabel);
 

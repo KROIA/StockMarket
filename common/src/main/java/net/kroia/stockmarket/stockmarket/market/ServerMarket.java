@@ -45,8 +45,20 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
 
     private MarketSettings settings;
 
-    // Callback fired when this market closes, used by ServerMarketManager to cancel inter-market orders
-    private @Nullable Consumer<ItemID> marketClosedCallback;
+    // Callback fired when this market enters maintenance, used by ServerMarketManager to cancel inter-market orders
+    private @Nullable Consumer<ItemID> marketMaintenanceCallback;
+
+    // ---- Trading hours (T-158) ----
+    // Runtime "inside trading hours" flag. When false: putOrder rejects ALL orders (player, bot,
+    // inter-market) and update() skips matching, so the price stays static. Pending/resting orders
+    // are never cancelled by a scheduled close and cancelOrder stays allowed.
+    // Recomputed at the end of every ServerMarketManager.update() via updateTradingHours().
+    private boolean tradingOpen = true;
+    // Manual open/close override set by command. null = follow the schedule. Persisted.
+    // Cleared automatically on the next scheduled transition.
+    private @Nullable Boolean tradingOverride = null;
+    // Schedule result of the last evaluation; used to detect scheduled transitions. Persisted.
+    private boolean lastScheduledOpen = true;
 
     /**
      * Input: Real price
@@ -72,7 +84,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
 
     public ServerMarket(ItemID itemID, @Nullable Function<Double, Float> volumeProvider, long defaultPrice, float naturalAbundance)
     {
-        this.settings = new MarketSettings(true, defaultPrice, naturalAbundance);
+        this.settings = new MarketSettings(false, defaultPrice, naturalAbundance);
         this.defaultVolumeProviderFunction =  volumeProvider;
         this.itemID = itemID;
         this.orderbook = new Orderbook(itemID,
@@ -165,11 +177,13 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     }
 
     /**
-     * Sets a callback that fires when this market closes (setMarketOpen(false)).
+     * Sets a callback that fires when this market enters maintenance ({@code setMaintenance(true)}).
      * Used by ServerMarketManager to cancel inter-market orders referencing this market.
+     *
+     * @param callback receives the ItemID of the market entering maintenance, or {@code null} to clear
      */
-    public void setMarketClosedCallback(@Nullable Consumer<ItemID> callback) {
-        this.marketClosedCallback = callback;
+    public void setMarketMaintenanceCallback(@Nullable Consumer<ItemID> callback) {
+        this.marketMaintenanceCallback = callback;
     }
 
 
@@ -292,7 +306,10 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     {
         if(order.isFilled())
             return false;
-        if(!settings.marketOpen && order.isPlayerOrder())
+        if(settings.maintenance && order.isPlayerOrder())
+            return false;
+        // Outside trading hours (or closed by override) no new orders of any kind are accepted.
+        if(!tradingOpen)
             return false;
         if(!order.getItemID().equals(itemID))
             return false; // Wrong stockmarket for this order
@@ -382,13 +399,13 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
 
 
     @Override
-    public boolean isMarketOpen()
+    public boolean isUnderMaintenance()
     {
-        return settings.marketOpen;
+        return settings.maintenance;
     }
     @Override
-    public CompletableFuture<Boolean> isMarketOpenAsync() {
-        return CompletableFuture.completedFuture(settings.marketOpen);
+    public CompletableFuture<Boolean> isUnderMaintenanceAsync() {
+        return CompletableFuture.completedFuture(settings.maintenance);
     }
 
 
@@ -396,13 +413,13 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
 
 
     @Override
-    public boolean setMarketOpen(boolean marketOpen)
+    public boolean setMaintenance(boolean maintenance)
     {
-        this.settings.marketOpen = marketOpen;
-        if (!marketOpen) {
+        this.settings.maintenance = maintenance;
+        if (maintenance) {
             cancelAllPlayerOrders();
-            if (marketClosedCallback != null) {
-                marketClosedCallback.accept(itemID);
+            if (marketMaintenanceCallback != null) {
+                marketMaintenanceCallback.accept(itemID);
             }
         }
         return true;
@@ -420,12 +437,83 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
             cancelledCount++;
         }
         if (cancelledCount > 0) {
-            info("Market closed: cancelled " + cancelledCount + " player order(s)");
+            info("Maintenance enabled: cancelled " + cancelledCount + " player order(s)");
         }
     }
     @Override
-    public CompletableFuture<Boolean> setMarketOpenAsync(boolean marketOpen) {
-        return CompletableFuture.completedFuture(setMarketOpen(marketOpen));
+    public CompletableFuture<Boolean> setMaintenanceAsync(boolean maintenance) {
+        return CompletableFuture.completedFuture(setMaintenance(maintenance));
+    }
+
+    @Override
+    public boolean isTradingOpen()
+    {
+        return tradingOpen;
+    }
+
+    @Override
+    public boolean setTradingHours(int openMinute, int closeMinute)
+    {
+        applyTradingWindow(openMinute, closeMinute);
+        return true;
+    }
+    @Override
+    public CompletableFuture<Boolean> setTradingHoursAsync(int openMinute, int closeMinute)
+    {
+        return CompletableFuture.completedFuture(setTradingHours(openMinute, closeMinute));
+    }
+
+    @Override
+    public boolean setTradingOverride(boolean open)
+    {
+        // Only stored here; applied by the next updateTradingHours() call at the end of the tick
+        // so the state never flips while order buffers are being processed.
+        tradingOverride = open;
+        return true;
+    }
+    @Override
+    public CompletableFuture<Boolean> setTradingOverrideAsync(boolean open)
+    {
+        return CompletableFuture.completedFuture(setTradingOverride(open));
+    }
+
+    /**
+     * @return the active manual override ({@code true} = forced open, {@code false} = forced closed),
+     *         or {@code null} when the market follows its schedule
+     */
+    public @Nullable Boolean getTradingOverride()
+    {
+        return tradingOverride;
+    }
+
+    @Override
+    public void updateTradingHours(int minuteOfDay)
+    {
+        boolean scheduled = settings.isWithinTradingHours(minuteOfDay);
+        // A scheduled transition (also caused by a window edit or a clock-source switch that
+        // flips the result) ends any manual override.
+        if (scheduled != lastScheduledOpen) {
+            lastScheduledOpen = scheduled;
+            tradingOverride = null;
+        }
+        tradingOpen = tradingOverride != null ? tradingOverride : scheduled;
+    }
+
+    /**
+     * Clamps the window to [0, 1440] and normalizes every "whole day" form (open == close,
+     * open 24:00) to 00:00-24:00. The open state itself is re-evaluated on the next tick.
+     */
+    private void applyTradingWindow(int openMinute, int closeMinute)
+    {
+        int open = Math.max(0, Math.min(1440, openMinute));
+        int close = Math.max(0, Math.min(1440, closeMinute));
+        if (open == 1440) open = 0;
+        if (open == close || (open == 0 && close == 1440)) {
+            open = 0;
+            close = 1440;
+        }
+        settings.tradingOpenMinute = open;
+        settings.tradingCloseMinute = close;
     }
 
 
@@ -555,7 +643,13 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         boolean wasEnabled = this.settings.virtualOrderbookEnabled;
         boolean willBeEnabled = settings.virtualOrderbookEnabled;
 
-        this.settings.marketOpen = settings.marketOpen;
+        // Entering maintenance via the settings panel must have the same side effects as
+        // setMaintenance(true) (cancel + refund player orders, cancel inter-market orders);
+        // otherwise only the flag would flip and open player orders would stay in the book.
+        if (settings.maintenance && !this.settings.maintenance)
+            setMaintenance(true);
+        else
+            this.settings.maintenance = settings.maintenance;
         this.settings.defaultPrice = settings.defaultPrice;
         this.settings.naturalAbundance = settings.naturalAbundance;
         this.settings.virtualOrderbookEnabled = settings.virtualOrderbookEnabled;
@@ -568,6 +662,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         // VO reads return 0 and drops all writes.
         orderbook.setVirtualDisabled(!willBeEnabled);
         this.settings.ignorePluginAutosubscribe = settings.ignorePluginAutosubscribe;
+        applyTradingWindow(settings.tradingOpenMinute, settings.tradingCloseMinute);
         // netPlayerItemFlow is intentionally not copied from client settings
 
         // Transition-zero on enable→disable: task 4 requires that the VO stays empty
@@ -610,6 +705,10 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     @Override
     public void update()
     {
+        // Closed (outside trading hours / override): no matching, price stays static. Buffered
+        // orders stay buffered; putOrder already rejects new ones while closed.
+        if (!tradingOpen)
+            return;
         orderbook.setCurrentMarketPrice(currentMarketPrice);
 
         matchingEngine.update(currentMarketPrice);
@@ -837,6 +936,13 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         tag.putBoolean("virtualOrderbookEnabled", settings.virtualOrderbookEnabled);
         tag.putBoolean("virtualOrderbookCleared", settings.virtualOrderbookCleared);
         tag.putBoolean("ignorePluginAutosubscribe", settings.ignorePluginAutosubscribe);
+        // Persist the admin/integration maintenance flag so it survives restarts (missing on old NBT -> not under maintenance).
+        tag.putBoolean("maintenance", settings.maintenance);
+        // Trading hours. Override stored as byte: -1 = none, 0 = forced closed, 1 = forced open.
+        tag.putInt("tradingOpenMinute", settings.tradingOpenMinute);
+        tag.putInt("tradingCloseMinute", settings.tradingCloseMinute);
+        tag.putByte("tradingOverride", tradingOverride == null ? (byte) -1 : (byte) (tradingOverride ? 1 : 0));
+        tag.putBoolean("lastScheduledOpen", lastScheduledOpen);
 
         return success;
     }
@@ -884,6 +990,17 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         {
             settings.ignorePluginAutosubscribe = NbtCompat.getBoolean(tag, "ignorePluginAutosubscribe");
         }
+        // Restore the maintenance flag only — do NOT call setMaintenance(): player orders were already
+        // cancelled when maintenance was enabled, so the side effects must not re-run on load.
+        settings.maintenance = tag.contains("maintenance") && NbtCompat.getBoolean(tag, "maintenance");
+        // Trading hours: missing keys (old saves) -> always open, no override.
+        applyTradingWindow(
+                tag.contains("tradingOpenMinute") ? NbtCompat.getInt(tag, "tradingOpenMinute") : 0,
+                tag.contains("tradingCloseMinute") ? NbtCompat.getInt(tag, "tradingCloseMinute") : 1440);
+        byte override = tag.contains("tradingOverride") ? NbtCompat.getByte(tag, "tradingOverride") : -1;
+        tradingOverride = override < 0 ? null : override == 1;
+        lastScheduledOpen = !tag.contains("lastScheduledOpen") || NbtCompat.getBoolean(tag, "lastScheduledOpen");
+        tradingOpen = tradingOverride != null ? tradingOverride : lastScheduledOpen;
         // Sync the runtime flags on the VirtualOrderbook with the loaded persisted state.
         // These flags live in memory only on VirtualOrderbook — the settings are the
         // source of truth across restarts.

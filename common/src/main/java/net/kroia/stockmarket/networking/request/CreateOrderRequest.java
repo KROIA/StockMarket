@@ -13,6 +13,7 @@ import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.networking.ExtraCodecUtils;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.networking.NetworkGate;
+import net.kroia.stockmarket.stockmarket.market.MarketSettings;
 import net.kroia.stockmarket.stockmarket.market.ServerMarket;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.util.MultiServerUtils;
@@ -60,7 +61,9 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
         UNABLE_TO_LOCK_ITEM,
         UNABLE_TO_UNLOCK_MONEY,
         UNABLE_TO_UNLOCK_ITEM,
-        NO_PLAYER_SENDER
+        NO_PLAYER_SENDER,
+        // Appended (ordinal is the wire format): market is under maintenance or outside its trading hours.
+        MARKET_CLOSED
     }
     public static class OutputData
     {
@@ -113,6 +116,15 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
                  response.status = Status.INVALID_VOLUME;
              if(input.price < 0)
                  response.status = Status.INVALID_PRICE;
+             future.complete(response);
+             return future;
+         }
+         // Under maintenance or outside trading hours: reject before any funds are locked.
+         // putOrder() would refuse the order anyway; checking here avoids a
+         // pointless lock/unlock round-trip and gives the player a clear status.
+         if(serverMarket.getTradingState() != MarketSettings.TradingState.OPEN)
+         {
+             response.status = Status.MARKET_CLOSED;
              future.complete(response);
              return future;
          }
@@ -344,6 +356,13 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
                     return future;
                 }
             }
+            // Funds are released — report the rejection instead of CREATED.
+            // A maintenance/close can race the early check above; any other putOrder()
+            // refusal (e.g. the volume rounded to 0 raw units) is a volume problem.
+            response.status = serverMarket.getTradingState() != MarketSettings.TradingState.OPEN
+                    ? Status.MARKET_CLOSED : Status.INVALID_VOLUME;
+            future.complete(response);
+            return future;
         }
         response.status = Status.CREATED;
         response.orderEcho = order;

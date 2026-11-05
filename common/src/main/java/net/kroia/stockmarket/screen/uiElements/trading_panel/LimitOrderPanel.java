@@ -10,6 +10,7 @@ import net.kroia.stockmarket.screen.UI_Colors;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.minecraft.network.chat.Component;
 
+import java.util.Locale;
 import java.util.function.BiConsumer;
 
 public class LimitOrderPanel extends StockMarketGuiElement
@@ -20,6 +21,10 @@ public class LimitOrderPanel extends StockMarketGuiElement
         private static final Component PRICE = Component.translatable(PREFIX +"price");
         private static final Component BUY = Component.translatable(PREFIX +"buy");
         private static final Component SELL = Component.translatable(PREFIX +"sell");
+        // T-159: "Market" button (sets the limit price to the current market price)
+        private static final Component MARKET_PRICE = Component.translatable(PREFIX +"market_price");
+        // T-159: "Est: <cost> <currency>" — shared with MarketOrderPanel
+        private static final String ESTIMATED_COST = "gui."+ StockMarketMod.MOD_ID + ".trade_panel.estimated_cost";
     }
 
     private final TextBox quantityTextBox;
@@ -110,7 +115,7 @@ public class LimitOrderPanel extends StockMarketGuiElement
         currencyLabel.setAlignment(Alignment.RIGHT);
 
         // "Market" button sets the price to the current market price
-        marketPriceButton = new Button("Market", () -> {
+        marketPriceButton = new Button(Texts.MARKET_PRICE.getString(), () -> {
             setPrice(currentMarketPrice);
             updateEstimatedCost();
             updateValidation();
@@ -342,7 +347,7 @@ public class LimitOrderPanel extends StockMarketGuiElement
     private void updateEstimatedCost()
     {
         double cost = quantity * price;
-        String costText = String.format("Est: %.2f %s", cost, currencyName);
+        String costText = Component.translatable(Texts.ESTIMATED_COST, String.format(Locale.ROOT, "%.2f", cost), currencyName).getString();
         estimatedCostLabel.setText(costText);
 
         // Color red only when the displayed money cost exceeds the player's balance

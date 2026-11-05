@@ -172,6 +172,11 @@ public class InterMarketExecutorTestSuite extends TestSuite {
         addTest("K2_want_market_price_moves_up", this::test_K2_want_market_price_moves_up);
         addTest("K3_price_update_atomic", this::test_K3_price_update_atomic);
         addTest("K4_prices_correct_after_partial_sequence", this::test_K4_prices_correct_after_partial_sequence);
+
+        // ── Category L: Trading hours (T-158) — a pair trades only while BOTH legs are open ──
+        addTest("L1_leg_closed_by_hours_skips_and_keeps_order", this::test_L1_leg_closed_by_hours_skips_and_keeps_order);
+        addTest("L2_both_legs_open_executes", this::test_L2_both_legs_open_executes);
+        addTest("L3_leg_closed_by_override_skips_and_keeps_order", this::test_L3_leg_closed_by_override_skips_and_keeps_order);
     }
 
     @Override
@@ -254,17 +259,42 @@ public class InterMarketExecutorTestSuite extends TestSuite {
         marketA.test_clearOrderbook();
         marketA.test_setDefaultVolumeProviderFunction(depthA);
         marketA.test_resetVirtualOrderBookVolume();
-        marketA.setMarketOpen(true);
+        marketA.setMaintenance(false);
 
         marketB.test_setCurrentMarketPrice(priceB);
         marketB.test_clearOrderbook();
         marketB.test_setDefaultVolumeProviderFunction(depthB);
         marketB.test_resetVirtualOrderBookVolume();
-        marketB.setMarketOpen(true);
+        marketB.setMaintenance(false);
+
+        // T-158: back to always-open trading hours. A forced-open override is a no-op on an
+        // always-open market, but replaces a forced-closed override left by an L-test.
+        reopenTradingHours(marketA);
+        reopenTradingHours(marketB);
 
         // Unlock any locked funds from previous tests before resetting balance
         resetBankAccount(bankAccount);
         resetBankAccount(counterpartyAccount);
+    }
+
+    /**
+     * Makes a market trading-open again: always-open window, forced-open override, and the
+     * open state applied immediately (normally that happens at the end of the manager tick).
+     * @param market the scratch market to reopen
+     */
+    private void reopenTradingHours(IServerMarket market) {
+        market.setTradingHours(0, 1440);
+        market.setTradingOverride(true);
+        market.updateTradingHours(marketManager.getCurrentTradingMinute());
+    }
+
+    /**
+     * @param imo an inter-market order of the test player
+     * @return {@code true} if the order is still waiting in the manager's inter-market queue
+     */
+    private boolean isPending(InterMarketOrder imo) {
+        return marketManager.getPendingInterMarketOrdersForPlayer(testPlayerUUID).stream()
+                .anyMatch(o -> o.getInterMarketGroupID().equals(imo.getInterMarketGroupID()));
     }
 
     private void resetBankAccount(IServerBankAccount account) {
@@ -565,7 +595,7 @@ public class InterMarketExecutorTestSuite extends TestSuite {
             return fail("Expected " + sellVolume + " locked before close, got " + lockedBeforeClose);
 
         // Close marketA — should trigger cancelInterMarketOrdersForMarket
-        marketA.setMarketOpen(false);
+        marketA.setMaintenance(true);
 
         long lockedAfterClose = bankAccount.getBank(itemA_ID).getLockedBalance();
         long freeAfterClose = bankAccount.getBank(itemA_ID).getBalance();
@@ -1146,8 +1176,8 @@ public class InterMarketExecutorTestSuite extends TestSuite {
                 return fail("InterMarketOrder was not enqueued");
 
             // Close BOTH markets — should trigger cancel callbacks
-            marketA.setMarketOpen(false);
-            marketB.setMarketOpen(false);
+            marketA.setMaintenance(true);
+            marketB.setMaintenance(true);
 
             // Process after close
             marketManager.update();
@@ -4157,7 +4187,7 @@ public class InterMarketExecutorTestSuite extends TestSuite {
 
             // Should have some partial fill (A decreased somewhat)
             // Close market A — should cancel the order
-            marketA.setMarketOpen(false);
+            marketA.setMaintenance(true);
 
             long aAfterClose = bankAccount.getBank(itemA_ID).getTotalBalance();
             long lockedAfterClose = bankAccount.getBank(itemA_ID).getLockedBalance();
@@ -4649,6 +4679,108 @@ public class InterMarketExecutorTestSuite extends TestSuite {
                     + ", priceB: 80 -> " + prevPriceB + " (violations=" + priceB_violations + ")");
         } catch (Exception e) {
             return fail("Exception: " + e.getMessage());
+        }
+    }
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  Category L: Trading hours (T-158)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Shared body of L1/L3: enqueues a market-type IMO while both legs are open, closes one
+     * leg via {@code closeLeg}, and checks the order is SKIPPED (still queued, nothing traded,
+     * new orders refused). Then reopens via {@code reopenLeg} and checks the order fills.
+     * @param closedLeg the leg that gets closed
+     * @param closeLeg  closes {@code closedLeg} (state must be applied immediately)
+     * @param reopenLeg reopens {@code closedLeg} (state must be applied immediately)
+     * @param context   label for the result messages
+     */
+    private TestResult runClosedLegScenario(IServerMarket closedLeg, Runnable closeLeg, Runnable reopenLeg, String context) {
+        resetState(100, 50);
+        long sellVolume = 10 * scaleFactor;
+        long initialA = bankAccount.getBank(itemA_ID).getTotalBalance();
+        long initialB = bankAccount.getBank(itemB_ID).getTotalBalance();
+
+        InterMarketOrder imo = createIMO(sellVolume, 0); // market order
+        if (!enqueueIMO(imo))
+            return fail(context + ": order was not enqueued while both legs were open");
+
+        closeLeg.run();
+        if (closedLeg.isTradingOpen())
+            return fail(context + ": leg should be closed");
+        // A new inter-market order touching the closed leg must be refused.
+        if (marketManager.putInterMarketOrder(createIMO(scaleFactor, 0)))
+            return fail(context + ": putInterMarketOrder accepted an order while a leg is closed");
+
+        marketManager.update(); // executor -> SKIPPED; end-of-tick schedule keeps the leg closed
+        if (closedLeg.isTradingOpen())
+            return fail(context + ": leg reopened unexpectedly after the manager tick");
+        if (!isPending(imo))
+            return fail(context + ": order was removed from the queue while a leg was closed");
+        if (bankAccount.getBank(itemA_ID).getTotalBalance() != initialA
+                || bankAccount.getBank(itemB_ID).getTotalBalance() != initialB)
+            return fail(context + ": balances changed while a leg was closed");
+        if (bankAccount.getBank(itemA_ID).getLockedBalance() != sellVolume)
+            return fail(context + ": sell items should stay locked, got " + bankAccount.getBank(itemA_ID).getLockedBalance());
+
+        reopenLeg.run();
+        marketManager.update();
+        if (isPending(imo))
+            return fail(context + ": order still pending after the leg reopened");
+        if (bankAccount.getBank(itemB_ID).getTotalBalance() <= initialB)
+            return fail(context + ": order did not execute after the leg reopened");
+        return pass(context + ": skipped while closed, filled after reopen");
+    }
+
+    /** Want leg (B) outside its trading window: order skipped + kept, fills after reopen. */
+    private TestResult test_L1_leg_closed_by_hours_skips_and_keeps_order() {
+        try {
+            return runClosedLegScenario(marketB, () -> {
+                // 1-minute window 12 h away from now, so the end-of-tick re-evaluation keeps it closed.
+                int now = marketManager.getCurrentTradingMinute();
+                int open = (now + 720) % 1440;
+                marketB.setTradingHours(open, open + 1);
+                marketB.updateTradingHours(now);
+            }, () -> reopenTradingHours(marketB), "L1 closed by hours");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        } finally {
+            reopenTradingHours(marketB);
+        }
+    }
+
+    /** Both legs trading-open: the inter-market order executes in the same tick. */
+    private TestResult test_L2_both_legs_open_executes() {
+        try {
+            resetState(100, 50);
+            if (!marketA.isTradingOpen() || !marketB.isTradingOpen())
+                return fail("Both legs should be open after reset");
+            long initialB = bankAccount.getBank(itemB_ID).getTotalBalance();
+            InterMarketOrder imo = createIMO(10 * scaleFactor, 0);
+            if (!enqueueIMO(imo))
+                return fail("Order was not enqueued");
+            marketManager.update();
+            if (isPending(imo))
+                return fail("Order still pending although both legs are open");
+            if (bankAccount.getBank(itemB_ID).getTotalBalance() <= initialB)
+                return fail("Order did not execute although both legs are open");
+            return pass("Both legs open: order executed");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /** Have leg (A) forced closed by a manual override: order skipped + kept, fills after reopen. */
+    private TestResult test_L3_leg_closed_by_override_skips_and_keeps_order() {
+        try {
+            return runClosedLegScenario(marketA, () -> {
+                // Always-open schedule -> no transition, so the override holds across ticks.
+                marketA.setTradingOverride(false);
+                marketA.updateTradingHours(marketManager.getCurrentTradingMinute());
+            }, () -> reopenTradingHours(marketA), "L3 closed by override");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        } finally {
+            reopenTradingHours(marketA);
         }
     }
 }

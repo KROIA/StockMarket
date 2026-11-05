@@ -120,11 +120,11 @@ public class VolatilityPluginGuiElement extends PluginGuiElement<VolatilityPlugi
      * @param settings the settings to display
      */
     private void populateFrom(VolatilityPlugin.Settings settings) {
-        scaleTextBox.setText(settings.volatilityScale());
+        scaleTextBox.setText(settings.volatilityScale(), 6);
         flowEnabledCheckBox.setChecked(settings.flowInfluenceEnabled());
-        flowSensitivityTextBox.setText(settings.flowSensitivity());
-        minPriceMultTextBox.setText(settings.minPriceMult());
-        maxPriceMultTextBox.setText(settings.maxPriceMult());
+        flowSensitivityTextBox.setText(settings.flowSensitivity(), 6);
+        minPriceMultTextBox.setText(settings.minPriceMult(), 6);
+        maxPriceMultTextBox.setText(settings.maxPriceMult(), 6);
     }
 
     private void onApply() {

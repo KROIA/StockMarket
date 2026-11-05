@@ -118,7 +118,7 @@ public class PlaceInterMarketOrderRequest extends StockMarketGenericRequest<Plac
             future.complete(new OutputData(false, "NO_SUCH_MARKET_HAVE"));
             return future;
         }
-        if (!haveMarket.isMarketOpen()) {
+        if (haveMarket.isUnderMaintenance() || !haveMarket.isTradingOpen()) { // under maintenance or outside trading hours
             future.complete(new OutputData(false, "MARKET_CLOSED_HAVE"));
             return future;
         }
@@ -128,7 +128,7 @@ public class PlaceInterMarketOrderRequest extends StockMarketGenericRequest<Plac
             future.complete(new OutputData(false, "NO_SUCH_MARKET_WANT"));
             return future;
         }
-        if (!wantMarket.isMarketOpen()) {
+        if (wantMarket.isUnderMaintenance() || !wantMarket.isTradingOpen()) { // under maintenance or outside trading hours
             future.complete(new OutputData(false, "MARKET_CLOSED_WANT"));
             return future;
         }

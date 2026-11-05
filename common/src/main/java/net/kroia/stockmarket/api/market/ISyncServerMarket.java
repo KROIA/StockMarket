@@ -79,8 +79,61 @@ public interface ISyncServerMarket {
     boolean cancelOrder(UUID executor, long time, Order.Type type, long startPrice, long targetVolume);
 
     List<Order> getLimitOrders();
-    boolean isMarketOpen();
-    boolean setMarketOpen(boolean marketOpen);
+    /**
+     * @return {@code true} if this market is under maintenance (player orders rejected,
+     *         bots still trade)
+     */
+    boolean isUnderMaintenance();
+    /**
+     * Enables or disables maintenance mode. Enabling it cancels all player orders and fires the
+     * maintenance callback (cancels inter-market orders); ending it only clears the flag.
+     * @param maintenance {@code true} to enter maintenance, {@code false} to end it
+     * @return {@code true} on success
+     */
+    boolean setMaintenance(boolean maintenance);
+
+    /**
+     * @return {@code true} if the market is currently inside its trading hours (or forced open by
+     *         an override). When {@code false} no new orders are accepted and no matching happens;
+     *         resting orders stay in the book and can still be cancelled.
+     */
+    boolean isTradingOpen();
+
+    /**
+     * Combined state for display: MAINTENANCE wins over CLOSED.
+     * @return the current {@link MarketSettings.TradingState}
+     */
+    default MarketSettings.TradingState getTradingState()
+    {
+        if (isUnderMaintenance()) return MarketSettings.TradingState.MAINTENANCE;
+        return isTradingOpen() ? MarketSettings.TradingState.OPEN : MarketSettings.TradingState.CLOSED;
+    }
+
+    /**
+     * Sets the daily trading window. Values are clamped to [0, 1440]; open == close (or
+     * 00:00-24:00) means always open; open &gt; close wraps over midnight. The open state is
+     * re-evaluated at the end of the next market-manager tick.
+     * @param openMinute  opening minute of the day (0..1440)
+     * @param closeMinute closing minute of the day (0..1440)
+     * @return {@code true} on success
+     */
+    boolean setTradingHours(int openMinute, int closeMinute);
+
+    /**
+     * Manually forces the market open or closed until the next scheduled transition
+     * (schedule flips open/closed), then the override is cleared.
+     * Applied at the end of the next market-manager tick. Persisted.
+     * @param open {@code true} to force open, {@code false} to force closed
+     * @return {@code true} on success
+     */
+    boolean setTradingOverride(boolean open);
+
+    /**
+     * Re-evaluates the trading schedule. Called by the server market manager once per tick
+     * (master only) after all order buffers were processed.
+     * @param minuteOfDay current minute of the day (0..1439) of the active clock source
+     */
+    void updateTradingHours(int minuteOfDay);
 
     MarketPriceStruct getCurrentMarketPriceStruct();
     MarketPriceStruct getCurrentMarketPriceStructAndReset();

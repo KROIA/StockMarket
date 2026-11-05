@@ -7,6 +7,7 @@ import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
 import net.kroia.stockmarket.networking.request.TransactionHistoryRequest;
 import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
+import net.minecraft.network.chat.Component;
 
 import java.time.Instant;
 import java.time.ZoneId;
@@ -130,7 +131,7 @@ public class TransactionHistoryPanel extends StockMarketGuiElement {
 
             // BUY / SELL — positive amount = buy, negative = sell
             boolean isBuy = record.amount() > 0;
-            typeLabel = new Label(isBuy ? "BUY" : "SELL");
+            typeLabel = new Label(Component.translatable(isBuy ? "gui.stockmarket.order_row.buy" : "gui.stockmarket.order_row.sell").getString());
             typeLabel.setTextFontScale(0.8f);
             addChild(typeLabel);
 

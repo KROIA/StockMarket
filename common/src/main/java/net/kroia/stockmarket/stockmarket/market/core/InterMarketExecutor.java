@@ -98,10 +98,15 @@ public class InterMarketExecutor
         try
         {
             // ── Pre-flight checks ─────────────────────────────────────────────
-            if ((!haveMarket.isMarketOpen() || !wantMarket.isMarketOpen()) && !order.isBotOrder())
+            if ((haveMarket.isUnderMaintenance() || wantMarket.isUnderMaintenance()) && !order.isBotOrder())
             {
                 logWarn("One or both markets are closed, canceling order");
                 return ExecutionResult.CANCELED;
+            }
+            // Outside trading hours: keep the order queued (SKIPPED) until both legs reopen.
+            if (!haveMarket.isTradingOpen() || !wantMarket.isTradingOpen())
+            {
+                return ExecutionResult.SKIPPED;
             }
 
             // For player orders, verify the money bank exists

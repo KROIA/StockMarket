@@ -24,6 +24,8 @@ import net.kroia.stockmarket.screen.widgets.OrderbookVolumeHistogram;
 import net.kroia.stockmarket.screen.widgets.OrderMarkerOverlay;
 import net.kroia.stockmarket.api.market.IPriceDataProvider;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
+import net.kroia.stockmarket.stockmarket.market.MarketSettings;
+import net.kroia.stockmarket.networking.stream.MarketPriceStream;
 import net.kroia.stockmarket.screen.widgets.CandlestickChart;
 import net.kroia.stockmarket.networking.request.CancelOrderRequest;
 import net.kroia.stockmarket.networking.request.CreateOrderRequest;
@@ -38,7 +40,9 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
@@ -49,9 +53,19 @@ public class TradeScreen extends StockMarketGuiScreen {
         private static final String PREFIX = "gui."+ StockMarketMod.MOD_ID + ".trade_screen.";
         private static final Component TITLE = Component.translatable(PREFIX +"title");
         private static final Component MARKET_CLOSED = Component.translatable(PREFIX +"market_closed");
+        private static final Component MAINTENANCE = Component.translatable(PREFIX +"maintenance");
+        // T-158: trading-hours / clock line ("Trading hours %s-%s" or "24h", then "%s (in-game|server)")
+        private static final String TRADING_HOURS = PREFIX + "trading_hours";
+        private static final String TRADING_HOURS_ALWAYS = PREFIX + "trading_hours_always";
+        private static final String CLOCK_INGAME = PREFIX + "clock_ingame";
+        private static final String CLOCK_SERVER = PREFIX + "clock_server";
         private static final String MONEY_MODE = Component.translatable(PREFIX + "mode_money").getString();
         private static final String PAIR_MODE = Component.translatable(PREFIX + "mode_pair").getString();
         private static final String NEWS = Component.translatable(PREFIX + "news").getString();
+        // T-159: titles of the order tabs below the chart
+        private static final String TAB_PENDING_ORDERS = Component.translatable(PREFIX + "tab_pending_orders").getString();
+        private static final String TAB_MY_HISTORY = Component.translatable(PREFIX + "tab_my_history").getString();
+        private static final String TAB_MARKET_TRADES = Component.translatable(PREFIX + "tab_market_trades").getString();
         // T-155: labels for the shared Commodities/Companies market-group segmented
         // control. Reuse the existing pair_selector tab lang keys (same wording).
         static final String GROUP_COMMODITIES = Component.translatable("gui.stockmarket.pair_selector.tab.commodities").getString();
@@ -87,6 +101,22 @@ public class TradeScreen extends StockMarketGuiScreen {
     private final OrderHistoryPanel orderHistoryPanel;
     private final TransactionHistoryPanel transactionHistoryPanel;
     private final Label marketClosedLabel;
+    /**
+     * T-158: always-visible line between the market selector and the trading panel showing
+     * the displayed market's trading window and the master's trading clock, e.g.
+     * "Trading hours 08:00-18:00 · 14:32 (in-game)" or "24h · 14:32 (server)".
+     * Empty until the first market price stream update delivered the status.
+     */
+    private final Label tradingHoursLabel;
+    /**
+     * T-158: one-shot {@link ClientMarket#isUnderMaintenanceAsync()} results per market, used only while
+     * the market's price stream has not delivered a {@link MarketPriceStream.TradingStatus} yet
+     * (first ~100 ms after subscribing, or after the stream stopped). Keeps the "Under Maintenance"
+     * banner exact on screen open. An entry is dropped as soon as stream data is available.
+     */
+    private final java.util.Map<ItemID, Boolean> maintenanceFallback = new java.util.HashMap<>();
+    /** T-158: last trading state applied to the panels / banner; UI is only touched on change. */
+    private @Nullable MarketSettings.TradingState appliedTradingState = null;
     /**
      * T-123 / T-125 (untrusted slave gate): banner shown across the top of the
      * trading area when the client is connected to a slave that the master
@@ -162,6 +192,13 @@ public class TradeScreen extends StockMarketGuiScreen {
     // Pair mode state: tracks the "have" and "want" markets for cross-rate calculation
     private @Nullable ItemID pairHaveMarketID = null;
     private @Nullable ItemID pairWantMarketID = null;
+
+    /**
+     * Issue #81: markets whose (ref-counted) price stream THIS screen currently holds one
+     * subscription on. Never call subscribe/unsubscribe directly — use
+     * {@link #syncPriceSubscriptions()} so each market is held at most once.
+     */
+    private final Set<ItemID> subscribedMarketIDs = new HashSet<>();
 
     // Trading currency ID cached for balance lookups
     private @Nullable ItemID tradingCurrencyID = null;
@@ -290,11 +327,19 @@ public class TradeScreen extends StockMarketGuiScreen {
                 this::onInterMarketBuyLimit, this::onInterMarketSellLimit);
         interMarketTradingPanel.setEnabled(false);
 
-        marketClosedLabel = new Label(Texts.MARKET_CLOSED.getString());
+        // T-158: text is switched between "Market Closed" / "Under Maintenance" by updateTradingStatusUI().
+        marketClosedLabel = new Label(Texts.MAINTENANCE.getString());
         marketClosedLabel.setAlignment(Label.Alignment.CENTER);
         marketClosedLabel.setTextColor(UI_Colors.sellColorRed);
         marketClosedLabel.setTextFontScale(1.5f);
         marketClosedLabel.setEnabled(false);
+
+        // T-158: trading hours + clock, always visible (same layout for every market).
+        // Small font; if the text is still wider than the right panel the Label auto-scrolls.
+        tradingHoursLabel = new Label("");
+        tradingHoursLabel.setAlignment(Label.Alignment.CENTER);
+        tradingHoursLabel.setTextFontScale(0.7f);
+        tradingHoursLabel.setPadding(0);
 
         // T-123 / T-125 (untrusted slave gate): a red info banner shown across
         // the top of the trading area when the master does NOT trust this
@@ -326,9 +371,9 @@ public class TradeScreen extends StockMarketGuiScreen {
         orderHistoryPanel = new OrderHistoryPanel();
         transactionHistoryPanel = new TransactionHistoryPanel();
         ordersTabElement = new TabElement();
-        ordersTabElement.addTab("Pending Orders", pendingOrdersPanel);
-        ordersTabElement.addTab("My History", orderHistoryPanel);
-        ordersTabElement.addTab("Market Trades", transactionHistoryPanel);
+        ordersTabElement.addTab(Texts.TAB_PENDING_ORDERS, pendingOrdersPanel);
+        ordersTabElement.addTab(Texts.TAB_MY_HISTORY, orderHistoryPanel);
+        ordersTabElement.addTab(Texts.TAB_MARKET_TRADES, transactionHistoryPanel);
 
         addElement(moneyModeButton);
         addElement(pairModeButton);
@@ -343,6 +388,7 @@ public class TradeScreen extends StockMarketGuiScreen {
         addElement(tradingPanel);
         addElement(interMarketTradingPanel);
         addElement(marketClosedLabel);
+        addElement(tradingHoursLabel);
         addElement(untrustedSlaveBanner1);
         addElement(untrustedSlaveBanner2);
         addElement(untrustedSlaveBanner3);
@@ -381,22 +427,13 @@ public class TradeScreen extends StockMarketGuiScreen {
             currentMarketID = initialMarket;
             ClientMarket market = getMarket(currentMarketID);
             if (market != null) {
-                market.subscribeToMarketPriceUpdate();
+                syncPriceSubscriptions();
                 candlestickChart.setMarket(market);
                 orderMarkerOverlay.setCurrentMarket(currentMarketID);
                 // prefer company displayName if this ItemID is a stamped share (T-147)
                 tradingPanel.setItemName(ShareVisualHelpers.getDisplayName(currentMarketID, currentMarketID.getStack().getHoverName()).getString());
                 tradingPanel.setLimitPrice(market.getCurrentMarketRealPrice());
-                // Mirror switchMarket's isMarketOpenAsync sync so the "Market Closed"
-                // banner appears immediately when the screen opens onto a closed market
-                // (previously the label only updated when the user switched markets,
-                // leaving the first view of a closed market unlabeled).
-                market.isMarketOpenAsync().thenAccept(isOpen -> {
-                    Minecraft.getInstance().execute(() -> {
-                        tradingPanel.setMarketOpen(isOpen);
-                        marketClosedLabel.setEnabled(!isOpen);
-                    });
-                });
+                // T-158: open/closed/maintenance state is applied per tick by updateTradingStatusUI().
             }
             // Update last market in preferences
             prefs.setLastMarketID(currentMarketID);
@@ -470,6 +507,10 @@ public class TradeScreen extends StockMarketGuiScreen {
                     activeOrdersStreamID = null;
                 }
         );
+
+        // T-158: apply the initial trading state right away (uses the maintenance fallback until
+        // the price stream delivers the status; tick() keeps it current afterwards).
+        updateTradingStatusUI();
     }
 
 
@@ -508,6 +549,9 @@ public class TradeScreen extends StockMarketGuiScreen {
             }
         }
 
+        // T-158: trading state + hours/clock line (cheap; only touches widgets on change)
+        updateTradingStatusUI();
+
         // Periodically refresh balances for the trading panel (~2s)
         if (now - lastBalanceRefreshMs > BALANCE_REFRESH_INTERVAL_MS) {
             lastBalanceRefreshMs = now;
@@ -526,6 +570,91 @@ public class TradeScreen extends StockMarketGuiScreen {
                 }
             }
         }
+    }
+
+    /**
+     * T-158: effective trading state of one market. Uses the live
+     * {@link ClientMarket#getTradingStatus()} from the market price stream; while that is
+     * {@code null} it falls back to a one-shot {@link ClientMarket#isUnderMaintenanceAsync()} result
+     * (MAINTENANCE or OPEN - CLOSED is only known once the stream delivers).
+     * @param marketID market to query, may be {@code null}
+     * @return the trading state; OPEN if unknown so controls never get stuck disabled
+     *         (the server rejects orders on closed/under-maintenance markets anyway)
+     */
+    private MarketSettings.TradingState getEffectiveTradingState(@Nullable ItemID marketID) {
+        if (marketID == null) return MarketSettings.TradingState.OPEN;
+        ClientMarket market = getMarket(marketID);
+        if (market == null) return MarketSettings.TradingState.OPEN;
+        MarketPriceStream.TradingStatus status = market.getTradingStatus();
+        if (status != null) {
+            // Live data available: drop the fallback so it is re-fetched if the stream stops.
+            maintenanceFallback.remove(marketID);
+            return status.getTradingState();
+        }
+        if (!maintenanceFallback.containsKey(marketID)) {
+            maintenanceFallback.put(marketID, false); // mark as requested
+            market.isUnderMaintenanceAsync().thenAccept(maintenance -> Minecraft.getInstance().execute(() -> {
+                // Ignore late answers once stream data replaced the fallback.
+                if (maintenanceFallback.containsKey(marketID))
+                    maintenanceFallback.put(marketID, maintenance);
+            }));
+        }
+        return maintenanceFallback.get(marketID) ? MarketSettings.TradingState.MAINTENANCE : MarketSettings.TradingState.OPEN;
+    }
+
+    /**
+     * T-158: applies the trading state of the displayed market(s) to the trading panels and
+     * the closed/maintenance banner (only when it changed), and refreshes the trading-hours/clock line.
+     * <p>
+     * Money mode uses {@link #currentMarketID}. Pair mode needs BOTH legs open (the server
+     * rejects inter-market orders otherwise), so the more restrictive leg wins
+     * (MAINTENANCE &gt; CLOSED &gt; OPEN) and its hours/clock are shown. Called every tick, so
+     * market and mode switches are picked up automatically.
+     */
+    private void updateTradingStatusUI() {
+        ItemID displayID;
+        MarketSettings.TradingState state;
+        if (isPairMode) {
+            displayID = pairHaveMarketID;
+            state = getEffectiveTradingState(pairHaveMarketID);
+            MarketSettings.TradingState wantState = getEffectiveTradingState(pairWantMarketID);
+            // Enum order is OPEN, CLOSED, MAINTENANCE -> higher ordinal = more restrictive.
+            if (pairWantMarketID != null && (displayID == null || wantState.ordinal() > state.ordinal())) {
+                state = wantState;
+                displayID = pairWantMarketID;
+            }
+        } else {
+            displayID = currentMarketID;
+            state = getEffectiveTradingState(currentMarketID);
+        }
+
+        if (state != appliedTradingState) {
+            appliedTradingState = state;
+            boolean open = state == MarketSettings.TradingState.OPEN;
+            // Only gates the buy/sell buttons; cancelling pending orders (orders panel / chart) stays usable.
+            tradingPanel.setMarketOpen(open);
+            interMarketTradingPanel.setMarketOpen(open);
+            marketClosedLabel.setText((state == MarketSettings.TradingState.MAINTENANCE
+                    ? Texts.MAINTENANCE : Texts.MARKET_CLOSED).getString());
+            marketClosedLabel.setEnabled(!open);
+        }
+
+        String hoursText = "";
+        ClientMarket displayMarket = displayID != null ? getMarket(displayID) : null;
+        MarketPriceStream.TradingStatus status = displayMarket != null ? displayMarket.getTradingStatus() : null;
+        if (status != null) {
+            String hours = status.isAlwaysOpen()
+                    ? Component.translatable(Texts.TRADING_HOURS_ALWAYS).getString()
+                    : Component.translatable(Texts.TRADING_HOURS,
+                            MarketSettings.formatMinute(status.openMinute()),
+                            MarketSettings.formatMinute(status.closeMinute())).getString();
+            String clock = Component.translatable(status.clockRealTime() ? Texts.CLOCK_SERVER : Texts.CLOCK_INGAME,
+                    MarketSettings.formatMinute(status.clockMinute())).getString();
+            hoursText = hours + " \u00B7 " + clock;
+        }
+        // setText re-runs the label layout, so only call it when the text actually changed.
+        if (!hoursText.equals(tradingHoursLabel.getText()))
+            tradingHoursLabel.setText(hoursText);
     }
 
     /**
@@ -633,7 +762,7 @@ public class TradeScreen extends StockMarketGuiScreen {
         selectAccountButton.setAccountData(accountData);
         refreshTradingPanelBalances();
         // T-131 (balance-display fix): the FavoritesBar "Bank Balance" frame (money
-        // mode) and the PairSelectorWidget "Bal:" labels (pair mode) have their OWN
+        // mode) and the PairSelectorWidget "Balance:" labels (pair mode) have their OWN
         // balance-fetch paths that previously always read the personal account. Mirror
         // the selected account into them so EVERY balance shown in the trade screen
         // follows the chosen account, then their labels refresh immediately.
@@ -771,31 +900,19 @@ public class TradeScreen extends StockMarketGuiScreen {
      * Switches the displayed market: unsubscribes old, subscribes new, updates all widgets.
      */
     private void switchMarket(ItemID newMarketID) {
-        // Unsubscribe from old market
-        if (currentMarketID != null) {
-            ClientMarket oldMarket = getMarket(currentMarketID);
-            if (oldMarket != null) {
-                oldMarket.unsubscribeFromMarketPriceUpdate();
-            }
-        }
-
         currentMarketID = newMarketID;
+        // Subscribe the new market / release the old one (subscribe before setMarket so
+        // the chart sees a live stream).
+        syncPriceSubscriptions();
         ClientMarket market = getMarket(newMarketID);
         if (market != null) {
-            market.subscribeToMarketPriceUpdate();
             candlestickChart.setMarket(market);
             orderMarkerOverlay.setCurrentMarket(newMarketID);
             // prefer company displayName if this ItemID is a stamped share (T-147)
             tradingPanel.setItemName(ShareVisualHelpers.getDisplayName(newMarketID, newMarketID.getStack().getHoverName()).getString());
             tradingPanel.setLimitPrice(market.getCurrentMarketRealPrice());
             tradingPanel.setCurrentMarketPrice(market.getCurrentMarketRealPrice());
-
-            market.isMarketOpenAsync().thenAccept(isOpen -> {
-                Minecraft.getInstance().execute(() -> {
-                    tradingPanel.setMarketOpen(isOpen);
-                    marketClosedLabel.setEnabled(!isOpen);
-                });
-            });
+            // T-158: open/closed/maintenance state follows on the next tick (updateTradingStatusUI()).
         }
 
         // Refresh balances for the new market
@@ -881,6 +998,9 @@ public class TradeScreen extends StockMarketGuiScreen {
             }
         }
 
+        // Drop the deleted market from this screen's subscription set (Issue #81).
+        syncPriceSubscriptions();
+
         // Rebuild the market list so the deleted entry disappears immediately.
         favoritesBar.scheduleRebuild(getAvailableMarkets(),
                 StockMarketGuiElement.getPlayerPreferences().getFavoriteMarketIDs(), currentMarketID);
@@ -897,25 +1017,13 @@ public class TradeScreen extends StockMarketGuiScreen {
 
         if(currentMarketID != null)
         {
-            ClientMarket market = getMarket(currentMarketID);
-            if(market != null)
-            {
-                market.unsubscribeFromMarketPriceUpdate();
-            }
-
             candlestickChart.setMarket(null);
             currentMarketID = null;
         }
-
-        // Unsubscribe from the "want" market price stream if in pair mode
-        if (pairWantMarketID != null) {
-            ClientMarket wantMarket = getMarket(pairWantMarketID);
-            if (wantMarket != null) {
-                wantMarket.unsubscribeFromMarketPriceUpdate();
-            }
-            pairWantMarketID = null;
-        }
+        pairWantMarketID = null;
         pairHaveMarketID = null;
+        // Issue #81: nothing is in view any more -> releases every subscription this screen holds.
+        syncPriceSubscriptions();
 
         super.onClose();
     }
@@ -974,7 +1082,9 @@ public class TradeScreen extends StockMarketGuiScreen {
         // Market selector area height (favorites bar or pair selector). Three button
         // rows now sit above it (the account selector row + the mode-button row +
         // T-155 the shared group row), so reserve vertical space for all three.
-        int selectorHeight = (height - spacing) / 2 - 3 * (modeButtonHeight + spacing);
+        // T-158: also reserve one small row for the trading-hours/clock line below the selector.
+        int hoursRowHeight = 8;
+        int selectorHeight = (height - spacing) / 2 - 3 * (modeButtonHeight + spacing) - (hoursRowHeight + spacing);
 
         // Top-right: favorites bar or pair selector (below mode buttons)
         favoritesBar.setBounds(rightPanelX, selectorTop, rightPanelWidth, selectorHeight);
@@ -983,7 +1093,10 @@ public class TradeScreen extends StockMarketGuiScreen {
         // Bottom-right: trading panel (below the selector area). The account
         // selector now lives in its own dedicated full-width top row (placed above),
         // so no extra vertical reservation is needed here.
-        int tradingPanelTop = selectorTop + selectorHeight + spacing;
+        // T-158: trading-hours/clock line sits between the selector and the trading panel.
+        int hoursRowY = selectorTop + selectorHeight + spacing;
+        tradingHoursLabel.setBounds(rightPanelX, hoursRowY, rightPanelWidth, hoursRowHeight);
+        int tradingPanelTop = hoursRowY + hoursRowHeight + spacing;
         tradingPanel.setBounds(rightPanelX, tradingPanelTop, rightPanelWidth, height - (tradingPanelTop - padding));
         // Inter-market trading panel same bounds as regular trading panel
         interMarketTradingPanel.setBounds(tradingPanel.getLeft(), tradingPanel.getTop(),
@@ -1093,13 +1206,6 @@ public class TradeScreen extends StockMarketGuiScreen {
 
             // If both pair sides are already selected, configure cross-rate mode on the chart
             if (pairHaveMarketID != null && pairWantMarketID != null) {
-                // Ensure both markets are subscribed to price updates — restored
-                // selections from preferences skip onPairSelected() which normally does this
-                ClientMarket haveMarket = getMarket(pairHaveMarketID);
-                ClientMarket wantMarket = getMarket(pairWantMarketID);
-                if (haveMarket != null) haveMarket.subscribeToMarketPriceUpdate();
-                if (wantMarket != null) wantMarket.subscribeToMarketPriceUpdate();
-
                 IPriceDataProvider crossRate = getMarketManager().getCrossRateMarket(pairHaveMarketID, pairWantMarketID);
                 if (crossRate != null) {
                     candlestickChart.setPriceDataProvider(crossRate);
@@ -1124,8 +1230,44 @@ public class TradeScreen extends StockMarketGuiScreen {
             }
         }
 
+        // Issue #81: pair mode holds both legs; money mode releases legs no longer shown.
+        syncPriceSubscriptions();
+
         // Trigger re-layout so chart/histogram bounds update for the new mode
         updateLayout(null);
+    }
+
+    /**
+     * Issue #81: reconciles this screen's price-stream subscriptions with what is in view.
+     * Wanted = the current market, plus both pair legs while pair mode is active (the
+     * cross-rate chart and the T-158 trading-status UI read both). Subscribes newly wanted
+     * markets once and releases markets that left view, so the ref-count in
+     * {@link ClientMarket} stays balanced. Call after any change of {@link #currentMarketID},
+     * {@link #pairHaveMarketID}, {@link #pairWantMarketID} or {@link #isPairMode}.
+     */
+    private void syncPriceSubscriptions() {
+        Set<ItemID> wanted = new HashSet<>();
+        if (currentMarketID != null) wanted.add(currentMarketID);
+        if (isPairMode) {
+            if (pairHaveMarketID != null) wanted.add(pairHaveMarketID);
+            if (pairWantMarketID != null) wanted.add(pairWantMarketID);
+        }
+        // Release markets that left view (a deleted market is already gone -> just drop it)
+        subscribedMarketIDs.removeIf(id -> {
+            if (wanted.contains(id)) return false;
+            ClientMarket m = getMarket(id);
+            if (m != null) m.unsubscribeFromMarketPriceUpdate();
+            return true;
+        });
+        // Subscribe markets newly in view (only once per screen)
+        for (ItemID id : wanted) {
+            if (subscribedMarketIDs.contains(id)) continue;
+            ClientMarket m = getMarket(id);
+            if (m != null) {
+                m.subscribeToMarketPriceUpdate();
+                subscribedMarketIDs.add(id);
+            }
+        }
     }
 
     /**
@@ -1151,13 +1293,8 @@ public class TradeScreen extends StockMarketGuiScreen {
             switchMarketInternal(pairHaveMarketID);
         }
 
-        // Subscribe to the "want" market price updates as well
-        if (pairWantMarketID != null) {
-            ClientMarket wantMarket = getMarket(pairWantMarketID);
-            if (wantMarket != null) {
-                wantMarket.subscribeToMarketPriceUpdate();
-            }
-        }
+        // Hold both legs, release the previous pair's legs (Issue #81)
+        syncPriceSubscriptions();
 
         // Configure candlestick chart for cross-rate mode via the market manager
         if (pairHaveMarketID != null && pairWantMarketID != null) {
@@ -1183,18 +1320,10 @@ public class TradeScreen extends StockMarketGuiScreen {
      * a FavoritesBar rebuild. Used by pair mode to switch the fallback display market.
      */
     private void switchMarketInternal(ItemID newMarketID) {
-        // Unsubscribe from old market
-        if (currentMarketID != null) {
-            ClientMarket oldMarket = getMarket(currentMarketID);
-            if (oldMarket != null) {
-                oldMarket.unsubscribeFromMarketPriceUpdate();
-            }
-        }
-
         currentMarketID = newMarketID;
+        syncPriceSubscriptions();
         ClientMarket market = getMarket(newMarketID);
         if (market != null) {
-            market.subscribeToMarketPriceUpdate();
             candlestickChart.setMarket(market);
             // Only bind the overlay to the market in money mode — in pair mode the overlay
             // must stay unbound so money-market limit orders are never drawn on the
@@ -1206,13 +1335,7 @@ public class TradeScreen extends StockMarketGuiScreen {
             tradingPanel.setItemName(ShareVisualHelpers.getDisplayName(newMarketID, newMarketID.getStack().getHoverName()).getString());
             tradingPanel.setLimitPrice(market.getCurrentMarketRealPrice());
             tradingPanel.setCurrentMarketPrice(market.getCurrentMarketRealPrice());
-
-            market.isMarketOpenAsync().thenAccept(isOpen -> {
-                Minecraft.getInstance().execute(() -> {
-                    tradingPanel.setMarketOpen(isOpen);
-                    marketClosedLabel.setEnabled(!isOpen);
-                });
-            });
+            // T-158: open/closed/maintenance state follows on the next tick (updateTradingStatusUI()).
         }
 
         refreshTradingPanelBalances();
@@ -1254,7 +1377,17 @@ public class TradeScreen extends StockMarketGuiScreen {
             info("Order created");
         } else {
             warn("Order rejected: " + result.status);
+            // Tell the player why: the market is outside its trading hours.
+            if (result.status == CreateOrderRequest.Status.MARKET_CLOSED)
+                Minecraft.getInstance().execute(this::showMarketClosedMessage);
         }
+    }
+
+    /** T-158: action-bar message telling the player the market is closed. Main thread only. */
+    private void showMarketClosedMessage() {
+        if (Minecraft.getInstance().player != null)
+            Minecraft.getInstance().player.displayClientMessage(
+                    Component.translatable("message.stockmarket.order_status.market_closed"), true);
     }
 
     private void onBuyMarket(double quantity)
@@ -1384,6 +1517,12 @@ public class TradeScreen extends StockMarketGuiScreen {
     private void onMoveInterMarketOrderFromChart(InterMarketOrder order, double newRate) {
         if (pairHaveMarketID == null || pairWantMarketID == null || selectedBankAccountNr == -1) return;
         if (newRate <= 0) return;
+        // T-158: same as onMoveOrderFromChart - the re-placement needs both legs open.
+        if (getEffectiveTradingState(order.getSellItemID()) != MarketSettings.TradingState.OPEN
+                || getEffectiveTradingState(order.getBuyItemID()) != MarketSettings.TradingState.OPEN) {
+            showMarketClosedMessage();
+            return;
+        }
 
         boolean orderMatchesPairDirection = order.getSellItemID().equals(pairHaveMarketID);
         // Capture original parameters for rollback if the new order placement fails
@@ -1444,6 +1583,12 @@ public class TradeScreen extends StockMarketGuiScreen {
      * at the new price with the remaining volume.
      */
     private void onMoveOrderFromChart(Order order, double newPrice) {
+        // T-158: a move is cancel + re-create. On a closed/under-maintenance market the re-create (and the
+        // restore) would be rejected and the order lost, so refuse the move; the marker snaps back.
+        if (getEffectiveTradingState(order.getItemID()) != MarketSettings.TradingState.OPEN) {
+            showMarketClosedMessage();
+            return;
+        }
         CancelOrderRequest.InputData cancelInput = new CancelOrderRequest.InputData(
                 order.getItemID(),
                 order.getTime(),

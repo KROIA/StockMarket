@@ -121,7 +121,8 @@ public class PluginMarket implements IPluginMarket
 
     @Override
     public boolean isMarketOpen() {
-        return serverMarket.isMarketOpen();
+        // Open = not under maintenance AND inside trading hours.
+        return !serverMarket.isUnderMaintenance() && serverMarket.isTradingOpen();
     }
 
     /** {@inheritDoc} Delegates to the underlying {@link net.kroia.stockmarket.stockmarket.market.MarketSettings#virtualOrderbookEnabled} flag. */

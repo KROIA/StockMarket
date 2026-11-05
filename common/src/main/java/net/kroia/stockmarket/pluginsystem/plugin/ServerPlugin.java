@@ -266,13 +266,14 @@ public abstract class ServerPlugin<TSettings, TRuntimeData> implements ServerSav
     public final void update_internal()
     {
         state  = State.EXEC_UPDATE;
-        update(cache.getInterfaces());
+        // Only markets inside their trading hours; closed markets keep a static price.
+        update(cache.getOpenInterfaces());
         state  = State.NONE;
     }
     public final void finalize_internal()
     {
         state  = State.EXEC_FINALIZE;
-        finalize(cache.getInterfaces());
+        finalize(cache.getOpenInterfaces());
         state  = State.NONE;
     }
 

@@ -1,5 +1,7 @@
 package net.kroia.stockmarket.networking.request;
 
+import net.kroia.modutilities.UtilitiesPlatform;
+import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -10,13 +12,28 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Returns the master server's wall clock (for client/server time offset sync) plus the
+ * trading-hours clocks (T-158). Slaves route this request to the master
+ * ({@code needsRoutingToMaster()}), so all values always describe the master.
+ */
 public class ServerTimeRequest extends StockMarketGenericRequest<Long, ServerTimeRequest.OutputData> {
 
-    public record OutputData(long serverTime, long clientTimeEcho)
+    /**
+     * @param serverTime      master wall-clock time in ms
+     * @param clientTimeEcho  the client's send time, echoed back for round-trip compensation
+     * @param realMinuteOfDay master's local real time as minute of the day (0..1439)
+     * @param gameMinuteOfDay master overworld in-game time as minute of the day (0..1439)
+     * @param useRealTime     {@code true} if trading hours currently follow real time, {@code false} for in-game time
+     */
+    public record OutputData(long serverTime, long clientTimeEcho, int realMinuteOfDay, int gameMinuteOfDay, boolean useRealTime)
     {
         public static final StreamCodec<RegistryFriendlyByteBuf, OutputData> STREAM_CODEC = StreamCodec.composite(
-                ByteBufCodecs.VAR_LONG, p -> p.serverTime,
-                ByteBufCodecs.VAR_LONG, p -> p.clientTimeEcho,
+                ByteBufCodecs.VAR_LONG, OutputData::serverTime,
+                ByteBufCodecs.VAR_LONG, OutputData::clientTimeEcho,
+                ByteBufCodecs.VAR_INT, OutputData::realMinuteOfDay,
+                ByteBufCodecs.VAR_INT, OutputData::gameMinuteOfDay,
+                ByteBufCodecs.BOOL, OutputData::useRealTime,
                 OutputData::new
         );
     }
@@ -28,12 +45,17 @@ public class ServerTimeRequest extends StockMarketGenericRequest<Long, ServerTim
 
     @Override
     protected OutputData getDefaultResponse() {
-        return new OutputData(0,0);
+        return new OutputData(0, 0, 0, 0, false);
     }
 
     @Override
     public CompletableFuture<OutputData> handleOnMasterServer(Long input, String slaveID, @Nullable UUID playerSender) {
-        return CompletableFuture.completedFuture(new OutputData(System.currentTimeMillis(), input));
+        // Runs on the master. The live setting is read directly (the manager's cached copy may lag one tick).
+        boolean useRealTime = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.TRADING_HOURS_USE_REAL_TIME.get();
+        return CompletableFuture.completedFuture(new OutputData(System.currentTimeMillis(), input,
+                ServerMarketManager.realMinuteOfDay(),
+                ServerMarketManager.gameMinuteOfDay(UtilitiesPlatform.getServer()),
+                useRealTime));
     }
 
     @Override

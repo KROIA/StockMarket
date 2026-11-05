@@ -21,8 +21,35 @@ public interface IAsyncMarket {
 
     CompletableFuture<Boolean> putOrderAsync(Order order);
     CompletableFuture<List<Order>> getLimitOrdersAsync();
-    CompletableFuture<Boolean> isMarketOpenAsync();
-    CompletableFuture<Boolean> setMarketOpenAsync(boolean marketOpen);
+    /**
+     * Queries whether this market is under maintenance (admin/integration maintenance mode).
+     * @return future resolving to {@code true} if under maintenance
+     */
+    CompletableFuture<Boolean> isUnderMaintenanceAsync();
+    /**
+     * Enables or disables maintenance mode. Enabling it cancels all player orders and inter-market orders
+     * referencing this market; bots keep trading.
+     * @param maintenance {@code true} to enter maintenance, {@code false} to end it
+     * @return future resolving to {@code true} on success
+     */
+    CompletableFuture<Boolean> setMaintenanceAsync(boolean maintenance);
+
+    /**
+     * Async counterpart of {@link net.kroia.stockmarket.api.market.ISyncServerMarket#setTradingHours(int, int)}.
+     * Admin-gated for players; refused when forwarded from an untrusted slave.
+     * @param openMinute  opening minute of the day (0..1440)
+     * @param closeMinute closing minute of the day (0..1440)
+     * @return future resolving to {@code true} on success, {@code false} when denied
+     */
+    CompletableFuture<Boolean> setTradingHoursAsync(int openMinute, int closeMinute);
+
+    /**
+     * Async counterpart of {@link net.kroia.stockmarket.api.market.ISyncServerMarket#setTradingOverride(boolean)}.
+     * Server-side only (not callable by clients); refused when forwarded from an untrusted slave.
+     * @param open {@code true} to force open, {@code false} to force closed until the next scheduled transition
+     * @return future resolving to {@code true} on success, {@code false} when denied
+     */
+    CompletableFuture<Boolean> setTradingOverrideAsync(boolean open);
 
     CompletableFuture<MarketPriceStruct> getCurrentMarketPriceStructAsync();
     CompletableFuture<MarketPriceStruct> getCurrentMarketPriceStructAndResetAsync();
