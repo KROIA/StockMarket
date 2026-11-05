@@ -96,8 +96,13 @@ subprojects {
     }
 
     tasks.withType(JavaCompile).configureEach {
+        it.options.encoding = 'UTF-8' // sources contain raw non-ASCII text (de_de/zh_cn news events)
         it.options.release = 21 // mc<=1.21.11
         //it.options.release = 25 // mc>=26.1
+    }
+
+    tasks.withType(Javadoc).configureEach {
+        it.options.encoding = 'UTF-8'
     }
 
     // Configure Maven publishing.
