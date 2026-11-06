@@ -7,6 +7,7 @@ This guide covers two common ways to set up the stock market on a server, with c
 * [Use Case 1: Standard Market with Virtual Orderbook (default)](#use-case-1-standard-market-with-virtual-orderbook-default)
 * [Use Case 2: Player-Driven Market (virtual orderbook disabled)](#use-case-2-player-driven-market-virtual-orderbook-disabled)
 * [Recommendation](#recommendation)
+* [Permissions (LuckPerms)](#permissions-luckperms)
 
 ---
 
@@ -94,3 +95,35 @@ Note: the **Clear** and **Reset Virtual Orderbook** buttons in the market settin
 ## Recommendation
 
 For new servers, start with **Use Case 1** across the board. Once you have a stable and active player base, consider migrating specific high-value items to **Use Case 2** where realistic player-driven pricing matters more than guaranteed liquidity. The two setups can coexist — the choice is per market.
+
+---
+
+## Permissions (LuckPerms)
+
+StockMarket admin commands and functions check these permission nodes, so a permission mod such as LuckPerms can grant or deny them per player or group. Without a permission mod, or when the permission mod leaves a node unset, each node requires operator level 2 (same as before).
+
+| Node | Grants |
+|------|--------|
+| `stockmarket.admin.command.op` | `/stockmarket op` and `/stockmarket deop` (StockMarket admin mode of a player) |
+| `stockmarket.admin.command.manage` | `/stockmarket manage` (the player must also have StockMarket admin mode) |
+| `stockmarket.admin.command.preset` | `/stockmarket preset ...` |
+| `stockmarket.admin.command.news` | `/stockmarket news ...` |
+| `stockmarket.admin.command.backup` | `/stockmarket backup ...` |
+| `stockmarket.admin.command.market` | `/stockmarket open <market>`, `/stockmarket close <market>` and `/stockmarket <market> remove` |
+| `stockmarket.admin.command.exportrecipes` | `/stockmarket exportrecipes` (dev builds only) |
+| `stockmarket.admin.command.devtest` | `/stockmarket devTestScreen` (dev builds only) |
+| `stockmarket.admin.notify` | Receiving chat notifications when another admin changes settings |
+
+Example: give the `admin` group every StockMarket admin right:
+
+```
+/lp group admin permission set stockmarket.admin.* true
+```
+
+The wildcard is resolved by LuckPerms itself (its `apply-wildcards` option, on by default), so it works on Fabric, Quilt and NeoForge. Other permission mods may not support wildcards; set the nodes individually there.
+
+Notes:
+
+* The management GUI and the other in-game admin functions are gated by **StockMarket admin mode** (`/stockmarket op`), not by a node. The node `stockmarket.admin.command.op` controls who may switch admin mode on or off. Admin mode is stored on the master server, so it also works for players on slave servers.
+* Nodes are only checked for players online on the server that runs the check. The console and command blocks always use operator level 2.
+* Command nodes are checked when a player's command list is sent. After changing a node for an online player, they may need to rejoin before the command shows up or disappears.

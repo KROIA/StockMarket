@@ -138,8 +138,8 @@ public abstract class StockMarketGenericRequest<IN, OUT> extends GenericRequest<
             if (excludePlayer != null && player.getUUID().equals(excludePlayer)) {
                 continue;
             }
-            // Only send to players with op level 2 (stockmarket admin permission)
-            if (PermissionCompat.hasPermission(player, 2)) {
+            // Only send to players with the notify node (op level 2 without a permission mod)
+            if (PermissionCompat.hasPermission(player, StockMarketPermissions.NOTIFY, StockMarketPermissions.FALLBACK_LEVEL)) {
                 player.sendSystemMessage(chatMessage);
             }
         }
