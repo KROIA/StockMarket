@@ -148,12 +148,11 @@ Used by **VolatilityPlugin** and **DefaultOrderbookVolumeDistributionPlugin**.
 2. Change the values in the text fields.
 3. Click **Apply** to send the new settings to the server.
 
-**VolatilityPlugin fields:**
-- Volatility Scale
+**Apply** sends the values for the selected market only; **Apply to all** sends them to every market subscribed to the plugin (after a confirmation dialog). Hover over a field to see its tooltip.
 
-**DefaultOrderbookVolumeDistributionPlugin fields:**
-- Volume Scale
-- Speed
+**VolatilityPlugin fields:** Volatility Scale, Player Flow Influence, Flow Sensitivity, Min Price Multiplier, Max Price Multiplier -- see [VolatilityPlugin](plugins/volatility-plugin.md).
+
+**DefaultOrderbookVolumeDistributionPlugin fields:** Volume Scale, Speed, Accumulation Rate, Decumulation Rate, plus a **Reset Volume** button -- see [Order Book Volume Distribution](plugins/orderbook-volume-distribution.md).
 
 ### Custom Screen Settings
 
@@ -164,7 +163,7 @@ Used by **TargetPriceBot**.
    - **Top left:** A candlestick chart with an adjacent orderbook volume histogram showing price history and volume distribution. An orange horizontal line shows the live target price that the bot is steering toward.
    - **Bottom left:** A market selector. Click an item to switch the chart to that market's data.
    - **Right side:** PID gain settings (P Gain, I Gain, D Gain, Rate) as text input fields.
-3. Edit the PID values and click **Apply** to send changes to the server.
+3. Edit the PID values and click **Apply** to send changes to the server (or **Apply to all** for every subscribed market). See [TargetPriceBot](plugins/target-price-bot.md) for what each value does.
 4. Press **Escape** to return to the plugin list.
 
 The candlestick chart updates in real time while the screen is open, showing both the price history and the current target price.
@@ -176,6 +175,6 @@ All plugin configuration is saved automatically when the server saves world data
 - Which plugins are enabled or disabled
 - The execution order
 - Which markets each plugin is subscribed to
-- All plugin-specific settings (volatility scale, PID gains, volume scale, speed)
+- All plugin-specific settings (see the [per-plugin pages](overview.md#default-plugins))
 
 Settings survive server restarts. A fresh world starts with all three default plugins registered and subscribed to the first available market.

@@ -20,6 +20,10 @@ For players, server admins and content creators.
 ### Plugin System
 - [Overview](user-guide/plugin-system/overview.md) — what market plugins do
 - [Managing Plugins](user-guide/plugin-system/management.md) — add, configure and subscribe plugins in-game
+- [VolatilityPlugin](user-guide/plugin-system/plugins/volatility-plugin.md) — random walk, flow-driven equilibrium, Min/Max Price Multipliers
+- [TargetPriceBot](user-guide/plugin-system/plugins/target-price-bot.md) — PID gains and how fast the price follows its target
+- [Order Book Volume Distribution](user-guide/plugin-system/plugins/orderbook-volume-distribution.md) — order book depth and refill speed
+- [NewsPlugin](user-guide/plugin-system/plugins/news-plugin.md) — per-market news sensitivity and scheduler values
 
 ## Developer Guide
 For mod developers extending StockMarket.

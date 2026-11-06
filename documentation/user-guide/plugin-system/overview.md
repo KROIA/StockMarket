@@ -8,53 +8,16 @@ Plugins run entirely on the server. Players do not interact with plugins directl
 
 ## Default Plugins
 
-The StockMarket mod ships with four built-in plugins. Together, they create a functioning market with realistic price behavior.
+The StockMarket mod ships with four built-in plugins. Together, they create a functioning market with realistic price behavior. Each has its own page with every setting, the math behind it, diagrams and tuning advice.
 
-### 1. VolatilityPlugin
+| Plugin | What it does | Details |
+|--------|--------------|---------|
+| **VolatilityPlugin** | Sets each market's target price: a random walk around an equilibrium price that moves permanently with net player buying and selling (bounded by Min/Max Price Multipliers). | [VolatilityPlugin](plugins/volatility-plugin.md) |
+| **TargetPriceBot** | Places market orders that push the real price toward the target price, steered by a PID controller. | [TargetPriceBot](plugins/target-price-bot.md) |
+| **DefaultOrderbookVolumeDistributionPlugin** | Fills the order book with virtual buy and sell volume around the current price and refills it over time. | [Order Book Volume Distribution](plugins/orderbook-volume-distribution.md) |
+| **NewsPlugin** | Publishes JSON-defined news events and multiplies the target price of the affected markets while they run. | [NewsPlugin](plugins/news-plugin.md), [News Event System](../news-system/overview.md) |
 
-Adds natural price movement to markets. Without this plugin, prices remain flat at their default value.
-
-The plugin uses a random walk algorithm to generate price fluctuations around a market's base price. The result is organic-looking price movement that rises and falls over time, similar to real markets.
-
-**Settings:**
-
-| Setting | Effect |
-|---------|--------|
-| Volatility Scale | Controls how large the price swings are. Higher values produce more dramatic price movement. A value of `1.0` is the default. Setting it to `0.5` halves the swings; setting it to `2.0` doubles them. |
-
-### 2. TargetPriceBot
-
-Automatically places orders to push the market price toward a target price. When the current price is below the target, the bot places buy orders to push the price up. When the price is above the target, it places sell orders to push the price down.
-
-The bot uses a PID controller -- a feedback mechanism that adjusts its behavior based on how far the price is from the target and how fast it is changing. This prevents the bot from overshooting or oscillating wildly.
-
-**Settings:**
-
-| Setting | Effect |
-|---------|--------|
-| P Gain | Reaction strength. Higher values make the bot respond more aggressively to price differences. Default: `0.5`. |
-| I Gain | Accumulated error correction. Addresses persistent price drift that the P gain alone cannot fix. Default: `0.1`. |
-| D Gain | Dampening. Reduces overshoot by reacting to how quickly the error is changing. Default: `0.0`. |
-| Rate | Update speed factor for the PID controller. Default: `0.1`. |
-
-### 3. DefaultOrderbookVolumeDistributionPlugin
-
-Fills the orderbook with virtual buy and sell orders at different price levels. This creates realistic market depth so that players see meaningful bid/ask spreads when they open the trading screen.
-
-Without this plugin, the orderbook would be empty except for player orders and bot orders, making the market feel thin and unrealistic.
-
-**Settings:**
-
-| Setting | Effect |
-|---------|--------|
-| Volume Scale | Controls how much depth appears in the orderbook. Higher values produce more volume at each price level. Default: `1.0`. |
-| Speed | How quickly the orderbook depth rebuilds after trades consume existing volume. Higher values mean faster recovery. Default: `0.05`. |
-
-### 4. NewsPlugin
-
-Publishes JSON-defined news events that temporarily (or permanently) move the prices of the affected markets. Players read the headlines through a craftable newspaper item.
-
-The plugin has its own dedicated management window (active events, per-market impact, trigger/reload/stop buttons) and per-market settings (news enabled, sensitivity). See the [News Event System](../news-system/overview.md) documentation for the full feature description and the [JSON configuration reference](../news-system/configuration.md).
+Every plugin also has the same **generic settings** in its entry on the [Plugin Management Screen](management.md): *Enabled*, *Auto-subscribe* (subscribe newly created markets automatically), *Logger* (write the plugin's messages to the server log), its market subscriptions and its position in the list.
 
 ## How Plugins Work Together
 

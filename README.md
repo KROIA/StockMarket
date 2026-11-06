@@ -417,6 +417,8 @@ The random walk is anchored on a flow-driven [price equilibrium](#price-equilibr
 | Min Price Multiplier | Lower clamp for the equilibrium as a fraction of the default price. Default: 0.05 (never below 5% of the default price). |
 | Max Price Multiplier | Upper clamp for the equilibrium as a multiple of the default price. Default: 20 (never above 20x the default price). |
 
+Full reference with worked examples and tuning advice: [VolatilityPlugin](documentation/user-guide/plugin-system/plugins/volatility-plugin.md).
+
 ### TargetPriceBot
 The market-making bot that drives prices toward a target value. It places [market orders](#market-order) to push the price in the desired direction. A [PID controller](https://en.wikipedia.org/wiki/Proportional%E2%80%93integral%E2%80%93derivative_controller) determines the size and direction of each order to smoothly converge on the target price without overshooting.
 
@@ -428,7 +430,9 @@ The target price is influenced by the **VolatilityPlugin** (random walk noise) a
 | PID P | Proportional gain — how aggressively the bot reacts to the current price difference. |
 | PID I | Integral gain — how much accumulated past error influences the bot's orders. |
 | PID D | Derivative gain — how much the rate of price change dampens the bot's response. |
-| PID Rate | How quickly the PID controller updates. |
+| PID Rate | Limit of the integral term (anti-windup): caps how much the accumulated price gap can add to the bot output. |
+
+Full reference and tuning advice: [TargetPriceBot](documentation/user-guide/plugin-system/plugins/target-price-bot.md).
 
 ### DefaultOrderbookVolumeDistributionPlugin
 Automatically fills the [order book](#order-book) with a realistic volume distribution so that players always have liquidity to trade against. Without this plugin, market orders would have no counterpart to fill against.
@@ -444,10 +448,12 @@ The distribution uses a power-law shape near the current price (tighter spreads 
 | Decumulation Rate | How fast excess volume decreases (slower for stability). |
 | Reset Volume | Force an immediate reset of the order book to the target distribution. |
 
+Full reference and tuning advice: [Order Book Volume Distribution](documentation/user-guide/plugin-system/plugins/orderbook-volume-distribution.md).
+
 ### NewsPlugin
 Randomly publishes news events defined in JSON files (`config/StockMarket/news/`) and moves the prices of the affected markets — shocks, trends, crashes and even permanent shifts. Players read the headlines with a craftable **newspaper item**; an opt-in popup notifies interested players when news breaks. Admins control everything through the plugin's management window and the `/stockmarket news` commands.
 
-See the [News Event System overview](documentation/user-guide/news-system/overview.md), the [JSON configuration reference](documentation/user-guide/news-system/configuration.md), and the step-by-step [event authoring tutorial](documentation/user-guide/news-system/authoring-tutorial.md).
+See the [News Event System overview](documentation/user-guide/news-system/overview.md), the [JSON configuration reference](documentation/user-guide/news-system/configuration.md), and the step-by-step [event authoring tutorial](documentation/user-guide/news-system/authoring-tutorial.md). Plugin settings (sensitivity, scheduler): [NewsPlugin](documentation/user-guide/plugin-system/plugins/news-plugin.md).
 
 ### How the plugins work together
 The three plugins combine to create a functioning market:
