@@ -86,16 +86,6 @@ void setAutoSubscribeNewMarkets(boolean autoSubscribe)
 Sets whether this plugin automatically subscribes to newly created markets. Default: `true`.
 
 ```java
-int getSubscriptionOrder()
-```
-Returns the subscription order used for sorting in the plugin list.
-
-```java
-void setSubscriptionOrder(int order)
-```
-Sets the subscription order used for sorting in the plugin list.
-
-```java
 void setNetworkStreamPacketTickInterval(int tickInterval)
 ```
 Sets the tick-based interval for runtime data stream packets.

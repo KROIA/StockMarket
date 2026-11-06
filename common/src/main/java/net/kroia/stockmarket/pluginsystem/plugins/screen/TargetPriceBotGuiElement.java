@@ -13,6 +13,7 @@ import net.kroia.stockmarket.pluginsystem.screen.PluginGuiElement;
 import net.kroia.stockmarket.screen.widgets.CandlestickChart;
 import net.kroia.stockmarket.screen.widgets.OrderbookVolumeHistogram;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
+import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.world.item.ItemStack;
@@ -49,6 +50,10 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
         public static final Component LABEL_D_GAIN = Component.translatable(PREFIX + "d_gain");
         public static final Component LABEL_RATE = Component.translatable(PREFIX + "rate");
         public static final Component APPLY_BUTTON = Component.translatable(PREFIX + "apply");
+        public static final Component P_GAIN_TOOLTIP = Component.translatable(PREFIX + "p_gain.tooltip");
+        public static final Component I_GAIN_TOOLTIP = Component.translatable(PREFIX + "i_gain.tooltip");
+        public static final Component D_GAIN_TOOLTIP = Component.translatable(PREFIX + "d_gain.tooltip");
+        public static final Component RATE_TOOLTIP = Component.translatable(PREFIX + "rate.tooltip");
     }
 
     private final CandlestickChart candlestickChart;
@@ -65,6 +70,9 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
     private final Label rateLabel;
     private final TextBox rateTextBox;
     private final Button applyButton;
+    private final Button applyAllButton;
+    /** Holds Apply + Apply-to-all side by side as one row of the vertical settings list. */
+    private final StockMarketGuiElement applyButtonRow;
     private List<ItemID> subscribedMarkets = new ArrayList<>();
     private Map<ItemID, TargetPriceBot.Settings> allSettings = new HashMap<>();
     private final Map<Short, Double> marketTargetPrices = new HashMap<>();
@@ -114,7 +122,29 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
         rateTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, true, 10, 6));
 
         applyButton = new Button(Texts.APPLY_BUTTON.getString(), this::onApplySettings);
-        applyButton.setHeight(20);
+        applyAllButton = new Button(ApplyAllTexts.APPLY_ALL.getString(), () -> confirmApplyToAllMarkets(readSettings()));
+        setSettingTooltip(ApplyAllTexts.APPLY_ALL_TOOLTIP, applyAllButton);
+        applyButtonRow = new StockMarketGuiElement() {
+            @Override
+            protected void render() {}
+
+            @Override
+            protected void layoutChanged() {
+                int halfW = (getWidth() - spacing) / 2;
+                applyButton.setBounds(0, 0, halfW, getHeight());
+                applyAllButton.setBounds(halfW + spacing, 0, getWidth() - halfW - spacing, getHeight());
+            }
+        };
+        applyButtonRow.setEnableBackground(false);
+        applyButtonRow.setEnableOutline(false);
+        applyButtonRow.addChild(applyButton);
+        applyButtonRow.addChild(applyAllButton);
+        applyButtonRow.setHeight(20);
+
+        setSettingTooltip(Texts.P_GAIN_TOOLTIP, pGainLabel, pGainTextBox);
+        setSettingTooltip(Texts.I_GAIN_TOOLTIP, iGainLabel, iGainTextBox);
+        setSettingTooltip(Texts.D_GAIN_TOOLTIP, dGainLabel, dGainTextBox);
+        setSettingTooltip(Texts.RATE_TOOLTIP, rateLabel, rateTextBox);
 
         settingsListView.addChild(pGainLabel);
         settingsListView.addChild(pGainTextBox);
@@ -124,7 +154,7 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
         settingsListView.addChild(dGainTextBox);
         settingsListView.addChild(rateLabel);
         settingsListView.addChild(rateTextBox);
-        settingsListView.addChild(applyButton);
+        settingsListView.addChild(applyButtonRow);
 
         addChild(candlestickChart);
         addChild(orderbookVolumeHistogram);
@@ -275,14 +305,19 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
         }
     }
 
-    private void onApplySettings() {
-        if (selectedMarketID == null) return;
-        sendCustomSettings(selectedMarketID, new TargetPriceBot.Settings(
+    /** Builds the PID settings from the current input values. */
+    private TargetPriceBot.Settings readSettings() {
+        return new TargetPriceBot.Settings(
                 (float) pGainTextBox.getDouble(),
                 (float) iGainTextBox.getDouble(),
                 (float) dGainTextBox.getDouble(),
                 (float) rateTextBox.getDouble()
-        ));
+        );
+    }
+
+    private void onApplySettings() {
+        if (selectedMarketID == null) return;
+        sendCustomSettings(selectedMarketID, readSettings());
     }
 
     @Override

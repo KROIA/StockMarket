@@ -10,6 +10,7 @@ import net.kroia.modutilities.gui.elements.base.ListView;
 import net.kroia.modutilities.gui.layout.LayoutGrid;
 import net.kroia.modutilities.gui.layout.LayoutVertical;
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.pluginsystem.screen.PluginGuiElement;
 import net.kroia.stockmarket.screen.widgets.CandlestickChart;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
@@ -83,6 +84,8 @@ public class ManagementScreen extends StockMarketGuiScreen {
         public static final Component PLUGINS_TITLE = Component.translatable(PREFIX + "plugins.title");
         public static final Component PLUGINS_ENABLED = Component.translatable(PREFIX + "plugins.enabled");
         public static final Component PLUGINS_MANAGE = Component.translatable(PREFIX + "plugins.manage");
+        public static final Component PLUGINS_MANAGE_TOOLTIP = Component.translatable(PREFIX + "plugins.manage.tooltip");
+        public static final Component PLUGINS_ENABLED_TOOLTIP = Component.translatable(PREFIX + "plugins.enabled.tooltip");
 
         public static final Component MOD_SETTINGS = Component.translatable(PREFIX + "mod_settings");
         public static final Component MOD_SETTINGS_TOOLTIP = Component.translatable(PREFIX + "mod_settings.tooltip");
@@ -330,6 +333,8 @@ public class ManagementScreen extends StockMarketGuiScreen {
             statusLabel.setAlignment(Label.Alignment.CENTER);
 
             managePluginsButton = new Button(Texts.PLUGINS_MANAGE.getString(), this::onManagePluginsButtonClicked);
+            PluginGuiElement.setSettingTooltip(Texts.PLUGINS_MANAGE_TOOLTIP, managePluginsButton);
+            PluginGuiElement.setSettingTooltip(Texts.PLUGINS_ENABLED_TOOLTIP, statusLabel);
 
             this.addChild(titleLabel);
             this.addChild(statusLabel);

@@ -30,6 +30,10 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
         public static final Component DECUMULATION_RATE = Component.translatable(PREFIX + "decumulation_rate");
         public static final Component APPLY = Component.translatable(PREFIX + "apply");
         public static final Component RESET_VOLUME = Component.translatable(PREFIX + "reset_volume");
+        public static final Component VOLUME_SCALE_TOOLTIP = Component.translatable(PREFIX + "volume_scale.tooltip");
+        public static final Component SPEED_TOOLTIP = Component.translatable(PREFIX + "speed.tooltip");
+        public static final Component ACCUMULATION_RATE_TOOLTIP = Component.translatable(PREFIX + "accumulation_rate.tooltip");
+        public static final Component DECUMULATION_RATE_TOOLTIP = Component.translatable(PREFIX + "decumulation_rate.tooltip");
     }
 
     private final Label volumeScaleLabel;
@@ -41,6 +45,7 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
     private final Label decumulationRateLabel;
     private final TextBox decumulationRateTextBox;
     private final Button applyButton;
+    private final Button applyAllButton;
     private final Button resetVolumeButton;
     private @Nullable OrderbookVolumeHistogram histogram;
     private @Nullable OrderbookVolumeHistogram.Overlay volumeOverlay;
@@ -71,6 +76,14 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
 
         applyButton = new Button(Texts.APPLY.getString(), this::onApply);
         resetVolumeButton = new Button(Texts.RESET_VOLUME.getString(), this::onResetVolume);
+        // Apply-to-all never resets the volume (resetVolume = false)
+        applyAllButton = new Button(ApplyAllTexts.APPLY_ALL.getString(), () -> confirmApplyToAllMarkets(readSettings(false)));
+        setSettingTooltip(ApplyAllTexts.APPLY_ALL_TOOLTIP, applyAllButton);
+
+        setSettingTooltip(Texts.VOLUME_SCALE_TOOLTIP, volumeScaleLabel, volumeScaleTextBox);
+        setSettingTooltip(Texts.SPEED_TOOLTIP, speedLabel, speedTextBox);
+        setSettingTooltip(Texts.ACCUMULATION_RATE_TOOLTIP, accumulationRateLabel, accumulationRateTextBox);
+        setSettingTooltip(Texts.DECUMULATION_RATE_TOOLTIP, decumulationRateLabel, decumulationRateTextBox);
 
         addChild(volumeScaleLabel);
         addChild(volumeScaleTextBox);
@@ -81,9 +94,10 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
         addChild(decumulationRateLabel);
         addChild(decumulationRateTextBox);
         addChild(applyButton);
+        addChild(applyAllButton);
         addChild(resetVolumeButton);
 
-        // 5 rows (4 label+field rows, 1 button row with Apply + Reset side by side)
+        // 5 rows (4 label+field rows, 1 button row with Apply + Apply-to-all + Reset side by side)
         setHeight(5 * (defaultElementHeight + spacing) + padding);
     }
 
@@ -157,29 +171,32 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
         }
     }
 
-    private void onApply() {
-        ItemID market = getActiveMarket();
-        if (market == null) return;
-        sendCustomSettings(market, new DefaultOrderbookVolumeDistributionPlugin.Settings(
+    /**
+     * Builds the settings from the current input values.
+     *
+     * @param resetVolume true to also wipe the market's current virtual volume
+     */
+    private DefaultOrderbookVolumeDistributionPlugin.Settings readSettings(boolean resetVolume) {
+        return new DefaultOrderbookVolumeDistributionPlugin.Settings(
                 (float) volumeScaleTextBox.getDouble(),
                 (float) speedTextBox.getDouble(),
                 (float) accumulationRateTextBox.getDouble(),
                 (float) decumulationRateTextBox.getDouble(),
-                false
-        ));
+                resetVolume
+        );
+    }
+
+    private void onApply() {
+        ItemID market = getActiveMarket();
+        if (market == null) return;
+        sendCustomSettings(market, readSettings(false));
         currentVolumeScale = (float) volumeScaleTextBox.getDouble();
     }
 
     private void onResetVolume() {
         ItemID market = getActiveMarket();
         if (market == null) return;
-        sendCustomSettings(market, new DefaultOrderbookVolumeDistributionPlugin.Settings(
-                (float) volumeScaleTextBox.getDouble(),
-                (float) speedTextBox.getDouble(),
-                (float) accumulationRateTextBox.getDouble(),
-                (float) decumulationRateTextBox.getDouble(),
-                true
-        ));
+        sendCustomSettings(market, readSettings(true));
         currentVolumeScale = (float) volumeScaleTextBox.getDouble();
     }
 
@@ -208,9 +225,10 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
         decumulationRateTextBox.setBounds(decumulationRateLabel.getRight() + spacing, y, fieldW, eh);
 
         y = decumulationRateTextBox.getBottom() + spacing;
-        int buttonW = (w - 2 * padding - spacing) / 2;
+        int buttonW = (w - 2 * padding - 2 * spacing) / 3;
         applyButton.setBounds(padding, y, buttonW, eh);
-        resetVolumeButton.setBounds(applyButton.getRight() + spacing, y, buttonW, eh);
+        applyAllButton.setBounds(applyButton.getRight() + spacing, y, buttonW, eh);
+        resetVolumeButton.setBounds(applyAllButton.getRight() + spacing, y, buttonW, eh);
     }
 
     @Override

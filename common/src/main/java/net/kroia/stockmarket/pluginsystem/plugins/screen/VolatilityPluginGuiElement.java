@@ -29,6 +29,11 @@ public class VolatilityPluginGuiElement extends PluginGuiElement<VolatilityPlugi
         public static final Component MIN_PRICE_MULT_LABEL = Component.translatable(PREFIX + "min_price_mult");
         public static final Component MAX_PRICE_MULT_LABEL = Component.translatable(PREFIX + "max_price_mult");
         public static final Component APPLY = Component.translatable(PREFIX + "apply");
+        public static final Component SCALE_TOOLTIP = Component.translatable(PREFIX + "scale.tooltip");
+        public static final Component FLOW_ENABLED_TOOLTIP = Component.translatable(PREFIX + "flow_enabled.tooltip");
+        public static final Component FLOW_SENSITIVITY_TOOLTIP = Component.translatable(PREFIX + "flow_sensitivity.tooltip");
+        public static final Component MIN_PRICE_MULT_TOOLTIP = Component.translatable(PREFIX + "min_price_mult.tooltip");
+        public static final Component MAX_PRICE_MULT_TOOLTIP = Component.translatable(PREFIX + "max_price_mult.tooltip");
     }
 
     private final Label scaleLabel;
@@ -41,6 +46,7 @@ public class VolatilityPluginGuiElement extends PluginGuiElement<VolatilityPlugi
     private final Label maxPriceMultLabel;
     private final TextBox maxPriceMultTextBox;
     private final Button applyButton;
+    private final Button applyAllButton;
     private Map<ItemID, VolatilityPlugin.Settings> allSettings = new HashMap<>();
 
     public VolatilityPluginGuiElement() {
@@ -68,6 +74,14 @@ public class VolatilityPluginGuiElement extends PluginGuiElement<VolatilityPlugi
         maxPriceMultTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 10, 6));
 
         applyButton = new Button(Texts.APPLY.getString(), this::onApply);
+        applyAllButton = new Button(ApplyAllTexts.APPLY_ALL.getString(), () -> confirmApplyToAllMarkets(readSettings()));
+        setSettingTooltip(ApplyAllTexts.APPLY_ALL_TOOLTIP, applyAllButton);
+
+        setSettingTooltip(Texts.SCALE_TOOLTIP, scaleLabel, scaleTextBox);
+        setSettingTooltip(Texts.FLOW_ENABLED_TOOLTIP, flowEnabledCheckBox);
+        setSettingTooltip(Texts.FLOW_SENSITIVITY_TOOLTIP, flowSensitivityLabel, flowSensitivityTextBox);
+        setSettingTooltip(Texts.MIN_PRICE_MULT_TOOLTIP, minPriceMultLabel, minPriceMultTextBox);
+        setSettingTooltip(Texts.MAX_PRICE_MULT_TOOLTIP, maxPriceMultLabel, maxPriceMultTextBox);
 
         addChild(scaleLabel);
         addChild(scaleTextBox);
@@ -79,8 +93,9 @@ public class VolatilityPluginGuiElement extends PluginGuiElement<VolatilityPlugi
         addChild(maxPriceMultLabel);
         addChild(maxPriceMultTextBox);
         addChild(applyButton);
+        addChild(applyAllButton);
 
-        // 6 rows of controls (scale, flow toggle, sensitivity, min mult, max mult, apply)
+        // 6 rows of controls (scale, flow toggle, sensitivity, min mult, max mult, apply + apply-to-all)
         setHeight(6 * (defaultElementHeight + spacing) + padding);
     }
 
@@ -127,15 +142,20 @@ public class VolatilityPluginGuiElement extends PluginGuiElement<VolatilityPlugi
         maxPriceMultTextBox.setText(settings.maxPriceMult(), 6);
     }
 
-    private void onApply() {
-        ItemID market = getActiveMarket();
-        if (market == null) return;
-        sendCustomSettings(market, new VolatilityPlugin.Settings(
+    /** Builds the settings from the current input values. */
+    private VolatilityPlugin.Settings readSettings() {
+        return new VolatilityPlugin.Settings(
                 (float) scaleTextBox.getDouble(),
                 flowEnabledCheckBox.isChecked(),
                 (float) flowSensitivityTextBox.getDouble(),
                 (float) minPriceMultTextBox.getDouble(),
-                (float) maxPriceMultTextBox.getDouble()));
+                (float) maxPriceMultTextBox.getDouble());
+    }
+
+    private void onApply() {
+        ItemID market = getActiveMarket();
+        if (market == null) return;
+        sendCustomSettings(market, readSettings());
     }
 
     @Override
@@ -166,8 +186,10 @@ public class VolatilityPluginGuiElement extends PluginGuiElement<VolatilityPlugi
         maxPriceMultLabel.setBounds(padding, minPriceMultTextBox.getBottom() + spacing, labelW, eh);
         maxPriceMultTextBox.setBounds(textBoxX, maxPriceMultLabel.getTop(), textBoxW, eh);
 
-        // Row 6: apply button
-        applyButton.setBounds(padding, maxPriceMultTextBox.getBottom() + spacing, w - 2 * padding, eh);
+        // Row 6: apply + apply-to-all buttons side by side
+        int buttonW = (w - 2 * padding - spacing) / 2;
+        applyButton.setBounds(padding, maxPriceMultTextBox.getBottom() + spacing, buttonW, eh);
+        applyAllButton.setBounds(applyButton.getRight() + spacing, applyButton.getTop(), buttonW, eh);
     }
 
     @Override

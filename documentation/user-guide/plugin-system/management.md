@@ -92,7 +92,7 @@ Execution order determines the sequence in which plugins run each update cycle. 
 1. Click the **up arrow** button to move a plugin up (it will execute earlier).
 2. Click the **down arrow** button to move a plugin down (it will execute later).
 
-The list updates immediately to show the new order. See the [Plugin System Overview](overview.md) for why execution order matters.
+The list updates immediately to show the new order. See the [Plugin System Overview](overview.md) for why execution order matters. Plugins with auto-subscribe enabled also subscribe newly created markets in this order.
 
 ## Subscribing Markets to Plugins
 
@@ -113,6 +113,17 @@ To remove a market from a plugin:
 2. Click and hold the small **close button** in the top-right corner of the icon. The button turns bright red when active.
 3. Release the mouse while still over the close button to confirm removal. If you change your mind, move the mouse away before releasing — the removal is cancelled.
 4. The plugin stops affecting that market immediately.
+
+## Selecting a Plugin and Stepping Through Its Markets
+
+Click anywhere inside a plugin entry to select it; the selected plugin is shown with a darker background. The selection is kept when the list refreshes.
+
+With a plugin selected, press the **Left** / **Right** arrow keys to select the previous / next market of that plugin for the chart, the same as clicking its icon:
+
+- The selection wraps around from the last market to the first and back.
+- If the chart shows a market the plugin is not subscribed to, **Right** jumps to its first market and **Left** to its last.
+- The market icon row scrolls so the selected icon stays visible.
+- The arrow keys are ignored while a text box has focus, so you can still move the cursor in settings fields.
 
 ## Filtering Plugins by Market
 

@@ -421,6 +421,7 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
     private final Label sensitivityLabel;
     private final TextBox sensitivityTextBox;
     private final Button applyButton;
+    private final Button applyAllButton;
     private final ItemSelectionView marketSelectionView;
     /** Small price-history chart of the selected market (bottom right, T-085). */
     private final CandlestickChart marketChart;
@@ -521,8 +522,11 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
         sensitivityTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, true, 10, 6));
         sensitivityTextBox.setText(NewsPlugin.DEFAULT_SENSITIVITY, 6);
         setupRightAnchoredTooltip(sensitivityTextBox, Texts.SENSITIVITY_TOOLTIP);
+        setupRightAnchoredTooltip(sensitivityLabel, Texts.SENSITIVITY_TOOLTIP);
 
         applyButton = new Button(Texts.APPLY.getString(), this::onApplySettings);
+        applyAllButton = new Button(ApplyAllTexts.APPLY_ALL.getString(), () -> confirmApplyToAllMarkets(readSettings()));
+        setupRightAnchoredTooltip(applyAllButton, ApplyAllTexts.APPLY_ALL_TOOLTIP);
 
         // T-086: group the editor controls in an outlined frame so it reads as one
         // unit — Apply commits exactly the checkbox + sensitivity inside the frame.
@@ -533,6 +537,7 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
         settingsFrame.addChild(sensitivityLabel);
         settingsFrame.addChild(sensitivityTextBox);
         settingsFrame.addChild(applyButton);
+        settingsFrame.addChild(applyAllButton);
 
         marketSelectionView = new ItemSelectionView(this::onMarketSelected);
 
@@ -746,9 +751,14 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
      */
     private void onApplySettings() {
         if (selectedMarketID == null) return;
-        sendCustomSettings(selectedMarketID, new NewsPlugin.Settings(
+        sendCustomSettings(selectedMarketID, readSettings());
+    }
+
+    /** Builds the news settings from the current editor values. */
+    private NewsPlugin.Settings readSettings() {
+        return new NewsPlugin.Settings(
                 newsEnabledCheckBox.isChecked(),
-                (float) sensitivityTextBox.getDouble()));
+                (float) sensitivityTextBox.getDouble());
     }
 
     // ── Admin actions (T-076/T-081/T-082/T-085, backed by NewsAdminRequest) ──
@@ -1202,7 +1212,10 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
         sensitivityLabel.setBounds(padding, newsEnabledCheckBox.getBottom() + spacing, sensLabelW, eh);
         sensitivityTextBox.setBounds(padding + sensLabelW + spacing, sensitivityLabel.getTop(),
                 frameInnerW - sensLabelW - spacing, eh);
-        applyButton.setBounds(padding, sensitivityTextBox.getBottom() + spacing, frameInnerW, eh);
+        int applyW = (frameInnerW - spacing) / 2;
+        applyButton.setBounds(padding, sensitivityTextBox.getBottom() + spacing, applyW, eh);
+        applyAllButton.setBounds(applyButton.getRight() + spacing, applyButton.getTop(),
+                frameInnerW - applyW - spacing, eh);
 
         int chartH = Math.max(90, h * 30 / 100);
         int chartY = h - chartH;
@@ -1517,6 +1530,10 @@ public class NewsPluginGuiElement extends PluginGuiElement<NewsPlugin.Settings, 
             setupRightAnchoredTooltip(maxBox, Texts.SCHED_MAX_TOOLTIP);
             setupRightAnchoredTooltip(globalBox, Texts.SCHED_MAX_GLOBAL_TOOLTIP);
             setupRightAnchoredTooltip(perMarketBox, Texts.SCHED_MAX_PER_MARKET_TOOLTIP);
+            setupRightAnchoredTooltip(minLabel, Texts.SCHED_MIN_TOOLTIP);
+            setupRightAnchoredTooltip(maxLabel, Texts.SCHED_MAX_TOOLTIP);
+            setupRightAnchoredTooltip(globalLabel, Texts.SCHED_MAX_GLOBAL_TOOLTIP);
+            setupRightAnchoredTooltip(perMarketLabel, Texts.SCHED_MAX_PER_MARKET_TOOLTIP);
 
             applySchedulerButton = new Button(Texts.SCHED_APPLY.getString(), this::onApplyScheduler);
             resetSchedulerButton = new Button(Texts.SCHED_RESET.getString(), this::onResetScheduler);

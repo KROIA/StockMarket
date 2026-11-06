@@ -300,7 +300,7 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
 
     /**
      * Auto-subscribes a newly created market to all plugins that opt in,
-     * sorted by subscriptionOrder (0 = earliest, ties resolved by list order).
+     * in plugin list (execution) order.
      *
      * @param marketID the ID of the newly created market
      */
@@ -324,9 +324,7 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
             }
         }
 
-        List<ServerPlugin> sorted = new ArrayList<>(plugins.values());
-        sorted.sort(Comparator.comparingInt(ServerPlugin::getSubscriptionOrder));
-        for (ServerPlugin plugin : sorted)
+        for (ServerPlugin plugin : new ArrayList<>(plugins.values()))
         {
             if (plugin.getAutoSubscribeNewMarkets())
             {
@@ -512,7 +510,6 @@ public class ServerPluginManager implements ServerSaveableChunked, IServerPlugin
             if (pluginTag.contains("description")) plugin.setDescription(NbtCompat.getString(pluginTag, "description"));
             if (pluginTag.contains("loggerEnabled")) plugin.setLoggerEnabled(NbtCompat.getBoolean(pluginTag, "loggerEnabled"));
             if (pluginTag.contains("autoSubscribeNewMarkets")) plugin.setAutoSubscribeNewMarkets(NbtCompat.getBoolean(pluginTag, "autoSubscribeNewMarkets"));
-            if (pluginTag.contains("subscriptionOrder")) plugin.setSubscriptionOrder(NbtCompat.getInt(pluginTag, "subscriptionOrder"));
 
             // Restore subscribed markets
             if (pluginTag.contains("subscribedMarkets")) {

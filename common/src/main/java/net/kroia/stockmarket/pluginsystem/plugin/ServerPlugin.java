@@ -107,13 +107,6 @@ public abstract class ServerPlugin<TSettings, TRuntimeData> implements ServerSav
         genericPluginData.setAutoSubscribeNewMarkets(autoSubscribe);
     }
 
-    public int getSubscriptionOrder() {
-        return genericPluginData.getSubscriptionOrder();
-    }
-    public void setSubscriptionOrder(int order) {
-        genericPluginData.setSubscriptionOrder(order);
-    }
-
     public GenericPluginData getGenericPluginData() {
         return genericPluginData;
     }

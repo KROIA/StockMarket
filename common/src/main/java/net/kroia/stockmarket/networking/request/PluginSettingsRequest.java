@@ -93,7 +93,6 @@ public class PluginSettingsRequest extends StockMarketGenericRequest<PluginSetti
         plugin.setDescription(updated.getDescription());
         plugin.setLoggerEnabled(updated.isLoggerEnabled());
         plugin.setAutoSubscribeNewMarkets(updated.getAutoSubscribeNewMarkets());
-        plugin.setSubscriptionOrder(updated.getSubscriptionOrder());
 
         // Notify other admins about the settings change
         broadcastToAdmins(playerSender,
