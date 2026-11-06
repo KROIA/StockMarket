@@ -152,7 +152,8 @@ public class VillagerTradeManager {
         }
 
         this.table = new VillagerTradePriceTable(System.currentTimeMillis(), enabled, currency,
-                settings.VILLAGER_BUY_MARGIN.get(), settings.VILLAGER_SELL_MARGIN.get(), prices);
+                settings.VILLAGER_BUY_MARGIN.get(), settings.VILLAGER_SELL_MARGIN.get(),
+                settings.REPLACE_EMERALDS_FOR_UNLISTED.get(), prices);
     }
 
     /**

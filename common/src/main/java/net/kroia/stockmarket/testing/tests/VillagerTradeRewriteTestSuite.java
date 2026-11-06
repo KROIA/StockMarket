@@ -62,6 +62,11 @@ public class VillagerTradeRewriteTestSuite extends TestSuite {
         addTest("item_cost_accepts_plain_currency", this::test_item_cost_accepts_plain_currency);
         addTest("clamp_warns_once_per_offer", this::test_clamp_warns_once_per_offer);
         addTest("table_lookup_resolves_item_ids", this::test_table_lookup_resolves_item_ids);
+        addTest("emerald_replace_off_unchanged", this::test_emerald_replace_off_unchanged);
+        addTest("emerald_replace_converts_unlisted", this::test_emerald_replace_converts_unlisted);
+        addTest("emerald_replace_no_emerald_market_unchanged", this::test_emerald_replace_no_emerald_market_unchanged);
+        addTest("emerald_replace_listed_item_uses_market", this::test_emerald_replace_listed_item_uses_market);
+        addTest("emerald_replace_toggle_off_restores", this::test_emerald_replace_toggle_off_restores);
     }
 
     // ========================================================================
@@ -75,11 +80,22 @@ public class VillagerTradeRewriteTestSuite extends TestSuite {
     private static VillagerTradePriceTable table(long version, boolean enabled, ItemStack currency,
                                                  Map<Short, Long> prices) {
         return new VillagerTradePriceTable(version, enabled, currency,
-                BUY_MARGIN, SELL_MARGIN, prices);
+                BUY_MARGIN, SELL_MARGIN, false, prices);
     }
 
     private static VillagerTradePriceTable moneyTable(long version) {
         return table(version, true, moneyCurrency(), Map.of());
+    }
+
+    /** Enabled money table with the given REPLACE_EMERALDS_FOR_UNLISTED flag. */
+    private static VillagerTradePriceTable emeraldReplaceTable(long version, boolean replace) {
+        return new VillagerTradePriceTable(version, true, moneyCurrency(),
+                BUY_MARGIN, SELL_MARGIN, replace, Map.of());
+    }
+
+    /** Emerald market only (100 raw per emerald) — iron and coal are unlisted. */
+    private static ToLongFunction<ItemStack> emeraldOnlyLookup() {
+        return stack -> stack.is(Items.EMERALD) ? 100L : 0L;
     }
 
     /** Villager sells: 5 emeralds → 1 iron ingot. */
@@ -596,5 +612,136 @@ public class VillagerTradeRewriteTestSuite extends TestSuite {
         if (!r.passed()) return r;
 
         return pass("tableLookup resolves ItemIDs and falls back to 0 for unknown items");
+    }
+
+    // ========================================================================
+    // REPLACE_EMERALDS_FOR_UNLISTED
+    // ========================================================================
+
+    /** Option off: an emerald market alone must not convert unlisted offers. */
+    private TestResult test_emerald_replace_off_unchanged() {
+        MerchantOffers offers = new MerchantOffers();
+        MerchantOffer vanilla = sellIronOffer();
+        offers.add(vanilla);
+        VillagerTradeData.VillagerEntry entry = new VillagerTradeData.VillagerEntry();
+
+        boolean changed = VillagerTradeRewriter.processOffers(
+                offers, entry, emeraldReplaceTable(1L, false), emeraldOnlyLookup(), null);
+
+        TestResult r = assertFalse("Nothing rewritten with the option off", changed);
+        if (!r.passed()) return r;
+        r = assertTrue("Live offer instance untouched", offers.get(0) == vanilla);
+        if (!r.passed()) return r;
+
+        return pass("Option off keeps unlisted offers in emerald form");
+    }
+
+    /** Option on + emerald market: unlisted offers convert with margins applied. */
+    private TestResult test_emerald_replace_converts_unlisted() {
+        MerchantOffers offers = new MerchantOffers();
+        offers.add(sellIronOffer());
+        offers.add(buyCoalOffer());
+        VillagerTradeData.VillagerEntry entry = new VillagerTradeData.VillagerEntry();
+
+        boolean changed = VillagerTradeRewriter.processOffers(
+                offers, entry, emeraldReplaceTable(1L, true), emeraldOnlyLookup(), null);
+
+        TestResult r = assertTrue("Unlisted offers must be converted", changed);
+        if (!r.passed()) return r;
+        MerchantOffer sell = offers.get(0);
+        r = assertTrue("Sell cost is currency", isMoney(sell.getBaseCostA()));
+        if (!r.passed()) return r;
+        // 5 emeralds × 100 raw × sell margin 1.2 = 600 raw
+        r = assertEquals("Sell cost = emeralds × emerald price × sell margin (600 raw)",
+                600L, rawValue(sell.getBaseCostA(), sell.getCostB()));
+        if (!r.passed()) return r;
+        r = assertEquals("Converted sell offer neutralizes discounts", 0.0f, sell.getPriceMultiplier());
+        if (!r.passed()) return r;
+
+        MerchantOffer buy = offers.get(1);
+        r = assertTrue("Buy result is currency", isMoney(buy.getResult()));
+        if (!r.passed()) return r;
+        // 1 emerald × 100 raw × buy margin 0.8 = 80 raw
+        r = assertEquals("Payout = emeralds × emerald price × buy margin (80 raw)",
+                80L, rawValue(buy.getResult()));
+        if (!r.passed()) return r;
+        r = assertEquals("Converted buy offer keeps its priceMultiplier", 0.05f, buy.getPriceMultiplier());
+        if (!r.passed()) return r;
+        r = assertTrue("Converted offers are tracked as rewritten",
+                entry.get(0).isRewritten() && entry.get(1).isRewritten());
+        if (!r.passed()) return r;
+
+        return pass("Unlisted offers converted via the emerald market with margins");
+    }
+
+    /** Option on but no emerald market: unlisted offers stay emerald. */
+    private TestResult test_emerald_replace_no_emerald_market_unchanged() {
+        MerchantOffers offers = new MerchantOffers();
+        MerchantOffer vanilla = sellIronOffer();
+        offers.add(vanilla);
+        VillagerTradeData.VillagerEntry entry = new VillagerTradeData.VillagerEntry();
+
+        boolean changed = VillagerTradeRewriter.processOffers(
+                offers, entry, emeraldReplaceTable(1L, true), stack -> 0L, null);
+
+        TestResult r = assertFalse("Nothing rewritten without an emerald market", changed);
+        if (!r.passed()) return r;
+        r = assertTrue("Live offer instance untouched", offers.get(0) == vanilla);
+        if (!r.passed()) return r;
+
+        return pass("No emerald market keeps unlisted offers in emerald form");
+    }
+
+    /** Option on: a listed item is still priced from its own market (market wins). */
+    private TestResult test_emerald_replace_listed_item_uses_market() {
+        MerchantOffers offers = new MerchantOffers();
+        offers.add(sellIronOffer());
+        VillagerTradeData.VillagerEntry entry = new VillagerTradeData.VillagerEntry();
+        ToLongFunction<ItemStack> ironAndEmerald = stack -> stack.is(Items.IRON_INGOT) ? 200L
+                : stack.is(Items.EMERALD) ? 100L : 0L;
+
+        VillagerTradeRewriter.processOffers(offers, entry, emeraldReplaceTable(1L, true), ironAndEmerald, null);
+
+        // iron 200 raw × 1.2 = 240 raw (the emerald path would give 600 raw)
+        TestResult r = assertEquals("Listed item priced from its own market (240 raw)",
+                240L, rawValue(offers.get(0).getBaseCostA(), offers.get(0).getCostB()));
+        if (!r.passed()) return r;
+
+        return pass("Market price of the traded item wins over the emerald conversion");
+    }
+
+    /** Converted offers are restored when the option is turned off, and via restoreAll. */
+    private TestResult test_emerald_replace_toggle_off_restores() {
+        MerchantOffers offers = new MerchantOffers();
+        offers.add(sellIronOffer());
+        VillagerTradeData.VillagerEntry entry = new VillagerTradeData.VillagerEntry();
+
+        VillagerTradeRewriter.processOffers(offers, entry, emeraldReplaceTable(1L, true), emeraldOnlyLookup(), null);
+        offers.get(0).increaseUses();
+
+        // v2: option switched off → offer returns to the emerald original.
+        boolean changed = VillagerTradeRewriter.processOffers(
+                offers, entry, emeraldReplaceTable(2L, false), emeraldOnlyLookup(), null);
+        TestResult r = assertTrue("Turning the option off must change the offer", changed);
+        if (!r.passed()) return r;
+        r = assertTrue("Offer restored to emerald cost", offers.get(0).getBaseCostA().is(Items.EMERALD));
+        if (!r.passed()) return r;
+        r = assertEquals("Original emerald count restored", 5, offers.get(0).getBaseCostA().getCount());
+        if (!r.passed()) return r;
+        r = assertEquals("Live uses carried through the restore", 1, offers.get(0).getUses());
+        if (!r.passed()) return r;
+
+        // v3: option on again → converts; then the full restore (feature disabled) path.
+        VillagerTradeRewriter.processOffers(offers, entry, emeraldReplaceTable(3L, true), emeraldOnlyLookup(), null);
+        r = assertTrue("Re-enabled option converts again", isMoney(offers.get(0).getBaseCostA()));
+        if (!r.passed()) return r;
+        VillagerTradeRewriter.restoreAll(offers, entry);
+        r = assertTrue("restoreAll returns the converted offer to emeralds",
+                offers.get(0).getBaseCostA().is(Items.EMERALD));
+        if (!r.passed()) return r;
+        r = assertEquals("Original priceMultiplier restored", 0.05f, offers.get(0).getPriceMultiplier());
+        if (!r.passed()) return r;
+
+        return pass("Emerald-converted offers restore on option-off and on full restore");
     }
 }

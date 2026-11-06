@@ -171,7 +171,8 @@ public class StockMarketModSettings extends ModSettings {
      * item is listed on the stock market no longer use emeralds: both directions
      * of such a trade are converted to the configured trading currency
      * ({@link Market#CURRENCY}) and priced from the market. Offers for items
-     * <b>without</b> a market keep their vanilla emerald form.
+     * <b>without</b> a market keep their vanilla emerald form, unless
+     * {@link #REPLACE_EMERALDS_FOR_UNLISTED} converts them via the emerald market.
      * <p>
      * These settings are only read on the <b>master</b> server (slave servers never
      * load {@code settings.json}); the master broadcasts the resulting price table
@@ -201,6 +202,17 @@ public class StockMarketModSettings extends ModSettings {
          * villager charges more than market value.
          */
         public final Setting<Float> VILLAGER_SELL_MARGIN = registerSetting("VILLAGER_SELL_MARGIN", 1.2f, Float.class);
+
+        /**
+         * When {@code true}, emerald offers whose traded item has <b>no</b> market are
+         * converted to the trading currency as well, valued at
+         * {@code emerald count × emerald market price} (× buy/sell margin). Only takes
+         * effect while an emerald market exists; otherwise such offers keep their
+         * vanilla emerald form. Offers whose item is listed always use the item's own
+         * market price. Read live on every table recompute (not restart-required) and
+         * carried to slaves inside the price table. Disabled by default.
+         */
+        public final Setting<Boolean> REPLACE_EMERALDS_FOR_UNLISTED = registerSetting("REPLACE_EMERALDS_FOR_UNLISTED", false, Boolean.class);
 
         public VillagerTrading() { super("VillagerTrading"); }
     }

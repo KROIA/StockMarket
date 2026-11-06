@@ -236,6 +236,12 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
         //   master broadcasts. Recompute + broadcast immediately (same path as the
         //   periodic refresh in VillagerTradeManager.tickMaster()) so slaves pick
         //   up ENABLED/margin changes without waiting for the next interval.
+        //   REPLACE_EMERALDS_FOR_UNLISTED (T-167) rides inside the table as
+        //   replaceEmeraldsForUnlisted (slaves rewrite their own villagers and
+        //   never read settings.json); the emerald price is the emerald's entry
+        //   in the table's price map. Toggling it bumps the table version, so
+        //   every server re-evaluates (converts or restores) its villagers on
+        //   the next interaction — no extra propagation needed.
         // * Utilities (autosave, logging) and ServerMarket (orderbook size, currency,
         //   candle time) are consumed ONLY on the master (slaves have no DataManager,
         //   no ServerMarketManager and no master-side logger settings) — no

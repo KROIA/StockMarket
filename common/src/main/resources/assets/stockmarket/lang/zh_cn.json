@@ -209,6 +209,8 @@
   "gui.stockmarket.mod_settings_screen.setting.VillagerTrading.VILLAGER_BUY_MARGIN.tooltip": "村民从玩家处收购时对市场价格的乘数。\n低于 1.0 表示村民支付的低于市场价。\n范围：0.01 - 100。",
   "gui.stockmarket.mod_settings_screen.setting.VillagerTrading.VILLAGER_SELL_MARGIN": "村民出售价系数",
   "gui.stockmarket.mod_settings_screen.setting.VillagerTrading.VILLAGER_SELL_MARGIN.tooltip": "村民向玩家出售时对市场价格的乘数。\n高于 1.0 表示村民收取的高于市场价。\n范围：0.01 - 100。",
+  "gui.stockmarket.mod_settings_screen.setting.VillagerTrading.REPLACE_EMERALDS_FOR_UNLISTED": "替换未上市物品的绿宝石",
+  "gui.stockmarket.mod_settings_screen.setting.VillagerTrading.REPLACE_EMERALDS_FOR_UNLISTED.tooltip": "将没有市场的物品的绿宝石交易也转换为货币，\n按绿宝石市场价格计算（绿宝石数量 × 绿宝石价格 × 系数）。\n需要存在绿宝石市场，否则这些交易仍使用绿宝石。",
   "gui.stockmarket.news_screen.title": "市场新闻",
   "gui.stockmarket.news_screen.masthead": "市场时报",
   "gui.stockmarket.news_screen.toast_checkbox": "启用新闻弹窗",

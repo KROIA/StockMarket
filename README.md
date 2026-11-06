@@ -469,6 +469,7 @@ While a news event is active, the **NewsPlugin** multiplies the target price fro
 Villager (and wandering trader) trade offers for **market-listed items** no longer use emeralds — both trade directions are converted to the configured trading-currency item (`ServerMarket.CURRENCY`, editable in-game via the Mod Settings screen's Market group / ServerMarket section, or directly in `world/data/StockMarket/settings.json`) and priced from the stock market:
 * Only offers whose traded item exists on the stock market are repriced (component-aware, so e.g. specific enchanted books can have their own markets). A trade where the villager sells requires a market for the sold item; a trade where the villager buys requires a market for every item it asks for.
 * Items **without** a market keep their normal vanilla emerald trades. If a market is created for such an item later, the offer converts to currency pricing on the next price refresh; if a market is deleted, affected offers return to their original emerald form.
+* **Optional emerald replacement:** with `REPLACE_EMERALDS_FOR_UNLISTED` turned on and an **emerald market** present, trades of items *without* a market are converted to currency as well, valued at `emerald count × emerald market price` (times the buy/sell margin). Trades of market-listed items still use the item's own market price. Without an emerald market, or with the option off, these trades stay emerald-based; turning the option off (or deleting the emerald market) restores them.
 * Prices refresh automatically on the configured interval (default 20 real minutes ≈ one Minecraft day).
 * Original emerald offers are stored in world data; disabling the feature restores every villager's original offers the next time it is interacted with. Partially used offers stay partially used.
 
@@ -486,6 +487,7 @@ Edit these in-game via `/stockmarket manage` → **Mod Settings** → **Villager
 | `PRICE_REFRESH_INTERVAL_MINUTES` | `20` | Real-time minutes between price refreshes/broadcasts. |
 | `VILLAGER_BUY_MARGIN` | `0.8` | Multiplier on the market price when the villager **buys** from the player (villager pays below market). |
 | `VILLAGER_SELL_MARGIN` | `1.2` | Multiplier on the market price when the villager **sells** to the player (villager charges above market). |
+| `REPLACE_EMERALDS_FOR_UNLISTED` | `false` | Also convert emerald trades of items **without** a market into currency, priced via the emerald market (`emerald count × emerald price × margin`). Only active while an emerald market exists. No restart needed: villagers update on their next interaction after the change. |
 
 ### Paying with money
 When an offer's price is BankSystem money, the trade accepts **any combination of denominations** — the price is matched by value, not by exact note type. A 20.00 cost can be paid with 1×20, 2×10, 4×5, 20×1, or even a single 50 note:

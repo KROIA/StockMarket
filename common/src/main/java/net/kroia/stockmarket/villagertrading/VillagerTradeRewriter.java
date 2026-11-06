@@ -29,8 +29,10 @@ import java.util.function.ToLongFunction;
  * Rewrites villager (and wandering trader) merchant offers from emerald form to
  * the configured stock-market trading currency — but <b>only</b> for offers
  * whose traded item is listed on the stock market. Unlisted items keep their
- * vanilla emerald trades; offers are restored to emerald form when their market
- * disappears or the feature is disabled.
+ * vanilla emerald trades, unless {@code VillagerTrading.REPLACE_EMERALDS_FOR_UNLISTED}
+ * is on and an emerald market exists — then their emerald amount is converted
+ * at the emerald market price. Offers are restored to emerald form when their
+ * pricing basis disappears or the feature/option is disabled.
  * <p>
  * Registered once on Architectury's {@code InteractionEvent.INTERACT_ENTITY},
  * which fires server-side in the interaction packet handler <i>before</i>
@@ -190,9 +192,12 @@ public final class VillagerTradeRewriter {
      * <ul>
      *   <li>traded item has a market price → rewrite to currency form
      *       (also covers the market-created-later transition);</li>
-     *   <li>traded item has no market price → the offer stays in (or is
-     *       <b>restored</b> to) its original emerald form. The snapshot is kept,
-     *       so a later re-listing converts the offer again.</li>
+     *   <li>traded item has no market price but the emerald-replacement option
+     *       is on and an emerald market exists → rewrite to currency form at
+     *       {@code emerald count × emerald price};</li>
+     *   <li>otherwise → the offer stays in (or is <b>restored</b> to) its
+     *       original emerald form. The snapshot is kept, so a later re-listing
+     *       (or re-enabled option) converts the offer again.</li>
      * </ul>
      *
      * @param offers        the villager's live offer list (mutated in place)
@@ -250,8 +255,10 @@ public final class VillagerTradeRewriter {
                     }
                 }
             } else if (original.isRewritten()) {
-                // The item's market disappeared (or the currency changed so the
-                // offer no longer qualifies): restore the vanilla emerald form.
+                // The item's market disappeared, the emerald conversion no longer
+                // applies (option off / emerald market gone), or the currency
+                // changed so the offer no longer qualifies: restore the vanilla
+                // emerald form.
                 // The snapshot stays in the sidecar so a re-listed market
                 // converts the offer again on a later reprice.
                 offers.set(i, restoreOffer(original.offer(), offers.get(i)));
@@ -331,8 +338,11 @@ public final class VillagerTradeRewriter {
      * <b>only</b> when the traded item is listed on the stock market: a
      * villager-sells offer requires a market price for the result item; a
      * villager-buys offer requires a market price for <b>every</b> item cost.
-     * Unlisted offers return {@code null} — they keep their vanilla emerald
-     * form. All math in raw units.
+     * Unlisted offers fall back to {@code emerald count × emerald market price}
+     * when {@link VillagerTradePriceTable#replaceEmeraldsForUnlisted()} is set
+     * and an emerald market exists; otherwise they return {@code null} and keep
+     * their vanilla emerald form. Margins, priceMultiplier and demand handling
+     * are identical for both pricing bases. All math in raw units.
      * <p>
      * Demand/discount semantics: when the <b>cost</b> side becomes currency
      * (villager sells) the new offer uses {@code priceMultiplier = 0}, which
@@ -371,8 +381,9 @@ public final class VillagerTradeRewriter {
 
     /**
      * Villager sells an item for emeralds → the emerald cost slots become
-     * currency. Only applies when the sold item has a market price; otherwise
-     * returns {@code null} and the offer keeps its vanilla emerald form.
+     * currency. Priced from the sold item's market; without one, from the
+     * emerald cost × emerald market price if the replacement option is on.
+     * Otherwise returns {@code null} and the offer keeps its vanilla emerald form.
      */
     private static @Nullable RewriteResult rewriteSellOffer(MerchantOffer original, MerchantOffer live,
                                                             VillagerTradePriceTable table,
@@ -384,13 +395,22 @@ public final class VillagerTradeRewriter {
         boolean costAEmerald = costA.itemStack().is(Items.EMERALD);
         boolean costBEmerald = costB.isPresent() && costB.get().itemStack().is(Items.EMERALD);
 
-        // The sold item MUST be market-listed (component-aware via the price
-        // lookup) — unlisted items stay on their vanilla emerald pricing.
+        // A market-listed sold item (component-aware via the price lookup) is
+        // priced from its own market. Unlisted items stay on their vanilla
+        // emerald pricing — unless the emerald-replacement option converts the
+        // emerald cost via the emerald market.
+        long basisRaw;
         long resultPriceRaw = priceLookup.applyAsLong(result);
-        if (resultPriceRaw <= 0) {
-            return null;
+        if (resultPriceRaw > 0) {
+            basisRaw = resultPriceRaw * result.getCount();
+        } else {
+            long emeraldRaw = emeraldPriceRaw(table, priceLookup);
+            if (emeraldRaw <= 0) {
+                return null;
+            }
+            int emeralds = (costAEmerald ? costA.count() : 0) + (costBEmerald ? costB.get().count() : 0);
+            basisRaw = emeraldRaw * emeralds;
         }
-        long basisRaw = resultPriceRaw * result.getCount();
         long moneyRaw = Math.max(1, Math.round(basisRaw * (double) table.sellMargin()));
 
         // Currency may only occupy cost slots not held by a non-emerald item
@@ -427,9 +447,10 @@ public final class VillagerTradeRewriter {
 
     /**
      * Villager buys items for emeralds → the emerald result stack becomes
-     * currency. Only applies when <b>every</b> item cost has a market price;
-     * otherwise returns {@code null} and the offer keeps its vanilla emerald
-     * form.
+     * currency. Priced from the item markets when <b>every</b> item cost has a
+     * market price; otherwise from the emerald payout × emerald market price if
+     * the replacement option is on. Otherwise returns {@code null} and the
+     * offer keeps its vanilla emerald form.
      */
     private static @Nullable RewriteResult rewriteBuyOffer(MerchantOffer original, MerchantOffer live,
                                                            VillagerTradePriceTable table,
@@ -437,20 +458,21 @@ public final class VillagerTradeRewriter {
         ItemCost costA = original.getItemCostA();
         Optional<ItemCost> costB = original.getItemCostB();
 
-        // ALL item costs must be market-listed — a single unlisted ingredient
-        // keeps the whole offer on its vanilla emerald pricing.
+        // ALL item costs must be market-listed to price from the item markets —
+        // a single unlisted ingredient keeps the whole offer on its vanilla
+        // emerald pricing, unless the emerald-replacement option converts the
+        // emerald payout via the emerald market.
         long basisRaw;
         long priceA = priceLookup.applyAsLong(costA.itemStack());
-        if (priceA <= 0) {
-            return null;
-        }
-        basisRaw = priceA * costA.count();
-        if (costB.isPresent()) {
-            long priceB = priceLookup.applyAsLong(costB.get().itemStack());
-            if (priceB <= 0) {
+        long priceB = costB.isPresent() ? priceLookup.applyAsLong(costB.get().itemStack()) : 0L;
+        if (priceA > 0 && (costB.isEmpty() || priceB > 0)) {
+            basisRaw = priceA * costA.count() + (costB.isPresent() ? priceB * costB.get().count() : 0L);
+        } else {
+            long emeraldRaw = emeraldPriceRaw(table, priceLookup);
+            if (emeraldRaw <= 0) {
                 return null;
             }
-            basisRaw += priceB * costB.get().count();
+            basisRaw = emeraldRaw * original.getResult().getCount();
         }
         long moneyRaw = Math.max(1, Math.round(basisRaw * (double) table.buyMargin()));
 
@@ -466,6 +488,19 @@ public final class VillagerTradeRewriter {
                 live.getUses(), original.getMaxUses(), original.getXp(),
                 original.getPriceMultiplier(), live.getDemand());
         return new RewriteResult(offer, fit.clamped());
+    }
+
+    /**
+     * Price of one emerald (raw units) used to convert offers whose traded item
+     * has no market ({@code VillagerTrading.REPLACE_EMERALDS_FOR_UNLISTED}).
+     *
+     * @param table       the current price table (carries the option flag)
+     * @param priceLookup resolves an ItemStack to its raw market price (0 = no market)
+     * @return the emerald market price, or {@code 0} when the option is off or
+     *         no emerald market exists (offer then keeps its emerald form)
+     */
+    private static long emeraldPriceRaw(VillagerTradePriceTable table, ToLongFunction<ItemStack> priceLookup) {
+        return table.replaceEmeraldsForUnlisted() ? priceLookup.applyAsLong(new ItemStack(Items.EMERALD)) : 0L;
     }
 
     /**

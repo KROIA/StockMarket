@@ -58,6 +58,7 @@ public class VillagerTradePricingTestSuite extends TestSuite {
         addTest("no_market_offer_not_rewritten", this::test_no_market_offer_not_rewritten);
         addTest("sell_margin_item_basis", this::test_sell_margin_item_basis);
         addTest("buy_margin_applied", this::test_buy_margin_applied);
+        addTest("emerald_replacement_margins_applied", this::test_emerald_replacement_margins_applied);
         addTest("price_table_stream_codec_roundtrip", this::test_price_table_stream_codec_roundtrip);
     }
 
@@ -78,7 +79,7 @@ public class VillagerTradePricingTestSuite extends TestSuite {
     /** Builds an enabled price table with the given currency, margins and prices. */
     private static VillagerTradePriceTable table(ItemStack currency, float buyMargin, float sellMargin,
                                                  Map<Short, Long> prices) {
-        return new VillagerTradePriceTable(1L, true, currency, buyMargin, sellMargin, prices);
+        return new VillagerTradePriceTable(1L, true, currency, buyMargin, sellMargin, false, prices);
     }
 
     private static ItemStack moneyCurrency() {
@@ -345,7 +346,7 @@ public class VillagerTradePricingTestSuite extends TestSuite {
 
     /**
      * Offers whose traded item has NO market must not be rewritten at all —
-     * they keep their vanilla emerald form (no emerald-conversion fallback).
+     * they keep their vanilla emerald form (emerald replacement option off).
      */
     private TestResult test_no_market_offer_not_rewritten() {
         VillagerTradePriceTable table = table(moneyCurrency(), 0.8f, 1.2f, Map.of());
@@ -436,6 +437,55 @@ public class VillagerTradePricingTestSuite extends TestSuite {
         return pass("Buy rewrite applies the buy margin and preserves the item-cost side");
     }
 
+    /**
+     * REPLACE_EMERALDS_FOR_UNLISTED: unlisted offers are priced as
+     * emerald count × emerald market price (100 raw) × margin, with the same
+     * slot / priceMultiplier handling as market-priced offers.
+     */
+    private TestResult test_emerald_replacement_margins_applied() {
+        VillagerTradePriceTable table = new VillagerTradePriceTable(1L, true, moneyCurrency(),
+                0.8f, 1.2f, true, Map.of());
+        // Only emerald and coal have markets.
+        ToLongFunction<ItemStack> lookup = stack -> stack.is(Items.EMERALD) ? 100L
+                : stack.is(Items.COAL) ? 100L : 0L;
+
+        // Villager sells: 10 emeralds + book → unlisted enchanted book.
+        // 10 × 100 raw × 1.2 = 1200 raw; the book slot stays put.
+        MerchantOffer sell = new MerchantOffer(new ItemCost(Items.EMERALD, 10),
+                Optional.of(new ItemCost(Items.BOOK, 1)),
+                new ItemStack(Items.ENCHANTED_BOOK), 0, 12, 5, 0.2f, 0);
+        VillagerTradeRewriter.RewriteResult sellResult =
+                VillagerTradeRewriter.rewriteOffer(sell, sell, table, lookup);
+        TestResult r = assertNotNull("Unlisted sell offer must be converted via the emerald market", sellResult);
+        if (!r.passed()) return r;
+        r = assertEquals("Cost = emeralds × emerald price × sell margin (1200 raw)",
+                1200L, totalRawValue(List.of(sellResult.offer().getBaseCostA())));
+        if (!r.passed()) return r;
+        r = assertEquals("Book cost slot preserved", Items.BOOK, sellResult.offer().getCostB().getItem());
+        if (!r.passed()) return r;
+        r = assertEquals("Money-cost offers neutralize demand/discounts (multiplier 0)",
+                0.0f, sellResult.offer().getPriceMultiplier());
+        if (!r.passed()) return r;
+
+        // Villager buys: 15 coal + 2 sticks (sticks unlisted) → 2 emeralds.
+        // 2 × 100 raw × 0.8 = 160 raw; item costs and multiplier preserved.
+        MerchantOffer buy = new MerchantOffer(new ItemCost(Items.COAL, 15),
+                Optional.of(new ItemCost(Items.STICK, 2)),
+                new ItemStack(Items.EMERALD, 2), 0, 16, 2, 0.05f, 0);
+        VillagerTradeRewriter.RewriteResult buyResult =
+                VillagerTradeRewriter.rewriteOffer(buy, buy, table, lookup);
+        r = assertNotNull("Buy offer with an unlisted cost must be converted via the emerald market", buyResult);
+        if (!r.passed()) return r;
+        r = assertEquals("Payout = emeralds × emerald price × buy margin (160 raw)",
+                160L, totalRawValue(List.of(buyResult.offer().getResult())));
+        if (!r.passed()) return r;
+        r = assertEquals("Buy offers keep the original priceMultiplier",
+                0.05f, buyResult.offer().getPriceMultiplier());
+        if (!r.passed()) return r;
+
+        return pass("Emerald replacement applies buy/sell margins like the market-priced path");
+    }
+
     // ========================================================================
     // Price table codec
     // ========================================================================
@@ -450,7 +500,7 @@ public class VillagerTradePricingTestSuite extends TestSuite {
         prices.put((short) 12, 3456L);
         prices.put((short) 99, 100L);
         VillagerTradePriceTable original = new VillagerTradePriceTable(
-                42L, true, moneyCurrency(), 0.75f, 1.25f, prices);
+                42L, true, moneyCurrency(), 0.75f, 1.25f, true, prices);
 
         RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), access);
         VillagerTradePriceTable.STREAM_CODEC.encode(buf, original);
@@ -466,6 +516,9 @@ public class VillagerTradePricingTestSuite extends TestSuite {
         r = assertEquals("buyMargin survives", original.buyMargin(), decoded.buyMargin());
         if (!r.passed()) return r;
         r = assertEquals("sellMargin survives", original.sellMargin(), decoded.sellMargin());
+        if (!r.passed()) return r;
+        r = assertEquals("replaceEmeraldsForUnlisted survives",
+                original.replaceEmeraldsForUnlisted(), decoded.replaceEmeraldsForUnlisted());
         if (!r.passed()) return r;
         r = assertEquals("price map survives", original.pricesRawByItemIdShort(), decoded.pricesRawByItemIdShort());
         if (!r.passed()) return r;

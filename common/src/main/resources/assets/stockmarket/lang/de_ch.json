@@ -237,6 +237,8 @@
   "gui.stockmarket.mod_settings_screen.setting.VillagerTrading.VILLAGER_BUY_MARGIN.tooltip": "Multiplikator uf de Marktpriis, wenn de Dorfbewohner vom Spieler CHAUFT.\nUnder 1.0 = Dorfbewohner zahlt weniger als de Marktwärt.\nBereich: 0.01 - 100.",
   "gui.stockmarket.mod_settings_screen.setting.VillagerTrading.VILLAGER_SELL_MARGIN": "Dorfbewohner-Verchaufsmarge",
   "gui.stockmarket.mod_settings_screen.setting.VillagerTrading.VILLAGER_SELL_MARGIN.tooltip": "Multiplikator uf de Marktpriis, wenn de Dorfbewohner am Spieler VERCHAUFT.\nÜber 1.0 = Dorfbewohner verlangt meh als de Marktwärt.\nBereich: 0.01 - 100.",
+  "gui.stockmarket.mod_settings_screen.setting.VillagerTrading.REPLACE_EMERALDS_FOR_UNLISTED": "Smaragd bi nöd glistete Items ersetze",
+  "gui.stockmarket.mod_settings_screen.setting.VillagerTrading.REPLACE_EMERALDS_FOR_UNLISTED.tooltip": "Wandlet au Smaragd-Aagebot vo Items OHNI Markt in Gäld um,\nbasierend uf em Smaragd-Marktpriis (Smaragdaazahl × Smaragdpriis × Marge).\nBruucht en Smaragd-Markt; susch bliibed die Aagebot bi Smaragd.",
   "gui.stockmarket.news_screen.title": "Marktnachrichte",
   "gui.stockmarket.news_screen.masthead": "The Market Times",
   "gui.stockmarket.news_screen.toast_checkbox": "News-Popups aktiviere",
