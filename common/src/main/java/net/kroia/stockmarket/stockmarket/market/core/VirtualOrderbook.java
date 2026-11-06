@@ -62,18 +62,43 @@ public class VirtualOrderbook implements ServerSaveable
     }
 
 
+    /**
+     * Updates the market price and recenters the array window when the price leaves the
+     * middle half of the window.
+     * <p>
+     * T-164: when the price jumps past the old window edge, the slots between the old edge
+     * and the new price were swept by the jump. Their shift-fill values come from the
+     * default provider, which at this point still sees the OLD market price and therefore
+     * returns the opposite side's shape; {@link #getDefaultVolume(long)} then re-signs it for
+     * the new side (e.g. old ask volume reappears as bid volume below the new price). The
+     * swept range is zeroed after the shift so no phantom liquidity is left behind; the
+     * volume distribution plugin refills it gradually.
+     * Normal drift never triggers this: the window recenters while the price is still inside
+     * it, so the swept range is empty.
+     * @param currentMarketPrice new raw market price
+     */
     public void setCurrentMarketPrice(long currentMarketPrice)
     {
         this.currentMarketPrice = currentMarketPrice;
-        long currentIndexOffset = dynamicArray.getIndexOffset();
-        int sizeForth = dynamicArray.getSize()/4;
-        if(currentMarketPrice > currentIndexOffset + sizeForth*3)
+        long oldOffset = dynamicArray.getIndexOffset();
+        int size = dynamicArray.getSize();
+        int sizeForth = size/4;
+        if(currentMarketPrice > oldOffset + sizeForth*3 || currentMarketPrice < oldOffset + sizeForth)
         {
-            dynamicArray.setOffset(currentMarketPrice-dynamicArray.getSize()/2);
-        }
-        else if(currentMarketPrice < currentIndexOffset + sizeForth)
-        {
-            dynamicArray.setOffset(currentMarketPrice-dynamicArray.getSize()/2);
+            long newOffset = currentMarketPrice - size/2;
+            dynamicArray.setOffset(newOffset);
+            if(newOffset > oldOffset)
+            {
+                // Up move: zero [max(oldEnd, newOffset), price)
+                for(long p = Math.max(oldOffset + size, newOffset); p < currentMarketPrice; p++)
+                    dynamicArray.set(p, 0f);
+            }
+            else
+            {
+                // Down move: zero (price, min(oldOffset, newEnd))
+                for(long p = currentMarketPrice + 1; p < Math.min(oldOffset, newOffset + size); p++)
+                    dynamicArray.set(p, 0f);
+            }
         }
     }
 

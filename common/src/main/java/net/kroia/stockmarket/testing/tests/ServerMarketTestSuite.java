@@ -81,6 +81,7 @@ public class ServerMarketTestSuite extends TestSuite {
         addTest("tradingHours_override_clearedOnTransition", this::test_tradingHours_override_clearedOnTransition);
         addTest("tradingHours_setTradingHours_normalizes", this::test_tradingHours_setTradingHours_normalizes);
         addTest("tradingHours_save_load_roundTrip_and_oldNbt", this::test_tradingHours_saveLoad);
+        addTest("save_load_closedState_freshMarket", this::test_saveLoad_closedState_freshMarket);
     }
 
     @Override
@@ -764,6 +765,47 @@ public class ServerMarketTestSuite extends TestSuite {
         } catch (Exception e) {
             return fail("Exception: " + e.getMessage());
         } finally {
+            resetMarket(100, true);
+        }
+    }
+
+    /**
+     * T-165: a closed market must stay closed across a restart. Maintenance and a forced-closed
+     * trading override are saved, then loaded into a separate, freshly created market (as a server
+     * start would), and must both survive. A tag without the "maintenance" key (pre-2.2.0 world)
+     * must load as not under maintenance.
+     */
+    private TestResult test_saveLoad_closedState_freshMarket() {
+        IServerMarket fresh = null;
+        try {
+            resetMarket(100, false);                // under maintenance
+            serverMarket.setTradingOverride(false); // forced closed
+            serverMarket.updateTradingHours(0);     // apply the override
+            CompoundTag tag = new CompoundTag();
+            TestResult r = assertTrue("save succeeds", ((ServerMarket) serverMarket).save(tag));
+            if (!r.passed()) return r;
+
+            fresh = fixture.createMarket("fresh");
+            r = assertFalse("fresh market starts not under maintenance", fresh.isUnderMaintenance());
+            if (!r.passed()) return r;
+            ServerMarket loaded = (ServerMarket) fresh;
+            loaded.load(tag);
+            r = assertTrue("maintenance survives load into a fresh market", fresh.isUnderMaintenance());
+            if (!r.passed()) return r;
+            r = assertEquals("forced-closed override survives load", Boolean.FALSE, loaded.getTradingOverride());
+            if (!r.passed()) return r;
+            r = assertFalse("fresh market loads closed", fresh.isTradingOpen());
+            if (!r.passed()) return r;
+
+            tag.remove("maintenance");
+            loaded.load(tag);
+            r = assertFalse("missing maintenance key loads as open (not under maintenance)", fresh.isUnderMaintenance());
+            if (!r.passed()) return r;
+            return pass("Maintenance + override persist into a fresh market; old NBT loads open");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        } finally {
+            if (fresh != null) fresh.setMaintenance(false);
             resetMarket(100, true);
         }
     }

@@ -66,12 +66,18 @@ public class TransactionHistoryPanel extends StockMarketGuiElement {
 
     /**
      * Replaces the displayed records. Thread-safe via dirty flag.
+     * <p>
+     * The auto-refresh polls every few seconds; if the server returns the same records
+     * (OrderRecordStruct is a record of value fields, so List.equals compares contents)
+     * the rebuild is skipped so the list isn't torn down and recreated for nothing.
      *
      * @param records the new list of transaction history records
      */
     public void updateRecords(List<OrderRecordStruct> records) {
+        List<OrderRecordStruct> next = records != null ? new ArrayList<>(records) : new ArrayList<>();
+        if (next.equals(pendingRecords)) return; // unchanged -> keep current widgets
+        pendingRecords = next;
         needsRebuild = true;
-        pendingRecords = records != null ? new ArrayList<>(records) : new ArrayList<>();
     }
 
     @Override

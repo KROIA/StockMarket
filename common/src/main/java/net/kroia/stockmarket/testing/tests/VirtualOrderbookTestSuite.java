@@ -38,6 +38,8 @@ public class VirtualOrderbookTestSuite extends TestSuite {
         addTest("save_load_round_trip", this::test_save_load_roundTrip);
         addTest("get_capital_sums_products", this::test_getCapital_sumsProducts);
         addTest("duplicate_round_conservative_matches", this::test_duplicateRoundConservative_matchesDynamicIndexedArray);
+        addTest("jump_up_zeroes_swept_range", this::test_jumpUp_zeroesSweptRange);
+        addTest("jump_down_zeroes_swept_range", this::test_jumpDown_zeroesSweptRange);
     }
 
     private VirtualOrderbook createOrderbook(long marketPrice) {
@@ -317,5 +319,56 @@ public class VirtualOrderbookTestSuite extends TestSuite {
             }
         }
         return pass("VirtualOrderbook.roundConservative matches DynamicIndexedArray.roundConservative");
+    }
+
+    /**
+     * T-164: a jump past the upper window edge must not mirror the old ask shape as bids.
+     * The provider emulates production, where it still sees the stale price (50): above 50 it
+     * returns the large "ask" magnitude 7, below it the "bid" magnitude 3.
+     * After jumping to 200 the swept slots [150,200) must be 0, slots above 200 sell-side.
+     */
+    private TestResult test_jumpUp_zeroesSweptRange() {
+        VirtualOrderbook vob = new VirtualOrderbook(ARRAY_SIZE);
+        vob.setDefaultVolumeProvider((price) -> price > 50 ? 7.0f : 3.0f);
+        vob.setCurrentMarketPrice(50);
+        vob.resetVolumeDistribution();
+
+        vob.setCurrentMarketPrice(200);
+        for (long p = 150; p < 200; p++) {
+            float vol = vob.getVolume(p);
+            if (Math.abs(vol) > EPSILON)
+                return fail("Swept slot " + p + " should be 0 after jump up, got: " + vol);
+        }
+        for (long p = 201; p < 250; p++) {
+            float vol = vob.getVolume(p);
+            if (vol >= 0)
+                return fail("Slot " + p + " above new price should be sell-side (<0), got: " + vol);
+        }
+        return pass("Jump up zeroes swept range, keeps sell side above price");
+    }
+
+    /**
+     * T-164 mirror: a jump past the lower window edge must not mirror the old bid shape as asks.
+     * Window starts centred at 300 (provider stale price 300); jump to 150 → (150,200) must be 0,
+     * slots below 150 buy-side.
+     */
+    private TestResult test_jumpDown_zeroesSweptRange() {
+        VirtualOrderbook vob = new VirtualOrderbook(ARRAY_SIZE);
+        vob.setDefaultVolumeProvider((price) -> price < 300 ? 7.0f : 3.0f);
+        vob.setCurrentMarketPrice(300);
+        vob.resetVolumeDistribution();
+
+        vob.setCurrentMarketPrice(150);
+        for (long p = 151; p < 200; p++) {
+            float vol = vob.getVolume(p);
+            if (Math.abs(vol) > EPSILON)
+                return fail("Swept slot " + p + " should be 0 after jump down, got: " + vol);
+        }
+        for (long p = 100; p < 150; p++) {
+            float vol = vob.getVolume(p);
+            if (vol <= 0)
+                return fail("Slot " + p + " below new price should be buy-side (>0), got: " + vol);
+        }
+        return pass("Jump down zeroes swept range, keeps buy side below price");
     }
 }

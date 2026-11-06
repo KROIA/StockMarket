@@ -78,12 +78,19 @@ public class OrderHistoryPanel extends StockMarketGuiElement {
 
     /**
      * Replaces the displayed records. Thread-safe via dirty flag.
+     * <p>
+     * The auto-refresh polls every few seconds; if the server returns the same records
+     * (OrderRecordStruct is a record of value fields, so List.equals compares contents)
+     * the rebuild is skipped. Filter changes (market switch) trigger their own rebuild
+     * in {@link #setCurrentMarketID(ItemID)}.
      *
      * @param records the new list of order history records
      */
     public void updateRecords(List<OrderRecordStruct> records) {
+        List<OrderRecordStruct> next = records != null ? new ArrayList<>(records) : new ArrayList<>();
+        if (next.equals(pendingRecords)) return; // unchanged -> keep current widgets
+        pendingRecords = next;
         needsRebuild = true;
-        pendingRecords = records != null ? new ArrayList<>(records) : new ArrayList<>();
     }
 
     @Override
@@ -108,9 +115,15 @@ public class OrderHistoryPanel extends StockMarketGuiElement {
     }
 
     /**
-     * Sets the current market for filtering the clear operation.
+     * Sets the current market used to filter the displayed records.
+     * Forces a rebuild on change, because {@link #updateRecords(List)} skips
+     * rebuilds when the server data is unchanged and would otherwise keep
+     * showing the previous market's filter.
+     *
+     * @param marketID the market to filter by, or null to show all markets
      */
     public void setCurrentMarketID(@org.jetbrains.annotations.Nullable ItemID marketID) {
+        if (!java.util.Objects.equals(this.currentMarketID, marketID)) needsRebuild = true;
         this.currentMarketID = marketID;
     }
 
