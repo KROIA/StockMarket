@@ -53,17 +53,34 @@ public class MarketPriceStream extends StockMarketGenericStream<ItemID, MarketPr
      * @param openMinute    opening minute of the day of this market's trading window (0..1440)
      * @param closeMinute   closing minute of the day of this market's trading window (0..1440);
      *                      {@code open == close} or 00:00-24:00 means always open, {@code open > close} wraps midnight
+     * @param maxOrderVolume  T-179: this market's max volume of one player order (real items); 0 = unlimited.
+     *                        Used by the trade screen to clamp its amount boxes.
+     * @param tradeCooldownMs T-179: the master's global per-player trade cooldown ({@code TRADE_COOLDOWN_MS}); 0 = off.
+     *                        Used by the trade screen to grey out buy/sell after an accepted order.
      */
-    public record TradingStatus(byte state, short clockMinute, boolean clockRealTime, short openMinute, short closeMinute)
+    public record TradingStatus(byte state, short clockMinute, boolean clockRealTime, short openMinute, short closeMinute,
+                                long maxOrderVolume, long tradeCooldownMs)
     {
-        public static final StreamCodec<RegistryFriendlyByteBuf, TradingStatus> STREAM_CODEC = StreamCodec.composite(
-                ByteBufCodecs.BYTE, TradingStatus::state,
-                ByteBufCodecs.SHORT, TradingStatus::clockMinute,
-                ByteBufCodecs.BOOL, TradingStatus::clockRealTime,
-                ByteBufCodecs.SHORT, TradingStatus::openMinute,
-                ByteBufCodecs.SHORT, TradingStatus::closeMinute,
-                TradingStatus::new
-        );
+        // Hand-rolled: StreamCodec.composite supports at most 6 fields. Field order = wire format.
+        public static final StreamCodec<RegistryFriendlyByteBuf, TradingStatus> STREAM_CODEC = new StreamCodec<>() {
+            @Override
+            public void encode(RegistryFriendlyByteBuf buf, TradingStatus s) {
+                ByteBufCodecs.BYTE.encode(buf, s.state);
+                ByteBufCodecs.SHORT.encode(buf, s.clockMinute);
+                ByteBufCodecs.BOOL.encode(buf, s.clockRealTime);
+                ByteBufCodecs.SHORT.encode(buf, s.openMinute);
+                ByteBufCodecs.SHORT.encode(buf, s.closeMinute);
+                ByteBufCodecs.VAR_LONG.encode(buf, s.maxOrderVolume);
+                ByteBufCodecs.VAR_LONG.encode(buf, s.tradeCooldownMs);
+            }
+
+            @Override
+            public TradingStatus decode(RegistryFriendlyByteBuf buf) {
+                return new TradingStatus(ByteBufCodecs.BYTE.decode(buf), ByteBufCodecs.SHORT.decode(buf),
+                        ByteBufCodecs.BOOL.decode(buf), ByteBufCodecs.SHORT.decode(buf), ByteBufCodecs.SHORT.decode(buf),
+                        ByteBufCodecs.VAR_LONG.decode(buf), ByteBufCodecs.VAR_LONG.decode(buf));
+            }
+        };
 
         /**
          * @return the decoded trading state; unknown ordinals (version mismatch) map to OPEN
@@ -148,7 +165,9 @@ public class MarketPriceStream extends StockMarketGenericStream<ItemID, MarketPr
     }
 
     /**
-     * Snapshots the market's trading state and the master's trading clock. The clock values are the
+     * Snapshots the market's trading state, the master's trading clock and (T-179) the order limits
+     * (max order volume, trade cooldown). Changes are detected by record equality, so an admin edit
+     * reaches subscribed clients within one update interval (~100 ms). The clock values are the
      * ones cached by {@link ServerMarketManager} at its last update tick, so the client sees the same
      * minute the open/closed decision was made with. This stream always runs on the master
      * (slaves route it there via {@code needsRoutingToMaster()}).
@@ -157,13 +176,16 @@ public class MarketPriceStream extends StockMarketGenericStream<ItemID, MarketPr
     {
         int clockMinute = 0;
         boolean realTime = false;
+        long tradeCooldownMs = 0;
         if (manager instanceof ServerMarketManager smm) {
             clockMinute = smm.getCurrentTradingMinute();
             realTime = smm.isTradingHoursUseRealTime();
+            tradeCooldownMs = smm.getTradeCooldownMs();
         }
         MarketSettings settings = market.getSettings();
         return new TradingStatus((byte) market.getTradingState().ordinal(), (short) clockMinute, realTime,
-                (short) settings.tradingOpenMinute, (short) settings.tradingCloseMinute);
+                (short) settings.tradingOpenMinute, (short) settings.tradingCloseMinute,
+                settings.maxOrderVolume, tradeCooldownMs);
     }
 
     @Override

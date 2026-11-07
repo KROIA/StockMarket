@@ -149,6 +149,20 @@ public class StockMarketModSettings extends ModSettings {
          */
         public final Setting<Long> TRADE_COOLDOWN_MS = registerSetting("TRADE_COOLDOWN_MS", 500L, Long.class);
 
+        /**
+         * Factor of the default max order size (T-179): a market's derived default is
+         * {@code max(factor, round(factor * naturalAbundance))} real items
+         * (see {@code MarketSettings.defaultMaxOrderVolume}). Clamped to &ge; 1.
+         * <p>
+         * Used whenever a default is DERIVED: new markets, new/default presets, preset files and
+         * market saves without an explicit value, and the Mod Settings "Apply to all markets"
+         * action. Existing markets and presets keep their explicit values until that action runs.
+         * Read live — no restart required.
+         * <p>
+         * Slave-propagation: NOT needed. Markets and presets only live on the master.
+         */
+        public final Setting<Long> MAX_ORDER_VOLUME_FACTOR = registerSetting("MAX_ORDER_VOLUME_FACTOR", 64L, Long.class);
+
         public Market() { super("ServerMarket"); }
 
         /**

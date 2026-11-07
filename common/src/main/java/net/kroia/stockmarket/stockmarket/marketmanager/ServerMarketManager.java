@@ -18,6 +18,7 @@ import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
 import net.kroia.stockmarket.networking.packet.MarketRemovedPacket;
+import net.kroia.stockmarket.stockmarket.market.MarketSettings;
 import net.kroia.stockmarket.stockmarket.market.ServerMarket;
 import net.kroia.stockmarket.stockmarket.market.core.InterMarketExecutor;
 import net.kroia.stockmarket.stockmarket.market.core.order.InterMarketOrder;
@@ -511,11 +512,42 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
      */
     public long getTradeCooldownRemainingMs(UUID playerUUID)
     {
-        Long cooldown = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.TRADE_COOLDOWN_MS.get();
+        long cooldown = getTradeCooldownMs();
         Long last = lastAcceptedPlayerOrderMillis.get(playerUUID);
-        if (cooldown == null || cooldown <= 0 || last == null)
+        if (cooldown <= 0 || last == null)
             return 0;
         return Math.max(0, last + cooldown - System.currentTimeMillis());
+    }
+
+    /**
+     * T-179: the configured global trade cooldown ({@code MARKET.TRADE_COOLDOWN_MS}, read live).
+     * Also shipped to clients in the market price stream so the trade screen can grey out its buttons.
+     *
+     * @return cooldown in ms; 0 = off
+     */
+    public long getTradeCooldownMs()
+    {
+        Long cooldown = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.TRADE_COOLDOWN_MS.get();
+        return cooldown == null ? 0 : Math.max(0, cooldown);
+    }
+
+    /**
+     * T-179 (Mod Settings "Apply to all markets"): recomputes {@code maxOrderVolume} of EVERY market
+     * from its natural abundance and the given factor via
+     * {@link MarketSettings#defaultMaxOrderVolume(float, long)}. Custom per-market limits (including
+     * 0 = unlimited) are overwritten. Persisted with the next market save (autosave/server stop),
+     * like every other market-settings edit.
+     *
+     * @param factor items per abundance unit (the saved {@code MAX_ORDER_VOLUME_FACTOR})
+     * @return number of markets updated
+     */
+    public int applyDefaultMaxOrderVolumeToAllMarkets(long factor)
+    {
+        for (ServerMarket market : markets.values()) {
+            MarketSettings settings = market.getSettings();
+            settings.maxOrderVolume = MarketSettings.defaultMaxOrderVolume(settings.naturalAbundance, factor);
+        }
+        return markets.size();
     }
 
     /**

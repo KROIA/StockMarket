@@ -61,7 +61,7 @@ When the market price has moved away from the default price, the value cluster a
   <img src="../../../images/plugins/volume_distribution_off_fair.svg" width="600" alt="Order book with market price 70 and default price 100. Buy volume left of 70, sell volume right of 70 with a shoulder of extra volume around the default price of 100.">
 </p>
 
-When the price moves, price levels that change side (for example from buy to sell) are emptied immediately and refilled with the opposite order type at the configured speed.
+When the price moves, price levels that change side (for example from buy to sell) are emptied immediately and refilled with the opposite order type at the configured speed. After a fast price move, the levels the move swept through are empty and refill gradually (time constant `1 / (Accumulation Rate x Speed)`, about 200 s at default settings), so the next trade in the opposite direction can briefly spike the price.
 
 ## Settings in Detail
 

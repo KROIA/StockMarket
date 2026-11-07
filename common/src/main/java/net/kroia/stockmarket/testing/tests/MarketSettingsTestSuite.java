@@ -5,6 +5,8 @@ import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.networking.stream.MarketPriceStream;
 import net.kroia.stockmarket.stockmarket.market.MarketSettings;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.minecraft.core.RegistryAccess;
@@ -33,6 +35,77 @@ public class MarketSettingsTestSuite extends TestSuite {
         // Max order volume (T-166)
         addTest("max_order_volume_formula", this::test_maxOrderVolume_formula);
         addTest("max_order_volume_codec_round_trip", this::test_maxOrderVolume_codecRoundTrip);
+        // Max order factor, amount clamp, stream status (T-179)
+        addTest("max_order_volume_factor_formula", this::test_maxOrderVolume_factorFormula);
+        addTest("clamp_order_amount", this::test_clampOrderAmount);
+        addTest("trading_status_codec_round_trip", this::test_tradingStatus_codecRoundTrip);
+    }
+
+    /** T-179: defaultMaxOrderVolume(abundance, factor) = max(factor, round(factor x abundance)); factor &lt; 1 counts as 1. */
+    private TestResult test_maxOrderVolume_factorFormula() {
+        long[] factors = {1, 64, 100};
+        float[] abundance = {0.1f, 5f, 200f};
+        long[][] expected = {
+                {1, 5, 200},        // factor 1: 0.1 rounds to 0 -> floor 1
+                {64, 320, 12800},   // factor 64 (default)
+                {100, 500, 20000},  // factor 100
+        };
+        for (int f = 0; f < factors.length; f++) {
+            for (int a = 0; a < abundance.length; a++) {
+                TestResult r = assertEquals("factor " + factors[f] + ", abundance " + abundance[a], expected[f][a],
+                        MarketSettings.defaultMaxOrderVolume(abundance[a], factors[f]));
+                if (!r.passed()) return r;
+            }
+        }
+        TestResult r = assertEquals("factor 0 counts as 1", 5L, MarketSettings.defaultMaxOrderVolume(5f, 0));
+        if (!r.passed()) return r;
+        r = assertEquals("1-arg overload uses the server factor",
+                MarketSettings.defaultMaxOrderVolume(5f, StockMarketModBackend.getMaxOrderVolumeFactor()),
+                MarketSettings.defaultMaxOrderVolume(5f));
+        if (!r.passed()) return r;
+        return pass("Max order volume formula honours the factor");
+    }
+
+    /** T-179: the trade-screen amount clamp (pure helper). */
+    private TestResult test_clampOrderAmount() {
+        double[][] cases = {
+                // amount, limit, expected
+                {10, 64, 10},      // below
+                {64, 64, 64},      // at
+                {100, 64, 64},     // above
+                {100, 0, 100},     // 0 = unlimited
+                {100, -1, 100},    // negative limit = unlimited
+                {-100, 64, -64},   // signed sell volume keeps its sign
+                {-10, 64, -10},
+                {5.5, 5, 5},       // fractional amounts
+                {0, 64, 0},
+        };
+        for (double[] c : cases) {
+            TestResult r = assertEquals("clamp(" + c[0] + ", " + c[1] + ")", c[2], MarketSettings.clampOrderAmount(c[0], c[1]));
+            if (!r.passed()) return r;
+        }
+        return pass("clampOrderAmount limits the magnitude only above a positive limit");
+    }
+
+    /** T-179: the hand-rolled TradingStatus codec carries maxOrderVolume + tradeCooldownMs. */
+    private TestResult test_tradingStatus_codecRoundTrip() {
+        RegistryAccess access = UtilitiesPlatform.getRegistryAccess();
+        if (access == null)
+            return pass("codec round-trip skipped (no registry access in this context)");
+        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), access);
+        try {
+            MarketPriceStream.TradingStatus s = new MarketPriceStream.TradingStatus(
+                    (byte) 1, (short) 725, true, (short) 480, (short) 1320, 12800L, 500L);
+            MarketPriceStream.TradingStatus.STREAM_CODEC.encode(buf, s);
+            MarketPriceStream.TradingStatus d = MarketPriceStream.TradingStatus.STREAM_CODEC.decode(buf);
+            TestResult r = assertEquals("status survives", s, d);
+            if (!r.passed()) return r;
+            r = assertEquals("buffer fully consumed", 0, buf.readableBytes());
+            if (!r.passed()) return r;
+            return pass("TradingStatus survives the stream codec");
+        } finally {
+            buf.release();
+        }
     }
 
     /** defaultMaxOrderVolume = max(64, round(64 x abundance)); constructors use it. */
@@ -40,12 +113,14 @@ public class MarketSettingsTestSuite extends TestSuite {
         float[] abundance = {0.1f, 1f, 5f, 30f, 200f};
         long[] expected = {64, 64, 320, 1920, 12800};
         for (int i = 0; i < abundance.length; i++) {
-            TestResult r = assertEquals("abundance " + abundance[i], expected[i], MarketSettings.defaultMaxOrderVolume(abundance[i]));
+            TestResult r = assertEquals("abundance " + abundance[i], expected[i], MarketSettings.defaultMaxOrderVolume(abundance[i], 64));
             if (!r.passed()) return r;
         }
-        TestResult r = assertEquals("ctor derives from abundance", 320L, new MarketSettings(false, 1L, 5f).maxOrderVolume);
+        // T-179: constructors use the server's MAX_ORDER_VOLUME_FACTOR (64 by default)
+        long factor = StockMarketModBackend.getMaxOrderVolumeFactor();
+        TestResult r = assertEquals("ctor derives from abundance", MarketSettings.defaultMaxOrderVolume(5f, factor), new MarketSettings(false, 1L, 5f).maxOrderVolume);
         if (!r.passed()) return r;
-        r = assertEquals("default ctor (abundance 10)", 640L, new MarketSettings().maxOrderVolume);
+        r = assertEquals("default ctor (abundance 10)", MarketSettings.defaultMaxOrderVolume(10f, factor), new MarketSettings().maxOrderVolume);
         if (!r.passed()) return r;
         return pass("Max order volume formula matches the approved examples");
     }

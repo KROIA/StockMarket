@@ -6,6 +6,7 @@ import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.setting.SettingsStore;
 import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.networking.NetworkGate;
+import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
@@ -28,6 +29,9 @@ import java.util.concurrent.CompletableFuture;
  *   <li>{@link Action#SET} — applies the values from the payload, sanitizes them
  *       (see {@link #sanitize}), persists them to {@code settings.json} and returns
  *       the confirmed (post-sanitize) state.</li>
+ *   <li>{@link Action#APPLY_MAX_ORDER_VOLUME_TO_ALL_MARKETS} — (T-179) recomputes the max order
+ *       size of every market from its abundance and the SAVED {@code MAX_ORDER_VOLUME_FACTOR};
+ *       the payload is ignored, {@code OutputData.message} carries the updated market count.</li>
  * </ul>
  * <p>
  * <b>Wire format:</b> the payload is the {@link SettingsStore} JSON string of
@@ -70,6 +74,9 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
     /** Maximum per-player trade cooldown in milliseconds (1 minute); minimum is 0 = off. */
     public static final long MAX_TRADE_COOLDOWN_MS = 60_000L;
 
+    /** Minimum max-order-volume factor (T-179): at least one item per abundance unit. */
+    public static final long MIN_MAX_ORDER_VOLUME_FACTOR = 1L;
+
     /** Minimum villager price refresh interval in minutes. */
     public static final long MIN_PRICE_REFRESH_INTERVAL_MINUTES = 1L;
     /** Maximum villager price refresh interval in minutes (1 week). */
@@ -97,7 +104,14 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
         /** Fetch the current settings state (input JSON is ignored/empty). */
         GET,
         /** Apply + persist the settings contained in the input JSON. */
-        SET;
+        SET,
+        /**
+         * T-179: recompute {@code maxOrderVolume} of EVERY market from its natural abundance and the
+         * currently SAVED {@code MAX_ORDER_VOLUME_FACTOR} (unsaved screen edits are not used — the
+         * client says so in its confirm popup). Input JSON is ignored. On success
+         * {@link OutputData#message} holds the number of updated markets. Appended (ordinal = wire format).
+         */
+        APPLY_MAX_ORDER_VOLUME_TO_ALL_MARKETS;
 
         /** Wire codec: encoded as a single byte (the ordinal). */
         public static final StreamCodec<RegistryFriendlyByteBuf, Action> STREAM_CODEC =
@@ -123,7 +137,7 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
      * Output payload returned from the server to the client.
      *
      * @param success      true if the action succeeded (for SET: values applied AND persisted)
-     * @param message      short human-readable failure reason, empty on success
+     * @param message      short human-readable failure reason, empty on success (APPLY_MAX_ORDER_VOLUME_TO_ALL_MARKETS: the updated market count)
      * @param settingsJson the CONFIRMED current server state (post-sanitize) as
      *                     SettingsStore JSON; empty string when the request was rejected
      *                     before touching the settings (no permission / not master)
@@ -197,6 +211,22 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
                     store.toJsonString(settings.getEditableGroups())));
         }
 
+        // ------------- APPLY_MAX_ORDER_VOLUME_TO_ALL_MARKETS (T-179) -------------
+        // Same admin + master + trusted-slave gates as SET (checked above). Markets only exist on
+        // the master (slaves have no ServerMarketManager), so no slave propagation is needed —
+        // order checks run on the master and the new limits reach clients via MarketPriceStream.
+        if (input.action() == Action.APPLY_MAX_ORDER_VOLUME_TO_ALL_MARKETS) {
+            if (!(getServerMarketManager() instanceof ServerMarketManager marketManager)) {
+                return CompletableFuture.completedFuture(new OutputData(false, "Market manager not available",
+                        store.toJsonString(settings.getEditableGroups())));
+            }
+            long factor = net.kroia.stockmarket.StockMarketModBackend.getMaxOrderVolumeFactor(); // saved value, >= 1
+            int count = marketManager.applyDefaultMaxOrderVolumeToAllMarkets(factor);
+            info("Max order volume of " + count + " markets recomputed with factor " + factor + " by " + getPlayerName(playerSender));
+            return CompletableFuture.completedFuture(new OutputData(true, String.valueOf(count),
+                    store.toJsonString(settings.getEditableGroups())));
+        }
+
         // ------------------------------ SET ------------------------------
         JsonObject root;
         try {
@@ -267,6 +297,11 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
         //   order handlers (CreateOrderRequest / PlaceInterMarketOrderRequest
         //   .handleOnMasterServer); slave players' orders are routed to the master,
         //   so the master's value applies everywhere — no propagation needed.
+        //   Clients learn the value through MarketPriceStream.TradingStatus (T-179, <= ~100 ms).
+        // * ServerMarket.MAX_ORDER_VOLUME_FACTOR (T-179): read only on the master when a
+        //   max order size is derived (new markets/presets, saves without a value, the
+        //   APPLY_MAX_ORDER_VOLUME_TO_ALL_MARKETS action). Markets/presets live only on the
+        //   master — no propagation needed. Changing it does NOT touch existing markets.
         String villagerAfter = store.toJsonString(settings.VILLAGER_TRADING);
         if (!villagerAfter.equals(villagerBefore) && BACKEND_INSTANCES.VILLAGER_TRADE_MANAGER != null) {
             BACKEND_INSTANCES.VILLAGER_TRADE_MANAGER.recomputeTable();
@@ -297,6 +332,7 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
      *   <li>{@code ServerMarket.PRICE_HISTORY_MAX_CANDLES_PER_RESPONSE} ∈ [16, 65,536]</li>
      *   <li>{@code ServerMarket.PRICE_HISTORY_INITIAL_LOAD_CANDLES} ∈ [16, 8,192]</li>
      *   <li>{@code ServerMarket.TRADE_COOLDOWN_MS} ∈ [0, 60,000 ms]</li>
+     *   <li>{@code ServerMarket.MAX_ORDER_VOLUME_FACTOR} &ge; 1</li>
      *   <li>{@code VillagerTrading.PRICE_REFRESH_INTERVAL_MINUTES} ∈ [1, 10,080]</li>
      *   <li>{@code VillagerTrading.VILLAGER_BUY_MARGIN / VILLAGER_SELL_MARGIN} ∈ [0.01, 100];
      *       NaN/Infinite values fall back to the setting's default</li>
@@ -331,6 +367,8 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
                         settings.MARKET.PRICE_HISTORY_INITIAL_LOAD_CANDLES.getDefaultValue()));
         settings.MARKET.TRADE_COOLDOWN_MS.set(
                 clamp(settings.MARKET.TRADE_COOLDOWN_MS.get(), 0L, MAX_TRADE_COOLDOWN_MS));
+        settings.MARKET.MAX_ORDER_VOLUME_FACTOR.set(
+                clamp(settings.MARKET.MAX_ORDER_VOLUME_FACTOR.get(), MIN_MAX_ORDER_VOLUME_FACTOR, Long.MAX_VALUE));
         ItemStack currency = settings.MARKET.CURRENCY.get();
         if (currency == null || currency.isEmpty()) {
             // Never allow an empty trading currency — keep the previous one.

@@ -74,17 +74,52 @@ public class MarketSettings {
      */
     public long maxOrderVolume;
 
+    /** Compile-time default of the {@code MARKET.MAX_ORDER_VOLUME_FACTOR} mod setting (one stack). */
+    public static final long DEFAULT_MAX_ORDER_VOLUME_FACTOR = 64L;
+
     /**
      * Default max order volume derived from a market's natural abundance:
-     * {@code max(64, round(64 * naturalAbundance))} - one stack per abundance unit, at least one stack.
-     * Single source of the formula, used for new markets, presets and old saves.
+     * {@code max(factor, round(factor * naturalAbundance))} - {@code factor} items per abundance unit,
+     * at least {@code factor} items. Single source of the formula, used for new markets, presets,
+     * old saves and the Mod Settings "Apply to all markets" action (T-179).
+     *
+     * @param naturalAbundance the market's natural abundance
+     * @param factor           items per abundance unit (the {@code MAX_ORDER_VOLUME_FACTOR} setting); values &lt; 1 count as 1
+     * @return the default max order volume in real items
+     */
+    public static long defaultMaxOrderVolume(float naturalAbundance, long factor)
+    {
+        long f = Math.max(1L, factor);
+        return Math.max(f, Math.round(f * (double) naturalAbundance));
+    }
+
+    /**
+     * {@link #defaultMaxOrderVolume(float, long)} with the running server's current factor
+     * ({@link net.kroia.stockmarket.StockMarketModBackend#getMaxOrderVolumeFactor()}); on a remote
+     * client (no server) the default factor 64 is used — those values are never authoritative.
      *
      * @param naturalAbundance the market's natural abundance
      * @return the default max order volume in real items
      */
     public static long defaultMaxOrderVolume(float naturalAbundance)
     {
-        return Math.max(64L, Math.round(64.0 * naturalAbundance));
+        return defaultMaxOrderVolume(naturalAbundance, net.kroia.stockmarket.StockMarketModBackend.getMaxOrderVolumeFactor());
+    }
+
+    /**
+     * T-179: clamps an order amount to a market's max order volume, keeping its sign
+     * (so it works for signed buy(+)/sell(-) volumes too). Pure helper used by every
+     * trade-screen amount box.
+     *
+     * @param amount         the requested amount (real items, may be negative for sells)
+     * @param maxOrderVolume the limit in real items; &le; 0 = unlimited (no clamp)
+     * @return {@code amount} with its magnitude limited to {@code maxOrderVolume}
+     */
+    public static double clampOrderAmount(double amount, double maxOrderVolume)
+    {
+        if (maxOrderVolume <= 0 || Math.abs(amount) <= maxOrderVolume)
+            return amount;
+        return Math.copySign(maxOrderVolume, amount);
     }
 
     /**

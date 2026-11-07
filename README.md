@@ -240,7 +240,7 @@ Select the **Market Order** or **Limit Order** tab in the trading panel:
 
 In **Pair Mode**, the trading panel switches to show **Market Exchange** and **Limit Exchange** tabs, which work the same way but for cross-market trades at the current exchange rate.
 
-**Order limits:** each market has a **max order size** (items per order, set by the admin), and after an accepted order you have to wait a short **trade cooldown** (default 0.5 s, shared by all markets) before the next one. An order that breaks either rule is rejected and a message tells you the limit or how long to wait; a rejected order does not restart the cooldown. Split large trades into several orders.
+**Order limits:** each market has a **max order size** (items per order, set by the admin), and after an accepted order you have to wait a short **trade cooldown** (default 0.5 s, shared by all markets) before the next one. An order that breaks either rule is rejected and a message tells you the limit or how long to wait; a rejected order does not restart the cooldown. Split large trades into several orders. The trading panel helps: the amount box and the +X buttons never go above the market's max order size (typed values snap down to it; no limit when it is 0), and after an accepted order the Buy/Sell buttons are greyed out with a countdown (e.g. "Buy (0.4s)") until the cooldown is over — on every market, also after switching markets. Moving an order on the chart is not affected.
 
 #### Managing Orders
 - **Pending Orders** tab shows all your active limit orders. Each order has a cancel button.
@@ -278,7 +278,7 @@ Run <code>/stockmarket manage</code> to open the management interface. It has th
     The overview shows all existing markets in a searchable grid.<br>
     - Click a market to select it and view its price chart.<br>
     - Use the <b>Market Settings</b> button to configure individual market parameters.<br>
-      &nbsp;&nbsp;<b>Max order size</b>: the most items a single player order may buy or sell on this market (0 = unlimited, bots are not limited). Defaults to <code>max(64, 64 x abundance)</code>, e.g. abundance 5 = 320, 30 = 1,920, 200 = 12,800. Markets from older saves get this default on the first load after the update.<br>
+      &nbsp;&nbsp;<b>Max order size</b>: the most items a single player order may buy or sell on this market (0 = unlimited, bots are not limited). Defaults to <code>max(F, F x abundance)</code> with the <b>Max order size factor</b> F from the Mod Settings (default 64), e.g. abundance 5 = 320, 30 = 1,920, 200 = 12,800. Markets from older saves get this default on the first load after the update.<br>
     - Use the <b>Open/Close</b> checkbox to enable or disable trading on a market. Close a market before making major changes to prevent players from exploiting price movements.<br>
     - Use the <b>Remove</b> button to delete a market. Open positions from players will be automatically closed.<br>
     - The <b>Manage Plugins</b> button opens the Plugin Management screen (see below).<br>
@@ -302,7 +302,7 @@ Run <code>/stockmarket manage</code> to open the management interface. It has th
     </summary>
     Edit the default price and abundance values used when creating new markets.<br>
     - Browse presets by category.<br>
-    - Adjust price, abundance and <b>max order</b> (max items per player order on markets created from the preset, 0 = unlimited) for any item. Preset files from older versions are filled with <code>max(64, 64 x abundance)</code>.<br>
+    - Adjust price, abundance and <b>max order</b> (max items per player order on markets created from the preset, 0 = unlimited) for any item. Preset files from older versions and new presets are filled with <code>max(F, F x abundance)</code> (F = Mod Settings factor); existing preset values are kept.<br>
     - Click <b>Save</b> to persist your changes.<br>
 </details>
 
@@ -312,6 +312,7 @@ The **Mod Settings** button on the Management GUI's overview tab opens an editor
 * **Apply** validates and clamps the values server-side, saves them to `settings.json` and re-displays the confirmed state. **Reload** re-fetches the current server values, **Defaults** resets the fields to the compile-time defaults (nothing is saved until Apply).
 * Most settings take effect immediately. Fields marked with an orange **⟳ Restart required** label (orderbook array size, trading currency) are only read once at startup — the new value is saved but only applies after a server restart.
 * **Trade cooldown (ms)** (`ServerMarket.TRADE_COOLDOWN_MS`, default `500`, range 0 - 60000, `0` = off): minimum time between two accepted orders of the same player across all markets and both normal and pair (inter-market) orders — stops autoclickers. Rejected orders don't restart it; bots are not affected. Takes effect immediately.
+* **Max order size factor** (`ServerMarket.MAX_ORDER_VOLUME_FACTOR`, default `64`, minimum 1): the default max order size of a market is `max(factor, factor x abundance)`. Used for new markets and presets and for saves without a value; existing markets keep their limit. The **Apply to all markets** button next to it (asks for confirmation) recomputes the max order size of **every** market from its abundance and the **saved** factor — per-market custom limits, including 0 = unlimited, are overwritten. Press Apply first if you changed the factor.
 * Changes to the **Villager Trading** group are propagated to all connected slave servers right away (the villager price table is recomputed and re-broadcast).
 
 This screen is the recommended way to change any persisted mod setting — admins do not need to edit `settings.json` by hand.

@@ -40,6 +40,7 @@ import net.kroia.stockmarket.pluginsystem.pluginmanager.PluginManager;
 import net.kroia.stockmarket.pluginsystem.pluginmanager.ServerPluginManager;
 import net.kroia.stockmarket.stockmarket.marketmanager.ClientMarketManager;
 import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
+import net.kroia.stockmarket.stockmarket.market.MarketSettings;
 
 import net.kroia.stockmarket.minecraft.menu.StockMarketMenus;
 import net.kroia.stockmarket.networking.StockMarketNetworking;
@@ -130,6 +131,22 @@ public class StockMarketModBackend implements StockMarketAPI {
      */
     public static @Nullable ClientInstances getClientInstances() {
         return CLIENT_INSTANCES;
+    }
+
+    /**
+     * T-179: current {@code MARKET.MAX_ORDER_VOLUME_FACTOR} of the running (master) server, read live.
+     * Without a running server (remote client, or before setup) the compile-time default is returned —
+     * client-side derivations are never authoritative (markets/presets come from the master with explicit values).
+     *
+     * @return the factor, &ge; 1
+     */
+    public static long getMaxOrderVolumeFactor() {
+        ServerInstances server = SERVER_INSTANCES;
+        if (server == null || server.SERVER_SETTINGS == null)
+            return MarketSettings.DEFAULT_MAX_ORDER_VOLUME_FACTOR;
+        Long factor = server.SERVER_SETTINGS.MARKET.MAX_ORDER_VOLUME_FACTOR.get();
+        return factor == null ? MarketSettings.DEFAULT_MAX_ORDER_VOLUME_FACTOR
+                : Math.max(1L, factor);
     }
 
     StockMarketModBackend()

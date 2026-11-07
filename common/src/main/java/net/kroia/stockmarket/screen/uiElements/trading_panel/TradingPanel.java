@@ -7,6 +7,7 @@ import net.kroia.stockmarket.screen.UI_Colors;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.minecraft.network.chat.Component;
 
+import java.util.Locale;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -95,6 +96,40 @@ public class TradingPanel extends TabElement {
     public void setMarketOpen(boolean open) {
         marketOrderPanel.setMarketOpen(open);
         limitOrderPanel.setMarketOpen(open);
+    }
+
+    /**
+     * T-179: limits the amount boxes of both tabs to the market's max order size.
+     * @param maxQuantity limit in real items; &le; 0 = unlimited
+     */
+    public void setMaxQuantity(double maxQuantity) {
+        marketOrderPanel.setMaxQuantity(maxQuantity);
+        limitOrderPanel.setMaxQuantity(maxQuantity);
+    }
+
+    /**
+     * T-179: greys out buy/sell on both tabs while the player's trade cooldown runs.
+     * @param remainingMs remaining cooldown in ms; &le; 0 = ready
+     */
+    public void setTradeCooldown(long remainingMs) {
+        marketOrderPanel.setTradeCooldown(remainingMs);
+        limitOrderPanel.setTradeCooldown(remainingMs);
+    }
+
+    /**
+     * T-179: shared by all trading sub-panels. While {@code remainingMs > 0} the button stays
+     * visible but ignores clicks and shows the countdown, e.g. "Buy (0.4s)".
+     *
+     * @param button      the buy or sell button
+     * @param text        the button's normal label
+     * @param remainingMs remaining cooldown in ms; &le; 0 = ready
+     */
+    static void applyTradeCooldown(Button button, String text, long remainingMs) {
+        boolean ready = remainingMs <= 0;
+        button.setClickable(ready);
+        String label = ready ? text : text + String.format(Locale.ROOT, " (%.1fs)", remainingMs / 1000.0);
+        if (!label.equals(button.getText()))
+            button.setText(label);
     }
 
     @Override

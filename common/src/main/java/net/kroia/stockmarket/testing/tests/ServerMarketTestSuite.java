@@ -14,6 +14,7 @@ import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import net.kroia.stockmarket.stockmarket.market.MarketSettings;
 import net.kroia.stockmarket.stockmarket.market.ServerMarket;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
+import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.testing.TestFixture;
 import net.minecraft.nbt.CompoundTag;
@@ -83,6 +84,41 @@ public class ServerMarketTestSuite extends TestSuite {
         addTest("tradingHours_save_load_roundTrip_and_oldNbt", this::test_tradingHours_saveLoad);
         addTest("save_load_closedState_freshMarket", this::test_saveLoad_closedState_freshMarket);
         addTest("maxOrderVolume_saveLoad_and_oldNbt", this::test_maxOrderVolume_saveLoad);
+        addTest("maxOrderVolume_applyToAllMarkets", this::test_maxOrderVolume_applyToAllMarkets);
+    }
+
+    /**
+     * T-179: "Apply to all markets" recomputes every market's maxOrderVolume from its abundance and the
+     * given factor, overwriting custom values (including 0 = unlimited). All live markets are restored afterwards.
+     */
+    private TestResult test_maxOrderVolume_applyToAllMarkets() {
+        ServerMarketManager manager = (ServerMarketManager) backend.MARKET_MANAGER.getSync();
+        java.util.Map<ItemID, Long> snapshot = new java.util.HashMap<>();
+        for (ItemID id : manager.getAvailableMarketIDs())
+            snapshot.put(id, manager.getServerMarket(id).getSettings().maxOrderVolume);
+        MarketSettings s = serverMarket.getSettings();
+        float prevAbundance = s.naturalAbundance;
+        try {
+            s.naturalAbundance = 5f;
+            s.maxOrderVolume = 0; // a custom "unlimited" must be overwritten too
+            int count = manager.applyDefaultMaxOrderVolumeToAllMarkets(100);
+            TestResult r = assertEquals("count = all markets", snapshot.size(), count);
+            if (!r.passed()) return r;
+            r = assertEquals("scratch market recomputed (factor 100, abundance 5)", 500L, s.maxOrderVolume);
+            if (!r.passed()) return r;
+            for (ItemID id : snapshot.keySet()) {
+                MarketSettings ms = manager.getServerMarket(id).getSettings();
+                r = assertEquals("market " + id + " recomputed", MarketSettings.defaultMaxOrderVolume(ms.naturalAbundance, 100), ms.maxOrderVolume);
+                if (!r.passed()) return r;
+            }
+            return pass("Apply to all markets recomputes every market from abundance x factor");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        } finally {
+            s.naturalAbundance = prevAbundance;
+            for (java.util.Map.Entry<ItemID, Long> e : snapshot.entrySet())
+                manager.getServerMarket(e.getKey()).getSettings().maxOrderVolume = e.getValue();
+        }
     }
 
     @Override

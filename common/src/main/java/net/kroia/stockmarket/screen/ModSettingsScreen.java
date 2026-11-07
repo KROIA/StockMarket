@@ -2,6 +2,8 @@ package net.kroia.stockmarket.screen;
 
 import com.google.gson.JsonParser;
 import net.kroia.modutilities.gui.Gui;
+import net.kroia.modutilities.gui.client.ClientCompat;
+import net.kroia.modutilities.gui.client.GuiScreen;
 import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.CheckBox;
 import net.kroia.modutilities.gui.elements.CloseButton;
@@ -20,6 +22,7 @@ import net.kroia.modutilities.setting.SettingsStore;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModSettings;
 import net.kroia.stockmarket.networking.request.ModSettingsRequest;
+import net.kroia.stockmarket.pluginsystem.plugins.screen.NewsDialogScreen;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.kroia.stockmarket.util.StockMarketGuiScreen;
 import net.minecraft.client.Minecraft;
@@ -27,6 +30,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -78,6 +82,14 @@ public class ModSettingsScreen extends StockMarketGuiScreen {
         public static final Component STATUS_LOADED = Component.translatable(PREFIX + "status.loaded");
         public static final Component STATUS_SAVED = Component.translatable(PREFIX + "status.saved");
         public static final Component STATUS_FAILED = Component.translatable(PREFIX + "status.failed");
+        /** T-179: "Apply to all markets" button next to MAX_ORDER_VOLUME_FACTOR (also the confirm label). */
+        public static final Component APPLY_ALL_MAX_ORDER = Component.translatable(PREFIX + "apply_all_max_order");
+        public static final Component APPLY_ALL_MAX_ORDER_TOOLTIP = Component.translatable(PREFIX + "apply_all_max_order.tooltip");
+        public static final Component APPLY_ALL_MAX_ORDER_CONFIRM_TITLE = Component.translatable(PREFIX + "apply_all_max_order.confirm_title");
+        /** Args: market count, saved factor. Line breaks separate dialog lines. */
+        public static final String APPLY_ALL_MAX_ORDER_CONFIRM_MESSAGE = PREFIX + "apply_all_max_order.confirm_message";
+        /** Args: updated market count, factor. */
+        public static final String APPLY_ALL_MAX_ORDER_DONE = PREFIX + "apply_all_max_order.done";
 
         /** Heading label of a settings group ("Utilities", "ServerMarket", "VillagerTrading"). */
         public static Component group(String groupName) {
@@ -138,6 +150,11 @@ public class ModSettingsScreen extends StockMarketGuiScreen {
      * Never persisted locally — the master remains the single source of truth.
      */
     private final StockMarketModSettings workingCopy = new StockMarketModSettings();
+    /**
+     * T-179: MAX_ORDER_VOLUME_FACTOR as last confirmed by the master (GET/SET response); -1 until
+     * loaded. "Apply to all markets" always uses this SAVED value, never an unsaved edit.
+     */
+    private long savedMaxOrderVolumeFactor = -1;
     private final List<FieldBinding> bindings = new ArrayList<>();
 
     private final Label titleLabel;
@@ -250,6 +267,8 @@ public class ModSettingsScreen extends StockMarketGuiScreen {
         private Button selectItemButton = null;
         private Label unsupportedLabel = null;
         private Label restartMarker = null;
+        /** T-179: "Apply to all markets" button, only on the MAX_ORDER_VOLUME_FACTOR row. */
+        private Button applyAllButton = null;
 
         SettingRow(SettingsGroup group, Setting<?> setting) {
             setEnableBackground(false);
@@ -278,6 +297,15 @@ public class ModSettingsScreen extends StockMarketGuiScreen {
                 // extends to the LEFT and stays inside the window.
                 restartMarker.setHoverTooltipMousePositionAlignment(Alignment.TOP_RIGHT);
                 addChild(restartMarker);
+            }
+
+            if (setting == workingCopy.MARKET.MAX_ORDER_VOLUME_FACTOR) {
+                applyAllButton = new Button(Texts.APPLY_ALL_MAX_ORDER.getString(), ModSettingsScreen.this::onApplyMaxOrderVolumeToAll);
+                applyAllButton.setHoverTooltipSupplier(Texts.APPLY_ALL_MAX_ORDER_TOOLTIP::getString);
+                applyAllButton.setHoverTooltipFontScale(hoverToolTipFontSize);
+                // Right edge of the screen: tooltip extends left.
+                applyAllButton.setHoverTooltipMousePositionAlignment(Alignment.TOP_RIGHT);
+                addChild(applyAllButton);
             }
         }
 
@@ -422,7 +450,7 @@ public class ModSettingsScreen extends StockMarketGuiScreen {
         protected void layoutChanged() {
             int w = getWidth() - 2 * padding;
             int labelW = (int) (w * 0.45);
-            int markerW = restartMarker != null ? (int) (w * 0.2) : 0;
+            int markerW = restartMarker != null || applyAllButton != null ? (int) (w * 0.2) : 0;
             int editorX = padding + labelW + spacing;
             int editorW = w - labelW - spacing - (markerW > 0 ? markerW + spacing : 0);
 
@@ -441,6 +469,8 @@ public class ModSettingsScreen extends StockMarketGuiScreen {
                 unsupportedLabel.setBounds(editorX, padding / 2, editorW, ELEMENT_HEIGHT);
             if (restartMarker != null)
                 restartMarker.setBounds(padding + w - markerW, padding / 2, markerW, ELEMENT_HEIGHT);
+            if (applyAllButton != null)
+                applyAllButton.setBounds(padding + w - markerW, padding / 2, markerW, ELEMENT_HEIGHT);
         }
     }
 
@@ -501,6 +531,8 @@ public class ModSettingsScreen extends StockMarketGuiScreen {
             try {
                 new SettingsStore().fromJson(workingCopy.getEditableGroups(),
                         JsonParser.parseString(output.settingsJson()));
+                Long factor = workingCopy.MARKET.MAX_ORDER_VOLUME_FACTOR.get();
+                savedMaxOrderVolumeFactor = factor != null ? factor : -1;
                 refreshFields();
             } catch (Exception e) {
                 error("Failed to parse mod settings response", e);
@@ -515,6 +547,41 @@ public class ModSettingsScreen extends StockMarketGuiScreen {
                     ? Texts.STATUS_FAILED.getString() : output.message();
             setStatus(msg, STATUS_COLOR_ERROR);
         }
+    }
+
+    /**
+     * T-179: asks for confirmation, then lets the master recompute the max order size of EVERY
+     * market from its abundance and the SAVED factor (see {@link #savedMaxOrderVolumeFactor}).
+     * The popup warns that per-market custom limits are overwritten and that unsaved edits are not used.
+     */
+    private void onApplyMaxOrderVolumeToAll() {
+        if (savedMaxOrderVolumeFactor < 1) return; // settings not loaded yet
+        List<String> lines = Arrays.asList(Component.translatable(Texts.APPLY_ALL_MAX_ORDER_CONFIRM_MESSAGE,
+                String.valueOf(getAvailableMarkets().size()), String.valueOf(savedMaxOrderVolumeFactor))
+                .getString().split("\n"));
+        GuiScreen.setScreen(NewsDialogScreen.confirmDialog(ClientCompat.screen(),
+                Texts.APPLY_ALL_MAX_ORDER_CONFIRM_TITLE, lines, Texts.APPLY_ALL_MAX_ORDER,
+                this::sendApplyMaxOrderVolumeToAll));
+    }
+
+    /**
+     * T-179: sends {@link ModSettingsRequest.Action#APPLY_MAX_ORDER_VOLUME_TO_ALL_MARKETS} and shows the
+     * updated market count. Does not reload the fields, so unsaved edits stay in the editors.
+     */
+    private void sendApplyMaxOrderVolumeToAll() {
+        long factor = savedMaxOrderVolumeFactor;
+        setStatus(Texts.STATUS_LOADING.getString(), STATUS_COLOR_NEUTRAL);
+        ModSettingsRequest.InputData input = new ModSettingsRequest.InputData(
+                ModSettingsRequest.Action.APPLY_MAX_ORDER_VOLUME_TO_ALL_MARKETS, "");
+        AsynchronousRequestResponseSystem.sendRequestToServer(BACKEND_INSTANCES.NETWORKING.MOD_SETTINGS_REQUEST, input)
+                .thenAccept(output -> Minecraft.getInstance().execute(() -> {
+                    if (output.success())
+                        setStatus(Component.translatable(Texts.APPLY_ALL_MAX_ORDER_DONE, output.message(),
+                                String.valueOf(factor)).getString(), STATUS_COLOR_OK);
+                    else
+                        setStatus(output.message() == null || output.message().isEmpty()
+                                ? Texts.STATUS_FAILED.getString() : output.message(), STATUS_COLOR_ERROR);
+                }));
     }
 
     /** Writes all working-copy values into their editor widgets. */
