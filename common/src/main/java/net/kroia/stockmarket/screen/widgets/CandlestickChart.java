@@ -88,6 +88,8 @@ public class CandlestickChart extends StockMarketGuiElement {
     private final Rectangle volumeRect = new Rectangle(1, 1, 0, 0);
     private final Rectangle volumeScissorRect = new Rectangle(1, 1, 0, 0);
     private double zoomLevel = 200;
+    /** Minimum visible candle count (horizontal zoom floor); shared by live zoom and viewport restore. */
+    private static final double MIN_ZOOM_CANDLES = 5.0;
     private final RectangleF chartviewRect = new RectangleF(200, 0, 200, 500);
     private final Point lastDragMousePos = new Point();
     private int maxPriceLabelTextWidth = 0;
@@ -769,9 +771,9 @@ public class CandlestickChart extends StockMarketGuiElement {
         // Horizontal zoom (disabled when holding Ctrl for vertical-only zoom)
         if (!isKeyPressed(InputConstants.KEY_LEFT_CONTROL)) {
             double minScrollValue = Math.min(canvasRect.width / 3.f, data.getCandles().size());
-            zoomLevel = Math.max(Math.min(zoomLevel * zoomFactor, minScrollValue), 5.0f);
+            zoomLevel = Math.max(Math.min(zoomLevel * zoomFactor, minScrollValue), MIN_ZOOM_CANDLES);
 
-            if (zoomLevel < minScrollValue && zoomLevel > 5) {
+            if (zoomLevel < minScrollValue && zoomLevel > MIN_ZOOM_CANDLES) {
                 int newCandleWidth = (Math.abs(canvasRect.width / (int) zoomLevel) / 2) * 2;
                 if (newCandleWidth > 0)
                     chartviewRect.width = (double) (((long) zoomLevel * newCandleWidth) / newCandleWidth);
@@ -783,7 +785,7 @@ public class CandlestickChart extends StockMarketGuiElement {
                 chartviewRect.x = mouseWorldX - mouseNormX * chartviewRect.width;
                 clampViewToNewestCandle();
             } else {
-                zoomLevel = Math.max(Math.min(zoomLevel, minScrollValue), 5.0f);
+                zoomLevel = Math.max(Math.min(zoomLevel, minScrollValue), MIN_ZOOM_CANDLES);
                 chartviewRect.width = (int) zoomLevel;
                 clampViewToNewestCandle();
             }
@@ -927,9 +929,12 @@ public class CandlestickChart extends StockMarketGuiElement {
         if (tag == null || tag.isEmpty()) return;
         chartviewRect.x = NbtCompat.getDouble(tag, "viewX");
         chartviewRect.y = NbtCompat.getDouble(tag, "viewY");
-        chartviewRect.width = NbtCompat.getDouble(tag, "viewW");
+        // T-180: a missing/0 width would draw a zero-width chart until the next scroll. Only the
+        // floor is applied: the live max (min(canvas width / 3, candle count)) needs loaded candles,
+        // which are usually not there yet; the next scroll applies it.
+        chartviewRect.width = Math.max(NbtCompat.getDouble(tag, "viewW"), MIN_ZOOM_CANDLES);
         chartviewRect.height = NbtCompat.getDouble(tag, "viewH");
-        zoomLevel = NbtCompat.getDouble(tag, "zoom");
+        zoomLevel = Math.max(NbtCompat.getDouble(tag, "zoom"), MIN_ZOOM_CANDLES);
         skipAutoCenterOnce = true;
         selectCandleTimeDeltaByIndex(NbtCompat.getInt(tag, "candleTimeIdx"));
         // The deserialised viewport is an authoritative placement — mark this
@@ -982,9 +987,10 @@ public class CandlestickChart extends StockMarketGuiElement {
 
         chartviewRect.x = state.viewX;
         chartviewRect.y = state.viewY;
-        chartviewRect.width = state.viewWidth;
+        // T-180: same zoom floor as deserializeViewport / live zoom.
+        chartviewRect.width = Math.max(state.viewWidth, MIN_ZOOM_CANDLES);
         chartviewRect.height = state.viewHeight;
-        zoomLevel = state.zoomLevel;
+        zoomLevel = Math.max(state.zoomLevel, MIN_ZOOM_CANDLES);
         currentCandleTimeIdx = state.candleTimeIdx;
 
         // Load the correct candle data and update button colors without auto-centering

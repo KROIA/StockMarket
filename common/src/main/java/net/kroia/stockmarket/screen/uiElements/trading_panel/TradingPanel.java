@@ -7,7 +7,6 @@ import net.kroia.stockmarket.screen.UI_Colors;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.minecraft.network.chat.Component;
 
-import java.util.Locale;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -116,20 +115,39 @@ public class TradingPanel extends TabElement {
         limitOrderPanel.setTradeCooldown(remainingMs);
     }
 
+    /** T-180: light, semi-transparent gray drawn over a buy/sell button while the trade cooldown runs. */
+    static final int TRADE_COOLDOWN_OVERLAY_COLOR = 0x80A0A0A0;
+
     /**
-     * T-179: shared by all trading sub-panels. While {@code remainingMs > 0} the button stays
-     * visible but ignores clicks and shows the countdown, e.g. "Buy (0.4s)".
+     * T-180: creates a buy/sell button that draws {@link #TRADE_COOLDOWN_OVERLAY_COLOR} over its
+     * bounds while it is not clickable (see {@link #applyTradeCooldown}). Same overlay technique as
+     * {@code MarketItemButton}: drawn in the background pass, so the label stays readable on top.
+     *
+     * @param text          the button label ("Buy"/"Sell")
+     * @param onFallingEdge click action
+     * @return the new button
+     */
+    static Button tradeButton(String text, Runnable onFallingEdge) {
+        return new Button(text, onFallingEdge) {
+            @Override
+            protected void renderBackground() {
+                super.renderBackground();
+                if (!isClickable())
+                    drawRect(0, 0, getWidth(), getHeight(), TRADE_COOLDOWN_OVERLAY_COLOR);
+            }
+        };
+    }
+
+    /**
+     * T-179/T-180: shared by all trading sub-panels. While {@code remainingMs > 0} the button stays
+     * visible with its normal label but ignores clicks; buttons made by {@link #tradeButton} then
+     * show a gray overlay.
      *
      * @param button      the buy or sell button
-     * @param text        the button's normal label
      * @param remainingMs remaining cooldown in ms; &le; 0 = ready
      */
-    static void applyTradeCooldown(Button button, String text, long remainingMs) {
-        boolean ready = remainingMs <= 0;
-        button.setClickable(ready);
-        String label = ready ? text : text + String.format(Locale.ROOT, " (%.1fs)", remainingMs / 1000.0);
-        if (!label.equals(button.getText()))
-            button.setText(label);
+    static void applyTradeCooldown(Button button, long remainingMs) {
+        button.setClickable(remainingMs <= 0);
     }
 
     @Override

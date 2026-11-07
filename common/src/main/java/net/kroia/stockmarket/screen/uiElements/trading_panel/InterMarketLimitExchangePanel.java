@@ -193,14 +193,14 @@ class InterMarketLimitExchangePanel extends StockMarketGuiElement {
         estimatedCostLabel.setAlignment(Alignment.CENTER);
 
         // Buy limit button (green)
-        buyButton = new Button(Texts.BUY.getString(), () -> onBuyLimit.accept(quantity, rateLimit));
+        buyButton = TradingPanel.tradeButton(Texts.BUY.getString(), () -> onBuyLimit.accept(quantity, rateLimit));
         buyButton.setBackgroundColor(darkerBuyColor1);
         buyButton.setHoverColor(darkerBuyColor2);
         buyButton.setPressedColor(darkerBuyColor3);
         buyButton.setOutlineColor(darkerBuyColor4);
 
         // Sell limit button (red)
-        sellButton = new Button(Texts.SELL.getString(), () -> onSellLimit.accept(quantity, rateLimit));
+        sellButton = TradingPanel.tradeButton(Texts.SELL.getString(), () -> onSellLimit.accept(quantity, rateLimit));
         sellButton.setBackgroundColor(darkerSellColor1);
         sellButton.setHoverColor(darkerSellColor2);
         sellButton.setPressedColor(darkerSellColor3);
@@ -288,8 +288,8 @@ class InterMarketLimitExchangePanel extends StockMarketGuiElement {
      * @param remainingMs remaining cooldown in ms; &le; 0 = ready
      */
     public void setTradeCooldown(long remainingMs) {
-        TradingPanel.applyTradeCooldown(buyButton, Texts.BUY.getString(), remainingMs);
-        TradingPanel.applyTradeCooldown(sellButton, Texts.SELL.getString(), remainingMs);
+        TradingPanel.applyTradeCooldown(buyButton, remainingMs);
+        TradingPanel.applyTradeCooldown(sellButton, remainingMs);
     }
 
     public void setMarketOpen(boolean open) {
