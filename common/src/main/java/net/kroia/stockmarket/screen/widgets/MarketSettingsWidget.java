@@ -27,6 +27,8 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
     private static final Component MAINTENANCE_TOOLTIP = Component.translatable(PREFIX + "maintenance.tooltip");
     private static final Component DEFAULT_PRICE_TEXT = Component.translatable(PREFIX + "default_price");
     private static final Component ABUNDANCE_TEXT = Component.translatable(PREFIX + "abundance");
+    private static final Component MAX_ORDER_TEXT = Component.translatable(PREFIX + "max_order_volume");
+    private static final Component MAX_ORDER_TOOLTIP = Component.translatable(PREFIX + "max_order_volume.tooltip");
     private static final Component VIRTUAL_ORDERBOOK_ENABLED_TEXT = Component.translatable(PREFIX + "virtual_orderbook_enabled");
     private static final Component VIRTUAL_ORDERBOOK_ENABLED_TOOLTIP = Component.translatable(PREFIX + "virtual_orderbook_enabled.tooltip");
     private static final Component RESET_VIRTUAL_ORDERBOOK_TEXT = Component.translatable(PREFIX + "reset_virtual_orderbook");
@@ -85,6 +87,9 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
     private final TextBox defaultPriceTextBox;
     private final Label abundanceLabel;
     private final TextBox abundanceTextBox;
+    /** T-166: max volume of a single player order (MarketSettings.maxOrderVolume, 0 = unlimited). */
+    private final Label maxOrderLabel;
+    private final TextBox maxOrderTextBox;
     private final Label netFlowLabel;
     private final Label netFlowValueLabel;
     private final Button resetNetFlowButton;
@@ -133,6 +138,16 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
 
         abundanceTextBox = new TextBox();
         abundanceTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 10, 6));
+
+        maxOrderLabel = new Label(MAX_ORDER_TEXT.getString());
+        maxOrderLabel.setAlignment(Label.Alignment.RIGHT);
+        maxOrderLabel.setHoverTooltipSupplier(MAX_ORDER_TOOLTIP::getString);
+        maxOrderLabel.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
+
+        maxOrderTextBox = new TextBox();
+        maxOrderTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 12, 0));
+        maxOrderTextBox.setHoverTooltipSupplier(MAX_ORDER_TOOLTIP::getString);
+        maxOrderTextBox.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
 
         netFlowLabel = new Label(NET_FLOW_TEXT.getString());
         netFlowLabel.setAlignment(Label.Alignment.RIGHT);
@@ -199,6 +214,8 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
         addChild(defaultPriceTextBox);
         addChild(abundanceLabel);
         addChild(abundanceTextBox);
+        addChild(maxOrderLabel);
+        addChild(maxOrderTextBox);
         addChild(netFlowLabel);
         addChild(netFlowValueLabel);
         addChild(resetNetFlowButton);
@@ -221,8 +238,8 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
             child.setTooltipPositionAlignment(Alignment.TOP_RIGHT);
         }
 
-        // 8 base rows + trading hours, apply-all, status and server-time rows.
-        setHeight(12 * elementHeight + 13 * padding);
+        // 9 base rows + trading hours, apply-all, status and server-time rows.
+        setHeight(13 * elementHeight + 14 * padding);
         setTradingHoursText(settings.tradingOpenMinute, settings.tradingCloseMinute);
         loadSettings();
         netFlowRefreshTimer.start(NET_FLOW_REFRESH_INTERVAL_MS);
@@ -311,10 +328,13 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
         abundanceLabel.setBounds(padding, defaultPriceLabel.getBottom() + padding, labelWidth, elementHeight);
         abundanceTextBox.setBounds(abundanceLabel.getRight() + spacing, abundanceLabel.getTop(), fieldWidth, elementHeight);
 
+        maxOrderLabel.setBounds(padding, abundanceLabel.getBottom() + padding, labelWidth, elementHeight);
+        maxOrderTextBox.setBounds(maxOrderLabel.getRight() + spacing, maxOrderLabel.getTop(), fieldWidth, elementHeight);
+
         // Net flow row: label | value label | reset button
         int resetButtonWidth = 40;
         int valueWidth = fieldWidth - resetButtonWidth - spacing;
-        netFlowLabel.setBounds(padding, abundanceLabel.getBottom() + padding, labelWidth, elementHeight);
+        netFlowLabel.setBounds(padding, maxOrderLabel.getBottom() + padding, labelWidth, elementHeight);
         netFlowValueLabel.setBounds(netFlowLabel.getRight() + spacing, netFlowLabel.getTop(), valueWidth, elementHeight);
         resetNetFlowButton.setBounds(netFlowValueLabel.getRight() + spacing, netFlowLabel.getTop(), resetButtonWidth, elementHeight);
 
@@ -471,6 +491,7 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
         float abundance = parseAbundance(abundanceTextBox.getText());
         if (abundance > 0)
             settings.naturalAbundance = abundance;
+        settings.maxOrderVolume = parseMaxOrder(maxOrderTextBox.getText(), settings.maxOrderVolume);
         market.setSettings(settings);
     }
 
@@ -489,6 +510,7 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
         settings.ignorePluginAutosubscribe = marketSettings.ignorePluginAutosubscribe;
         settings.tradingOpenMinute = marketSettings.tradingOpenMinute;
         settings.tradingCloseMinute = marketSettings.tradingCloseMinute;
+        settings.maxOrderVolume = marketSettings.maxOrderVolume;
         maintenanceCheckBox.setChecked(settings.maintenance);
         virtualOrderbookEnabledCheckBox.setChecked(settings.virtualOrderbookEnabled);
         // Sync the Clear/Reset button enabled state with the freshly-loaded checkbox
@@ -497,6 +519,7 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
         updateVirtualOrderbookButtonEnabled(settings.virtualOrderbookEnabled);
         defaultPriceTextBox.setText(getBankManager().convertToRealAmount(settings.defaultPrice), getBankManager().getItemFractionDigitsCount());
         abundanceTextBox.setText(formatAbundance(settings.naturalAbundance));
+        maxOrderTextBox.setText(Long.toString(settings.maxOrderVolume));
         netFlowValueLabel.setText(String.valueOf(getBankManager().convertToRealAmount(settings.netPlayerItemFlow)));
         setTradingHoursText(settings.tradingOpenMinute, settings.tradingCloseMinute);
         loading = false;
@@ -510,6 +533,7 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
         float abundance = parseAbundance(abundanceTextBox.getText());
         if (abundance > 0)
             settings.naturalAbundance = abundance;
+        settings.maxOrderVolume = parseMaxOrder(maxOrderTextBox.getText(), settings.maxOrderVolume);
         return settings;
     }
 
@@ -526,6 +550,19 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
         String s = String.format(Locale.ROOT, "%.4f", value);
         s = s.contains(".") ? s.replaceAll("0+$", "").replaceAll("\\.$", "") : s;
         return s;
+    }
+
+    /**
+     * @param text     the max-order text box content
+     * @param fallback value kept when the text is not a number
+     * @return the parsed max order volume (0 = unlimited)
+     */
+    private static long parseMaxOrder(String text, long fallback) {
+        try {
+            return Math.max(0, Long.parseLong(text.trim()));
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
     }
 
     private static float parseAbundance(String text) {

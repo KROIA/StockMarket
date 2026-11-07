@@ -38,6 +38,42 @@ public class MarketPresetTestSuite extends TestSuite {
         addTest("json_round_trip_preserves_values", this::test_jsonRoundTripPreservesValues);
         addTest("category_names_unique", this::test_categoryNamesUnique);
         addTest("preset_replacement_in_category", this::test_presetReplacementInCategory);
+        // T-166 max order volume
+        addTest("max_order_volume_derived_default", this::test_maxOrderVolume_derivedDefault);
+        addTest("max_order_volume_forward_merge", this::test_maxOrderVolume_forwardMerge);
+    }
+
+    /** Presets (incl. all default presets) derive maxOrderVolume from their abundance. */
+    private TestResult test_maxOrderVolume_derivedDefault() {
+        TestResult r = assertEquals("abundance 5 -> 320", 320L, new MarketPreset("minecraft:diamond", 100f, 5f).getMaxOrderVolume());
+        if (!r.passed()) return r;
+        for (MarketPresetCategory cat : DefaultPresets.generate(null)) {
+            for (MarketPreset p : cat.getPresets()) {
+                long expected = net.kroia.stockmarket.stockmarket.market.MarketSettings.defaultMaxOrderVolume(p.getNaturalAbundance());
+                r = assertEquals("default preset " + p.getItemId(), expected, p.getMaxOrderVolume());
+                if (!r.passed()) return r;
+            }
+        }
+        return pass("Preset maxOrderVolume derived from abundance");
+    }
+
+    /** Forward-merge fills a missing maxOrderVolume from the entry's abundance and keeps existing values. */
+    private TestResult test_maxOrderVolume_forwardMerge() {
+        com.google.gson.JsonObject root = com.google.gson.JsonParser.parseString(
+                "{\"category\":\"Test\",\"presets\":["
+                        + "{\"itemId\":\"minecraft:iron_ingot\",\"defaultPrice\":15.0,\"naturalAbundance\":30.0},"
+                        + "{\"itemId\":\"minecraft:diamond\",\"defaultPrice\":100.0,\"naturalAbundance\":5.0,\"maxOrderVolume\":0}"
+                        + "]}").getAsJsonObject();
+        boolean changed = net.kroia.stockmarket.stockmarket.market.preset.MarketPresetManager
+                .forwardMergeCategoryJson(root, new java.util.ArrayList<>());
+        TestResult r = assertTrue("merge reports a change", changed);
+        if (!r.passed()) return r;
+        MarketPresetCategory cat = GSON.fromJson(root, MarketPresetCategory.class);
+        r = assertEquals("missing field -> 64 x 30", 1920L, cat.findPreset("minecraft:iron_ingot").getMaxOrderVolume());
+        if (!r.passed()) return r;
+        r = assertEquals("existing 0 kept", 0L, cat.findPreset("minecraft:diamond").getMaxOrderVolume());
+        if (!r.passed()) return r;
+        return pass("Forward-merge fills maxOrderVolume from abundance");
     }
 
     private TestResult test_presetRecordFields() {

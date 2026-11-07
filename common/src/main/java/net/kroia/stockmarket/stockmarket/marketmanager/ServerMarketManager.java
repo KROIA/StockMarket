@@ -48,6 +48,10 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
     private final Map<UUID, User> userMap = new HashMap<>();
 
     private final Map<ItemID, ServerMarket> markets = new HashMap<>();
+    // T-166 trade cooldown: player UUID -> time (ms) of the player's last ACCEPTED order.
+    // Master only; lives as long as this manager (dropped on server stop). One entry per
+    // trading player, never pruned on disconnect (slave players never "leave" the master).
+    private final Map<UUID, Long> lastAcceptedPlayerOrderMillis = new HashMap<>();
 
     // Central queue for pending inter-market orders, sorted by time (FIFO)
     private final PriorityQueue<InterMarketOrder> pendingInterMarketOrders =
@@ -145,6 +149,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
             if (preset != null) {
                 m.getSettings().virtualOrderbookEnabled = preset.isOrderbookEnabled();
                 m.getSettings().ignorePluginAutosubscribe = preset.isIgnorePluginAutosubscribe();
+                m.getSettings().maxOrderVolume = preset.getMaxOrderVolume();
                 // Sync the runtime "disabled" flag on the underlying VirtualOrderbook so
                 // a preset-disabled market immediately behaves as empty in the matching
                 // engine — otherwise the flag would only take effect after the next
@@ -198,6 +203,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
 
         long defaultPrice = MarketManager.convertToRawAmountStatic(cfg.defaultPrice());
         float abundance = cfg.naturalAbundance();
+        // maxOrderVolume is derived from the abundance by the ServerMarket/MarketSettings constructor.
         ServerMarket m = new ServerMarket(marketID, null, defaultPrice, abundance);
         m.getSettings().virtualOrderbookEnabled = cfg.virtualOrderbookEnabled();
         m.getSettings().ignorePluginAutosubscribe = cfg.ignorePluginAutosubscribe();
@@ -493,6 +499,108 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
     public ServerMarket getServerMarket(ItemID marketID)
     {
         return markets.get(marketID);
+    }
+
+    /**
+     * T-166: remaining global trade cooldown of a player. The cooldown
+     * ({@code MARKET.TRADE_COOLDOWN_MS}, read live) starts at the player's last ACCEPTED
+     * order and is shared by all markets and both order paths (normal + inter-market).
+     *
+     * @param playerUUID the ordering player
+     * @return milliseconds until the player may place the next order; 0 = may trade now
+     */
+    public long getTradeCooldownRemainingMs(UUID playerUUID)
+    {
+        Long cooldown = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.TRADE_COOLDOWN_MS.get();
+        Long last = lastAcceptedPlayerOrderMillis.get(playerUUID);
+        if (cooldown == null || cooldown <= 0 || last == null)
+            return 0;
+        return Math.max(0, last + cooldown - System.currentTimeMillis());
+    }
+
+    /**
+     * T-166: records that a player order was accepted now, (re)starting the player's trade cooldown.
+     * Call only after the order was actually put into the market; rejected orders must not call this.
+     *
+     * @param playerUUID the ordering player
+     */
+    public void markPlayerOrderAccepted(UUID playerUUID)
+    {
+        lastAcceptedPlayerOrderMillis.put(playerUUID, System.currentTimeMillis());
+    }
+
+    /**
+     * T-166 move credit: a chart "move" is cancel + re-create on the client. The re-created order
+     * (and the restore after a failed move) must not be blocked by the max order size or the trade
+     * cooldown, otherwise a lowered limit would make the player lose the order.
+     * <p>
+     * <b>Trust:</b> the exemption is never a client flag. A credit is only granted by the master
+     * itself when it actually cancels one of the player's own LIMIT orders (CancelOrderRequest /
+     * {@link #cancelInterMarketOrder}); it covers at most that order's remaining volume, the same
+     * direction and the same market(s), expires after {@link #MOVE_CREDIT_TTL_MS} and is consumed by
+     * the first accepted order it covers. So a client can only re-place volume that was already
+     * accepted into the book, once per cancelled order — never more volume or more orders.
+     *
+     * @param market      market of the cancelled order (inter-market: the sell/"have" market)
+     * @param otherMarket inter-market only: the buy/"want" market; null for normal orders
+     * @param rawVolume   remaining raw volume (signed for normal orders, positive have-volume for inter-market)
+     * @param expiresAtMs expiry time (System.currentTimeMillis based)
+     */
+    public record MoveCredit(ItemID market, @Nullable ItemID otherMarket, long rawVolume, long expiresAtMs) {}
+
+    /** How long a move credit stays valid after the cancel. */
+    public static final long MOVE_CREDIT_TTL_MS = 10_000L;
+    // Player UUID -> unexpired move credits. Master only, dropped with the manager on server stop.
+    private final Map<UUID, List<MoveCredit>> moveCredits = new HashMap<>();
+
+    /**
+     * Grants a move credit after the master cancelled one of the player's own LIMIT orders.
+     * See {@link MoveCredit} for the trust reasoning.
+     *
+     * @param playerUUID  the order owner
+     * @param market      market of the cancelled order (inter-market: sell/"have" market)
+     * @param otherMarket inter-market: buy/"want" market; null for normal orders
+     * @param rawVolume   remaining raw volume of the cancelled order
+     */
+    public void grantMoveCredit(UUID playerUUID, ItemID market, @Nullable ItemID otherMarket, long rawVolume)
+    {
+        if (rawVolume == 0) return;
+        moveCredits.computeIfAbsent(playerUUID, k -> new ArrayList<>())
+                .add(new MoveCredit(market, otherMarket, rawVolume, System.currentTimeMillis() + MOVE_CREDIT_TTL_MS));
+    }
+
+    /**
+     * Finds an unexpired move credit covering a new LIMIT order: same market(s), same direction and
+     * |rawVolume| not larger than the credit. Does not consume it — call {@link #consumeMoveCredit}
+     * once the order is accepted, so a move that fails for another reason keeps the credit for the restore.
+     *
+     * @return the covering credit, or null (then the normal limits apply)
+     */
+    public @Nullable MoveCredit findMoveCredit(UUID playerUUID, ItemID market, @Nullable ItemID otherMarket, long rawVolume)
+    {
+        List<MoveCredit> credits = moveCredits.get(playerUUID);
+        if (credits == null) return null;
+        long now = System.currentTimeMillis();
+        credits.removeIf(c -> c.expiresAtMs() < now);
+        if (credits.isEmpty()) {
+            moveCredits.remove(playerUUID);
+            return null;
+        }
+        for (MoveCredit c : credits) {
+            if (c.market().equals(market) && Objects.equals(c.otherMarket(), otherMarket)
+                    && Long.signum(c.rawVolume()) == Long.signum(rawVolume)
+                    && Math.abs(rawVolume) <= Math.abs(c.rawVolume()))
+                return c;
+        }
+        return null;
+    }
+
+    /** Removes a move credit after the order it covered was accepted. */
+    public void consumeMoveCredit(UUID playerUUID, MoveCredit credit)
+    {
+        List<MoveCredit> credits = moveCredits.get(playerUUID);
+        if (credits != null && credits.remove(credit) && credits.isEmpty())
+            moveCredits.remove(playerUUID);
     }
 
 
@@ -889,8 +997,13 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
             if (order.getInterMarketGroupID().equals(groupID)
                     && !order.isBotOrder()
                     && playerUUID.equals(order.getOwnerUUID())) {
+                // T-166: capture before the cancel callback touches the order. Limit orders only
+                // (the ones a player can drag); allows re-placing this volume (see MoveCredit).
+                long remainingHave = -order.getSellOrder().getRemainingVolume();
                 it.remove();
                 onInterMarketOrderCanceled(order);
+                if (order.getCrossRateLimit() > 0)
+                    grantMoveCredit(playerUUID, order.getSellItemID(), order.getBuyItemID(), remainingHave);
                 return true;
             }
         }

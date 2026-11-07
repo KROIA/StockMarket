@@ -30,6 +30,48 @@ public class MarketSettingsTestSuite extends TestSuite {
         addTest("trading_hours_codec_round_trip", this::test_tradingHours_codecRoundTrip);
         addTest("trading_hours_parse_minute", this::test_tradingHours_parseMinute);
         addTest("trading_hours_validate_window", this::test_tradingHours_validateWindow);
+        // Max order volume (T-166)
+        addTest("max_order_volume_formula", this::test_maxOrderVolume_formula);
+        addTest("max_order_volume_codec_round_trip", this::test_maxOrderVolume_codecRoundTrip);
+    }
+
+    /** defaultMaxOrderVolume = max(64, round(64 x abundance)); constructors use it. */
+    private TestResult test_maxOrderVolume_formula() {
+        float[] abundance = {0.1f, 1f, 5f, 30f, 200f};
+        long[] expected = {64, 64, 320, 1920, 12800};
+        for (int i = 0; i < abundance.length; i++) {
+            TestResult r = assertEquals("abundance " + abundance[i], expected[i], MarketSettings.defaultMaxOrderVolume(abundance[i]));
+            if (!r.passed()) return r;
+        }
+        TestResult r = assertEquals("ctor derives from abundance", 320L, new MarketSettings(false, 1L, 5f).maxOrderVolume);
+        if (!r.passed()) return r;
+        r = assertEquals("default ctor (abundance 10)", 640L, new MarketSettings().maxOrderVolume);
+        if (!r.passed()) return r;
+        return pass("Max order volume formula matches the approved examples");
+    }
+
+    /** maxOrderVolume (appended last) survives the stream codec. */
+    private TestResult test_maxOrderVolume_codecRoundTrip() {
+        RegistryAccess access = UtilitiesPlatform.getRegistryAccess();
+        if (access == null)
+            return pass("codec round-trip skipped (no registry access in this context)");
+        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), access);
+        try {
+            MarketSettings s = new MarketSettings(false, 5L, 30f);
+            s.maxOrderVolume = 4321;
+            s.tradingCloseMinute = 600;
+            MarketSettings.STREAM_CODEC.encode(buf, s);
+            MarketSettings d = MarketSettings.STREAM_CODEC.decode(buf);
+            TestResult r = assertEquals("maxOrderVolume survives", 4321L, d.maxOrderVolume);
+            if (!r.passed()) return r;
+            r = assertEquals("close minute still decoded", 600, d.tradingCloseMinute);
+            if (!r.passed()) return r;
+            r = assertEquals("buffer fully consumed", 0, buf.readableBytes());
+            if (!r.passed()) return r;
+            return pass("maxOrderVolume survives the stream codec");
+        } finally {
+            buf.release();
+        }
     }
 
     /** parseMinute accepts H/HH/H:MM/HH:MM and 24:00, rejects out-of-range values. */

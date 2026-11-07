@@ -20,6 +20,7 @@ public class MarketSettings {
             ByteBufCodecs.BOOL.encode(buf, s.ignorePluginAutosubscribe);
             ByteBufCodecs.VAR_INT.encode(buf, s.tradingOpenMinute);
             ByteBufCodecs.VAR_INT.encode(buf, s.tradingCloseMinute);
+            ByteBufCodecs.VAR_LONG.encode(buf, s.maxOrderVolume);
         }
 
         @Override
@@ -34,6 +35,7 @@ public class MarketSettings {
             s.ignorePluginAutosubscribe = ByteBufCodecs.BOOL.decode(buf);
             s.tradingOpenMinute = ByteBufCodecs.VAR_INT.decode(buf);
             s.tradingCloseMinute = ByteBufCodecs.VAR_INT.decode(buf);
+            s.maxOrderVolume = ByteBufCodecs.VAR_LONG.decode(buf);
             return s;
         }
     };
@@ -65,6 +67,25 @@ public class MarketSettings {
     // open > close wraps over midnight (e.g. 22:00-06:00). 0/1440 = always open (default).
     public int tradingOpenMinute = 0;
     public int tradingCloseMinute = 1440;
+    /**
+     * Maximum volume (real item count, buy or sell) a single player order may have on this market.
+     * 0 = unlimited. Bots are not limited. Defaults to {@link #defaultMaxOrderVolume(float)} of the
+     * natural abundance; markets loaded from saves that predate this field derive it the same way.
+     */
+    public long maxOrderVolume;
+
+    /**
+     * Default max order volume derived from a market's natural abundance:
+     * {@code max(64, round(64 * naturalAbundance))} - one stack per abundance unit, at least one stack.
+     * Single source of the formula, used for new markets, presets and old saves.
+     *
+     * @param naturalAbundance the market's natural abundance
+     * @return the default max order volume in real items
+     */
+    public static long defaultMaxOrderVolume(float naturalAbundance)
+    {
+        return Math.max(64L, Math.round(64.0 * naturalAbundance));
+    }
 
     /**
      * Trading state shown to clients. MAINTENANCE (admin/integration maintenance mode) takes precedence over
@@ -156,6 +177,7 @@ public class MarketSettings {
         this.virtualOrderbookEnabled = true;
         this.virtualOrderbookCleared = false;
         this.ignorePluginAutosubscribe = false;
+        this.maxOrderVolume = defaultMaxOrderVolume(naturalAbundance);
     }
     public MarketSettings(boolean maintenance, long defaultPrice)
     {
@@ -178,5 +200,6 @@ public class MarketSettings {
         this.virtualOrderbookEnabled = virtualOrderbookEnabled;
         this.virtualOrderbookCleared = false;
         this.ignorePluginAutosubscribe = false;
+        this.maxOrderVolume = defaultMaxOrderVolume(naturalAbundance);
     }
 }

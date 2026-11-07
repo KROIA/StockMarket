@@ -662,6 +662,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         // VO reads return 0 and drops all writes.
         orderbook.setVirtualDisabled(!willBeEnabled);
         this.settings.ignorePluginAutosubscribe = settings.ignorePluginAutosubscribe;
+        this.settings.maxOrderVolume = Math.max(0, settings.maxOrderVolume); // 0 = unlimited
         applyTradingWindow(settings.tradingOpenMinute, settings.tradingCloseMinute);
         // netPlayerItemFlow is intentionally not copied from client settings
 
@@ -941,6 +942,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         // Trading hours. Override stored as byte: -1 = none, 0 = forced closed, 1 = forced open.
         tag.putInt("tradingOpenMinute", settings.tradingOpenMinute);
         tag.putInt("tradingCloseMinute", settings.tradingCloseMinute);
+        tag.putLong("maxOrderVolume", settings.maxOrderVolume);
         tag.putByte("tradingOverride", tradingOverride == null ? (byte) -1 : (byte) (tradingOverride ? 1 : 0));
         tag.putBoolean("lastScheduledOpen", lastScheduledOpen);
 
@@ -990,6 +992,11 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         {
             settings.ignorePluginAutosubscribe = NbtCompat.getBoolean(tag, "ignorePluginAutosubscribe");
         }
+        // Max order volume: old saves without the key derive it from the (just loaded) abundance,
+        // so live servers get the protection on upgrade. A stored 0 stays 0 (unlimited).
+        settings.maxOrderVolume = tag.contains("maxOrderVolume")
+                ? NbtCompat.getLong(tag, "maxOrderVolume")
+                : MarketSettings.defaultMaxOrderVolume(settings.naturalAbundance);
         // Restore the maintenance flag only — do NOT call setMaintenance(): player orders were already
         // cancelled when maintenance was enabled, so the side effects must not re-run on load.
         settings.maintenance = tag.contains("maintenance") && NbtCompat.getBoolean(tag, "maintenance");

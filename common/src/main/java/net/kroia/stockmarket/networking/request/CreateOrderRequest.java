@@ -16,6 +16,7 @@ import net.kroia.stockmarket.networking.NetworkGate;
 import net.kroia.stockmarket.stockmarket.market.MarketSettings;
 import net.kroia.stockmarket.stockmarket.market.ServerMarket;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
+import net.kroia.stockmarket.stockmarket.marketmanager.ServerMarketManager;
 import net.kroia.stockmarket.util.MultiServerUtils;
 import net.kroia.stockmarket.util.StockMarketGenericRequest;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -63,21 +64,41 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
         UNABLE_TO_UNLOCK_ITEM,
         NO_PLAYER_SENDER,
         // Appended (ordinal is the wire format): market is under maintenance or outside its trading hours.
-        MARKET_CLOSED
+        MARKET_CLOSED,
+        // Appended (T-166): |volume| exceeds the market's maxOrderVolume. OutputData.detail = the limit.
+        ORDER_TOO_LARGE,
+        // Appended (T-166): the player's global trade cooldown has not elapsed. OutputData.detail = remaining ms.
+        TRADING_TOO_FAST
     }
     public static class OutputData
     {
         public Status status;
         public @Nullable Order orderEcho;
+        /**
+         * Extra number for the client message: the max order volume for {@link Status#ORDER_TOO_LARGE},
+         * the remaining cooldown in ms for {@link Status#TRADING_TOO_FAST}, otherwise 0.
+         */
+        public long detail;
         public static final StreamCodec<RegistryFriendlyByteBuf, OutputData> STREAM_CODEC = StreamCodec.composite(
                 ExtraCodecUtils.enumStreamCodec(Status.class), p -> p.status,
                 ExtraCodecUtils.nullable(Order.STREAM_CODEC), p -> p.orderEcho,
+                ByteBufCodecs.VAR_LONG, p -> p.detail,
                 OutputData::new
         );
         public OutputData(Status status, @Nullable Order orderEcho)
         {
+            this(status, orderEcho, 0);
+        }
+        /**
+         * @param status    result status
+         * @param orderEcho the created order, or null
+         * @param detail    extra number for the client message (see {@link #detail})
+         */
+        public OutputData(Status status, @Nullable Order orderEcho, long detail)
+        {
             this.status = status;
             this.orderEcho = orderEcho;
+            this.detail = detail;
         }
     }
 
@@ -127,6 +148,28 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
              response.status = Status.MARKET_CLOSED;
              future.complete(response);
              return future;
+         }
+         // T-166 anti-autoclicker: per-market max order size, then the global per-player cooldown.
+         // Exempt: a limit order covered by a server-granted move credit (the player just had the
+         // master cancel an own limit order of at least this volume, i.e. a chart move or its restore).
+         // Not client-settable — see ServerMarketManager.MoveCredit.
+         ServerMarketManager marketManager = (ServerMarketManager) getServerMarketManager();
+         ServerMarketManager.MoveCredit moveCredit = input.type == Order.Type.LIMIT
+                 ? marketManager.findMoveCredit(playerSender, input.itemID, null, toRawAmount(input.volume)) : null;
+         if(moveCredit == null)
+         {
+             long maxOrderVolume = serverMarket.getSettings().maxOrderVolume;
+             if(maxOrderVolume > 0 && Math.abs(input.volume) > maxOrderVolume)
+             {
+                 future.complete(new OutputData(Status.ORDER_TOO_LARGE, null, maxOrderVolume));
+                 return future;
+             }
+             long cooldownRemaining = marketManager.getTradeCooldownRemainingMs(playerSender);
+             if(cooldownRemaining > 0)
+             {
+                 future.complete(new OutputData(Status.TRADING_TOO_FAST, null, cooldownRemaining));
+                 return future;
+             }
          }
 
         IBankManager serverBankManager = getServerBankManager();
@@ -364,6 +407,12 @@ public class CreateOrderRequest extends StockMarketGenericRequest<CreateOrderReq
             future.complete(response);
             return future;
         }
+        // Only accepted orders (re)start the player's trade cooldown; a re-placed (moved) order
+        // instead uses up its move credit and does not count as a new trade.
+        if(moveCredit != null)
+            marketManager.consumeMoveCredit(playerSender, moveCredit);
+        else
+            marketManager.markPlayerOrderAccepted(playerSender);
         response.status = Status.CREATED;
         response.orderEcho = order;
         future.complete(response);

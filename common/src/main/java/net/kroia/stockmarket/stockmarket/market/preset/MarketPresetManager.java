@@ -8,6 +8,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.stockmarket.market.MarketSettings;
 import net.minecraft.core.RegistryAccess;
 import org.jetbrains.annotations.Nullable;
 
@@ -211,7 +212,7 @@ public class MarketPresetManager {
      *                              describing the entry and the fields filled
      * @return {@code true} iff at least one entry was mutated (caller should rewrite the file)
      */
-    static boolean forwardMergeCategoryJson(JsonObject categoryRoot, List<String> filledFieldsPerPreset) {
+    public static boolean forwardMergeCategoryJson(JsonObject categoryRoot, List<String> filledFieldsPerPreset) {
         JsonElement presetsEl = categoryRoot.get("presets");
         if (presetsEl == null || !presetsEl.isJsonArray()) return false;
         JsonArray presets = presetsEl.getAsJsonArray();
@@ -231,6 +232,13 @@ public class MarketPresetManager {
             JsonObject entry = entryEl.getAsJsonObject();
 
             List<String> filled = new ArrayList<>();
+            // maxOrderVolume's default depends on the entry's own abundance, so it cannot come
+            // from the fresh-instance defaults below (that would yield the 0-abundance value).
+            if (!entry.has("maxOrderVolume")) {
+                float abundance = entry.has("naturalAbundance") ? entry.get("naturalAbundance").getAsFloat() : 0f;
+                entry.addProperty("maxOrderVolume", MarketSettings.defaultMaxOrderVolume(abundance));
+                filled.add("maxOrderVolume");
+            }
             for (Map.Entry<String, JsonElement> defField : defaults.entrySet()) {
                 String key = defField.getKey();
                 if (entry.has(key)) continue;

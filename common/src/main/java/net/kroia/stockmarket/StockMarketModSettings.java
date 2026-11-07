@@ -136,6 +136,19 @@ public class StockMarketModSettings extends ModSettings {
          */
         public final Setting<Boolean> TRADING_HOURS_USE_REAL_TIME = registerSetting("TRADING_HOURS_USE_REAL_TIME", false, Boolean.class);
 
+        /**
+         * Global per-player trade cooldown in ms (T-166, anti-autoclicker). After an ACCEPTED player
+         * order, further orders of the same player are rejected until the cooldown has elapsed
+         * (rejected orders do not restart it). Shared across all markets and both order paths
+         * (normal and inter-market orders). Bots are not affected. 0 = off.
+         * <p>
+         * Read live on every order — no restart required.
+         * <p>
+         * Slave-propagation: NOT needed. Orders from slave players are routed to the master,
+         * which is the only server that reads this value.
+         */
+        public final Setting<Long> TRADE_COOLDOWN_MS = registerSetting("TRADE_COOLDOWN_MS", 500L, Long.class);
+
         public Market() { super("ServerMarket"); }
 
         /**

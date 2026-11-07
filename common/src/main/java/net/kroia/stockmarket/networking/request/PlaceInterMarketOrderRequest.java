@@ -133,6 +133,39 @@ public class PlaceInterMarketOrderRequest extends StockMarketGenericRequest<Plac
             return future;
         }
 
+        // 3b. T-166 anti-autoclicker. Each leg is checked against its own market's
+        // maxOrderVolume: the sell leg with the "have" volume, the buy leg with the exact
+        // target (buy direction) or, without one, the volume estimated at current prices.
+        // Error codes carry the number after a colon: "ORDER_TOO_LARGE:<limit>",
+        // "TRADING_TOO_FAST:<remaining ms>" (decoded by TradeScreen).
+        // Exempt: a limit order covered by a server-granted move credit (the master just cancelled
+        // an own limit inter-market order of the same pair with at least this have-volume, i.e. a
+        // chart move or its restore). Not client-settable — see ServerMarketManager.MoveCredit.
+        ServerMarketManager marketManager = (ServerMarketManager) getServerMarketManager();
+        ServerMarketManager.MoveCredit moveCredit = input.crossRateLimit > 0
+                ? marketManager.findMoveCredit(playerSender, input.haveItemID, input.wantItemID, toRawAmount(input.volume)) : null;
+        if (moveCredit == null) {
+            long haveLimit = haveMarket.getSettings().maxOrderVolume;
+            if (haveLimit > 0 && input.volume > haveLimit) {
+                future.complete(new OutputData(false, "ORDER_TOO_LARGE:" + haveLimit));
+                return future;
+            }
+            long wantLimit = wantMarket.getSettings().maxOrderVolume;
+            long wantPriceNow = wantMarket.getCurrentMarketPrice();
+            double wantVolume = input.targetBuyVolume > 0
+                    ? (double) input.targetBuyVolume / getItemFractionScaleFactor()
+                    : (wantPriceNow > 0 ? input.volume * haveMarket.getCurrentMarketPrice() / wantPriceNow : 0);
+            if (wantLimit > 0 && wantVolume > wantLimit) {
+                future.complete(new OutputData(false, "ORDER_TOO_LARGE:" + wantLimit));
+                return future;
+            }
+            long cooldownRemaining = marketManager.getTradeCooldownRemainingMs(playerSender);
+            if (cooldownRemaining > 0) {
+                future.complete(new OutputData(false, "TRADING_TOO_FAST:" + cooldownRemaining));
+                return future;
+            }
+        }
+
         // 4. Get bank manager and bank account
         IBankManager serverBankManager = getServerBankManager();
         if (serverBankManager == null) {
@@ -268,8 +301,7 @@ public class PlaceInterMarketOrderRequest extends StockMarketGenericRequest<Plac
         );
 
         // 8. Enqueue the inter-market order on the "want" (buy) market
-        ServerMarketManager smm = (ServerMarketManager) getServerMarketManager();
-        if (!smm.putInterMarketOrder(imo)) {
+        if (!marketManager.putInterMarketOrder(imo)) {
             // Enqueue failed — unlock the items
             BankStatus unlockStatus = itemBank.unlockAmount(lockVolume);
             if (unlockStatus != BankStatus.SUCCESS) {
@@ -281,7 +313,12 @@ public class PlaceInterMarketOrderRequest extends StockMarketGenericRequest<Plac
             return future;
         }
 
-        // 9. Success
+        // 9. Success — only accepted orders (re)start the player's trade cooldown; a re-placed
+        // (moved) order instead uses up its move credit.
+        if (moveCredit != null)
+            marketManager.consumeMoveCredit(playerSender, moveCredit);
+        else
+            marketManager.markPlayerOrderAccepted(playerSender);
         future.complete(new OutputData(true, null));
         return future;
     }

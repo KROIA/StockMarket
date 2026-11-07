@@ -67,6 +67,9 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
     /** Maximum candle time in milliseconds (1 day). */
     public static final long MAX_CANDLE_TIME_MS = 86_400_000L;
 
+    /** Maximum per-player trade cooldown in milliseconds (1 minute); minimum is 0 = off. */
+    public static final long MAX_TRADE_COOLDOWN_MS = 60_000L;
+
     /** Minimum villager price refresh interval in minutes. */
     public static final long MIN_PRICE_REFRESH_INTERVAL_MINUTES = 1L;
     /** Maximum villager price refresh interval in minutes (1 week). */
@@ -260,6 +263,10 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
         //   evaluated only on the master (ServerMarketManager.update reads the
         //   setting live every tick). Slaves/clients receive the resulting market
         //   state + clock via the market price stream — no propagation needed.
+        // * ServerMarket.TRADE_COOLDOWN_MS (T-166): read live only in the master-side
+        //   order handlers (CreateOrderRequest / PlaceInterMarketOrderRequest
+        //   .handleOnMasterServer); slave players' orders are routed to the master,
+        //   so the master's value applies everywhere — no propagation needed.
         String villagerAfter = store.toJsonString(settings.VILLAGER_TRADING);
         if (!villagerAfter.equals(villagerBefore) && BACKEND_INSTANCES.VILLAGER_TRADE_MANAGER != null) {
             BACKEND_INSTANCES.VILLAGER_TRADE_MANAGER.recomputeTable();
@@ -289,6 +296,7 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
      *   <li>{@code ServerMarket.CURRENCY}: must be a non-empty ItemStack, else previous value</li>
      *   <li>{@code ServerMarket.PRICE_HISTORY_MAX_CANDLES_PER_RESPONSE} ∈ [16, 65,536]</li>
      *   <li>{@code ServerMarket.PRICE_HISTORY_INITIAL_LOAD_CANDLES} ∈ [16, 8,192]</li>
+     *   <li>{@code ServerMarket.TRADE_COOLDOWN_MS} ∈ [0, 60,000 ms]</li>
      *   <li>{@code VillagerTrading.PRICE_REFRESH_INTERVAL_MINUTES} ∈ [1, 10,080]</li>
      *   <li>{@code VillagerTrading.VILLAGER_BUY_MARGIN / VILLAGER_SELL_MARGIN} ∈ [0.01, 100];
      *       NaN/Infinite values fall back to the setting's default</li>
@@ -321,6 +329,8 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
                 clampInt(settings.MARKET.PRICE_HISTORY_INITIAL_LOAD_CANDLES.get(),
                         MIN_PRICE_HISTORY_INITIAL_LOAD, MAX_PRICE_HISTORY_INITIAL_LOAD,
                         settings.MARKET.PRICE_HISTORY_INITIAL_LOAD_CANDLES.getDefaultValue()));
+        settings.MARKET.TRADE_COOLDOWN_MS.set(
+                clamp(settings.MARKET.TRADE_COOLDOWN_MS.get(), 0L, MAX_TRADE_COOLDOWN_MS));
         ItemStack currency = settings.MARKET.CURRENCY.get();
         if (currency == null || currency.isEmpty()) {
             // Never allow an empty trading currency — keep the previous one.

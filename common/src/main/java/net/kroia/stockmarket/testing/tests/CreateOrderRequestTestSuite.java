@@ -73,6 +73,15 @@ public class CreateOrderRequestTestSuite extends TestSuite {
         addTest("marketBuy_noLiquidity_unlocksMoney", this::test_marketBuy_noLiquidity_unlocksMoney);
         addTest("marketSell_partialFill_unlocksRemainderItems", this::test_marketSell_partialFill_unlocksRemainderItems);
         addTest("marketBuy_partialFill_unlocksRemainderMoney", this::test_marketBuy_partialFill_unlocksRemainderMoney);
+
+        // T-166: max order size + global per-player trade cooldown
+        addTest("maxOrder_oversizeRejected", this::test_maxOrder_oversizeRejected);
+        addTest("maxOrder_atLimitAccepted", this::test_maxOrder_atLimitAccepted);
+        addTest("maxOrder_zeroUnlimited", this::test_maxOrder_zeroUnlimited);
+        addTest("cooldown_rejectsSecondOrder", this::test_cooldown_rejectsSecondOrder);
+        addTest("cooldown_rejectedDoesNotRestart", this::test_cooldown_rejectedDoesNotRestart);
+        addTest("cooldown_zeroOff", this::test_cooldown_zeroOff);
+        addTest("move_afterLimitLowered_orderSurvives", this::test_move_afterLimitLowered_orderSurvives);
     }
 
     /**
@@ -740,5 +749,180 @@ public class CreateOrderRequestTestSuite extends TestSuite {
         } catch (Exception e) {
             return fail("Exception: " + e.getMessage());
         }
+    }
+
+    // ── T-166: max order size + trade cooldown ───────────────────────────────
+
+    /**
+     * Runs a test body with the trade cooldown set to {@code cooldownMs} and the shared
+     * market's maxOrderVolume set to {@code maxOrder}; both are restored afterwards.
+     */
+    private TestResult withLimits(long cooldownMs, long maxOrder, java.util.function.Supplier<TestResult> body) {
+        Long prevCooldown = backend.SERVER_SETTINGS.MARKET.TRADE_COOLDOWN_MS.get();
+        long prevMax = serverMarket.getSettings().maxOrderVolume;
+        try {
+            backend.SERVER_SETTINGS.MARKET.TRADE_COOLDOWN_MS.set(cooldownMs);
+            serverMarket.getSettings().maxOrderVolume = maxOrder;
+            return body.get();
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        } finally {
+            backend.SERVER_SETTINGS.MARKET.TRADE_COOLDOWN_MS.set(prevCooldown);
+            serverMarket.getSettings().maxOrderVolume = prevMax;
+            serverMarket.test_clearOrderbook();
+            serverMarket.test_clearIncomingOrderBuffers();
+        }
+    }
+
+    /** Places a small resting buy limit order for the player (accepted unless a limit hits). */
+    private CreateOrderRequest.OutputData smallBuy(IServerBankAccount acc, UUID player) {
+        return executeRequest(new CreateOrderRequest.InputData(
+                itemID, acc.getAccountNumber(), Order.Type.LIMIT, 1.0, 1.0), player);
+    }
+
+    /** Buy and sell orders above maxOrderVolume are rejected before any funds are locked. */
+    private TestResult test_maxOrder_oversizeRejected() {
+        return withLimits(0, 10, () -> {
+            UUID player = UUID.randomUUID();
+            IServerBankAccount acc = freshAccount("MaxOrderOversize", 1_000_000_000_000L, 1_000_000_000L, player);
+            long moneyBefore = acc.getBank(moneyID).getBalance();
+            CreateOrderRequest.OutputData buy = executeRequest(new CreateOrderRequest.InputData(
+                    itemID, acc.getAccountNumber(), Order.Type.LIMIT, 11.0, 1.0), player);
+            TestResult r = assertEquals("buy 11 > 10 rejected", CreateOrderRequest.Status.ORDER_TOO_LARGE, buy.status);
+            if (!r.passed()) return r;
+            r = assertEquals("detail carries the limit", 10L, buy.detail);
+            if (!r.passed()) return r;
+            CreateOrderRequest.OutputData sell = executeRequest(new CreateOrderRequest.InputData(
+                    itemID, acc.getAccountNumber(), Order.Type.MARKET, -11.0, 0.0), player);
+            r = assertEquals("sell 11 > 10 rejected", CreateOrderRequest.Status.ORDER_TOO_LARGE, sell.status);
+            if (!r.passed()) return r;
+            r = assertEquals("no money locked", moneyBefore, acc.getBank(moneyID).getBalance());
+            if (!r.passed()) return r;
+            return pass("Oversize orders rejected with ORDER_TOO_LARGE");
+        });
+    }
+
+    /** An order exactly at maxOrderVolume is accepted. */
+    private TestResult test_maxOrder_atLimitAccepted() {
+        return withLimits(0, 10, () -> {
+            UUID player = UUID.randomUUID();
+            IServerBankAccount acc = freshAccount("MaxOrderAtLimit", 1_000_000_000_000L, 0, player);
+            CreateOrderRequest.OutputData result = executeRequest(new CreateOrderRequest.InputData(
+                    itemID, acc.getAccountNumber(), Order.Type.LIMIT, 10.0, 1.0), player);
+            return assertEquals("volume == limit accepted", CreateOrderRequest.Status.CREATED, result.status);
+        });
+    }
+
+    /** maxOrderVolume 0 means unlimited. */
+    private TestResult test_maxOrder_zeroUnlimited() {
+        return withLimits(0, 0, () -> {
+            UUID player = UUID.randomUUID();
+            IServerBankAccount acc = freshAccount("MaxOrderUnlimited", 1_000_000_000_000L, 0, player);
+            CreateOrderRequest.OutputData result = executeRequest(new CreateOrderRequest.InputData(
+                    itemID, acc.getAccountNumber(), Order.Type.LIMIT, 100_000.0, 1.0), player);
+            return assertEquals("huge order accepted with limit 0", CreateOrderRequest.Status.CREATED, result.status);
+        });
+    }
+
+    /** A second order of the same player inside the cooldown window is rejected. */
+    private TestResult test_cooldown_rejectsSecondOrder() {
+        return withLimits(60_000, 0, () -> {
+            UUID player = UUID.randomUUID();
+            IServerBankAccount acc = freshAccount("CooldownSecond", 1_000_000_000_000L, 0, player);
+            TestResult r = assertEquals("first order accepted", CreateOrderRequest.Status.CREATED, smallBuy(acc, player).status);
+            if (!r.passed()) return r;
+            CreateOrderRequest.OutputData second = smallBuy(acc, player);
+            r = assertEquals("second order rejected", CreateOrderRequest.Status.TRADING_TOO_FAST, second.status);
+            if (!r.passed()) return r;
+            r = assertTrue("detail = remaining ms in (0, 60000]", second.detail > 0 && second.detail <= 60_000);
+            if (!r.passed()) return r;
+            UUID other = UUID.randomUUID();
+            IServerBankAccount otherAcc = freshAccount("CooldownOther", 1_000_000_000_000L, 0, other);
+            r = assertEquals("other player is not blocked", CreateOrderRequest.Status.CREATED, smallBuy(otherAcc, other).status);
+            if (!r.passed()) return r;
+            return pass("Cooldown rejects the second order of the same player only");
+        });
+    }
+
+    /** A rejected order does not restart the cooldown: the remaining time keeps shrinking. */
+    private TestResult test_cooldown_rejectedDoesNotRestart() {
+        return withLimits(60_000, 0, () -> {
+            UUID player = UUID.randomUUID();
+            IServerBankAccount acc = freshAccount("CooldownNoRestart", 1_000_000_000_000L, 0, player);
+            TestResult r = assertEquals("first order accepted", CreateOrderRequest.Status.CREATED, smallBuy(acc, player).status);
+            if (!r.passed()) return r;
+            try { Thread.sleep(50); } catch (InterruptedException ignored) {}
+            CreateOrderRequest.OutputData rejected1 = smallBuy(acc, player);
+            CreateOrderRequest.OutputData rejected2 = smallBuy(acc, player);
+            r = assertEquals("rejected 1", CreateOrderRequest.Status.TRADING_TOO_FAST, rejected1.status);
+            if (!r.passed()) return r;
+            r = assertEquals("rejected 2", CreateOrderRequest.Status.TRADING_TOO_FAST, rejected2.status);
+            if (!r.passed()) return r;
+            // A restart by rejected1 would put rejected2 back at ~60000 ms (> rejected1's ~59950).
+            r = assertTrue("remaining did not grow (" + rejected1.detail + " -> " + rejected2.detail + ")",
+                    rejected2.detail <= rejected1.detail && rejected1.detail < 60_000);
+            if (!r.passed()) return r;
+            return pass("Rejected orders do not restart the cooldown");
+        });
+    }
+
+    /** Cooldown 0 disables the check. */
+    private TestResult test_cooldown_zeroOff() {
+        return withLimits(0, 0, () -> {
+            UUID player = UUID.randomUUID();
+            IServerBankAccount acc = freshAccount("CooldownOff", 1_000_000_000_000L, 0, player);
+            for (int i = 0; i < 3; i++) {
+                TestResult r = assertEquals("order " + i + " accepted", CreateOrderRequest.Status.CREATED, smallBuy(acc, player).status);
+                if (!r.passed()) return r;
+            }
+            return pass("Cooldown 0 lets back-to-back orders through");
+        });
+    }
+
+    /**
+     * A chart move (cancel + re-create) of an order larger than a since-lowered limit, inside the
+     * cooldown, is accepted via the server-granted move credit; the credit only covers the cancelled
+     * volume, is used up by one order and cannot be forged without a real cancel.
+     */
+    private TestResult test_move_afterLimitLowered_orderSurvives() {
+        return withLimits(60_000, 0, () -> {
+            UUID player = UUID.randomUUID();
+            IServerBankAccount acc = freshAccount("MoveCredit", 1_000_000_000_000L, 1_000_000_000_000L, player);
+            // Resting sell limit far above the market, 20 items, placed while unlimited.
+            CreateOrderRequest.OutputData placed = executeRequest(new CreateOrderRequest.InputData(
+                    itemID, acc.getAccountNumber(), Order.Type.LIMIT, -20.0, 100_000.0), player);
+            TestResult r = assertEquals("original order accepted", CreateOrderRequest.Status.CREATED, placed.status);
+            if (!r.passed()) return r;
+            serverMarket.update(); // move it from the input buffer into the book
+            serverMarket.getSettings().maxOrderVolume = 10; // admin lowers the limit
+
+            // No cancel yet -> no credit: a "move-like" order is limited normally (cannot be forged).
+            CreateOrderRequest.OutputData forged = executeRequest(new CreateOrderRequest.InputData(
+                    itemID, acc.getAccountNumber(), Order.Type.LIMIT, -20.0, 99_000.0), player);
+            r = assertEquals("no credit without a cancel", CreateOrderRequest.Status.ORDER_TOO_LARGE, forged.status);
+            if (!r.passed()) return r;
+
+            Order o = placed.orderEcho;
+            boolean cancelled = new net.kroia.stockmarket.networking.request.CancelOrderRequest().handleOnMasterServer(
+                    new net.kroia.stockmarket.networking.request.CancelOrderRequest.InputData(
+                            itemID, o.getTime(), o.getType().ordinal(), o.getStartPrice(), o.getTargetVolume()),
+                    "", player).join();
+            r = assertTrue("cancel succeeds", cancelled);
+            if (!r.passed()) return r;
+
+            CreateOrderRequest.OutputData bigger = executeRequest(new CreateOrderRequest.InputData(
+                    itemID, acc.getAccountNumber(), Order.Type.LIMIT, -21.0, 99_000.0), player);
+            r = assertEquals("credit does not cover more volume", CreateOrderRequest.Status.ORDER_TOO_LARGE, bigger.status);
+            if (!r.passed()) return r;
+            CreateOrderRequest.OutputData moved = executeRequest(new CreateOrderRequest.InputData(
+                    itemID, acc.getAccountNumber(), Order.Type.LIMIT, -20.0, 99_000.0), player);
+            r = assertEquals("moved order accepted despite limit 10 + cooldown", CreateOrderRequest.Status.CREATED, moved.status);
+            if (!r.passed()) return r;
+            CreateOrderRequest.OutputData again = executeRequest(new CreateOrderRequest.InputData(
+                    itemID, acc.getAccountNumber(), Order.Type.LIMIT, -20.0, 99_000.0), player);
+            r = assertEquals("credit is used up", CreateOrderRequest.Status.ORDER_TOO_LARGE, again.status);
+            if (!r.passed()) return r;
+            return pass("Moving an order is not blocked by a lowered limit; the exemption is server-verified");
+        });
     }
 }

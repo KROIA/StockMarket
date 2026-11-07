@@ -82,6 +82,7 @@ public class ServerMarketTestSuite extends TestSuite {
         addTest("tradingHours_setTradingHours_normalizes", this::test_tradingHours_setTradingHours_normalizes);
         addTest("tradingHours_save_load_roundTrip_and_oldNbt", this::test_tradingHours_saveLoad);
         addTest("save_load_closedState_freshMarket", this::test_saveLoad_closedState_freshMarket);
+        addTest("maxOrderVolume_saveLoad_and_oldNbt", this::test_maxOrderVolume_saveLoad);
     }
 
     @Override
@@ -724,6 +725,47 @@ public class ServerMarketTestSuite extends TestSuite {
             return fail("Exception: " + e.getMessage());
         } finally {
             resetMarket(100, true);
+        }
+    }
+
+    /**
+     * T-166: maxOrderVolume persists (0 stays 0); NBT without the key derives it from the loaded abundance.
+     */
+    private TestResult test_maxOrderVolume_saveLoad() {
+        ServerMarket market = (ServerMarket) serverMarket;
+        MarketSettings s = serverMarket.getSettings();
+        float prevAbundance = s.naturalAbundance;
+        long prevMax = s.maxOrderVolume;
+        try {
+            s.naturalAbundance = 5f;
+            s.maxOrderVolume = 123;
+            CompoundTag tag = new CompoundTag();
+            TestResult r = assertTrue("save succeeds", market.save(tag));
+            if (!r.passed()) return r;
+            s.maxOrderVolume = 999;
+            market.load(tag);
+            r = assertEquals("stored value restored", 123L, s.maxOrderVolume);
+            if (!r.passed()) return r;
+
+            s.maxOrderVolume = 0;
+            tag = new CompoundTag();
+            market.save(tag);
+            s.maxOrderVolume = 999;
+            market.load(tag);
+            r = assertEquals("0 (unlimited) stays 0", 0L, s.maxOrderVolume);
+            if (!r.passed()) return r;
+
+            // Old NBT (pre-T-166): no key -> derived from the loaded abundance (5 -> 320)
+            tag.remove("maxOrderVolume");
+            market.load(tag);
+            r = assertEquals("old NBT -> derived from abundance", 320L, s.maxOrderVolume);
+            if (!r.passed()) return r;
+            return pass("maxOrderVolume persists and old NBT derives it from abundance");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        } finally {
+            s.naturalAbundance = prevAbundance;
+            s.maxOrderVolume = prevMax;
         }
     }
 
