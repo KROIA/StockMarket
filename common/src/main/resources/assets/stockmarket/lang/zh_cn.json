@@ -23,6 +23,7 @@
   "message.stockmarket.command_news_request_failed": "新闻管理请求失败 — 主服务器是否可达？",
   "message.stockmarket.order_status.order_too_large": "订单过大：每笔最多 %s 个物品",
   "message.stockmarket.order_status.trading_too_fast": "交易过快：请等待 %s 秒",
+  "message.stockmarket.order_status.market_order_partially_filled": "市价单仅部分成交：已成交 %s / %s 个%s，其余部分已取消并退还",
   "commands.stockmarket.backup.pause_submitted": "已请求暂停备份 — 请等到控制台出现 '[StockMarket] db-worker paused for backup' 后再开始归档。",
   "commands.stockmarket.backup.already_paused": "db-worker 已为备份而暂停。",
   "commands.stockmarket.backup.resumed": "已请求恢复 db-worker。",

@@ -388,7 +388,8 @@ public class InterMarketExecutor
             long crossRateLimit = order.getCrossRateLimit();
             if (crossRateLimit > 0)
             {
-                dynamicBuyPriceCap = actualDollarYield * crossRateLimit / actualSellFilled;
+                // T-176: overflow-safe (dollars x rate can exceed 2^63 for huge sells)
+                dynamicBuyPriceCap = MatchingEngine.mulDivSaturated(actualDollarYield, crossRateLimit, actualSellFilled);
                 if (dynamicBuyPriceCap <= 0) dynamicBuyPriceCap = 1;
             }
         }

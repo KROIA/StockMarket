@@ -2,12 +2,17 @@ package net.kroia.stockmarket.testing.tests;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
+import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
+import net.kroia.stockmarket.pluginsystem.interaction.MarketInterface;
 import net.kroia.stockmarket.pluginsystem.plugins.VolatilityPlugin;
+import net.kroia.stockmarket.pluginsystem.plugins.VolatilityPlugin.FlowBand;
 import net.kroia.stockmarket.pluginsystem.plugins.VolatilityPlugin.Settings;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
+
+import java.util.List;
 
 /**
  * Tests for the pure {@link VolatilityPlugin#computeEquilibriumPrice} helper
@@ -51,6 +56,8 @@ public class VolatilityPluginTestSuite extends TestSuite {
         addTest("factor_e_at_capacity", this::test_factorE_atCapacity);
         addTest("codec_round_trip", this::test_codec_roundTrip);
         addTest("codec_legacy_payload_uses_defaults", this::test_codec_legacyPayload_usesDefaults);
+        addTest("flow_band_bounds", this::test_flowBand_bounds);
+        addTest("update_saturates_flow_and_buyback_moves_price", this::test_update_saturatesFlow_buybackMovesPrice);
     }
 
     /**
@@ -286,5 +293,70 @@ public class VolatilityPluginTestSuite extends TestSuite {
         } finally {
             buf.release();
         }
+    }
+
+    /**
+     * T-174: the saturation band is exactly where the equilibrium hits the clamps
+     * (upper = sell side -> floor, lower = buy side -> ceiling), and is null when the
+     * flow term is inactive.
+     */
+    private TestResult test_flowBand_bounds() {
+        Settings s = new Settings(0.3f, true, 500f, 0.05f, 20f);
+        FlowBand band = VolatilityPlugin.flowBand(ABUNDANCE, s);
+        if (band == null) return fail("Band must exist for valid settings");
+        // Same float->double casts as the plugin (0.3f/0.05f are not exact in double).
+        double capacity = (double) s.flowSensitivity() * ABUNDANCE / (1.0 + s.volatilityScale());
+        double expUpper = -capacity * Math.log(s.minPriceMult());
+        double expLower = -capacity * Math.log(s.maxPriceMult());
+        if (!relClose(band.upper(), expUpper) || !(band.upper() > 0))
+            return fail("upper must be +capacity*ln(1/minMult) = " + expUpper + ", got " + band.upper());
+        if (!relClose(band.lower(), expLower) || !(band.lower() < 0))
+            return fail("lower must be -capacity*ln(maxMult) = " + expLower + ", got " + band.lower());
+        double floor = VolatilityPlugin.computeEquilibriumPrice(DEFAULT_PRICE, band.upper(), ABUNDANCE, s);
+        double ceil = VolatilityPlugin.computeEquilibriumPrice(DEFAULT_PRICE, band.lower(), ABUNDANCE, s);
+        if (!relClose(floor, DEFAULT_PRICE * s.minPriceMult()) || !relClose(ceil, DEFAULT_PRICE * s.maxPriceMult()))
+            return fail("Band edges must map to floor/ceiling, got " + floor + " / " + ceil);
+        if (VolatilityPlugin.flowBand(ABUNDANCE, new Settings(0.3f, false, 500f, 0.05f, 20f)) != null)
+            return fail("Band must be null when flow influence is disabled");
+        if (VolatilityPlugin.flowBand(0f, s) != null)
+            return fail("Band must be null for invalid capacity");
+        return pass("Flow band matches the equilibrium clamps");
+    }
+
+    /** Relative comparison (1e-9) for values derived from float settings. */
+    private static boolean relClose(double actual, double expected) {
+        return Math.abs(actual - expected) <= 1e-9 * Math.max(1.0, Math.abs(expected));
+    }
+
+    /**
+     * T-174 scenario: a huge sell saturates the market's counter at the band edge
+     * during update(), and a 1-item buy-back raises the equilibrium immediately.
+     * Huge buy saturates symmetrically at the lower edge.
+     */
+    private TestResult test_update_saturatesFlow_buybackMovesPrice() {
+        ItemID id = new ItemID((short) 1);
+        NewsPluginTestSuite.TestMarket market = new NewsPluginTestSuite.TestMarket(id, DEFAULT_PRICE);
+        VolatilityPlugin plugin = new VolatilityPlugin();
+        plugin.onMarketSubscribed(id); // default settings
+        FlowBand band = VolatilityPlugin.flowBand(market.getNaturalAbundance(), defaults());
+        List<MarketInterface> markets = List.of(new MarketInterface(market, null));
+
+        market.netFlow = 1e9; // huge net sell
+        plugin.update(markets);
+        if (market.netFlow != band.upper())
+            return fail("Counter must saturate at " + band.upper() + ", got " + market.netFlow);
+
+        double atFloor = VolatilityPlugin.computeEquilibriumPrice(DEFAULT_PRICE, market.netFlow, market.getNaturalAbundance(), defaults());
+        market.netFlow -= 1; // buy back one item
+        plugin.update(markets);
+        double after = VolatilityPlugin.computeEquilibriumPrice(DEFAULT_PRICE, market.netFlow, market.getNaturalAbundance(), defaults());
+        if (!(after > atFloor))
+            return fail("1-item buy-back must raise the equilibrium immediately: " + atFloor + " -> " + after);
+
+        market.netFlow = -1e9; // huge net buy
+        plugin.update(markets);
+        if (market.netFlow != band.lower())
+            return fail("Counter must saturate at " + band.lower() + ", got " + market.netFlow);
+        return pass("Counter saturates at the band; buy-back moves the price immediately");
     }
 }

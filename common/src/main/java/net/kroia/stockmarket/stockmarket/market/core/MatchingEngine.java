@@ -13,6 +13,7 @@ import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -457,8 +458,12 @@ public class MatchingEngine
             // 2. Stop conditions
             if (wantTargetVolume <= 0)
                 break;
-            //if (haveLockedVolume <= 0 && transactionMoneyBalance <= 0)
-            //    break;
+            // T-171: sell budget spent and the buffer can't buy even one raw unit -> nothing
+            // left to do. (haveToSell is capped at haveLockedVolume below, so without this
+            // stop the loop would idle until the timeout instead of over-selling.)
+            if (haveLockedVolume <= 0
+                    && (wantSamplePrice <= 0 || affordableVolume(transactionMoneyBalance, wantSamplePrice) <= 0))
+                break;
 
             // 3. Read depth at current prices
             long haveVolume = getMatchableVolume(haveMarket.getOrderbook(), haveSamplePrice, true);
@@ -485,27 +490,39 @@ public class MatchingEngine
             if (canAffordWant < wantVolume && canAffordWant < wantTargetVolume)
             {
                 long wantWeNeed = Math.min(wantVolume, wantTargetVolume);
-                long dollarsNeeded = wantWeNeed * wantSamplePrice - transactionMoneyBalance;
+                // T-172: volume * price is SF^2-scaled; divide by SF once to get dollars on the
+                // same scale as transactionMoneyBalance (previously the buffer was subtracted
+                // from an SF^2 value, so it was effectively ignored -> oversold when it was > 0).
+                long dollarsNeeded = mulDivSaturated(wantWeNeed, wantSamplePrice, SF) - transactionMoneyBalance;
                 if (dollarsNeeded < 0) dollarsNeeded = 0;
 
-                long haveToSell = (haveSamplePrice > 0) ? dollarsNeeded / haveSamplePrice : 0;
-                if (haveSamplePrice > 0 && haveToSell * haveSamplePrice / SF < dollarsNeeded)
+                // dollars -> have-volume: dollars * SF / price
+                long haveToSell = (haveSamplePrice > 0) ? mulDivSaturated(dollarsNeeded, SF, haveSamplePrice) : 0;
+                if (haveSamplePrice > 0 && haveToSell < Long.MAX_VALUE
+                        && mulDivSaturated(haveToSell, haveSamplePrice, SF) < dollarsNeeded)
                     haveToSell += 1;  // round up
 
                 haveToSell = Math.min(haveToSell, haveVolume);
+                // T-171: never sell more than the order still has locked (its sell budget).
+                haveToSell = Math.min(haveToSell, haveLockedVolume);
 
                 if (haveToSell > 0)
                 {
-                    // Withdraw from player's locked item balance
+                    // T-171: only check here that the locked have-items cover the sale; withdraw
+                    // after consuming, and only the volume actually consumed. The depth consumer
+                    // can take less than haveToSell (broke/unresolvable resting buyer), and
+                    // withdrawing up front lost that difference (neither sold nor re-locked).
+                    IServerBank haveItemBank = null;
                     if (!order.isBotOrder() && playerBankAccount != null)
                     {
-                        IServerBank haveItemBank = playerBankAccount.getBank(order.getSellItemID());
-                        if (haveItemBank == null || haveItemBank.withdrawLockedPrefered(haveToSell) != BankStatus.SUCCESS)
+                        haveItemBank = playerBankAccount.getBank(order.getSellItemID());
+                        if (haveItemBank == null || haveItemBank.getLockedBalance() < haveToSell)
                             break;
                     }
 
                     DepthConsumeResult consumed = consumeBuySideDepthAtPrice(
                             haveMarket, haveSamplePrice, haveToSell);
+                    withdrawSoldHaveItems(haveItemBank, consumed.volumeConsumed());
 
                     haveLockedVolume -= consumed.volumeConsumed();
                     transactionMoneyBalance += consumed.dollarAmount();
@@ -586,13 +603,16 @@ public class MatchingEngine
                 && madeProgress && !order.isBotOrder() && playerBankAccount != null)
         {
             IServerBank haveItemBank = playerBankAccount.getBank(order.getSellItemID());
-            if (haveItemBank != null && haveItemBank.withdrawLockedPrefered(haveLockedVolume) == BankStatus.SUCCESS)
+            // T-171: same as the main loop - consume first, withdraw only what was sold; the
+            // unsold rest simply stays locked. (Previously: withdraw all, then lockAmount(unsold),
+            // which locked other *free* items instead of returning the withdrawn ones.)
+            if (haveItemBank != null && haveItemBank.getLockedBalance() >= haveLockedVolume)
             {
                 long sellPrice = lastHaveFillPrice > 0 ? lastHaveFillPrice : haveSamplePrice;
                 DepthConsumeResult consumed = consumeBuySideDepthAtPrice(
                         haveMarket, sellPrice, haveLockedVolume);
+                withdrawSoldHaveItems(haveItemBank, consumed.volumeConsumed());
 
-                long unsold = haveLockedVolume - consumed.volumeConsumed();
                 haveLockedVolume -= consumed.volumeConsumed();
                 transactionMoneyBalance += consumed.dollarAmount();
                 order.getSellOrder().edit(-consumed.volumeConsumed(), consumed.dollarAmount());
@@ -603,9 +623,6 @@ public class MatchingEngine
 
                 if (consumed.volumeConsumed() > 0)
                     lastHaveFillPrice = sellPrice;
-
-                if (unsold > 0)
-                    haveItemBank.lockAmount(unsold);
             }
         }
 
@@ -634,6 +651,26 @@ public class MatchingEngine
             return InterMarketExecutor.ExecutionResult.SKIPPED;
     }
 
+    /**
+     * T-171: removes the have-items the bilateral walk actually sold from the player's
+     * locked balance. Called after {@link #consumeBuySideDepthAtPrice}, with exactly the
+     * consumed volume, so unsold items stay locked (and are unlocked by the manager when
+     * the order completes or is cancelled).
+     *
+     * @param haveItemBank the player's have-item bank, or null for bot orders (no-op)
+     * @param sold         raw volume consumed by the depth walk (positive)
+     */
+    private static void withdrawSoldHaveItems(@Nullable IServerBank haveItemBank, long sold)
+    {
+        if (haveItemBank == null || sold <= 0)
+            return;
+        BankStatus status = haveItemBank.withdrawLocked(sold);
+        // Should not fail: the caller checked getLockedBalance() >= requested volume >= sold.
+        if (status != BankStatus.SUCCESS && BACKEND_INSTANCES != null)
+            BACKEND_INSTANCES.LOGGER.error("[MatchingEngine] Inter-market sell: could not withdraw "
+                    + sold + " sold locked have-items: " + status);
+    }
+
     /** Tiny value-holder to return two banks together. */
     private static final class BankPair
     {
@@ -659,7 +696,8 @@ public class MatchingEngine
 
     private final Orderbook.LongPair pair_cache =  new Orderbook.LongPair();
     private long currentMarketPrice;
-    private float tradedVolumeSinceLastReset = 0;
+    // T-175: long, not float - a float sum drops small fills once it holds a huge one (> 2^24 raw).
+    private long tradedVolumeSinceLastReset = 0;
     private long playerFilledVolumeSinceLastReset = 0;
 
 
@@ -686,8 +724,9 @@ public class MatchingEngine
         this.priceChanged = priceChanged;
     }
 
-    // Total matched trade volume accumulated during the last update() call (real-scaled)
-    public float getLastTradedVolume() { return tradedVolumeSinceLastReset; }
+    // Total matched trade volume accumulated during the last update() call, in RAW units
+    // (real items * ITEM_FRACTION_SCALE_FACTOR)
+    public long getLastTradedVolume() { return tradedVolumeSinceLastReset; }
 
     // Net raw volume filled by player orders during the last update() call (buys positive, sells negative).
     // Counted per fill so the player's market impact is known while a large order is still filling.
@@ -1417,14 +1456,43 @@ public class MatchingEngine
      * cost formula as the matching loop: cost = Math.round(price * volume / SF).
      * Floor division (funds * SF / price) can under-count by 1 when Math.round
      * would round the cost down, so this method checks if +1 is still affordable.
+     * <p>T-176: {@code funds * SF} is overflow-safe ({@link #mulDivSaturated}); huge funds
+     * saturate at {@code Long.MAX_VALUE} instead of wrapping to a negative volume.
+     * Every caller (player buy cap, counterparty caps, bilateral walk) goes through here.</p>
      */
-    static long affordableVolume(long funds, long price)
+    public static long affordableVolume(long funds, long price)
     {
         long SF = BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
-        long vol = funds * SF / price;
+        long vol = mulDivSaturated(funds, SF, price);
+        if (vol == Long.MAX_VALUE)
+            return vol;
         long costOfNext = Math.round((double) price * (vol + 1) / SF);
         if (costOfNext <= funds)
             vol++;
         return vol;
+    }
+
+    /**
+     * Overflow-safe {@code a * b / c} (truncating division, like plain long math).
+     * Uses the plain long product when it fits; otherwise computes exactly with
+     * {@link BigInteger} and saturates the result to {@code Long.MAX_VALUE} /
+     * {@code Long.MIN_VALUE}. Shared by the matching engine and the inter-market executor
+     * for volume x price and dollar x rate products that can exceed 2^63 (T-172, T-176).
+     *
+     * @param a first factor
+     * @param b second factor
+     * @param c divisor, must not be 0
+     * @return {@code a * b / c}, saturated to the long range
+     */
+    public static long mulDivSaturated(long a, long b, long c)
+    {
+        long hi = Math.multiplyHigh(a, b);
+        long lo = a * b;
+        if ((hi == 0 && lo >= 0) || (hi == -1 && lo < 0))
+            return lo / c;  // product fits in a long
+        BigInteger r = BigInteger.valueOf(a).multiply(BigInteger.valueOf(b)).divide(BigInteger.valueOf(c));
+        if (r.bitLength() < 64)
+            return r.longValue();
+        return r.signum() < 0 ? Long.MIN_VALUE : Long.MAX_VALUE;
     }
 }

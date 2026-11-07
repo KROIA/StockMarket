@@ -17,6 +17,8 @@ public class PID implements ServerSaveable {
 
     private double output = 0;
     private double lastOutput = 0;
+    /** Symmetric bound for the filtered output, see {@link #setOutputLimit(double)}. Unbounded by default. */
+    private double outputLimit = Double.POSITIVE_INFINITY;
 
     private long lastMillis;
     public PID(double kp, double ki, double kd, double iBound)
@@ -86,6 +88,20 @@ public class PID implements ServerSaveable {
         return iBound;
     }
 
+    /**
+     * Clamps the filtered output (and therefore the value fed back into the output filter)
+     * to {@code [-limit, limit]}.
+     * <p>
+     * Callers that only use a bounded range of the output must set this: otherwise a long-lasting
+     * large error winds the filter memory up far beyond that range, and after the error changes sign
+     * the output keeps the old sign for several updates (overshoot).
+     *
+     * @param limit maximum absolute output, must be &gt; 0; {@link Double#POSITIVE_INFINITY} disables the clamp
+     */
+    public void setOutputLimit(double limit) {
+        this.outputLimit = limit;
+    }
+
     public double getLastError() {
         return lastError;
     }
@@ -109,6 +125,8 @@ public class PID implements ServerSaveable {
 
         double derivativeTerm = (dt == 0) ? 0 : kd*(error - lastError)/dt;
         output = 0.5f*lastOutput + 0.5f*(kp*error + i + derivativeTerm);
+        // Clamp before storing as lastOutput so the filter memory can't wind up beyond the usable range
+        output = Math.max(-outputLimit, Math.min(outputLimit, output));
         lastOutput = output;
         lastError = (error*0.5f + lastError*0.5f);
         return output;

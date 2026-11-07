@@ -130,6 +130,8 @@ public class NewsPluginTestSuite extends TestSuite {
         final ItemID id;
         double targetPrice;
         double defaultPrice;
+        /** Net player flow in real units (also used by VolatilityPluginTestSuite). */
+        double netFlow;
 
         TestMarket(ItemID id, double price) {
             this.id = id;
@@ -150,7 +152,8 @@ public class NewsPluginTestSuite extends TestSuite {
         @Override public long placeOrder(double amount, double price) { return 0; }
         @Override public void placeOrder(double amount) { }
         @Override public float getNaturalAbundance() { return 10f; }
-        @Override public double getNetPlayerItemFlow() { return 0; }
+        @Override public double getNetPlayerItemFlow() { return netFlow; }
+        @Override public void setNetPlayerItemFlow(double v) { netFlow = v; }
         @Override public boolean isMarketOpen() { return true; }
         @Override public float getCurrentCandleTradedVolume() { return 0; }
         @Override public boolean isVirtualOrderbookEnabled() { return true; }

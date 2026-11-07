@@ -437,6 +437,7 @@
   "message.stockmarket.admin_broadcast.plugin_unsubscribed": "%s unsubscribed '%s' from %s",
   "message.stockmarket.order_status.order_too_large": "Order too large: max %s items per order",
   "message.stockmarket.order_status.trading_too_fast": "Trading too fast: wait %s s",
+  "message.stockmarket.order_status.market_order_partially_filled": "Market order only partly filled: %s of %s %s traded, the rest was canceled and refunded",
   "gui.stockmarket.management_screen.tab_overview": "Overview",
   "gui.stockmarket.management_screen.tab_presets": "Presets",
   "gui.stockmarket.preset_editor_tab.new_category": "+ New",

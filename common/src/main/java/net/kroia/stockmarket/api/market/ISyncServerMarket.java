@@ -144,6 +144,11 @@ public interface ISyncServerMarket {
     long getNetPlayerItemFlow();
     void resetNetPlayerItemFlow();
     /**
+     * Overwrites the net player item flow counter (raw units; positive = players net-sold).
+     * @param netPlayerItemFlow the new raw counter value
+     */
+    void setNetPlayerItemFlow(long netPlayerItemFlow);
+    /**
      * Refills the virtual orderbook from the plugin-provided default volume distribution
      * function and drops the sticky-clear flag. Use this after a {@link #clearVirtualOrderbook()}
      * to bring the market back to a fully-populated depth profile.
@@ -159,7 +164,7 @@ public interface ISyncServerMarket {
 
     Orderbook getOrderbook();
 
-    // Returns the accumulated traded volume for the current candle period (real-scaled)
+    // Returns the accumulated traded volume for the current candle period, in RAW units (real * ITEM_FRACTION_SCALE_FACTOR)
     float getCurrentCandleTradedVolume();
 
     void update();

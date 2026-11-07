@@ -26,6 +26,7 @@ public class PIDTestSuite extends TestSuite {
         addTest("dt_division_by_zero", this::test_update_dtDivisionByZero);
         addTest("output_smoothing", this::test_outputSmoothing);
         addTest("load_missing_fields", this::test_load_missingFields);
+        addTest("output_limit_bounds_windup_and_flips_fast", this::test_outputLimit_boundsWindupAndFlipsFast);
     }
 
     private TestResult test_proportionalOnly() {
@@ -173,5 +174,25 @@ public class PIDTestSuite extends TestSuite {
         // Missing kd, i, lastError, iBound
         boolean loaded = pid.load(tag);
         return assertFalse("load() should return false if any required field is missing", loaded);
+    }
+
+    /**
+     * T-178: with an output limit, a long-lasting large error must not wind the output filter
+     * up beyond the limit, and after the error flips sign the output must flip on the next update.
+     * Without the limit the filter memory reaches ~-50 here and the sign stays negative for ~5 updates.
+     */
+    private TestResult test_outputLimit_boundsWindupAndFlipsFast() {
+        PID pid = new PID(0.5, 0.0, 0.0, 0.1); // ki = kd = 0: independent of wall-clock dt
+        pid.setOutputLimit(1.0);
+        for (int j = 0; j < 50; j++) {
+            double out = pid.update(-100.0);
+            if (out < -1.0 - EPSILON || out > 1.0 + EPSILON)
+                return fail("Output " + out + " left the limit [-1, 1] at update " + j);
+        }
+        // Error flips: price crossed the target. 0.5*(-1) + 0.5*(0.5*5) = 0.75
+        double flipped = pid.update(5.0);
+        if (flipped <= 0)
+            return fail("Output must flip sign within one update after the error flips, got " + flipped);
+        return pass("Output stays within the limit and flips sign on the first update after the error flips");
     }
 }

@@ -127,7 +127,7 @@ The floor and ceiling for the **equilibrium**, as a fraction or multiple of the 
 Important to know:
 
 - **They bound the equilibrium, not the final price.** The random walk still swings around the floor or ceiling (with Volatility Scale 0.3 a diamond at the floor of 8 still wobbles between roughly 7 and 9), news events multiply the target on top, and players can still trade the real price beyond the target for a while.
-- **Flow keeps counting beyond the limits.** If players net-sell 10,000 diamonds, the equilibrium sits at the floor of 8 from about 5,760 diamonds on. Before the price can recover, players must first net-buy back the extra ~4,240 diamonds. To re-anchor a market at its default price, press **Reset** next to **Net Flow** in the market's settings on the Management Screen.
+- **Flow stops counting at the limits.** Once the equilibrium reaches the floor or ceiling, the plugin holds the Net Flow counter at that point, so extra flow is not stored. If players net-sell 10,000 diamonds, the counter stops at about +5,760 (the floor of 8); the moment players buy diamonds back, the equilibrium starts rising again -- there is no dead zone to trade back first. If you narrow the band or change the Flow Sensitivity, Volatility Scale or Abundance later, the counter is pulled into the new band on the next update. While Player Flow Influence is off, or no Volatility Plugin is subscribed to the market, the counter is not limited. To re-anchor a market at its default price, press **Reset** next to **Net Flow** in the market's settings on the Management Screen.
 
 **Tuning advice:**
 

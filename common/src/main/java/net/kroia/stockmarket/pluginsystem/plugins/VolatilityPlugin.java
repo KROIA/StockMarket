@@ -146,6 +146,19 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
         for (MarketInterface market : markets) {
             MarketData data = marketData.get(market.market.getMarketID());
             if (data == null) continue;
+
+            // Saturate the market's net-flow counter at the band where the equilibrium
+            // already sits at minPriceMult/maxPriceMult. Flow beyond it has no price
+            // effect; storing it would only create a dead zone that players must trade
+            // back before the price moves again (T-174).
+            FlowBand band = flowBand(market.market.getNaturalAbundance(), data.settings);
+            if (band != null) {
+                double flow = market.market.getNetPlayerItemFlow();
+                if (flow < band.lower() || flow > band.upper()) {
+                    market.market.setNetPlayerItemFlow(Math.min(Math.max(flow, band.lower()), band.upper()));
+                }
+            }
+
             // The random-walk target price is only meaningful for markets whose
             // virtual orderbook is enabled — the downstream consumers (e.g.
             // TargetPriceBot) also skip disabled markets, so producing a target
@@ -216,8 +229,51 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
                                                  float naturalAbundance, Settings settings) {
         // Feature disabled or no flow: keep the anchor exactly at the default price
         // (bit-identical to the previous behavior).
-        if (settings == null || !settings.flowInfluenceEnabled()) return defaultPrice;
         if (netPlayerItemFlow == 0.0 || Double.isNaN(netPlayerItemFlow)) return defaultPrice;
+        FlowBand band = flowBand(naturalAbundance, settings);
+        if (band == null) return defaultPrice;
+
+        // Negative sign flips the direction: net-sold items (flow > 0) push the
+        // exponent negative and therefore the price down; net-bought items
+        // (flow < 0) push it positive and the price up.
+        double exponent = -netPlayerItemFlow / band.capacity();
+        // Clamp BEFORE exp so extreme flows can neither overflow to infinity
+        // nor underflow the price to 0.
+        exponent = Math.min(Math.max(exponent, band.lnMinMult()), band.lnMaxMult());
+
+        return defaultPrice * Math.exp(exponent);
+    }
+
+    /**
+     * The flow-equilibrium parameters of one market, all in real (item) units.
+     *
+     * @param capacity  items needed to move the equilibrium by a factor of e
+     * @param lnMinMult ln(minPriceMult) (sanitized), the lowest allowed exponent (&lt; 0)
+     * @param lnMaxMult ln(maxPriceMult) (sanitized), the highest allowed exponent (&gt; 0)
+     * @param lower     net flow at which the equilibrium reaches maxPriceMult
+     *                  (= -capacity * ln(maxPriceMult), negative: players net-BOUGHT)
+     * @param upper     net flow at which the equilibrium reaches minPriceMult
+     *                  (= -capacity * ln(minPriceMult), positive: players net-SOLD)
+     */
+    public record FlowBand(double capacity, double lnMinMult, double lnMaxMult, double lower, double upper) {}
+
+    /**
+     * Single source of the capacity / saturation formula used by
+     * {@link #computeEquilibriumPrice} and by the net-flow saturation in {@link #update}.
+     * <pre>
+     * capacity = flowSensitivity * naturalAbundance / (1 + volatilityScale)
+     * lower    = -capacity * ln(maxPriceMult)   (buy side, price at ceiling)
+     * upper    = -capacity * ln(minPriceMult)   (sell side, price at floor)
+     * </pre>
+     * Net flow outside [lower, upper] has no further price effect.
+     *
+     * @param naturalAbundance the market item's natural abundance
+     * @param settings         the per-market plugin settings (may be null)
+     * @return the band, or null if the flow term is inactive (settings null, flow
+     *         influence disabled, or capacity not strictly positive and finite)
+     */
+    public static FlowBand flowBand(float naturalAbundance, Settings settings) {
+        if (settings == null || !settings.flowInfluenceEnabled()) return null;
 
         // Items needed to move the price by a factor of e. Dividing by
         // (1 + volatilityScale) makes highly volatile markets react slightly
@@ -226,7 +282,7 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
                 / (1.0 + settings.volatilityScale());
         // Disable the flow term if capacity is invalid (<= 0, NaN or infinite),
         // e.g. abundance or sensitivity set to 0/negative by an admin.
-        if (!(capacity > 0.0) || Double.isInfinite(capacity)) return defaultPrice;
+        if (!(capacity > 0.0) || Double.isInfinite(capacity)) return null;
 
         // Sanitize clamp multipliers: enforce 0 < minPriceMult < 1 < maxPriceMult.
         // (The "!(x > y)" form also catches NaN.)
@@ -235,15 +291,9 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
         if (!(minMult > 0.0) || !(minMult < 1.0)) minMult = DEFAULT_MIN_PRICE_MULT;
         if (!(maxMult > 1.0)) maxMult = DEFAULT_MAX_PRICE_MULT;
 
-        // Negative sign flips the direction: net-sold items (flow > 0) push the
-        // exponent negative and therefore the price down; net-bought items
-        // (flow < 0) push it positive and the price up.
-        double exponent = -netPlayerItemFlow / capacity;
-        // Clamp BEFORE exp so extreme flows can neither overflow to infinity
-        // nor underflow the price to 0.
-        exponent = Math.min(Math.max(exponent, Math.log(minMult)), Math.log(maxMult));
-
-        return defaultPrice * Math.exp(exponent);
+        double lnMin = Math.log(minMult);
+        double lnMax = Math.log(maxMult);
+        return new FlowBand(capacity, lnMin, lnMax, -capacity * lnMax, -capacity * lnMin);
     }
 
     @Override

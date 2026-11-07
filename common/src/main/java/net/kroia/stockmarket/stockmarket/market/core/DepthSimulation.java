@@ -201,7 +201,9 @@ public class DepthSimulation
         // maxAffordable = funds * SF / price
         long remainingBuyVolume;
         if (currentPrice > 0)
-            remainingBuyVolume = dollarBudget * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR / currentPrice + 1;
+            // T-176: overflow-safe; saturates instead of wrapping negative for huge budgets
+            remainingBuyVolume = Math.min(MatchingEngine.mulDivSaturated(dollarBudget, BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR, currentPrice),
+                    Long.MAX_VALUE - 1) + 1;
         else
             remainingBuyVolume = Long.MAX_VALUE;
 
@@ -300,7 +302,7 @@ public class DepthSimulation
                 if (availableFunds < -costFull)
                 {
                     // fillPotential = -funds * SF / price (negative volume for sells)
-                    fillPotential = -availableFunds * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR / sellOrder.getStartPrice();
+                    fillPotential = -MatchingEngine.mulDivSaturated(availableFunds, BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR, sellOrder.getStartPrice()); // T-176: overflow-safe
                 }
 
                 if (fillPotential >= 0)
@@ -393,9 +395,10 @@ public class DepthSimulation
 
                     // partialVolume = remainingDollarsNeeded * SF / price
                     // This is the max volume we'd need to sell at this price to reach the target
-                    long maxVolumeForTarget = remainingDollarsNeeded * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR / walkPrice;
+                    // T-176: overflow-safe products (huge dollar targets)
+                    long maxVolumeForTarget = MatchingEngine.mulDivSaturated(remainingDollarsNeeded, BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR, walkPrice);
                     // Add 1 to handle rounding: we may need one extra raw unit to cover the target
-                    if (maxVolumeForTarget * walkPrice / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR < remainingDollarsNeeded)
+                    if (MatchingEngine.mulDivSaturated(maxVolumeForTarget, walkPrice, BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR) < remainingDollarsNeeded)
                         maxVolumeForTarget++;
 
                     long canConsume = Math.min(virtualVol, maxVolumeForTarget);
@@ -453,7 +456,7 @@ public class DepthSimulation
                 if (fullCost > remainingDollarsNeeded)
                 {
                     // Partial fill: only sell enough to reach the target
-                    long partialVolume = remainingDollarsNeeded * BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR / buyOrder.getStartPrice();
+                    long partialVolume = MatchingEngine.mulDivSaturated(remainingDollarsNeeded, BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR, buyOrder.getStartPrice()); // T-176: overflow-safe
                     if (partialVolume <= 0)
                         partialVolume = 1;  // sell at least 1 raw unit if we need any dollars
 

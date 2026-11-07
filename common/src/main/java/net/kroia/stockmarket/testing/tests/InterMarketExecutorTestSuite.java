@@ -177,6 +177,11 @@ public class InterMarketExecutorTestSuite extends TestSuite {
         addTest("L1_leg_closed_by_hours_skips_and_keeps_order", this::test_L1_leg_closed_by_hours_skips_and_keeps_order);
         addTest("L2_both_legs_open_executes", this::test_L2_both_legs_open_executes);
         addTest("L3_leg_closed_by_override_skips_and_keeps_order", this::test_L3_leg_closed_by_override_skips_and_keeps_order);
+
+        // ── Category M: Bilateral walk bookkeeping (T-171, T-172) ──
+        addTest("M1_partial_consume_withdraws_only_consumed", this::test_M1_partial_consume_withdraws_only_consumed);
+        addTest("M2_never_sells_more_than_locked", this::test_M2_never_sells_more_than_locked);
+        addTest("M3_money_buffer_reduces_have_sold", this::test_M3_money_buffer_reduces_have_sold);
     }
 
     @Override
@@ -4781,6 +4786,145 @@ public class InterMarketExecutorTestSuite extends TestSuite {
             return fail("Exception: " + e.getMessage());
         } finally {
             reopenTradingHours(marketA);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  Category M: Bilateral walk bookkeeping (T-171, T-172)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Builds a LIMIT inter-market order (sell A, buy B) with an explicit buy target.
+     * @param buyTarget  raw B volume to buy
+     * @param sellVolume raw A volume to lock/sell at most
+     * @param rateLimit  cross-rate limit (raw)
+     */
+    private InterMarketOrder createLimitIMO(long buyTarget, long sellVolume, long rateLimit) {
+        return new InterMarketOrder(itemB_ID, itemA_ID, Order.Type.LIMIT,
+                buyTarget, marketB.getCurrentMarketPrice(),
+                sellVolume, marketA.getCurrentMarketPrice(),
+                System.currentTimeMillis(), testPlayerUUID, bankAccountNr, rateLimit);
+    }
+
+    /**
+     * T-171: the resting buyer on A can only afford 3 of the ~4.1 items the walk wants to
+     * sell, so the depth consumer takes less than haveToSell. Only the consumed volume may
+     * leave the player's A bank; the rest stays locked and is released on cancel.
+     */
+    private TestResult test_M1_partial_consume_withdraws_only_consumed() {
+        try {
+            resetState(100, 80, p -> 0f, p -> 5f);
+
+            // Resting buyer on A: 10 items at 99, but only 3 items' worth of money left.
+            placeCounterpartyLimitOrder(marketA, 10 * scaleFactor, 99);
+            IServerBank cpMoney = counterpartyAccount.getBank(moneyID);
+            long affordableMoney = Math.round(3.0 * 99);   // 3 items at 99
+            // Note: setBalance() sets the TOTAL (free + locked) balance, so reset the whole bank
+            // to 3 items' worth and lock all of it for the resting order.
+            unlockAll(cpMoney);
+            cpMoney.setBalance(affordableMoney);
+            cpMoney.lockAmount(affordableMoney);
+            if (cpMoney.getTotalBalance() != affordableMoney || cpMoney.getLockedBalance() != affordableMoney)
+                return fail("Setup failed: counterparty money total/locked should be " + affordableMoney
+                        + ", got " + cpMoney.getTotalBalance() + "/" + cpMoney.getLockedBalance());
+
+            IServerBank aBank = bankAccount.getBank(itemA_ID);
+            long initialA = aBank.getTotalBalance();
+
+            InterMarketOrder imo = createIMO(5 * scaleFactor, scaleFactor);
+            if (!enqueueIMO(imo))
+                return fail("InterMarketOrder was not enqueued");
+            marketManager.update();
+
+            long sold = -imo.getSellOrder().getFilledVolume();
+            if (sold <= 0)
+                return fail("Expected a partial sell into the resting buyer, sold=" + sold);
+            if (sold > 3 * scaleFactor)
+                return fail("Sold more than the resting buyer could pay for: " + sold);
+            if (aBank.getTotalBalance() != initialA - sold)
+                return fail("A balance should be start - sold = " + (initialA - sold)
+                        + " (unsold part must not be lost), got " + aBank.getTotalBalance());
+            if (aBank.getLockedBalance() != 5 * scaleFactor - sold)
+                return fail("Unsold rest should still be locked: expected " + (5 * scaleFactor - sold)
+                        + ", got " + aBank.getLockedBalance());
+
+            marketManager.cancelInterMarketOrdersForMarket(itemA_ID);
+            if (aBank.getLockedBalance() != 0)
+                return fail("Cancel should release the unsold rest, still locked: " + aBank.getLockedBalance());
+            if (aBank.getTotalBalance() != initialA - sold)
+                return fail("After cancel A balance should be " + (initialA - sold) + ", got " + aBank.getTotalBalance());
+            return pass("Withdrew only the consumed " + sold + " raw; rest released on cancel");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /**
+     * T-171: buy target needs ~5 items of A but only 2 are locked. The walk must stop at the
+     * locked volume and never touch the player's free (unlocked) A items.
+     */
+    private TestResult test_M2_never_sells_more_than_locked() {
+        try {
+            resetState(100, 80);
+
+            IServerBank aBank = bankAccount.getBank(itemA_ID);
+            long initialA = aBank.getTotalBalance();
+            long locked = 2 * scaleFactor;
+
+            InterMarketOrder imo = createLimitIMO(10 * scaleFactor, locked, 4L * scaleFactor);
+            if (!enqueueIMO(imo))
+                return fail("InterMarketOrder was not enqueued");
+            marketManager.update();
+
+            long sold = -imo.getSellOrder().getFilledVolume();
+            if (sold > locked)
+                return fail("Sold " + sold + " raw but only " + locked + " were locked");
+            if (aBank.getTotalBalance() != initialA - sold)
+                return fail("A balance should be start - sold = " + (initialA - sold) + ", got " + aBank.getTotalBalance());
+
+            marketManager.cancelInterMarketOrdersForMarket(itemA_ID);
+            if (aBank.getTotalBalance() < initialA - locked)
+                return fail("Free A items were sold: balance " + aBank.getTotalBalance()
+                        + " < start - locked " + (initialA - locked));
+            if (aBank.getLockedBalance() != 0)
+                return fail("Nothing should stay locked after cancel, got " + aBank.getLockedBalance());
+            return pass("Sold " + sold + " of " + locked + " locked raw; free items untouched");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /**
+     * T-172: the order already holds 200 money in its buffer. To buy 5 B at 81 (405 money)
+     * the walk must sell only (405 - 200) / 99 ≈ 2.07 A, not the 4.09 A the SF² formula
+     * produced (which ignored the buffer).
+     */
+    private TestResult test_M3_money_buffer_reduces_have_sold() {
+        try {
+            resetState(100, 80, p -> 0f, p -> 0f);
+            placeCounterpartyLimitOrder(marketA, 20 * scaleFactor, 99);   // buy-side depth on A at 99
+            placeCounterpartyLimitOrder(marketB, -10 * scaleFactor, 81);  // sell-side depth on B at 81
+
+            long buyTarget = 5 * scaleFactor;
+            long buffer = 200;
+            InterMarketOrder imo = createLimitIMO(buyTarget, 10 * scaleFactor, scaleFactor);
+            imo.setTransactionMoneyBalance(buffer);
+            if (!enqueueIMO(imo))
+                return fail("InterMarketOrder was not enqueued");
+            marketManager.update();
+
+            long bought = imo.getBuyOrder().getFilledVolume();
+            long sold = -imo.getSellOrder().getFilledVolume();
+            long dollarsNeeded = buyTarget * 81 / scaleFactor - buffer;
+            long expectedSold = (dollarsNeeded * scaleFactor + 98) / 99;   // ceil
+            if (bought != buyTarget)
+                return fail("Expected to buy the full target " + buyTarget + ", bought " + bought);
+            if (sold > expectedSold + 1)
+                return fail("Oversold: sold " + sold + " raw A, expected ~" + expectedSold
+                        + " (buffer of " + buffer + " must reduce the sale)");
+            return pass("Sold " + sold + " raw A (expected ~" + expectedSold + ") for " + bought + " raw B");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
         }
     }
 }

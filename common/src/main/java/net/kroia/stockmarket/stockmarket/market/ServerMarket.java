@@ -16,12 +16,16 @@ import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
 import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.market.core.MatchingEngine;
 import net.kroia.stockmarket.stockmarket.market.core.Orderbook;
+import net.kroia.modutilities.ServerPlayerUtilities;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.PriorityQueue;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -70,7 +74,10 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     private long candleOpenPrice;
     private long candleHighPrice;
     private long candleLowPrice;
-    private float candleTradedVolume = 0;
+    // T-175: accumulated in RAW units as long so small fills still count after a huge one
+    // (a float sum stops changing once it exceeds ~2^24 times the fill). Widened to float only
+    // at the API/storage boundary (MarketPriceStruct, getCurrentCandleTradedVolume()).
+    private long candleTradedVolume = 0;
 
     /**
      * Temporary order buffers for collecting order async and only process the order on update
@@ -564,6 +571,8 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     @Override
     public void resetNetPlayerItemFlow() { netPlayerItemFlow = 0; }
     @Override
+    public void setNetPlayerItemFlow(long netPlayerItemFlow) { this.netPlayerItemFlow = netPlayerItemFlow; }
+    @Override
     public CompletableFuture<Boolean> resetNetPlayerItemFlowAsync()
     {
         resetNetPlayerItemFlow();
@@ -754,6 +763,32 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     {
         unlockRemainingFunds(order);
         saveOrderRecord(order);
+        notifyMarketOrderNotFullyFilled(order);
+    }
+
+    /**
+     * T-173: tells the owner of a player MARKET order that it was only partly filled. The
+     * matching engine cancels (and refunds) whatever a market order could not fill in its
+     * one pass: virtual-book walk limit, price floor 0, buyer out of money, empty book.
+     * {@code CreateOrderRequest} already answered "created" at placement (matching runs later
+     * in the tick), so without this the player only saw a plain success.
+     * <p>Sent as a translatable chat message (resolved client-side). Only reaches players
+     * online on this (master) server; players on a slave server get no message.</p>
+     *
+     * @param order the canceled order (fill state is final at this point)
+     */
+    private void notifyMarketOrderNotFullyFilled(Order order)
+    {
+        if (!order.isMarketOrder() || order.isBotOrder() || order.isFilled())
+            return;
+        ServerPlayer player = ServerPlayerUtilities.getOnlinePlayer(order.getExecutorPlayerUUID());
+        if (player == null)
+            return;
+        double sf = BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR;
+        player.sendSystemMessage(Component.translatable("message.stockmarket.order_status.market_order_partially_filled",
+                String.format(Locale.ROOT, "%.2f", Math.abs(order.getFilledVolume()) / sf),
+                String.format(Locale.ROOT, "%.2f", Math.abs(order.getTargetVolume()) / sf),
+                itemID.getStack().getHoverName()));
     }
 
     /**

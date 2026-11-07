@@ -104,6 +104,11 @@ public class MatchingEngineTestSuite extends TestSuite {
         addTest("interMarketMarketOrder_creditsFlowOnBothMarkets", this::test_interMarketMarketOrder_creditsFlowOnBothMarkets);
         addTest("interMarketLimitOrder_creditsFlowOnBothMarkets", this::test_interMarketLimitOrder_creditsFlowOnBothMarkets);
         addTest("consumeBuySideDepth_droppedRestingOrder_unlocksFunds", this::test_consumeBuySideDepth_droppedRestingOrder_unlocksFunds);
+
+        // Large-volume regressions (T-173, T-175, T-176)
+        addTest("marketSell_thinBook_countsOnlyFilled", this::test_marketSell_thinBook_countsOnlyFilled);
+        addTest("candleTradedVolume_keepsSmallFillsAfterHugeFill", this::test_candleTradedVolume_keepsSmallFillsAfterHugeFill);
+        addTest("affordableVolume_hugeFunds_saturates", this::test_affordableVolume_hugeFunds_saturates);
     }
 
     @Override
@@ -882,5 +887,107 @@ public class MatchingEngineTestSuite extends TestSuite {
 
     private float uniformVolumeDistribution(double price) {
         return (float) uniformVolumeDistributionScale / backend.BANK_SYSTEM_API.getServerBankManager().getSync().getItemFractionScaleFactor();
+    }
+
+    // ── Large-volume regressions (T-173, T-175, T-176) ───────────────────────
+
+    /**
+     * T-173: a player market sell far larger than the thin virtual book stops at the walk
+     * limit / price floor. Only the filled part may count: flow == -filled, the item bank
+     * loses exactly the filled volume and the cancelled rest is unlocked again.
+     */
+    private TestResult test_marketSell_thinBook_countsOnlyFilled() {
+        try {
+            resetMarketState(true, 50);
+            serverMarket.test_resetVirtualOrderBookVolume();
+            serverMarket.resetNetPlayerItemFlow();
+            if (!(serverMarket instanceof ServerMarket market))
+                return fail("Expected the scratch market to be a master ServerMarket");
+
+            IServerBank itemBank = bankAccount1.getBank(serverMarket.getItemID());
+            unlockAll(itemBank);
+            long start = 2_000_000;
+            itemBank.setBalance(start);
+            long target = 1_000_000;
+            itemBank.lockAmount(target);   // as CreateOrderRequest does
+
+            Order sell = new Order(serverMarket.getItemID(), Order.Type.MARKET, -target, 0, 0,
+                    UUID.randomUUID(), bankAccountNr1);
+            serverMarket.putOrder(sell);
+            serverMarket.update();
+
+            long filled = sell.getFilledVolume();   // negative
+            if (filled >= 0 || -filled >= target)
+                return fail("Expected a partial fill, got filledVolume=" + filled + " of " + -target);
+            if (market.getNetPlayerItemFlow() != -filled)
+                return fail("Flow should be " + -filled + " (filled only), got " + market.getNetPlayerItemFlow());
+            if (itemBank.getTotalBalance() != start + filled)
+                return fail("Item balance should be start - filled = " + (start + filled)
+                        + ", got " + itemBank.getTotalBalance());
+            if (itemBank.getLockedBalance() != 0)
+                return fail("Cancelled rest should be unlocked, still locked: " + itemBank.getLockedBalance());
+            return pass("Filled " + -filled + " of " + target + " raw; flow and balance count only the fill");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /**
+     * T-175: after a huge fill (2^26 raw), 100 fills of 1 raw must still be counted in the
+     * candle volume. A float accumulator drops every one of them (ulp at 2^26 is 8).
+     */
+    private TestResult test_candleTradedVolume_keepsSmallFillsAfterHugeFill() {
+        try {
+            resetMarketState(false, 10);
+            serverMarket.test_resetVirtualOrderBookVolume();
+            ItemID id = serverMarket.getItemID();
+            long huge = 1L << 26;
+            int smallFills = 100;
+
+            // Resting bot bid below the market price, big enough for every sell below.
+            serverMarket.putOrder(new Order(id, Order.Type.LIMIT, huge + smallFills, 9, 0));
+            serverMarket.update();
+            serverMarket.getCurrentMarketPriceStructAndReset();   // fresh candle
+
+            serverMarket.putOrder(new Order(id, Order.Type.MARKET, -huge, 0, 0));
+            serverMarket.update();
+            for (int i = 0; i < smallFills; i++) {
+                serverMarket.putOrder(new Order(id, Order.Type.MARKET, -1, 0, 0));
+                serverMarket.update();
+            }
+
+            float expected = (float) (huge + smallFills);
+            float got = serverMarket.getCurrentCandleTradedVolume();
+            if (Math.abs(got - expected) > Math.ulp(expected))
+                return fail("Candle volume should be ~" + (huge + smallFills) + ", got " + (long) got
+                        + " (small fills lost)");
+            return pass("Candle volume " + (long) got + " includes the " + smallFills + " small fills");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /** T-176: affordable volume and the shared mul/div helper saturate instead of wrapping negative. */
+    private TestResult test_affordableVolume_hugeFunds_saturates() {
+        try {
+            long v = MatchingEngine.affordableVolume(Long.MAX_VALUE - 5, 1);
+            if (v != Long.MAX_VALUE)
+                return fail("affordableVolume(MAX-5, 1) should saturate to Long.MAX_VALUE, got " + v);
+            long funds = 100_000_000_000_000_000L;   // 1e17 raw: funds * SF overflows a long
+            v = MatchingEngine.affordableVolume(funds, 1000);
+            long exact = java.math.BigInteger.valueOf(funds).multiply(java.math.BigInteger.valueOf(scaleFactor))
+                    .divide(java.math.BigInteger.valueOf(1000)).longValue();
+            if (v < exact || v > exact + 1)
+                return fail("affordableVolume(1e17, 1000) should be ~" + exact + ", got " + v);
+            if (MatchingEngine.mulDivSaturated(Long.MAX_VALUE, Long.MAX_VALUE, 1) != Long.MAX_VALUE)
+                return fail("mulDivSaturated should saturate high");
+            if (MatchingEngine.mulDivSaturated(Long.MIN_VALUE, 2, 1) != Long.MIN_VALUE)
+                return fail("mulDivSaturated should saturate low");
+            if (MatchingEngine.mulDivSaturated(7, 9, 2) != 31)
+                return fail("mulDivSaturated(7, 9, 2) should be 31");
+            return pass("Huge funds saturate, exact results otherwise");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
     }
 }

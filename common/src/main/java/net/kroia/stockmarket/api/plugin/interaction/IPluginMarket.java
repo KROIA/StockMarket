@@ -152,6 +152,18 @@ public interface IPluginMarket {
      */
     double getNetPlayerItemFlow();
 
+    /**
+     * Overwrites the net player item flow counter. Applied immediately (not cache-buffered).
+     * Used by the VolatilityPlugin to saturate the counter at the flow where its
+     * equilibrium price already sits at the configured floor/ceiling.
+     * @param netPlayerItemFlow the new net flow in real (scaled) units, same sign
+     *                          convention as {@link #getNetPlayerItemFlow()}
+     * <p>
+     * The default implementation is a no-op so existing external implementations of this
+     * interface keep compiling. Implementations backed by a real market should override it.
+     */
+    default void setNetPlayerItemFlow(double netPlayerItemFlow) {}
+
 
 
     /**

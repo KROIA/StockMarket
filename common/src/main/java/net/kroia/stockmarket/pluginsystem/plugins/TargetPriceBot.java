@@ -71,10 +71,21 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
             this.pidI = i;
             this.pidD = d;
             this.pidRate = rate;
-            this.pid = new PID(p, i, d, rate);
+            this.pid = createPid(p, i, d, rate);
         }
     }
     private final Map<ItemID, RuntimeData> marketData = new HashMap<>();
+
+    /**
+     * Creates the bot's PID with its output limited to [-1, 1], the range the bot actually uses
+     * as order fraction. Without the limit the output filter winds up while the price sits far
+     * from the target and the bot keeps pushing past the target for several cycles (T-178).
+     */
+    private static PID createPid(float p, float i, float d, float rate) {
+        PID pid = new PID(p, i, d, rate);
+        pid.setOutputLimit(1);
+        return pid;
+    }
 
     // Default PID gains — configurable via custom settings (per-market)
     private static final float DEFAULT_PID_P = 0.5f;
@@ -220,7 +231,7 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
             data.pidI = settings.pidI();
             data.pidD = settings.pidD();
             data.pidRate = settings.pidRate();
-            data.pid = new PID(data.pidP, data.pidI, data.pidD, data.pidRate);
+            data.pid = createPid(data.pidP, data.pidI, data.pidD, data.pidRate);
         }
     }
 
@@ -264,7 +275,7 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
                             data.pidI = NbtCompat.getFloat(marketTag, "pidI");
                             data.pidD = NbtCompat.getFloat(marketTag, "pidD");
                             data.pidRate = NbtCompat.getFloat(marketTag, "pidRate");
-                            data.pid = new PID(data.pidP, data.pidI, data.pidD, data.pidRate);
+                            data.pid = createPid(data.pidP, data.pidI, data.pidD, data.pidRate);
                         }
                         if (marketTag.contains("targetPrice")) data.targetPrice = NbtCompat.getDouble(marketTag, "targetPrice");
                         if (marketTag.contains("tickCounter")) data.tickCounter = NbtCompat.getInt(marketTag, "tickCounter");

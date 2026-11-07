@@ -117,6 +117,13 @@ public class PluginMarket implements IPluginMarket
         return MarketManager.convertToRealAmountStatic(serverMarket.getNetPlayerItemFlow());
     }
 
+    /** {@inheritDoc} Non-finite values are ignored. */
+    @Override
+    public void setNetPlayerItemFlow(double netPlayerItemFlow) {
+        if (Double.isNaN(netPlayerItemFlow) || Double.isInfinite(netPlayerItemFlow)) return;
+        serverMarket.setNetPlayerItemFlow(MarketManager.convertToRawAmountStatic(netPlayerItemFlow));
+    }
+
 
 
     @Override
