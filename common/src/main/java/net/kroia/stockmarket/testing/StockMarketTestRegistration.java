@@ -44,6 +44,7 @@ import net.kroia.stockmarket.testing.tests.NormalizedRandomPriceGeneratorTestSui
 import net.kroia.stockmarket.testing.tests.RandomWalkTestSuite;
 import net.kroia.stockmarket.testing.tests.ServerMarketTestSuite;
 import net.kroia.stockmarket.testing.tests.PlayerPreferencesTestSuite;
+import net.kroia.stockmarket.testing.tests.AdminFlagSyncTestSuite;
 import net.kroia.stockmarket.testing.tests.UserTestSuite;
 import net.kroia.stockmarket.testing.tests.VillagerMoneyPaymentTestSuite;
 import net.kroia.stockmarket.testing.tests.VillagerTradePricingTestSuite;
@@ -74,6 +75,7 @@ public class StockMarketTestRegistration {
         TestRegistry.register(new PriceHistoryTestSuite());
         TestRegistry.register(new PriceHistoryCacheTestSuite());
         TestRegistry.register(new UserTestSuite());
+        TestRegistry.register(new AdminFlagSyncTestSuite()); // admin flag / LuckPerms sync decisions
         TestRegistry.register(new PlayerPreferencesTestSuite());
         TestRegistry.register(new MarketSettingsTestSuite());
         TestRegistry.register(new MarketPresetTestSuite());

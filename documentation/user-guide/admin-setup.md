@@ -113,6 +113,7 @@ StockMarket admin commands and functions check these permission nodes, so a perm
 | `stockmarket.admin.command.exportrecipes` | `/stockmarket exportrecipes` (dev builds only) |
 | `stockmarket.admin.command.devtest` | `/stockmarket devTestScreen` (dev builds only) |
 | `stockmarket.admin.notify` | Receiving chat notifications when another admin changes settings |
+| `stockmarket.admin` | Source of the StockMarket admin flag while `SYNC_ADMIN_FLAG_WITH_PERMISSION` is on (see below) |
 
 Example: give the `admin` group every StockMarket admin right:
 
@@ -127,3 +128,16 @@ Notes:
 * The management GUI and the other in-game admin functions are gated by **StockMarket admin mode** (`/stockmarket op`), not by a node. The node `stockmarket.admin.command.op` controls who may switch admin mode on or off. Admin mode is stored on the master server, so it also works for players on slave servers.
 * Nodes are only checked for players online on the server that runs the check. The console and command blocks always use operator level 2.
 * Command nodes are checked when a player's command list is sent. After changing a node for an online player, they may need to rejoin before the command shows up or disappears.
+
+### Syncing StockMarket admin mode with LuckPerms
+
+The Mod Setting `SYNC_ADMIN_FLAG_WITH_PERMISSION` (Mod Settings → Utilities, "Sync admin flag with LuckPerms", default off) keeps StockMarket admin mode and the LuckPerms node `stockmarket.admin` in step, in both directions:
+
+- `/stockmarket op <player>` sets admin mode and gives the player the node `stockmarket.admin=true` in LuckPerms (this works for offline players too). `/stockmarket deop <player>` clears admin mode and removes the player's own `stockmarket.admin` node.
+- Changing the node in LuckPerms (commands, web editor, a group) updates admin mode straight away, without a rejoin.
+- A LuckPerms group grant wins: if a group still grants `stockmarket.admin`, the player stays a StockMarket admin right after `deop`, and the command tells you so. Remove the group grant to deop the player.
+- A player who joins for the first time while a LuckPerms group already grants `stockmarket.admin` becomes a StockMarket admin straight away. Note that `stockmarket.admin.*` does not include `stockmarket.admin` itself; grant it on its own.
+- When the setting is first turned on (at server start or in the Mod Settings screen), every player who already has admin mode gets `stockmarket.admin=true` in LuckPerms, once. This never removes anything. A marker file `AdminFlagLuckPermsMigrated.marker` in the world's `data/StockMarket` folder records that it ran; delete it to run the migration again.
+- With multiple servers: set the option on the master (slaves never load `settings.json`). A slave passes LuckPerms changes of its players on to the master, but only if the master trusts that slave (`/banksystem trust`); the master applies them only while its option is on. Untrusted slaves never change admin mode.
+- The setting takes effect immediately, no restart needed.
+- Without LuckPerms the setting does nothing: admin mode only changes through `/stockmarket op` and `deop`, and the node `stockmarket.admin` falls back to operator level 2.

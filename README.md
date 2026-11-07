@@ -264,6 +264,8 @@ A server operator needs to grant StockMarket admin privileges:<br>
 <code>/stockmarket op</code> — Grant admin to yourself<br>
 <code>/stockmarket op [username]</code> — Grant admin to another player
 
+With LuckPerms, the Mod Setting **Sync admin flag with LuckPerms** (`SYNC_ADMIN_FLAG_WITH_PERMISSION`, default off) syncs admin mode with the permission node `stockmarket.admin` in both directions: `/stockmarket op` and `deop` write the node, and node changes in LuckPerms update admin mode live. A LuckPerms group grant wins over `deop` (the player stays admin and you get a note). See [Syncing StockMarket admin mode with LuckPerms](documentation/user-guide/admin-setup.md#syncing-stockmarket-admin-mode-with-luckperms).
+
 #### Opening the Management GUI
 Run <code>/stockmarket manage</code> to open the management interface. It has three tabs:
 

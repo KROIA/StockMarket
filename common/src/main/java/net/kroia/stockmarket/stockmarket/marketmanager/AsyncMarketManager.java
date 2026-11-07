@@ -13,6 +13,8 @@ import net.kroia.stockmarket.api.market.IAsyncMarket;
 import net.kroia.stockmarket.api.marketmanager.IAsyncMarketManager;
 import net.kroia.stockmarket.api.marketmanager.IServerMarketManager;
 import net.kroia.stockmarket.stockmarket.market.AsyncMarket;
+import net.kroia.stockmarket.networking.NetworkGate;
+import net.kroia.stockmarket.util.AdminFlagSync;
 import net.kroia.stockmarket.util.MultiServerUtils;
 import net.kroia.stockmarket.util.StockMarketLogger;
 import net.minecraft.core.UUIDUtil;
@@ -75,6 +77,8 @@ public class AsyncMarketManager implements IAsyncMarketManager {
         IsStockmarketAdmin,
         GetPlayerPreferences,
         UpdatePlayerPreferences,
+        /** Slave to master: admin flag change from LuckPerms (AdminFlagSync); trusted slaves only, master setting gates it. */
+        SyncAdminFlagFromPermission,
     }
 
 
@@ -101,6 +105,7 @@ public class AsyncMarketManager implements IAsyncMarketManager {
         put(FunctionType.IsStockmarketAdmin,                        codecPacket(UUIDUtil.STREAM_CODEC.cast(), ByteBufCodecs.BOOL.cast()));
         put(FunctionType.GetPlayerPreferences,                      codecPacket(UUIDUtil.STREAM_CODEC.cast(), PlayerPreferences.STREAM_CODEC));
         put(FunctionType.UpdatePlayerPreferences,                   codecPacket(ParamGroup_UUID_Preferences.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
+        put(FunctionType.SyncAdminFlagFromPermission,               codecPacket(ParamGroup_UUID_Bool.STREAM_CODEC, ByteBufCodecs.BOOL.cast()));
 
     }};
     /**
@@ -219,6 +224,16 @@ public class AsyncMarketManager implements IAsyncMarketManager {
                 case FunctionType.UpdatePlayerPreferences -> {
                     ParamGroup_UUID_Preferences data = (ParamGroup_UUID_Preferences)input.decodeParams();
                     yield OutputData.of(input.function, manager.updatePlayerPreferences(data.uuid, data.preferences));
+                }
+                case FunctionType.SyncAdminFlagFromPermission -> {
+                    // Server-internal (null sender) write from a TRUSTED slave (untrusted ones are already refused by
+                    // isRequestAllowed; checked again here), applied only while the master's own setting is on.
+                    ParamGroup_UUID_Bool data = (ParamGroup_UUID_Bool)input.decodeParams();
+                    boolean accept = AdminFlagSync.acceptSlaveSync(!slaveID.isEmpty(), playerSender != null,
+                            !slaveID.isEmpty() && NetworkGate.isMutatingCallAllowed(slaveID, "SyncAdminFlagFromPermission"),
+                            AdminFlagSync.isEnabled());
+                    yield OutputData.of(input.function, accept
+                            && AdminFlagSync.writeLocal(manager, data.uuid, data.bool, "permission sync from slave '" + slaveID + "'"));
                 }
             });
         }
@@ -428,6 +443,21 @@ public class AsyncMarketManager implements IAsyncMarketManager {
         CompletableFuture<OutputData> outputDataFuture = sendRequest(inputData);
         outputDataFuture.thenAccept((outputData)-> future.complete(outputData.decodeResult()));
         return future;
+    }
+    /**
+     * Slave only: forwards a LuckPerms change of the admin node to the master (see {@link AdminFlagSync}).
+     * Not part of {@link IAsyncMarketManager}: it is internal to the permission sync.
+     *
+     * @param playerUUID the user
+     * @param isAdmin    the effective node value
+     * @return true if the master applied it; false if it refused (setting off, untrusted) or is unreachable
+     */
+    public CompletableFuture<Boolean> syncAdminFlagFromPermissionAsync(UUID playerUUID, boolean isAdmin)
+    {
+        if(!MultiServerUtils.canInteractWithStockMarket())
+            return CompletableFuture.completedFuture(false);
+        InputData inputData = InputData.of(FunctionType.SyncAdminFlagFromPermission, new ParamGroup_UUID_Bool(playerUUID, isAdmin));
+        return sendRequest(inputData).thenApply(outputData -> Boolean.TRUE.equals(outputData.decodeResult()));
     }
     @Override
     public CompletableFuture<Boolean> isStockmarketAdminAsync(UUID playerUUID)

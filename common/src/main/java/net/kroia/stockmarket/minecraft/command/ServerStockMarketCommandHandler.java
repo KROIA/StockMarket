@@ -74,6 +74,8 @@ public class ServerStockMarketCommandHandler implements IServerStockMarketComman
             sendMessage(executor, msg);
             if (!executor.equals(playerUUID))
                 sendMessage(playerUUID, msg);
+            // Mirror into LuckPerms (setting on + LuckPerms only); deop re-checks group grants ("group wins").
+            net.kroia.stockmarket.util.AdminFlagSync.pushToLuckPerms(executor, playerUUID, userName, isAdmin);
             return true;
         }
         return false;

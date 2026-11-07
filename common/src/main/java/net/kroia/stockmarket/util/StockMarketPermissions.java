@@ -33,9 +33,15 @@ public final class StockMarketPermissions {
     /** Receiving admin chat notifications about settings changes made by other admins. */
     public static final String NOTIFY = "stockmarket.admin.notify";
 
+    /**
+     * Source of the per-user StockMarket admin flag while {@code Utilities.SYNC_ADMIN_FLAG_WITH_PERMISSION} is on
+     * (see {@link AdminFlagSync}). Not covered by {@code stockmarket.admin.*}; grant it on its own.
+     */
+    public static final String ADMIN = "stockmarket.admin";
+
     /** Every node, used by {@link #register()} and the registration test. */
     public static final String[] ALL_NODES = {COMMAND_OP, COMMAND_MANAGE, COMMAND_PRESET, COMMAND_NEWS,
-            COMMAND_BACKUP, COMMAND_MARKET, COMMAND_EXPORTRECIPES, COMMAND_DEVTEST, NOTIFY};
+            COMMAND_BACKUP, COMMAND_MARKET, COMMAND_EXPORTRECIPES, COMMAND_DEVTEST, NOTIFY, ADMIN};
 
     /** Registers all nodes with ModUtilities. Must run during mod init, before the server starts (NeoForge). */
     public static void register() {

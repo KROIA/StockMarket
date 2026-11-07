@@ -398,6 +398,7 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
         {
             user = new User(playerUUID, playerName);
             userMap.put(playerUUID, user);
+            net.kroia.stockmarket.util.AdminFlagSync.onUserAdded(playerUUID); // LuckPerms grant of a new user
             return;
         }
         if(!user.getName().equals(playerName))
@@ -449,6 +450,13 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
 
 
 
+
+    /**
+     * @return the UUIDs of every user whose StockMarket admin flag is set (used by the one-time LuckPerms migration)
+     */
+    public java.util.List<UUID> getStockmarketAdminUUIDs() {
+        return userMap.values().stream().filter(User::isStockMarketAdmin).map(User::getUUID).toList();
+    }
 
     @Override
     public boolean isStockmarketAdmin(UUID playerUUID) {

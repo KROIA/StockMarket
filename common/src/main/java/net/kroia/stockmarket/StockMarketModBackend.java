@@ -172,6 +172,7 @@ public class StockMarketModBackend implements StockMarketAPI {
                 net.kroia.stockmarket.screen.widgets.DisplayCandlestickChart::new);
 
         EventRegistration.init();
+        AdminFlagSync.init(); // LuckPerms listener for stockmarket.admin, no-op without LuckPerms
         if (StockMarketMod.ENABLE_DEV_FEATURES) {
             invokeDevBootstrap("init", new Class<?>[0]);
         }
@@ -275,6 +276,7 @@ public class StockMarketModBackend implements StockMarketAPI {
         DataManager.setBackend(SERVER_INSTANCES);
         StockMarketLogger.setBackend(SERVER_INSTANCES);
         VillagerTradeRewriter.setBackend(SERVER_INSTANCES);
+        AdminFlagSync.setBackend(SERVER_INSTANCES);
 
         boolean isMaster = BankSystemMod.getAPI().getServerBankManager().isMaster();
         villagerAutosaveTicks = 0;
@@ -303,6 +305,7 @@ public class StockMarketModBackend implements StockMarketAPI {
 
             loadDataFromFiles(UtilitiesPlatform.getServer());
             preRegisterPresetItemStacks();
+            AdminFlagSync.migrateIfNeeded(); // one-time push of admins to LuckPerms (setting on), users are loaded now
             registerItemPriceProvider();
 
             // Villager trade repricing: build the initial price table now that

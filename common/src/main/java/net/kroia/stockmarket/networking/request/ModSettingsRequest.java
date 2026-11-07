@@ -302,6 +302,11 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
         //   max order size is derived (new markets/presets, saves without a value, the
         //   APPLY_MAX_ORDER_VOLUME_TO_ALL_MARKETS action). Markets/presets live only on the
         //   master — no propagation needed. Changing it does NOT touch existing markets.
+        // * Utilities.SYNC_ADMIN_FLAG_WITH_PERMISSION: read live, master only (the admin flags
+        //   live on the master). Slaves keep defaults and forward LuckPerms changes of their
+        //   players whenever the master trusts them; the master applies them only while this
+        //   value is on (AsyncMarketManager SyncAdminFlagFromPermission). Turning it on here may
+        //   trigger the one-time LuckPerms migration (below). No propagation needed.
         String villagerAfter = store.toJsonString(settings.VILLAGER_TRADING);
         if (!villagerAfter.equals(villagerBefore) && BACKEND_INSTANCES.VILLAGER_TRADE_MANAGER != null) {
             BACKEND_INSTANCES.VILLAGER_TRADE_MANAGER.recomputeTable();
@@ -314,6 +319,7 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
         info("Mod settings updated by " + getPlayerName(playerSender) + (saved ? " (persisted)" : " (PERSIST FAILED)"));
 
         boolean success = saved && applyError == null;
+        net.kroia.stockmarket.util.AdminFlagSync.migrateIfNeeded(); // setting may have just been turned on
         return CompletableFuture.completedFuture(new OutputData(success,
                 applyError == null ? "" : applyError,
                 store.toJsonString(settings.getEditableGroups())));
