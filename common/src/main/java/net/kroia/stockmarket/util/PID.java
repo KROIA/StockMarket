@@ -20,7 +20,6 @@ public class PID implements ServerSaveable {
     /** Symmetric bound for the filtered output, see {@link #setOutputLimit(double)}. Unbounded by default. */
     private double outputLimit = Double.POSITIVE_INFINITY;
 
-    private long lastMillis;
     public PID(double kp, double ki, double kd, double iBound)
     {
         this.kp = kp;
@@ -30,7 +29,6 @@ public class PID implements ServerSaveable {
         this.iBound = iBound;
         this.i = 0;
         this.lastError = 0;
-        lastMillis = System.currentTimeMillis();
     }
 
     @Override
@@ -105,18 +103,20 @@ public class PID implements ServerSaveable {
     public double getLastError() {
         return lastError;
     }
-    public void setCurrentMillis()
+    /**
+     * Advances the controller by one step.
+     * <p>
+     * The caller passes the step time (e.g. tick time) instead of the controller reading the wall clock,
+     * so results are deterministic and the I/D terms work when steps run faster than real time (replays).
+     *
+     * @param error      target minus current value
+     * @param dtSeconds  time since the previous update in seconds; clamped to 1 s so a long pause can't
+     *                   saturate the integral term in one step; 0 disables the derivative term for this step
+     * @return the filtered, output-limited controller output
+     */
+    public double update(double error, double dtSeconds)
     {
-        lastMillis = System.currentTimeMillis();
-    }
-
-    public double update(double error)
-    {
-        long millis = System.currentTimeMillis();
-        // Clamp dt to 1 s: after a long pause (market closed outside trading hours, server lag)
-        // the elapsed time would otherwise saturate the integral term in a single step.
-        double dt = Math.min((millis - lastMillis)/1000.0f, 1.0);
-        lastMillis = millis;
+        double dt = Math.min(dtSeconds, 1.0);
         i += error*dt * ki;
         if(i > iBound)
             i = iBound;

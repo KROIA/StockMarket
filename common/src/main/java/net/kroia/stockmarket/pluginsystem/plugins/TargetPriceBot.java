@@ -203,7 +203,7 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
                 settings != null ? settings.maxTargetMovePerSecond() : DEFAULT_MAX_TARGET_MOVE_PER_SECOND, STEP_SECONDS);
         double currentPrice = market.market.getPrice();
 
-        double output = data.pid.update(data.targetPrice - currentPrice);
+        double output = data.pid.update(data.targetPrice - currentPrice, STEP_SECONDS);
         // Clamp PID output to [-1, 1] as a fraction of how aggressively to push
         double pidFraction = Math.min(Math.max(-1, output), 1);
 

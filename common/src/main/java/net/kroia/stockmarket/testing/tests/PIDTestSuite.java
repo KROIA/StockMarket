@@ -10,6 +10,8 @@ import net.minecraft.nbt.CompoundTag;
 public class PIDTestSuite extends TestSuite {
 
     private static final double EPSILON = 0.0001;
+    /** Step time passed to every update (the bot's step: 5 ticks). */
+    private static final double DT = 0.25;
 
     @Override
     public TestCategory getCategory() {
@@ -27,16 +29,16 @@ public class PIDTestSuite extends TestSuite {
         addTest("output_smoothing", this::test_outputSmoothing);
         addTest("load_missing_fields", this::test_load_missingFields);
         addTest("output_limit_bounds_windup_and_flips_fast", this::test_outputLimit_boundsWindupAndFlipsFast);
+        addTest("integral_uses_given_dt", this::test_integralUsesGivenDt);
+        addTest("deterministic", this::test_deterministic);
     }
 
     private TestResult test_proportionalOnly() {
         PID pid = new PID(2.0, 0.0, 0.0, 100.0);
-        pid.setCurrentMillis();
-        double output = pid.update(10.0);
+        double output = pid.update(10.0, DT);
         // The PID uses smoothing: output = 0.5*lastOutput + 0.5*(kp*error + i + kd*dError/dt)
         // First call: lastOutput=0, so output = 0.5 * (2.0 * 10.0) = 10.0
-        // Due to timing-dependent derivative term (kd=0 here), the proportional part dominates
-        if (Math.abs(output - 10.0) > 1.0) {
+        if (Math.abs(output - 10.0) > EPSILON) {
             return fail("With kp=2.0 and error=10, output should be approximately 10.0 but was " + output);
         }
         return pass("Proportional-only output is proportional to error");
@@ -44,9 +46,8 @@ public class PIDTestSuite extends TestSuite {
 
     private TestResult test_integralAccumulation() {
         PID pid = new PID(0.0, 1.0, 0.0, 1000.0);
-        pid.setCurrentMillis();
-        double firstOutput = pid.update(10.0);
-        double secondOutput = pid.update(10.0);
+        double firstOutput = pid.update(10.0, DT);
+        double secondOutput = pid.update(10.0, DT);
         // The integral term accumulates over time, so successive outputs should grow
         // (assuming small dt between calls, the integral accumulates error*dt*ki)
         // With kp=0 and kd=0, the output comes purely from the integral term
@@ -61,9 +62,8 @@ public class PIDTestSuite extends TestSuite {
     private TestResult test_integralBoundClamping() {
         double iBound = 5.0;
         PID pid = new PID(0.0, 100.0, 0.0, iBound);
-        pid.setCurrentMillis();
         for (int j = 0; j < 100; j++) {
-            pid.update(1000.0);
+            pid.update(1000.0, DT);
         }
         double output = pid.getOutput();
         // The integral is clamped to [-iBound, iBound], so the output (which is just the
@@ -77,9 +77,8 @@ public class PIDTestSuite extends TestSuite {
 
     private TestResult test_save_load_roundTrip() {
         PID original = new PID(1.5, 0.3, 0.7, 50.0);
-        original.setCurrentMillis();
-        original.update(5.0);
-        original.update(3.0);
+        original.update(5.0, DT);
+        original.update(3.0, DT);
 
         CompoundTag tag = new CompoundTag();
         original.save(tag);
@@ -110,13 +109,10 @@ public class PIDTestSuite extends TestSuite {
     private TestResult test_update_derivativeResponse() {
         // kp=0, ki=0, only kd active. Output should respond to error change rate.
         PID pid = new PID(0.0, 0.0, 5.0, 100.0);
-        pid.setCurrentMillis();
         // First update with error=0 to establish baseline
-        try { Thread.sleep(10); } catch (InterruptedException e) { /* ignore */ }
-        pid.update(0.0);
+        pid.update(0.0, DT);
         // Second update with a jump in error
-        try { Thread.sleep(10); } catch (InterruptedException e) { /* ignore */ }
-        double output = pid.update(10.0);
+        double output = pid.update(10.0, DT);
         // With only derivative term active and a positive error change, output should be non-zero
         // output = 0.5*lastOutput + 0.5*(kd*(error - lastError)/dt)
         // lastError after first call is smoothed: 0*0.5 + 0*0.5 = 0
@@ -129,10 +125,9 @@ public class PIDTestSuite extends TestSuite {
 
     private TestResult test_update_dtDivisionByZero() {
         PID pid = new PID(1.0, 0.0, 1.0, 100.0);
-        pid.setCurrentMillis();
         try {
-            double out1 = pid.update(5.0);
-            double out2 = pid.update(5.0);
+            double out1 = pid.update(5.0, 0.0);
+            double out2 = pid.update(5.0, 0.0);
             if (Double.isNaN(out2) || Double.isInfinite(out2)) {
                 return fail("Output should not be NaN/Infinite when dt=0, got " + out2);
             }
@@ -146,14 +141,11 @@ public class PIDTestSuite extends TestSuite {
         // Output uses 50% smoothing: output = 0.5*lastOutput + 0.5*(computed)
         // First call: lastOutput=0, so output = 0.5 * 0 + 0.5 * computed = 0.5 * computed
         PID pid = new PID(2.0, 0.0, 0.0, 100.0);
-        pid.setCurrentMillis();
-        try { Thread.sleep(10); } catch (InterruptedException e) { /* ignore */ }
-        double firstOutput = pid.update(10.0);
+        double firstOutput = pid.update(10.0, DT);
         // With kp=2, ki=0, kd=0: raw = kp*error = 20.0
         // output = 0.5*0 + 0.5*20 = 10.0 (approximately, ignoring tiny dt-dependent derivative)
         // Second call with same error:
-        try { Thread.sleep(10); } catch (InterruptedException e) { /* ignore */ }
-        double secondOutput = pid.update(10.0);
+        double secondOutput = pid.update(10.0, DT);
         // lastError was smoothed to ~5.0 after first call, so error for second = 10.0
         // raw = kp*10 + kd*(10-5)/dt ~= 20 (kd=0)
         // output = 0.5*firstOutput + 0.5*20
@@ -182,17 +174,42 @@ public class PIDTestSuite extends TestSuite {
      * Without the limit the filter memory reaches ~-50 here and the sign stays negative for ~5 updates.
      */
     private TestResult test_outputLimit_boundsWindupAndFlipsFast() {
-        PID pid = new PID(0.5, 0.0, 0.0, 0.1); // ki = kd = 0: independent of wall-clock dt
+        PID pid = new PID(0.5, 0.0, 0.0, 0.1); // ki = kd = 0: independent of dt
         pid.setOutputLimit(1.0);
         for (int j = 0; j < 50; j++) {
-            double out = pid.update(-100.0);
+            double out = pid.update(-100.0, DT);
             if (out < -1.0 - EPSILON || out > 1.0 + EPSILON)
                 return fail("Output " + out + " left the limit [-1, 1] at update " + j);
         }
         // Error flips: price crossed the target. 0.5*(-1) + 0.5*(0.5*5) = 0.75
-        double flipped = pid.update(5.0);
+        double flipped = pid.update(5.0, DT);
         if (flipped <= 0)
             return fail("Output must flip sign within one update after the error flips, got " + flipped);
         return pass("Output stays within the limit and flips sign on the first update after the error flips");
+    }
+
+    /** T-201: the integral uses the passed step time: after one step i = err * dt * ki. */
+    private TestResult test_integralUsesGivenDt() {
+        PID pid = new PID(0.0, 2.0, 0.0, 1000.0);
+        double out = pid.update(10.0, 0.25);
+        // i = 10 * 0.25 * 2 = 5; output = 0.5 * 0 + 0.5 * 5 = 2.5
+        TestResult r = assertTrue("output 2.5 expected, got " + out, Math.abs(out - 2.5) < EPSILON);
+        if (!r.passed()) return r;
+        // dt is clamped to 1 s: i += 10 * 1 * 2 = 20 -> i = 25; output = 0.5 * 2.5 + 0.5 * 25 = 13.75
+        out = pid.update(10.0, 60.0);
+        return assertTrue("dt clamped to 1 s: output 13.75 expected, got " + out, Math.abs(out - 13.75) < EPSILON);
+    }
+
+    /** T-201: no wall clock: two controllers fed the same inputs give bit-identical outputs. */
+    private TestResult test_deterministic() {
+        PID a = new PID(0.5, 0.1, 0.2, 0.1);
+        PID b = new PID(0.5, 0.1, 0.2, 0.1);
+        for (int j = 0; j < 200; j++) {
+            double err = Math.sin(j * 0.37) * 100;
+            double oa = a.update(err, DT);
+            double ob = b.update(err, DT);
+            if (oa != ob) return fail("Outputs differ at step " + j + ": " + oa + " vs " + ob);
+        }
+        return pass("Same inputs give the same outputs");
     }
 }
