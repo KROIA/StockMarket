@@ -27,6 +27,12 @@ public class PluginMarket implements IPluginMarket
         return serverMarket.getItemID();
     }
 
+    @Override
+    public double getMaxRealOrderVolume()
+    {
+        return serverMarket.getMaxRealOrderVolume();
+    }
+
     /*@Override
     public int getStreamPacketSendTickInterval() {
         return 0;

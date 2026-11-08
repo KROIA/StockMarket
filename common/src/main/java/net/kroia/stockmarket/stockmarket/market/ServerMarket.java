@@ -17,6 +17,7 @@ import net.kroia.stockmarket.stockmarket.market.core.order.Order;
 import net.kroia.stockmarket.stockmarket.market.core.MatchingEngine;
 import net.kroia.stockmarket.stockmarket.market.core.Orderbook;
 import net.kroia.modutilities.ServerPlayerUtilities;
+import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
@@ -199,6 +200,11 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     public ItemID getItemID()
     {
         return itemID;
+    }
+    @Override
+    public double getMaxRealOrderVolume()
+    {
+        return MarketManager.convertToRealAmountStatic(settings.maxOrderVolume);
     }
     @Override
     public ItemID getItemIDAsync() {

@@ -80,23 +80,29 @@ public class VirtualOrderbook implements ServerSaveable
     public void setCurrentMarketPrice(long currentMarketPrice)
     {
         this.currentMarketPrice = currentMarketPrice;
+        updateDynamicArrayOffset(currentMarketPrice);
+    }
+
+
+    public void updateDynamicArrayOffset(long newMarketPrice)
+    {
         long oldOffset = dynamicArray.getIndexOffset();
         int size = dynamicArray.getSize();
         int sizeForth = size/4;
-        if(currentMarketPrice > oldOffset + sizeForth*3 || currentMarketPrice < oldOffset + sizeForth)
+        if(newMarketPrice > oldOffset + sizeForth*3 || newMarketPrice < oldOffset + sizeForth)
         {
-            long newOffset = currentMarketPrice - size/2;
+            long newOffset = newMarketPrice - size/2;
             dynamicArray.setOffset(newOffset);
             if(newOffset > oldOffset)
             {
                 // Up move: zero [max(oldEnd, newOffset), price)
-                for(long p = Math.max(oldOffset + size, newOffset); p < currentMarketPrice; p++)
+                for(long p = Math.max(oldOffset + size, newOffset); p < newMarketPrice; p++)
                     dynamicArray.set(p, 0f);
             }
             else
             {
                 // Down move: zero (price, min(oldOffset, newEnd))
-                for(long p = currentMarketPrice + 1; p < Math.min(oldOffset, newOffset + size); p++)
+                for(long p = newMarketPrice + 1; p < Math.min(oldOffset, newOffset + size); p++)
                     dynamicArray.set(p, 0f);
             }
         }

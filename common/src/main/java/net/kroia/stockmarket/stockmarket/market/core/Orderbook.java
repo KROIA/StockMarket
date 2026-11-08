@@ -103,6 +103,10 @@ public class Orderbook implements ServerSaveable
         this.currentMarketPrice = currentMarketPrice;
         virtualOrderbook.setCurrentMarketPrice(currentMarketPrice);
     }
+    public void updateDynamicArrayOffset(long newMarketPrice)
+    {
+        virtualOrderbook.updateDynamicArrayOffset(newMarketPrice);
+    }
 
     public boolean putOrder(Order order)
     {

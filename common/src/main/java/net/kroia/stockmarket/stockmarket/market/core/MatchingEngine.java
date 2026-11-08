@@ -849,6 +849,7 @@ public class MatchingEngine
             processSell(order, orderVolume, itemBank, moneyBank, minAcceptedPrice);
         else
             processBuy(order, orderVolume, itemBank, moneyBank, maxAcceptedPrice);
+        orderbook.setCurrentMarketPrice(currentMarketPrice);
     }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -985,7 +986,6 @@ public class MatchingEngine
 
 
         commitSell(itemBank, moneyBank, itemDelta, moneyDelta, order);
-        orderbook.setCurrentMarketPrice(currentMarketPrice);
     }
     private void processBotSell(Order order, long orderVolume, long minimalAcceptedPrice)
     {
@@ -1153,7 +1153,6 @@ public class MatchingEngine
         moneyDelta  = result[2];
 
         commitBuy(itemBank, moneyBank, itemDelta, moneyDelta, order);
-        orderbook.setCurrentMarketPrice(currentMarketPrice);
     }
     private void processBotBuy(Order order, long orderVolume, long maximalAcceptedPrice)
     {
@@ -1195,12 +1194,15 @@ public class MatchingEngine
                     currentMarketPrice = nextExecutedPrice;
                 }
                 // If we emptied this price level, step down
-                if (virtualVol + filled == 0 && orderVolume != 0)
+                if (virtualVol + filled == 0 && orderVolume != 0) {
                     nextExecutedPrice -= 1;
+                    orderbook.updateDynamicArrayOffset(nextExecutedPrice);
+                }
             }
             else
             {
                 nextExecutedPrice -= 1;
+                orderbook.updateDynamicArrayOffset(nextExecutedPrice);
             }
 
             if (nextExecutedPrice <= 0)
@@ -1215,7 +1217,7 @@ public class MatchingEngine
                 break;
             }
         }
-        orderbook.setCurrentMarketPrice(currentMarketPrice);
+        //orderbook.setCurrentMarketPrice(currentMarketPrice);
         return new long[]{ orderVolume, itemDelta, moneyDelta };
     }
     /**
@@ -1265,12 +1267,15 @@ public class MatchingEngine
                 }
 
                 // If we emptied this price level, step up
-                if (virtualVol + filled == 0 && orderVolume != 0)
+                if (virtualVol + filled == 0 && orderVolume != 0) {
                     nextExecutedPrice += 1;
+                    orderbook.updateDynamicArrayOffset(nextExecutedPrice);
+                }
             }
             else
             {
                 nextExecutedPrice += 1;
+                orderbook.updateDynamicArrayOffset(nextExecutedPrice);
             }
             timeout--;
             if(timeout <= 0)
@@ -1279,7 +1284,7 @@ public class MatchingEngine
                 break;
             }
         }
-        orderbook.setCurrentMarketPrice(currentMarketPrice);
+        //orderbook.setCurrentMarketPrice(currentMarketPrice);
         return new long[]{ orderVolume, itemDelta, moneyDelta, availableFunds };
     }
 

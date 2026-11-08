@@ -12,6 +12,13 @@ public interface IPluginMarket {
 
 
     /**
+     * Gets the maximum volume size a player is allowed to palce an order of.
+     * @return
+     */
+    double getMaxRealOrderVolume();
+
+
+    /**
      * Gets the interval in ticks at which the plugin should send stream packets to clients.
      * @return The tick interval for sending stream packets.
      */

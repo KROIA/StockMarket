@@ -55,6 +55,7 @@ public interface ISyncServerMarket {
 
 
     ItemID getItemID();
+    double getMaxRealOrderVolume();
     long getDefaultPrice();
     long getCurrentMarketPrice();
     long getCurrentTime();
