@@ -55,6 +55,10 @@ public interface ISyncServerMarket {
 
 
     ItemID getItemID();
+    /**
+     * Gets the maximum volume of a single player order on this market.
+     * @return the limit in real items; 0 = unlimited
+     */
     double getMaxRealOrderVolume();
     long getDefaultPrice();
     long getCurrentMarketPrice();

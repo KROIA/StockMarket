@@ -12,8 +12,8 @@ public interface IPluginMarket {
 
 
     /**
-     * Gets the maximum volume size a player is allowed to palce an order of.
-     * @return
+     * Gets the maximum volume a player is allowed to place in a single order on this market.
+     * @return the limit in real items; 0 = unlimited
      */
     double getMaxRealOrderVolume();
 

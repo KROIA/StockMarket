@@ -9,7 +9,6 @@ import net.kroia.stockmarket.pluginsystem.plugin.ServerPlugin;
 import net.kroia.stockmarket.util.PID;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
-import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 
 import java.util.ArrayList;
@@ -20,16 +19,40 @@ import java.util.Map;
 public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, TargetPriceBot.RuntimeStreamData> {
 
     /**
-     * Custom settings record for the TargetPriceBot PID controller gains.
+     * Custom per-market settings of the TargetPriceBot.
+     *
+     * @param pidP                 proportional gain
+     * @param pidI                 integral gain
+     * @param pidD                 derivative gain
+     * @param pidRate              integral limit (anti-windup)
+     * @param maxOrderVolumeFactor max volume of one bot order as a multiple of the market's player
+     *                             order limit ({@code MarketSettings.maxOrderVolume}). A factor keeps the
+     *                             bot limit tracking per-market limit changes. &lt;= 0, or a market
+     *                             without a player limit (0 = unlimited), means no bot limit.
      */
-    public record Settings(float pidP, float pidI, float pidD, float pidRate) {
-        public static final StreamCodec<ByteBuf, Settings> CODEC = StreamCodec.composite(
-                ByteBufCodecs.FLOAT, Settings::pidP,
-                ByteBufCodecs.FLOAT, Settings::pidI,
-                ByteBufCodecs.FLOAT, Settings::pidD,
-                ByteBufCodecs.FLOAT, Settings::pidRate,
-                Settings::new
-        );
+    public record Settings(float pidP, float pidI, float pidD, float pidRate, float maxOrderVolumeFactor) {
+        public static final StreamCodec<ByteBuf, Settings> CODEC = new StreamCodec<>() {
+            @Override
+            public Settings decode(ByteBuf buf) {
+                float p = buf.readFloat();
+                float i = buf.readFloat();
+                float d = buf.readFloat();
+                float rate = buf.readFloat();
+                // Backward compatibility: saves before the volume limit stored only the 4 PID floats.
+                // Every decode path wraps exactly one settings payload per buffer, so "no bytes left"
+                // identifies the old format.
+                float factor = buf.isReadable() ? buf.readFloat() : DEFAULT_MAX_ORDER_VOLUME_FACTOR;
+                return new Settings(p, i, d, rate, factor);
+            }
+            @Override
+            public void encode(ByteBuf buf, Settings s) {
+                buf.writeFloat(s.pidP());
+                buf.writeFloat(s.pidI());
+                buf.writeFloat(s.pidD());
+                buf.writeFloat(s.pidRate());
+                buf.writeFloat(s.maxOrderVolumeFactor());
+            }
+        };
     }
 
     /**
@@ -92,6 +115,20 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
     private static final float DEFAULT_PID_I = 0.1f;
     private static final float DEFAULT_PID_D = 0.0f;
     private static final float DEFAULT_PID_RATE = 0.1f;
+    /** Default bot order limit: 10x the market's player order limit. */
+    public static final float DEFAULT_MAX_ORDER_VOLUME_FACTOR = 10f;
+
+    /**
+     * Max volume of one bot order.
+     *
+     * @param maxPlayerOrderVolume the market's player order limit in real items; &lt;= 0 = unlimited
+     * @param factor               bot limit as a multiple of the player limit; &lt;= 0 = unlimited
+     * @return the limit in real items, {@link Double#POSITIVE_INFINITY} if unlimited
+     */
+    public static double botOrderVolumeLimit(double maxPlayerOrderVolume, float factor) {
+        if (maxPlayerOrderVolume <= 0 || factor <= 0) return Double.POSITIVE_INFINITY;
+        return maxPlayerOrderVolume * factor;
+    }
 
 
 
@@ -139,7 +176,11 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
         // Size from virtual depth only: counting resting player limit orders here let the bot fill a
         // whole player order in one go at its limit price, before the player's flow could move the price.
         float volumeToTarget = market.oderBook.getRealVirtualVolume(currentPrice, data.targetPrice);
-        double absVolumeToTarget = Math.min(market.market.getMaxRealOrderVolume()*10, Math.abs(volumeToTarget));
+        // Cap the order: an oversized bot order walks the price through the whole virtual book in one
+        // tick and can fill a far-away player limit order at its price (trading exploit).
+        Settings settings = getCustomSettings(market.market.getMarketID());
+        float factor = settings != null ? settings.maxOrderVolumeFactor() : DEFAULT_MAX_ORDER_VOLUME_FACTOR;
+        double absVolumeToTarget = Math.min(botOrderVolumeLimit(market.market.getMaxRealOrderVolume(), factor), Math.abs(volumeToTarget));
 
         double normalized;
         if (absVolumeToTarget < 0.01) {
@@ -220,7 +261,7 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
 
     @Override
     protected Settings provideDefaultCustomSettings() {
-        return new Settings(DEFAULT_PID_P, DEFAULT_PID_I, DEFAULT_PID_D, DEFAULT_PID_RATE);
+        return new Settings(DEFAULT_PID_P, DEFAULT_PID_I, DEFAULT_PID_D, DEFAULT_PID_RATE, DEFAULT_MAX_ORDER_VOLUME_FACTOR);
     }
 
     @Override

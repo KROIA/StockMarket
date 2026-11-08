@@ -54,6 +54,8 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
         public static final Component I_GAIN_TOOLTIP = Component.translatable(PREFIX + "i_gain.tooltip");
         public static final Component D_GAIN_TOOLTIP = Component.translatable(PREFIX + "d_gain.tooltip");
         public static final Component RATE_TOOLTIP = Component.translatable(PREFIX + "rate.tooltip");
+        public static final Component LABEL_MAX_ORDER_FACTOR = Component.translatable(PREFIX + "max_order_factor");
+        public static final Component MAX_ORDER_FACTOR_TOOLTIP = Component.translatable(PREFIX + "max_order_factor.tooltip");
     }
 
     private final CandlestickChart candlestickChart;
@@ -69,6 +71,9 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
     private final TextBox dGainTextBox;
     private final Label rateLabel;
     private final TextBox rateTextBox;
+    /** Bot order limit as a multiple of the market's player order limit (TargetPriceBot.Settings#maxOrderVolumeFactor). */
+    private final Label maxOrderFactorLabel;
+    private final TextBox maxOrderFactorTextBox;
     private final Button applyButton;
     private final Button applyAllButton;
     /** Holds Apply + Apply-to-all side by side as one row of the vertical settings list. */
@@ -121,6 +126,11 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
         rateTextBox = new TextBox();
         rateTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, true, 10, 6));
 
+        // Bot order volume limit factor (non-negative, 0 = unlimited)
+        maxOrderFactorLabel = new Label(Texts.LABEL_MAX_ORDER_FACTOR.getString());
+        maxOrderFactorTextBox = new TextBox();
+        maxOrderFactorTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 10, 3));
+
         applyButton = new Button(Texts.APPLY_BUTTON.getString(), this::onApplySettings);
         applyAllButton = new Button(ApplyAllTexts.APPLY_ALL.getString(), () -> confirmApplyToAllMarkets(readSettings()));
         setSettingTooltip(ApplyAllTexts.APPLY_ALL_TOOLTIP, applyAllButton);
@@ -145,6 +155,7 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
         setSettingTooltip(Texts.I_GAIN_TOOLTIP, iGainLabel, iGainTextBox);
         setSettingTooltip(Texts.D_GAIN_TOOLTIP, dGainLabel, dGainTextBox);
         setSettingTooltip(Texts.RATE_TOOLTIP, rateLabel, rateTextBox);
+        setSettingTooltip(Texts.MAX_ORDER_FACTOR_TOOLTIP, maxOrderFactorLabel, maxOrderFactorTextBox);
 
         settingsListView.addChild(pGainLabel);
         settingsListView.addChild(pGainTextBox);
@@ -154,6 +165,8 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
         settingsListView.addChild(dGainTextBox);
         settingsListView.addChild(rateLabel);
         settingsListView.addChild(rateTextBox);
+        settingsListView.addChild(maxOrderFactorLabel);
+        settingsListView.addChild(maxOrderFactorTextBox);
         settingsListView.addChild(applyButtonRow);
 
         addChild(candlestickChart);
@@ -291,6 +304,7 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
             iGainTextBox.setText(s.pidI(), 6);
             dGainTextBox.setText(s.pidD(), 6);
             rateTextBox.setText(s.pidRate(), 6);
+            maxOrderFactorTextBox.setText(s.maxOrderVolumeFactor(), 3);
         }
     }
 
@@ -305,13 +319,14 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
         }
     }
 
-    /** Builds the PID settings from the current input values. */
+    /** Builds the bot settings (PID gains + order volume limit factor) from the current input values. */
     private TargetPriceBot.Settings readSettings() {
         return new TargetPriceBot.Settings(
                 (float) pGainTextBox.getDouble(),
                 (float) iGainTextBox.getDouble(),
                 (float) dGainTextBox.getDouble(),
-                (float) rateTextBox.getDouble()
+                (float) rateTextBox.getDouble(),
+                (float) Math.max(0, maxOrderFactorTextBox.getDouble())
         );
     }
 

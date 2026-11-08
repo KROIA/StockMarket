@@ -61,6 +61,7 @@ public class PluginTestSuite extends TestSuite {
         // TargetPriceBot scenarios
         addTest("targetPriceBot_noOvershootAfterWindup", this::test_targetPriceBot_noOvershootAfterWindup);
         addTest("targetPriceBot_priceJump_noMirroredBidWall_converges", this::test_targetPriceBot_priceJump_noMirroredBidWall_converges);
+        addTest("targetPriceBot_orderVolumeLimit", this::test_targetPriceBot_orderVolumeLimit);
     }
 
     @Override
@@ -261,6 +262,7 @@ public class PluginTestSuite extends TestSuite {
                 new Class<?>[]{IPluginMarket.class}, (proxy, method, args) -> switch (method.getName()) {
                     case "getMarketID" -> itemID;
                     case "isVirtualOrderbookEnabled" -> true;
+                    case "getMaxRealOrderVolume" -> 0.0; // unlimited: this scenario is about PID behavior, not the size cap
                     case "getPreviousTargetPrice", "getTargetPrice" -> target;
                     case "getPrice" -> price[0];
                     case "placeOrder" -> {
@@ -301,6 +303,56 @@ public class PluginTestSuite extends TestSuite {
             if (Math.abs(price[0] - target) > 0.5)
                 return fail("Price did not converge to target " + target + ", ended at " + price[0]);
             return pass("Bot buys right after the shock and converges to " + price[0]);
+        } catch (Exception e) {
+            return fail("Exception: " + e);
+        }
+    }
+
+    /**
+     * Trading exploit fix: a bot order never exceeds {@code maxOrderVolumeFactor x} the market's player
+     * order limit, the limit is off when the player limit is 0 (unlimited), and settings saved before the
+     * factor existed (4 PID floats) decode with the default factor.
+     */
+    private TestResult test_targetPriceBot_orderVolumeLimit() {
+        final double playerLimit = 5;
+        final double[] maxOrder = {0};
+        IPluginMarket market = (IPluginMarket) Proxy.newProxyInstance(IPluginMarket.class.getClassLoader(),
+                new Class<?>[]{IPluginMarket.class}, (proxy, method, args) -> switch (method.getName()) {
+                    case "getMarketID" -> itemID;
+                    case "isVirtualOrderbookEnabled" -> true;
+                    case "getMaxRealOrderVolume" -> playerLimit;
+                    case "getPreviousTargetPrice", "getTargetPrice" -> 1000.0;
+                    case "getPrice" -> 100.0; // far below target, huge depth -> PID wants a big buy
+                    case "placeOrder" -> {
+                        maxOrder[0] = Math.max(maxOrder[0], Math.abs((Double) args[0]));
+                        yield 0L;
+                    }
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
+        IPluginOrderBook book = (IPluginOrderBook) Proxy.newProxyInstance(IPluginOrderBook.class.getClassLoader(),
+                new Class<?>[]{IPluginOrderBook.class}, (proxy, method, args) -> switch (method.getName()) {
+                    case "getRealVirtualVolume" -> -1e6f;
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
+        try {
+            TargetPriceBot bot = new TargetPriceBot();
+            bot.onMarketSubscribed(itemID);
+            List<MarketInterface> markets = List.of(new MarketInterface(market, book));
+            for (int t = 0; t < 50; t++) bot.update(markets);
+            double cap = playerLimit * TargetPriceBot.DEFAULT_MAX_ORDER_VOLUME_FACTOR;
+            if (maxOrder[0] <= 0 || maxOrder[0] > cap + 1e-6)
+                return fail("Largest bot order " + maxOrder[0] + ", expected in (0, " + cap + "]");
+            if (TargetPriceBot.botOrderVolumeLimit(0, 10) != Double.POSITIVE_INFINITY
+                    || TargetPriceBot.botOrderVolumeLimit(5, 0) != Double.POSITIVE_INFINITY)
+                return fail("Limit must be off for player limit 0 or factor 0");
+
+            io.netty.buffer.ByteBuf legacy = io.netty.buffer.Unpooled.buffer();
+            for (int i = 0; i < 4; i++) legacy.writeFloat(0.5f);
+            TargetPriceBot.Settings decoded = TargetPriceBot.Settings.CODEC.decode(legacy);
+            legacy.release();
+            if (decoded.maxOrderVolumeFactor() != TargetPriceBot.DEFAULT_MAX_ORDER_VOLUME_FACTOR || decoded.pidP() != 0.5f)
+                return fail("Legacy settings decoded as " + decoded);
+            return pass("Largest bot order " + maxOrder[0] + " <= " + cap + ", legacy settings load with the default factor");
         } catch (Exception e) {
             return fail("Exception: " + e);
         }
