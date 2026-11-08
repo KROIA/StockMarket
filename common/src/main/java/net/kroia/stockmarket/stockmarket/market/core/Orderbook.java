@@ -108,6 +108,15 @@ public class Orderbook implements ServerSaveable
         virtualOrderbook.updateDynamicArrayOffset(newMarketPrice);
     }
 
+    /**
+     * T-198: fades the virtual depth memory by one tick. See {@link VirtualOrderbook#fadeDepthMemory(double)}.
+     * @param dtSeconds elapsed time in seconds
+     */
+    public void fadeVirtualDepthMemory(double dtSeconds)
+    {
+        virtualOrderbook.fadeDepthMemory(dtSeconds);
+    }
+
     public boolean putOrder(Order order)
     {
         if(order.isBuyOrder())

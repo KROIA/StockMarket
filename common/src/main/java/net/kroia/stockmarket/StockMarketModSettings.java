@@ -181,6 +181,27 @@ public class StockMarketModSettings extends ModSettings {
         public final Setting<Float> NET_FLOW_HALF_LIFE_MINUTES = registerSetting("NET_FLOW_HALF_LIFE_MINUTES", 10f, Float.class);
 
         /**
+         * T-198: recovery half-life in minutes of the virtual depth memory. Virtual (default) volume
+         * consumed outside the hi-res array window stays thin and recovers toward the full default:
+         * the missing fraction halves every half-life. 0 = memory off (depth outside the window is
+         * always the full default, the pre-T-198 behaviour).
+         * <p>
+         * Read live (every tick and on every window move) — no restart required.
+         * <p>
+         * Slave-propagation: NOT needed. Markets only live on the master.
+         */
+        public final Setting<Float> VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES = registerSetting("VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES", 30f, Float.class);
+
+        /**
+         * T-198: price ceiling of the virtual depth: no default ask volume exists above
+         * {@code multiplier x current price}. This ends an order walk through the ask side (it
+         * replaces the former walk level limit); the remainder of a market buy is canceled there.
+         * <p>
+         * Read live — no restart required. Slave-propagation: NOT needed (master only).
+         */
+        public final Setting<Float> VIRTUAL_DEPTH_MAX_PRICE_MULTIPLIER = registerSetting("VIRTUAL_DEPTH_MAX_PRICE_MULTIPLIER", 100f, Float.class);
+
+        /**
          * #89: realized trading profit (real money, sum over all markets) a single player may make within
          * {@link #PROFIT_ALERT_WINDOW_MINUTES} before online admins get a chat alert and the event is
          * written to the server log. "Realized" = net money of the player's completed/cancelled orders

@@ -74,9 +74,6 @@ public class DepthSimulation
         buyOrders.sort((a, b) -> Long.compare(b.getStartPrice(), a.getStartPrice()));
 
         int buyOrderIndex = 0;
-        // Safety bound of the engine's walk (MatchingEngine.walkLevelLimit)
-        long bound = orderbook.hasDefaultVirtualVolume() ? currentPrice - MatchingEngine.getWalkLevelLimit() : Long.MIN_VALUE;
-        boolean aborted = false;
 
         // Walk through real orders interleaved with virtual depth,
         // mirroring MatchingEngine.processSell's for-loop over buyOrderSnapshot
@@ -91,10 +88,10 @@ public class DepthSimulation
 
             // --- Drain virtual buy-side depth from walkPrice down to stopPrice ---
             // Mirrors MatchingEngine.drainVirtualSell(orderVolume, itemDelta, moneyDelta, stopPrice)
-            long end = Math.max(Math.max(stopPrice, 1), bound);
+            long end = Math.max(stopPrice, 1);
             while (remainingSellVolume < 0)
             {
-                if (walkPrice < end) { aborted = end > Math.max(stopPrice, 1); break; }
+                if (walkPrice < end) break;
                 long virtualVol = orderbook.getRawVirtualVolumeRounded(walkPrice);
                 if (virtualVol > 0)
                 {
@@ -119,14 +116,10 @@ public class DepthSimulation
                 {
                     // Skip empty levels exactly (never over volume)
                     long found = walkPrice > end ? orderbook.findVirtualVolume(walkPrice - 1, end, false) : VirtualOrderbook.NO_VOLUME;
-                    if (found == VirtualOrderbook.NO_VOLUME) { walkPrice = end; aborted = end > Math.max(stopPrice, 1); break; }
+                    if (found == VirtualOrderbook.NO_VOLUME) { walkPrice = end; break; }
                     walkPrice = found;
                 }
             }
-            // Safety bound reached before the next real order: the engine cancels the rest here
-            if (aborted)
-                break;
-
             // --- Match against the next real buy order ---
             if (buyOrderIndex < buyOrders.size() && remainingSellVolume < 0)
             {
@@ -219,10 +212,6 @@ public class DepthSimulation
         sellOrders.sort(Comparator.comparingLong(Order::getStartPrice));
 
         int sellOrderIndex = 0;
-        // Safety bound of the engine's walk (MatchingEngine.walkLevelLimit)
-        long bound = orderbook.hasDefaultVirtualVolume()
-                ? MatchingEngine.saturatedAdd(currentPrice, MatchingEngine.getWalkLevelLimit()) : Long.MAX_VALUE;
-        boolean aborted = false;
 
         // Walk through real orders interleaved with virtual depth,
         // mirroring MatchingEngine.processBuy's for-loop over sellOrderSnapshot
@@ -237,10 +226,11 @@ public class DepthSimulation
 
             // --- Drain virtual sell-side depth from walkPrice up to stopPrice ---
             // Mirrors MatchingEngine.drainVirtualBuy(orderVolume, itemDelta, moneyDelta, stopPrice, availableFunds)
-            long end = Math.min(stopPrice, bound);
+            // T-198: no level bound; findVirtualVolume ends at the price ceiling
+            long end = stopPrice;
             while (remainingBuyVolume > 0)
             {
-                if (walkPrice > end) { aborted = end < stopPrice; break; }
+                if (walkPrice > end) break;
                 long virtualVol = orderbook.getRawVirtualVolumeRounded(walkPrice);
                 if (virtualVol < 0)
                 {
@@ -281,14 +271,10 @@ public class DepthSimulation
                 {
                     // Skip empty levels exactly (never over volume)
                     long found = walkPrice < end ? orderbook.findVirtualVolume(walkPrice + 1, end, true) : VirtualOrderbook.NO_VOLUME;
-                    if (found == VirtualOrderbook.NO_VOLUME) { walkPrice = end; aborted = end < stopPrice; break; }
+                    if (found == VirtualOrderbook.NO_VOLUME) { walkPrice = end; break; }
                     walkPrice = found;
                 }
             }
-            // Safety bound reached before the next real order: the engine cancels the rest here
-            if (aborted)
-                break;
-
             // --- Match against the next real sell order ---
             if (sellOrderIndex < sellOrders.size() && remainingBuyVolume > 0 && availableFunds > 0)
             {
@@ -375,8 +361,6 @@ public class DepthSimulation
 
         int buyOrderIndex = 0;
         boolean done = false;
-        // Safety bound of the engine's walk (MatchingEngine.walkLevelLimit)
-        long bound = orderbook.hasDefaultVirtualVolume() ? currentPrice - MatchingEngine.getWalkLevelLimit() : Long.MIN_VALUE;
 
         // Walk through real orders interleaved with virtual depth
         // (the yield check also ends the walk when a full real fill hit the target exactly)
@@ -390,13 +374,13 @@ public class DepthSimulation
                 stopPrice = 0;
 
             // --- Drain virtual buy-side depth from walkPrice down to stopPrice ---
-            long end = Math.max(Math.max(stopPrice, 1), bound);
+            long end = Math.max(stopPrice, 1);
             while (dollarYield < targetDollars)
             {
                 if (walkPrice < end)
                 {
-                    // Safety bound, or no real order left: done. Else the next real order is reached.
-                    if (end > Math.max(stopPrice, 1) || buyOrderIndex >= buyOrders.size())
+                    // No real order left: done. Else the next real order is reached.
+                    if (buyOrderIndex >= buyOrders.size())
                         done = true;
                     break;
                 }

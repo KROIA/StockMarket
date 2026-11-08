@@ -84,6 +84,7 @@ public class PluginTestSuite extends TestSuite {
         addTest("targetPriceBot_targetRateLimit", this::test_targetPriceBot_targetRateLimit);
         addTest("profitAlert_window", this::test_profitAlert_window);
         addTest("pumpReplay_noProfit", this::test_pumpReplay_noProfit);
+        addTest("depthMemory_replayReport", this::test_depthMemory_replayReport);
     }
 
     @Override
@@ -540,9 +541,23 @@ public class PluginTestSuite extends TestSuite {
      * wall clock); the re-centering shift-fill on price moves is real.
      */
     private ReplayResult replay(float halfLifeMinutes, float maxTargetMovePerSecond, int cycles, int ordersPerLeg, int waitTicks) {
+        return replay(halfLifeMinutes, maxTargetMovePerSecond, cycles, ordersPerLeg, waitTicks,
+                backend.SERVER_SETTINGS.MARKET.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.getDefaultValue(), 0);
+    }
+
+    /**
+     * {@link #replay(float, float, int, int, int)} with the T-198 depth memory half-life and an
+     * order size override.
+     *
+     * @param memoryMinutes {@code MARKET.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES} for the run (0 = memory off)
+     * @param orderItems    real items per order (buy and sell chunks); 0 = the market's max order size
+     */
+    private ReplayResult replay(float halfLifeMinutes, float maxTargetMovePerSecond, int cycles, int ordersPerLeg, int waitTicks,
+                                float memoryMinutes, long orderItems) {
         ServerMarket market = (ServerMarket) serverMarket;
         StockMarketModSettings.Market modSettings = backend.SERVER_SETTINGS.MARKET;
         Float prevHalfLife = modSettings.NET_FLOW_HALF_LIFE_MINUTES.get();
+        Float prevMemory = modSettings.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.get();
         Float prevAlert = modSettings.PROFIT_ALERT_THRESHOLD.get();
         int sf = backend.BANK_SYSTEM_API.getServerBankManager().getSync().getItemFractionScaleFactor();
         double defaultPrice = 160;
@@ -555,6 +570,7 @@ public class PluginTestSuite extends TestSuite {
         long originalPrice = market.getCurrentMarketPrice();
         try {
             modSettings.NET_FLOW_HALF_LIFE_MINUTES.set(halfLifeMinutes);
+            modSettings.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.set(memoryMinutes);
             modSettings.PROFIT_ALERT_THRESHOLD.set(0f); // no chat alerts from the test
 
             settings.defaultPrice = MarketManager.convertToRawAmountStatic(defaultPrice);
@@ -594,14 +610,15 @@ public class PluginTestSuite extends TestSuite {
 
             double maxPrice = 0;
             int legTicks = ordersPerLeg * 10;
+            long chunk = orderItems > 0 ? orderItems : maxOrder;
             for (int c = 0; c < cycles; c++) {
                 // Buy leg, wait, sell leg; one order per 10 ticks.
                 for (int t = 0; t < 2 * legTicks + waitTicks + 10; t++) {
                     if (t < legTicks && t % 10 == 0) {
-                        market.putOrder(new Order(itemID, Order.Type.MARKET, maxOrder * sf, 0,
+                        market.putOrder(new Order(itemID, Order.Type.MARKET, chunk * sf, 0,
                                 System.currentTimeMillis(), player, account.getAccountNumber()));
                     } else if (t >= legTicks + waitTicks && t % 10 == 0 && itemBank.getBalance() > 0) {
-                        long sell = Math.min(itemBank.getBalance(), maxOrder * sf);
+                        long sell = Math.min(itemBank.getBalance(), chunk * sf);
                         itemBank.lockAmount(sell);
                         market.putOrder(new Order(itemID, Order.Type.MARKET, -sell, 0,
                                 System.currentTimeMillis(), player, account.getAccountNumber()));
@@ -618,6 +635,7 @@ public class PluginTestSuite extends TestSuite {
             return new ReplayResult(moneyDelta, itemsLeft, moneyDelta + itemsLeft * defaultPrice, maxPrice);
         } finally {
             modSettings.NET_FLOW_HALF_LIFE_MINUTES.set(prevHalfLife);
+            modSettings.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.set(prevMemory);
             modSettings.PROFIT_ALERT_THRESHOLD.set(prevAlert);
             settings.defaultPrice = prevDefault;
             settings.naturalAbundance = prevAbundance;
@@ -669,6 +687,38 @@ public class PluginTestSuite extends TestSuite {
             if (rapidOn.profit() > bound)
                 return fail("Rapid replay with mitigations made " + rapidOn.profit() + " > bound " + bound + ". " + report);
             return pass(report);
+        } catch (Exception e) {
+            return fail("Exception: " + e);
+        }
+    }
+
+    /**
+     * T-198 report only (asserts come with T-197): replay numbers with the depth memory.
+     * <ul>
+     *   <li>patient hold (5 x max-order buys, 60 s hold, sell back; 5 cycles), memory on vs off;</li>
+     *   <li>sweep: ONE market buy of 1,000,000 items (more than the whole default ask side, so it
+     *       walks to the price ceiling), hold, then sell everything in one order; hold 0 s
+     *       ("at once"), 60 s, 120 s and 5 min with memory on, at once also with memory off.</li>
+     * </ul>
+     * Mitigations (faded flow, target rate limit) at their defaults. Numbers are logged and in the
+     * pass message.
+     */
+    private TestResult test_depthMemory_replayReport() {
+        try {
+            float hl = backend.SERVER_SETTINGS.MARKET.NET_FLOW_HALF_LIFE_MINUTES.getDefaultValue();
+            float move = TargetPriceBot.DEFAULT_MAX_TARGET_MOVE_PER_SECOND;
+            float mem = backend.SERVER_SETTINGS.MARKET.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.getDefaultValue();
+            long sweep = 1_000_000;
+            StringBuilder out = new StringBuilder();
+            out.append("patient memory ON: ").append(replay(hl, move, 5, 5, 1200, mem, 0));
+            out.append(" | patient memory OFF: ").append(replay(hl, move, 5, 5, 1200, 0f, 0));
+            out.append(" | sweep+sell at once ON: ").append(replay(hl, move, 1, 1, 0, mem, sweep));
+            out.append(" | sweep+sell at once OFF: ").append(replay(hl, move, 1, 1, 0, 0f, sweep));
+            out.append(" | sweep hold 60 s ON: ").append(replay(hl, move, 1, 1, 1200, mem, sweep));
+            out.append(" | sweep hold 120 s ON: ").append(replay(hl, move, 1, 1, 2400, mem, sweep));
+            out.append(" | sweep hold 5 min ON: ").append(replay(hl, move, 1, 1, 6000, mem, sweep));
+            StockMarketMod.LOGGER.info("[T-198 replay] {}", out);
+            return pass(out.toString());
         } catch (Exception e) {
             return fail("Exception: " + e);
         }

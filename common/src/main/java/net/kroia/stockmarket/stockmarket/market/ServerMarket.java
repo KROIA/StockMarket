@@ -767,6 +767,8 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     {
         // #89: tick-time decay of the faded net flow (runs while closed too: no fills, still fades).
         fadedNetPlayerItemFlow = fade(fadedNetPlayerItemFlow, netFlowHalfLifeSeconds(), TICK_SECONDS);
+        // T-198: consumed virtual depth outside the array window recovers on tick time (also while closed).
+        orderbook.fadeVirtualDepthMemory(TICK_SECONDS);
         // Closed (outside trading hours / override): no matching, price stays static. Buffered
         // orders stay buffered; putOrder already rejects new ones while closed.
         if (!tradingOpen)

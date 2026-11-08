@@ -665,8 +665,8 @@ public class MatchingEngine
     /**
      * Finds the next level from {@code from} toward {@code to} (inclusive) that holds depth on
      * one side: virtual volume or a real limit order. Exact, like the regular walk's gap skip.
-     * A book with default virtual volume is searched at most {@link #walkLevelLimit} levels
-     * (the inter-market order then retries next tick).
+     * The virtual search is finite: upward it ends at the virtual book's price ceiling
+     * ({@link VirtualOrderbook#getAskCeiling()}), downward at {@code to} (&ge; 1).
      *
      * @param orderbook the book to search
      * @param from      first level to check
@@ -676,8 +676,6 @@ public class MatchingEngine
      */
     private static long nextDepthLevel(Orderbook orderbook, long from, long to, boolean askSide)
     {
-        if (orderbook.hasDefaultVirtualVolume())
-            to = askSide ? Math.min(to, saturatedAdd(from, walkLevelLimit)) : Math.max(to, from - walkLevelLimit);
         if (askSide ? from > to : from < to)
             return -1;
         // Nearest real order in range
@@ -730,38 +728,11 @@ public class MatchingEngine
     // skipped in one step (Orderbook#findVirtualVolume), never by jumping over volume.
     // A limit remainder only rests once the walk consumed everything up to its limit; the
     // market price is then the limit, so the book is never crossed.
-
-    /**
-     * Default of {@link #walkLevelLimit}: 5,000,000 raw price levels (50,000 coins at scale 100).
-     * Far above any real walk (200 -> 5000 coins is 480,000 levels); it only exists so a walk
-     * through a provider-backed book (one provider call per level) can never freeze the server.
-     */
-    public static final long DEFAULT_WALK_LEVEL_LIMIT = 5_000_000L;
-
-    /**
-     * Safety bound: how many price levels one order may walk through a book whose virtual side
-     * has default volume (see {@link Orderbook#hasDefaultVirtualVolume()}). Books without default
-     * volume are not bounded: skipping their gaps costs at most one array window. Reaching the
-     * bound is an error: it is logged and the remainder is canceled, never left resting.
-     */
-    private static long walkLevelLimit = DEFAULT_WALK_LEVEL_LIMIT;
-    /** Number of walks the safety bound stopped since server start (read by tests). */
-    private static long walkAbortCount = 0;
-
-    /**
-     * Test hook: sets the walk safety bound. Tests must restore {@link #DEFAULT_WALK_LEVEL_LIMIT}.
-     * @param levels maximum number of price levels one order may walk (at least 1)
-     */
-    public static void test_setWalkLevelLimit(long levels) { walkLevelLimit = Math.max(1, levels); }
-    /** @return the walk safety bound in price levels (see {@link #walkLevelLimit}) */
-    public static long getWalkLevelLimit() { return walkLevelLimit; }
-    /** @return how many walks the safety bound has stopped so far */
-    public static long getWalkAbortCount() { return walkAbortCount; }
+    // T-198: there is no walk level limit. A walk ends because the virtual book has no default
+    // ask volume above its price ceiling (VirtualOrderbook#getAskCeiling) and no bids below price 1.
 
     /** Next price level the current order's walk examines (persists across its drain calls). */
     private long walkNext;
-    /** Safety-bound price of the current order's walk (Long.MAX_VALUE / Long.MIN_VALUE when unbounded). */
-    private long walkBound;
     /** Set by the drains: the walk consumed every level up to and including its stop price. */
     private boolean walkReachedStop = false;
     /**
@@ -875,7 +846,7 @@ public class MatchingEngine
      * it walks the book like a market order capped at its limit (#94): it consumes everything in
      * its way and stops as soon as it is filled. A remainder rests only if the walk consumed all
      * volume up to its limit; the market price is then the limit, so the book is not crossed.
-     * If the walk stopped short (funds/items ran out, safety bound) the remainder is canceled.
+     * If the walk stopped short (funds/items ran out) the remainder is canceled.
      *
      * @param order the incoming limit order
      */
@@ -1280,33 +1251,14 @@ public class MatchingEngine
 // ═══════════════════════════════════════════════════════════════════════════
 
     /**
-     * Starts the walk of a new order at the current market price and sets its safety bound.
-     * Only a book with default virtual volume needs one (a gap search there costs one provider
-     * call per level); without it a gap search costs at most one array window.
+     * Starts the walk of a new order at the current market price.
      *
-     * @param up true for a buy (walks up), false for a sell (walks down)
+     * @param up true for a buy (walks up), false for a sell (walks down); both start at the price
      */
     private void startWalk(boolean up)
     {
         walkNext = currentMarketPrice;
         walkReachedStop = false;
-        if (!orderbook.hasDefaultVirtualVolume())
-            walkBound = up ? Long.MAX_VALUE : Long.MIN_VALUE;
-        else
-            walkBound = up ? saturatedAdd(currentMarketPrice, walkLevelLimit) : currentMarketPrice - walkLevelLimit;
-    }
-
-    /**
-     * Logs the safety-bound stop of a walk. The caller cancels the remainder: a market order
-     * through its commit, a limit order in {@link #processLimitOrder} (walkReachedLimit stays false).
-     *
-     * @param boundPrice the price level where the bound stopped the walk
-     */
-    private void walkAborted(long boundPrice)
-    {
-        walkAbortCount++;
-        error("Order walk stopped by the safety bound of " + walkLevelLimit + " price levels at price "
-                + boundPrice + "; the remainder is canceled");
     }
 
     /**
@@ -1314,7 +1266,11 @@ public class MatchingEngine
      * until the remaining sell volume is 0 or every level down to {@code stopPrice} is consumed.
      * Empty levels are skipped exactly via {@link Orderbook#findVirtualVolume}. Sets
      * {@link #walkReachedStop} when nothing is left on the bid side down to {@code stopPrice}
-     * (price floor 1). Stops early (and logs) at the safety bound.
+     * (price floor 1).
+     * <p>
+     * Termination (T-198, no level counter): every iteration either fills at least one raw unit
+     * (orderVolume moves toward 0), or moves {@code next} strictly down toward the finite
+     * {@code end >= 1}, or breaks. Each findVirtualVolume call is bounded by {@code end}.
      *
      * @param orderVolume  current remaining volume (negative = still needs filling)
      * @param itemDelta    accumulated item delta so far
@@ -1325,7 +1281,7 @@ public class MatchingEngine
     private long[] drainVirtualSell(long orderVolume, long itemDelta, long moneyDelta, long stopPrice)
     {
         walkReachedStop = false;
-        long end = Math.max(Math.max(stopPrice, 1), walkBound);
+        long end = Math.max(stopPrice, 1);
         long next = walkNext;
         boolean passed = false;
         while (orderVolume < 0)
@@ -1357,10 +1313,7 @@ public class MatchingEngine
         }
         walkNext = next;
         if (passed)
-        {
-            if (end > Math.max(stopPrice, 1)) walkAborted(end);
-            else walkReachedStop = true;
-        }
+            walkReachedStop = true;
         return new long[]{ orderVolume, itemDelta, moneyDelta };
     }
 
@@ -1369,7 +1322,13 @@ public class MatchingEngine
      * until the remaining buy volume is 0, the buyer runs out of funds, or every level up to
      * {@code stopPrice} is consumed. Empty levels are skipped exactly via
      * {@link Orderbook#findVirtualVolume}. Sets {@link #walkReachedStop} when nothing is left on
-     * the ask side up to {@code stopPrice}. Stops early (and logs) at the safety bound.
+     * the ask side up to {@code stopPrice} (or up to the virtual book's price ceiling, above which
+     * no default ask volume exists; a market buy's remainder is then canceled by its commit).
+     * <p>
+     * Termination (T-198, no level counter): every iteration either fills at least one raw unit,
+     * or moves {@code next} strictly up (findVirtualVolume returns a level &gt; next), or breaks.
+     * findVirtualVolume itself never searches past {@code max(window end, ceiling)}, so a search
+     * toward {@code stopPrice = Long.MAX_VALUE} is finite and returns NO_VOLUME at the ceiling.
      *
      * @param orderVolume    current remaining volume (positive = still needs filling)
      * @param itemDelta      accumulated item delta so far
@@ -1382,7 +1341,7 @@ public class MatchingEngine
                                    long stopPrice, long availableFunds)
     {
         walkReachedStop = false;
-        long end = Math.min(stopPrice, walkBound);
+        long end = stopPrice;
         long next = walkNext;
         boolean passed = false;
         while (orderVolume > 0)
@@ -1428,10 +1387,7 @@ public class MatchingEngine
         }
         walkNext = next;
         if (passed)
-        {
-            if (end < stopPrice) walkAborted(end);
-            else walkReachedStop = true;
-        }
+            walkReachedStop = true;
         return new long[]{ orderVolume, itemDelta, moneyDelta, availableFunds };
     }
 

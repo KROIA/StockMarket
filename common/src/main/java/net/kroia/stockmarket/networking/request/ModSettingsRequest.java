@@ -79,6 +79,12 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
 
     /** Maximum net flow half-life (#89) in minutes (1 week); minimum is 0 = no fading. */
     public static final float MAX_NET_FLOW_HALF_LIFE_MINUTES = 10_080f;
+    /** Maximum virtual depth recovery half-life (T-198) in minutes (1 week); minimum is 0 = memory off. */
+    public static final float MAX_VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES = 10_080f;
+    /** Minimum virtual depth price ceiling multiplier (T-198). */
+    public static final float MIN_VIRTUAL_DEPTH_MAX_PRICE_MULTIPLIER = 2f;
+    /** Maximum virtual depth price ceiling multiplier (T-198). */
+    public static final float MAX_VIRTUAL_DEPTH_MAX_PRICE_MULTIPLIER = 10_000f;
     /** Minimum profit alert window (#89) in minutes. */
     public static final long MIN_PROFIT_ALERT_WINDOW_MINUTES = 1L;
     /** Maximum profit alert window (#89) in minutes (1 week). */
@@ -311,6 +317,9 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
         //   master — no propagation needed. Changing it does NOT touch existing markets.
         // * ServerMarket.NET_FLOW_HALF_LIFE_MINUTES (#89): read live every tick in
         //   ServerMarket.update() on the master; markets only live there — no propagation needed.
+        // * ServerMarket.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES / VIRTUAL_DEPTH_MAX_PRICE_MULTIPLIER
+        //   (T-198): read live by the master's VirtualOrderbook (every tick / window move / depth
+        //   read); markets only live on the master — no propagation needed.
         // * ServerMarket.PROFIT_ALERT_THRESHOLD / PROFIT_ALERT_WINDOW_MINUTES (#89): read live when
         //   a player order completes, which only happens on the master — no propagation needed.
         //   (Admins online on a slave are not alerted; see ProfitAlerts.)
@@ -352,6 +361,8 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
      *   <li>{@code ServerMarket.TRADE_COOLDOWN_MS} ∈ [0, 60,000 ms]</li>
      *   <li>{@code ServerMarket.MAX_ORDER_VOLUME_FACTOR} &ge; 1</li>
      *   <li>{@code ServerMarket.NET_FLOW_HALF_LIFE_MINUTES} ∈ [0, 10,080]; NaN = default</li>
+     *   <li>{@code ServerMarket.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES} ∈ [0, 10,080]; NaN = default</li>
+     *   <li>{@code ServerMarket.VIRTUAL_DEPTH_MAX_PRICE_MULTIPLIER} ∈ [2, 10,000]; NaN = default</li>
      *   <li>{@code ServerMarket.PROFIT_ALERT_THRESHOLD} &ge; 0; NaN/Infinite = default</li>
      *   <li>{@code ServerMarket.PROFIT_ALERT_WINDOW_MINUTES} ∈ [1, 10,080]</li>
      *   <li>{@code VillagerTrading.PRICE_REFRESH_INTERVAL_MINUTES} ∈ [1, 10,080]</li>
@@ -392,6 +403,10 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
                 clamp(settings.MARKET.MAX_ORDER_VOLUME_FACTOR.get(), MIN_MAX_ORDER_VOLUME_FACTOR, Long.MAX_VALUE));
         settings.MARKET.NET_FLOW_HALF_LIFE_MINUTES.set(clampFloat(settings.MARKET.NET_FLOW_HALF_LIFE_MINUTES.get(),
                 0f, MAX_NET_FLOW_HALF_LIFE_MINUTES, settings.MARKET.NET_FLOW_HALF_LIFE_MINUTES.getDefaultValue()));
+        settings.MARKET.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.set(clampFloat(settings.MARKET.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.get(),
+                0f, MAX_VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES, settings.MARKET.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.getDefaultValue()));
+        settings.MARKET.VIRTUAL_DEPTH_MAX_PRICE_MULTIPLIER.set(clampFloat(settings.MARKET.VIRTUAL_DEPTH_MAX_PRICE_MULTIPLIER.get(),
+                MIN_VIRTUAL_DEPTH_MAX_PRICE_MULTIPLIER, MAX_VIRTUAL_DEPTH_MAX_PRICE_MULTIPLIER, settings.MARKET.VIRTUAL_DEPTH_MAX_PRICE_MULTIPLIER.getDefaultValue()));
         settings.MARKET.PROFIT_ALERT_THRESHOLD.set(clampFloat(settings.MARKET.PROFIT_ALERT_THRESHOLD.get(),
                 0f, Float.MAX_VALUE, settings.MARKET.PROFIT_ALERT_THRESHOLD.getDefaultValue()));
         settings.MARKET.PROFIT_ALERT_WINDOW_MINUTES.set(clamp(settings.MARKET.PROFIT_ALERT_WINDOW_MINUTES.get(),
