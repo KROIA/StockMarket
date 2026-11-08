@@ -683,6 +683,15 @@ public class MatchingEngine
     private final Orderbook orderbook;
     private static final int TIMEOUT_COUNT = 10000;
 
+    /**
+     * #88: set by {@link #drainVirtualBuy}/{@link #drainVirtualSell} when the walk hit
+     * {@link #TIMEOUT_COUNT} before reaching its stop price while virtual volume may still sit
+     * in between. The caller must then stop: a real order is only matched once the walk has
+     * reached its price, so a far player limit order can never be filled (and set the price)
+     * past liquidity the walk did not consume.
+     */
+    private boolean drainTimedOut = false;
+
     private final PriorityQueue<Order> buyMarketOrders_inputBuffer;
     private final PriorityQueue<Order> sellMarketOrders_inputBuffer;
     private final PriorityQueue<Order> buyLimitOrders_inputBuffer;
@@ -892,7 +901,8 @@ public class MatchingEngine
             itemDelta   = result[1];
             moneyDelta  = result[2];
 
-            if (orderVolume >= 0 || (currentMarketPrice <= minimalAcceptedPrice && buyOrder.getStartPrice() != minimalAcceptedPrice))
+            // #88: walk stopped short of this buy order -> never match beyond the walked price
+            if (drainTimedOut || orderVolume >= 0 || (currentMarketPrice <= minimalAcceptedPrice && buyOrder.getStartPrice() != minimalAcceptedPrice))
             {
                 sellEarlyReturn = true;
                 break;
@@ -1038,9 +1048,8 @@ public class MatchingEngine
             moneyDelta     = result[2];
             availableFunds = result[3];
 
-
-
-            if (orderVolume <= 0 || (currentMarketPrice >= maximalAcceptedPrice && sellOrder.getStartPrice() != maximalAcceptedPrice))
+            // #88: walk stopped short of this sell order -> never match beyond the walked price
+            if (drainTimedOut || orderVolume <= 0 || (currentMarketPrice >= maximalAcceptedPrice && sellOrder.getStartPrice() != maximalAcceptedPrice))
             {
                 buyEarlyReturn = true;
                 break;
@@ -1172,10 +1181,12 @@ public class MatchingEngine
      * @param itemDelta    accumulated item delta so far
      * @param moneyDelta   accumulated money delta so far
      * @param stopPrice    do not go below this price (exclusive lower bound)
-     * @return             long[3] = { orderVolume, itemDelta, moneyDelta }
+     * @return             long[3] = { orderVolume, itemDelta, moneyDelta };
+     *                     sets {@link #drainTimedOut} if the step limit stopped the walk early
      */
     private long[] drainVirtualSell(long orderVolume, long itemDelta, long moneyDelta, long stopPrice)
     {
+        drainTimedOut = false;
         long nextExecutedPrice = currentMarketPrice;
         long timeout = TIMEOUT_COUNT;
         while (orderVolume < 0 && nextExecutedPrice >= stopPrice)
@@ -1213,7 +1224,10 @@ public class MatchingEngine
             timeout--;
             if(timeout <= 0)
             {
-                // timeout
+                // #88: step limit before reaching stopPrice. Only an empty gap counts as reached.
+                if (orderVolume < 0 && nextExecutedPrice >= stopPrice
+                        && !orderbook.isVirtualVolumeEmptyBetween(stopPrice, nextExecutedPrice))
+                    drainTimedOut = true;
                 break;
             }
         }
@@ -1230,11 +1244,13 @@ public class MatchingEngine
      * @param moneyDelta     accumulated money delta so far  (negative, growing)
      * @param stopPrice      do not go above this price (exclusive upper bound)
      * @param availableFunds buyer's remaining spendable balance
-     * @return               long[4] = { orderVolume, itemDelta, moneyDelta, availableFunds }
+     * @return               long[4] = { orderVolume, itemDelta, moneyDelta, availableFunds };
+     *                       sets {@link #drainTimedOut} if the step limit stopped the walk early
      */
     private long[] drainVirtualBuy(long orderVolume, long itemDelta, long moneyDelta,
                                    long stopPrice, long availableFunds)
     {
+        drainTimedOut = false;
         long nextExecutedPrice = currentMarketPrice;
         long timeout = TIMEOUT_COUNT;
         while (orderVolume > 0 && nextExecutedPrice <= stopPrice)
@@ -1280,7 +1296,10 @@ public class MatchingEngine
             timeout--;
             if(timeout <= 0)
             {
-                // timeout
+                // #88: step limit before reaching stopPrice. Only an empty gap counts as reached.
+                if (orderVolume > 0 && nextExecutedPrice <= stopPrice
+                        && !orderbook.isVirtualVolumeEmptyBetween(nextExecutedPrice, stopPrice))
+                    drainTimedOut = true;
                 break;
             }
         }

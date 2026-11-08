@@ -152,6 +152,7 @@ public class NewsPluginTestSuite extends TestSuite {
         @Override public long placeOrder(double amount, double price) { return 0; }
         @Override public void placeOrder(double amount) { }
         @Override public float getNaturalAbundance() { return 10f; }
+        @Override public double getMaxRealOrderVolume() { return 0; }
         @Override public double getNetPlayerItemFlow() { return netFlow; }
         @Override public void setNetPlayerItemFlow(double v) { netFlow = v; }
         @Override public boolean isMarketOpen() { return true; }

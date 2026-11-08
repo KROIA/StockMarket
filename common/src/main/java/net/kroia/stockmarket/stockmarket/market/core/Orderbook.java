@@ -227,6 +227,19 @@ public class Orderbook implements ServerSaveable
         return virtualOrderbook.roundConservative(getRawVirtualVolume(rawPrice));
     }
 
+    /**
+     * Tells whether the virtual book holds no volume between two raw prices (inclusive).
+     * See {@link VirtualOrderbook#isEmptyBetween(long, long)}.
+     *
+     * @param fromRawPrice one end of the range
+     * @param toRawPrice   other end of the range
+     * @return true if no virtual volume sits in the range
+     */
+    public boolean isVirtualVolumeEmptyBetween(long fromRawPrice, long toRawPrice)
+    {
+        return virtualOrderbook.isEmptyBetween(fromRawPrice, toRawPrice);
+    }
+
 
     public long getRawVolume(long startPrice, long endPrice)
     {

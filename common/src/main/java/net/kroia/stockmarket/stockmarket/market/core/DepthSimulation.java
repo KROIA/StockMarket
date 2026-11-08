@@ -77,6 +77,7 @@ public class DepthSimulation
         buyOrders.sort((a, b) -> Long.compare(b.getStartPrice(), a.getStartPrice()));
 
         int buyOrderIndex = 0;
+        boolean timedOut = false;
 
         // Walk through real orders interleaved with virtual depth,
         // mirroring MatchingEngine.processSell's for-loop over buyOrderSnapshot
@@ -127,8 +128,17 @@ public class DepthSimulation
 
                 timeout--;
                 if (timeout <= 0)
+                {
+                    // #88 (mirrors MatchingEngine.drainVirtualSell): step limit before reaching
+                    // the next real order -> stop unless nothing lies in between.
+                    if (remainingSellVolume < 0 && walkPrice >= stopPrice
+                            && !orderbook.isVirtualVolumeEmptyBetween(stopPrice, walkPrice))
+                        timedOut = true;
                     break;
+                }
             }
+            if (timedOut)
+                break;
 
             // --- Match against the next real buy order ---
             if (buyOrderIndex < buyOrders.size() && remainingSellVolume < 0)
@@ -222,6 +232,7 @@ public class DepthSimulation
         sellOrders.sort(Comparator.comparingLong(Order::getStartPrice));
 
         int sellOrderIndex = 0;
+        boolean timedOut = false;
 
         // Walk through real orders interleaved with virtual depth,
         // mirroring MatchingEngine.processBuy's for-loop over sellOrderSnapshot
@@ -282,8 +293,17 @@ public class DepthSimulation
 
                 timeout--;
                 if (timeout <= 0)
+                {
+                    // #88 (mirrors MatchingEngine.drainVirtualBuy): step limit before reaching
+                    // the next real order -> stop unless nothing lies in between.
+                    if (remainingBuyVolume > 0 && walkPrice <= stopPrice
+                            && !orderbook.isVirtualVolumeEmptyBetween(walkPrice, stopPrice))
+                        timedOut = true;
                     break;
+                }
             }
+            if (timedOut)
+                break;
 
             // --- Match against the next real sell order ---
             if (sellOrderIndex < sellOrders.size() && remainingBuyVolume > 0 && availableFunds > 0)
@@ -435,6 +455,10 @@ public class DepthSimulation
                 timeout--;
                 if (timeout <= 0)
                 {
+                    // #88: an empty gap to the next real order still counts as reached
+                    if (buyOrderIndex < buyOrders.size() && walkPrice >= stopPrice
+                            && orderbook.isVirtualVolumeEmptyBetween(stopPrice, walkPrice))
+                        break;
                     done = true;
                     break;
                 }

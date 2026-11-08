@@ -99,6 +99,11 @@ public class MatchingEngineTestSuite extends TestSuite {
         // Timeout Handling
         addTest("drainVirtualSell_timeout", this::test_drainVirtualSell_timeout);
         addTest("drainVirtualBuy_timeout", this::test_drainVirtualBuy_timeout);
+        // #88: a timed-out walk must never fall through to a far real order
+        addTest("drainTimeout_marketBuy_neverFillsFarSell", this::test_drainTimeout_marketBuy_neverFillsFarSell);
+        addTest("drainTimeout_limitBuy_neverFillsFarSell", this::test_drainTimeout_limitBuy_neverFillsFarSell);
+        addTest("drainTimeout_marketSell_neverFillsFarBuy", this::test_drainTimeout_marketSell_neverFillsFarBuy);
+        addTest("drainTimeout_emptyBook_fillsFarSell", this::test_drainTimeout_emptyBook_fillsFarSell);
 
         // Inter-market net player flow (issue #36 follow-up)
         addTest("interMarketMarketOrder_creditsFlowOnBothMarkets", this::test_interMarketMarketOrder_creditsFlowOnBothMarkets);
@@ -679,6 +684,128 @@ public class MatchingEngineTestSuite extends TestSuite {
             TestResult r = assertTrue("Should complete within 30 seconds (timeout prevents hang)", elapsed < 30000);
             if (!r.passed()) return r;
             return pass("drainVirtualBuy timeout prevents infinite loop (completed in " + elapsed + "ms)");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    // ── #88: drain timeout must not fall through to far real orders ───────────
+
+    /** Raw start price of the #88 tests (100 coins); the walk step limit is 10000 raw ticks = 100 coins. */
+    private static final long DRAIN88_START = 10000;
+    /** Raw price of the far player order (5000 coins), far beyond one walk. */
+    private static final long DRAIN88_FAR = 500000;
+
+    /**
+     * #88 setup: uniform virtual depth (5 raw per level), so 100 coins hold ~50000 raw;
+     * account2 rests a big player sell far above, account1 is rich enough to buy it all.
+     *
+     * @param volume raw volume of the far sell
+     * @return the resting far sell
+     */
+    private Order placeFarPlayerSell(long volume) {
+        resetMarketState(true, DRAIN88_START);
+        ItemID item = serverMarket.getItemID();
+        bankAccount2.getBank(item).setBalance(volume);
+        bankAccount1.getBank(moneyID).setBalance(1_000_000_000_000L);
+        Order farSell = new Order(item, Order.Type.LIMIT, -volume, DRAIN88_FAR, 0, UUID.randomUUID(), bankAccountNr2);
+        serverMarket.putOrder(farSell);
+        serverMarket.update();
+        return farSell;
+    }
+
+    /** Checks the #88 invariant after a buy: the far sell is untouched and the price never reached it. */
+    private TestResult checkFarSellUntouched(Order farSell, Order buy) {
+        if (farSell.getFilledVolume() != 0)
+            return fail("Far sell @" + DRAIN88_FAR + " was filled (" + farSell.getFilledVolume()
+                    + ") although the walk stopped near " + serverMarket.getCurrentMarketPrice());
+        if (serverMarket.getCurrentMarketPrice() >= DRAIN88_FAR)
+            return fail("Price jumped to the far sell: " + serverMarket.getCurrentMarketPrice());
+        if (buy.getFilledVolume() <= 0)
+            return fail("Buy should fill the virtual depth it walked through");
+        if (buy.isFilled())
+            return fail("Buy should not be fully filled: depth within one walk is smaller than the order");
+        return pass("Walk stopped at " + serverMarket.getCurrentMarketPrice() + ", filled " + buy.getFilledVolume()
+                + ", far sell untouched");
+    }
+
+    /** #88: market buy bigger than the depth of one walk stops at the walked price; remainder canceled. */
+    private TestResult test_drainTimeout_marketBuy_neverFillsFarSell() {
+        try {
+            Order farSell = placeFarPlayerSell(1_000_000);
+            Order buy = new Order(serverMarket.getItemID(), Order.Type.MARKET, 1_000_000, DRAIN88_START, 0, UUID.randomUUID(), bankAccountNr1);
+            serverMarket.putOrder(buy);
+            serverMarket.update();
+            return checkFarSellUntouched(farSell, buy);
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /** #88 limit variant: a limit buy at the far price walks one step limit, then rests; no far fill. */
+    private TestResult test_drainTimeout_limitBuy_neverFillsFarSell() {
+        try {
+            Order farSell = placeFarPlayerSell(1_000_000);
+            Order buy = new Order(serverMarket.getItemID(), Order.Type.LIMIT, 1_000_000, DRAIN88_FAR, 0, UUID.randomUUID(), bankAccountNr1);
+            serverMarket.putOrder(buy);
+            serverMarket.update();
+            return checkFarSellUntouched(farSell, buy);
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /** #88 sell side: market sell bigger than one walk never fills a player bid far below. */
+    private TestResult test_drainTimeout_marketSell_neverFillsFarBuy() {
+        try {
+            long start = DRAIN88_FAR;      // 5000 coins
+            long farBid = DRAIN88_START;   // 100 coins
+            resetMarketState(true, start);
+            ItemID item = serverMarket.getItemID();
+            bankAccount2.getBank(moneyID).setBalance(1_000_000_000_000L);
+            bankAccount1.getBank(item).setBalance(1_000_000);
+            Order farBuy = new Order(item, Order.Type.LIMIT, 1_000_000, farBid, 0, UUID.randomUUID(), bankAccountNr2);
+            serverMarket.putOrder(farBuy);
+            serverMarket.update();
+
+            Order sell = new Order(item, Order.Type.MARKET, -1_000_000, start, 0, UUID.randomUUID(), bankAccountNr1);
+            serverMarket.putOrder(sell);
+            serverMarket.update();
+
+            if (farBuy.getFilledVolume() != 0)
+                return fail("Far bid @" + farBid + " was filled (" + farBuy.getFilledVolume() + ")");
+            if (serverMarket.getCurrentMarketPrice() <= farBid)
+                return fail("Price dropped to the far bid: " + serverMarket.getCurrentMarketPrice());
+            if (sell.getFilledVolume() == 0 || sell.isFilled())
+                return fail("Sell should fill only the walked virtual depth, filled " + sell.getFilledVolume());
+            return pass("Walk stopped at " + serverMarket.getCurrentMarketPrice() + ", far bid untouched");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /** #88: with no virtual depth between the price and a far real ask, the ask still fills (real-only book). */
+    private TestResult test_drainTimeout_emptyBook_fillsFarSell() {
+        try {
+            resetMarketState(false, DRAIN88_START);   // no virtual depth anywhere
+            ItemID item = serverMarket.getItemID();
+            long volume = 1000;
+            bankAccount2.getBank(item).setBalance(volume);
+            bankAccount1.getBank(moneyID).setBalance(1_000_000_000_000L);
+            Order farSell = new Order(item, Order.Type.LIMIT, -volume, DRAIN88_FAR, 0, UUID.randomUUID(), bankAccountNr2);
+            serverMarket.putOrder(farSell);
+            serverMarket.update();
+
+            Order buy = new Order(item, Order.Type.MARKET, volume, DRAIN88_START, 0, UUID.randomUUID(), bankAccountNr1);
+            serverMarket.putOrder(buy);
+            serverMarket.update();
+
+            if (!farSell.isFilled() || !buy.isFilled())
+                return fail("Empty book: far sell should fill completely, sell filled " + farSell.getFilledVolume()
+                        + ", buy filled " + buy.getFilledVolume());
+            if (serverMarket.getCurrentMarketPrice() != DRAIN88_FAR)
+                return fail("Price should be the far sell price " + DRAIN88_FAR + ", was " + serverMarket.getCurrentMarketPrice());
+            return pass("Empty gap skipped, far sell filled at " + DRAIN88_FAR);
         } catch (Exception e) {
             return fail("Exception: " + e.getMessage());
         }
