@@ -18,8 +18,24 @@ import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.kroia.stockmarket.testing.TestFixture;
 
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
+import net.kroia.banksystem.api.bank.IServerBank;
+import net.kroia.banksystem.api.bankaccount.IServerBankAccount;
+import net.kroia.stockmarket.StockMarketMod;
+import net.kroia.stockmarket.StockMarketModSettings;
+import net.kroia.stockmarket.pluginsystem.plugin.ServerPlugin;
+import net.kroia.stockmarket.pluginsystem.plugins.DefaultOrderbookVolumeDistributionPlugin;
+import net.kroia.stockmarket.pluginsystem.plugins.VolatilityPlugin;
+import net.kroia.stockmarket.stockmarket.market.MarketSettings;
+import net.kroia.stockmarket.stockmarket.market.core.order.Order;
+import net.kroia.stockmarket.util.ProfitAlerts;
+import net.minecraft.network.codec.StreamCodec;
+
 import java.lang.reflect.Proxy;
 import java.util.List;
+import java.util.Locale;
+import java.util.UUID;
 
 public class PluginTestSuite extends TestSuite {
 
@@ -62,6 +78,12 @@ public class PluginTestSuite extends TestSuite {
         addTest("targetPriceBot_noOvershootAfterWindup", this::test_targetPriceBot_noOvershootAfterWindup);
         addTest("targetPriceBot_priceJump_noMirroredBidWall_converges", this::test_targetPriceBot_priceJump_noMirroredBidWall_converges);
         addTest("targetPriceBot_orderVolumeLimit", this::test_targetPriceBot_orderVolumeLimit);
+
+        // #89 bot pump mitigations
+        addTest("netFlow_fadeHalfLife", this::test_netFlow_fadeHalfLife);
+        addTest("targetPriceBot_targetRateLimit", this::test_targetPriceBot_targetRateLimit);
+        addTest("profitAlert_window", this::test_profitAlert_window);
+        addTest("pumpReplay_noProfit", this::test_pumpReplay_noProfit);
     }
 
     @Override
@@ -432,6 +454,223 @@ public class PluginTestSuite extends TestSuite {
             serverMarket.test_clearIncomingOrderBuffers();
             serverMarket.test_setCurrentMarketPrice(originalPrice);
             serverMarket.test_clearOrderbook();
+        }
+    }
+
+    // ── #89 bot pump mitigations ─────────────────────────────────────────────
+
+    /**
+     * Pure decay math of the faded net flow: after one half-life the value has halved, after two it
+     * is a quarter, the per-tick decay compounds to the same result, and half-life 0 = no fading.
+     */
+    private TestResult test_netFlow_fadeHalfLife() {
+        double hl = 600; // 10 min
+        double one = ServerMarket.fade(1000, hl, hl);
+        double two = ServerMarket.fade(1000, hl, 2 * hl);
+        double ticked = 1000;
+        for (int t = 0; t < (int) Math.round(hl / ServerMarket.TICK_SECONDS); t++)
+            ticked = ServerMarket.fade(ticked, hl, ServerMarket.TICK_SECONDS);
+        if (Math.abs(one - 500) > 1e-9 || Math.abs(two - 250) > 1e-9)
+            return fail("Expected 500 / 250 after 1 / 2 half-lives, got " + one + " / " + two);
+        if (Math.abs(ticked - 500) > 1e-6)
+            return fail("Per-tick decay over one half-life should give 500, got " + ticked);
+        if (ServerMarket.fade(-1000, 0, 1e6) != -1000 || ServerMarket.fade(-1000, hl, hl) != -500)
+            return fail("Half-life 0 must not fade; negative flow must fade symmetrically");
+        return pass("Half-life halves the value (500, 250, per-tick " + ticked + "); 0 = no fading");
+    }
+
+    /**
+     * Target rate limit of the TargetPriceBot: the first step snaps, then the target moves at most
+     * maxMove x dt relative per step in both directions, 0 = no limit, and settings saved before the
+     * limit existed (5 floats) decode with the default.
+     */
+    private TestResult test_targetPriceBot_targetRateLimit() {
+        double snap = TargetPriceBot.limitTargetMove(0, 160, 0.01f, 0.25);
+        double up = TargetPriceBot.limitTargetMove(160, 3200, 0.01f, 0.25);
+        double down = TargetPriceBot.limitTargetMove(160, 1, 0.01f, 0.25);
+        double near = TargetPriceBot.limitTargetMove(160, 160.1, 0.01f, 0.25);
+        double off = TargetPriceBot.limitTargetMove(160, 3200, 0f, 0.25);
+        if (snap != 160 || Math.abs(up - 160.4) > 1e-6 || Math.abs(down - 159.6) > 1e-6 || near != 160.1 || off != 3200)
+            return fail("snap " + snap + ", up " + up + ", down " + down + ", near " + near + ", off " + off);
+        ByteBuf legacy = Unpooled.buffer();
+        for (int i = 0; i < 5; i++) legacy.writeFloat(0.5f);
+        TargetPriceBot.Settings decoded = TargetPriceBot.Settings.CODEC.decode(legacy);
+        legacy.release();
+        if (decoded.maxTargetMovePerSecond() != TargetPriceBot.DEFAULT_MAX_TARGET_MOVE_PER_SECOND || decoded.maxOrderVolumeFactor() != 0.5f)
+            return fail("Legacy settings decoded as " + decoded);
+        return pass("Target moves " + up + " / " + down + " per 0.25 s step at 1%/s; legacy settings get the default");
+    }
+
+    /** Profit alert bookkeeping: fires once when a window exceeds the threshold, resets with a new window, off at 0. */
+    private TestResult test_profitAlert_window() {
+        UUID p = UUID.randomUUID();
+        long w = 60_000;
+        boolean a1 = ProfitAlerts.record(p, 600, 0, 1000, w);       // 600
+        boolean a2 = ProfitAlerts.record(p, -100, 10, 1000, w);     // 500
+        boolean a3 = ProfitAlerts.record(p, 600, 20, 1000, w);      // 1100 -> alert
+        boolean a4 = ProfitAlerts.record(p, 5000, 30, 1000, w);     // same window: no second alert
+        boolean a5 = ProfitAlerts.record(p, 1001, w + 1, 1000, w);  // new window -> alert again
+        boolean off = ProfitAlerts.record(UUID.randomUUID(), 1e12, 0, 0, w);
+        if (a1 || a2 || !a3 || a4 || !a5 || off)
+            return fail("Alerts " + a1 + "," + a2 + "," + a3 + "," + a4 + "," + a5 + ", off=" + off);
+        return pass("Alert once per window when the realized profit exceeds the threshold");
+    }
+
+    /** Result of one {@link #replay} run, money in real units. */
+    private record ReplayResult(double moneyDelta, double itemsLeft, double profit, double maxPrice) {
+        @Override public String toString() {
+            return String.format(Locale.ROOT, "profit %.0f (money %+.0f, items left %.0f), max price %.2f",
+                    profit, moneyDelta, itemsLeft, maxPrice);
+        }
+    }
+
+    /**
+     * #89 replay of a reported server exploit on a diamond-like market (default price 160, abundance 50 = the
+     * diamond preset, max order 3200, production depth profile of the default volume plugin,
+     * VolatilityPlugin + TargetPriceBot with default settings except the volatility random walk
+     * (scale 0, so runs are deterministic) and the two mitigation knobs under test).
+     * <p>
+     * Scripted player per cycle: {@code ordersPerLeg} market buys of max order size, one every 10
+     * ticks (respects the default 500 ms trade cooldown), then {@code waitTicks}, then sells
+     * everything back in max-order chunks, again one per 10 ticks. Ticks are simulated (plugins,
+     * cache apply, market update in production order), so faded-flow decay and target rate limit
+     * run on tick time.
+     * <p>
+     * Not modelled: the default volume plugin's slow refill of consumed virtual depth (runs on the
+     * wall clock); the re-centering shift-fill on price moves is real.
+     */
+    private ReplayResult replay(float halfLifeMinutes, float maxTargetMovePerSecond, int cycles, int ordersPerLeg, int waitTicks) {
+        ServerMarket market = (ServerMarket) serverMarket;
+        StockMarketModSettings.Market modSettings = backend.SERVER_SETTINGS.MARKET;
+        Float prevHalfLife = modSettings.NET_FLOW_HALF_LIFE_MINUTES.get();
+        Float prevAlert = modSettings.PROFIT_ALERT_THRESHOLD.get();
+        int sf = backend.BANK_SYSTEM_API.getServerBankManager().getSync().getItemFractionScaleFactor();
+        double defaultPrice = 160;
+        float abundance = 50;
+        long maxOrder = MarketSettings.defaultMaxOrderVolume(abundance);
+        MarketSettings settings = market.getSettings();
+        long prevDefault = settings.defaultPrice;
+        float prevAbundance = settings.naturalAbundance;
+        long prevMaxOrder = settings.maxOrderVolume;
+        long originalPrice = market.getCurrentMarketPrice();
+        try {
+            modSettings.NET_FLOW_HALF_LIFE_MINUTES.set(halfLifeMinutes);
+            modSettings.PROFIT_ALERT_THRESHOLD.set(0f); // no chat alerts from the test
+
+            settings.defaultPrice = MarketManager.convertToRawAmountStatic(defaultPrice);
+            settings.naturalAbundance = abundance;
+            settings.maxOrderVolume = maxOrder;
+            market.test_clearOrderbook();
+            market.test_clearIncomingOrderBuffers();
+            market.test_setCurrentMarketPrice(settings.defaultPrice);
+            market.resetNetPlayerItemFlow();
+
+            MarketCache cache = new MarketCache(market);
+            cache.getPluginOrderBook().registerDefaultVolumeDistributionCalculator(
+                    new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator(defaultPrice, abundance));
+            market.test_resetVirtualOrderBookVolume();
+            List<MarketInterface> markets = List.of(new MarketInterface(cache.getPluginMarket(), cache.getPluginOrderBook()));
+
+            VolatilityPlugin vol = new VolatilityPlugin();
+            vol.setLoggerEnabled(false);
+            vol.onMarketSubscribed(itemID);
+            VolatilityPlugin.Settings vs = VolatilityPlugin.Settings.createDefault();
+            applySettings(vol, VolatilityPlugin.Settings.CODEC, new VolatilityPlugin.Settings(0f, vs.flowInfluenceEnabled(),
+                    vs.flowSensitivity(), vs.minPriceMult(), vs.maxPriceMult()));
+            TargetPriceBot bot = new TargetPriceBot();
+            bot.setLoggerEnabled(false);
+            bot.onMarketSubscribed(itemID);
+            applySettings(bot, TargetPriceBot.Settings.CODEC, new TargetPriceBot.Settings(0.5f, 0.1f, 0f, 0.1f,
+                    TargetPriceBot.DEFAULT_MAX_ORDER_VOLUME_FACTOR, maxTargetMovePerSecond));
+
+            IServerBankAccount account = fixture.createBankAccount("replay");
+            UUID player = fixture.createUser("replay");
+            ItemID moneyID = backend.MARKET_MANAGER.getSync().getTradingCurrencyID();
+            long startMoney = MarketManager.convertToRawAmountStatic(1e9);
+            account.createBank(itemID, 0);
+            account.createBank(moneyID, startMoney);
+            IServerBank itemBank = account.getBank(itemID);
+            IServerBank moneyBank = account.getBank(moneyID);
+
+            double maxPrice = 0;
+            int legTicks = ordersPerLeg * 10;
+            for (int c = 0; c < cycles; c++) {
+                // Buy leg, wait, sell leg; one order per 10 ticks.
+                for (int t = 0; t < 2 * legTicks + waitTicks + 10; t++) {
+                    if (t < legTicks && t % 10 == 0) {
+                        market.putOrder(new Order(itemID, Order.Type.MARKET, maxOrder * sf, 0,
+                                System.currentTimeMillis(), player, account.getAccountNumber()));
+                    } else if (t >= legTicks + waitTicks && t % 10 == 0 && itemBank.getBalance() > 0) {
+                        long sell = Math.min(itemBank.getBalance(), maxOrder * sf);
+                        itemBank.lockAmount(sell);
+                        market.putOrder(new Order(itemID, Order.Type.MARKET, -sell, 0,
+                                System.currentTimeMillis(), player, account.getAccountNumber()));
+                    }
+                    vol.update(markets);
+                    bot.update(markets);
+                    cache.apply();
+                    market.update();
+                    maxPrice = Math.max(maxPrice, MarketManager.convertToRealAmountStatic(market.getCurrentMarketPrice()));
+                }
+            }
+            double moneyDelta = MarketManager.convertToRealAmountStatic(moneyBank.getTotalBalance() - startMoney);
+            double itemsLeft = itemBank.getTotalBalance() / (double) sf;
+            return new ReplayResult(moneyDelta, itemsLeft, moneyDelta + itemsLeft * defaultPrice, maxPrice);
+        } finally {
+            modSettings.NET_FLOW_HALF_LIFE_MINUTES.set(prevHalfLife);
+            modSettings.PROFIT_ALERT_THRESHOLD.set(prevAlert);
+            settings.defaultPrice = prevDefault;
+            settings.naturalAbundance = prevAbundance;
+            settings.maxOrderVolume = prevMaxOrder;
+            market.test_setDefaultVolumeProviderFunction(null);
+            market.test_clearIncomingOrderBuffers();
+            market.test_clearOrderbook();
+            market.test_setCurrentMarketPrice(originalPrice);
+            market.resetNetPlayerItemFlow();
+        }
+    }
+
+    /** Encodes {@code settings} with {@code codec} and applies it to {@code plugin} for the scratch market. */
+    private <T> void applySettings(ServerPlugin<T, ?> plugin, StreamCodec<ByteBuf, T> codec, T settings) {
+        ByteBuf buf = Unpooled.buffer();
+        codec.encode(buf, settings);
+        byte[] bytes = new byte[buf.readableBytes()];
+        buf.readBytes(bytes);
+        buf.release();
+        if (!plugin.decodeAndApplyCustomSettings(itemID, bytes))
+            throw new IllegalStateException("Could not apply plugin settings " + settings);
+    }
+
+    /**
+     * replays the pattern of a reported server exploit (#89) (rapid buy / short wait / sell cycles) with and without
+     * the mitigations (faded flow + target rate limit at their defaults vs. half-life 0 and no rate
+     * limit). Asserts that with the defaults the rapid pattern makes no profit beyond a small bound
+     * and reports a patient variant (60 s hold) plus each mitigation alone.
+     * <p>
+     * Bound: 0.5% of the bought volume valued at the default price.
+     */
+    private TestResult test_pumpReplay_noProfit() {
+        try {
+            float hl = backend.SERVER_SETTINGS.MARKET.NET_FLOW_HALF_LIFE_MINUTES.getDefaultValue();
+            float move = TargetPriceBot.DEFAULT_MAX_TARGET_MOVE_PER_SECOND;
+            int cycles = 20, orders = 5, rapidWait = 20, patientCycles = 5, patientWait = 1200;
+            ReplayResult rapidOn = replay(hl, move, cycles, orders, rapidWait);
+            ReplayResult rapidOff = replay(0f, 0f, cycles, orders, rapidWait);
+            ReplayResult patientOn = replay(hl, move, patientCycles, orders, patientWait);
+            ReplayResult patientOff = replay(0f, 0f, patientCycles, orders, patientWait);
+            ReplayResult patientFadeOnly = replay(hl, 0f, patientCycles, orders, patientWait);
+            ReplayResult patientRateOnly = replay(0f, move, patientCycles, orders, patientWait);
+            String report = "rapid ON: " + rapidOn + " | rapid OFF: " + rapidOff
+                    + " | patient ON: " + patientOn + " | patient OFF: " + patientOff
+                    + " | patient fade-only: " + patientFadeOnly + " | patient rate-only: " + patientRateOnly;
+            StockMarketMod.LOGGER.info("[#89 replay] {}", report);
+            double bought = (double) cycles * orders * MarketSettings.defaultMaxOrderVolume(50) * 160;
+            double bound = 0.005 * bought;
+            if (rapidOn.profit() > bound)
+                return fail("Rapid replay with mitigations made " + rapidOn.profit() + " > bound " + bound + ". " + report);
+            return pass(report);
+        } catch (Exception e) {
+            return fail("Exception: " + e);
         }
     }
 }

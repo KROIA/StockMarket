@@ -10,6 +10,9 @@ import net.kroia.banksystem.api.bankmanager.IServerBankManager;
 import net.kroia.banksystem.util.ItemID;
 import net.kroia.modutilities.persistence.ServerSaveable;
 import net.kroia.stockmarket.StockMarketModBackend;
+import net.kroia.stockmarket.StockMarketModSettings;
+import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
+import net.kroia.stockmarket.util.ProfitAlerts;
 import net.kroia.stockmarket.api.market.IServerMarket;
 import net.kroia.stockmarket.data.table.record.MarketPriceStruct;
 import net.kroia.stockmarket.data.table.record.OrderRecordStruct;
@@ -46,6 +49,15 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     private final MatchingEngine matchingEngine;
     private long currentMarketPrice;
     private long netPlayerItemFlow = 0;
+    /**
+     * #89: exponentially faded copy of {@link #netPlayerItemFlow} (raw units). Gets the same
+     * per-fill deltas, but decays towards 0 every tick with the half-life
+     * {@code MARKET.NET_FLOW_HALF_LIFE_MINUTES}, so a one-off burst of buys/sells fades out while
+     * sustained demand keeps it up. This is the value the price plugins read. Persisted.
+     */
+    private double fadedNetPlayerItemFlow = 0;
+    /** Duration of one server tick in seconds; the faded flow decays per {@link #update()} call. */
+    public static final double TICK_SECONDS = 0.05;
 
     private MarketSettings settings;
 
@@ -573,15 +585,43 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     public MarketSettings getSettings()
     {
         settings.netPlayerItemFlow = netPlayerItemFlow;
+        settings.fadedNetPlayerItemFlow = Math.round(fadedNetPlayerItemFlow);
         return settings;
     }
 
     @Override
     public long getNetPlayerItemFlow() { return netPlayerItemFlow; }
     @Override
-    public void resetNetPlayerItemFlow() { netPlayerItemFlow = 0; }
+    public void resetNetPlayerItemFlow() { netPlayerItemFlow = 0; fadedNetPlayerItemFlow = 0; }
     @Override
     public void setNetPlayerItemFlow(long netPlayerItemFlow) { this.netPlayerItemFlow = netPlayerItemFlow; }
+    @Override
+    public double getFadedNetPlayerItemFlow() { return fadedNetPlayerItemFlow; }
+    @Override
+    public void setFadedNetPlayerItemFlow(double fadedNetPlayerItemFlow) { this.fadedNetPlayerItemFlow = fadedNetPlayerItemFlow; }
+
+    /**
+     * Exponential decay of a value over {@code dtSeconds}: {@code value * 2^(-dt / halfLife)}.
+     * Pure function, so the decay math can be tested in isolation.
+     *
+     * @param value           the value to fade
+     * @param halfLifeSeconds time after which the value has halved; &lt;= 0 (or NaN) = no fading
+     * @param dtSeconds       elapsed time in seconds
+     * @return the faded value
+     */
+    public static double fade(double value, double halfLifeSeconds, double dtSeconds)
+    {
+        if (!(halfLifeSeconds > 0) || value == 0) return value;
+        return value * Math.pow(2.0, -dtSeconds / halfLifeSeconds);
+    }
+
+    /** @return the configured net flow half-life in seconds, 0 = no fading (also before the settings exist). */
+    private static double netFlowHalfLifeSeconds()
+    {
+        if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.SERVER_SETTINGS == null) return 0;
+        Float minutes = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.NET_FLOW_HALF_LIFE_MINUTES.get();
+        return minutes == null ? 0 : minutes * 60.0;
+    }
     @Override
     public CompletableFuture<Boolean> resetNetPlayerItemFlowAsync()
     {
@@ -725,6 +765,8 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     @Override
     public void update()
     {
+        // #89: tick-time decay of the faded net flow (runs while closed too: no fills, still fades).
+        fadedNetPlayerItemFlow = fade(fadedNetPlayerItemFlow, netFlowHalfLifeSeconds(), TICK_SECONDS);
         // Closed (outside trading hours / override): no matching, price stays static. Buffered
         // orders stay buffered; putOrder already rejects new ones while closed.
         if (!tradingOpen)
@@ -748,6 +790,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     {
         unlockRemainingFunds(order);
         saveOrderRecord(order);
+        trackRealizedProfit(order);
     }
 
     /**
@@ -773,7 +816,30 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
     {
         unlockRemainingFunds(order);
         saveOrderRecord(order);
+        trackRealizedProfit(order);
         notifyMarketOrderNotFullyFilled(order);
+    }
+
+    /**
+     * #89: feeds a finished player order's net money (all fills of the order, sell proceeds
+     * positive, buy costs negative) into the per-player profit alert. Inter-market legs count too,
+     * so a pair trade nets out to its real money result.
+     *
+     * @param order the consumed or canceled order (fill state is final)
+     */
+    private void trackRealizedProfit(Order order)
+    {
+        if (order.isBotOrder() || order.getFilledVolume() == 0 || order.getExecutorPlayerUUID() == null)
+            return;
+        if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.SERVER_SETTINGS == null)
+            return;
+        StockMarketModSettings.Market s = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET;
+        Float threshold = s.PROFIT_ALERT_THRESHOLD.get();
+        Long window = s.PROFIT_ALERT_WINDOW_MINUTES.get();
+        if (threshold == null || threshold <= 0 || window == null)
+            return;
+        ProfitAlerts.onOrderFinished(order.getExecutorPlayerUUID(),
+                MarketManager.convertToRealAmountStatic(order.getTransferredMoney()), threshold, window);
     }
 
     /**
@@ -826,6 +892,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
      */
     private void trackPlayerNetFlow(long filledVolume) {
         netPlayerItemFlow -= filledVolume;
+        fadedNetPlayerItemFlow -= filledVolume;
     }
 
     /**
@@ -980,6 +1047,7 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         tag.putLong("defaultPrice", settings.defaultPrice);
         tag.putFloat("naturalAbundance", settings.naturalAbundance);
         tag.putLong("netPlayerItemFlow", netPlayerItemFlow);
+        tag.putDouble("fadedNetPlayerItemFlow", fadedNetPlayerItemFlow);
         // Persist the new preset-derived flags so restarts keep the admin's intent.
         // Reads on the load side are guarded with contains() so old NBT still loads
         // with the field defaults (true / false / false respectively).
@@ -1029,6 +1097,9 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
         {
             netPlayerItemFlow = NbtCompat.getLong(tag, "netPlayerItemFlow");
         }
+        // #89: saves without the faded value start it at the real flow (what the plugins read until now).
+        fadedNetPlayerItemFlow = tag.contains("fadedNetPlayerItemFlow")
+                ? NbtCompat.getDouble(tag, "fadedNetPlayerItemFlow") : netPlayerItemFlow;
         if(tag.contains("virtualOrderbookEnabled"))
         {
             settings.virtualOrderbookEnabled = NbtCompat.getBoolean(tag, "virtualOrderbookEnabled");

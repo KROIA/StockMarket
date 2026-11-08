@@ -21,6 +21,7 @@ public class MarketSettings {
             ByteBufCodecs.VAR_INT.encode(buf, s.tradingOpenMinute);
             ByteBufCodecs.VAR_INT.encode(buf, s.tradingCloseMinute);
             ByteBufCodecs.VAR_LONG.encode(buf, s.maxOrderVolume);
+            ByteBufCodecs.VAR_LONG.encode(buf, s.fadedNetPlayerItemFlow);
         }
 
         @Override
@@ -36,6 +37,7 @@ public class MarketSettings {
             s.tradingOpenMinute = ByteBufCodecs.VAR_INT.decode(buf);
             s.tradingCloseMinute = ByteBufCodecs.VAR_INT.decode(buf);
             s.maxOrderVolume = ByteBufCodecs.VAR_LONG.decode(buf);
+            s.fadedNetPlayerItemFlow = ByteBufCodecs.VAR_LONG.decode(buf);
             return s;
         }
     };
@@ -48,6 +50,9 @@ public class MarketSettings {
     public float naturalAbundance;
     // Net items put into market by players (sell increases, buy decreases). Read-only on client.
     public long netPlayerItemFlow;
+    // #89: faded (exponentially decaying) net player flow, rounded to raw units. Read-only on
+    // client, only filled by ServerMarket.getSettings() for display; never applied by setSettings.
+    public long fadedNetPlayerItemFlow;
     // Whether the market has a virtual orderbook. Plugins that write to or read from the
     // virtual orderbook should skip this market entirely when this is false. Defaults to true
     // so existing markets (loaded from NBT / JSON that predate this field) keep working.

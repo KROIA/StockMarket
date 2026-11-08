@@ -40,6 +40,9 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
     /** Explains the sign of the net flow value (positive = players net-sold, negative = net-bought). */
     private static final Component NET_FLOW_TOOLTIP = Component.translatable(PREFIX + "net_flow.tooltip");
     private static final Component RESET_NET_FLOW_TEXT = Component.translatable(PREFIX + "reset_net_flow");
+    // #89: faded (decaying) net flow, the value the price plugins read
+    private static final Component FADED_NET_FLOW_TEXT = Component.translatable(PREFIX + "faded_net_flow");
+    private static final Component FADED_NET_FLOW_TOOLTIP = Component.translatable(PREFIX + "faded_net_flow.tooltip");
     private static final Component APPLY_TEXT = Component.translatable(PREFIX + "apply");
 
     private static final Component TRADING_HOURS_TEXT = Component.translatable(PREFIX + "trading_hours");
@@ -98,6 +101,9 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
     private final Label netFlowLabel;
     private final Label netFlowValueLabel;
     private final Button resetNetFlowButton;
+    /** #89: faded net flow row (read-only, refreshed together with the net flow). */
+    private final Label fadedNetFlowLabel;
+    private final Label fadedNetFlowValueLabel;
     private final Button resetVirtualOrderbookButton;
     private final Button clearVirtualOrderbookButton;
     private final Button applyButton;
@@ -165,6 +171,14 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
         netFlowValueLabel = new Label("0");
         netFlowValueLabel.setAlignment(Label.Alignment.LEFT);
 
+        fadedNetFlowLabel = new Label(FADED_NET_FLOW_TEXT.getString());
+        fadedNetFlowLabel.setAlignment(Label.Alignment.RIGHT);
+        fadedNetFlowLabel.setHoverTooltipSupplier(FADED_NET_FLOW_TOOLTIP::getString);
+        fadedNetFlowLabel.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
+
+        fadedNetFlowValueLabel = new Label("0");
+        fadedNetFlowValueLabel.setAlignment(Label.Alignment.LEFT);
+
         resetNetFlowButton = new Button(RESET_NET_FLOW_TEXT.getString(), () -> {
             market.resetNetPlayerItemFlow().thenAccept(success -> {
                 if (success) loadSettings();
@@ -229,6 +243,8 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
         addChild(netFlowLabel);
         addChild(netFlowValueLabel);
         addChild(resetNetFlowButton);
+        addChild(fadedNetFlowLabel);
+        addChild(fadedNetFlowValueLabel);
         addChild(resetVirtualOrderbookButton);
         addChild(clearVirtualOrderbookButton);
         addChild(applyButton);
@@ -248,9 +264,9 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
             child.setTooltipPositionAlignment(Alignment.TOP_RIGHT);
         }
 
-        // 9 base rows + trading hours, apply-all, status and server-time rows;
+        // 10 base rows + trading hours, apply-all, status and server-time rows;
         // +2 padding for the inner top/bottom margin of the trading-hours frame.
-        setHeight(13 * elementHeight + 16 * padding);
+        setHeight(14 * elementHeight + 17 * padding);
         setTradingHoursText(settings.tradingOpenMinute, settings.tradingCloseMinute);
         loadSettings();
         netFlowRefreshTimer.start(NET_FLOW_REFRESH_INTERVAL_MS);
@@ -325,7 +341,14 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
         if (marketSettings == null)
             return;
         settings.netPlayerItemFlow = marketSettings.netPlayerItemFlow;
+        settings.fadedNetPlayerItemFlow = marketSettings.fadedNetPlayerItemFlow;
+        setNetFlowTexts();
+    }
+
+    /** Shows the real and the faded net flow (#89) of {@link #settings} in real units. */
+    private void setNetFlowTexts() {
         netFlowValueLabel.setText(String.valueOf(getBankManager().convertToRealAmount(settings.netPlayerItemFlow)));
+        fadedNetFlowValueLabel.setText(String.valueOf(getBankManager().convertToRealAmount(settings.fadedNetPlayerItemFlow)));
     }
 
     @Override
@@ -353,12 +376,14 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
         netFlowLabel.setBounds(padding, maxOrderLabel.getBottom() + padding, labelWidth, elementHeight);
         netFlowValueLabel.setBounds(netFlowLabel.getRight() + spacing, netFlowLabel.getTop(), valueWidth, elementHeight);
         resetNetFlowButton.setBounds(netFlowValueLabel.getRight() + spacing, netFlowLabel.getTop(), resetButtonWidth, elementHeight);
+        fadedNetFlowLabel.setBounds(padding, netFlowLabel.getBottom() + padding, labelWidth, elementHeight);
+        fadedNetFlowValueLabel.setBounds(fadedNetFlowLabel.getRight() + spacing, fadedNetFlowLabel.getTop(), fieldWidth, elementHeight);
 
         // Virtual-orderbook control group: the enable checkbox and the Clear/Reset
         // buttons sit together as a visually cohesive block so the "these buttons act
         // on the same subsystem the checkbox toggles" relationship reads at a glance.
         // Task 3 also gates Clear/Reset enabled state on the checkbox value.
-        virtualOrderbookEnabledCheckBox.setBounds(padding, netFlowLabel.getBottom() + padding, width, elementHeight);
+        virtualOrderbookEnabledCheckBox.setBounds(padding, fadedNetFlowLabel.getBottom() + padding, width, elementHeight);
 
         // Clear and Reset side by side directly beneath the checkbox, split 50/50.
         int clearResetLeftW = (width - spacing) / 2;
@@ -530,6 +555,7 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
         settings.defaultPrice = marketSettings.defaultPrice;
         settings.naturalAbundance = marketSettings.naturalAbundance;
         settings.netPlayerItemFlow = marketSettings.netPlayerItemFlow;
+        settings.fadedNetPlayerItemFlow = marketSettings.fadedNetPlayerItemFlow;
         settings.virtualOrderbookEnabled = marketSettings.virtualOrderbookEnabled;
         // Round-trip fields that this widget does not surface as controls but must
         // preserve when Apply writes settings back to the server. Otherwise the
@@ -548,7 +574,7 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
         defaultPriceTextBox.setText(getBankManager().convertToRealAmount(settings.defaultPrice), getBankManager().getItemFractionDigitsCount());
         abundanceTextBox.setText(formatAbundance(settings.naturalAbundance));
         maxOrderTextBox.setText(Long.toString(settings.maxOrderVolume));
-        netFlowValueLabel.setText(String.valueOf(getBankManager().convertToRealAmount(settings.netPlayerItemFlow)));
+        setNetFlowTexts();
         setTradingHoursText(settings.tradingOpenMinute, settings.tradingCloseMinute);
         loading = false;
     }

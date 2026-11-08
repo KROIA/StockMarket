@@ -81,7 +81,11 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
         };
     }
 
-    static class DistributionCalculator implements IVolumeDistributionCalculator
+    /**
+     * The default virtual depth profile. Public so in-game tests can build a market with the
+     * production depth shape without running the plugin (see PluginTestSuite #89 replay).
+     */
+    public static class DistributionCalculator implements IVolumeDistributionCalculator
     {
         private float volumeScale = 1000;
         private double defaultPrice = 0;
@@ -89,6 +93,16 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
         public DistributionCalculator()
         {
 
+        }
+
+        /**
+         * @param defaultPrice the market's default (fair) price in real units
+         * @param volumeScale  depth scale; the plugin uses {@code volumeScale setting x naturalAbundance}
+         */
+        public DistributionCalculator(double defaultPrice, float volumeScale)
+        {
+            this.defaultPrice = defaultPrice;
+            this.volumeScale = volumeScale;
         }
 
         @Override

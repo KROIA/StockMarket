@@ -77,6 +77,13 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
     /** Minimum max-order-volume factor (T-179): at least one item per abundance unit. */
     public static final long MIN_MAX_ORDER_VOLUME_FACTOR = 1L;
 
+    /** Maximum net flow half-life (#89) in minutes (1 week); minimum is 0 = no fading. */
+    public static final float MAX_NET_FLOW_HALF_LIFE_MINUTES = 10_080f;
+    /** Minimum profit alert window (#89) in minutes. */
+    public static final long MIN_PROFIT_ALERT_WINDOW_MINUTES = 1L;
+    /** Maximum profit alert window (#89) in minutes (1 week). */
+    public static final long MAX_PROFIT_ALERT_WINDOW_MINUTES = 10_080L;
+
     /** Minimum villager price refresh interval in minutes. */
     public static final long MIN_PRICE_REFRESH_INTERVAL_MINUTES = 1L;
     /** Maximum villager price refresh interval in minutes (1 week). */
@@ -302,6 +309,11 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
         //   max order size is derived (new markets/presets, saves without a value, the
         //   APPLY_MAX_ORDER_VOLUME_TO_ALL_MARKETS action). Markets/presets live only on the
         //   master — no propagation needed. Changing it does NOT touch existing markets.
+        // * ServerMarket.NET_FLOW_HALF_LIFE_MINUTES (#89): read live every tick in
+        //   ServerMarket.update() on the master; markets only live there — no propagation needed.
+        // * ServerMarket.PROFIT_ALERT_THRESHOLD / PROFIT_ALERT_WINDOW_MINUTES (#89): read live when
+        //   a player order completes, which only happens on the master — no propagation needed.
+        //   (Admins online on a slave are not alerted; see ProfitAlerts.)
         // * Utilities.SYNC_ADMIN_FLAG_WITH_PERMISSION: read live, master only (the admin flags
         //   live on the master). Slaves keep defaults and forward LuckPerms changes of their
         //   players whenever the master trusts them; the master applies them only while this
@@ -339,6 +351,9 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
      *   <li>{@code ServerMarket.PRICE_HISTORY_INITIAL_LOAD_CANDLES} ∈ [16, 8,192]</li>
      *   <li>{@code ServerMarket.TRADE_COOLDOWN_MS} ∈ [0, 60,000 ms]</li>
      *   <li>{@code ServerMarket.MAX_ORDER_VOLUME_FACTOR} &ge; 1</li>
+     *   <li>{@code ServerMarket.NET_FLOW_HALF_LIFE_MINUTES} ∈ [0, 10,080]; NaN = default</li>
+     *   <li>{@code ServerMarket.PROFIT_ALERT_THRESHOLD} &ge; 0; NaN/Infinite = default</li>
+     *   <li>{@code ServerMarket.PROFIT_ALERT_WINDOW_MINUTES} ∈ [1, 10,080]</li>
      *   <li>{@code VillagerTrading.PRICE_REFRESH_INTERVAL_MINUTES} ∈ [1, 10,080]</li>
      *   <li>{@code VillagerTrading.VILLAGER_BUY_MARGIN / VILLAGER_SELL_MARGIN} ∈ [0.01, 100];
      *       NaN/Infinite values fall back to the setting's default</li>
@@ -375,6 +390,12 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
                 clamp(settings.MARKET.TRADE_COOLDOWN_MS.get(), 0L, MAX_TRADE_COOLDOWN_MS));
         settings.MARKET.MAX_ORDER_VOLUME_FACTOR.set(
                 clamp(settings.MARKET.MAX_ORDER_VOLUME_FACTOR.get(), MIN_MAX_ORDER_VOLUME_FACTOR, Long.MAX_VALUE));
+        settings.MARKET.NET_FLOW_HALF_LIFE_MINUTES.set(clampFloat(settings.MARKET.NET_FLOW_HALF_LIFE_MINUTES.get(),
+                0f, MAX_NET_FLOW_HALF_LIFE_MINUTES, settings.MARKET.NET_FLOW_HALF_LIFE_MINUTES.getDefaultValue()));
+        settings.MARKET.PROFIT_ALERT_THRESHOLD.set(clampFloat(settings.MARKET.PROFIT_ALERT_THRESHOLD.get(),
+                0f, Float.MAX_VALUE, settings.MARKET.PROFIT_ALERT_THRESHOLD.getDefaultValue()));
+        settings.MARKET.PROFIT_ALERT_WINDOW_MINUTES.set(clamp(settings.MARKET.PROFIT_ALERT_WINDOW_MINUTES.get(),
+                MIN_PROFIT_ALERT_WINDOW_MINUTES, MAX_PROFIT_ALERT_WINDOW_MINUTES));
         ItemStack currency = settings.MARKET.CURRENCY.get();
         if (currency == null || currency.isEmpty()) {
             // Never allow an empty trading currency — keep the previous one.
@@ -392,6 +413,12 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
         settings.VILLAGER_TRADING.VILLAGER_SELL_MARGIN.set(
                 clampMargin(settings.VILLAGER_TRADING.VILLAGER_SELL_MARGIN.get(),
                         settings.VILLAGER_TRADING.VILLAGER_SELL_MARGIN.getDefaultValue()));
+    }
+
+    /** Clamps a Float setting value into [min, max]; null, NaN and Infinite fall back to {@code fallback}. */
+    private static float clampFloat(@Nullable Float value, float min, float max, float fallback) {
+        if (value == null || value.isNaN() || value.isInfinite()) return fallback;
+        return Math.max(min, Math.min(max, value));
     }
 
     /** Clamps a Long setting value into [min, max]; null falls back to min. */

@@ -130,6 +130,18 @@ public class PluginMarket implements IPluginMarket
         serverMarket.setNetPlayerItemFlow(MarketManager.convertToRawAmountStatic(netPlayerItemFlow));
     }
 
+    @Override
+    public double getFadedNetPlayerItemFlow() {
+        return MarketManager.convertToRealAmountStatic(Math.round(serverMarket.getFadedNetPlayerItemFlow()));
+    }
+
+    /** {@inheritDoc} Non-finite values are ignored. */
+    @Override
+    public void setFadedNetPlayerItemFlow(double fadedNetPlayerItemFlow) {
+        if (Double.isNaN(fadedNetPlayerItemFlow) || Double.isInfinite(fadedNetPlayerItemFlow)) return;
+        serverMarket.setFadedNetPlayerItemFlow(MarketManager.convertToRawAmountStatic(fadedNetPlayerItemFlow));
+    }
+
 
 
     @Override

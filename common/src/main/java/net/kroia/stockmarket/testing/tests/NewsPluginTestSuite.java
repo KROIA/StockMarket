@@ -155,6 +155,9 @@ public class NewsPluginTestSuite extends TestSuite {
         @Override public double getMaxRealOrderVolume() { return 0; }
         @Override public double getNetPlayerItemFlow() { return netFlow; }
         @Override public void setNetPlayerItemFlow(double v) { netFlow = v; }
+        /** The mock does not fade: the faded flow is the same field as the real one. */
+        @Override public double getFadedNetPlayerItemFlow() { return netFlow; }
+        @Override public void setFadedNetPlayerItemFlow(double v) { netFlow = v; }
         @Override public boolean isMarketOpen() { return true; }
         @Override public float getCurrentCandleTradedVolume() { return 0; }
         @Override public boolean isVirtualOrderbookEnabled() { return true; }

@@ -165,6 +165,41 @@ public class StockMarketModSettings extends ModSettings {
          */
         public final Setting<Long> MAX_ORDER_VOLUME_FACTOR = registerSetting("MAX_ORDER_VOLUME_FACTOR", 64L, Long.class);
 
+        /**
+         * #89: half-life in minutes of the faded net player flow ({@code ServerMarket.fadedNetPlayerItemFlow}),
+         * the flow value the price plugins (VolatilityPlugin equilibrium) read. The real net flow is not
+         * affected. 0 = no fading (the faded value then equals the real flow).
+         * <p>
+         * Default 10 min: a one-off burst is at 50% after 10 min and at ~12% after 30 min, so scripted
+         * buy/sell bursts stop pinning the equilibrium, while steady demand still counts: a constant net
+         * rate R holds the faded flow at R x 14.4 min (half-life / ln 2).
+         * <p>
+         * Read live every tick (decay in {@code ServerMarket.update()}) — no restart required.
+         * <p>
+         * Slave-propagation: NOT needed. Markets only live on the master.
+         */
+        public final Setting<Float> NET_FLOW_HALF_LIFE_MINUTES = registerSetting("NET_FLOW_HALF_LIFE_MINUTES", 10f, Float.class);
+
+        /**
+         * #89: realized trading profit (real money, sum over all markets) a single player may make within
+         * {@link #PROFIT_ALERT_WINDOW_MINUTES} before online admins get a chat alert and the event is
+         * written to the server log. "Realized" = net money of the player's completed/cancelled orders
+         * (sell proceeds minus buy costs) in the window. 0 = off.
+         * <p>
+         * Read live on every completed order — no restart required.
+         * <p>
+         * Slave-propagation: NOT needed. Orders settle only on the master.
+         */
+        public final Setting<Float> PROFIT_ALERT_THRESHOLD = registerSetting("PROFIT_ALERT_THRESHOLD", 1_000_000f, Float.class);
+
+        /**
+         * #89: length of the window (minutes) for {@link #PROFIT_ALERT_THRESHOLD}. Fixed windows per
+         * player; a window starts with the player's first completed order after the previous one ended.
+         * <p>
+         * Read live — no restart required. Slave-propagation: NOT needed (master only).
+         */
+        public final Setting<Long> PROFIT_ALERT_WINDOW_MINUTES = registerSetting("PROFIT_ALERT_WINDOW_MINUTES", 60L, Long.class);
+
         public Market() { super("ServerMarket"); }
 
         /**

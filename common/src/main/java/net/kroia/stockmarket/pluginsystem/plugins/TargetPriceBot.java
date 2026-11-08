@@ -29,8 +29,13 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
      *                             order limit ({@code MarketSettings.maxOrderVolume}). A factor keeps the
      *                             bot limit tracking per-market limit changes. &lt;= 0, or a market
      *                             without a player limit (0 = unlimited), means no bot limit.
+     * @param maxTargetMovePerSecond #89: max relative move of the target price the bot chases, per second
+     *                             of tick time (0.01 = 1%/s, compounding). The bot follows the plugins'
+     *                             target through this rate limit, so a sudden target jump (e.g. a pinned
+     *                             flow equilibrium) is walked towards slowly. &lt;= 0 = no limit.
      */
-    public record Settings(float pidP, float pidI, float pidD, float pidRate, float maxOrderVolumeFactor) {
+    public record Settings(float pidP, float pidI, float pidD, float pidRate, float maxOrderVolumeFactor,
+                           float maxTargetMovePerSecond) {
         public static final StreamCodec<ByteBuf, Settings> CODEC = new StreamCodec<>() {
             @Override
             public Settings decode(ByteBuf buf) {
@@ -42,7 +47,9 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
                 // Every decode path wraps exactly one settings payload per buffer, so "no bytes left"
                 // identifies the old format.
                 float factor = buf.isReadable() ? buf.readFloat() : DEFAULT_MAX_ORDER_VOLUME_FACTOR;
-                return new Settings(p, i, d, rate, factor);
+                // Same for the target rate limit (#89), added after the volume factor.
+                float maxMove = buf.isReadable() ? buf.readFloat() : DEFAULT_MAX_TARGET_MOVE_PER_SECOND;
+                return new Settings(p, i, d, rate, factor, maxMove);
             }
             @Override
             public void encode(ByteBuf buf, Settings s) {
@@ -51,6 +58,7 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
                 buf.writeFloat(s.pidD());
                 buf.writeFloat(s.pidRate());
                 buf.writeFloat(s.maxOrderVolumeFactor());
+                buf.writeFloat(s.maxTargetMovePerSecond());
             }
         };
     }
@@ -117,6 +125,29 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
     private static final float DEFAULT_PID_RATE = 0.1f;
     /** Default bot order limit: 10x the market's player order limit. */
     public static final float DEFAULT_MAX_ORDER_VOLUME_FACTOR = 10f;
+    /**
+     * #89: default target rate limit, 0.5% per second (~35% per minute, x2 in ~2.3 min). Above the
+     * normal VolatilityPlugin random walk, which moves the target by well under 1% per step, but a
+     * pinned 5-20x flow target now takes minutes to reach instead of seconds.
+     */
+    public static final float DEFAULT_MAX_TARGET_MOVE_PER_SECOND = 0.005f;
+    /** Tick time between two bot steps: the bot acts every 5th update (5 ticks x 50 ms). */
+    private static final double STEP_SECONDS = 5 * 0.05;
+
+    /**
+     * Moves {@code current} towards {@code target} by at most {@code current * maxMovePerSecond * dt}.
+     *
+     * @param current          the rate-limited target of the previous step; &lt;= 0 = none yet (snap)
+     * @param target           the new raw target from the price plugins
+     * @param maxMovePerSecond max relative move per second; &lt;= 0 = no limit (returns target)
+     * @param dtSeconds        tick time since the previous step
+     * @return the new rate-limited target
+     */
+    public static double limitTargetMove(double current, double target, float maxMovePerSecond, double dtSeconds) {
+        if (!(maxMovePerSecond > 0) || !(current > 0)) return target;
+        double maxStep = current * maxMovePerSecond * dtSeconds;
+        return Math.max(current - maxStep, Math.min(current + maxStep, target));
+    }
 
     /**
      * Max volume of one bot order.
@@ -166,7 +197,10 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
         if(data.tickCounter < 5)
             return;
         data.tickCounter = 0;
-        data.targetPrice = market.market.getPreviousTargetPrice();
+        Settings settings = getCustomSettings(market.market.getMarketID());
+        // #89: chase the plugins' target only through the rate limit (persisted as targetPrice).
+        data.targetPrice = limitTargetMove(data.targetPrice, market.market.getPreviousTargetPrice(),
+                settings != null ? settings.maxTargetMovePerSecond() : DEFAULT_MAX_TARGET_MOVE_PER_SECOND, STEP_SECONDS);
         double currentPrice = market.market.getPrice();
 
         double output = data.pid.update(data.targetPrice - currentPrice);
@@ -178,7 +212,6 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
         float volumeToTarget = market.oderBook.getRealVirtualVolume(currentPrice, data.targetPrice);
         // Cap the order: an oversized bot order walks the price through the whole virtual book in one
         // tick and can fill a far-away player limit order at its price (trading exploit).
-        Settings settings = getCustomSettings(market.market.getMarketID());
         float factor = settings != null ? settings.maxOrderVolumeFactor() : DEFAULT_MAX_ORDER_VOLUME_FACTOR;
         double absVolumeToTarget = Math.min(botOrderVolumeLimit(market.market.getMaxRealOrderVolume(), factor), Math.abs(volumeToTarget));
 
@@ -261,7 +294,8 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
 
     @Override
     protected Settings provideDefaultCustomSettings() {
-        return new Settings(DEFAULT_PID_P, DEFAULT_PID_I, DEFAULT_PID_D, DEFAULT_PID_RATE, DEFAULT_MAX_ORDER_VOLUME_FACTOR);
+        return new Settings(DEFAULT_PID_P, DEFAULT_PID_I, DEFAULT_PID_D, DEFAULT_PID_RATE, DEFAULT_MAX_ORDER_VOLUME_FACTOR,
+                DEFAULT_MAX_TARGET_MOVE_PER_SECOND);
     }
 
     @Override

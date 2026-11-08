@@ -147,15 +147,20 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
             MarketData data = marketData.get(market.market.getMarketID());
             if (data == null) continue;
 
-            // Saturate the market's net-flow counter at the band where the equilibrium
+            // Saturate the market's net-flow counters at the band where the equilibrium
             // already sits at minPriceMult/maxPriceMult. Flow beyond it has no price
             // effect; storing it would only create a dead zone that players must trade
-            // back before the price moves again (T-174).
+            // back before the price moves again (T-174). #89: the real and the faded
+            // flow are each clamped independently; the equilibrium reads the faded one.
             FlowBand band = flowBand(market.market.getNaturalAbundance(), data.settings);
             if (band != null) {
                 double flow = market.market.getNetPlayerItemFlow();
                 if (flow < band.lower() || flow > band.upper()) {
                     market.market.setNetPlayerItemFlow(Math.min(Math.max(flow, band.lower()), band.upper()));
+                }
+                double faded = market.market.getFadedNetPlayerItemFlow();
+                if (faded < band.lower() || faded > band.upper()) {
+                    market.market.setFadedNetPlayerItemFlow(Math.min(Math.max(faded, band.lower()), band.upper()));
                 }
             }
 
@@ -176,7 +181,7 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
             // price range and heavy player buying permanently raises it.
             double defaultPrice = market.market.getDefaultRealPrice();
             double equilibrium = computeEquilibriumPrice(defaultPrice,
-                    market.market.getNetPlayerItemFlow(),
+                    market.market.getFadedNetPlayerItemFlow(),
                     market.market.getNaturalAbundance(),
                     data.settings);
 

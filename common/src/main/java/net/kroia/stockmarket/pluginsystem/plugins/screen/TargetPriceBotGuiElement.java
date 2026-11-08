@@ -56,6 +56,8 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
         public static final Component RATE_TOOLTIP = Component.translatable(PREFIX + "rate.tooltip");
         public static final Component LABEL_MAX_ORDER_FACTOR = Component.translatable(PREFIX + "max_order_factor");
         public static final Component MAX_ORDER_FACTOR_TOOLTIP = Component.translatable(PREFIX + "max_order_factor.tooltip");
+        public static final Component LABEL_MAX_TARGET_MOVE = Component.translatable(PREFIX + "max_target_move");
+        public static final Component MAX_TARGET_MOVE_TOOLTIP = Component.translatable(PREFIX + "max_target_move.tooltip");
     }
 
     private final CandlestickChart candlestickChart;
@@ -74,6 +76,9 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
     /** Bot order limit as a multiple of the market's player order limit (TargetPriceBot.Settings#maxOrderVolumeFactor). */
     private final Label maxOrderFactorLabel;
     private final TextBox maxOrderFactorTextBox;
+    /** #89: target rate limit in % per second (TargetPriceBot.Settings#maxTargetMovePerSecond x 100). */
+    private final Label maxTargetMoveLabel;
+    private final TextBox maxTargetMoveTextBox;
     private final Button applyButton;
     private final Button applyAllButton;
     /** Holds Apply + Apply-to-all side by side as one row of the vertical settings list. */
@@ -131,6 +136,11 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
         maxOrderFactorTextBox = new TextBox();
         maxOrderFactorTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 10, 3));
 
+        // Target rate limit in % per second (non-negative, 0 = no limit)
+        maxTargetMoveLabel = new Label(Texts.LABEL_MAX_TARGET_MOVE.getString());
+        maxTargetMoveTextBox = new TextBox();
+        maxTargetMoveTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 10, 4));
+
         applyButton = new Button(Texts.APPLY_BUTTON.getString(), this::onApplySettings);
         applyAllButton = new Button(ApplyAllTexts.APPLY_ALL.getString(), () -> confirmApplyToAllMarkets(readSettings()));
         setSettingTooltip(ApplyAllTexts.APPLY_ALL_TOOLTIP, applyAllButton);
@@ -156,6 +166,7 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
         setSettingTooltip(Texts.D_GAIN_TOOLTIP, dGainLabel, dGainTextBox);
         setSettingTooltip(Texts.RATE_TOOLTIP, rateLabel, rateTextBox);
         setSettingTooltip(Texts.MAX_ORDER_FACTOR_TOOLTIP, maxOrderFactorLabel, maxOrderFactorTextBox);
+        setSettingTooltip(Texts.MAX_TARGET_MOVE_TOOLTIP, maxTargetMoveLabel, maxTargetMoveTextBox);
 
         settingsListView.addChild(pGainLabel);
         settingsListView.addChild(pGainTextBox);
@@ -167,6 +178,8 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
         settingsListView.addChild(rateTextBox);
         settingsListView.addChild(maxOrderFactorLabel);
         settingsListView.addChild(maxOrderFactorTextBox);
+        settingsListView.addChild(maxTargetMoveLabel);
+        settingsListView.addChild(maxTargetMoveTextBox);
         settingsListView.addChild(applyButtonRow);
 
         addChild(candlestickChart);
@@ -305,6 +318,7 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
             dGainTextBox.setText(s.pidD(), 6);
             rateTextBox.setText(s.pidRate(), 6);
             maxOrderFactorTextBox.setText(s.maxOrderVolumeFactor(), 3);
+            maxTargetMoveTextBox.setText(s.maxTargetMovePerSecond() * 100, 4);
         }
     }
 
@@ -326,7 +340,8 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
                 (float) iGainTextBox.getDouble(),
                 (float) dGainTextBox.getDouble(),
                 (float) rateTextBox.getDouble(),
-                (float) Math.max(0, maxOrderFactorTextBox.getDouble())
+                (float) Math.max(0, maxOrderFactorTextBox.getDouble()),
+                (float) Math.max(0, maxTargetMoveTextBox.getDouble() / 100)
         );
     }
 

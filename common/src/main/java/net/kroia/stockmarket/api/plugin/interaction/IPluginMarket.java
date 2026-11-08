@@ -171,6 +171,26 @@ public interface IPluginMarket {
      */
     default void setNetPlayerItemFlow(double netPlayerItemFlow) {}
 
+    /**
+     * Gets the faded net player item flow (#89): the same per-fill counting as
+     * {@link #getNetPlayerItemFlow()}, but it decays exponentially towards 0 with the admin
+     * half-life {@code MARKET.NET_FLOW_HALF_LIFE_MINUTES}. A one-off burst of trades fades out,
+     * sustained demand or supply keeps it up. Price plugins should use this value.
+     * <p>
+     * The default implementation returns {@link #getNetPlayerItemFlow()} (no fading) so
+     * existing external implementations of this interface keep compiling.
+     * @return the faded net flow as a real (scaled) value, same sign convention
+     */
+    default double getFadedNetPlayerItemFlow() { return getNetPlayerItemFlow(); }
+
+    /**
+     * Overwrites the faded net player item flow. Applied immediately (not cache-buffered).
+     * Used by the VolatilityPlugin to saturate it at its price band.
+     * The default implementation is a no-op.
+     * @param fadedNetPlayerItemFlow the new faded flow in real (scaled) units
+     */
+    default void setFadedNetPlayerItemFlow(double fadedNetPlayerItemFlow) {}
+
 
 
     /**
