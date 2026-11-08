@@ -408,6 +408,22 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
             userMap.put(playerUUID, user);
         }
     }
+    /**
+     * Removes a StockMarket user (admin flag and preferences). Used by test cleanup to drop fake users again;
+     * a real player who rejoins is simply created anew by {@link #onPlayerJoin}.
+     *
+     * @param playerUUID the user to remove
+     * @return true if the user existed
+     */
+    public boolean removeUser(UUID playerUUID) {
+        return userMap.remove(playerUUID) != null;
+    }
+
+    /** @return true if a StockMarket user exists for this UUID */
+    public boolean userExists(UUID playerUUID) {
+        return userMap.containsKey(playerUUID);
+    }
+
     @Override
     public void onPlayerJoinAsync(UUID playerUUID, String playerName)
     {

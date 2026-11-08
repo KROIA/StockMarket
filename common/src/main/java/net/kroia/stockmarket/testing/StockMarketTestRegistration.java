@@ -45,6 +45,8 @@ import net.kroia.stockmarket.testing.tests.RandomWalkTestSuite;
 import net.kroia.stockmarket.testing.tests.ServerMarketTestSuite;
 import net.kroia.stockmarket.testing.tests.PlayerPreferencesTestSuite;
 import net.kroia.stockmarket.testing.tests.AdminFlagSyncTestSuite;
+import net.kroia.stockmarket.testing.tests.AdminFlagSyncLuckPermsTests;
+import net.kroia.stockmarket.testing.tests.StockMarketLuckPermsRemovedTests;
 import net.kroia.stockmarket.testing.tests.UserTestSuite;
 import net.kroia.stockmarket.testing.tests.VillagerMoneyPaymentTestSuite;
 import net.kroia.stockmarket.testing.tests.VillagerTradePricingTestSuite;
@@ -115,5 +117,9 @@ public class StockMarketTestRegistration {
         TestRegistry.register(new VillagerTradeRewriteTestSuite());
         TestRegistry.register(new NewsHistoryRequestTestSuite());
         TestRegistry.register(new NewsPictureRequestTestSuite());
+        // Admin flag sync against a real LuckPerms (skip without it), then "LuckPerms removed" phase 1/2.
+        // Last: the removed-suite's phase 1 leaves the sync setting on (autotest runs only).
+        TestRegistry.register(new AdminFlagSyncLuckPermsTests());
+        TestRegistry.register(new StockMarketLuckPermsRemovedTests());
     }
 }

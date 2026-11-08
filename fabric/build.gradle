@@ -81,6 +81,22 @@ dependencies {
 
 }
 
+// Opt-in LuckPerms for dev runs (runClient/runServer, tools/autotest --luckperms): -Pwith_luckperms=true.
+// modLocalRuntime: dev runtime only, never in the mod jar or the published POM/Gradle module metadata.
+if ((findProperty('with_luckperms') ?: 'false').toBoolean()) {
+    repositories {
+        maven {
+            url = 'https://api.modrinth.com/maven'
+            content { includeGroup 'maven.modrinth' }
+        }
+    }
+    dependencies {
+        modLocalRuntime "maven.modrinth:luckperms:${rootProject.luckperms_fabric_version}"
+        // LuckPerms needs fabric-permissions-api; ModUtilities ships it jar-in-jar, which the dev run does not load
+        modLocalRuntime "me.lucko:fabric-permissions-api:${rootProject.fabric_permissions_api_version}"
+    }
+}
+
 processResources {
     inputs.property 'version', project.version
     inputs.property 'minecraft_version', rootProject.minecraft_version

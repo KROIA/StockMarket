@@ -38,5 +38,9 @@ dependencies {
         exclude group: "org.slf4j"
     }
 
+    // LuckPerms API: compileOnly, never bundled. Only the dev-build LuckPerms tests (testing/) reference it,
+    // in nested classes loaded only when LuckPerms is present.
+    compileOnly "net.luckperms:api:${rootProject.luckperms_api_version}"
+
 
 }
