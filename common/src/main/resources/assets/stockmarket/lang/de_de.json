@@ -458,6 +458,7 @@
   "gui.stockmarket.plugin_management_screen.logger": "Logger",
   "gui.stockmarket.plugin_management_screen.plugin_missing": "Plugin-Mod nicht installiert — eigene Oberfläche nicht verfügbar",
   "gui.stockmarket.market_settings_widget.net_flow": "Nettofluss:",
+  "gui.stockmarket.market_settings_widget.net_flow.tooltip": "Netto-Anzahl Items, die Spieler mit diesem Markt gehandelt\nhaben (pro Ausführung gezählt, ohne Bot-Orders).\nPositiv: Spieler haben mehr Items in den Markt verkauft\nals gekauft -> zusätzliches Angebot, senkt den\nGleichgewichtspreis.\nNegativ: Spieler haben mehr gekauft als verkauft ->\nzusätzliche Nachfrage, hebt den Gleichgewichtspreis.\nWird vom Volatilitäts-Plugin verwendet, das ab Erreichen\nder Preisgrenze nicht weiterzählt. Zurücksetzen setzt 0.",
   "gui.stockmarket.market_settings_widget.reset_net_flow": "Zurücksetzen",
   "gui.stockmarket.market_settings_widget.apply": "Anwenden",
   "stockmarket.candlestick.loadingOlder": "Lade ältere Daten...",

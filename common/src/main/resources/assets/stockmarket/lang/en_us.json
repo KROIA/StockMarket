@@ -458,6 +458,7 @@
   "gui.stockmarket.plugin_management_screen.logger": "Logger",
   "gui.stockmarket.plugin_management_screen.plugin_missing": "Plugin mod not installed — custom UI unavailable",
   "gui.stockmarket.market_settings_widget.net_flow": "Net Flow:",
+  "gui.stockmarket.market_settings_widget.net_flow.tooltip": "Net number of items players traded with this market\n(counted per fill, bot orders excluded).\nPositive: players sold more items into the market than\nthey bought -> extra supply, pushes the equilibrium\nprice down.\nNegative: players bought more than they sold -> extra\ndemand, pushes the equilibrium price up.\nUsed by the Volatility plugin, which stops counting once\nthe price limit is reached. Reset sets it to 0.",
   "gui.stockmarket.market_settings_widget.reset_net_flow": "Reset",
   "gui.stockmarket.market_settings_widget.apply": "Apply",
   "stockmarket.candlestick.loadingOlder": "Loading older data...",

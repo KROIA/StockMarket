@@ -458,6 +458,7 @@
   "gui.stockmarket.plugin_management_screen.logger": "Logger",
   "gui.stockmarket.plugin_management_screen.plugin_missing": "Plugin-Mod nöd installiert — eigeti Oberflächi nöd verfüegbar",
   "gui.stockmarket.market_settings_widget.net_flow": "Nettofluss:",
+  "gui.stockmarket.market_settings_widget.net_flow.tooltip": "Netto-Aazahl Items, wo Spieler mit däm Märt ghandlet\nhend (pro Uusfüehrig zählt, ohni Bot-Orders).\nPositiv: Spieler hend meh Items i de Märt verchauft\nals gchauft -> zuesätzlichs Aagebot, senkt de\nGliichgwichtspriis.\nNegativ: Spieler hend meh gchauft als verchauft ->\nzuesätzlichi Nachfrag, hebt de Gliichgwichtspriis.\nWird vom Volatilitäts-Plugin bruucht, wo ab de\nPriisgränze nüme witerzählt. Zruggsetze setzt 0.",
   "gui.stockmarket.market_settings_widget.reset_net_flow": "Zruggsetze",
   "gui.stockmarket.market_settings_widget.apply": "Aawende",
   "stockmarket.candlestick.loadingOlder": "Lade ältere Date...",

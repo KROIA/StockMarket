@@ -37,6 +37,8 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
     private static final Component CLEAR_VIRTUAL_ORDERBOOK_TOOLTIP = Component.translatable(PREFIX + "clear_virtual_orderbook.tooltip");
     // T-159: net player item flow row + apply button
     private static final Component NET_FLOW_TEXT = Component.translatable(PREFIX + "net_flow");
+    /** Explains the sign of the net flow value (positive = players net-sold, negative = net-bought). */
+    private static final Component NET_FLOW_TOOLTIP = Component.translatable(PREFIX + "net_flow.tooltip");
     private static final Component RESET_NET_FLOW_TEXT = Component.translatable(PREFIX + "reset_net_flow");
     private static final Component APPLY_TEXT = Component.translatable(PREFIX + "apply");
 
@@ -58,6 +60,9 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
     private static final int SUCCESS_TEXT_COLOR = 0xFF55FF55;
 
     private static final int elementHeight = 20;
+
+    /** Color of the outline drawn around the trading-hours group. */
+    private static final int TRADING_HOURS_FRAME_COLOR = 0xFF777777;
 
     /** How often the Net Flow value is re-requested from the server, in milliseconds. */
     private static final long NET_FLOW_REFRESH_INTERVAL_MS = 1000;
@@ -105,6 +110,9 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
     /** Shows {@code invalid_time} (red) while the window is invalid, otherwise apply-all feedback. */
     private final Label tradingHoursStatusLabel;
     private final Label serverTimeLabel;
+    /** Top edge and height of the outline around the trading-hours group; computed in {@link #layoutChanged()}. */
+    private int tradingHoursFrameY = 0;
+    private int tradingHoursFrameHeight = 0;
     /** Default text color of the time boxes, restored once the input becomes valid again. */
     private final int defaultTimeTextColor;
 
@@ -151,6 +159,8 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
 
         netFlowLabel = new Label(NET_FLOW_TEXT.getString());
         netFlowLabel.setAlignment(Label.Alignment.RIGHT);
+        netFlowLabel.setHoverTooltipSupplier(NET_FLOW_TOOLTIP::getString);
+        netFlowLabel.setHoverTooltipFontScale(StockMarketGuiElement.hoverToolTipFontSize);
 
         netFlowValueLabel = new Label("0");
         netFlowValueLabel.setAlignment(Label.Alignment.LEFT);
@@ -238,8 +248,9 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
             child.setTooltipPositionAlignment(Alignment.TOP_RIGHT);
         }
 
-        // 9 base rows + trading hours, apply-all, status and server-time rows.
-        setHeight(13 * elementHeight + 14 * padding);
+        // 9 base rows + trading hours, apply-all, status and server-time rows;
+        // +2 padding for the inner top/bottom margin of the trading-hours frame.
+        setHeight(13 * elementHeight + 16 * padding);
         setTradingHoursText(settings.tradingOpenMinute, settings.tradingCloseMinute);
         loadSettings();
         netFlowRefreshTimer.start(NET_FLOW_REFRESH_INTERVAL_MS);
@@ -262,6 +273,11 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
      */
     @Override
     protected void render() {
+        // Outline grouping the trading-hours controls (incl. "Apply to all", which only
+        // copies the trading hours). Drawn before the timer early-return so it shows every frame.
+        if (tradingHoursFrameHeight > 0)
+            drawFrame(padding, tradingHoursFrameY, getWidth() - 2 * padding, tradingHoursFrameHeight, TRADING_HOURS_FRAME_COLOR, 1);
+
         // The same once-per-second tick also refreshes the server-time row. Each request has
         // its own in-flight guard so a slow one never stacks and never blocks the other.
         if (!netFlowRefreshTimer.check())
@@ -350,19 +366,31 @@ public class MarketSettingsWidget extends StockMarketGuiElement {
         clearVirtualOrderbookButton.setBounds(padding, virtualOrderbookEnabledCheckBox.getBottom() + padding, clearResetLeftW, elementHeight);
         resetVirtualOrderbookButton.setBounds(clearVirtualOrderbookButton.getRight() + spacing, clearVirtualOrderbookButton.getTop(), clearResetRightW, elementHeight);
 
+        // Trading-hours group, enclosed by an outline (drawn in render()) and inset by one
+        // padding on every side. The label column ends at the same x as the rows above so the
+        // fields stay aligned; only the right edge is pulled in.
+        tradingHoursFrameY = resetVirtualOrderbookButton.getBottom() + padding;
+        int innerX = 2 * padding;
+        int innerWidth = Math.max(0, width - 2 * padding);
+        int innerLabelWidth = Math.max(0, labelWidth - padding);
+        int innerFieldWidth = Math.max(0, fieldWidth - padding);
+
         // Trading hours row: label | open | "-" | close (the two boxes share the field width).
         int dashWidth = 8;
-        int timeBoxWidth = (fieldWidth - dashWidth - 2 * spacing) / 2;
-        tradingHoursLabel.setBounds(padding, resetVirtualOrderbookButton.getBottom() + padding, labelWidth, elementHeight);
+        int timeBoxWidth = Math.max(0, (innerFieldWidth - dashWidth - 2 * spacing) / 2);
+        tradingHoursLabel.setBounds(innerX, tradingHoursFrameY + padding, innerLabelWidth, elementHeight);
         tradingOpenTextBox.setBounds(tradingHoursLabel.getRight() + spacing, tradingHoursLabel.getTop(), timeBoxWidth, elementHeight);
         tradingHoursDashLabel.setBounds(tradingOpenTextBox.getRight() + spacing, tradingHoursLabel.getTop(), dashWidth, elementHeight);
         tradingCloseTextBox.setBounds(tradingHoursDashLabel.getRight() + spacing, tradingHoursLabel.getTop(),
-                fieldWidth - timeBoxWidth - dashWidth - 2 * spacing, elementHeight);
-        applyAllHoursButton.setBounds(padding, tradingHoursLabel.getBottom() + padding, width, elementHeight);
-        tradingHoursStatusLabel.setBounds(padding, applyAllHoursButton.getBottom() + padding, width, elementHeight);
-        serverTimeLabel.setBounds(padding, tradingHoursStatusLabel.getBottom() + padding, width, elementHeight);
+                Math.max(0, innerFieldWidth - timeBoxWidth - dashWidth - 2 * spacing), elementHeight);
+        // "Apply to all" belongs to the trading hours (it only copies the window), so it lives inside the frame.
+        applyAllHoursButton.setBounds(innerX, tradingHoursLabel.getBottom() + padding, innerWidth, elementHeight);
+        tradingHoursStatusLabel.setBounds(innerX, applyAllHoursButton.getBottom() + padding, innerWidth, elementHeight);
+        serverTimeLabel.setBounds(innerX, tradingHoursStatusLabel.getBottom() + padding, innerWidth, elementHeight);
+        tradingHoursFrameHeight = serverTimeLabel.getBottom() + padding - tradingHoursFrameY;
 
-        applyButton.setBounds(padding, serverTimeLabel.getBottom() + padding, width, elementHeight);
+        // General Apply (all settings of this market) sits below the trading-hours frame.
+        applyButton.setBounds(padding, tradingHoursFrameY + tradingHoursFrameHeight + padding, width, elementHeight);
     }
 
     /**
