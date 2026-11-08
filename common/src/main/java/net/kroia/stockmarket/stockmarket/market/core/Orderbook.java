@@ -251,6 +251,18 @@ public class Orderbook implements ServerSaveable
     }
 
     /**
+     * T-200: exact one-sided virtual volume a market order consumes walking from {@code fromRawPrice}
+     * to {@code toRawPrice}. Resting limit orders are not counted. See
+     * {@link VirtualOrderbook#sideVolume(long, long, boolean, long)}.
+     *
+     * @return summed absolute raw volume (&gt;= 0)
+     */
+    public long getRawVirtualSideVolume(long fromRawPrice, long toRawPrice, boolean askSide, long rawCap)
+    {
+        return virtualOrderbook.sideVolume(fromRawPrice, toRawPrice, askSide, rawCap);
+    }
+
+    /**
      * @return true if the virtual book has default volume outside its array window, so a
      *         search across a gap costs one provider call per level.
      *         See {@link VirtualOrderbook#hasDefaultVolume()}.

@@ -72,6 +72,30 @@ public interface IPluginOrderBook {
         return 0;
     }
 
+    /**
+     * Exact virtual volume a market order must consume to move the price from the current market
+     * price to {@code targetRealPrice}, read level by level the way the matching engine walks the
+     * book (including the depth memory outside the orderbook window). Only the side the order eats
+     * is counted: asks for a target above the price, bids for a target below. Resting limit orders
+     * are not counted (the walk would fill them too, so the real move is never larger).
+     * <p>
+     * A market order of exactly this size ends at or before the target; use it to size orders that
+     * must not overshoot.
+     * <p>
+     * Default: {@code 0} ("no depth information"), which keeps order sizing callers inert.
+     *
+     * @param targetRealPrice the real price the order should move the market to
+     * @param capReal         stop counting once this many real items are reached (the caller's order
+     *                        limit); {@link Double#POSITIVE_INFINITY} = no cap
+     * @return signed real volume: negative = ask volume a buy consumes (target above the price),
+     *         positive = bid volume a sell consumes (target below), 0 if the target is the current
+     *         price or there is no volume in between
+     */
+    default float getRealVirtualVolumeToPrice(double targetRealPrice, double capReal)
+    {
+        return 0;
+    }
+
     long getRawVolume(long backendPrice);
 
     float getRawVirtualVolume(long backendPrice);

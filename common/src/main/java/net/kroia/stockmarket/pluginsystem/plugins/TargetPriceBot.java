@@ -95,6 +95,8 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
         public PID pid;
         public int tickCounter = 0;
         public double targetPrice = 0;
+        /** Last step that placed an order (diagnostics, see {@link #test_getLastStep}). */
+        StepInfo lastStep;
         float pidP, pidI, pidD, pidRate;
 
         RuntimeData(float p, float i, float d, float rate) {
@@ -106,6 +108,27 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
         }
     }
     private final Map<ItemID, RuntimeData> marketData = new HashMap<>();
+
+    /**
+     * Diagnostics of one bot step that placed an order (replay traces).
+     *
+     * @param target      the rate-limited bot target (real price)
+     * @param priceBefore market price when the order was sized (real)
+     * @param estimate    the volume the bot measured to the target (real items, signed: + = buy)
+     * @param amount      the placed market order (real items, + = buy)
+     */
+    public record StepInfo(double target, double priceBefore, double estimate, double amount) {}
+
+    /**
+     * Test hook: the last step of the bot on {@code marketID} that placed an order. A new object per
+     * order, so callers detect a new order by identity.
+     *
+     * @return the step, or null if none yet / not subscribed
+     */
+    public StepInfo test_getLastStep(ItemID marketID) {
+        RuntimeData data = marketData.get(marketID);
+        return data == null ? null : data.lastStep;
+    }
 
     /**
      * Creates the bot's PID with its output limited to [-1, 1], the range the bot actually uses
@@ -207,31 +230,29 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
         // Clamp PID output to [-1, 1] as a fraction of how aggressively to push
         double pidFraction = Math.min(Math.max(-1, output), 1);
 
-        // Size from virtual depth only: counting resting player limit orders here let the bot fill a
-        // whole player order in one go at its limit price, before the player's flow could move the price.
-        float volumeToTarget = market.oderBook.getRealVirtualVolume(currentPrice, data.targetPrice);
         // Cap the order: an oversized bot order walks the price through the whole virtual book in one
         // tick and can fill a far-away player limit order at its price (trading exploit).
         float factor = settings != null ? settings.maxOrderVolumeFactor() : DEFAULT_MAX_ORDER_VOLUME_FACTOR;
-        double absVolumeToTarget = Math.min(botOrderVolumeLimit(market.market.getMaxRealOrderVolume(), factor), Math.abs(volumeToTarget));
-
-        double normalized;
-        if (absVolumeToTarget < 0.01) {
-            normalized = 0;
-        } else {
-            // Scale order size proportional to orderbook depth and PID urgency
-            normalized = pidFraction * absVolumeToTarget;
-            // Constrain: don't overshoot by consuming more than the volume to target
-            if (normalized < 0 && volumeToTarget > 0)
-                normalized = Math.max(-volumeToTarget, normalized);
-            else if (normalized > 0 && volumeToTarget < 0)
-                normalized = Math.min(-volumeToTarget, normalized);
-        }
-
-        double marketOrderAmount = ((double) Math.round(normalized * 100)) / 100;
+        double limit = botOrderVolumeLimit(market.market.getMaxRealOrderVolume(), factor);
+        // T-200: size from the exact one-sided virtual depth between the price and the target, read the
+        // way the matching walk reads it (incl. the depth memory). A market order of that size ends at or
+        // before the target, so the bot can never walk past its own target. Resting player limit orders
+        // are not counted: counting them let the bot fill a whole player order in one go at its limit
+        // price, and leaving them out only makes the order smaller.
+        // Signed like the book: negative = asks to buy through (target above), positive = bids to sell into.
+        float volumeToTarget = market.oderBook.getRealVirtualVolumeToPrice(data.targetPrice, limit);
+        double absVolumeToTarget = Math.min(limit, Math.abs(volumeToTarget));
+        // Direction to the target: +1 buy, -1 sell. The PID output only sets the urgency; if its sign
+        // still points the other way (filter lag right after the price crossed the target), don't
+        // trade instead of pushing the price further away.
+        double direction = volumeToTarget < 0 ? 1 : -1;
+        double urgency = Math.max(0, pidFraction * direction);
+        // Truncate (not round) to 0.01 so the order never exceeds the measured volume.
+        double marketOrderAmount = direction * Math.floor(urgency * absVolumeToTarget * 100) / 100;
         if(marketOrderAmount != 0)
         {
             market.market.placeOrder(marketOrderAmount);
+            data.lastStep = new StepInfo(data.targetPrice, currentPrice, volumeToTarget, marketOrderAmount);
             info("Placing order: " + marketOrderAmount + " (PID-OUT: " + output + ", fraction: " + pidFraction + ", volumeToTarget: " + volumeToTarget + ")");
         }
     }

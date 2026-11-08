@@ -85,6 +85,19 @@ public class PluginOrderBook implements IPluginOrderBook
         return orderbook.getRealVirtualVolume(minPrice, maxPrice);
     }
 
+    /** {@inheritDoc} Counts from the orderbook's raw current price, where the matching walk starts. */
+    @Override
+    public float getRealVirtualVolumeToPrice(double targetRealPrice, double capReal) {
+        long from = serverMarket.getCurrentMarketPrice();
+        long to = Math.max(1, MarketManager.convertToRawAmountStatic(targetRealPrice)); // sells stop at price 1
+        if (to == from)
+            return 0;
+        boolean up = to > from;
+        long cap = Double.isFinite(capReal) ? MarketManager.convertToRawAmountStatic(capReal) : Long.MAX_VALUE;
+        float real = (float) MarketManager.convertToRealAmountStatic(orderbook.getRawVirtualSideVolume(from, to, up, cap));
+        return up ? -real : real;
+    }
+
     @Override
     public float getRealVolume(long backendPrice) {
         return (float)MarketManager.convertToRealAmountStatic(orderbook.getRawVolume(backendPrice));

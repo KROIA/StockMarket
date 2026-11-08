@@ -114,6 +114,7 @@ public class MatchingEngineTestSuite extends TestSuite {
         // T-198: depth memory
         addTest("depthMemory_maxOrder_sameFillsOnOff", this::test_depthMemory_maxOrder_sameFillsOnOff);
         addTest("depthMemory_sweepThenSellBack_loses", this::test_depthMemory_sweepThenSellBack_loses);
+        addTest("sideVolume_orderOfExactSizeStopsAtTarget", this::test_sideVolume_orderOfExactSizeStopsAtTarget);
         addTest("walk_emptyGap_isFast", this::test_walk_emptyGap_isFast);
         addTest("walk_diamondPreset_priceImpact", this::test_walk_diamondPreset_priceImpact);
 
@@ -1069,6 +1070,63 @@ public class MatchingEngineTestSuite extends TestSuite {
         } finally {
             ms.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.set(prev);
             serverMarket.test_setDefaultVolumeProviderFunction(this::uniformVolumeDistribution);
+        }
+    }
+
+    /**
+     * T-200: on memory-thinned diamond depth (sweep up, sell back), a market buy of exactly
+     * {@code getRawVirtualSideVolume(price, target)} fills completely, ends at or below the target and
+     * leaves no ask volume up to the target (so one more raw unit would pass it); mirrored for a sell
+     * back down to the buy's start.
+     */
+    private TestResult test_sideVolume_orderOfExactSizeStopsAtTarget() {
+        StockMarketModSettings.Market ms = backend.SERVER_SETTINGS.MARKET;
+        Float prev = ms.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.get();
+        try {
+            ms.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.set(30f);
+            useDiamondDepth();
+            ItemID item = serverMarket.getItemID();
+            bankAccount1.getBank(moneyID).setBalance(1_000_000_000_000_000L);
+            bankAccount1.getBank(item).setBalance(0);
+            // Sweep up and sell everything back: the asks between the price and the sweep top are thin now
+            serverMarket.putOrder(new Order(item, Order.Type.MARKET, 20_000L * scaleFactor, 0, 0, UUID.randomUUID(), bankAccountNr1));
+            serverMarket.update();
+            long top = serverMarket.getCurrentMarketPrice();
+            long bought = bankAccount1.getBank(item).getBalance();
+            bankAccount1.getBank(item).lockAmount(bought);
+            serverMarket.putOrder(new Order(item, Order.Type.MARKET, -bought, 0, 0, UUID.randomUUID(), bankAccountNr1));
+            serverMarket.update();
+
+            StringBuilder out = new StringBuilder();
+            long buyStart = serverMarket.getCurrentMarketPrice();
+            for (boolean buy : new boolean[]{ true, false }) {
+                net.kroia.stockmarket.stockmarket.market.core.Orderbook book = master().getOrderbook();
+                long start = serverMarket.getCurrentMarketPrice();
+                long target = buy ? top : buyStart;   // buy up to the sweep top, then sell back down
+                long v = book.getRawVirtualSideVolume(start, target, buy, Long.MAX_VALUE);
+                if (v <= 0) return fail("No volume between " + start + " and " + target);
+                if (!buy) { bankAccount1.getBank(item).setBalance(v); bankAccount1.getBank(item).lockAmount(v); }
+                Order o = new Order(item, Order.Type.MARKET, buy ? v : -v, 0, 0, UUID.randomUUID(), bankAccountNr1);
+                serverMarket.putOrder(o);
+                serverMarket.update();
+                long end = serverMarket.getCurrentMarketPrice();
+                String side = buy ? "buy" : "sell";
+                if (Math.abs(o.getFilledVolume()) != v)
+                    return fail(side + " filled " + o.getFilledVolume() + " of " + v);
+                if (buy ? end > target : end < target)
+                    return fail(side + " of " + v + " passed the target " + target + ": end " + end);
+                long left = book.getRawVirtualSideVolume(end, target, buy, Long.MAX_VALUE);
+                if (left != 0)
+                    return fail(side + " left " + left + " raw between " + end + " and " + target);
+                out.append(String.format(java.util.Locale.ROOT, "%s %d raw: %d -> %d (target %d); ", side, v, start, end, target));
+            }
+            return pass(out.toString());
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        } finally {
+            ms.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.set(prev);
+            serverMarket.test_setDefaultVolumeProviderFunction(this::uniformVolumeDistribution);
+            serverMarket.test_clearOrderbook();
         }
     }
 

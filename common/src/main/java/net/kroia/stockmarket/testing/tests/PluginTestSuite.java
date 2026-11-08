@@ -85,6 +85,7 @@ public class PluginTestSuite extends TestSuite {
         addTest("profitAlert_window", this::test_profitAlert_window);
         addTest("pumpReplay_noProfit", this::test_pumpReplay_noProfit);
         addTest("depthMemory_replayReport", this::test_depthMemory_replayReport);
+        addTest("targetPriceBot_buyBackStopsAtTarget", this::test_targetPriceBot_buyBackStopsAtTarget);
 
         // T-197 tuning sweep (report only, ~10 min; runs only with -Dstockmarket.t197sweep=true
         // or env STOCKMARKET_T197_SWEEP set)
@@ -280,7 +281,7 @@ public class PluginTestSuite extends TestSuite {
      * shock drops it just below the target. The bot must buy on its very next cycle and then
      * approach the target from below without selling it further down.
      * Uses an in-memory linear book ({@code depth} items per real price unit) so the result is
-     * deterministic; the bot's I term is tiny and dt-dependent, the outcome is driven by kp.
+     * deterministic; the bot's I term is bounded (pidRate 0.1), the outcome is driven by kp.
      */
     private TestResult test_targetPriceBot_noOvershootAfterWindup() {
         final double depth = 10;
@@ -302,10 +303,10 @@ public class PluginTestSuite extends TestSuite {
                     }
                     default -> throw new UnsupportedOperationException(method.getName());
                 });
-        // Signed volume between two prices: positive (bids) when the first price is above the second
+        // Signed volume from the price to the target: positive (bids) when the price is above the target
         IPluginOrderBook book = (IPluginOrderBook) Proxy.newProxyInstance(IPluginOrderBook.class.getClassLoader(),
                 new Class<?>[]{IPluginOrderBook.class}, (proxy, method, args) -> switch (method.getName()) {
-                    case "getRealVirtualVolume" -> (float) (depth * ((Double) args[0] - (Double) args[1]));
+                    case "getRealVirtualVolumeToPrice" -> (float) (depth * (price[0] - (Double) args[0]));
                     default -> throw new UnsupportedOperationException(method.getName());
                 });
         try {
@@ -361,7 +362,7 @@ public class PluginTestSuite extends TestSuite {
                 });
         IPluginOrderBook book = (IPluginOrderBook) Proxy.newProxyInstance(IPluginOrderBook.class.getClassLoader(),
                 new Class<?>[]{IPluginOrderBook.class}, (proxy, method, args) -> switch (method.getName()) {
-                    case "getRealVirtualVolume" -> -1e6f;
+                    case "getRealVirtualVolumeToPrice" -> -1e6f;
                     default -> throw new UnsupportedOperationException(method.getName());
                 });
         try {
@@ -531,7 +532,7 @@ public class PluginTestSuite extends TestSuite {
      * @param endPrice market price after the last tick
      */
     private record ReplayResult(double moneyDelta, double itemsLeft, double profit, double maxPrice,
-                                double spent, double endPrice) {
+                                double spent, double endPrice, int botOvershoots, double maxBotOvershoot) {
         /** @return profit in % of the money spent on buys (0 if nothing was bought) */
         double profitPct() { return spent > 0 ? 100 * profit / spent : 0; }
 
@@ -666,6 +667,11 @@ public class PluginTestSuite extends TestSuite {
                 cache.apply();
                 market.update();
             }
+            // Bot orders that overshoot their target (T-200; listed in the trace)
+            TargetPriceBot.StepInfo lastStep = null;
+            int overshoots = 0;
+            double maxOvershoot = 0, tick = 1.0 / sf;
+            StringBuilder events = new StringBuilder();
             for (int c = 0; c < cycles; c++) {
                 // Buy leg, wait, sell leg; one order per 10 ticks.
                 for (int t = 0; t < cycleTicks; t++) {
@@ -689,19 +695,40 @@ public class PluginTestSuite extends TestSuite {
                         market.putOrder(new Order(itemID, Order.Type.MARKET, -sell, 0,
                                 System.currentTimeMillis(), player, account.getAccountNumber()));
                     }
+                    double priceBefore = MarketManager.convertToRealAmountStatic(market.getCurrentMarketPrice());
                     vol.update(markets);
                     bot.update(markets);
                     cache.apply();
                     market.update();
+                    {
+                        // T-200: bot orders that end more than one tick past the bot's own target
+                        TargetPriceBot.StepInfo step = bot.test_getLastStep(itemID);
+                        if (step != null && step != lastStep) {
+                            lastStep = step;
+                            double after = MarketManager.convertToRealAmountStatic(market.getCurrentMarketPrice());
+                            double over = step.amount() > 0 ? after - step.target() : step.target() - after;
+                            if (over > tick + 1e-9) {
+                                overshoots++;
+                                maxOvershoot = Math.max(maxOvershoot, over);
+                                if (trace != null && overshoots <= 25)
+                                    events.append(String.format(Locale.ROOT, " [%d: target %.2f amount %+.2f est %+.2f price %.2f->%.2f%s]",
+                                            c * cycleTicks + t, step.target(), step.amount(), step.estimate(), priceBefore, after,
+                                            moneyBefore != moneyBank.getTotalBalance() ? " +player" : ""));
+                            }
+                        }
+                    }
                     maxPrice = Math.max(maxPrice, MarketManager.convertToRealAmountStatic(market.getCurrentMarketPrice()));
                     windowMax = Math.max(windowMax, MarketManager.convertToRealAmountStatic(market.getCurrentMarketPrice()));
                     if (t < legTicks) spent += MarketManager.convertToRealAmountStatic(Math.max(0, moneyBefore - moneyBank.getTotalBalance()));
                 }
             }
+            if (trace != null)
+                trace.append(String.format(Locale.ROOT, "\n bot overshoots > 1 tick past its target: %d, max %.2f%s",
+                        overshoots, maxOvershoot, events));
             double moneyDelta = MarketManager.convertToRealAmountStatic(moneyBank.getTotalBalance() - startMoney);
             double itemsLeft = itemBank.getTotalBalance() / (double) sf;
             return new ReplayResult(moneyDelta, itemsLeft, moneyDelta + itemsLeft * defaultPrice, maxPrice, spent,
-                    MarketManager.convertToRealAmountStatic(market.getCurrentMarketPrice()));
+                    MarketManager.convertToRealAmountStatic(market.getCurrentMarketPrice()), overshoots, maxOvershoot);
         } finally {
             modSettings.NET_FLOW_HALF_LIFE_MINUTES.set(prevHalfLife);
             modSettings.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.set(prevMemory);
@@ -793,6 +820,25 @@ public class PluginTestSuite extends TestSuite {
         }
     }
 
+    /**
+     * T-200: with the depth memory on, after the player sells back, the bot buys the price back up
+     * through memory-thinned asks. Sized from the exact one-sided depth, no bot order may end more than
+     * one raw tick past the bot's own target (patient pattern, 2 cycles, defaults).
+     */
+    private TestResult test_targetPriceBot_buyBackStopsAtTarget() {
+        try {
+            float hl = backend.SERVER_SETTINGS.MARKET.NET_FLOW_HALF_LIFE_MINUTES.getDefaultValue();
+            VolatilityPlugin.Settings vs = VolatilityPlugin.Settings.createDefault();
+            ReplayResult r = replay(hl, TargetPriceBot.DEFAULT_MAX_TARGET_MOVE_PER_SECOND, 2, 5, 1200, 0, true,
+                    new ReplayConfig(vs.flowSensitivity(), 50, vs.maxPriceMult(), 30, 20), null);
+            if (r.botOvershoots() > 0)
+                return fail(r.botOvershoots() + " bot orders ended past the target, max " + r.maxBotOvershoot() + ". " + r);
+            return pass("No bot order passed its target. " + r);
+        } catch (Exception e) {
+            return fail("Exception: " + e);
+        }
+    }
+
     // ── T-197 tuning sweep (report only) ────────────────────────────────────
 
     /**
@@ -872,7 +918,9 @@ public class PluginTestSuite extends TestSuite {
     /**
      * T-197 diagnostics of the T-198 patient replay (no warm-up, defaults, as in
      * {@link #test_depthMemory_replayReport}), memory on vs off: price / equilibrium / bot's interpolated
-     * virtual volume to the equilibrium / exact virtual volume, every 100 ticks.
+     * virtual volume to the equilibrium / exact virtual volume, every 100 ticks, plus every bot order
+     * that ended more than one tick past the bot's target (T-200). Then the held sweep (5 min) trace and
+     * the current-default T-197 rows (memory 30 and off), each twice to check determinism.
      */
     private TestResult test_t197_patientTrace() {
         if (!t197Requested(true)) return skip("T-197 trace not requested");
@@ -887,21 +935,16 @@ public class PluginTestSuite extends TestSuite {
                         new ReplayConfig(vs.flowSensitivity(), 50, vs.maxPriceMult(), mem, 0), trace);
                 out.append("\nmemory ").append(mem).append(": ").append(r).append("\n trace").append(trace);
             }
-            // Held sweep (60 max buys, 5 min hold, sell back): memory 30 min vs ~no recovery (1 week) vs
-            // off, maxPriceMult 20 and 2, to separate depth-memory recovery from the flow equilibrium.
-            for (float mult : new float[]{2, 20})
-                for (float mem : new float[]{30, 10080, 0}) {
-                    StringBuilder trace = mem == 30 ? new StringBuilder() : null;
-                    ReplayResult r = replay(hl, move, 1, 60, 6000, 0, true,
-                            new ReplayConfig(vs.flowSensitivity(), 50, mult, mem, 20), trace);
-                    out.append(String.format(Locale.ROOT, "\nsweep hold 5 min mult %.0f memory %.0f: %s (%+.1f%%), end %.0f",
-                            mult, mem, r, r.profitPct(), r.endPrice()));
-                    if (trace != null) out.append("\n trace").append(trace);
-                }
-            // Run-to-run determinism of one row (current defaults), twice.
-            for (int i = 0; i < 2; i++)
-                out.append("\nrepeat ").append(t197Row(new ReplayConfig(vs.flowSensitivity(), 50, vs.maxPriceMult(),
-                        backend.SERVER_SETTINGS.MARKET.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.getDefaultValue(), 20)));
+            // Held sweep (60 max buys, 5 min hold, sell back) at the current defaults, memory 30 min.
+            StringBuilder held = new StringBuilder();
+            ReplayResult h = replay(hl, move, 1, 60, 6000, 0, true,
+                    new ReplayConfig(vs.flowSensitivity(), 50, vs.maxPriceMult(), 30, 20), held);
+            out.append(String.format(Locale.ROOT, "\nsweep hold 5 min memory 30: %s (%+.1f%%), end %.0f\n trace%s",
+                    h, h.profitPct(), h.endPrice(), held));
+            // Run-to-run determinism: each current-default row (memory 30 and off) twice.
+            for (float mem : new float[]{30, 0})
+                for (int i = 0; i < 2; i++)
+                    out.append("\nrepeat ").append(t197Row(new ReplayConfig(vs.flowSensitivity(), 50, vs.maxPriceMult(), mem, 20)));
             StockMarketMod.LOGGER.info("[T-197 trace] {}", out);
             return pass(out.toString());
         } catch (Exception e) {

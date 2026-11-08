@@ -646,6 +646,36 @@ public class VirtualOrderbook implements ServerSaveable
     }
 
     /**
+     * T-200: exact virtual volume of ONE side that a market order consumes when it walks from
+     * {@code from} to {@code to} (both inclusive), read the way the matching walk reads it: per level,
+     * rounded ({@link DynamicIndexedArray#getRounded}), depth memory and the ask ceiling included.
+     * Levels holding the other side (e.g. a leftover bid on the price tick when sizing a buy) are not
+     * counted, and empty / remembered-empty stretches are skipped via {@link #findVolume}.
+     * <p>A market order of exactly the returned volume therefore ends at a level &lt;= {@code to}
+     * (buy) / &gt;= {@code to} (sell); one more raw unit walks past {@code to}.</p>
+     *
+     * @param from    first level, normally the current market price (where the walk starts)
+     * @param to      last level to count; must be above {@code from} for asks, below for bids
+     * @param askSide true: sum sell-side volume (a buy walking up), false: buy-side volume (a sell walking down)
+     * @param cap     stop once the sum reaches this raw volume ({@link Long#MAX_VALUE} = no cap)
+     * @return summed absolute raw volume (&gt;= 0); may exceed {@code cap} by the last level read
+     */
+    public long sideVolume(long from, long to, boolean askSide, long cap)
+    {
+        if(disabled) return 0;
+        int step = to >= from ? 1 : -1;
+        long sum = 0;
+        for(long p = from; sum < cap; p += step)
+        {
+            p = findVolume(p, to, askSide);
+            if(p == NO_VOLUME) break;
+            sum += Math.abs(dynamicArray.getRounded(p));
+            if(p == to) break;
+        }
+        return sum;
+    }
+
+    /**
      * @return true if levels outside the array window can hold volume (a default provider is
      *         set and the book is neither disabled nor cleared). Only then is a search with
      *         {@link #findVolume} linear in the distance; otherwise it is bounded by the window.

@@ -51,6 +51,9 @@ public class VirtualOrderbookTestSuite extends TestSuite {
         addTest("depth_memory_fade_half_life_and_off", this::test_depthMemory_fade);
         addTest("depth_memory_nbt_round_trip", this::test_depthMemory_nbt);
         addTest("depth_memory_reset_clears", this::test_depthMemory_resetClears);
+        addTest("side_volume_one_side_only", this::test_sideVolume_oneSideOnly);
+        addTest("side_volume_matches_level_scan_with_memory", this::test_sideVolume_matchesLevelScan);
+        addTest("side_volume_cap_early_exit", this::test_sideVolume_capEarlyExit);
     }
 
     private VirtualOrderbook createOrderbook(long marketPrice) {
@@ -490,6 +493,60 @@ public class VirtualOrderbookTestSuite extends TestSuite {
                 return fail("Tick " + (990 + i) + ": read " + read[i] + " before, filled " + v);
         }
         return pass("Shift-fill equals the values read before the shift");
+    }
+
+    // ── T-200: one-sided volume to a target ────────────────────────────────
+
+    /** Reference: sum of |rounded volume| of the asked side over every level from..to (no skipping). */
+    private static long scanSide(VirtualOrderbook vob, long from, long to, boolean askSide) {
+        long sum = 0;
+        int step = to >= from ? 1 : -1;
+        for (long p = from; ; p += step) {
+            long v = (long) vob.getVolumeRounded(p);
+            if (askSide ? v < 0 : v > 0) sum += Math.abs(v);
+            if (p == to) return sum;
+        }
+    }
+
+    /** The bid on the price tick is not counted for ask sizing (and vice versa). */
+    private TestResult test_sideVolume_oneSideOnly() {
+        VirtualOrderbook vob = memoryBook(1000);           // price tick 1000 holds a bid (+10)
+        long asks = vob.sideVolume(1000, 1010, true, Long.MAX_VALUE);
+        TestResult r = assertEquals("asks 1001..1010", 100L, asks);
+        if (!r.passed()) return r;
+        vob.setVolume(1000, -4f);                          // price tick turned into an ask
+        long bids = vob.sideVolume(1000, 990, false, Long.MAX_VALUE);
+        r = assertEquals("bids 990..999 only", 100L, bids);
+        if (!r.passed()) return r;
+        return assertEquals("ask on the price tick counted for a buy", 104L, vob.sideVolume(1000, 1010, true, Long.MAX_VALUE));
+    }
+
+    /**
+     * With remembered empty depth outside the window (consumed asks, then the price moved up), the
+     * skipping sum equals a level-by-level scan both ways, and the empty stretch adds nothing.
+     */
+    private TestResult test_sideVolume_matchesLevelScan() {
+        VirtualOrderbook vob = memoryBook(1000);           // window [950, 1049]
+        for (long p = 1001; p <= 1049; p++) vob.setVolume(p, 0f);
+        vob.setCurrentMarketPrice(1080);                   // window [1030, 1129], [1001, 1049] empty bids now
+        for (long[] c : new long[][]{ {1080, 800}, {1080, 1001}, {1080, 1200}, {1080, 3000} }) {
+            boolean ask = c[1] > c[0];
+            long fast = vob.sideVolume(c[0], c[1], ask, Long.MAX_VALUE);
+            long ref = scanSide(vob, c[0], c[1], ask);
+            if (fast != ref) return fail("sideVolume(" + c[0] + ", " + c[1] + ") = " + fast + ", level scan " + ref);
+        }
+        // Same fully consumed slots as depth_memory_partial_eviction_conserves
+        long gapHi = DepthMemory.slotStart(DepthMemory.slotOf(1029)) - 1;
+        long gapLo = DepthMemory.slotStart(DepthMemory.slotOf(1001) + 1);
+        if (gapHi < gapLo) return fail("No fully consumed slot between 1001 and 1029");
+        long gap = vob.sideVolume(gapHi, gapLo, false, Long.MAX_VALUE);
+        return assertEquals("consumed stretch " + gapLo + ".." + gapHi + " holds no bids", 0L, gap);
+    }
+
+    /** The sum stops at the first level that reaches the cap. */
+    private TestResult test_sideVolume_capEarlyExit() {
+        VirtualOrderbook vob = memoryBook(1000);
+        return assertEquals("3 levels of 10 reach cap 25", 30L, vob.sideVolume(1000, 1049, true, 25));
     }
 
     /** Runs the step-move conservation scenario; returns {before, after} of the total |volume|. */
