@@ -182,6 +182,13 @@ public class InterMarketExecutorTestSuite extends TestSuite {
         addTest("M1_partial_consume_withdraws_only_consumed", this::test_M1_partial_consume_withdraws_only_consumed);
         addTest("M2_never_sells_more_than_locked", this::test_M2_never_sells_more_than_locked);
         addTest("M3_money_buffer_reduces_have_sold", this::test_M3_money_buffer_reduces_have_sold);
+
+        // ── Category N: Dupe checks — totals + other reservations conserved on cancel/complete ──
+        addTest("N1_market_imo_partial_fill_conserves_totals", this::test_N1_market_imo_partial_fill_conserves_totals);
+        addTest("N2_market_imo_keeps_other_money_reservation", this::test_N2_market_imo_keeps_other_money_reservation);
+        addTest("N3_limit_imo_partial_fill_cancel_conserves", this::test_N3_limit_imo_partial_fill_cancel_conserves);
+        addTest("N4_limit_imo_unfilled_cancel_conserves", this::test_N4_limit_imo_unfilled_cancel_conserves);
+        addTest("N5_limit_imo_partial_fill_maintenance_cancel_conserves", this::test_N5_limit_imo_partial_fill_maintenance_cancel_conserves);
     }
 
     @Override
@@ -4925,6 +4932,255 @@ public class InterMarketExecutorTestSuite extends TestSuite {
             return pass("Sold " + sold + " raw A (expected ~" + expectedSold + ") for " + bought + " raw B");
         } catch (Exception e) {
             return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  Category N: Dupe checks
+    //  Virtual depth is 0 on both markets, so every fill is player-to-player and the
+    //  sum of (free + locked) over both accounts must be exactly conserved for A, B and
+    //  money. The test player also holds resting own limit orders (sell A, buy B); their
+    //  reservations must survive the inter-market order untouched — an over-unlock on
+    //  cancel would release them (BankSystem locks are pooled per bank, not per order).
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /** Resting own sell A reservation (raw A) placed by {@link #setupDupeScenario}. */
+    private static final long DUPE_OWN_SELL_A = 5;
+    /** Resting own buy B volume (whole items) at price 50 placed by {@link #setupDupeScenario}. */
+    private static final long DUPE_OWN_BUY_B = 10;
+
+    /**
+     * Places a resting LIMIT order of the TEST player and locks its funds like
+     * CreateOrderRequest does (buy: ceil(volume * price / SF) money, sell: volume items).
+     *
+     * @param market target market
+     * @param volume raw volume, positive = buy, negative = sell
+     * @param price  raw limit price (must not cross the market so the order rests)
+     * @return the amount locked (money for buys, items for sells)
+     */
+    private long placeOwnLimitOrder(IServerMarket market, long volume, long price) {
+        Order order = new Order(market.getItemID(), Order.Type.LIMIT, volume, price,
+                System.currentTimeMillis(), testPlayerUUID, bankAccountNr);
+        long locked;
+        if (volume > 0) {
+            locked = (long) Math.ceil((double) volume * price / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
+            bankAccount.getBank(moneyID).lockAmount(locked);
+            order.setOriginalLockedMoney(locked);
+        } else {
+            locked = -volume;
+            bankAccount.getBank(market.getItemID()).lockAmount(locked);
+        }
+        market.putOrder(order);
+        market.update();
+        return locked;
+    }
+
+    /**
+     * Zero virtual depth; counterparty buys A at 99 ({@code cpBuyA} raw) and sells B at 81
+     * ({@code cpSellB} raw); test player rests a sell of 5 A at 200 and a buy of 10 B at 50.
+     *
+     * @return {lockedOwnA, lockedOwnMoney}
+     */
+    private long[] setupDupeScenario(long cpBuyA, long cpSellB) {
+        resetState(100, 80, p -> 0f, p -> 0f);
+        placeCounterpartyLimitOrder(marketA, cpBuyA, 99);
+        placeCounterpartyLimitOrder(marketB, -cpSellB, 81);
+        long ownA = placeOwnLimitOrder(marketA, -DUPE_OWN_SELL_A * scaleFactor, 200);
+        long ownMoney = placeOwnLimitOrder(marketB, DUPE_OWN_BUY_B * scaleFactor, 50);
+        return new long[]{ownA, ownMoney};
+    }
+
+    /** @return {A, B, money} summed (free + locked) over the test player and the counterparty */
+    private long[] totals() {
+        return new long[]{
+                bankAccount.getBank(itemA_ID).getTotalBalance() + counterpartyAccount.getBank(itemA_ID).getTotalBalance(),
+                bankAccount.getBank(itemB_ID).getTotalBalance() + counterpartyAccount.getBank(itemB_ID).getTotalBalance(),
+                bankAccount.getBank(moneyID).getTotalBalance() + counterpartyAccount.getBank(moneyID).getTotalBalance()};
+    }
+
+    /** @return a failure if any total changed, otherwise null */
+    private TestResult checkTotals(long[] before, String context) {
+        long[] after = totals();
+        String[] names = {"A items", "B items", "money"};
+        for (int i = 0; i < 3; i++) {
+            if (after[i] != before[i])
+                return fail(context + ": total " + names[i] + " not conserved: before=" + before[i]
+                        + " after=" + after[i] + " (delta " + (after[i] - before[i]) + ")");
+        }
+        return null;
+    }
+
+    /**
+     * Claim 2 (market path / child legs): sell-direction MARKET inter-market order of 10 A
+     * where only 3 A of buy depth exists. The child sell leg fills 3 A, the parent's
+     * remaining 7 A are unlocked once (line 972). A double unlock would release the own
+     * resting sell's 5 A reservation; a creation would break the A total.
+     */
+    private TestResult test_N1_market_imo_partial_fill_conserves_totals() {
+        try {
+            long[] own = setupDupeScenario(3 * scaleFactor, 10 * scaleFactor);
+            long[] before = totals();
+
+            long sellVolume = 10 * scaleFactor;
+            // buyVolume 0 = sell-direction market order, exactly like PlaceInterMarketOrderRequest.
+            InterMarketOrder imo = new InterMarketOrder(itemB_ID, itemA_ID, Order.Type.MARKET,
+                    0, marketB.getCurrentMarketPrice(), sellVolume, marketA.getCurrentMarketPrice(),
+                    System.currentTimeMillis(), testPlayerUUID, bankAccountNr, 0);
+            if (!enqueueIMO(imo))
+                return fail("InterMarketOrder was not enqueued");
+            marketManager.update();
+            if (isPending(imo))
+                return fail("Market inter-market order should be terminal after one tick");
+
+            long sold = -imo.getSellOrder().getFilledVolume();
+            if (sold <= 0 || sold >= sellVolume)
+                return fail("Expected a partial sell fill, sold=" + sold);
+
+            TestResult r = checkTotals(before, "market IMO partial fill");
+            if (r != null) return r;
+            long lockedA = bankAccount.getBank(itemA_ID).getLockedBalance();
+            if (lockedA != own[0])
+                return fail("A locked should equal the own resting sell reservation " + own[0]
+                        + ", got " + lockedA + " (sold " + sold + " of " + sellVolume + ")");
+            return pass("Sold " + sold + " of " + sellVolume + " raw A, bought "
+                    + imo.getBuyOrder().getFilledVolume() + " raw B; totals and A reservation intact");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Claim 1 (market path / child BUY leg): the money reservation of the player's own
+     * resting buy order must be unchanged after a market inter-market order. A spurious
+     * unlock of the child buy (no originalLockedMoney) would lower it; so does the child
+     * buy paying via withdrawLockedPrefered (the failure message tells which: compare the
+     * delta with the child buy cost).
+     */
+    private TestResult test_N2_market_imo_keeps_other_money_reservation() {
+        try {
+            long[] own = setupDupeScenario(3 * scaleFactor, 10 * scaleFactor);
+            long[] before = totals();
+
+            InterMarketOrder imo = new InterMarketOrder(itemB_ID, itemA_ID, Order.Type.MARKET,
+                    0, marketB.getCurrentMarketPrice(), 10 * scaleFactor, marketA.getCurrentMarketPrice(),
+                    System.currentTimeMillis(), testPlayerUUID, bankAccountNr, 0);
+            if (!enqueueIMO(imo))
+                return fail("InterMarketOrder was not enqueued");
+            marketManager.update();
+
+            TestResult r = checkTotals(before, "market IMO");
+            if (r != null) return r;
+            long lockedMoney = bankAccount.getBank(moneyID).getLockedBalance();
+            long buyCost = -imo.getBuyOrder().getTransferredMoney();
+            if (lockedMoney != own[1])
+                return fail("Money locked for the own resting buy should stay " + own[1] + ", got " + lockedMoney
+                        + " (delta " + (lockedMoney - own[1]) + ", child buy cost " + buyCost
+                        + "). Totals are conserved, so no money was created.");
+            return pass("Own money reservation " + own[1] + " intact after market IMO (buy cost " + buyCost + ")");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Limit path: partial fill (only 2 B of sell depth), then the player cancels. Totals,
+     * the own A reservation and the own money reservation must all be unchanged.
+     */
+    private TestResult test_N3_limit_imo_partial_fill_cancel_conserves() {
+        try {
+            long[] own = setupDupeScenario(20 * scaleFactor, 2 * scaleFactor);
+            long[] before = totals();
+
+            InterMarketOrder imo = createLimitIMO(10 * scaleFactor, 10 * scaleFactor, scaleFactor);
+            if (!enqueueIMO(imo))
+                return fail("InterMarketOrder was not enqueued");
+            marketManager.update();
+            long bought = imo.getBuyOrder().getFilledVolume();
+            if (bought <= 0 || !isPending(imo))
+                return fail("Expected a pending partial fill, bought=" + bought + " pending=" + isPending(imo));
+
+            if (!marketManager.cancelInterMarketOrder(imo.getInterMarketGroupID(), testPlayerUUID))
+                return fail("cancelInterMarketOrder returned false");
+
+            TestResult r = checkTotals(before, "limit IMO partial fill + cancel");
+            if (r != null) return r;
+            long lockedA = bankAccount.getBank(itemA_ID).getLockedBalance();
+            long lockedMoney = bankAccount.getBank(moneyID).getLockedBalance();
+            if (lockedA != own[0])
+                return fail("A locked should be " + own[0] + " after cancel, got " + lockedA);
+            if (lockedMoney != own[1])
+                return fail("Money locked should be " + own[1] + " after cancel, got " + lockedMoney);
+            return pass("Bought " + bought + " raw B, sold " + (-imo.getSellOrder().getFilledVolume())
+                    + " raw A; totals and reservations intact after cancel");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /** Limit path: unfavorable rate (SKIPPED, nothing filled), then the player cancels. */
+    private TestResult test_N4_limit_imo_unfilled_cancel_conserves() {
+        try {
+            long[] own = setupDupeScenario(20 * scaleFactor, 10 * scaleFactor);
+            long[] before = totals();
+
+            InterMarketOrder imo = createLimitIMO(10 * scaleFactor, 10 * scaleFactor, scaleFactor / 10);
+            if (!enqueueIMO(imo))
+                return fail("InterMarketOrder was not enqueued");
+            marketManager.update();
+            if (imo.getSellOrder().getFilledVolume() != 0 || !isPending(imo))
+                return fail("Expected an unfilled pending order");
+
+            if (!marketManager.cancelInterMarketOrder(imo.getInterMarketGroupID(), testPlayerUUID))
+                return fail("cancelInterMarketOrder returned false");
+
+            TestResult r = checkTotals(before, "limit IMO unfilled cancel");
+            if (r != null) return r;
+            long lockedA = bankAccount.getBank(itemA_ID).getLockedBalance();
+            long lockedMoney = bankAccount.getBank(moneyID).getLockedBalance();
+            if (lockedA != own[0])
+                return fail("A locked should be " + own[0] + " after cancel, got " + lockedA);
+            if (lockedMoney != own[1])
+                return fail("Money locked should be " + own[1] + " after cancel, got " + lockedMoney);
+            return pass("Unfilled cancel: totals and reservations intact");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Limit path: partial fill, then market A goes into maintenance. That cancels the
+     * inter-market order AND the own resting sell A (so A locked must drop to 0); the own
+     * buy B on market B keeps its money reservation.
+     */
+    private TestResult test_N5_limit_imo_partial_fill_maintenance_cancel_conserves() {
+        try {
+            long[] own = setupDupeScenario(20 * scaleFactor, 2 * scaleFactor);
+            long[] before = totals();
+
+            InterMarketOrder imo = createLimitIMO(10 * scaleFactor, 10 * scaleFactor, scaleFactor);
+            if (!enqueueIMO(imo))
+                return fail("InterMarketOrder was not enqueued");
+            marketManager.update();
+            if (imo.getBuyOrder().getFilledVolume() <= 0 || !isPending(imo))
+                return fail("Expected a pending partial fill");
+
+            marketA.setMaintenance(true);
+            if (isPending(imo))
+                return fail("Maintenance should have canceled the inter-market order");
+
+            TestResult r = checkTotals(before, "limit IMO partial fill + maintenance");
+            if (r != null) return r;
+            long lockedA = bankAccount.getBank(itemA_ID).getLockedBalance();
+            long lockedMoney = bankAccount.getBank(moneyID).getLockedBalance();
+            if (lockedA != 0)
+                return fail("A locked should be 0 after maintenance cancels everything on A, got " + lockedA);
+            if (lockedMoney != own[1])
+                return fail("Money locked should be " + own[1] + " after maintenance on A, got " + lockedMoney);
+            return pass("Maintenance cancel: totals and reservations intact");
+        } catch (Exception e) {
+            return fail("Exception: " + e.getMessage());
+        } finally {
+            marketA.setMaintenance(false);
         }
     }
 }

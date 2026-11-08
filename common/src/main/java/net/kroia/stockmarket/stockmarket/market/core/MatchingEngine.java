@@ -1326,12 +1326,30 @@ public class MatchingEngine
         }
     }
 
-    /** Commit a completed (or partially completed) BUY and fire orderConsumed. */
+    /**
+     * Commit a completed (or partially completed) BUY and fire orderConsumed.
+     * <p>#93: an INTER_MARKET buy leg has no money reservation of its own (it spends the
+     * proceeds of the sell leg, which land in the free balance), so it pays from the free
+     * balance first. Taking locked money would eat the reservation of the player's own resting
+     * limit buys. Locked money is only used for a shortfall of the free balance.</p>
+     */
     private void commitBuy(@Nullable IServerBank itemBank, @Nullable IServerBank moneyBank,
                            long itemDelta, long moneyDelta, Order order)
     {
         if(moneyBank != null)
-            moneyBank.withdrawLockedPrefered(-moneyDelta);  // moneyDelta is negative → withdraw positive
+        {
+            long cost = -moneyDelta;  // moneyDelta is negative → withdraw positive
+            if (order.getType() == Order.Type.INTER_MARKET && cost > 0)
+            {
+                long fromFree = Math.min(cost, Math.max(0, moneyBank.getBalance()));
+                if (fromFree > 0)
+                    moneyBank.withdraw(fromFree);
+                if (cost > fromFree)
+                    moneyBank.withdrawLockedPrefered(cost - fromFree);
+            }
+            else
+                moneyBank.withdrawLockedPrefered(cost);
+        }
         if(itemBank != null)
             itemBank.deposit(itemDelta);
         trackPlayerFill(order, itemDelta);

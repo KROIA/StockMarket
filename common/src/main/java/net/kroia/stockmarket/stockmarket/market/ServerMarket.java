@@ -890,6 +890,10 @@ public class ServerMarket implements ServerSaveable, IServerMarket {
      */
     private void unlockRemainingFunds(Order order) {
         if (order.isBotOrder()) return; // bot orders have no bank reservations
+        // #93: INTER_MARKET legs hold no reservation of their own; the inter-market executor
+        // owns the parent order's locks and releases them itself. Unlocking here would free
+        // the reservations of the player's other orders (or the parent's items twice).
+        if (order.getType() == Order.Type.INTER_MARKET) return;
         if (BACKEND_INSTANCES == null || BACKEND_INSTANCES.BANK_SYSTEM_API == null) return;
 
         IServerBankAccount bankAccount = BACKEND_INSTANCES.BANK_SYSTEM_API
