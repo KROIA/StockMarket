@@ -444,7 +444,8 @@ public class MatchingEngine
         long lastHaveFillPrice = haveSamplePrice;
         long lastWantFillPrice = wantSamplePrice;
 
-        // Main loop with timeout protection
+        // Main loop. Per-tick work guard only: empty levels are skipped in one step, so each
+        // iteration consumes depth; an unfinished order keeps walking from there next tick.
         int timeout = 10000;
         while (timeout-- > 0)
         {
@@ -465,22 +466,32 @@ public class MatchingEngine
                     && (wantSamplePrice <= 0 || affordableVolume(transactionMoneyBalance, wantSamplePrice) <= 0))
                 break;
 
-            // 3. Read depth at current prices
+            // 3. Read depth at current prices. #94: the virtual window follows the walk like in
+            //    the regular engine; a fill outside the window was not stored (the level kept its
+            //    default volume and could be sold again).
+            haveMarket.getOrderbook().updateDynamicArrayOffset(haveSamplePrice);
+            wantMarket.getOrderbook().updateDynamicArrayOffset(wantSamplePrice);
             long haveVolume = getMatchableVolume(haveMarket.getOrderbook(), haveSamplePrice, true);
             long wantVolume  = getMatchableVolume(wantMarket.getOrderbook(), wantSamplePrice, false);
 
             if (wantVolume <= 0)
             {
-                // No depth at current prices — advance and retry
-                wantSamplePrice += 1;
+                // No depth here: skip the empty levels, at most up to where the rate check stops
+                long maxWant = mulDivSaturated(saturatedAdd(crossMarketLimitPrice, 1), haveSamplePrice, SF);
+                long next = nextDepthLevel(wantMarket.getOrderbook(), wantSamplePrice + 1, maxWant, true);
+                if (next < 0)
+                    break;
+                wantSamplePrice = next;
                 continue;
             }
             if(haveVolume <= 0)
             {
-                // No depth at current prices — advance and retry
-                haveSamplePrice -= 1;
-                if (haveSamplePrice <= 0)
+                // No depth here: skip the empty levels, at most down to where the rate check stops
+                long minHave = mulDivSaturated(wantSamplePrice, SF, saturatedAdd(crossMarketLimitPrice, 1));
+                long next = nextDepthLevel(haveMarket.getOrderbook(), haveSamplePrice - 1, Math.max(1, minHave), false);
+                if (next < 0)
                     break;
+                haveSamplePrice = next;
                 continue;
             }
 
@@ -652,6 +663,37 @@ public class MatchingEngine
     }
 
     /**
+     * Finds the next level from {@code from} toward {@code to} (inclusive) that holds depth on
+     * one side: virtual volume or a real limit order. Exact, like the regular walk's gap skip.
+     * A book with default virtual volume is searched at most {@link #walkLevelLimit} levels
+     * (the inter-market order then retries next tick).
+     *
+     * @param orderbook the book to search
+     * @param from      first level to check
+     * @param to        last level to check; the search walks toward it
+     * @param askSide   true: sell-side depth (walk up), false: buy-side depth (walk down)
+     * @return the level, or -1 if none
+     */
+    private static long nextDepthLevel(Orderbook orderbook, long from, long to, boolean askSide)
+    {
+        if (orderbook.hasDefaultVirtualVolume())
+            to = askSide ? Math.min(to, saturatedAdd(from, walkLevelLimit)) : Math.max(to, from - walkLevelLimit);
+        if (askSide ? from > to : from < to)
+            return -1;
+        // Nearest real order in range
+        long best = -1;
+        for (Order o : askSide ? orderbook.getSellLimitOrders() : orderbook.getBuyLimitOrders())
+        {
+            long p = o.getStartPrice();
+            boolean inRange = askSide ? (p >= from && p <= to) : (p <= from && p >= to);
+            if (inRange && (best < 0 || (askSide ? p < best : p > best)))
+                best = p;
+        }
+        long virtual = orderbook.findVirtualVolume(from, best >= 0 ? best : to, askSide);
+        return virtual != VirtualOrderbook.NO_VOLUME ? virtual : best;
+    }
+
+    /**
      * T-171: removes the have-items the bilateral walk actually sold from the player's
      * locked balance. Called after {@link #consumeBuySideDepthAtPrice}, with exactly the
      * consumed volume, so unsold items stay locked (and are unlocked by the manager when
@@ -681,16 +723,53 @@ public class MatchingEngine
 
     private final ItemID itemID;
     private final Orderbook orderbook;
-    private static final int TIMEOUT_COUNT = 10000;
+    // ── Order walk (#88, #94) ────────────────────────────────────────────────
+    // An order walks the book level by level and consumes ALL volume in its way (virtual and
+    // real, in price order) until it is filled, its limit is passed, or funds/items run out.
+    // A real order is only matched once every level before it is empty. Empty levels are
+    // skipped in one step (Orderbook#findVirtualVolume), never by jumping over volume.
+    // A limit remainder only rests once the walk consumed everything up to its limit; the
+    // market price is then the limit, so the book is never crossed.
 
     /**
-     * #88: set by {@link #drainVirtualBuy}/{@link #drainVirtualSell} when the walk hit
-     * {@link #TIMEOUT_COUNT} before reaching its stop price while virtual volume may still sit
-     * in between. The caller must then stop: a real order is only matched once the walk has
-     * reached its price, so a far player limit order can never be filled (and set the price)
-     * past liquidity the walk did not consume.
+     * Default of {@link #walkLevelLimit}: 5,000,000 raw price levels (50,000 coins at scale 100).
+     * Far above any real walk (200 -> 5000 coins is 480,000 levels); it only exists so a walk
+     * through a provider-backed book (one provider call per level) can never freeze the server.
      */
-    private boolean drainTimedOut = false;
+    public static final long DEFAULT_WALK_LEVEL_LIMIT = 5_000_000L;
+
+    /**
+     * Safety bound: how many price levels one order may walk through a book whose virtual side
+     * has default volume (see {@link Orderbook#hasDefaultVirtualVolume()}). Books without default
+     * volume are not bounded: skipping their gaps costs at most one array window. Reaching the
+     * bound is an error: it is logged and the remainder is canceled, never left resting.
+     */
+    private static long walkLevelLimit = DEFAULT_WALK_LEVEL_LIMIT;
+    /** Number of walks the safety bound stopped since server start (read by tests). */
+    private static long walkAbortCount = 0;
+
+    /**
+     * Test hook: sets the walk safety bound. Tests must restore {@link #DEFAULT_WALK_LEVEL_LIMIT}.
+     * @param levels maximum number of price levels one order may walk (at least 1)
+     */
+    public static void test_setWalkLevelLimit(long levels) { walkLevelLimit = Math.max(1, levels); }
+    /** @return the walk safety bound in price levels (see {@link #walkLevelLimit}) */
+    public static long getWalkLevelLimit() { return walkLevelLimit; }
+    /** @return how many walks the safety bound has stopped so far */
+    public static long getWalkAbortCount() { return walkAbortCount; }
+
+    /** Next price level the current order's walk examines (persists across its drain calls). */
+    private long walkNext;
+    /** Safety-bound price of the current order's walk (Long.MAX_VALUE / Long.MIN_VALUE when unbounded). */
+    private long walkBound;
+    /** Set by the drains: the walk consumed every level up to and including its stop price. */
+    private boolean walkReachedStop = false;
+    /**
+     * Set by {@link #processBuy}/{@link #processSell}: the order still has volume and the walk
+     * consumed everything (virtual and real) up to and including its limit price. Only then may
+     * a limit remainder rest (see {@link #processLimitOrder}).
+     */
+    private boolean walkReachedLimit = false;
 
     private final PriorityQueue<Order> buyMarketOrders_inputBuffer;
     private final PriorityQueue<Order> sellMarketOrders_inputBuffer;
@@ -791,30 +870,34 @@ public class MatchingEngine
         priceChanged.accept(this.currentMarketPrice);
     }
 
+    /**
+     * Places a limit order. A buy below / sell above the market price rests directly. Otherwise
+     * it walks the book like a market order capped at its limit (#94): it consumes everything in
+     * its way and stops as soon as it is filled. A remainder rests only if the walk consumed all
+     * volume up to its limit; the market price is then the limit, so the book is not crossed.
+     * If the walk stopped short (funds/items ran out, safety bound) the remainder is canceled.
+     *
+     * @param order the incoming limit order
+     */
     private void processLimitOrder(Order order)
     {
-        if(order.isBuyOrder())
-        {
-            if(order.getStartPrice() < currentMarketPrice)
-            {
-                orderbook.putOrder(order);
-                return;
-            }
-
-        }
-        else
-        {
-            if(order.getStartPrice() > currentMarketPrice)
-            {
-                orderbook.putOrder(order);
-                return;
-            }
-        }
-        processMarketOrder(order, order.getStartPrice(), order.getStartPrice());
-        if(!order.isFilled())
+        long limit = order.getStartPrice();
+        if(order.isBuyOrder() ? limit < currentMarketPrice : limit > currentMarketPrice)
         {
             orderbook.putOrder(order);
+            return;
         }
+        if(!processMarketOrder(order, limit, limit) || order.isFilled())
+            return;
+        if(walkReachedLimit)
+        {
+            // Nothing is left on the other side up to the limit -> the price is the limit now
+            currentMarketPrice = limit;
+            orderbook.setCurrentMarketPrice(limit);
+            orderbook.putOrder(order);
+        }
+        else
+            orderCanceled(order);   // never rest crossed
     }
 
     /**
@@ -826,9 +909,11 @@ public class MatchingEngine
      *
      * currentMarketPrice is mutable class-level state; it walks down on SELL, up on BUY.
      *
+     * @return false if the order was canceled before it could walk (missing banks), else true
      */
-    private void processMarketOrder(Order order, long minAcceptedPrice, long maxAcceptedPrice)
+    private boolean processMarketOrder(Order order, long minAcceptedPrice, long maxAcceptedPrice)
     {
+        walkReachedLimit = false;
         // ── Resolve the submitting player's bank accounts ──────────────────────
         IServerBankAccount account = getBankAccount(order.getBankAccountNr());
         long orderVolume = order.getRemainingVolume();
@@ -838,7 +923,7 @@ public class MatchingEngine
                 processBotSell(order, orderVolume, minAcceptedPrice);
             else
                 processBotBuy(order, orderVolume, maxAcceptedPrice);
-            return;
+            return true;
         }
 
         IServerBank itemBank  = account.getBank(itemID);
@@ -849,7 +934,7 @@ public class MatchingEngine
         if (itemBank == null && orderVolume > 0)
             itemBank = account.getOrCreateBank(itemID);
 
-        if (itemBank == null || moneyBank == null) { orderCanceled(order); return; }
+        if (itemBank == null || moneyBank == null) { orderCanceled(order); return false; }
 
 
 
@@ -859,6 +944,7 @@ public class MatchingEngine
         else
             processBuy(order, orderVolume, itemBank, moneyBank, maxAcceptedPrice);
         orderbook.setCurrentMarketPrice(currentMarketPrice);
+        return true;
     }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -889,6 +975,7 @@ public class MatchingEngine
         buyOrderSnapshot.sort(buyOrders.comparator());
         List<Order> buyOrdersToRemove = new ArrayList<>();
         boolean sellEarlyReturn = false;
+        startWalk(false);
 
         for (Order buyOrder : buyOrderSnapshot)
         {
@@ -901,9 +988,16 @@ public class MatchingEngine
             itemDelta   = result[1];
             moneyDelta  = result[2];
 
-            // #88: walk stopped short of this buy order -> never match beyond the walked price
-            if (drainTimedOut || orderVolume >= 0 || (currentMarketPrice <= minimalAcceptedPrice && buyOrder.getStartPrice() != minimalAcceptedPrice))
+            // #88: a real order is only matched once the walk consumed every level above it
+            if (orderVolume >= 0 || !walkReachedStop)
             {
+                sellEarlyReturn = true;
+                break;
+            }
+            // Next real bid is below the limit: everything down to the limit is consumed
+            if (buyOrder.getStartPrice() < minimalAcceptedPrice)
+            {
+                walkReachedLimit = true;
                 sellEarlyReturn = true;
                 break;
             }
@@ -993,7 +1087,7 @@ public class MatchingEngine
         orderVolume = result[0];
         itemDelta   = result[1];
         moneyDelta  = result[2];
-
+        walkReachedLimit = walkReachedStop && orderVolume < 0;
 
         commitSell(itemBank, moneyBank, itemDelta, moneyDelta, order);
     }
@@ -1034,6 +1128,7 @@ public class MatchingEngine
         sellOrderSnapshot.sort(sellOrders.comparator());
         List<Order> sellOrdersToRemove = new ArrayList<>();
         boolean buyEarlyReturn = false;
+        startWalk(true);
 
         for (Order sellOrder : sellOrderSnapshot)
         {
@@ -1048,9 +1143,16 @@ public class MatchingEngine
             moneyDelta     = result[2];
             availableFunds = result[3];
 
-            // #88: walk stopped short of this sell order -> never match beyond the walked price
-            if (drainTimedOut || orderVolume <= 0 || (currentMarketPrice >= maximalAcceptedPrice && sellOrder.getStartPrice() != maximalAcceptedPrice))
+            // #88: a real order is only matched once the walk consumed every level below it
+            if (orderVolume <= 0 || !walkReachedStop)
             {
+                buyEarlyReturn = true;
+                break;
+            }
+            // Next real ask is above the limit: everything up to the limit is consumed
+            if (sellOrder.getStartPrice() > maximalAcceptedPrice)
+            {
+                walkReachedLimit = true;
                 buyEarlyReturn = true;
                 break;
             }
@@ -1088,7 +1190,10 @@ public class MatchingEngine
                 }
 
                 if (fillPotential >= 0)
+                {
+                    buyEarlyReturn = true;   // buyer is broke: stop, the ask stays ahead
                     break;
+                }
 
                 // cost = rawVolume * rawPrice / scaleFactor
                 long cost = Math.round((double)fillPotential * sellOrder.getStartPrice() / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
@@ -1116,7 +1221,7 @@ public class MatchingEngine
                 if (availableFunds < -costFull)
                     fillPotential = -affordableVolume(availableFunds, sellOrder.getStartPrice());
 
-                if (fillPotential >= 0) break;
+                if (fillPotential >= 0) { buyEarlyReturn = true; break; }   // buyer is broke
 
                 // cost = rawVolume * rawPrice / scaleFactor
                 long cost = Math.round((double)fillPotential * sellOrder.getStartPrice() / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
@@ -1160,6 +1265,7 @@ public class MatchingEngine
         orderVolume = result[0];
         itemDelta   = result[1];
         moneyDelta  = result[2];
+        walkReachedLimit = walkReachedStop && orderVolume > 0;
 
         commitBuy(itemBank, moneyBank, itemDelta, moneyDelta, order);
     }
@@ -1174,137 +1280,166 @@ public class MatchingEngine
 // ═══════════════════════════════════════════════════════════════════════════
 
     /**
-     * Walk currentMarketPrice downward, consuming virtual volume at each step,
-     * until the remaining sell volume reaches 0 or price hits {@code stopPrice}.
+     * Starts the walk of a new order at the current market price and sets its safety bound.
+     * Only a book with default virtual volume needs one (a gap search there costs one provider
+     * call per level); without it a gap search costs at most one array window.
+     *
+     * @param up true for a buy (walks up), false for a sell (walks down)
+     */
+    private void startWalk(boolean up)
+    {
+        walkNext = currentMarketPrice;
+        walkReachedStop = false;
+        if (!orderbook.hasDefaultVirtualVolume())
+            walkBound = up ? Long.MAX_VALUE : Long.MIN_VALUE;
+        else
+            walkBound = up ? saturatedAdd(currentMarketPrice, walkLevelLimit) : currentMarketPrice - walkLevelLimit;
+    }
+
+    /**
+     * Logs the safety-bound stop of a walk. The caller cancels the remainder: a market order
+     * through its commit, a limit order in {@link #processLimitOrder} (walkReachedLimit stays false).
+     *
+     * @param boundPrice the price level where the bound stopped the walk
+     */
+    private void walkAborted(long boundPrice)
+    {
+        walkAbortCount++;
+        error("Order walk stopped by the safety bound of " + walkLevelLimit + " price levels at price "
+                + boundPrice + "; the remainder is canceled");
+    }
+
+    /**
+     * Walks down from the walk position, consuming virtual buy-side volume level by level,
+     * until the remaining sell volume is 0 or every level down to {@code stopPrice} is consumed.
+     * Empty levels are skipped exactly via {@link Orderbook#findVirtualVolume}. Sets
+     * {@link #walkReachedStop} when nothing is left on the bid side down to {@code stopPrice}
+     * (price floor 1). Stops early (and logs) at the safety bound.
      *
      * @param orderVolume  current remaining volume (negative = still needs filling)
      * @param itemDelta    accumulated item delta so far
      * @param moneyDelta   accumulated money delta so far
-     * @param stopPrice    do not go below this price (exclusive lower bound)
-     * @return             long[3] = { orderVolume, itemDelta, moneyDelta };
-     *                     sets {@link #drainTimedOut} if the step limit stopped the walk early
+     * @param stopPrice    lowest level to consume (inclusive)
+     * @return             long[3] = { orderVolume, itemDelta, moneyDelta }
      */
     private long[] drainVirtualSell(long orderVolume, long itemDelta, long moneyDelta, long stopPrice)
     {
-        drainTimedOut = false;
-        long nextExecutedPrice = currentMarketPrice;
-        long timeout = TIMEOUT_COUNT;
-        while (orderVolume < 0 && nextExecutedPrice >= stopPrice)
+        walkReachedStop = false;
+        long end = Math.max(Math.max(stopPrice, 1), walkBound);
+        long next = walkNext;
+        boolean passed = false;
+        while (orderVolume < 0)
         {
-            long virtualVol = orderbook.getRawVirtualVolumeRounded(nextExecutedPrice);
+            if (next < end) { passed = true; break; }
+            orderbook.updateDynamicArrayOffset(next);
+            long virtualVol = orderbook.getRawVirtualVolumeRounded(next);
             if (virtualVol > 0)
             {
-                long filled = orderbook.fillVirtual(nextExecutedPrice, orderVolume);
-                long virtualCost = Math.round((double)nextExecutedPrice * filled / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
+                long filled = orderbook.fillVirtual(next, orderVolume);
+                long virtualCost = Math.round((double)next * filled / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
                 itemDelta  += filled;
                 moneyDelta -= virtualCost;
                 orderVolume -= filled;
                 tradedVolumeSinceLastReset += Math.abs(filled);
-                if(filled != 0)
-                {
-                    currentMarketPrice = nextExecutedPrice;
-                }
+                if (filled == 0)
+                    break;   // cannot happen (bid level, sell volume left); guards an endless loop
+                currentMarketPrice = next;
                 // If we emptied this price level, step down
-                if (virtualVol + filled == 0 && orderVolume != 0) {
-                    nextExecutedPrice -= 1;
-                    orderbook.updateDynamicArrayOffset(nextExecutedPrice);
-                }
+                if (virtualVol + filled == 0 && orderVolume != 0)
+                    next -= 1;
             }
             else
             {
-                nextExecutedPrice -= 1;
-                orderbook.updateDynamicArrayOffset(nextExecutedPrice);
-            }
-
-            if (nextExecutedPrice <= 0)
-            {
-                nextExecutedPrice = 0;
-                break;
-            }
-            timeout--;
-            if(timeout <= 0)
-            {
-                // #88: step limit before reaching stopPrice. Only an empty gap counts as reached.
-                if (orderVolume < 0 && nextExecutedPrice >= stopPrice
-                        && !orderbook.isVirtualVolumeEmptyBetween(stopPrice, nextExecutedPrice))
-                    drainTimedOut = true;
-                break;
+                long found = next > end ? orderbook.findVirtualVolume(next - 1, end, false) : VirtualOrderbook.NO_VOLUME;
+                if (found == VirtualOrderbook.NO_VOLUME) { next = end; passed = true; break; }
+                next = found;
             }
         }
-        //orderbook.setCurrentMarketPrice(currentMarketPrice);
+        walkNext = next;
+        if (passed)
+        {
+            if (end > Math.max(stopPrice, 1)) walkAborted(end);
+            else walkReachedStop = true;
+        }
         return new long[]{ orderVolume, itemDelta, moneyDelta };
     }
+
     /**
-     * Walk currentMarketPrice upward, consuming virtual volume at each step,
-     * until the remaining buy volume reaches 0, price hits {@code stopPrice},
-     * or the buyer runs out of funds.
+     * Walks up from the walk position, consuming virtual sell-side volume level by level,
+     * until the remaining buy volume is 0, the buyer runs out of funds, or every level up to
+     * {@code stopPrice} is consumed. Empty levels are skipped exactly via
+     * {@link Orderbook#findVirtualVolume}. Sets {@link #walkReachedStop} when nothing is left on
+     * the ask side up to {@code stopPrice}. Stops early (and logs) at the safety bound.
      *
      * @param orderVolume    current remaining volume (positive = still needs filling)
      * @param itemDelta      accumulated item delta so far
      * @param moneyDelta     accumulated money delta so far  (negative, growing)
-     * @param stopPrice      do not go above this price (exclusive upper bound)
+     * @param stopPrice      highest level to consume (inclusive)
      * @param availableFunds buyer's remaining spendable balance
-     * @return               long[4] = { orderVolume, itemDelta, moneyDelta, availableFunds };
-     *                       sets {@link #drainTimedOut} if the step limit stopped the walk early
+     * @return               long[4] = { orderVolume, itemDelta, moneyDelta, availableFunds }
      */
     private long[] drainVirtualBuy(long orderVolume, long itemDelta, long moneyDelta,
                                    long stopPrice, long availableFunds)
     {
-        drainTimedOut = false;
-        long nextExecutedPrice = currentMarketPrice;
-        long timeout = TIMEOUT_COUNT;
-        while (orderVolume > 0 && nextExecutedPrice <= stopPrice)
+        walkReachedStop = false;
+        long end = Math.min(stopPrice, walkBound);
+        long next = walkNext;
+        boolean passed = false;
+        while (orderVolume > 0)
         {
-            long virtualVol = orderbook.getRawVirtualVolumeRounded(nextExecutedPrice);
+            if (next > end) { passed = true; break; }
+            orderbook.updateDynamicArrayOffset(next);
+            long virtualVol = orderbook.getRawVirtualVolumeRounded(next);
             if (virtualVol < 0)
             {
                 long maxByFunds;
-                if (nextExecutedPrice <= 0 || availableFunds >= Long.MAX_VALUE / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR) {
+                if (next <= 0 || availableFunds >= Long.MAX_VALUE / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR) {
                     maxByFunds = orderVolume;
                 } else {
-                    maxByFunds = affordableVolume(availableFunds, nextExecutedPrice);
+                    maxByFunds = affordableVolume(availableFunds, next);
                 }
                 long wantToFill = Math.min(orderVolume, maxByFunds);
 
                 if (wantToFill <= 0)
                     break;   // buyer is broke
 
-                long filled = orderbook.fillVirtual(nextExecutedPrice, wantToFill);
+                long filled = orderbook.fillVirtual(next, wantToFill);
                 // cost = rawPrice * rawVolume / scaleFactor
-                long cost = Math.round((double)nextExecutedPrice * filled / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
+                long cost = Math.round((double)next * filled / BankSystemModSettings.ITEM_FRACTION_SCALE_FACTOR);
                 itemDelta      += filled;
                 moneyDelta     -= cost;
                 availableFunds -= cost;
                 orderVolume    -= filled;
                 tradedVolumeSinceLastReset += Math.abs(filled);
-                if(filled != 0)
-                {
-                    currentMarketPrice = nextExecutedPrice;
-                }
+                if (filled == 0)
+                    break;   // cannot happen (ask level, funds checked); guards an endless loop
+                currentMarketPrice = next;
 
                 // If we emptied this price level, step up
-                if (virtualVol + filled == 0 && orderVolume != 0) {
-                    nextExecutedPrice += 1;
-                    orderbook.updateDynamicArrayOffset(nextExecutedPrice);
-                }
+                if (virtualVol + filled == 0 && orderVolume != 0)
+                    next += 1;
             }
             else
             {
-                nextExecutedPrice += 1;
-                orderbook.updateDynamicArrayOffset(nextExecutedPrice);
-            }
-            timeout--;
-            if(timeout <= 0)
-            {
-                // #88: step limit before reaching stopPrice. Only an empty gap counts as reached.
-                if (orderVolume > 0 && nextExecutedPrice <= stopPrice
-                        && !orderbook.isVirtualVolumeEmptyBetween(nextExecutedPrice, stopPrice))
-                    drainTimedOut = true;
-                break;
+                long found = next < end ? orderbook.findVirtualVolume(next + 1, end, true) : VirtualOrderbook.NO_VOLUME;
+                if (found == VirtualOrderbook.NO_VOLUME) { next = end; passed = true; break; }
+                next = found;
             }
         }
-        //orderbook.setCurrentMarketPrice(currentMarketPrice);
+        walkNext = next;
+        if (passed)
+        {
+            if (end < stopPrice) walkAborted(end);
+            else walkReachedStop = true;
+        }
         return new long[]{ orderVolume, itemDelta, moneyDelta, availableFunds };
+    }
+
+    /** @return {@code a + b} for non-negative {@code b}, saturated at Long.MAX_VALUE */
+    static long saturatedAdd(long a, long b)
+    {
+        long r = a + b;
+        return r < a ? Long.MAX_VALUE : r;
     }
 
 

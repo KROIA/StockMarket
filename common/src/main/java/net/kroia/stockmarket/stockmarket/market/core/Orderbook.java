@@ -228,16 +228,27 @@ public class Orderbook implements ServerSaveable
     }
 
     /**
-     * Tells whether the virtual book holds no volume between two raw prices (inclusive).
-     * See {@link VirtualOrderbook#isEmptyBetween(long, long)}.
+     * Exact search for the next level with virtual volume of one side.
+     * See {@link VirtualOrderbook#findVolume(long, long, boolean)}.
      *
-     * @param fromRawPrice one end of the range
-     * @param toRawPrice   other end of the range
-     * @return true if no virtual volume sits in the range
+     * @param fromRawPrice first level to check (inclusive)
+     * @param toRawPrice   last level to check (inclusive); the search walks toward it
+     * @param askSide      true for sell-side (negative) volume, false for buy-side (positive)
+     * @return the first matching level, or {@link VirtualOrderbook#NO_VOLUME}
      */
-    public boolean isVirtualVolumeEmptyBetween(long fromRawPrice, long toRawPrice)
+    public long findVirtualVolume(long fromRawPrice, long toRawPrice, boolean askSide)
     {
-        return virtualOrderbook.isEmptyBetween(fromRawPrice, toRawPrice);
+        return virtualOrderbook.findVolume(fromRawPrice, toRawPrice, askSide);
+    }
+
+    /**
+     * @return true if the virtual book has default volume outside its array window, so a
+     *         search across a gap costs one provider call per level.
+     *         See {@link VirtualOrderbook#hasDefaultVolume()}.
+     */
+    public boolean hasDefaultVirtualVolume()
+    {
+        return virtualOrderbook.hasDefaultVolume();
     }
 
 

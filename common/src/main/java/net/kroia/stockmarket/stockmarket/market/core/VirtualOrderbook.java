@@ -348,59 +348,61 @@ public class VirtualOrderbook implements ServerSaveable
         return dynamicArray.getSumRounded(startPrice, endPrice+1);
     }
 
-    /** Number of default-provider samples {@link #isEmptyBetween} takes outside the array window. */
-    private static final int EMPTY_CHECK_SAMPLES = 64;
+    /** Returned by {@link #findVolume} when no level in the range holds volume of the asked side. */
+    public static final long NO_VOLUME = Long.MIN_VALUE;
 
     /**
-     * Tells whether no virtual volume (either side, rounded like the matching walk reads it)
-     * sits in the price range [{@code fromPrice}, {@code toPrice}].
-     * <p>Used by the matching walk (#88) when it hits its step limit before reaching the next
-     * real order: only if this range is empty may the walk jump to that order, so a real-only
-     * market (virtual book disabled, cleared, or no volume distribution) still fills far orders
-     * while a book that still holds liquidity can never be skipped.</p>
+     * Exact search for the first price level, walking from {@code from} toward {@code to}
+     * (both inclusive, upward if {@code to >= from}, else downward), whose virtual volume,
+     * rounded like the matching walk reads it, lies on the requested side.
+     * <p>Used by the matching walk (#88/#94) to skip empty levels in one step instead of
+     * iterating raw ticks. Every level is checked, so the walk can never jump over volume:</p>
      * <ul>
-     *   <li>Disabled: always empty.</li>
-     *   <li>Levels inside the array window: every level is checked exactly.</li>
-     *   <li>Levels outside the window come from the default provider. Cleared: always 0.
-     *       Otherwise the provider is sampled.</li>
+     *   <li>Disabled: no level holds volume.</li>
+     *   <li>Inside the array window the stored values are checked.</li>
+     *   <li>Outside the window every read is the default volume (what the walk would see after
+     *       re-centring the window there). Cleared or without a provider that is 0, so those
+     *       stretches are skipped in O(1); with a provider each level is evaluated once.</li>
      * </ul>
-     * ponytail: outside the window the default provider is sampled at both ends plus
-     * {@value #EMPTY_CHECK_SAMPLES} evenly spaced levels, not every level; a provider with a
-     * spike narrower than the sample step between two zero samples would be missed. Scan every
-     * level if a plugin ever ships such a shape.
+     * There is no cheaper exact way for a provider-backed book: the provider is an arbitrary
+     * plugin function, so only a provider that declared where its volume ends could be skipped
+     * faster. Callers bound the range for provider-backed books ({@link #hasDefaultVolume()}).
      *
-     * @param fromPrice first raw price level of the range (inclusive, any order)
-     * @param toPrice   last raw price level of the range (inclusive, any order)
-     * @return true if no level in the range holds virtual volume
+     * @param from    first raw price level to check
+     * @param to      last raw price level to check
+     * @param askSide true: look for sell-side (negative) volume, false: buy-side (positive) volume
+     * @return the first matching level, or {@link #NO_VOLUME}
      */
-    public boolean isEmptyBetween(long fromPrice, long toPrice)
+    public long findVolume(long from, long to, boolean askSide)
     {
-        if(disabled) return true;
-        long from = Math.min(fromPrice, toPrice);
-        long to = Math.max(fromPrice, toPrice);
+        if(disabled) return NO_VOLUME;
+        int step = to >= from ? 1 : -1;
         long winStart = dynamicArray.getIndexOffset();
         long winEnd = winStart + dynamicArray.getSize() - 1;
-
-        // Exact check of the part inside the array window
-        for(long p = Math.max(from, winStart); p <= Math.min(to, winEnd); p++)
-            if(dynamicArray.getRounded(p) != 0) return false;
-
-        // Outside the window every read is the default volume (0 when cleared)
-        return isDefaultEmptyBetween(from, Math.min(to, winStart - 1))
-            && isDefaultEmptyBetween(Math.max(from, winEnd + 1), to);
+        boolean defaults = hasDefaultVolume();
+        for(long p = from; ; p += step)
+        {
+            if(!defaults && (p < winStart || p > winEnd))
+            {
+                // Outside the window without default volume: jump to the window or stop
+                if(step > 0 && p < winStart && winStart <= to) p = winStart;
+                else if(step < 0 && p > winEnd && winEnd >= to) p = winEnd;
+                else return NO_VOLUME;
+            }
+            long v = dynamicArray.getRounded(p);
+            if(askSide ? v < 0 : v > 0) return p;
+            if(p == to) return NO_VOLUME;
+        }
     }
 
-    /** Samples the default provider in [from, to] (see {@link #isEmptyBetween}); true for an empty range. */
-    private boolean isDefaultEmptyBetween(long from, long to)
+    /**
+     * @return true if levels outside the array window can hold volume (a default provider is
+     *         set and the book is neither disabled nor cleared). Only then is a search with
+     *         {@link #findVolume} linear in the distance; otherwise it is bounded by the window.
+     */
+    public boolean hasDefaultVolume()
     {
-        if(from > to || cleared) return true;
-        long span = to - from;
-        for(int i = 0; i <= EMPTY_CHECK_SAMPLES; i++)
-        {
-            long p = from + (long)((double)span * i / EMPTY_CHECK_SAMPLES);
-            if(roundConservative(getDefaultVolume(Math.min(p, to))) != 0) return false;
-        }
-        return true;
+        return !disabled && !cleared && defaultVolumeProvider != null;
     }
 
 

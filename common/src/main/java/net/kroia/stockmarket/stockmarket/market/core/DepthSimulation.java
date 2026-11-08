@@ -19,9 +19,6 @@ import java.util.List;
  */
 public class DepthSimulation
 {
-    /** Safety timeout to prevent infinite loops when walking through sparse depth regions. */
-    private static final int TIMEOUT_COUNT = 10000;
-
     // Utility class — no instances needed
     private DepthSimulation() {}
 
@@ -77,7 +74,9 @@ public class DepthSimulation
         buyOrders.sort((a, b) -> Long.compare(b.getStartPrice(), a.getStartPrice()));
 
         int buyOrderIndex = 0;
-        boolean timedOut = false;
+        // Safety bound of the engine's walk (MatchingEngine.walkLevelLimit)
+        long bound = orderbook.hasDefaultVirtualVolume() ? currentPrice - MatchingEngine.getWalkLevelLimit() : Long.MIN_VALUE;
+        boolean aborted = false;
 
         // Walk through real orders interleaved with virtual depth,
         // mirroring MatchingEngine.processSell's for-loop over buyOrderSnapshot
@@ -92,9 +91,10 @@ public class DepthSimulation
 
             // --- Drain virtual buy-side depth from walkPrice down to stopPrice ---
             // Mirrors MatchingEngine.drainVirtualSell(orderVolume, itemDelta, moneyDelta, stopPrice)
-            long timeout = TIMEOUT_COUNT;
-            while (remainingSellVolume < 0 && walkPrice >= stopPrice)
+            long end = Math.max(Math.max(stopPrice, 1), bound);
+            while (remainingSellVolume < 0)
             {
+                if (walkPrice < end) { aborted = end > Math.max(stopPrice, 1); break; }
                 long virtualVol = orderbook.getRawVirtualVolumeRounded(walkPrice);
                 if (virtualVol > 0)
                 {
@@ -117,27 +117,14 @@ public class DepthSimulation
                 }
                 else
                 {
-                    walkPrice--;
-                }
-
-                if (walkPrice <= 0)
-                {
-                    walkPrice = 0;
-                    break;
-                }
-
-                timeout--;
-                if (timeout <= 0)
-                {
-                    // #88 (mirrors MatchingEngine.drainVirtualSell): step limit before reaching
-                    // the next real order -> stop unless nothing lies in between.
-                    if (remainingSellVolume < 0 && walkPrice >= stopPrice
-                            && !orderbook.isVirtualVolumeEmptyBetween(stopPrice, walkPrice))
-                        timedOut = true;
-                    break;
+                    // Skip empty levels exactly (never over volume)
+                    long found = walkPrice > end ? orderbook.findVirtualVolume(walkPrice - 1, end, false) : VirtualOrderbook.NO_VOLUME;
+                    if (found == VirtualOrderbook.NO_VOLUME) { walkPrice = end; aborted = end > Math.max(stopPrice, 1); break; }
+                    walkPrice = found;
                 }
             }
-            if (timedOut)
+            // Safety bound reached before the next real order: the engine cancels the rest here
+            if (aborted)
                 break;
 
             // --- Match against the next real buy order ---
@@ -232,7 +219,10 @@ public class DepthSimulation
         sellOrders.sort(Comparator.comparingLong(Order::getStartPrice));
 
         int sellOrderIndex = 0;
-        boolean timedOut = false;
+        // Safety bound of the engine's walk (MatchingEngine.walkLevelLimit)
+        long bound = orderbook.hasDefaultVirtualVolume()
+                ? MatchingEngine.saturatedAdd(currentPrice, MatchingEngine.getWalkLevelLimit()) : Long.MAX_VALUE;
+        boolean aborted = false;
 
         // Walk through real orders interleaved with virtual depth,
         // mirroring MatchingEngine.processBuy's for-loop over sellOrderSnapshot
@@ -247,9 +237,10 @@ public class DepthSimulation
 
             // --- Drain virtual sell-side depth from walkPrice up to stopPrice ---
             // Mirrors MatchingEngine.drainVirtualBuy(orderVolume, itemDelta, moneyDelta, stopPrice, availableFunds)
-            long timeout = TIMEOUT_COUNT;
-            while (remainingBuyVolume > 0 && walkPrice <= stopPrice)
+            long end = Math.min(stopPrice, bound);
+            while (remainingBuyVolume > 0)
             {
+                if (walkPrice > end) { aborted = end < stopPrice; break; }
                 long virtualVol = orderbook.getRawVirtualVolumeRounded(walkPrice);
                 if (virtualVol < 0)
                 {
@@ -288,21 +279,14 @@ public class DepthSimulation
                 }
                 else
                 {
-                    walkPrice++;
-                }
-
-                timeout--;
-                if (timeout <= 0)
-                {
-                    // #88 (mirrors MatchingEngine.drainVirtualBuy): step limit before reaching
-                    // the next real order -> stop unless nothing lies in between.
-                    if (remainingBuyVolume > 0 && walkPrice <= stopPrice
-                            && !orderbook.isVirtualVolumeEmptyBetween(walkPrice, stopPrice))
-                        timedOut = true;
-                    break;
+                    // Skip empty levels exactly (never over volume)
+                    long found = walkPrice < end ? orderbook.findVirtualVolume(walkPrice + 1, end, true) : VirtualOrderbook.NO_VOLUME;
+                    if (found == VirtualOrderbook.NO_VOLUME) { walkPrice = end; aborted = end < stopPrice; break; }
+                    walkPrice = found;
                 }
             }
-            if (timedOut)
+            // Safety bound reached before the next real order: the engine cancels the rest here
+            if (aborted)
                 break;
 
             // --- Match against the next real sell order ---
@@ -391,9 +375,12 @@ public class DepthSimulation
 
         int buyOrderIndex = 0;
         boolean done = false;
+        // Safety bound of the engine's walk (MatchingEngine.walkLevelLimit)
+        long bound = orderbook.hasDefaultVirtualVolume() ? currentPrice - MatchingEngine.getWalkLevelLimit() : Long.MIN_VALUE;
 
         // Walk through real orders interleaved with virtual depth
-        while (!done)
+        // (the yield check also ends the walk when a full real fill hit the target exactly)
+        while (!done && dollarYield < targetDollars)
         {
             // Determine the stop price for virtual drain
             long stopPrice;
@@ -403,9 +390,16 @@ public class DepthSimulation
                 stopPrice = 0;
 
             // --- Drain virtual buy-side depth from walkPrice down to stopPrice ---
-            long timeout = TIMEOUT_COUNT;
-            while (dollarYield < targetDollars && walkPrice >= stopPrice)
+            long end = Math.max(Math.max(stopPrice, 1), bound);
+            while (dollarYield < targetDollars)
             {
+                if (walkPrice < end)
+                {
+                    // Safety bound, or no real order left: done. Else the next real order is reached.
+                    if (end > Math.max(stopPrice, 1) || buyOrderIndex >= buyOrders.size())
+                        done = true;
+                    break;
+                }
                 long virtualVol = orderbook.getRawVirtualVolumeRounded(walkPrice);
                 if (virtualVol > 0)
                 {
@@ -437,30 +431,19 @@ public class DepthSimulation
                     // If we fully consumed this price level, step down
                     if (canConsume >= virtualVol)
                         walkPrice--;
-                    // else we partially filled but didn't reach target (shouldn't happen
-                    // since we computed maxVolumeForTarget, but handle gracefully)
+                    else
+                    {
+                        // partial fill without reaching the target (shouldn't happen since we
+                        // computed maxVolumeForTarget); stop instead of spinning on this level
+                        done = true;
+                        break;
+                    }
                 }
                 else
                 {
-                    walkPrice--;
-                }
-
-                if (walkPrice <= 0)
-                {
-                    walkPrice = 0;
-                    done = true;
-                    break;
-                }
-
-                timeout--;
-                if (timeout <= 0)
-                {
-                    // #88: an empty gap to the next real order still counts as reached
-                    if (buyOrderIndex < buyOrders.size() && walkPrice >= stopPrice
-                            && orderbook.isVirtualVolumeEmptyBetween(stopPrice, walkPrice))
-                        break;
-                    done = true;
-                    break;
+                    // Skip empty levels exactly (never over volume); none left -> walkPrice < end
+                    long found = walkPrice > end ? orderbook.findVirtualVolume(walkPrice - 1, end, false) : VirtualOrderbook.NO_VOLUME;
+                    walkPrice = found == VirtualOrderbook.NO_VOLUME ? end - 1 : found;
                 }
             }
 
