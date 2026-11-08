@@ -472,7 +472,7 @@ public class PresetEditorTab extends StockMarketGuiElement {
         JsonObject serialized = MarketPreset.serializeItemStack(stack);
         String itemId = serialized.get("id").getAsString();
         JsonObject components = serialized.has("components") ? serialized.getAsJsonObject("components") : null;
-        MarketPreset newPreset = new MarketPreset(itemId, components, 10.0f, 10.0f);
+        MarketPreset newPreset = new MarketPreset(itemId, components, 10.0f, 100.0f); // price 10, abundance 100
 
         category.getPresets().add(newPreset);
         categoryModified = true;

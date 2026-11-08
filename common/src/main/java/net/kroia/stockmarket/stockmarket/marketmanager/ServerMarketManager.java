@@ -142,7 +142,8 @@ public class ServerMarketManager implements ServerSaveableChunked, IServerMarket
             MarketPreset preset = BACKEND_INSTANCES.PRESET_MANAGER != null
                     ? BACKEND_INSTANCES.PRESET_MANAGER.getPreset(marketID) : null;
             long defaultPrice = (preset != null) ? MarketManager.convertToRawAmountStatic(preset.getDefaultPrice()) : 1000;
-            float abundance = (preset != null) ? preset.getNaturalAbundance() : 10f;
+            // No preset: fallback abundance 100 (presets were raised x10 in T-185, see 8a2be930)
+            float abundance = (preset != null) ? preset.getNaturalAbundance() : 100f;
             m = new ServerMarket(marketID, null, defaultPrice, abundance);
             // Propagate the preset's orderbookEnabled flag into the market's live settings.
             // Presets without the flag (legacy JSON) default to true via MarketPreset's field

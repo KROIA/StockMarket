@@ -657,7 +657,7 @@ public class StockMarketCommands {
         }
         JsonObject components = serialized.has("components") ? serialized.getAsJsonObject("components") : null;
         // Same defaults as a preset created through the GUI item picker (PresetEditorTab).
-        MarketPreset newPreset = new MarketPreset(itemId, components, 10.0f, 10.0f);
+        MarketPreset newPreset = new MarketPreset(itemId, components, 10.0f, 100.0f); // price 10, abundance 100
         String displayName = stack.getHoverName().getString();
 
         MarketPresetManager presetManager = BACKEND_INSTANCES.PRESET_MANAGER;
