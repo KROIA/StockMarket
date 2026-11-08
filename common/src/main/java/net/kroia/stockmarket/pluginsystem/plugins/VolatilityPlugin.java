@@ -29,26 +29,38 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
      * Default flow sensitivity: items per unit of naturalAbundance that shift
      * the equilibrium price by a factor of e (~2.72x).
      * <p>
-     * Reasoning: default preset abundances range from ~5 (diamond) to ~200
-     * (cobblestone/dirt), with the preset fallback at 10. With a sensitivity of
-     * 500 the "capacity" (items needed for one factor-e move, before the
-     * volatility correction) is:
+     * T-197 (2026-11-08): raised from 500 to 2000 after a replay sweep (flowSensitivity
+     * 125..2000 x abundance 25/50/100 x maxPriceMult 20/5/3/2) on the diamond preset
+     * (price 160, abundance 50 after the x10 preset scale, player max order 3,200),
+     * with the faded net flow, the bot target rate limit and the 30 min depth memory at their
+     * defaults. Preset abundances now range ~50 (rare) to ~2,000 (bulk) since DefaultPresets
+     * scales them x10, so the capacity (items for one factor-e move, volatility scale 0)
+     * at 2000 is ~100,000 items for diamond. Measured with maxPriceMult 3:
      * <ul>
-     *   <li>diamond (abundance 5): ~2,500 diamonds net-sold to drop the price to ~37%</li>
-     *   <li>iron ingot (abundance 30): ~15,000 ingots</li>
-     *   <li>cobblestone (abundance 200): ~100,000 blocks</li>
+     *   <li>patient hold (5 x max-order buys, 60 s hold, sell back; 5 cycles): -3.5%
+     *       (was -42% at 500, but through price spikes);</li>
+     *   <li>rapid pump (20 x 5 max-order buys, 1 s wait, sell back): -24%;</li>
+     *   <li>organic demand (3,200 items every 30 s for 10 min): +148% (abundance 25),
+     *       +58% (50), +26% (100), so sustained buying still moves the price;</li>
+     *   <li>open follow-up: a held sweep (60 max-order buys, 5 min hold, sell back) still
+     *       makes ~+73%; it comes from depth-memory recovery and the bot buying back into thin
+     *       asks, not from this value.</li>
      * </ul>
-     * These match realistic trade volumes on a small server: bulk farmable items
-     * need huge dumps to crash, while rare items react to a few thousand units.
-     * Smaller moves happen proportionally earlier (e.g. ~10% price drop after
-     * ~capacity/10 items), so the market visibly responds long before capacity
-     * is reached.
+     * Smaller moves happen proportionally earlier (e.g. ~10% price change after
+     * ~capacity/10 items).
      */
-    public static final float DEFAULT_FLOW_SENSITIVITY = 500f;
+    public static final float DEFAULT_FLOW_SENSITIVITY = 2000f;
     /** Default lower clamp of the equilibrium: never below 5% of the default price. */
     public static final float DEFAULT_MIN_PRICE_MULT = 0.05f;
-    /** Default upper clamp of the equilibrium: never above 20x the default price. */
-    public static final float DEFAULT_MAX_PRICE_MULT = 20.0f;
+    /**
+     * Default upper clamp of the equilibrium: never above 3x the default price.
+     * <p>
+     * T-197: lowered from 20 to 3. The cap bounds how far a pump can drag the bot's target:
+     * held-sweep profit on the diamond replay was +101% at 20 vs +73% at 3 (flowSensitivity
+     * 2000), while organic demand at the default sensitivity stays below the cap
+     * (+26..+148% per 10 min by abundance, cap +200%).
+     */
+    public static final float DEFAULT_MAX_PRICE_MULT = 3.0f;
 
     /**
      * Custom per-market settings for the volatility and flow-equilibrium behavior.
@@ -67,7 +79,7 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
      *                             default price (0.05 = never below 5% of default).
      *                             Must be in (0, 1); invalid values fall back to the default
      * @param maxPriceMult         upper clamp for the equilibrium as a multiple of the
-     *                             default price (20 = never above 20x default).
+     *                             default price (3 = never above 3x default).
      *                             Must be &gt; 1; invalid values fall back to the default
      */
     public record Settings(float volatilityScale, boolean flowInfluenceEnabled,

@@ -85,6 +85,13 @@ public class PluginTestSuite extends TestSuite {
         addTest("profitAlert_window", this::test_profitAlert_window);
         addTest("pumpReplay_noProfit", this::test_pumpReplay_noProfit);
         addTest("depthMemory_replayReport", this::test_depthMemory_replayReport);
+
+        // T-197 tuning sweep (report only, ~10 min; runs only with -Dstockmarket.t197sweep=true
+        // or env STOCKMARKET_T197_SWEEP set)
+        for (float s : new float[]{125, 250, 500, 1000, 2000})
+            addTest("t197_sweep_sens" + (int) s, () -> test_t197_sweep(s));
+        addTest("t197_sweep_memoryOff", this::test_t197_sweep_memoryOff);
+        addTest("t197_patientTrace", this::test_t197_patientTrace);
     }
 
     @Override
@@ -517,13 +524,36 @@ public class PluginTestSuite extends TestSuite {
         return pass("Alert once per window when the realized profit exceeds the threshold");
     }
 
-    /** Result of one {@link #replay} run, money in real units. */
-    private record ReplayResult(double moneyDelta, double itemsLeft, double profit, double maxPrice) {
+    /**
+     * Result of one {@link #replay} run, money in real units.
+     *
+     * @param spent    money paid for the player's buys (profit % base)
+     * @param endPrice market price after the last tick
+     */
+    private record ReplayResult(double moneyDelta, double itemsLeft, double profit, double maxPrice,
+                                double spent, double endPrice) {
+        /** @return profit in % of the money spent on buys (0 if nothing was bought) */
+        double profitPct() { return spent > 0 ? 100 * profit / spent : 0; }
+
         @Override public String toString() {
             return String.format(Locale.ROOT, "profit %.0f (money %+.0f, items left %.0f), max price %.2f",
                     profit, moneyDelta, itemsLeft, maxPrice);
         }
     }
+
+    /**
+     * T-197 tuning knobs of one replay market (diamond preset defaults: VolatilityPlugin defaults,
+     * abundance 50, depth memory at the setting's default).
+     *
+     * @param flowSensitivity VolatilityPlugin flowSensitivity
+     * @param abundance       natural abundance (depth scale, flow capacity and player max order = 64 x abundance)
+     * @param maxPriceMult    VolatilityPlugin maxPriceMult
+     * @param memoryMinutes   {@code VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES} (0 = memory off)
+     * @param warmupTicks     ticks the plugins run before the player acts, so the bot's rate-limited
+     *                        target starts at the default price (0 = the bot's first step snaps to the
+     *                        target the player's first order already moved; pre-T-197 behaviour)
+     */
+    private record ReplayConfig(float flowSensitivity, float abundance, float maxPriceMult, float memoryMinutes, int warmupTicks) {}
 
     /**
      * #89 replay of a reported server exploit on a diamond-like market (default price 160, abundance 50 = the
@@ -554,6 +584,22 @@ public class PluginTestSuite extends TestSuite {
      */
     private ReplayResult replay(float halfLifeMinutes, float maxTargetMovePerSecond, int cycles, int ordersPerLeg, int waitTicks,
                                 float memoryMinutes, long orderItems) {
+        VolatilityPlugin.Settings vs = VolatilityPlugin.Settings.createDefault();
+        return replay(halfLifeMinutes, maxTargetMovePerSecond, cycles, ordersPerLeg, waitTicks, orderItems, true,
+                new ReplayConfig(vs.flowSensitivity(), 50, vs.maxPriceMult(), memoryMinutes, 0), null);
+    }
+
+    /**
+     * Core of the replays (see {@link #replay(float, float, int, int, int)}).
+     *
+     * @param sellBack false = buy only (organic demand): each cycle is the buy leg plus {@code waitTicks}
+     * @param cfg      market / plugin knobs under test
+     * @param trace    if not null, every 100 ticks "tick:price/equilibrium/bot-estimated volume to
+     *                 target/exact volume to target" is appended (diagnostics of the bot sizing)
+     */
+    private ReplayResult replay(float halfLifeMinutes, float maxTargetMovePerSecond, int cycles, int ordersPerLeg, int waitTicks,
+                                long orderItems, boolean sellBack, ReplayConfig cfg, StringBuilder trace) {
+        float memoryMinutes = cfg.memoryMinutes();
         ServerMarket market = (ServerMarket) serverMarket;
         StockMarketModSettings.Market modSettings = backend.SERVER_SETTINGS.MARKET;
         Float prevHalfLife = modSettings.NET_FLOW_HALF_LIFE_MINUTES.get();
@@ -561,7 +607,7 @@ public class PluginTestSuite extends TestSuite {
         Float prevAlert = modSettings.PROFIT_ALERT_THRESHOLD.get();
         int sf = backend.BANK_SYSTEM_API.getServerBankManager().getSync().getItemFractionScaleFactor();
         double defaultPrice = 160;
-        float abundance = 50;
+        float abundance = cfg.abundance();
         long maxOrder = MarketSettings.defaultMaxOrderVolume(abundance);
         MarketSettings settings = market.getSettings();
         long prevDefault = settings.defaultPrice;
@@ -591,8 +637,9 @@ public class PluginTestSuite extends TestSuite {
             vol.setLoggerEnabled(false);
             vol.onMarketSubscribed(itemID);
             VolatilityPlugin.Settings vs = VolatilityPlugin.Settings.createDefault();
-            applySettings(vol, VolatilityPlugin.Settings.CODEC, new VolatilityPlugin.Settings(0f, vs.flowInfluenceEnabled(),
-                    vs.flowSensitivity(), vs.minPriceMult(), vs.maxPriceMult()));
+            VolatilityPlugin.Settings volSettings = new VolatilityPlugin.Settings(0f, vs.flowInfluenceEnabled(),
+                    cfg.flowSensitivity(), vs.minPriceMult(), cfg.maxPriceMult());
+            applySettings(vol, VolatilityPlugin.Settings.CODEC, volSettings);
             TargetPriceBot bot = new TargetPriceBot();
             bot.setLoggerEnabled(false);
             bot.onMarketSubscribed(itemID);
@@ -608,16 +655,35 @@ public class PluginTestSuite extends TestSuite {
             IServerBank itemBank = account.getBank(itemID);
             IServerBank moneyBank = account.getBank(moneyID);
 
-            double maxPrice = 0;
+            double maxPrice = 0, spent = 0, windowMax = 0; // windowMax: trace, max since the last sample
             int legTicks = ordersPerLeg * 10;
             long chunk = orderItems > 0 ? orderItems : maxOrder;
+            int cycleTicks = sellBack ? 2 * legTicks + waitTicks + 10 : legTicks + waitTicks;
+            // Warm-up: plugins only, so the bot's rate-limited target is anchored before the player acts.
+            for (int t = 0; t < cfg.warmupTicks(); t++) {
+                vol.update(markets);
+                bot.update(markets);
+                cache.apply();
+                market.update();
+            }
             for (int c = 0; c < cycles; c++) {
                 // Buy leg, wait, sell leg; one order per 10 ticks.
-                for (int t = 0; t < 2 * legTicks + waitTicks + 10; t++) {
+                for (int t = 0; t < cycleTicks; t++) {
+                    if (trace != null && (c * cycleTicks + t) % 100 == 0) {
+                        double p = MarketManager.convertToRealAmountStatic(market.getCurrentMarketPrice());
+                        double eq = VolatilityPlugin.computeEquilibriumPrice(defaultPrice,
+                                cache.getPluginMarket().getFadedNetPlayerItemFlow(), abundance, volSettings);
+                        trace.append(String.format(Locale.ROOT, " %d:%.0f(max %.0f)/%.0f/%.0f/%.0f/%.0f", c * cycleTicks + t, p, windowMax, eq,
+                                cache.getPluginOrderBook().getRealVirtualVolume(p, eq),
+                                market.getOrderbook().getRealVolumeRounded(Math.min(p, eq), Math.max(p, eq)),
+                                market.getOrderbook().getRealVolumeRounded(0.9 * p, p)));
+                        windowMax = 0;
+                    }
+                    long moneyBefore = moneyBank.getTotalBalance();
                     if (t < legTicks && t % 10 == 0) {
                         market.putOrder(new Order(itemID, Order.Type.MARKET, chunk * sf, 0,
                                 System.currentTimeMillis(), player, account.getAccountNumber()));
-                    } else if (t >= legTicks + waitTicks && t % 10 == 0 && itemBank.getBalance() > 0) {
+                    } else if (sellBack && t >= legTicks + waitTicks && t % 10 == 0 && itemBank.getBalance() > 0) {
                         long sell = Math.min(itemBank.getBalance(), chunk * sf);
                         itemBank.lockAmount(sell);
                         market.putOrder(new Order(itemID, Order.Type.MARKET, -sell, 0,
@@ -628,11 +694,14 @@ public class PluginTestSuite extends TestSuite {
                     cache.apply();
                     market.update();
                     maxPrice = Math.max(maxPrice, MarketManager.convertToRealAmountStatic(market.getCurrentMarketPrice()));
+                    windowMax = Math.max(windowMax, MarketManager.convertToRealAmountStatic(market.getCurrentMarketPrice()));
+                    if (t < legTicks) spent += MarketManager.convertToRealAmountStatic(Math.max(0, moneyBefore - moneyBank.getTotalBalance()));
                 }
             }
             double moneyDelta = MarketManager.convertToRealAmountStatic(moneyBank.getTotalBalance() - startMoney);
             double itemsLeft = itemBank.getTotalBalance() / (double) sf;
-            return new ReplayResult(moneyDelta, itemsLeft, moneyDelta + itemsLeft * defaultPrice, maxPrice);
+            return new ReplayResult(moneyDelta, itemsLeft, moneyDelta + itemsLeft * defaultPrice, maxPrice, spent,
+                    MarketManager.convertToRealAmountStatic(market.getCurrentMarketPrice()));
         } finally {
             modSettings.NET_FLOW_HALF_LIFE_MINUTES.set(prevHalfLife);
             modSettings.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.set(prevMemory);
@@ -718,6 +787,122 @@ public class PluginTestSuite extends TestSuite {
             out.append(" | sweep hold 120 s ON: ").append(replay(hl, move, 1, 1, 2400, mem, sweep));
             out.append(" | sweep hold 5 min ON: ").append(replay(hl, move, 1, 1, 6000, mem, sweep));
             StockMarketMod.LOGGER.info("[T-198 replay] {}", out);
+            return pass(out.toString());
+        } catch (Exception e) {
+            return fail("Exception: " + e);
+        }
+    }
+
+    // ── T-197 tuning sweep (report only) ────────────────────────────────────
+
+    /**
+     * T-197 gate: {@code -Dstockmarket.t197sweep=true} runs the sweep and the traces, {@code =trace} the traces only.
+     *
+     * @param trace true for the trace test
+     */
+    private static boolean t197Requested(boolean trace) {
+        String v = System.getProperty("stockmarket.t197sweep", "");
+        return v.equals("true") || (trace && v.equals("trace"));
+    }
+
+    /**
+     * One T-197 table row: every scenario on one config, mitigations (faded flow, target rate limit)
+     * at their defaults, 20 warm-up ticks. Player orders respect the max order (64 x abundance) and the
+     * 500 ms cooldown (one order per 10 ticks).
+     * <ul>
+     *   <li>rapid: 20 x (5 max buys, 1 s wait, sell back);</li>
+     *   <li>patient: 5 x (5 max buys, 60 s hold, sell back);</li>
+     *   <li>sweep: 60 max buys back to back (30 s), hold 0 s / 60 s / 5 min, sell back at max rate;</li>
+     *   <li>organic: 3,200 items every 30 s for 10 min, never sold; end price and max in % of 160.</li>
+     * </ul>
+     * Cells: profit $ (profit % of the money spent) max price.
+     */
+    private String t197Row(ReplayConfig cfg) {
+        float hl = backend.SERVER_SETTINGS.MARKET.NET_FLOW_HALF_LIFE_MINUTES.getDefaultValue();
+        float move = TargetPriceBot.DEFAULT_MAX_TARGET_MOVE_PER_SECOND;
+        long maxOrder = MarketSettings.defaultMaxOrderVolume(cfg.abundance());
+        int organicOrders = (int) ((3200 + maxOrder - 1) / maxOrder);
+        long organicChunk = Math.min(3200, maxOrder);
+        StringBuilder row = new StringBuilder(String.format(Locale.ROOT, "sens %.0f | ab %.0f | mult %.0f | mem %.0f",
+                cfg.flowSensitivity(), cfg.abundance(), cfg.maxPriceMult(), cfg.memoryMinutes()));
+        ReplayResult[] runs = {
+                replay(hl, move, 20, 5, 20, 0, true, cfg, null),
+                replay(hl, move, 5, 5, 1200, 0, true, cfg, null),
+                replay(hl, move, 1, 60, 0, 0, true, cfg, null),
+                replay(hl, move, 1, 60, 1200, 0, true, cfg, null),
+                replay(hl, move, 1, 60, 6000, 0, true, cfg, null)};
+        for (ReplayResult r : runs)
+            row.append(String.format(Locale.ROOT, " | %+.2fM (%+.1f%%) max %.0f", r.profit() / 1e6, r.profitPct(), r.maxPrice()));
+        ReplayResult organic = replay(hl, move, 20, organicOrders, 600 - organicOrders * 10, organicChunk, false, cfg, null);
+        row.append(String.format(Locale.ROOT, " | organic end %+.0f%% max %+.0f%%",
+                100 * (organic.endPrice() / 160 - 1), 100 * (organic.maxPrice() / 160 - 1)));
+        StockMarketMod.LOGGER.info("[T-197 row] {}", row);
+        return row.toString();
+    }
+
+    /** T-197 sweep for one flowSensitivity: abundance 25/50/100 x maxPriceMult 20/5/3/2, memory at its default. */
+    private TestResult test_t197_sweep(float sensitivity) {
+        if (!t197Requested(false)) return skip("T-197 sweep not requested");
+        try {
+            float mem = backend.SERVER_SETTINGS.MARKET.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.getDefaultValue();
+            StringBuilder out = new StringBuilder();
+            for (float ab : new float[]{25, 50, 100})
+                for (float mult : new float[]{20, 5, 3, 2})
+                    out.append("\n").append(t197Row(new ReplayConfig(sensitivity, ab, mult, mem, 20)));
+            return pass(out.toString());
+        } catch (Exception e) {
+            return fail("Exception: " + e);
+        }
+    }
+
+    /** T-197 memory-off column: abundance 50, maxPriceMult 20 and 3, every sensitivity. */
+    private TestResult test_t197_sweep_memoryOff() {
+        if (!t197Requested(false)) return skip("T-197 sweep not requested");
+        try {
+            StringBuilder out = new StringBuilder();
+            for (float mult : new float[]{20, 3})
+                for (float s : new float[]{125, 250, 500, 1000, 2000})
+                    out.append("\n").append(t197Row(new ReplayConfig(s, 50, mult, 0f, 20)));
+            return pass(out.toString());
+        } catch (Exception e) {
+            return fail("Exception: " + e);
+        }
+    }
+
+    /**
+     * T-197 diagnostics of the T-198 patient replay (no warm-up, defaults, as in
+     * {@link #test_depthMemory_replayReport}), memory on vs off: price / equilibrium / bot's interpolated
+     * virtual volume to the equilibrium / exact virtual volume, every 100 ticks.
+     */
+    private TestResult test_t197_patientTrace() {
+        if (!t197Requested(true)) return skip("T-197 trace not requested");
+        try {
+            float hl = backend.SERVER_SETTINGS.MARKET.NET_FLOW_HALF_LIFE_MINUTES.getDefaultValue();
+            float move = TargetPriceBot.DEFAULT_MAX_TARGET_MOVE_PER_SECOND;
+            VolatilityPlugin.Settings vs = VolatilityPlugin.Settings.createDefault();
+            StringBuilder out = new StringBuilder();
+            for (float mem : new float[]{backend.SERVER_SETTINGS.MARKET.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.getDefaultValue(), 0f}) {
+                StringBuilder trace = new StringBuilder();
+                ReplayResult r = replay(hl, move, 5, 5, 1200, 0, true,
+                        new ReplayConfig(vs.flowSensitivity(), 50, vs.maxPriceMult(), mem, 0), trace);
+                out.append("\nmemory ").append(mem).append(": ").append(r).append("\n trace").append(trace);
+            }
+            // Held sweep (60 max buys, 5 min hold, sell back): memory 30 min vs ~no recovery (1 week) vs
+            // off, maxPriceMult 20 and 2, to separate depth-memory recovery from the flow equilibrium.
+            for (float mult : new float[]{2, 20})
+                for (float mem : new float[]{30, 10080, 0}) {
+                    StringBuilder trace = mem == 30 ? new StringBuilder() : null;
+                    ReplayResult r = replay(hl, move, 1, 60, 6000, 0, true,
+                            new ReplayConfig(vs.flowSensitivity(), 50, mult, mem, 20), trace);
+                    out.append(String.format(Locale.ROOT, "\nsweep hold 5 min mult %.0f memory %.0f: %s (%+.1f%%), end %.0f",
+                            mult, mem, r, r.profitPct(), r.endPrice()));
+                    if (trace != null) out.append("\n trace").append(trace);
+                }
+            // Run-to-run determinism of one row (current defaults), twice.
+            for (int i = 0; i < 2; i++)
+                out.append("\nrepeat ").append(t197Row(new ReplayConfig(vs.flowSensitivity(), 50, vs.maxPriceMult(),
+                        backend.SERVER_SETTINGS.MARKET.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES.getDefaultValue(), 20)));
+            StockMarketMod.LOGGER.info("[T-197 trace] {}", out);
             return pass(out.toString());
         } catch (Exception e) {
             return fail("Exception: " + e);
