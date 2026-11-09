@@ -170,15 +170,17 @@ public class StockMarketModSettings extends ModSettings {
          * the flow value the price plugins (VolatilityPlugin equilibrium) read. The real net flow is not
          * affected. 0 = no fading (the faded value then equals the real flow).
          * <p>
-         * Default 10 min: a one-off burst is at 50% after 10 min and at ~12% after 30 min, so scripted
-         * buy/sell bursts stop pinning the equilibrium, while steady demand still counts: a constant net
-         * rate R holds the faded flow at R x 14.4 min (half-life / ln 2).
+         * Default 360 min (6 h, T-208; was 10 min): a one-off burst is at 50% after 6 h, so a player's
+         * trade keeps its (bounded, see VolatilityPlugin {@code permanentImpact}) effect on the
+         * equilibrium for hours instead of snapping back within minutes; steady demand still counts: a
+         * constant net rate R holds the faded flow at R x 519 min (half-life / ln 2). Worlds that still
+         * hold the old default 10 are moved to 360 once on load ({@code DataManager.migrateNetFlowHalfLife()}).
          * <p>
          * Read live every tick (decay in {@code ServerMarket.update()}) — no restart required.
          * <p>
          * Slave-propagation: NOT needed. Markets only live on the master.
          */
-        public final Setting<Float> NET_FLOW_HALF_LIFE_MINUTES = registerSetting("NET_FLOW_HALF_LIFE_MINUTES", 10f, Float.class);
+        public final Setting<Float> NET_FLOW_HALF_LIFE_MINUTES = registerSetting("NET_FLOW_HALF_LIFE_MINUTES", 360f, Float.class);
 
         /**
          * T-198: recovery half-life in minutes of the virtual depth memory. Virtual (default) volume

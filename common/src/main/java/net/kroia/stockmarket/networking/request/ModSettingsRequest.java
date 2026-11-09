@@ -315,8 +315,10 @@ public class ModSettingsRequest extends StockMarketGenericRequest<ModSettingsReq
         //   max order size is derived (new markets/presets, saves without a value, the
         //   APPLY_MAX_ORDER_VOLUME_TO_ALL_MARKETS action). Markets/presets live only on the
         //   master — no propagation needed. Changing it does NOT touch existing markets.
-        // * ServerMarket.NET_FLOW_HALF_LIFE_MINUTES (#89): read live every tick in
-        //   ServerMarket.update() on the master; markets only live there — no propagation needed.
+        // * ServerMarket.NET_FLOW_HALF_LIFE_MINUTES (#89, default 360 since T-208): read live every
+        //   tick in ServerMarket.update() on the master; markets only live there — no propagation
+        //   needed. The one-shot 10 -> 360 migration (DataManager.migrateNetFlowHalfLife) also runs
+        //   only on the master's world load.
         // * ServerMarket.VIRTUAL_DEPTH_RECOVERY_HALF_LIFE_MINUTES / VIRTUAL_DEPTH_MAX_PRICE_MULTIPLIER
         //   (T-198): read live by the master's VirtualOrderbook (every tick / window move / depth
         //   read); markets only live on the master — no propagation needed.

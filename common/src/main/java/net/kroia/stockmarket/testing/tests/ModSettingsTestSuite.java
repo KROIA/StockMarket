@@ -7,6 +7,7 @@ import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
 import net.kroia.stockmarket.StockMarketModSettings;
+import net.kroia.stockmarket.data.DataManager;
 import net.kroia.stockmarket.networking.request.ModSettingsRequest;
 import net.kroia.stockmarket.testing.StockMarketTestCategories;
 import net.minecraft.world.item.ItemStack;
@@ -37,6 +38,10 @@ public class ModSettingsTestSuite extends TestSuite {
         addTest("sanitize_clamps_upper_bounds", this::test_sanitizeClampsUpperBounds);
         addTest("sanitize_restores_empty_currency", this::test_sanitizeRestoresEmptyCurrency);
         addTest("partial_payload_keeps_other_values", this::test_partialPayloadKeepsOtherValues);
+        addTest("netFlowHalfLife_migrates_old_default", () -> test_halfLifeMigration(10f, false, 360f, true));
+        addTest("netFlowHalfLife_keeps_custom", () -> test_halfLifeMigration(30f, false, 30f, false));
+        addTest("netFlowHalfLife_marker_present_keeps_10", () -> test_halfLifeMigration(10f, true, 10f, false));
+        addTest("netFlowHalfLife_fresh_world", () -> test_halfLifeMigration(null, false, 360f, false));
     }
 
     /**
@@ -208,5 +213,47 @@ public class ModSettingsTestSuite extends TestSuite {
         r = assertEquals("VillagerTrading setting missing from payload preserved", 0.33f, (float) settings.VILLAGER_TRADING.VILLAGER_BUY_MARGIN.get());
         if (!r.passed()) return r;
         return pass("Partial payloads only change the settings they contain");
+    }
+
+    /**
+     * T-208: the one-shot {@code NET_FLOW_HALF_LIFE_MINUTES} migration (old default 10 -> 360) on a
+     * fresh settings instance and a marker file in a temp folder. Afterwards the marker must always exist.
+     *
+     * @param start         the value loaded from the settings file, null = fresh world (default kept)
+     * @param markerPresent whether the marker exists before the migration
+     * @param expected      the expected value afterwards
+     * @param changed       the expected return value (value changed)
+     */
+    private TestResult test_halfLifeMigration(Float start, boolean markerPresent, float expected, boolean changed) {
+        StockMarketModSettings settings = new StockMarketModSettings();
+        if (start != null)
+            settings.MARKET.NET_FLOW_HALF_LIFE_MINUTES.set(start);
+        java.nio.file.Path dir = null;
+        try {
+            dir = java.nio.file.Files.createTempDirectory("sm_halflife_migration");
+            java.nio.file.Path marker = dir.resolve("data").resolve(DataManager.NET_FLOW_HALF_LIFE_MARKER);
+            if (markerPresent) {
+                java.nio.file.Files.createDirectories(marker.getParent());
+                java.nio.file.Files.writeString(marker, "x");
+            }
+            boolean result = DataManager.migrateNetFlowHalfLife(settings.MARKET.NET_FLOW_HALF_LIFE_MINUTES, marker);
+            TestResult r = assertEquals("migration return value", changed, result);
+            if (!r.passed()) return r;
+            r = assertTrue("half-life after migration: expected " + expected + ", got " + settings.MARKET.NET_FLOW_HALF_LIFE_MINUTES.get(),
+                    Math.abs(expected - settings.MARKET.NET_FLOW_HALF_LIFE_MINUTES.get()) < 1e-4f);
+            if (!r.passed()) return r;
+            r = assertTrue("marker exists after migration", java.nio.file.Files.exists(marker));
+            if (!r.passed()) return r;
+            return pass("half-life " + start + " -> " + settings.MARKET.NET_FLOW_HALF_LIFE_MINUTES.get());
+        } catch (Exception e) {
+            return fail("marker IO: " + e);
+        } finally {
+            if (dir != null) {
+                try (var walk = java.nio.file.Files.walk(dir)) {
+                    walk.sorted(java.util.Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
+                } catch (Exception ignored) {
+                }
+            }
+        }
     }
 }

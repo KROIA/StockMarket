@@ -4,6 +4,7 @@ import dev.architectury.platform.Platform;
 import net.kroia.modutilities.UtilitiesPlatform;
 import net.kroia.modutilities.persistence.DataPersistence;
 import net.kroia.modutilities.persistence.ServerSaveableChunked;
+import net.kroia.modutilities.setting.Setting;
 import net.kroia.stockmarket.StockMarketMod;
 import net.kroia.stockmarket.StockMarketModBackend;
 import net.kroia.stockmarket.StockMarketModSettings;
@@ -157,6 +158,7 @@ public class DataManager extends DataPersistence {
 
         boolean success = true;
         success &= loadSettings();
+        migrateNetFlowHalfLife();
         success &= loadMarketManager();
         success &= loadPluginManager();
         success &= loadPresets();
@@ -303,6 +305,64 @@ public class DataManager extends DataPersistence {
         return true;
     }
 
+
+    /** T-208: marker file (world StockMarket data folder) of the one-shot net-flow half-life migration. */
+    public static final String NET_FLOW_HALF_LIFE_MARKER = "NetFlowHalfLife360.marker";
+    /** T-208: the old default {@code NET_FLOW_HALF_LIFE_MINUTES} that the migration replaces. */
+    public static final float OLD_NET_FLOW_HALF_LIFE_MINUTES = 10f;
+
+    /**
+     * T-208: one-shot migration of {@code MARKET.NET_FLOW_HALF_LIFE_MINUTES} from the old default
+     * 10 min to the new default (360 min). Runs right after {@link #loadSettings()}; a marker file
+     * ({@link #NET_FLOW_HALF_LIFE_MARKER}) makes it run once per world, so a value set later (even 10)
+     * is kept. Saves the settings file at once when the value changed.
+     */
+    private void migrateNetFlowHalfLife()
+    {
+        if(BACKEND_INSTANCES == null || BACKEND_INSTANCES.SERVER_SETTINGS == null)
+            return;
+        Path marker = getAbsoluteSavePath(NET_FLOW_HALF_LIFE_MARKER);
+        Setting<Float> halfLife = BACKEND_INSTANCES.SERVER_SETTINGS.MARKET.NET_FLOW_HALF_LIFE_MINUTES;
+        try {
+            if(Files.exists(marker))
+                return;
+            if(migrateNetFlowHalfLife(halfLife, marker)) {
+                createSaveFolder();
+                saveSettings();
+                info("Net flow half-life migrated from the old default " + OLD_NET_FLOW_HALF_LIFE_MINUTES
+                        + " to " + halfLife.get() + " minutes (marker " + NET_FLOW_HALF_LIFE_MARKER + ")");
+            } else {
+                info("Net flow half-life kept at " + halfLife.get() + " minutes (marker " + NET_FLOW_HALF_LIFE_MARKER + " written)");
+            }
+        } catch (Exception e) {
+            error("Could not run the net flow half-life migration (marker " + marker + ")", e);
+        }
+    }
+
+    /**
+     * T-208: the pure half-life migration step, testable without a world. Does nothing when the
+     * marker exists. Otherwise sets the setting to its default when it holds exactly the old default
+     * ({@code |v - 10| < 1e-3}), and always writes the marker.
+     *
+     * @param halfLife the {@code NET_FLOW_HALF_LIFE_MINUTES} setting to migrate
+     * @param marker   the marker file; its parent folders are created
+     * @return true if the value was changed
+     * @throws java.io.IOException if the marker cannot be written
+     */
+    public static boolean migrateNetFlowHalfLife(Setting<Float> halfLife, Path marker) throws java.io.IOException
+    {
+        if(Files.exists(marker))
+            return false;
+        Float v = halfLife.get();
+        boolean change = v != null && Math.abs(v - OLD_NET_FLOW_HALF_LIFE_MINUTES) < 1e-3f;
+        if(change)
+            halfLife.set(halfLife.getDefaultValue());
+        if(marker.getParent() != null)
+            Files.createDirectories(marker.getParent());
+        Files.writeString(marker, "NET_FLOW_HALF_LIFE_MINUTES migrated from the old default 10 to 360 (T-208)."
+                + " Delete this file to run the migration again.\n");
+        return change;
+    }
 
     public boolean savePresets()
     {
