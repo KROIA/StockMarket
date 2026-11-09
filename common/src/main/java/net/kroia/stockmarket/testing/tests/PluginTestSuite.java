@@ -117,7 +117,7 @@ public class PluginTestSuite extends TestSuite {
         addTest("depthScale_rule_markets", this::test_depthScale_rule);
         addTest("depthScale_netheriteFloor", this::test_depthScale_netheriteFloor);
         addTest("depthScale_totalAskDepth_comparable", this::test_depthScale_totalAskDepth);
-        addTest("depthScale_maxOrderChange_resets", this::test_depthScale_maxOrderChange);
+        addTest("depthScale_maxOrderChange_noEffect", this::test_depthScale_maxOrderChange);
         addTest("depthScale_migration_resetsOnce", this::test_depthScale_migration);
         // T-207 regression probes (run only with -Dstockmarket.t207=true)
         addTest("t207_netFlow_matchesFills", this::test_t207_netFlow);
@@ -703,7 +703,7 @@ public class PluginTestSuite extends TestSuite {
             MarketCache cache = new MarketCache(market);
             cache.getPluginOrderBook().registerDefaultVolumeDistributionCalculator(
                     new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator(defaultPrice,
-                            DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(defaultPrice, maxOrder, 1f)));
+                            DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(defaultPrice, abundance, 1f)));
             market.test_resetVirtualOrderBookVolume();
             List<MarketInterface> markets = List.of(new MarketInterface(cache.getPluginMarket(), cache.getPluginOrderBook()));
 
@@ -1220,7 +1220,7 @@ public class PluginTestSuite extends TestSuite {
             MarketCache cache = new MarketCache(market);
             cache.getPluginOrderBook().registerDefaultVolumeDistributionCalculator(
                     new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator(defaultPrice,
-                            DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(defaultPrice, maxOrder, 1f)));
+                            DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(defaultPrice, s.abundance(), 1f)));
             market.test_resetVirtualOrderBookVolume();
             List<MarketInterface> markets = List.of(new MarketInterface(cache.getPluginMarket(), cache.getPluginOrderBook()));
             IPluginOrderBook book = cache.getPluginOrderBook();
@@ -2163,9 +2163,9 @@ public class PluginTestSuite extends TestSuite {
     }
 
     /** T-214: production calculator of a market at its default price (volumeScale 1). */
-    private static DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator t214Calc(double d, double maxOrder) {
+    private static DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator t214Calc(double d, float abundance) {
         return new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator(d,
-                DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(d, maxOrder, 1f));
+                DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(d, abundance, 1f));
     }
 
     /**
@@ -2182,25 +2182,24 @@ public class PluginTestSuite extends TestSuite {
         return Double.POSITIVE_INFINITY;
     }
 
-    /** T-214: diamond (160, max order 3,200) keeps its depth scale 50 = the old 1 x abundance 50, so the book is unchanged at P = D. */
+    /** T-214: diamond (160, abundance 50: reference order 3,200) keeps its depth scale 50 = the old 1 x abundance 50, so the book is unchanged at P = D. */
     private TestResult test_depthScale_diamondMatchesOld() {
         double tick = MarketManager.convertToRealAmountStatic(1);
-        float ds = DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(160, 3200, 1f);
+        float ds = DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(160, 50f, 1f);
         double expected = 250 * 3200 * tick / 160;
         if (Math.abs(ds - expected) > 1e-4 * expected) return fail("depthScale " + ds + ", expected " + expected);
         if (tick == 0.01 && ds != 50f) return fail("At tick 0.01 the diamond depth scale must be exactly 50, is " + ds);
-        var now = t214Calc(160, 3200);
+        var now = t214Calc(160, 50f);
         var old = new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator(160, ds);
         for (double p : new double[]{100, 150, 159.99, 160.01, 161.6, 200, 400})
             if (now.getVolume(160, p) != old.getVolume(160, p)) return fail("Volume at " + p + " differs at P = D");
-        if (ds != DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(160, 3200, 1f))
+        if (ds != DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(160, 50f, 1f))
             return fail("not deterministic");
-        // maxOrder 0 falls back to the default formula (64 x abundance)
-        double eff = DefaultOrderbookVolumeDistributionPlugin.effectiveMaxOrder(0, 50);
-        if (eff != 3200 || DefaultOrderbookVolumeDistributionPlugin.effectiveMaxOrder(500, 50) != 500
-                || DefaultOrderbookVolumeDistributionPlugin.effectiveMaxOrder(0, 0.5f) != 64)
-            return fail("effectiveMaxOrder fallback wrong: " + eff);
-        return pass("diamond depthScale " + ds + ", identical book at P = D; max order 0 -> " + eff);
+        // the reference order is the default max order formula max(64, 64 x abundance)
+        double eff = DefaultOrderbookVolumeDistributionPlugin.referenceOrderSize(50);
+        if (eff != 3200 || DefaultOrderbookVolumeDistributionPlugin.referenceOrderSize(0.5f) != 64)
+            return fail("referenceOrderSize wrong: " + eff);
+        return pass("diamond depthScale " + ds + ", identical book at P = D; reference order " + eff);
     }
 
     /**
@@ -2214,7 +2213,7 @@ public class PluginTestSuite extends TestSuite {
         double[] ref = null;
         double[] ds = {0.002, 0.01, 0.05, 0.2};
         for (double d : new double[]{16, 160, 1600, 16000}) {
-            var c = t214Calc(d, 3200);
+            var c = t214Calc(d, 50f);
             double[] dens = new double[ds.length];
             for (int i = 0; i < ds.length; i++) {
                 double p = Math.round(d * (1 + ds[i]) / tick) * tick;
@@ -2247,11 +2246,11 @@ public class PluginTestSuite extends TestSuite {
         for (double[] m : markets) {
             double d = m[0];
             double maxOrder = MarketSettings.defaultMaxOrderVolume((float) m[1], MarketSettings.DEFAULT_MAX_ORDER_VOLUME_FACTOR);
-            float ds = DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(d, maxOrder, 1f);
+            float ds = DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(d, (float) m[1], 1f);
             double raw = 250 * maxOrder * tick / d;
             boolean floor = raw < 0.1;
             if (Math.abs(ds - Math.max(raw, 0.1)) > 1e-4 * Math.max(raw, 0.1)) return fail("depthScale of " + d + " is " + ds);
-            double walk = t214Walk(t214Calc(d, maxOrder), d, maxOrder);
+            double walk = t214Walk(t214Calc(d, (float) m[1]), d, maxOrder);
             out.append(String.format(Locale.ROOT, " D %.4g max %.0f: scale %.4g%s walk %.3f%%;", d, maxOrder, ds, floor ? " (floor)" : "", 100 * walk));
             if (!floor && d >= 2 && (walk < 0.0025 || walk > 0.005)) return fail("One max order must walk about 0.36%:" + out);
             if (d < 2 && walk > tick / d + 1e-9) return fail("One max order must stay inside the first step:" + out);
@@ -2272,7 +2271,7 @@ public class PluginTestSuite extends TestSuite {
         for (int i = 0; i < markets.length; i++) {
             double d = markets[i][0];
             double maxOrder = MarketSettings.defaultMaxOrderVolume((float) markets[i][1], MarketSettings.DEFAULT_MAX_ORDER_VOLUME_FACTOR);
-            var c = t214Calc(d, maxOrder);
+            var c = t214Calc(d, (float) markets[i][1]);
             long k0 = Math.round(d / tick), k1 = Math.round(3 * d / tick);
             double sum = 0;
             for (long k = k0 + 1; k <= k1; k++) sum += c.getVolume(d, k * tick);
@@ -2285,20 +2284,20 @@ public class PluginTestSuite extends TestSuite {
         return pass(out.toString());
     }
 
-    /** T-214: netherite (22,000, max order 320) sits on the floor 0.1 x volumeScale; the floor scales with volumeScale. */
+    /** T-214: netherite (22,000, abundance 5: reference order 320) sits on the floor 0.1 x volumeScale; the floor scales with volumeScale. */
     private TestResult test_depthScale_netheriteFloor() {
-        float a = DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(22_000, 320, 1f);
-        float b = DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(22_000, 320, 2f);
-        float z = DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(0, 320, 1f);
+        float a = DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(22_000, 5f, 1f);
+        float b = DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(22_000, 5f, 2f);
+        float z = DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(0, 5f, 1f);
         if (Math.abs(a - 0.1f) > 1e-6 || Math.abs(b - 0.2f) > 1e-6 || Math.abs(z - 0.1f) > 1e-6)
             return fail("floor " + a + " / x2 " + b + " / D 0 " + z);
         return pass("netherite depthScale " + a + ", x2 volumeScale " + b);
     }
 
     /**
-     * T-214: the plugin recomputes the depth scale when the market's max order changes and hard-resets the book
-     * (a hard reset restarts the trend average, so it reads NaN right after that update); max order 0 falls back
-     * to 64 x abundance; an unchanged market does not reset.
+     * The book depth does not follow the market's max order size: changing it (also to 0 = unlimited) neither
+     * changes the depth scale nor resets the book; a default price change still resets and moves the calculator.
+     * (A hard reset restarts the trend average, so it reads NaN right after that update.)
      */
     private TestResult test_depthScale_maxOrderChange() {
         ServerMarket market = (ServerMarket) serverMarket;
@@ -2320,26 +2319,19 @@ public class PluginTestSuite extends TestSuite {
             cache.apply();
             if (Double.isNaN(p.test_getTrendLnMA(itemID))) return fail("First binding must not reset");
             float s1 = calc.getVolumeScale();
-            settings.maxOrderVolume = 6400;
-            p.update(markets);
-            cache.apply();
-            if (!Double.isNaN(p.test_getTrendLnMA(itemID))) return fail("Max order change must hard-reset the book");
-            float s2 = calc.getVolumeScale();
-            if (Math.abs(s2 / s1 - 2) > 1e-5) return fail("Double max order must double the depth scale: " + s1 + " -> " + s2);
-            p.update(markets);
-            cache.apply();
-            if (Double.isNaN(p.test_getTrendLnMA(itemID))) return fail("Unchanged market must not reset");
-            settings.maxOrderVolume = 0;
-            p.update(markets);
-            cache.apply();
-            float s3 = calc.getVolumeScale();
-            if (!Double.isNaN(p.test_getTrendLnMA(itemID)) || s3 != s1) return fail("Max order 0 must fall back to 3,200 and reset: " + s3);
+            for (long maxOrder : new long[]{6400, 0, 100}) {
+                settings.maxOrderVolume = maxOrder;
+                p.update(markets);
+                cache.apply();
+                if (Double.isNaN(p.test_getTrendLnMA(itemID))) return fail("Max order " + maxOrder + " must not reset the book");
+                if (calc.getVolumeScale() != s1) return fail("Max order " + maxOrder + " changed the depth scale: " + s1 + " -> " + calc.getVolumeScale());
+            }
             settings.defaultPrice = MarketManager.convertToRawAmountStatic(320);
             p.update(markets);
             cache.apply();
             if (!Double.isNaN(p.test_getTrendLnMA(itemID)) || calc.getDefaultPrice() != 320)
                 return fail("Default price change must reset and move the calculator");
-            return pass(String.format(Locale.ROOT, "scale %.4g -> %.4g (x2 max order) -> %.4g (max order 0); resets on change only", s1, s2, s3));
+            return pass(String.format(Locale.ROOT, "scale %.4g unchanged for max order 6,400 / 0 / 100, no reset; default price change resets", s1));
         } catch (Exception e) {
             return fail("Exception: " + e);
         } finally {
@@ -2464,7 +2456,7 @@ public class PluginTestSuite extends TestSuite {
         }
 
         /**
-         * @param volumeScale T-214: volume plugin volumeScale of the book ({@code depthScaleFor(price, maxOrder, volumeScale)})
+         * @param volumeScale T-214: volume plugin volumeScale of the book ({@code depthScaleFor(price, abundance, volumeScale)})
          */
         T207Env(double price, float abundance, long maxOrder, float sens, float maxMult, float volumeScale) {
             defaultPrice = price;
@@ -2481,7 +2473,7 @@ public class PluginTestSuite extends TestSuite {
             cache = new MarketCache(market);
             cache.getPluginOrderBook().registerDefaultVolumeDistributionCalculator(
                     new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator(price,
-                            DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(price, maxOrder, volumeScale)));
+                            DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(price, abundance, volumeScale)));
             market.test_resetVirtualOrderBookVolume();
             markets = List.of(new MarketInterface(cache.getPluginMarket(), cache.getPluginOrderBook()));
             vol = new VolatilityPlugin();
@@ -2551,12 +2543,13 @@ public class PluginTestSuite extends TestSuite {
 
     /**
      * T-207 diamond as in the reported in-game diamond setup: price 160, abundance 5, max order 10,000, sens 500, max mult 20.
-     * T-214: volumeScale 0.032 keeps the pre-T-214 thin book (depth scale 5 = abundance), so these tests keep their intent.
+     * Volume scale 1 gives the pre-T-214 thin book (depth scale 5 = abundance 5; the depth follows the abundance,
+     * not the max order), so these tests keep their intent.
      */
     private T207Env t207World() { return new T207Env(160, 5, 10_000, 500, 20, T207_THIN_VOLUME_SCALE); }
 
-    /** T-214: volumeScale that gives the thin diamond ({@link #t207World}) its pre-T-214 depth scale 5. */
-    private static final float T207_THIN_VOLUME_SCALE = 0.032f;
+    /** volumeScale that gives the thin diamond ({@link #t207World}) its pre-T-214 depth scale 5 (abundance 5). */
+    private static final float T207_THIN_VOLUME_SCALE = 1f;
 
     /** T-207 diamond at today's defaults: abundance 50, max order 3,200, sens 2000, max mult 3. */
     private T207Env t207Default() { return new T207Env(160, 50, 3_200, 2000, 3); }

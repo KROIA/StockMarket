@@ -12,7 +12,7 @@ The plugin computes a **target volume** for every price level around the current
 
 - The [TargetPriceBot](target-price-bot.md) moves the price by trading against this volume. It sizes its orders from the depth, so more depth does not slow the bot down -- but it does slow down **players**: they need more items to move the price.
 - Net player flow for the [VolatilityPlugin](volatility-plugin.md) is counted per item, independent of the depth.
-- The market's **Max order size** sets the depth (see below): the book is sized so that one max order moves the price by about the same percentage on every market.
+- The item's **Abundance** sets the depth (see below): the book is sized so that a reference order of `max(64, 64 x Abundance)` items moves the price by about the same percentage on every market. The market's **Max order size** setting does not change the depth.
 - Only works on markets whose virtual order book is enabled.
 
 ## Settings Overview
@@ -25,7 +25,7 @@ All settings are **per market**. Select a market icon in the plugin entry of the
 
 | Setting (UI name) | Default | Allowed values | What it controls |
 |---|---|---|---|
-| Volume Scale | `1` | number >= 0 | Overall depth of the book relative to the market's max order size (1 = one max order moves the price about 0.36 %) |
+| Volume Scale | `1` | number >= 0 | Overall depth of the book relative to the item's Abundance (1 = a reference order of `max(64, 64 x Abundance)` items moves the price about 0.36 %) |
 | Speed | `0.05` | number >= 0 | Master speed of the drift toward the target; multiplies both rates |
 | Accumulation Rate | `0.1` | number >= 0 | How fast missing volume is refilled |
 | Decumulation Rate | `0.01` | number >= 0 | How fast excess volume is removed |
@@ -38,15 +38,16 @@ For each price level the target volume is:
 
 ```
 target volume = shape(price level) x depth scale x default price / current price
-depth scale   = Volume Scale x max(250 x max order size x price step / default price, 0.1)
+depth scale   = Volume Scale x max(250 x reference order x price step / default price, 0.1)
+reference order = max(64, 64 x Abundance)
 ```
 
-The depth is defined per **percent of price**, not per price step. With Volume Scale `1` the sell volume within 1 % above the default price holds about 3.5 max orders, so one max order buy moves the price about 0.36 % on every market, whatever the item costs. The factor `default price / current price` keeps this when the price moves away from the default: at half the default price there are twice as many price steps per percent, each with twice the volume.
+The depth is defined per **percent of price**, not per price step. With Volume Scale `1` the sell volume within 1 % above the default price holds about 3.5 reference orders, so a buy of one reference order moves the price about 0.36 % on every market, whatever the item costs. The factor `default price / current price` keeps this when the price moves away from the default: at half the default price there are twice as many price steps per percent, each with twice the volume.
 
-- **Max order size** is the market's "Max order size" setting. A market without a limit (0) uses the default formula `max(64, 64 x Abundance)`.
-- **Expensive items** get at least 0.1 items per price step (times Volume Scale), so a netherite block market never has a book so thin that single items jump the price. On such markets one max order moves the price less than 0.36 %.
-- **Cheap items** (price below about 1) have few price steps per percent, for example dirt at 0.1 moves in 10 % steps. Their book is deep per step: one max order only uses a small part of the first step.
-- Changing a market's **Max order size** or **default price** rebuilds its book at the new depth right away (like **Reset Volume**).
+- The **reference order** is the default max order size of the Abundance, `max(64, 64 x Abundance)` (for example 3,200 for Abundance 50). It equals the market's max order size as long as that is left at its default; a custom max order size (or 0 = unlimited) does not change the book.
+- **Expensive items** get at least 0.1 items per price step (times Volume Scale), so a netherite block market never has a book so thin that single items jump the price. On such markets one reference order moves the price less than 0.36 %.
+- **Cheap items** (price below about 1) have few price steps per percent, for example dirt at 0.1 moves in 10 % steps. Their book is deep per step: one reference order only uses a small part of the first step.
+- Changing a market's **default price** rebuilds its book at the new depth right away (like **Reset Volume**). A changed **Abundance** changes the depth too; the book then drifts to it at the configured speed.
 
 The shape is the sum of four parts, all measured relative to the current market price:
 
@@ -75,13 +76,13 @@ When the price moves, price levels that change side (for example from buy to sel
 
 ### Volume Scale
 
-Multiplies the depth of the whole book without changing its shape (dashed curves in the first chart). It is relative to the market's max order size: at `1` one max order moves the price about 0.36 % on every market (cheap items move in whole price steps, see above). A market with a larger max order size gets a proportionally deeper book.
+Multiplies the depth of the whole book without changing its shape (dashed curves in the first chart). It is relative to the item's Abundance: at `1` a reference order of `max(64, 64 x Abundance)` items moves the price about 0.36 % on every market (cheap items move in whole price steps, see above). A higher Abundance gives a proportionally deeper book; the market's max order size does not.
 
 **What it means for players:** the price impact of a trade is roughly inversely proportional to the depth. With Volume Scale `2` a player needs about twice as many items to push the price by the same percentage; with `0.5` half as many.
 
 **Tuning advice:**
 
-- If a single player can crash or pump a market with a few max orders, raise Volume Scale for that market (raising the max order size does not help: the book grows with it).
+- If a single player can crash or pump a market with a few max orders, raise Volume Scale for that market or lower its max order size.
 - If trades feel like they have no effect at all, lower it.
 - Changes reach the market on its next update. Use **Reset Volume** to see the new depth immediately; otherwise it fills in over a few minutes.
 

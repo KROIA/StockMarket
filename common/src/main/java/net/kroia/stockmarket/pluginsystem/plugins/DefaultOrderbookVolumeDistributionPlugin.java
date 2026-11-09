@@ -225,9 +225,9 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
     }
 
     /**
-     * T-214: book density per unit of relative price, per max order item and volumeScale unit. At the default
-     * price the asks within +1% then hold about 3.47 max orders, so one max order walks the price about 0.36%
-     * on every market. 250 is exactly the pre-T-214 diamond (160, abundance 50, max order 3,200).
+     * T-214: book density per unit of relative price, per item of the reference order size and volumeScale unit.
+     * At the default price the asks within +1% then hold about 3.47 reference orders. 250 is exactly the pre-T-214
+     * diamond (160, abundance 50, reference order 3,200).
      */
     public static final double DEPTH_PER_MAX_ORDER = 250;
     /**
@@ -237,34 +237,35 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
     public static final double MIN_DEPTH_PER_TICK = 0.1;
 
     /**
-     * T-214: depth scale of a market, sized to its max order:
-     * {@code volumeScale x max(250 x maxOrder x tick / D, 0.1)}, with tick the real price of one raw tick.
-     * The density per unit of relative price is then {@code 250 x maxOrder x volumeScale} on every market.
+     * T-214: depth scale of a market: {@code volumeScale x max(250 x refOrder x tick / D, 0.1)}, with tick the real
+     * price of one raw tick and refOrder the reference order size {@link #referenceOrderSize} of the abundance. The
+     * density per unit of relative price is then {@code 250 x refOrder x volumeScale} on every market. The market's
+     * max order size setting does not affect the depth.
      *
      * @param defaultPrice the market's default price D (real); &lt;= 0 gives the floor
-     * @param maxOrder     the effective max order (real items, see {@link #effectiveMaxOrder})
+     * @param abundance    the market's natural abundance
      * @param volumeScale  the plugin's volumeScale setting (relative multiplier, 1 = default)
      * @return the calculator's depth scale (items per raw tick at {@code P = D})
      */
-    public static float depthScaleFor(double defaultPrice, double maxOrder, float volumeScale)
+    public static float depthScaleFor(double defaultPrice, float abundance, float volumeScale)
     {
         double tick = MarketManager.convertToRealAmountStatic(1);
-        double perTick = defaultPrice > 0 ? DEPTH_PER_MAX_ORDER * maxOrder * tick / defaultPrice : 0;
+        double refOrder = referenceOrderSize(abundance);
+        double perTick = defaultPrice > 0 ? DEPTH_PER_MAX_ORDER * refOrder * tick / defaultPrice : 0;
         return (float) (volumeScale * Math.max(perTick, MIN_DEPTH_PER_TICK));
     }
 
     /**
-     * T-214: the max order the depth is sized to. An unlimited market (0) uses the default formula
-     * {@link MarketSettings#defaultMaxOrderVolume(float, long)} with the compile-time factor 64, so the book does
-     * not depend on the MAX_ORDER_VOLUME_FACTOR mod setting.
+     * The order size the depth is sized to: the default max order formula
+     * {@link MarketSettings#defaultMaxOrderVolume(float, long)} with the compile-time factor 64 ({@code max(64, 64 x
+     * abundance)}), independent of the market's max order setting and the MAX_ORDER_VOLUME_FACTOR mod setting.
      *
-     * @param maxOrder  the market's max order volume (real items), &lt;= 0 = unlimited
      * @param abundance the market's natural abundance
-     * @return the max order in real items, &gt; 0
+     * @return the reference order size in real items, &gt; 0
      */
-    public static double effectiveMaxOrder(double maxOrder, float abundance)
+    public static double referenceOrderSize(float abundance)
     {
-        return maxOrder > 0 ? maxOrder : MarketSettings.defaultMaxOrderVolume(abundance, MarketSettings.DEFAULT_MAX_ORDER_VOLUME_FACTOR);
+        return MarketSettings.defaultMaxOrderVolume(abundance, MarketSettings.DEFAULT_MAX_ORDER_VOLUME_FACTOR);
     }
 
     private static final float DEFAULT_VOLUME_SCALE = 1.0f;
@@ -287,8 +288,8 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
         public float accumulationRate = DEFAULT_ACCUMULATION_RATE;
         public float decumulationRate = DEFAULT_DECUMULATION_RATE;
         public boolean pendingReset = false;
-        /** T-214: effective max order the depth scale was computed for (NaN = not yet bound to a market). */
-        public double depthMaxOrder = Double.NaN;
+        /** T-214: false until the depth scale was first computed for a market (no reset on the first binding). */
+        public boolean depthBound = false;
         public float trendPeriodMinutes = DEFAULT_TREND_PERIOD_MINUTES;
         public float trendGain = DEFAULT_TREND_GAIN;
         public float trendMaxFactor = DEFAULT_TREND_MAX_FACTOR;
@@ -317,28 +318,26 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
 
     /** T-214: NBT key of the depth model version; saves without it (pre-T-214 books) get one hard reset on load. */
     private static final String DEPTH_MODEL_KEY = "depthModel";
-    /** T-214: current depth model (price-normalised, sized to the max order). */
+    /** T-214: current depth model (price-normalised, sized to the reference order of the abundance). */
     private static final int DEPTH_MODEL = 2;
 
     /**
      * T-214: recomputes the calculator's default price and depth scale from the market. With
-     * {@code resetOnChange}, a changed default price or effective max order (after the first binding) also
-     * schedules a hard reset, so the book is rebuilt at the new depth instead of converging slowly.
+     * {@code resetOnChange}, a changed default price (after the first binding) also schedules a hard reset, so the
+     * book is rebuilt at the new depth instead of converging slowly.
      *
      * @param data          the market's runtime data
      * @param market        the market
-     * @param resetOnChange true = a change sets {@link RuntimeData#pendingReset}
+     * @param resetOnChange true = a default price change sets {@link RuntimeData#pendingReset}
      */
     private static void refreshDepth(RuntimeData data, IPluginMarket market, boolean resetOnChange)
     {
         double d = market.getDefaultRealPrice();
-        double maxOrder = effectiveMaxOrder(market.getMaxRealOrderVolume(), market.getNaturalAbundance());
-        if (resetOnChange && !Double.isNaN(data.depthMaxOrder)
-                && (d != data.calculator.defaultPrice || maxOrder != data.depthMaxOrder))
+        if (resetOnChange && data.depthBound && d != data.calculator.defaultPrice)
             data.pendingReset = true;
-        data.depthMaxOrder = maxOrder;
+        data.depthBound = true;
         data.calculator.defaultPrice = d;
-        data.calculator.volumeScale = depthScaleFor(d, maxOrder, data.volumeScale);
+        data.calculator.volumeScale = depthScaleFor(d, market.getNaturalAbundance(), data.volumeScale);
     }
 
     /** @return a subscribed market's distribution calculator, null if not subscribed (tests) */
@@ -391,7 +390,7 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
             RuntimeData data = marketData.get(market.market.getMarketID());
             if(data == null)
                 continue; // No runtime data for this market (interface without subscription) -> skip
-            refreshDepth(data, market.market, true);   // T-214: max order / default price changes rebuild the book
+            refreshDepth(data, market.market, true);   // T-214: default price changes rebuild the book
             // Markets with the virtual orderbook disabled are outside this plugin's scope:
             // there is no virtual depth to converge toward a target distribution on.
             if(!market.market.isVirtualOrderbookEnabled())

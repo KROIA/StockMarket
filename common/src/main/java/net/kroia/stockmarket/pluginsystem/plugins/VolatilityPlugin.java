@@ -204,8 +204,6 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
         double bookDefaultPrice = Double.NaN;
         /** T-208: natural abundance the cached bookEFold was computed for. */
         float bookAbundance = Float.NaN;
-        /** T-214: max order the cached bookEFold was computed for (the default book depth is sized to it). */
-        double bookMaxOrder = Double.NaN;
         /** T-208: ticks until the next bookEFold recomputation. */
         int bookTicksLeft = 0;
         /** T-208: zero bookEFold results in a row (for the one-time warning). */
@@ -488,8 +486,8 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
     }
 
     /**
-     * T-208: returns the market's cached bookEFold, recomputed when the default price, abundance or (T-214)
-     * max order changed, or every {@link #BOOK_EFOLD_REFRESH_TICKS} ticks. While no volume is found it retries
+     * T-208: returns the market's cached bookEFold, recomputed when the default price or abundance
+     * changed, or every {@link #BOOK_EFOLD_REFRESH_TICKS} ticks. While no volume is found it retries
      * every {@link #BOOK_EFOLD_RETRY_TICKS} ticks (the volume plugin may register its calculator later)
      * and warns once per market; the flow then uses the sensitivity capacity alone.
      *
@@ -500,13 +498,10 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
     private double refreshBookEFold(MarketInterface market, MarketData data) {
         double p0 = market.market.getDefaultRealPrice();
         float abundance = market.market.getNaturalAbundance();
-        double maxOrder = market.market.getMaxRealOrderVolume();
-        if (--data.bookTicksLeft > 0 && p0 == data.bookDefaultPrice && abundance == data.bookAbundance
-                && maxOrder == data.bookMaxOrder)
+        if (--data.bookTicksLeft > 0 && p0 == data.bookDefaultPrice && abundance == data.bookAbundance)
             return data.bookEFold;
         data.bookDefaultPrice = p0;
         data.bookAbundance = abundance;
-        data.bookMaxOrder = maxOrder;
         data.bookEFold = market.oderBook == null ? 0
                 : bookEFoldDepth(market.oderBook, p0, MarketManager.convertToRealAmountStatic(1), data.settings);
         if (data.bookEFold > 0) {

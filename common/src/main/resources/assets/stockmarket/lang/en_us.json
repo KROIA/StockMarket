@@ -506,7 +506,7 @@
   "gui.stockmarket.target_price_bot.oscillation_damping.tooltip": "How fast the swings die out: 0 = they keep going,\n1 = no overshoot. Default: 0.3",
   "gui.stockmarket.target_price_bot.oscillation_amplitude": "Oscillation Amplitude",
   "gui.stockmarket.target_price_bot.oscillation_amplitude.tooltip": "Size of the first swing towards the target, as a fraction\nof the player's price push. The price never goes past\nthe target nor above the player's price. Default: 0.15",
-  "gui.stockmarket.volume_distribution.volume_scale.tooltip": "Depth of the virtual order book relative to the market's max\norder size. At 1, one max order moves the price about 0.36 %\non every market. Higher = deeper book, the price moves less\nper trade. Default: 1",
+  "gui.stockmarket.volume_distribution.volume_scale.tooltip": "Depth of the virtual order book relative to the item's\nAbundance: the default book is sized to a reference order of\nmax(64, 64 x Abundance) items, which moves the price about\n0.36 % at 1. The market's max order size does not change it.\nHigher = deeper book, the price moves less per trade. Default: 1",
   "gui.stockmarket.volume_distribution.speed.tooltip": "Overall speed at which the virtual order book volume\nconverges to its target distribution. Multiplies both\nrates below. Default: 0.05",
   "gui.stockmarket.volume_distribution.accumulation_rate.tooltip": "Rate at which missing volume is refilled toward the target\n(e.g. after players consumed liquidity). Default: 0.1",
   "gui.stockmarket.volume_distribution.decumulation_rate.tooltip": "Rate at which excess volume is removed when a price level\nholds more volume than its target. Default: 0.01",

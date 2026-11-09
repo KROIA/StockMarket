@@ -8,7 +8,6 @@ import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
 import net.kroia.stockmarket.pluginsystem.interaction.MarketInterface;
 import net.kroia.stockmarket.pluginsystem.plugins.DefaultOrderbookVolumeDistributionPlugin;
-import net.kroia.stockmarket.stockmarket.market.MarketSettings;
 import net.kroia.stockmarket.pluginsystem.plugins.VolatilityPlugin;
 import net.kroia.stockmarket.pluginsystem.plugins.VolatilityPlugin.FlowBand;
 import net.kroia.stockmarket.pluginsystem.plugins.VolatilityPlugin.Settings;
@@ -107,8 +106,7 @@ public class VolatilityPluginTestSuite extends TestSuite {
     private TestResult test_thetaBound(double p0, float abundance, double[] flows) {
         DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator calc =
                 new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator(p0,
-                        DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(p0, MarketSettings.defaultMaxOrderVolume(abundance,
-                                MarketSettings.DEFAULT_MAX_ORDER_VOLUME_FACTOR), 1f));
+                        DefaultOrderbookVolumeDistributionPlugin.depthScaleFor(p0, abundance, 1f));
         DoubleUnaryOperator volumeAt = pick -> calc.getVolume(p0, pick);
         Settings s = defaults();
         double eFold = VolatilityPlugin.bookEFoldDepth(volumeAt, p0, TICK, Math.log(s.minPriceMult()), Math.log(s.maxPriceMult()));
