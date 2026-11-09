@@ -51,7 +51,27 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
      * computed on the server using the actual DistributionCalculator formula.
      */
     public record RuntimeStreamData(List<MarketDistribution> entries) {
-        public record MarketDistribution(short itemId, double startPrice, double priceStep, float[] volumes) {}
+        /**
+         * Sampled default volume of one market: {@code volumes[k]} is the raw volume per backend price
+         * point at real price {@code startPrice + k * priceStep}.
+         */
+        public record MarketDistribution(short itemId, double startPrice, double priceStep, float[] volumes) {
+            /**
+             * Linearly interpolates the sampled volume at {@code price}.
+             *
+             * @param price real price to sample
+             * @return the interpolated volume, 0 outside the sampled range or for NaN/infinite input
+             */
+            public float volumeAt(double price) {
+                double fractionalIndex = (price - startPrice) / priceStep;
+                // Range check in double before the int cast: zoomed far out the index saturates at
+                // Integer.MAX_VALUE and low + 1 overflowed past an int check (crash).
+                if (!(fractionalIndex >= 0) || !(fractionalIndex < volumes.length - 1)) return 0;
+                int low = (int) fractionalIndex;
+                double t = fractionalIndex - low;
+                return (float) (volumes[low] * (1 - t) + volumes[low + 1] * t);
+            }
+        }
 
         public static final StreamCodec<ByteBuf, RuntimeStreamData> CODEC = new StreamCodec<>() {
             @Override

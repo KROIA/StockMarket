@@ -116,6 +116,7 @@ public class PluginTestSuite extends TestSuite {
         addTest("targetPriceBot_emptyGap_noSnapBack", this::test_targetPriceBot_emptyGap_noSnapBack);
         // T-208 (ungated): the gap guard blocks at most 60 s after a player fill
         addTest("targetPriceBot_gapGuard_timesOut", this::test_targetPriceBot_gapGuard_timesOut);
+        addTest("volumeDistribution_volumeAt_extremePrices", this::test_volumeDistribution_volumeAt_extremePrices);
         // T-208 bot reference (setpoint) model
         addTest("targetPriceBot_reference_invariants", this::test_targetPriceBot_referenceInvariants);
         addTest("targetPriceBot_reference_codec_nbt_legacy", this::test_targetPriceBot_referenceCodecNbt);
@@ -2445,6 +2446,30 @@ public class PluginTestSuite extends TestSuite {
         } finally {
             harnessRefill = false;
         }
+    }
+
+    /**
+     * Zoomed far out the default volume overlay samples extreme prices; the interpolation must return 0
+     * there instead of overflowing its index (crash: index 2147483647 for length 64).
+     */
+    private TestResult test_volumeDistribution_volumeAt_extremePrices() {
+        var dist = new DefaultOrderbookVolumeDistributionPlugin.RuntimeStreamData.MarketDistribution(
+                (short) 0, 0.01, 1.0, new float[]{0f, 10f, 20f, 30f});
+        double[] outside = {1e12, 1e300, Double.MAX_VALUE, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY,
+                Double.NaN, -1e12, -Double.MAX_VALUE, 0, 3.01, 3.02};
+        try {
+            for (double p : outside)
+                if (dist.volumeAt(p) != 0) return fail("Expected 0 outside the samples at " + p + ", got " + dist.volumeAt(p));
+            var zeroStep = new DefaultOrderbookVolumeDistributionPlugin.RuntimeStreamData.MarketDistribution(
+                    (short) 0, 0.01, 0, new float[]{1f, 2f});
+            if (zeroStep.volumeAt(5) != 0 || zeroStep.volumeAt(0.01) != 0)
+                return fail("Expected 0 for a zero price step");
+            if (Math.abs(dist.volumeAt(1.51) - 15f) > 1e-3) return fail("Interpolation wrong: " + dist.volumeAt(1.51));
+            if (dist.volumeAt(0.01) != 0f) return fail("First sample wrong: " + dist.volumeAt(0.01));
+        } catch (Exception e) {
+            return fail("Exception: " + e);
+        }
+        return pass("0 outside the samples and for NaN/inf, interpolates inside");
     }
 
     /**

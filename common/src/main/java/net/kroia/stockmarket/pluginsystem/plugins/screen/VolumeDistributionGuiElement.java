@@ -284,7 +284,7 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
 
         for (int i = 0; i <= chunkCount; i++) {
             double price = startPrice + chunkPriceDelta * i;
-            float targetVolume = Math.abs(interpolateVolume(distribution, price)) * backendPricesPerChunk / scaleFactor;
+            float targetVolume = Math.abs(distribution.volumeAt(price)) * backendPricesPerChunk / scaleFactor;
             int x = histogram.toCanvasSpaceX(targetVolume);
             int y = histogram.toCanvasSpaceY(price);
 
@@ -294,16 +294,5 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
             lastX = x;
             lastY = y;
         }
-    }
-
-    private static float interpolateVolume(
-            DefaultOrderbookVolumeDistributionPlugin.RuntimeStreamData.MarketDistribution dist,
-            double price) {
-        double fractionalIndex = (price - dist.startPrice()) / dist.priceStep();
-        int low = (int) Math.floor(fractionalIndex);
-        int high = low + 1;
-        if (low < 0 || high >= dist.volumes().length) return 0;
-        double t = fractionalIndex - low;
-        return (float) (dist.volumes()[low] * (1 - t) + dist.volumes()[high] * t);
     }
 }
