@@ -141,6 +141,8 @@ public class PluginTestSuite extends TestSuite {
         addTest("t207_limitExit_report", this::test_t207_limitExit);
         // T-207 (ungated): the stored net flow is an exact counter of player fills
         addTest("netFlow_randomTrades_exact", this::test_netFlow_randomTrades_exact);
+        // T-207 (ungated): the bot does not trade through an empty gap right after a big order
+        addTest("targetPriceBot_emptyGap_noSnapBack", this::test_targetPriceBot_emptyGap_noSnapBack);
     }
 
     @Override
@@ -355,6 +357,7 @@ public class PluginTestSuite extends TestSuite {
         IPluginOrderBook book = (IPluginOrderBook) Proxy.newProxyInstance(IPluginOrderBook.class.getClassLoader(),
                 new Class<?>[]{IPluginOrderBook.class}, (proxy, method, args) -> switch (method.getName()) {
                     case "getRealVirtualVolumeToPrice" -> (float) (depth * (price[0] - (Double) args[0]));
+                    case "getDefaultRealVolume" -> 0f; // no default depth: T-207 gap guard off
                     default -> throw new UnsupportedOperationException(method.getName());
                 });
         try {
@@ -411,6 +414,7 @@ public class PluginTestSuite extends TestSuite {
         IPluginOrderBook book = (IPluginOrderBook) Proxy.newProxyInstance(IPluginOrderBook.class.getClassLoader(),
                 new Class<?>[]{IPluginOrderBook.class}, (proxy, method, args) -> switch (method.getName()) {
                     case "getRealVirtualVolumeToPrice" -> -1e6f;
+                    case "getDefaultRealVolume" -> 0f; // no default depth: T-207 gap guard off
                     default -> throw new UnsupportedOperationException(method.getName());
                 });
         try {
@@ -733,6 +737,7 @@ public class PluginTestSuite extends TestSuite {
             TargetPriceBot bot = new TargetPriceBot();
             bot.setLoggerEnabled(false);
             bot.onMarketSubscribed(itemID);
+            DefaultOrderbookVolumeDistributionPlugin refill = harnessRefill ? newHarnessRefill() : null;
             applySettings(bot, TargetPriceBot.Settings.CODEC, new TargetPriceBot.Settings(0.5f, 0.1f, 0f, 0.1f,
                     TargetPriceBot.DEFAULT_MAX_ORDER_VOLUME_FACTOR, maxTargetMovePerSecond));
 
@@ -751,6 +756,7 @@ public class PluginTestSuite extends TestSuite {
             int cycleTicks = (sellBack ? 2 * legTicks + waitTicks + 10 : legTicks + waitTicks) + gapTicks;
             // Warm-up: plugins only, so the bot's rate-limited target is anchored before the player acts.
             for (int t = 0; t < cfg.warmupTicks(); t++) {
+                if (refill != null) refill.update(markets);
                 vol.update(markets);
                 bot.update(markets);
                 cache.apply();
@@ -798,6 +804,7 @@ public class PluginTestSuite extends TestSuite {
                                 System.currentTimeMillis(), player, account.getAccountNumber()));
                     }
                     double priceBefore = MarketManager.convertToRealAmountStatic(market.getCurrentMarketPrice());
+                    if (refill != null) refill.update(markets);
                     vol.update(markets);
                     bot.update(markets);
                     cache.apply();
@@ -1224,7 +1231,9 @@ public class PluginTestSuite extends TestSuite {
      */
     private TestResult test_t206Sweep2(String name, float hl, float move, float k, float rise, float ret,
                                        float abundance, double price, boolean longPart) {
-        if (!t197Requested(true)) return skip("T-206 sweep not requested");
+        // T-207: today's default diamond rows (short part) also run with -Dstockmarket.t207=true
+        boolean t207Row = t207Requested() && name.equals("hl10_move0005") && !longPart;
+        if (!t197Requested(true) && !t207Row) return skip("T-206 sweep not requested");
         try {
             VolatilityPlugin.Settings vs = VolatilityPlugin.Settings.createDefault();
             float deadband = (float) Math.round(k * (double) vs.flowSensitivity() * abundance);
@@ -1233,22 +1242,36 @@ public class PluginTestSuite extends TestSuite {
                     deadband, rise, ret, price);
             long maxOrder = MarketSettings.defaultMaxOrderVolume(abundance);
             StringBuilder out = new StringBuilder();
-            java.util.function.BiConsumer<String, ReplayResult> log = (scenario, r) -> {
-                String row = String.format(Locale.ROOT, "%s | %s | %+.2f | %+.1f | %+.1f | %+.1f",
-                        name, scenario, r.profit(), r.profitPct(), 100 * (r.maxPrice() / price - 1), 100 * (r.endPrice() / price - 1));
-                StockMarketMod.LOGGER.info("[T-206b] {}", row);
-                out.append("\n[T-206b] ").append(row);
-            };
-            for (int hold : longPart ? new int[]{30, 60} : new int[]{5, 10, 15, 20})
-                log.accept("hold" + hold, replay(hl, move, 1, 60, hold * 1200, 0, true, cfg, null));
-            if (!longPart) {
-                log.accept("dump", replay(hl, move, 1, 60, 6000, 0, true, cfg, null, 0, 60 * maxOrder));
-                log.accept("organic", replay(hl, move, 20, 1, 590, 0, false, cfg, null));
-                log.accept("organic2x", replay(hl, move, 20, 2, 580, 0, false, cfg, null));
+            // T-207 rows: book refill on, each row without and with the bot's gap guard
+            harnessRefill = t207Row;
+            // fill <= 0 = no guard; T-207 rows compare no guard with the fills of T207_FILLS
+            double[] fills = t207Row ? new double[]{0, 0.05, 0.1, 0.25} : new double[]{TargetPriceBot.DEFAULT_GAP_MIN_FILL};
+            for (double fill : fills) {
+                boolean guard = fill > 0;
+                TargetPriceBot.test_setGapGuardEnabled(guard);
+                TargetPriceBot.test_setGapMinFill(guard ? fill : TargetPriceBot.DEFAULT_GAP_MIN_FILL);
+                String label = t207Row ? name + (guard ? " guard" + fill : " noguard") : name;
+                java.util.function.BiConsumer<String, ReplayResult> log = (scenario, r) -> {
+                    String row = String.format(Locale.ROOT, "%s | %s | %+.2f | %+.1f | %+.1f | %+.1f",
+                            label, scenario, r.profit(), r.profitPct(), 100 * (r.maxPrice() / price - 1), 100 * (r.endPrice() / price - 1));
+                    StockMarketMod.LOGGER.info("[T-206b] {}", row);
+                    out.append("\n[T-206b] ").append(row);
+                };
+                for (int hold : longPart ? new int[]{30, 60} : new int[]{5, 10, 15, 20})
+                    log.accept("hold" + hold, replay(hl, move, 1, 60, hold * 1200, 0, true, cfg, null));
+                if (!longPart) {
+                    log.accept("dump", replay(hl, move, 1, 60, 6000, 0, true, cfg, null, 0, 60 * maxOrder));
+                    log.accept("organic", replay(hl, move, 20, 1, 590, 0, false, cfg, null));
+                    log.accept("organic2x", replay(hl, move, 20, 2, 580, 0, false, cfg, null));
+                }
             }
             return pass(out.toString());
         } catch (Exception e) {
             return fail("Exception: " + e);
+        } finally {
+            harnessRefill = false;
+            TargetPriceBot.test_setGapGuardEnabled(true);
+            TargetPriceBot.test_setGapMinFill(TargetPriceBot.DEFAULT_GAP_MIN_FILL);
         }
     }
 
@@ -1315,6 +1338,7 @@ public class PluginTestSuite extends TestSuite {
             TargetPriceBot bot = new TargetPriceBot();
             bot.setLoggerEnabled(false);
             bot.onMarketSubscribed(itemID);
+            DefaultOrderbookVolumeDistributionPlugin refill = harnessRefill ? newHarnessRefill() : null;
             applySettings(bot, TargetPriceBot.Settings.CODEC, new TargetPriceBot.Settings(0.5f, 0.1f, 0f, 0.1f,
                     TargetPriceBot.DEFAULT_MAX_ORDER_VOLUME_FACTOR, move));
 
@@ -1332,6 +1356,7 @@ public class PluginTestSuite extends TestSuite {
                 total = Math.max(total, plans[i].endTick());
             }
             for (int t = 0; t < 20; t++) {
+                if (refill != null) refill.update(markets);
                 vol.update(markets);
                 bot.update(markets);
                 cache.apply();
@@ -1361,6 +1386,7 @@ public class PluginTestSuite extends TestSuite {
                                 System.currentTimeMillis(), players[i], accounts[i].getAccountNumber()));
                     }
                 }
+                if (refill != null) refill.update(markets);
                 vol.update(markets);
                 bot.update(markets);
                 cache.apply();
@@ -1396,17 +1422,24 @@ public class PluginTestSuite extends TestSuite {
      * from t 0, never sold). Logs "[T-206g] case | hold | combined $ (%) | p1 $ (%) | p2 $ (%) | max | path".
      */
     private TestResult test_t206TwoPlayers(String tag, float hl, float move, boolean organic, int[] holds) {
-        if (!t197Requested(true)) return skip("T-206 gate not requested");
+        // T-207: today's rows (short part) also run with -Dstockmarket.t207=true
+        boolean t207Row = t207Requested() && tag.equals("today") && holds[0] == 5;
+        if (!t197Requested(true) && !t207Row) return skip("T-206 gate not requested");
         try {
             StringBuilder out = new StringBuilder();
+            // T-207 rows: book refill on, each row without and with the bot's gap guard
+            harnessRefill = t207Row;
+            for (boolean guard : t207Row ? new boolean[]{false, true} : new boolean[]{true})
             for (int hold : holds) {
+                TargetPriceBot.test_setGapGuardEnabled(guard);
+                String tagLabel = t207Row ? tag + (guard ? "_guard" : "_noguard") : tag;
                 PlayerPlan[] plans = organic
                         ? new PlayerPlan[]{new PlayerPlan(0, 60, 10, hold * 1200, true), new PlayerPlan(0, 20, 600, 0, false)}
                         : new PlayerPlan[]{new PlayerPlan(0, 30, 10, hold * 1200, true), new PlayerPlan(3600, 30, 10, hold * 1200, true)};
                 PlayersResult r = replayPlayers(hl, move, plans);
                 double sum = r.profit()[0] + r.profit()[1], spentSum = r.spent()[0] + r.spent()[1];
                 String row = String.format(Locale.ROOT, "%s_%s | hold%d | %+.0f (%+.1f%%) | %+.0f (%+.1f%%) | %+.0f (%+.1f%%) | %.2f |%s",
-                        organic ? "pumpPlusOrganic" : "twoPumpers", tag, hold, sum, 100 * sum / spentSum,
+                        organic ? "pumpPlusOrganic" : "twoPumpers", tagLabel, hold, sum, 100 * sum / spentSum,
                         r.profit()[0], 100 * r.profit()[0] / r.spent()[0], r.profit()[1], 100 * r.profit()[1] / r.spent()[1],
                         r.maxPrice(), r.path());
                 StockMarketMod.LOGGER.info("[T-206g] {}", row);
@@ -1415,10 +1448,28 @@ public class PluginTestSuite extends TestSuite {
             return pass(out.toString());
         } catch (Exception e) {
             return fail("Exception: " + e);
+        } finally {
+            harnessRefill = false;
+            TargetPriceBot.test_setGapGuardEnabled(true);
         }
     }
 
     // ── T-207 regression probes (gated: -Dstockmarket.t207=true) ─────────────────────────────
+
+    /**
+     * T-207: when true, the replay harnesses ({@link #replay}, {@link #replayPlayers}, {@link T207Env}) also run
+     * the volume distribution plugin, so swept order book ranges refill as in production. Off by default
+     * so the existing replay tests keep their numbers; the T-207 rows switch it on.
+     */
+    private static boolean harnessRefill = false;
+
+    /** A volume distribution plugin subscribed to the scratch market (book refill for the harnesses). */
+    private DefaultOrderbookVolumeDistributionPlugin newHarnessRefill() {
+        DefaultOrderbookVolumeDistributionPlugin p = new DefaultOrderbookVolumeDistributionPlugin();
+        p.setLoggerEnabled(false);
+        p.onMarketSubscribed(itemID);
+        return p;
+    }
 
     /** T-207 gate. */
     private static boolean t207Requested() {
@@ -1447,6 +1498,8 @@ public class PluginTestSuite extends TestSuite {
         final VolatilityPlugin vol;
         final VolatilityPlugin.Settings volSettings;
         final TargetPriceBot bot;
+        /** Volume distribution plugin refilling the book, only with {@link #harnessRefill}. */
+        final DefaultOrderbookVolumeDistributionPlugin refill;
         boolean botEnabled = true;
         final IServerBankAccount account;
         final UUID player;
@@ -1486,6 +1539,7 @@ public class PluginTestSuite extends TestSuite {
             bot = new TargetPriceBot();
             bot.setLoggerEnabled(false);
             bot.onMarketSubscribed(itemID);
+            refill = harnessRefill ? newHarnessRefill() : null;
             account = fixture.createBankAccount("t207");
             player = fixture.createUser("t207");
             ItemID moneyID = backend.MARKET_MANAGER.getSync().getTradingCurrencyID();
@@ -1497,6 +1551,7 @@ public class PluginTestSuite extends TestSuite {
 
         /** One server tick in production order: plugins, cache apply, market update. */
         void tick() {
+            if (refill != null) refill.update(markets);
             vol.update(markets);
             if (botEnabled) bot.update(markets);
             cache.apply();
@@ -1578,21 +1633,31 @@ public class PluginTestSuite extends TestSuite {
         return bad == 0 ? pass(out.toString()) : fail(bad + " mismatches" + out);
     }
 
+    /** T-207: gap guard fill fractions compared by {@link #test_t207_spike}. */
+    private static final double[] T207_FILLS = {0.05, 0.1, 0.25, 0.5};
+
     /**
      * T-207 symptom 2: one big player buy (1 or 10 max orders, one per 10 ticks) after 200 warm-up
-     * ticks; per tick after the last buy: price, candle high, and the first bot step (target, measured
-     * volume, order) plus what the pre-b3e06646 sizing ({@code getRealVirtualVolume(price, target)})
-     * would have measured. Runs with and without the bot. Fails if the candle high misses the peak or
-     * the price gives back more than half of the spike within 20 ticks.
+     * ticks, with the book refilling as in production; per run the price path for 4,800 ticks, the tick
+     * at which half of the spike is given back, and the bot's first step (target, measured volume,
+     * order, depth seen). Modes: bot off, bot without gap guard, bot with the guard at each fill in
+     * {@link #T207_FILLS}. Fails if the bot with the default guard gives back more than half of the
+     * spike within 20 or 100 ticks.
      */
     private TestResult test_t207_spike() {
         if (!t207Requested()) return skip("T-207 not requested");
         StringBuilder out = new StringBuilder();
         int bad = 0;
+        harnessRefill = true; // book refills as in production
         try {
             for (String cfg : new String[]{"world", "default"})
                 for (int buys : new int[]{1, 10})
-                    for (boolean withBot : new boolean[]{true, false}) {
+                    // 0 = bot off, 1 = bot without gap guard, 2.. = bot with guard at the fill fractions below
+                    for (int mode = 0; mode < 2 + T207_FILLS.length; mode++) {
+                        boolean withBot = mode > 0;
+                        double fill = mode >= 2 ? T207_FILLS[mode - 2] : TargetPriceBot.DEFAULT_GAP_MIN_FILL;
+                        TargetPriceBot.test_setGapGuardEnabled(mode != 1);
+                        TargetPriceBot.test_setGapMinFill(fill);
                         try (T207Env env = cfg.equals("world") ? t207World() : t207Default()) {
                             env.botEnabled = withBot;
                             for (int t = 0; t < 200; t++) env.tick();
@@ -1606,8 +1671,17 @@ public class PluginTestSuite extends TestSuite {
                             TargetPriceBot.StepInfo first = null;
                             String oldSizing = "";
                             StringBuilder path = new StringBuilder();
-                            double at20 = peak;
-                            for (int t = 1; t <= 1200; t++) {
+                            double at20 = peak, at100 = peak;
+                            // depth seen right before each bot order: max empty gap (ticks), min volume in 1% of price
+                            long maxGap = 0; double minWin = Double.MAX_VALUE; int orders = 0; String firstDepth = "";
+                            int holdTicks = -1; // first tick the price gave back more than half of the spike
+                            for (int t = 1; t <= 4800; t++) {
+                                long[] gap = new long[1]; double[] win = new double[1]; double lvl = 0;
+                                if (withBot) {
+                                    double tgt = env.bot.test_getTargetPrice(itemID);
+                                    t207Depth(env.cache.getPluginOrderBook(), env.price(), tgt, gap, win);
+                                    lvl = env.cache.getPluginOrderBook().getDefaultRealVolume(env.price());
+                                }
                                 if (withBot && first == null) {
                                     // what the pre-b3e06646 bot would have measured right before this tick's step
                                     double target = env.bot.test_getTargetPrice(itemID);
@@ -1616,25 +1690,107 @@ public class PluginTestSuite extends TestSuite {
                                 }
                                 env.tick();
                                 TargetPriceBot.StepInfo s = env.bot.test_getLastStep(itemID);
-                                if (withBot && first == null && s != null && s != before) first = s;
-                                if (t == 1 || t == 2 || t == 5 || t == 6 || t == 10 || t == 20 || t == 100 || t == 1200)
+                                if (withBot && s != null && s != before) {
+                                    if (first == null) {
+                                        first = s;
+                                        firstDepth = String.format(Locale.ROOT, " | gap %d ticks (%.2f%% of price), vol in 1%% %.2f, default level vol %.3f",
+                                                gap[0], 100.0 * gap[0] / env.market.getCurrentMarketPrice(), win[0], lvl);
+                                    }
+                                    maxGap = Math.max(maxGap, gap[0]); minWin = Math.min(minWin, win[0]); orders++;
+                                    before = s;
+                                }
+                                if (t == 5 || t == 20 || t == 100 || t == 200 || t == 600 || t == 1200 || t == 2400 || t == 4800)
                                     path.append(String.format(Locale.ROOT, " +%d:%.2f", t, env.price()));
                                 if (t == 20) at20 = env.price();
+                                if (t == 100) at100 = env.price();
+                                if (holdTicks < 0 && env.price() < start + 0.5 * (peak - start)) holdTicks = t;
                             }
-                            boolean ok = high + 1e-9 >= peak && at20 >= start + 0.5 * (peak - start);
+                            // only the bot with the default guard is checked; the other modes are the comparison
+                            boolean ok = mode < 2 || fill != TargetPriceBot.DEFAULT_GAP_MIN_FILL
+                                    || (at20 >= start + 0.5 * (peak - start) && at100 >= start + 0.5 * (peak - start));
                             if (!ok) bad++;
-                            out.append(String.format(Locale.ROOT, "\n %s %dx max(%d) bot %s: start %.2f peak %.2f candleHigh %.2f |%s%s",
-                                    cfg, buys, env.maxOrder, withBot ? "on" : "off", start, peak, high, path, ok ? "" : "  <-- SNAP-BACK"));
+                            out.append(String.format(Locale.ROOT, "\n %s %dx max(%d) %s: start %.2f peak %.2f | half the spike given back after %s |%s%s",
+                                    cfg, buys, env.maxOrder, mode == 0 ? "bot off" : mode == 1 ? "bot no guard" : "bot guard fill " + fill, start, peak,
+                                    holdTicks < 0 ? ">4800 ticks" : holdTicks + " ticks", path, ok ? "" : "  <-- SNAP-BACK"));
                             if (first != null)
                                 out.append(String.format(Locale.ROOT, "\n    first bot step: target %.2f price %.2f measured %+.0f order %+.0f; %s",
-                                        first.target(), first.priceBefore(), first.estimate(), first.amount(), oldSizing));
+                                        first.target(), first.priceBefore(), first.estimate(), first.amount(), oldSizing)
+                                        + firstDepth + String.format(Locale.ROOT, "\n    bot orders %d, max gap before an order %d ticks, min vol in 1%% %.2f",
+                                        orders, maxGap, orders > 0 ? minWin : 0));
                         }
                     }
         } catch (Exception e) {
             return fail("Exception: " + e);
+        } finally {
+            harnessRefill = false;
+            TargetPriceBot.test_setGapGuardEnabled(true);
+            TargetPriceBot.test_setGapMinFill(TargetPriceBot.DEFAULT_GAP_MIN_FILL);
         }
         StockMarketMod.LOGGER.info("[T-207 spike] {}", out);
         return bad == 0 ? pass(out.toString()) : fail(bad + " snap-backs" + out);
+    }
+
+    /**
+     * T-207 gap guard: on the reported thin diamond setup (abundance 5, max order 10,000) one max buy sweeps
+     * the book from 160 to ~170 and leaves the swept range empty. Without the guard the bot's first,
+     * almost zero-sized sell fell through that gap and put the price back at ~160 within 5 ticks. The
+     * price must now keep at least half of the spike for 100 ticks (5 s). On today's default diamond
+     * (dense book) the bot must still trade within those 100 ticks after the same buy.
+     */
+    private TestResult test_targetPriceBot_emptyGap_noSnapBack() {
+        StringBuilder out = new StringBuilder();
+        harnessRefill = true; // book refills as in production
+        try {
+            for (boolean thin : new boolean[]{true, false}) {
+                try (T207Env env = thin ? t207World() : t207Default()) {
+                    for (int t = 0; t < 200; t++) env.tick();
+                    double start = env.price();
+                    env.marketOrder(env.maxOrder);
+                    env.tick();
+                    double peak = env.price();
+                    TargetPriceBot.StepInfo before = env.bot.test_getLastStep(itemID);
+                    for (int t = 0; t < 100; t++) env.tick();
+                    double after = env.price();
+                    boolean traded = env.bot.test_getLastStep(itemID) != before;
+                    out.append(String.format(Locale.ROOT, "\n %s: start %.2f peak %.2f +100 ticks %.2f, bot traded %b",
+                            thin ? "thin" : "default", start, peak, after, traded));
+                    if (!(peak > start))
+                        return fail("Harness: the buy did not move the price" + out);
+                    if (thin && after < start + 0.5 * (peak - start))
+                        return fail("Price snapped back through the empty gap" + out);
+                    if (!thin && !traded)
+                        return fail("Gap guard blocked the bot on a dense book" + out);
+                }
+            }
+            return pass("Spike holds on the thin book; bot still trades on the dense one" + out);
+        } catch (Exception e) {
+            return fail("Exception: " + e + out);
+        } finally {
+            harnessRefill = false;
+        }
+    }
+
+    /**
+     * T-207 diagnostics: the empty gap from the current price towards {@code target} (price levels until
+     * the first virtual volume on the side an order towards the target eats, or the whole distance if
+     * none) and the one-sided volume within 1% of the price in that direction.
+     *
+     * @param gapOut [0] = gap in price levels
+     * @param winOut [0] = |volume| within 1% of the price (capped at the target)
+     */
+    private static void t207Depth(IPluginOrderBook book, double price, double target, long[] gapOut, double[] winOut) {
+        double tick = MarketManager.convertToRealAmountStatic(1);
+        long dist = Math.round(Math.abs(target - price) / tick);
+        double dir = Math.signum(target - price);
+        if (dist == 0) { gapOut[0] = 0; winOut[0] = 0; return; }
+        winOut[0] = Math.abs(book.getRealVirtualVolumeToPrice(price + dir * Math.min(dist * tick, price * 0.01), Double.POSITIVE_INFINITY));
+        if (book.getRealVirtualVolumeToPrice(target, Double.POSITIVE_INFINITY) == 0) { gapOut[0] = dist; return; }
+        long lo = 1, hi = dist; // smallest d with volume within d levels
+        while (lo < hi) {
+            long mid = (lo + hi) >>> 1;
+            if (book.getRealVirtualVolumeToPrice(price + dir * mid * tick, Double.POSITIVE_INFINITY) != 0) hi = mid; else lo = mid + 1;
+        }
+        gapOut[0] = lo - 1;
     }
 
     /**
@@ -1645,6 +1801,25 @@ public class PluginTestSuite extends TestSuite {
      */
     private TestResult test_t207_limitExit() {
         if (!t207Requested()) return skip("T-207 not requested");
+        StringBuilder out = new StringBuilder();
+        harnessRefill = true; // book refills as in production
+        try {
+            for (boolean guard : new boolean[]{false, true}) {
+                TargetPriceBot.test_setGapGuardEnabled(guard);
+                out.append("\n gap guard ").append(guard ? "on" : "off").append(": ").append(t207LimitExitRun());
+            }
+        } catch (Exception e) {
+            return fail("Exception: " + e);
+        } finally {
+            harnessRefill = false;
+            TargetPriceBot.test_setGapGuardEnabled(true);
+        }
+        StockMarketMod.LOGGER.info("[T-207 limitExit] {}", out);
+        return pass(out.toString());
+    }
+
+    /** One run of {@link #test_t207_limitExit}; returns the report. */
+    private String t207LimitExitRun() {
         StringBuilder out = new StringBuilder();
         try (T207Env env = t207Default()) {
             for (int t = 0; t < 20; t++) env.tick();
@@ -1698,11 +1873,8 @@ public class PluginTestSuite extends TestSuite {
             out.append(String.format(Locale.ROOT, "\n sold %.0f avg %.2f, left %.0f, profit %+.0f (%+.1f%% of spent; leftovers at 160), %.1f min, max price %.2f",
                     sold, sold > 0 ? proceeds / sold : 0, left, profit, 100 * profit / spent, Math.min(t, 72_000) / 1200.0, maxPrice));
             out.append(String.format(Locale.ROOT, "\n fill ticks %d, of which on a new bot buy step %d | path%s", fillTicks, fillTicksWithBotBuy, path));
-        } catch (Exception e) {
-            return fail("Exception: " + e);
         }
-        StockMarketMod.LOGGER.info("[T-207 limitExit] {}", out);
-        return pass(out.toString());
+        return out.toString();
     }
 
     /**

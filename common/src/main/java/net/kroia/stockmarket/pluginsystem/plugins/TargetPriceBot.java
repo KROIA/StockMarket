@@ -1,6 +1,8 @@
 package net.kroia.stockmarket.pluginsystem.plugins;
 
 import net.kroia.modutilities.NbtCompat;
+import net.kroia.stockmarket.api.plugin.interaction.IPluginOrderBook;
+import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
 
 import io.netty.buffer.ByteBuf;
 import net.kroia.banksystem.util.ItemID;
@@ -196,6 +198,65 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
 
 
 
+    /**
+     * T-207: width of the gap window as a fraction of the current price (1%, the size of a depth
+     * memory band). The bot only trades if this first part of its way to the target holds liquidity.
+     */
+    public static final double GAP_WINDOW_FRACTION = 0.01;
+
+    /** T-207: gap guard switch, only turned off by tests to compare against the unguarded bot. */
+    private static boolean gapGuardEnabled = true;
+
+    /**
+     * Test hook: turns the T-207 gap guard on or off for all bots.
+     *
+     * @param enabled false = trade into empty gaps as before T-207
+     */
+    public static void test_setGapGuardEnabled(boolean enabled) { gapGuardEnabled = enabled; }
+
+    /** T-207: default of {@link #gapMinFill}. */
+    public static final double DEFAULT_GAP_MIN_FILL = 0.25;
+    /**
+     * T-207: how full the gap window must be, as a fraction of "default level volume at the window edge x
+     * price levels in the window" (an upper estimate of an undepleted window), before the bot trades.
+     */
+    private static double gapMinFill = DEFAULT_GAP_MIN_FILL;
+
+    /**
+     * Test hook: sets {@link #gapMinFill} for all bots.
+     *
+     * @param fill required fill fraction; &lt;= 0 disables the guard's volume check
+     */
+    public static void test_setGapMinFill(double fill) { gapMinFill = fill; }
+
+    /**
+     * T-207 gap guard: true if a bot order from {@code price} towards {@code target} would cross an
+     * (almost) empty stretch of the book, so even a tiny order would move the price far in one tick.
+     * <p>
+     * The window is the first {@link #GAP_WINDOW_FRACTION} of the price towards the target (or up to the
+     * target if it is closer). The bot may trade only if the one-sided virtual volume in that window is
+     * at least one price level of the market's default (undepleted) depth at the window's edge. A swept
+     * book (after a big player order) holds ~0 there until the volume distribution refills it; a normal
+     * book holds dozens of levels' worth. So this covers both "too little volume up to the target" and
+     * "an empty gap wider than the window". Markets without a default depth (0) are never guarded.
+     *
+     * @param book   the market's order book
+     * @param price  the current market price (real)
+     * @param target the bot's target price (real)
+     * @return true if the bot should skip this step
+     */
+    public static boolean crossesEmptyGap(IPluginOrderBook book, double price, double target) {
+        if (!(price > 0) || target == price) return false;
+        double windowEnd = target > price
+                ? Math.min(target, price * (1 + GAP_WINDOW_FRACTION))
+                : Math.max(target, price * (1 - GAP_WINDOW_FRACTION));
+        double levels = Math.max(1, Math.abs(windowEnd - price) / MarketManager.convertToRealAmountStatic(1));
+        double minVolume = gapMinFill * Math.abs(book.getDefaultRealVolume(windowEnd)) * levels;
+        if (!(minVolume > 0)) return false;
+        // capped at minVolume: stops scanning as soon as enough volume is found
+        return Math.abs(book.getRealVirtualVolumeToPrice(windowEnd, minVolume)) < minVolume;
+    }
+
     public TargetPriceBot() {
         super();
     }
@@ -251,6 +312,10 @@ public class TargetPriceBot extends ServerPlugin<TargetPriceBot.Settings, Target
         // price, and leaving them out only makes the order smaller.
         // Signed like the book: negative = asks to buy through (target above), positive = bids to sell into.
         float volumeToTarget = market.oderBook.getRealVirtualVolumeToPrice(data.targetPrice, limit);
+        // T-207: don't trade into an empty price gap (e.g. right after a big player order swept the
+        // book). Even a tiny order would fall through the gap and snap the price back at once.
+        if (gapGuardEnabled && crossesEmptyGap(market.oderBook, currentPrice, data.targetPrice))
+            return;
         double absVolumeToTarget = Math.min(limit, Math.abs(volumeToTarget));
         // Direction to the target: +1 buy, -1 sell. The PID output only sets the urgency; if its sign
         // still points the other way (filter lag right after the price crossed the target), don't
