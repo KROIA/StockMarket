@@ -9,6 +9,7 @@ import net.kroia.stockmarket.api.plugin.interaction.IPluginOrderBook;
 import net.kroia.stockmarket.api.plugin.interaction.IVolumeDistributionCalculator;
 import net.kroia.stockmarket.pluginsystem.interaction.MarketInterface;
 import net.kroia.stockmarket.pluginsystem.plugin.ServerPlugin;
+import net.kroia.stockmarket.stockmarket.market.ServerMarket;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -148,7 +149,6 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
 
     static class RuntimeData
     {
-        public long lastMillis;
         public float currentMarketPrice = 0;
         public final DistributionCalculator calculator;
         public float volumeScale = DEFAULT_VOLUME_SCALE;
@@ -170,7 +170,6 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
 
         public RuntimeData()
         {
-            lastMillis = System.currentTimeMillis();
             calculator = new DistributionCalculator();
         }
     }
@@ -240,10 +239,10 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
      */
     private void updateForMarket(MarketInterface market, RuntimeData data, boolean mayRefreshTargets)
     {
-        long currentMillis = System.currentTimeMillis();
         Tuple<@NotNull Long,@NotNull  Long> editableRange = market.oderBook.getEditableBackendPriceRange();
-        double deltaT = Math.min((currentMillis - data.lastMillis) / 1000.0, 1.0);
-        data.lastMillis = currentMillis;
+        // T-202: game time, one server tick per update (as the bot's PID, T-201), so convergence
+        // does not depend on server speed or wall-clock jitter.
+        double deltaT = ServerMarket.TICK_SECONDS;
 
         IPluginOrderBook orderBook = market.oderBook;
         long rangeStart = editableRange.getA();

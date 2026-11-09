@@ -222,7 +222,13 @@ public class VirtualOrderbook implements ServerSaveable
     public void fadeDepthMemory(double dtSeconds)
     {
         cachedSeg = null;   // the provider may have changed its shape since the last tick
-        if(depthMemory.isEmpty()) return;
+        if(depthMemory.isEmpty())
+        {
+            // T-202: restart the 1 s step phase with each new memory, so a leftover fraction from an
+            // earlier (cleared) memory cannot shift when the recovery steps land.
+            fadeClockSeconds = 0;
+            return;
+        }
         double halfLife = depthMemoryHalfLifeSeconds();
         if(!(halfLife > 0))
         {
