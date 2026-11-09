@@ -4,6 +4,7 @@ import com.mojang.math.Axis;
 import net.kroia.modutilities.gui.geometry.Rectangle;
 import net.kroia.stockmarket.screen.UI_Colors;
 import net.kroia.stockmarket.stockmarket.market.ClientMarket;
+import net.kroia.stockmarket.stockmarket.market.core.VirtualOrderbook;
 import net.kroia.stockmarket.util.PriceHistoryData;
 import net.kroia.stockmarket.util.StockMarketGuiElement;
 import net.minecraft.network.chat.Component;
@@ -48,13 +49,15 @@ public class OrderbookVolumeHistogram extends StockMarketGuiElement {
             "log_floor", "log_slot_below", "linear_lo", "recenter_lo",
             "recenter_hi", "linear_hi", "log_slot_above", "ask_ceiling"
     };
-    /** T-209: line colour per {@code VirtualOrderbook.BORDER_*} index: magenta = log grid edge, orange = log slot at the window, cyan = linear window, yellow = re-centre band. */
+    /** T-209: line colour per {@code VirtualOrderbook.BORDER_*} index: magenta = log grid edge, orange = log slot at the window, cyan = linear window, blue = re-centre borders. */
     private static final int[] BORDER_COLORS = {
-            0xFFFF55FF, 0xFFFF9933, 0xFF33CCFF, 0xFFFFFF55,
-            0xFFFFFF55, 0xFF33CCFF, 0xFFFF9933, 0xFFFF55FF
+            0xFFFF55FF, 0xFFFF9933, 0xFF33CCFF, 0xFF3355FF,
+            0xFF3355FF, 0xFF33CCFF, 0xFFFF9933, 0xFFFF55FF
     };
     /** T-209: hover distance in pixels for a border tooltip. */
     private static final int BORDER_HOVER_PX = 2;
+    /** T-209: thickness in pixels of the linear array lines (edges, re-centre borders, connecting vertical). */
+    private static final int LINEAR_LINE_PX = 2;
 
     public OrderbookVolumeHistogram(CandlestickChart parentChart)
     {
@@ -152,32 +155,73 @@ public class OrderbookVolumeHistogram extends StockMarketGuiElement {
         return parentChart.toCanvasSpaceY(price);
     }
 
-    /** T-209: draws one full-width line per visible border (off-screen borders are skipped). */
+    /** T-209: @return true for the re-centre borders, drawn half width (from the middle to the right edge) */
+    private static boolean isRecenterBorder(int i)
+    {
+        return i == VirtualOrderbook.BORDER_RECENTER_LO || i == VirtualOrderbook.BORDER_RECENTER_HI;
+    }
+
+    /** T-209: @return true for the borders of the linear array (edges and re-centre borders), drawn {@link #LINEAR_LINE_PX} thick */
+    private static boolean isLinearBorder(int i)
+    {
+        return i >= VirtualOrderbook.BORDER_LINEAR_LO && i <= VirtualOrderbook.BORDER_LINEAR_HI;
+    }
+
+    /** T-209: @return the canvas X where a border line starts (half width for the re-centre borders) */
+    private int borderStartX(int i)
+    {
+        return isRecenterBorder(i) ? scissorRect.x + scissorRect.width / 2 : scissorRect.x;
+    }
+
+    /**
+     * T-209: draws the visible borders (off-screen ones are skipped). The linear array is drawn as
+     * 2 px lines: full-width cyan edges joined by a vertical at 3/4 of the width (clipped to the
+     * visible price range), and blue half-width re-centre borders crossing that vertical.
+     * The log grid and ask ceiling markers stay 1 px full-width lines.
+     */
     private void renderArrayBorders()
     {
         if (arrayBorders.isEmpty()) return;
         // Same height renderHistogram() uses; set here too so the lines show while the book is empty.
         scissorRect.height = parentChart.toCanvasSpaceY(parentChart.getMinVisiblePrice()) - padding;
         int n = Math.min(arrayBorders.size(), BORDER_COLORS.length);
+        if (n > VirtualOrderbook.BORDER_LINEAR_HI)
+        {
+            double lo = arrayBorders.get(VirtualOrderbook.BORDER_LINEAR_LO);
+            double hi = arrayBorders.get(VirtualOrderbook.BORDER_LINEAR_HI);
+            double minVis = parentChart.getMinVisiblePrice(), maxVis = parentChart.getMaxVisiblePrice();
+            if (!Double.isNaN(lo) && !Double.isNaN(hi) && hi >= minVis && lo <= maxVis)
+            {
+                int yTop = parentChart.toCanvasSpaceY(Math.min(hi, maxVis));
+                int yBottom = parentChart.toCanvasSpaceY(Math.max(lo, minVis));
+                int x = scissorRect.x + scissorRect.width * 3 / 4 - LINEAR_LINE_PX / 2;
+                drawRect(x, Math.min(yTop, yBottom), LINEAR_LINE_PX, Math.abs(yBottom - yTop), BORDER_COLORS[VirtualOrderbook.BORDER_LINEAR_LO]);
+            }
+        }
         for (int i = 0; i < n; i++)
         {
             int y = borderY(i);
-            if (y != Integer.MIN_VALUE)
-                drawRect(scissorRect.x, y, scissorRect.width, 1, BORDER_COLORS[i]);
+            if (y == Integer.MIN_VALUE) continue;
+            int x = borderStartX(i);
+            if (isLinearBorder(i))
+                drawRect(x, y - LINEAR_LINE_PX / 2, scissorRect.x + scissorRect.width - x, LINEAR_LINE_PX, BORDER_COLORS[i]);
+            else
+                drawRect(x, y, scissorRect.width, 1, BORDER_COLORS[i]);
         }
     }
 
-    /** T-209: tooltip naming every border within {@link #BORDER_HOVER_PX} of the mouse, e.g. "linear ↑ 172.00". */
+    /** T-209: tooltip naming every border within {@link #BORDER_HOVER_PX} of the mouse (and over its line), e.g. "linear ↑ 172.00". */
     private void renderArrayBorderTooltip()
     {
         if (arrayBorders.isEmpty() || !isMouseOver()) return;
         int my = getMouseY();
+        int mx = getMouseX();
         StringBuilder sb = new StringBuilder();
         int n = Math.min(arrayBorders.size(), BORDER_KEYS.length);
         for (int i = 0; i < n; i++)
         {
             int y = borderY(i);
-            if (y == Integer.MIN_VALUE || Math.abs(y - my) > BORDER_HOVER_PX) continue;
+            if (y == Integer.MIN_VALUE || Math.abs(y - my) > BORDER_HOVER_PX || mx < borderStartX(i)) continue;
             if (!sb.isEmpty()) sb.append('\n');
             String price = BigDecimal.valueOf(arrayBorders.get(i)).stripTrailingZeros().toPlainString();
             sb.append(Component.translatable("gui.stockmarket.orderbook_volume_histogram.border." + BORDER_KEYS[i], price).getString());
