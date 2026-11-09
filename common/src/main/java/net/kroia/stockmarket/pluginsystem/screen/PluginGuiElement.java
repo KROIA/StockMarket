@@ -4,6 +4,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import net.kroia.modutilities.gui.client.ClientCompat;
 import net.kroia.modutilities.gui.client.GuiScreen;
+import net.kroia.modutilities.gui.elements.Button;
 import net.kroia.modutilities.gui.elements.base.GuiElement;
 import net.kroia.modutilities.networking.client_server.streaming.StreamSystem;
 import net.kroia.stockmarket.StockMarketMod;
@@ -51,6 +52,9 @@ public class PluginGuiElement<TSettings, TRuntimeData> extends StockMarketGuiEle
         public static final Component APPLY_ALL = Component.translatable(PREFIX + "apply_all");
         public static final Component APPLY_ALL_TOOLTIP = Component.translatable(PREFIX + "apply_all.tooltip");
         public static final Component CONFIRM_TITLE = Component.translatable(PREFIX + "apply_all_confirm_title");
+        /** Label and tooltip of the "Defaults" button (see {@link #createDefaultsButton()}). */
+        public static final Component DEFAULTS = Component.translatable(PREFIX + "defaults");
+        public static final Component DEFAULTS_TOOLTIP = Component.translatable(PREFIX + "defaults.tooltip");
     }
 
     private UUID runtimeStreamID = null;
@@ -268,6 +272,42 @@ public class PluginGuiElement<TSettings, TRuntimeData> extends StockMarketGuiEle
         GuiScreen.setScreen(NewsDialogScreen.confirmDialog(ClientCompat.screen(),
                 ApplyAllTexts.CONFIRM_TITLE, lines, ApplyAllTexts.APPLY_ALL,
                 () -> sendCustomSettingsToAllMarkets(settings)));
+    }
+
+    /**
+     * Returns the plugin's default custom settings (what a newly subscribed market gets), shown by the
+     * "Defaults" button. Override in plugins that have custom settings.
+     *
+     * @return the default settings, or null if this plugin has none (no "Defaults" button)
+     */
+    protected @Nullable TSettings defaultSettings() {
+        return null;
+    }
+
+    /**
+     * Fills the settings form with the given values without sending them. Called by the "Defaults"
+     * button; the user then resets a market with Apply (or all markets with Apply to all).
+     *
+     * @param settings the values to show in the form
+     */
+    protected void showSettings(TSettings settings) {
+        // Default: no-op. Subclasses with a settings form override.
+    }
+
+    /**
+     * Creates the "Defaults" button: it fills the form with {@link #defaultSettings()} via
+     * {@link #showSettings(Object)} and sends nothing. Subclasses add it to their layout.
+     *
+     * @return the button, or null if {@link #defaultSettings()} is null (button hidden)
+     */
+    protected final @Nullable Button createDefaultsButton() {
+        if (defaultSettings() == null) return null;
+        Button button = new Button(ApplyAllTexts.DEFAULTS.getString(), () -> {
+            TSettings defaults = defaultSettings();
+            if (defaults != null) showSettings(defaults);
+        });
+        setSettingTooltip(ApplyAllTexts.DEFAULTS_TOOLTIP, button);
+        return button;
     }
 
     /**

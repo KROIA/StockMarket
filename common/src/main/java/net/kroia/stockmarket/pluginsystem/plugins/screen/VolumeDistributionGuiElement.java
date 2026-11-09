@@ -47,6 +47,8 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
     private final Button applyButton;
     private final Button applyAllButton;
     private final Button resetVolumeButton;
+    /** Fills the form with the plugin defaults (null = hidden); own row below the buttons. */
+    private final @Nullable Button defaultsButton;
     private @Nullable OrderbookVolumeHistogram histogram;
     private @Nullable OrderbookVolumeHistogram.Overlay volumeOverlay;
     private float currentVolumeScale = 1.0f;
@@ -79,6 +81,7 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
         // Apply-to-all never resets the volume (resetVolume = false)
         applyAllButton = new Button(ApplyAllTexts.APPLY_ALL.getString(), () -> confirmApplyToAllMarkets(readSettings(false)));
         setSettingTooltip(ApplyAllTexts.APPLY_ALL_TOOLTIP, applyAllButton);
+        defaultsButton = createDefaultsButton();
 
         setSettingTooltip(Texts.VOLUME_SCALE_TOOLTIP, volumeScaleLabel, volumeScaleTextBox);
         setSettingTooltip(Texts.SPEED_TOOLTIP, speedLabel, speedTextBox);
@@ -96,9 +99,11 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
         addChild(applyButton);
         addChild(applyAllButton);
         addChild(resetVolumeButton);
+        if (defaultsButton != null) addChild(defaultsButton);
 
-        // 5 rows (4 label+field rows, 1 button row with Apply + Apply-to-all + Reset side by side)
-        setHeight(5 * (defaultElementHeight + spacing) + padding);
+        // 4 label+field rows, 1 button row with Apply + Apply-to-all + Reset side by side,
+        // and the Defaults button in its own row
+        setHeight((defaultsButton != null ? 6 : 5) * (defaultElementHeight + spacing) + padding);
     }
 
     @Override
@@ -155,6 +160,20 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
             decumulationRateTextBox.setText(s.decumulationRate(), 6);
             currentVolumeScale = s.volumeScale();
         }
+    }
+
+    @Override
+    protected DefaultOrderbookVolumeDistributionPlugin.Settings defaultSettings() {
+        return DefaultOrderbookVolumeDistributionPlugin.Settings.createDefault();
+    }
+
+    @Override
+    protected void showSettings(DefaultOrderbookVolumeDistributionPlugin.Settings s) {
+        // only the form; currentVolumeScale (overlay) follows on Apply
+        volumeScaleTextBox.setText(s.volumeScale(), 6);
+        speedTextBox.setText(s.speed(), 6);
+        accumulationRateTextBox.setText(s.accumulationRate(), 6);
+        decumulationRateTextBox.setText(s.decumulationRate(), 6);
     }
 
     @Override
@@ -229,6 +248,7 @@ public class VolumeDistributionGuiElement extends PluginGuiElement<DefaultOrderb
         applyButton.setBounds(padding, y, buttonW, eh);
         applyAllButton.setBounds(applyButton.getRight() + spacing, y, buttonW, eh);
         resetVolumeButton.setBounds(applyAllButton.getRight() + spacing, y, buttonW, eh);
+        if (defaultsButton != null) defaultsButton.setBounds(padding, applyButton.getBottom() + spacing, buttonW, eh);
     }
 
     @Override

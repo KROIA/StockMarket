@@ -479,6 +479,8 @@
   "stockmarket.candlestick.loadingOlder": "Lade ältere Daten...",
   "gui.stockmarket.plugin_gui.apply_all": "Auf alle anwenden",
   "gui.stockmarket.plugin_gui.apply_all.tooltip": "Diese Werte auf jeden Markt anwenden,\nder dieses Plugin abonniert hat (mit Bestätigung).",
+  "gui.stockmarket.plugin_gui.defaults": "Standard",
+  "gui.stockmarket.plugin_gui.defaults.tooltip": "Füllt das Formular mit den Standardwerten des Plugins.\nGeändert wird erst mit Anwenden\n(dieser Markt) oder Auf alle anwenden.",
   "gui.stockmarket.plugin_gui.apply_all_confirm_title": "Auf alle Märkte anwenden?",
   "gui.stockmarket.plugin_gui.apply_all_confirm_message": "Dies überschreibt die Einstellungen ALLER %2$s Märkte, die das Plugin \"%1$s\" abonniert haben, mit den aktuell angezeigten Werten.\nDie bisherigen Einstellungen der einzelnen Märkte gehen verloren.",
   "gui.stockmarket.volatility_plugin.scale.tooltip": "Amplitude der zufälligen Preisbewegung relativ zum\nGleichgewichtspreis. Bei 0.3 weicht der Preis typisch\num ca. +-4% ab, 90% der Zeit innerhalb +-12%,\nselten bis ca. +-26%.\n0 = keine Zufallsbewegung. Standard: 0.3",

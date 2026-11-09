@@ -479,6 +479,8 @@
   "stockmarket.candlestick.loadingOlder": "Loading older data...",
   "gui.stockmarket.plugin_gui.apply_all": "Apply to all",
   "gui.stockmarket.plugin_gui.apply_all.tooltip": "Apply these values to every market\nsubscribed to this plugin (asks for confirmation).",
+  "gui.stockmarket.plugin_gui.defaults": "Defaults",
+  "gui.stockmarket.plugin_gui.defaults.tooltip": "Fill the form with the plugin's default values.\nNothing is changed until you press Apply\n(this market) or Apply to all.",
   "gui.stockmarket.plugin_gui.apply_all_confirm_title": "Apply to all markets?",
   "gui.stockmarket.plugin_gui.apply_all_confirm_message": "This overwrites the settings of ALL %2$s markets subscribed to the plugin \"%1$s\" with the values currently shown.\nThe previous per-market settings will be lost.",
   "gui.stockmarket.volatility_plugin.scale.tooltip": "Amplitude of the random price walk, relative to the\nequilibrium price. At 0.3 the price typically deviates\nabout +-4%, 90% of the time within +-12%,\nrarely up to about +-26%.\n0 = no random movement. Default: 0.3",

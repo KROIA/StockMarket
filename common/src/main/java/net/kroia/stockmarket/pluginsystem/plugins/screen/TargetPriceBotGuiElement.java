@@ -101,7 +101,9 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
     private final TextBox oscillationAmplitudeTextBox;
     private final Button applyButton;
     private final Button applyAllButton;
-    /** Holds Apply + Apply-to-all side by side as one row of the vertical settings list. */
+    /** Fills the form with the plugin defaults (null = hidden). */
+    private final @Nullable Button defaultsButton;
+    /** Holds Apply + Apply-to-all (+ Defaults) side by side as one row of the vertical settings list. */
     private final StockMarketGuiElement applyButtonRow;
     private List<ItemID> subscribedMarkets = new ArrayList<>();
     private Map<ItemID, TargetPriceBot.Settings> allSettings = new HashMap<>();
@@ -178,21 +180,26 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
         applyButton = new Button(Texts.APPLY_BUTTON.getString(), this::onApplySettings);
         applyAllButton = new Button(ApplyAllTexts.APPLY_ALL.getString(), () -> confirmApplyToAllMarkets(readSettings()));
         setSettingTooltip(ApplyAllTexts.APPLY_ALL_TOOLTIP, applyAllButton);
+        defaultsButton = createDefaultsButton();
         applyButtonRow = new StockMarketGuiElement() {
             @Override
             protected void render() {}
 
             @Override
             protected void layoutChanged() {
-                int halfW = (getWidth() - spacing) / 2;
-                applyButton.setBounds(0, 0, halfW, getHeight());
-                applyAllButton.setBounds(halfW + spacing, 0, getWidth() - halfW - spacing, getHeight());
+                // Apply | Apply to all (| Defaults), equal widths
+                int n = defaultsButton != null ? 3 : 2;
+                int bw = (getWidth() - (n - 1) * spacing) / n;
+                applyButton.setBounds(0, 0, bw, getHeight());
+                applyAllButton.setBounds(bw + spacing, 0, bw, getHeight());
+                if (defaultsButton != null) defaultsButton.setBounds(2 * (bw + spacing), 0, getWidth() - 2 * (bw + spacing), getHeight());
             }
         };
         applyButtonRow.setEnableBackground(false);
         applyButtonRow.setEnableOutline(false);
         applyButtonRow.addChild(applyButton);
         applyButtonRow.addChild(applyAllButton);
+        if (defaultsButton != null) applyButtonRow.addChild(defaultsButton);
         applyButtonRow.setHeight(20);
 
         setSettingTooltip(Texts.P_GAIN_TOOLTIP, pGainLabel, pGainTextBox);
@@ -358,18 +365,27 @@ public class TargetPriceBotGuiElement extends PluginGuiElement<TargetPriceBot.Se
      */
     private void populateSettingsFromMarket(ItemID marketID) {
         TargetPriceBot.Settings s = allSettings.get(marketID);
-        if (s != null) {
-            pGainTextBox.setText(s.pidP(), 6);
-            iGainTextBox.setText(s.pidI(), 6);
-            dGainTextBox.setText(s.pidD(), 6);
-            rateTextBox.setText(s.pidRate(), 6);
-            maxOrderFactorTextBox.setText(s.maxOrderVolumeFactor(), 3);
-            maxTargetMoveTextBox.setText(s.maxTargetMovePerSecond() * 100, 4);
-            reversionTimeTextBox.setText(s.reversionTimeSeconds(), 1);
-            oscillationPeriodTextBox.setText(s.oscillationPeriodSeconds(), 1);
-            oscillationDampingTextBox.setText(s.oscillationDamping(), 3);
-            oscillationAmplitudeTextBox.setText(s.oscillationAmplitude(), 3);
-        }
+        if (s != null) showSettings(s);
+    }
+
+    @Override
+    protected TargetPriceBot.Settings defaultSettings() {
+        return TargetPriceBot.Settings.createDefault();
+    }
+
+    /** Fills the settings textboxes from the given values (sends nothing). */
+    @Override
+    protected void showSettings(TargetPriceBot.Settings s) {
+        pGainTextBox.setText(s.pidP(), 6);
+        iGainTextBox.setText(s.pidI(), 6);
+        dGainTextBox.setText(s.pidD(), 6);
+        rateTextBox.setText(s.pidRate(), 6);
+        maxOrderFactorTextBox.setText(s.maxOrderVolumeFactor(), 3);
+        maxTargetMoveTextBox.setText(s.maxTargetMovePerSecond() * 100, 4);
+        reversionTimeTextBox.setText(s.reversionTimeSeconds(), 1);
+        oscillationPeriodTextBox.setText(s.oscillationPeriodSeconds(), 1);
+        oscillationDampingTextBox.setText(s.oscillationDamping(), 3);
+        oscillationAmplitudeTextBox.setText(s.oscillationAmplitude(), 3);
     }
 
     /**

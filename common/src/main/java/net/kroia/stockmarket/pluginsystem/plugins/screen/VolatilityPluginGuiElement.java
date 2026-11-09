@@ -53,6 +53,8 @@ public class VolatilityPluginGuiElement extends PluginGuiElement<VolatilityPlugi
     private final TextBox permanentImpactTextBox;
     private final Button applyButton;
     private final Button applyAllButton;
+    /** Fills the form with the plugin defaults (null = hidden). */
+    private final @Nullable Button defaultsButton;
     private Map<ItemID, VolatilityPlugin.Settings> allSettings = new HashMap<>();
 
     public VolatilityPluginGuiElement() {
@@ -87,6 +89,7 @@ public class VolatilityPluginGuiElement extends PluginGuiElement<VolatilityPlugi
         applyButton = new Button(Texts.APPLY.getString(), this::onApply);
         applyAllButton = new Button(ApplyAllTexts.APPLY_ALL.getString(), () -> confirmApplyToAllMarkets(readSettings()));
         setSettingTooltip(ApplyAllTexts.APPLY_ALL_TOOLTIP, applyAllButton);
+        defaultsButton = createDefaultsButton();
 
         setSettingTooltip(Texts.SCALE_TOOLTIP, scaleLabel, scaleTextBox);
         setSettingTooltip(Texts.FLOW_ENABLED_TOOLTIP, flowEnabledCheckBox);
@@ -108,9 +111,10 @@ public class VolatilityPluginGuiElement extends PluginGuiElement<VolatilityPlugi
         addChild(permanentImpactTextBox);
         addChild(applyButton);
         addChild(applyAllButton);
+        if (defaultsButton != null) addChild(defaultsButton);
 
         // 7 rows of controls (scale, flow toggle, sensitivity, min mult, max mult,
-        // permanent impact, apply + apply-to-all)
+        // permanent impact, apply + apply-to-all + defaults)
         setHeight(7 * (defaultElementHeight + spacing) + padding);
     }
 
@@ -143,6 +147,16 @@ public class VolatilityPluginGuiElement extends PluginGuiElement<VolatilityPlugi
         if (success && marketID != null && confirmedSettings != null) {
             allSettings.put(marketID, confirmedSettings);
         }
+    }
+
+    @Override
+    protected VolatilityPlugin.Settings defaultSettings() {
+        return VolatilityPlugin.Settings.createDefault();
+    }
+
+    @Override
+    protected void showSettings(VolatilityPlugin.Settings settings) {
+        populateFrom(settings);
     }
 
     /**
@@ -208,10 +222,12 @@ public class VolatilityPluginGuiElement extends PluginGuiElement<VolatilityPlugi
         permanentImpactLabel.setBounds(padding, maxPriceMultTextBox.getBottom() + spacing, labelW, eh);
         permanentImpactTextBox.setBounds(textBoxX, permanentImpactLabel.getTop(), textBoxW, eh);
 
-        // Row 7: apply + apply-to-all buttons side by side
-        int buttonW = (w - 2 * padding - spacing) / 2;
+        // Row 7: apply + apply-to-all (+ defaults) buttons side by side
+        int buttons = defaultsButton != null ? 3 : 2;
+        int buttonW = (w - 2 * padding - (buttons - 1) * spacing) / buttons;
         applyButton.setBounds(padding, permanentImpactTextBox.getBottom() + spacing, buttonW, eh);
         applyAllButton.setBounds(applyButton.getRight() + spacing, applyButton.getTop(), buttonW, eh);
+        if (defaultsButton != null) defaultsButton.setBounds(applyAllButton.getRight() + spacing, applyButton.getTop(), buttonW, eh);
     }
 
     @Override

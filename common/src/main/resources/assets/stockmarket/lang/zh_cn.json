@@ -390,6 +390,8 @@
   "stockmarket.candlestick.loadingOlder": "正在加载更早的数据...",
   "gui.stockmarket.plugin_gui.apply_all": "应用到全部",
   "gui.stockmarket.plugin_gui.apply_all.tooltip": "将这些数值应用到订阅此插件的所有市场\n（需要确认）。",
+  "gui.stockmarket.plugin_gui.defaults": "默认值",
+  "gui.stockmarket.plugin_gui.defaults.tooltip": "用插件的默认值填写表单。\n按下“应用”（此市场）或“应用到全部”后才会生效。",
   "gui.stockmarket.plugin_gui.apply_all_confirm_title": "应用到所有市场？",
   "gui.stockmarket.plugin_gui.apply_all_confirm_message": "这将用当前显示的数值覆盖订阅插件“%1$s”的全部 %2$s 个市场的设置。\n各市场原有的设置将会丢失。",
   "gui.stockmarket.volatility_plugin.scale.tooltip": "随机价格波动相对于均衡价格的幅度。\n0.3 时价格通常偏离约 +-4%，\n90% 的时间在 +-12% 以内，极少达到约 +-26%。\n0 = 无随机波动。默认值：0.3",

@@ -479,6 +479,8 @@
   "stockmarket.candlestick.loadingOlder": "Lade ältere Date...",
   "gui.stockmarket.plugin_gui.apply_all": "Uf alli awände",
   "gui.stockmarket.plugin_gui.apply_all.tooltip": "Die Wert uf jede Markt awände,\nwo das Plugin abonniert het (mit Bestätigung).",
+  "gui.stockmarket.plugin_gui.defaults": "Standard",
+  "gui.stockmarket.plugin_gui.defaults.tooltip": "Füllt s Formular mit de Standardwert vom Plugin.\nGänderet wird erst mit Awände\n(dä Markt) oder Uf alli awände.",
   "gui.stockmarket.plugin_gui.apply_all_confirm_title": "Uf alli Märt awände?",
   "gui.stockmarket.plugin_gui.apply_all_confirm_message": "Das überschriibt d Iistellige vo ALLNE %2$s Märt, wo s Plugin \"%1$s\" abonniert hend, mit de aktuell aazeigte Wert.\nDi bisherige Iistellige vo de einzelne Märt gönd verlore.",
   "gui.stockmarket.volatility_plugin.scale.tooltip": "Amplitude vo de zuefällige Priisbewegig relativ zum\nGliichgwichtspriis. Bi 0.3 wiicht dä Priis typisch\num ca. +-4% ab, 90% vo de Ziit innerhalb +-12%,\nsälte bis ca. +-26%.\n0 = kei Zuefallsbewegig. Standard: 0.3",

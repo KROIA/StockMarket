@@ -31,6 +31,11 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
         public Settings(float volumeScale, float speed, float accumulationRate, float decumulationRate) {
             this(volumeScale, speed, accumulationRate, decumulationRate, false);
         }
+
+        /** @return the default settings of a newly subscribed market (no volume reset) */
+        public static Settings createDefault() {
+            return new Settings(DEFAULT_VOLUME_SCALE, DEFAULT_SPEED, DEFAULT_ACCUMULATION_RATE, DEFAULT_DECUMULATION_RATE);
+        }
         public static final StreamCodec<ByteBuf, Settings> CODEC = StreamCodec.composite(
                 ByteBufCodecs.FLOAT, Settings::volumeScale,
                 ByteBufCodecs.FLOAT, Settings::speed,
@@ -420,7 +425,7 @@ public class DefaultOrderbookVolumeDistributionPlugin extends ServerPlugin<Defau
 
     @Override
     protected Settings provideDefaultCustomSettings() {
-        return new Settings(DEFAULT_VOLUME_SCALE, DEFAULT_SPEED, DEFAULT_ACCUMULATION_RATE, DEFAULT_DECUMULATION_RATE);
+        return Settings.createDefault();
     }
 
     @Override
