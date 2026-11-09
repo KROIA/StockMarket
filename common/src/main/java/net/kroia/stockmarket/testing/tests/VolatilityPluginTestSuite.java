@@ -7,6 +7,7 @@ import net.kroia.modutilities.testing.TestCategory;
 import net.kroia.modutilities.testing.TestResult;
 import net.kroia.modutilities.testing.TestSuite;
 import net.kroia.stockmarket.pluginsystem.interaction.MarketInterface;
+import net.kroia.stockmarket.pluginsystem.plugins.DefaultOrderbookVolumeDistributionPlugin;
 import net.kroia.stockmarket.pluginsystem.plugins.VolatilityPlugin;
 import net.kroia.stockmarket.pluginsystem.plugins.VolatilityPlugin.FlowBand;
 import net.kroia.stockmarket.pluginsystem.plugins.VolatilityPlugin.Settings;
@@ -18,6 +19,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
 import java.util.List;
+import java.util.function.DoubleUnaryOperator;
 
 /**
  * Tests for the pure {@link VolatilityPlugin#computeEquilibriumPrice} helper
@@ -86,6 +88,109 @@ public class VolatilityPluginTestSuite extends TestSuite {
         addTest("smoothing_zero_times_exact", this::test_smoothing_zeroTimes_exact);
         addTest("smoothing_sign_flip_clamps_at_zero", this::test_smoothing_signFlip_clampsAtZero);
         addTest("smoothing_nbt_round_trip_and_legacy", this::test_smoothing_nbtRoundTrip_andLegacy);
+        // T-208 permanent impact θ
+        addTest("theta_bound_diamond", () -> test_thetaBound(160.0, 50f, new double[]{100, 3_200, 32_000, 192_000}));
+        addTest("theta_bound_dirt", () -> test_thetaBound(0.1, 2000f, new double[]{5_000, 20_000, 128_000}));
+        addTest("theta_codec_round_trip_and_legacy", this::test_theta_codec);
+        addTest("theta_nbt_round_trip_and_legacy", this::test_theta_nbt);
+    }
+
+    // ── T-208 permanent impact θ ────────────────────────────────────────────
+
+    /** Real price of one backend price level in these tests (scale 100). */
+    private static final double TICK = 0.01;
+
+    /**
+     * End price of a one-shot market order of {@code volume} items walking the default book level by
+     * level (asks at or above P0 for a buy, bids below it for a sell): the level where the order ends.
+     * Stops at 1000 x / 1/1000 x P0 (or one tick) if the book runs out first.
+     */
+    private static double walkEndPrice(DoubleUnaryOperator volumeAt, double p0, double volume, boolean buy) {
+        long k = Math.round(p0 / TICK);
+        long kMax = Math.round(p0 * 1000 / TICK);
+        if (!buy) k--;
+        double rem = volume;
+        while (k >= 1 && k <= kMax) {
+            double v = Math.abs(volumeAt.applyAsDouble(k * TICK));
+            if (rem <= v) return k * TICK;
+            rem -= v;
+            k += buy ? 1 : -1;
+        }
+        return Math.max(1, Math.min(k, kMax)) * TICK;
+    }
+
+    /**
+     * T-208: for the default book of a market (production DistributionCalculator, volume scale 1 x
+     * abundance), the equilibrium log move of a flow F is at most θ x the log move of F walked through
+     * that book in one go, buy and sell, at the default settings.
+     */
+    private TestResult test_thetaBound(double p0, float abundance, double[] flows) {
+        DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator calc =
+                new DefaultOrderbookVolumeDistributionPlugin.DistributionCalculator(p0, abundance);
+        DoubleUnaryOperator volumeAt = pick -> calc.getVolume(p0, pick);
+        Settings s = defaults();
+        double eFold = VolatilityPlugin.bookEFoldDepth(volumeAt, p0, TICK, Math.log(s.minPriceMult()), Math.log(s.maxPriceMult()));
+        if (!(eFold > 0)) return fail("bookEFold must be > 0, got " + eFold);
+        StringBuilder out = new StringBuilder("bookEFold " + Math.round(eFold) + ", capacity "
+                + Math.round(VolatilityPlugin.flowBand(abundance, s, eFold).capacity()) + ";");
+        for (double f : flows) {
+            for (boolean buy : new boolean[]{true, false}) {
+                double walk = Math.abs(Math.log(walkEndPrice(volumeAt, p0, f, buy) / p0));
+                double eq = VolatilityPlugin.computeEquilibriumPrice(p0, buy ? -f : f, abundance, s, eFold);
+                double move = Math.abs(Math.log(eq / p0));
+                out.append(String.format(java.util.Locale.ROOT, " %s %.0f: T %.5f walk %.5f;", buy ? "buy" : "sell", f, move, walk));
+                if (!(move <= s.permanentImpact() * walk + 1e-12))
+                    return fail("θ bound broken:" + out);
+            }
+        }
+        return pass(out.toString());
+    }
+
+    /** θ survives the codec; T-204 (8-field) payloads get 0.5; invalid θ (0, 2, NaN) becomes 0.5. */
+    private TestResult test_theta_codec() {
+        Settings original = new Settings(0.7f, true, 123.5f, 0f, 0f, 0f, 0.1f, 4f, 0.3f);
+        ByteBuf buf = Unpooled.buffer();
+        try {
+            Settings.CODEC.encode(buf, original);
+            TestResult r = assertEquals("θ round-trip", original, Settings.CODEC.decode(buf));
+            if (!r.passed()) return r;
+            buf.clear();
+            buf.writeFloat(0.3f).writeBoolean(true).writeFloat(2000f).writeFloat(0.05f).writeFloat(3f)
+                    .writeFloat(-1f).writeFloat(0f).writeFloat(0f); // T-204 payload, no θ
+            r = assertEquals("8-field payload gets the default θ", VolatilityPlugin.DEFAULT_PERMANENT_IMPACT,
+                    Settings.CODEC.decode(buf).permanentImpact());
+            if (!r.passed()) return r;
+            for (float bad : new float[]{0f, -0.5f, 2f, Float.NaN}) {
+                r = assertEquals("invalid θ " + bad + " becomes the default", VolatilityPlugin.DEFAULT_PERMANENT_IMPACT,
+                        defaults().withPermanentImpact(bad).permanentImpact());
+                if (!r.passed()) return r;
+            }
+            return assertEquals("θ = 1 is valid", 1f, defaults().withPermanentImpact(1f).permanentImpact());
+        } finally {
+            buf.release();
+        }
+    }
+
+    /** θ survives plugin save/load; a save without the {@code permanentImpact} key loads with 0.5. */
+    private TestResult test_theta_nbt() {
+        ItemID id = ItemID.getFromItemStack(new ItemStack(Items.DIAMOND));
+        if (id == null || !id.isValid()) return skip("diamond has no registered ItemID");
+        VolatilityPlugin plugin = new VolatilityPlugin();
+        plugin.onMarketSubscribed(id);
+        plugin.replaceCustomSettings(id, defaults().withPermanentImpact(0.25f));
+        CompoundTag tag = new CompoundTag();
+        plugin.save(tag);
+        VolatilityPlugin loaded = new VolatilityPlugin();
+        loaded.onMarketSubscribed(id);
+        loaded.load(tag);
+        TestResult r = assertEquals("θ after load", 0.25f, loaded.getMarketSettings(id).permanentImpact());
+        if (!r.passed()) return r;
+        ((ListTag) tag.get("marketData")).getCompound(0).remove("permanentImpact");
+        VolatilityPlugin legacy = new VolatilityPlugin();
+        legacy.onMarketSubscribed(id);
+        legacy.load(tag);
+        return assertEquals("save without θ loads the default", VolatilityPlugin.DEFAULT_PERMANENT_IMPACT,
+                legacy.getMarketSettings(id).permanentImpact());
     }
 
     /**

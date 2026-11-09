@@ -17,6 +17,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.function.DoubleUnaryOperator;
+
+import net.kroia.stockmarket.api.plugin.interaction.IPluginOrderBook;
+import net.kroia.stockmarket.stockmarket.marketmanager.MarketManager;
 
 public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Void> {
 
@@ -81,6 +85,21 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
     public static final float DEFAULT_FLOW_RISE_TIME_SECONDS = 0f;
     /** T-204: default return time (s) of the smoothed flow towards 0; 0 = instant (pre-T-204 behaviour). */
     public static final float DEFAULT_FLOW_RETURN_TIME_SECONDS = 0f;
+    /**
+     * T-208 (θ): default permanent impact. The equilibrium never moves more than this fraction of the
+     * log price move the same volume makes when it walks the default order book in one go, so a big
+     * trade still spikes the price, but the lasting shift is at most half of its own book impact.
+     * Valid range (0, 1]; invalid values fall back to this default.
+     */
+    public static final float DEFAULT_PERMANENT_IMPACT = 0.5f;
+    /** T-208: ticks between two {@link #bookEFoldDepth} recomputations per market (1 min at 20 TPS). */
+    static final int BOOK_EFOLD_REFRESH_TICKS = 1200;
+    /** T-208: ticks until the next try while no default book volume is found (calculators may register late). */
+    static final int BOOK_EFOLD_RETRY_TICKS = 20;
+    /** T-208: zero results in a row after which the "no volume calculator" warning is logged (once per market). */
+    static final int BOOK_EFOLD_WARN_AFTER = 5;
+    /** T-208: log-price sampling step of {@link #bookEFoldDepth} (0.1%). */
+    static final double BOOK_EFOLD_LN_STEP = 0.001;
 
     /**
      * Custom per-market settings for the volatility and flow-equilibrium behavior.
@@ -108,14 +127,33 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
      * @param maxPriceMult         upper clamp for the equilibrium as a multiple of the
      *                             default price (3 = never above 3x default).
      *                             Must be &gt; 1; invalid values fall back to the default
+     * @param permanentImpact      T-208 (θ): the largest lasting equilibrium move as a fraction of the
+     *                             log move of the same volume walked through the default order book;
+     *                             the flow capacity is {@code max(sensitivity capacity, bookEFold / θ)}.
+     *                             Range (0, 1]; invalid values (0, negative, &gt; 1, NaN) become
+     *                             {@link #DEFAULT_PERMANENT_IMPACT}
      */
     public record Settings(float volatilityScale, boolean flowInfluenceEnabled,
                            float flowSensitivity, float deadbandVolume,
                            float flowRiseTimeSeconds, float flowReturnTimeSeconds,
-                           float minPriceMult, float maxPriceMult) {
+                           float minPriceMult, float maxPriceMult, float permanentImpact) {
+        /** Sanitizes θ: anything outside (0, 1] (including NaN) becomes {@link #DEFAULT_PERMANENT_IMPACT}. */
+        public Settings {
+            if (!(permanentImpact > 0f && permanentImpact <= 1f)) permanentImpact = DEFAULT_PERMANENT_IMPACT;
+        }
+
+        /** T-204 field set with the default θ ({@link #DEFAULT_PERMANENT_IMPACT}). */
+        public Settings(float volatilityScale, boolean flowInfluenceEnabled,
+                        float flowSensitivity, float deadbandVolume,
+                        float flowRiseTimeSeconds, float flowReturnTimeSeconds,
+                        float minPriceMult, float maxPriceMult) {
+            this(volatilityScale, flowInfluenceEnabled, flowSensitivity, deadbandVolume,
+                    flowRiseTimeSeconds, flowReturnTimeSeconds, minPriceMult, maxPriceMult, DEFAULT_PERMANENT_IMPACT);
+        }
+
         /**
          * Pre-T-204 field set: deadband 0 (off) and no flow smoothing (0 / 0), i.e. exactly the
-         * pre-T-204 flow mechanics. Used by tests that exercise the raw flow math.
+         * pre-T-204 flow mechanics, default θ. Used by tests that exercise the raw flow math.
          */
         public Settings(float volatilityScale, boolean flowInfluenceEnabled,
                         float flowSensitivity, float minPriceMult, float maxPriceMult) {
@@ -125,13 +163,19 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
         /** @return a copy with the given deadband volume (items, 0 = off, &lt; 0 = auto) */
         public Settings withDeadbandVolume(float deadband) {
             return new Settings(volatilityScale, flowInfluenceEnabled, flowSensitivity, deadband,
-                    flowRiseTimeSeconds, flowReturnTimeSeconds, minPriceMult, maxPriceMult);
+                    flowRiseTimeSeconds, flowReturnTimeSeconds, minPriceMult, maxPriceMult, permanentImpact);
         }
 
         /** @return a copy with the given flow smoothing time constants (seconds, 0 = instant) */
         public Settings withFlowTimes(float riseSeconds, float returnSeconds) {
             return new Settings(volatilityScale, flowInfluenceEnabled, flowSensitivity, deadbandVolume,
-                    riseSeconds, returnSeconds, minPriceMult, maxPriceMult);
+                    riseSeconds, returnSeconds, minPriceMult, maxPriceMult, permanentImpact);
+        }
+
+        /** @return a copy with the given permanent impact θ (sanitized to (0, 1]) */
+        public Settings withPermanentImpact(float theta) {
+            return new Settings(volatilityScale, flowInfluenceEnabled, flowSensitivity, deadbandVolume,
+                    flowRiseTimeSeconds, flowReturnTimeSeconds, minPriceMult, maxPriceMult, theta);
         }
 
         public static final StreamCodec<ByteBuf, Settings> CODEC = new StreamCodec<>() {
@@ -156,8 +200,10 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
                 float deadband = buf.isReadable() ? buf.readFloat() : DEFAULT_DEADBAND_VOLUME;
                 float rise = buf.isReadable() ? buf.readFloat() : DEFAULT_FLOW_RISE_TIME_SECONDS;
                 float ret = buf.isReadable() ? buf.readFloat() : DEFAULT_FLOW_RETURN_TIME_SECONDS;
+                // T-208 θ is appended; older payloads end here and get the default.
+                float theta = buf.isReadable() ? buf.readFloat() : DEFAULT_PERMANENT_IMPACT;
                 return new Settings(volatilityScale, flowInfluenceEnabled,
-                        flowSensitivity, deadband, rise, ret, minPriceMult, maxPriceMult);
+                        flowSensitivity, deadband, rise, ret, minPriceMult, maxPriceMult, theta);
             }
             @Override
             public void encode(ByteBuf buf, Settings s) {
@@ -169,6 +215,7 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
                 buf.writeFloat(s.deadbandVolume());
                 buf.writeFloat(s.flowRiseTimeSeconds());
                 buf.writeFloat(s.flowReturnTimeSeconds());
+                buf.writeFloat(s.permanentImpact());
             }
         };
 
@@ -204,6 +251,21 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
         double lastFaded = 0;
         /** T-207: false until satFlow/lastFaded are seeded from the market (new market or pre-T-207 save). */
         boolean satSeeded = false;
+        /**
+         * T-208: cached {@link #bookEFoldDepth} of the market's default book around its default price
+         * (items per unit of log price; 0 = unknown / no volume calculator). Not saved, recomputed.
+         */
+        double bookEFold = 0;
+        /** T-208: default price the cached bookEFold was computed for (NaN = never computed). */
+        double bookDefaultPrice = Double.NaN;
+        /** T-208: natural abundance the cached bookEFold was computed for. */
+        float bookAbundance = Float.NaN;
+        /** T-208: ticks until the next bookEFold recomputation. */
+        int bookTicksLeft = 0;
+        /** T-208: zero bookEFold results in a row (for the one-time warning). */
+        int bookZeroCount = 0;
+        /** T-208: true once the "no volume calculator" warning was logged for this market. */
+        boolean bookWarned = false;
 
         MarketData() {
             priceGenerator = new NormalizedRandomPriceGenerator(5);
@@ -246,7 +308,10 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
             // at the band (where the equilibrium already sits at minPriceMult/maxPriceMult) only
             // happens on the plugin-private satFlow, so a buy-back after a huge one-sided trade
             // still moves the price at once (T-174) without capping the stored flow.
-            FlowBand band = flowBand(market.market.getNaturalAbundance(), data.settings);
+            // T-208: capacity = max(sensitivity capacity, bookEFold / θ), so the equilibrium never
+            // moves more than θ x the volume's own one-shot walk through the default book.
+            double bookEFold = refreshBookEFold(market, data);
+            FlowBand band = flowBand(market.market.getNaturalAbundance(), data.settings, bookEFold);
             data.satFlow = saturatedFlow(data, market.market.getFadedNetPlayerItemFlow(),
                     market.market.getNetPlayerItemFlow(), band, ServerMarket.netFlowHalfLifeSeconds());
 
@@ -275,7 +340,7 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
             double equilibrium = computeEquilibriumPrice(defaultPrice,
                     data.effFlow,
                     market.market.getNaturalAbundance(),
-                    data.settings);
+                    data.settings, bookEFold);
 
             // Scale random walk proportionally to the equilibrium price for equal percentage volatility
             double deviation = data.priceGenerator.getCurrentValue() * data.settings.volatilityScale();
@@ -325,10 +390,27 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
      */
     public static double computeEquilibriumPrice(double defaultPrice, double netPlayerItemFlow,
                                                  float naturalAbundance, Settings settings) {
+        return computeEquilibriumPrice(defaultPrice, netPlayerItemFlow, naturalAbundance, settings, 0);
+    }
+
+    /**
+     * T-208: {@link #computeEquilibriumPrice(double, double, float, Settings)} with the market's default
+     * book depth, so the capacity is {@code max(sensitivity capacity, bookEFold / permanentImpact)}.
+     *
+     * @param defaultPrice      the market's default price (real units)
+     * @param netPlayerItemFlow net items players sold (positive) or bought (negative)
+     * @param naturalAbundance  the market item's natural abundance
+     * @param settings          the per-market plugin settings (may be null)
+     * @param bookEFold         {@link #bookEFoldDepth} of the default book (items per unit log price);
+     *                          &lt;= 0 = unknown, the sensitivity capacity alone is used
+     * @return the equilibrium price, always &gt;= 0
+     */
+    public static double computeEquilibriumPrice(double defaultPrice, double netPlayerItemFlow,
+                                                 float naturalAbundance, Settings settings, double bookEFold) {
         // Feature disabled or no flow: keep the anchor exactly at the default price
         // (bit-identical to the previous behavior).
         if (netPlayerItemFlow == 0.0 || Double.isNaN(netPlayerItemFlow)) return defaultPrice;
-        FlowBand band = flowBand(naturalAbundance, settings);
+        FlowBand band = flowBand(naturalAbundance, settings, bookEFold);
         if (band == null) return defaultPrice;
 
         // Negative sign flips the direction: net-sold items (flow > 0) push the
@@ -378,7 +460,20 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
      *         influence disabled, or capacity not strictly positive and finite)
      */
     public static FlowBand flowBand(float naturalAbundance, Settings settings) {
-        return flowBand(naturalAbundance, settings, DEFAULT_DEADBAND_CAPACITY_MULT);
+        return flowBand(naturalAbundance, settings, DEFAULT_DEADBAND_CAPACITY_MULT, 0);
+    }
+
+    /**
+     * T-208: {@link #flowBand(float, Settings)} with the default book depth:
+     * {@code capacity = max(sensitivity capacity, bookEFold / permanentImpact)}.
+     *
+     * @param naturalAbundance the market item's natural abundance
+     * @param settings         the per-market plugin settings (may be null)
+     * @param bookEFold        {@link #bookEFoldDepth} (items per unit log price); &lt;= 0 = sensitivity capacity only
+     * @return the band, or null if the flow term is inactive
+     */
+    public static FlowBand flowBand(float naturalAbundance, Settings settings, double bookEFold) {
+        return flowBand(naturalAbundance, settings, DEFAULT_DEADBAND_CAPACITY_MULT, bookEFold);
     }
 
     /**
@@ -391,12 +486,29 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
      * @return the band, or null if the flow term is inactive
      */
     public static FlowBand flowBand(float naturalAbundance, Settings settings, float k) {
+        return flowBand(naturalAbundance, settings, k, 0);
+    }
+
+    /**
+     * Common implementation of the flowBand overloads.
+     *
+     * @param naturalAbundance the market item's natural abundance
+     * @param settings         the per-market plugin settings (may be null)
+     * @param k                multiple of the capacity an auto deadband (-1) counts as (&lt;= 0 = off)
+     * @param bookEFold        T-208 default book depth (items per unit log price); &lt;= 0 = unknown
+     * @return the band, or null if the flow term is inactive
+     */
+    private static FlowBand flowBand(float naturalAbundance, Settings settings, float k, double bookEFold) {
         if (settings == null || !settings.flowInfluenceEnabled()) return null;
 
         double capacity = capacity(naturalAbundance, settings);
         // Disable the flow term if capacity is invalid (<= 0, NaN or infinite),
         // e.g. abundance or sensitivity set to 0/negative by an admin.
         if (!(capacity > 0.0) || Double.isInfinite(capacity)) return null;
+        // T-208: never move the equilibrium more than θ x the volume's own walk through the
+        // default book (log move of F there >= F / bookEFold). θ is sanitized by Settings.
+        if (bookEFold > 0 && Double.isFinite(bookEFold))
+            capacity = Math.max(capacity, bookEFold / settings.permanentImpact());
         float db = settings.deadbandVolume();
         double deadband = db < 0 ? autoDeadband(capacity, k)
                 : (db > 0 && !Float.isInfinite(db) ? db : 0.0);
@@ -505,6 +617,109 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
     }
 
     /**
+     * T-208: the densest default-book depth per unit of log price, both sides, sampled every
+     * {@link #BOOK_EFOLD_LN_STEP} over the equilibrium range [P0 x minPriceMult, P0 x maxPriceMult]
+     * (prices below one tick skipped). A one-shot walk of F items through the default book moves the
+     * log price by at least about {@code F / bookEFold}, so {@code capacity >= bookEFold / θ} keeps the
+     * equilibrium move below θ x that walk.
+     * <p>
+     * Each backend price level (width {@code tick}) holds {@code |volume(P)|} items, so the depth per
+     * unit of log price at P is {@code |volume(P)| x P / tick}.
+     *
+     * @param volumeAt the default book volume per price level at a real price, with the market price at
+     *                 P0 (sign ignored)
+     * @param p0       the market's default price (real units)
+     * @param tick     the real price of one backend price level
+     * @param lnMin    ln of the lowest sampled price multiple (&lt; 0)
+     * @param lnMax    ln of the highest sampled price multiple (&gt; 0)
+     * @return items per unit of log price, 0 if there is no volume or the input is invalid
+     */
+    public static double bookEFoldDepth(DoubleUnaryOperator volumeAt, double p0, double tick, double lnMin, double lnMax) {
+        if (volumeAt == null || !(p0 > 0) || !(tick > 0) || !(lnMax > lnMin)) return 0;
+        double max = 0;
+        int n = (int) Math.ceil((lnMax - lnMin) / BOOK_EFOLD_LN_STEP);
+        for (int i = 0; i <= n; i++) {
+            double p = p0 * Math.exp(Math.min(lnMin + i * BOOK_EFOLD_LN_STEP, lnMax));
+            if (p < tick) continue;
+            double d = Math.abs(volumeAt.applyAsDouble(p)) * p / tick;
+            if (d > max && Double.isFinite(d)) max = d;
+        }
+        return max;
+    }
+
+    /**
+     * T-208: {@link #bookEFoldDepth(DoubleUnaryOperator, double, double, double, double)} for a
+     * market's default book ({@link IPluginOrderBook#getDefaultRealVolumeAround} with the price at P0)
+     * over the settings' sanitized [minPriceMult, maxPriceMult] range.
+     *
+     * @param book     the market's plugin order book (null = 0)
+     * @param p0       the market's default price (real units)
+     * @param tick     the real price of one backend price level
+     * @param settings the per-market settings (null = default clamps)
+     * @return items per unit of log price, 0 without volume calculators
+     */
+    public static double bookEFoldDepth(IPluginOrderBook book, double p0, double tick, Settings settings) {
+        if (book == null) return 0;
+        double minMult = settings != null ? settings.minPriceMult() : DEFAULT_MIN_PRICE_MULT;
+        double maxMult = settings != null ? settings.maxPriceMult() : DEFAULT_MAX_PRICE_MULT;
+        if (!(minMult > 0.0) || !(minMult < 1.0)) minMult = DEFAULT_MIN_PRICE_MULT;
+        if (!(maxMult > 1.0)) maxMult = DEFAULT_MAX_PRICE_MULT;
+        return bookEFoldDepth(pick -> book.getDefaultRealVolumeAround(p0, pick), p0, tick, Math.log(minMult), Math.log(maxMult));
+    }
+
+    /**
+     * T-208: returns the market's cached bookEFold, recomputed when the default price or abundance
+     * changed, or every {@link #BOOK_EFOLD_REFRESH_TICKS} ticks. While no volume is found it retries
+     * every {@link #BOOK_EFOLD_RETRY_TICKS} ticks (the volume plugin may register its calculator later)
+     * and warns once per market; the flow then uses the sensitivity capacity alone.
+     *
+     * @param market the market (its order book may be null in tests)
+     * @param data   the market's plugin data (cache fields updated)
+     * @return bookEFold (items per unit log price), 0 = unknown
+     */
+    private double refreshBookEFold(MarketInterface market, MarketData data) {
+        double p0 = market.market.getDefaultRealPrice();
+        float abundance = market.market.getNaturalAbundance();
+        if (--data.bookTicksLeft > 0 && p0 == data.bookDefaultPrice && abundance == data.bookAbundance)
+            return data.bookEFold;
+        data.bookDefaultPrice = p0;
+        data.bookAbundance = abundance;
+        data.bookEFold = market.oderBook == null ? 0
+                : bookEFoldDepth(market.oderBook, p0, MarketManager.convertToRealAmountStatic(1), data.settings);
+        if (data.bookEFold > 0) {
+            data.bookZeroCount = 0;
+            data.bookTicksLeft = BOOK_EFOLD_REFRESH_TICKS;
+        } else {
+            data.bookTicksLeft = BOOK_EFOLD_RETRY_TICKS;
+            if (++data.bookZeroCount >= BOOK_EFOLD_WARN_AFTER && !data.bookWarned) {
+                data.bookWarned = true;
+                warn("Market " + market.market.getMarketID() + " has no default order book volume (no volume"
+                        + " distribution calculator); the permanent impact limit is off, the flow uses the"
+                        + " sensitivity capacity only");
+            }
+        }
+        return data.bookEFold;
+    }
+
+    /**
+     * @param marketID the market
+     * @return the T-208 cached default book depth (items per unit log price), 0 if unknown
+     */
+    public double getBookEFold(ItemID marketID) {
+        MarketData data = marketData.get(marketID);
+        return data != null ? data.bookEFold : 0;
+    }
+
+    /**
+     * @param marketID the market
+     * @return the settings the plugin currently runs this market with (after load), null for unknown markets
+     */
+    public Settings getMarketSettings(ItemID marketID) {
+        MarketData data = marketData.get(marketID);
+        return data != null ? data.settings : null;
+    }
+
+    /**
      * @param marketID the market
      * @return the T-207 plugin-private saturated flow (items), 0 for unknown markets
      */
@@ -594,6 +809,7 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
             marketTag.putFloat("deadbandVolume", s.deadbandVolume());
             marketTag.putFloat("flowRiseTimeSeconds", s.flowRiseTimeSeconds());
             marketTag.putFloat("flowReturnTimeSeconds", s.flowReturnTimeSeconds());
+            marketTag.putFloat("permanentImpact", s.permanentImpact()); // T-208
             marketTag.putDouble("effFlow", entry.getValue().effFlow);
             if (entry.getValue().satSeeded) { // T-207; unseeded = seed from the market on the next tick
                 marketTag.putDouble("satFlow", entry.getValue().satFlow);
@@ -633,7 +849,9 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
                                 marketTag.contains("flowRiseTimeSeconds") ? NbtCompat.getFloat(marketTag, "flowRiseTimeSeconds") : DEFAULT_FLOW_RISE_TIME_SECONDS,
                                 marketTag.contains("flowReturnTimeSeconds") ? NbtCompat.getFloat(marketTag, "flowReturnTimeSeconds") : DEFAULT_FLOW_RETURN_TIME_SECONDS,
                                 marketTag.contains("minPriceMult") ? NbtCompat.getFloat(marketTag, "minPriceMult") : cur.minPriceMult(),
-                                marketTag.contains("maxPriceMult") ? NbtCompat.getFloat(marketTag, "maxPriceMult") : cur.maxPriceMult());
+                                marketTag.contains("maxPriceMult") ? NbtCompat.getFloat(marketTag, "maxPriceMult") : cur.maxPriceMult(),
+                                // T-208: missing key (older save) -> default θ
+                                marketTag.contains("permanentImpact") ? NbtCompat.getFloat(marketTag, "permanentImpact") : DEFAULT_PERMANENT_IMPACT);
                         data.effFlow = marketTag.contains("effFlow") ? NbtCompat.getDouble(marketTag, "effFlow") : 0;
                         // T-207: missing keys (pre-T-207 save) -> seeded as clamp(faded) on the first tick
                         data.satSeeded = marketTag.contains("satFlow") && marketTag.contains("lastFaded");
@@ -661,6 +879,7 @@ public class VolatilityPlugin extends ServerPlugin<VolatilityPlugin.Settings, Vo
         MarketData data = marketData.get(marketID);
         if (data != null) {
             data.settings = settings;
+            data.bookTicksLeft = 0; // T-208: the clamps define the bookEFold range, recompute next tick
         }
     }
 }

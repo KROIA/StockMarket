@@ -186,6 +186,26 @@ public interface IPluginOrderBook {
      *         The real volume at the given price
      */
     float getDefaultRealVolume(double pickPrice);
+
+    /**
+     * Like {@link #getDefaultRealVolume(double)}, but evaluates the volume distribution calculators as if
+     * the market price were {@code centerPrice} instead of the current price. Used to read the
+     * <i>default</i> book around the market's default price, whatever the price is now (T-208 permanent
+     * impact capacity).
+     * <p>
+     * Default: falls back to {@link #getDefaultRealVolume(double)} (centred on the current price), for
+     * implementations that cannot re-centre.
+     *
+     * @param centerPrice the real market price the distribution is centred on
+     * @param pickPrice   the real price at which the volume is measured
+     * @return positive volume for buy orders (below {@code centerPrice}), negative for sell orders
+     *         (at or above it); real units, per backend price level
+     */
+    default float getDefaultRealVolumeAround(double centerPrice, double pickPrice)
+    {
+        return getDefaultRealVolume(pickPrice);
+    }
+
     float getDefaultRawVolume(double pickPrice);
 
     /**

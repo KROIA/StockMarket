@@ -17,7 +17,8 @@ import java.util.Map;
 /**
  * Inline settings GUI for the VolatilityPlugin.
  * Displays the volatility scale, the flow-equilibrium toggle and its parameters
- * (flow sensitivity, deadband volume, flow rise/return time, min/max price multipliers)
+ * (flow sensitivity, deadband volume, flow rise/return time, min/max price multipliers,
+ * permanent impact θ)
  * plus an Apply button.
  */
 public class VolatilityPluginGuiElement extends PluginGuiElement<VolatilityPlugin.Settings, Void> {
@@ -32,6 +33,7 @@ public class VolatilityPluginGuiElement extends PluginGuiElement<VolatilityPlugi
         public static final Component RETURN_LABEL = Component.translatable(PREFIX + "flow_return_time");
         public static final Component MIN_PRICE_MULT_LABEL = Component.translatable(PREFIX + "min_price_mult");
         public static final Component MAX_PRICE_MULT_LABEL = Component.translatable(PREFIX + "max_price_mult");
+        public static final Component PERMANENT_IMPACT_LABEL = Component.translatable(PREFIX + "permanent_impact");
         public static final Component APPLY = Component.translatable(PREFIX + "apply");
         public static final Component SCALE_TOOLTIP = Component.translatable(PREFIX + "scale.tooltip");
         public static final Component FLOW_ENABLED_TOOLTIP = Component.translatable(PREFIX + "flow_enabled.tooltip");
@@ -41,6 +43,7 @@ public class VolatilityPluginGuiElement extends PluginGuiElement<VolatilityPlugi
         public static final Component RETURN_TOOLTIP = Component.translatable(PREFIX + "flow_return_time.tooltip");
         public static final Component MIN_PRICE_MULT_TOOLTIP = Component.translatable(PREFIX + "min_price_mult.tooltip");
         public static final Component MAX_PRICE_MULT_TOOLTIP = Component.translatable(PREFIX + "max_price_mult.tooltip");
+        public static final Component PERMANENT_IMPACT_TOOLTIP = Component.translatable(PREFIX + "permanent_impact.tooltip");
     }
 
     private final Label scaleLabel;
@@ -61,6 +64,9 @@ public class VolatilityPluginGuiElement extends PluginGuiElement<VolatilityPlugi
     private final TextBox minPriceMultTextBox;
     private final Label maxPriceMultLabel;
     private final TextBox maxPriceMultTextBox;
+    /** T-208: permanent impact θ in (0, 1]. */
+    private final Label permanentImpactLabel;
+    private final TextBox permanentImpactTextBox;
     private final Button applyButton;
     private final Button applyAllButton;
     private Map<ItemID, VolatilityPlugin.Settings> allSettings = new HashMap<>();
@@ -105,6 +111,11 @@ public class VolatilityPluginGuiElement extends PluginGuiElement<VolatilityPlugi
         maxPriceMultTextBox = new TextBox();
         maxPriceMultTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 10, 6));
 
+        permanentImpactLabel = new Label(Texts.PERMANENT_IMPACT_LABEL.getString());
+        permanentImpactLabel.setAlignment(Alignment.RIGHT);
+        permanentImpactTextBox = new TextBox();
+        permanentImpactTextBox.setMatchRegex(TextBox.createRegex_onlyNumerical(true, false, 2, 3));
+
         applyButton = new Button(Texts.APPLY.getString(), this::onApply);
         applyAllButton = new Button(ApplyAllTexts.APPLY_ALL.getString(), () -> confirmApplyToAllMarkets(readSettings()));
         setSettingTooltip(ApplyAllTexts.APPLY_ALL_TOOLTIP, applyAllButton);
@@ -117,6 +128,7 @@ public class VolatilityPluginGuiElement extends PluginGuiElement<VolatilityPlugi
         setSettingTooltip(Texts.RETURN_TOOLTIP, returnLabel, returnTextBox);
         setSettingTooltip(Texts.MIN_PRICE_MULT_TOOLTIP, minPriceMultLabel, minPriceMultTextBox);
         setSettingTooltip(Texts.MAX_PRICE_MULT_TOOLTIP, maxPriceMultLabel, maxPriceMultTextBox);
+        setSettingTooltip(Texts.PERMANENT_IMPACT_TOOLTIP, permanentImpactLabel, permanentImpactTextBox);
 
         addChild(scaleLabel);
         addChild(scaleTextBox);
@@ -133,12 +145,14 @@ public class VolatilityPluginGuiElement extends PluginGuiElement<VolatilityPlugi
         addChild(minPriceMultTextBox);
         addChild(maxPriceMultLabel);
         addChild(maxPriceMultTextBox);
+        addChild(permanentImpactLabel);
+        addChild(permanentImpactTextBox);
         addChild(applyButton);
         addChild(applyAllButton);
 
-        // 9 rows of controls (scale, flow toggle, sensitivity, deadband, rise time, return time,
-        // min mult, max mult, apply + apply-to-all)
-        setHeight(9 * (defaultElementHeight + spacing) + padding);
+        // 10 rows of controls (scale, flow toggle, sensitivity, deadband, rise time, return time,
+        // min mult, max mult, permanent impact, apply + apply-to-all)
+        setHeight(10 * (defaultElementHeight + spacing) + padding);
     }
 
     @Override
@@ -185,6 +199,7 @@ public class VolatilityPluginGuiElement extends PluginGuiElement<VolatilityPlugi
         returnTextBox.setText(settings.flowReturnTimeSeconds(), 3);
         minPriceMultTextBox.setText(settings.minPriceMult(), 6);
         maxPriceMultTextBox.setText(settings.maxPriceMult(), 6);
+        permanentImpactTextBox.setText(settings.permanentImpact(), 3);
     }
 
     /** Builds the settings from the current input values. */
@@ -197,7 +212,8 @@ public class VolatilityPluginGuiElement extends PluginGuiElement<VolatilityPlugi
                 (float) riseTextBox.getDouble(),
                 (float) returnTextBox.getDouble(),
                 (float) minPriceMultTextBox.getDouble(),
-                (float) maxPriceMultTextBox.getDouble());
+                (float) maxPriceMultTextBox.getDouble(),
+                (float) permanentImpactTextBox.getDouble());
     }
 
     private void onApply() {
@@ -244,9 +260,13 @@ public class VolatilityPluginGuiElement extends PluginGuiElement<VolatilityPlugi
         maxPriceMultLabel.setBounds(padding, minPriceMultTextBox.getBottom() + spacing, labelW, eh);
         maxPriceMultTextBox.setBounds(textBoxX, maxPriceMultLabel.getTop(), textBoxW, eh);
 
-        // Row 9: apply + apply-to-all buttons side by side
+        // Row 9: permanent impact θ (T-208)
+        permanentImpactLabel.setBounds(padding, maxPriceMultTextBox.getBottom() + spacing, labelW, eh);
+        permanentImpactTextBox.setBounds(textBoxX, permanentImpactLabel.getTop(), textBoxW, eh);
+
+        // Row 10: apply + apply-to-all buttons side by side
         int buttonW = (w - 2 * padding - spacing) / 2;
-        applyButton.setBounds(padding, maxPriceMultTextBox.getBottom() + spacing, buttonW, eh);
+        applyButton.setBounds(padding, permanentImpactTextBox.getBottom() + spacing, buttonW, eh);
         applyAllButton.setBounds(applyButton.getRight() + spacing, applyButton.getTop(), buttonW, eh);
     }
 

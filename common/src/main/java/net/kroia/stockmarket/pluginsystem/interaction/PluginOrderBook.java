@@ -200,6 +200,13 @@ public class PluginOrderBook implements IPluginOrderBook
         float currentMarketPrice = (float)MarketManager.convertToRealAmountStatic(serverMarket.getCurrentMarketPrice());
         return computeDefaultRealVolume(currentMarketPrice, pickPrice);
     }
+    /** {@inheritDoc} Evaluates the registered calculators with {@code centerPrice} as the market price. */
+    @Override
+    public float getDefaultRealVolumeAround(double centerPrice, double pickPrice)
+    {
+        return computeDefaultRealVolume((float) centerPrice, pickPrice);
+    }
+
     @Override
     public float getDefaultRawVolume(double pickPrice)
     {
